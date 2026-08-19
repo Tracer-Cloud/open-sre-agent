@@ -17,13 +17,13 @@ Pinned by `gateway/tests/test_package_borders.py`.
 Importing `gateway.web.webapp` (uvicorn or in-process via
 `serve_webapp_in_thread`) runs `configure_process(WEB_PROFILE)` — env, Sentry
 (`webapp`), and harness adapters. That is intentional so `MODE=web` and
-embedded web both get Path-2 investigate registration without a CLI/manager boot. Do
+embedded web both register `AgentSession.investigate` without a CLI/manager boot. Do
 **not** add a second harness-registration site in `web/`; adapters stay in
 `bootstrap.adapters` only. In a full gateway process, `GATEWAY_PROFILE` already
 ran; `WEB_PROFILE` may still run (separate idempotency key) — steps must stay
 safe to re-enter, not invent a divergent registry.
 
-## Capacity (Path-2)
+## Capacity
 
 `POST /investigate` and `InvestigationWorker` take
 :func:`~platform.turn_host.concurrency.process_turn_gate` — the same

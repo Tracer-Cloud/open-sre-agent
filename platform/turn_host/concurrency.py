@@ -1,13 +1,13 @@
 """Process-wide turn concurrency shared by every Gateway ingress.
 
-Production chat turns take the gate via :class:`GatewayTurnHandler` (``gate=``).
-Path-2 ``POST /investigate`` and :class:`InvestigationWorker` use the same
-process gate (:func:`process_turn_gate`) so HTTP investigate cannot starve
-chat or the reverse. Scheduled runs take the same instance: the controller builds
+Production chat turns take the gate via :class:`TurnHandler` (``gate=``).
+``POST /investigate`` and :class:`InvestigationWorker` use the same process
+gate (:func:`process_turn_gate`) so HTTP investigate cannot starve chat or
+the reverse. Scheduled runs take the same instance: the controller builds
 ``SchedulerRunners`` and calls ``.gated(turn_gate)`` before installing them.
 
-A callback wrapper for arbitrary handlers lives under tests only — not in
-production ``gateway/core/``.
+A callback wrapper for arbitrary handlers is tests-only, not production
+``gateway/core/``.
 """
 
 from __future__ import annotations
@@ -39,7 +39,7 @@ def turn_limit_for_profile(profile: SizeProfile | str | None = None) -> int:
 
 
 class TurnConcurrencyGate:
-    """A process-wide capacity gate for agent turns (chat + Path-2 + scheduler)."""
+    """A process-wide capacity gate for chat, investigate, and scheduled turns."""
 
     def __init__(self, limit: int) -> None:
         if limit < 1:
@@ -76,7 +76,7 @@ AT_CAPACITY_MESSAGE = "OpenSRE is at capacity. Please try again shortly."
 def process_turn_gate() -> TurnConcurrencyGate:
     """Return the process-wide gate (lazy from ``OPENSRE_SIZE_PROFILE``).
 
-    :class:`GatewayController` installs its gate here so chat and Path-2 share one
+    :class:`GatewayController` installs its gate here so chat and investigate share one
     semaphore in a full gateway process. Standalone ``WEB_PROFILE`` web creates
     the gate on first investigate/worker use.
     """

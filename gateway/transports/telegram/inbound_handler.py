@@ -25,7 +25,7 @@ from gateway.transports.telegram.principal import (
 from gateway.transports.telegram.session_rotation import resolve_or_rotate_session
 from gateway.transports.telegram.settings import GatewaySettings, TelegramInboundMessage
 from platform.analytics.usage_context import UsageSurface, bound_usage_context
-from platform.turn_host.turn_callback import GatewayAgentCallback
+from platform.turn_host.turn_callback import TurnCallback
 
 logger = logging.getLogger(__name__)
 
@@ -42,7 +42,7 @@ async def handle_polled_inbound_telegram_message(
     approvals: ApprovalBroker,
     active_cancels: ActiveTurnRegistry,
     loop: asyncio.AbstractEventLoop | None = None,
-    handle_callback_to_gateway_agent: GatewayAgentCallback,
+    handle_callback_to_gateway_agent: TurnCallback,
 ) -> None:
     """Process one long-polled inbound Telegram update."""
     user_lock = chat_locks.setdefault(event.user_id, asyncio.Lock())

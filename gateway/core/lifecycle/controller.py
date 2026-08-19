@@ -40,8 +40,8 @@ from platform.turn_host.concurrency import (
     process_turn_gate,
     set_process_turn_gate,
 )
-from platform.turn_host.turn_callback import GatewayAgentCallback
-from platform.turn_host.turn_handler import GatewayTurnHandler
+from platform.turn_host.turn_callback import TurnCallback
+from platform.turn_host.turn_handler import TurnHandler
 
 # The reload watcher only polls a flag, so it should never need the full
 # shutdown budget; cap it so chat workers keep the rest.
@@ -73,7 +73,7 @@ class GatewayController:
             set_process_turn_gate(turn_gate)
             self.turn_gate = turn_gate
         else:
-            # Same instance Path-2 investigate / InvestigationWorker use.
+            # Same gate POST /investigate and InvestigationWorker use.
             self.turn_gate = process_turn_gate()
         self._stopped = threading.Event()
 
@@ -90,7 +90,7 @@ class GatewayController:
         # same object — do not wrap it in a second "turn handler". Action tools
         # resolve per turn from each chat's live session inside the handler.
         console = Console(force_terminal=False)
-        handler = GatewayTurnHandler(
+        handler = TurnHandler(
             console=console,
             slash_ports_factory=self._slash_ports_factory,
             agent_build=chat_agent_build_config(),
@@ -116,7 +116,7 @@ class GatewayController:
         self,
         *,
         logger: logging.Logger,
-        handler: GatewayAgentCallback,
+        handler: TurnCallback,
     ) -> None:
         """Start web + every chat transport together (via :mod:`gateway.startup`)."""
         self.surfaces = gateway_startup.start_gateway(logger=logger, handler=handler)

@@ -20,13 +20,13 @@ from gateway.transports.buzz.settings import (
     GatewaySettings,
     load_gateway_settings,
 )
-from platform.turn_host.turn_callback import GatewayAgentCallback
+from platform.turn_host.turn_callback import TurnCallback
 
 
 def start_buzz_worker(
     *,
     logger: logging.Logger,
-    handler: GatewayAgentCallback,
+    handler: TurnCallback,
 ) -> tuple[PollingBackground, GatewaySettings]:
     """Load Buzz settings and start the mention-poll background worker.
 

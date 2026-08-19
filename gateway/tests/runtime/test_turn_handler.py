@@ -16,9 +16,9 @@ from core.agent_harness.session import SessionCore
 from core.agent_harness.session.persistence.memory import InMemorySessionStore
 from core.agent_harness.turns.turn_results import ToolCallingTurnResult, TurnResult
 from platform.turn_host.session_agents import SessionAgentPool
-from platform.turn_host.turn_handler import GatewayTurnHandler
+from platform.turn_host.turn_handler import TurnHandler
 from tests.core.agent.orchestration.cross_surface_parity_harness import (
-    RecordingGatewayOutputSink,
+    RecordingTurnOutput,
 )
 from tests.shared.default_headless_build_stub import default_headless_build_stub
 from tests.shared.fake_agent import fake_agent
@@ -108,7 +108,7 @@ def test_turn_handler_resolves_action_tools_from_live_session(monkeypatch: Any) 
     chat_integrations = {"slack": {"webhook_url": "https://hooks.example/test"}}
     session.resolved_integrations_cache = chat_integrations
 
-    handler = GatewayTurnHandler(console=Console(force_terminal=False))
+    handler = TurnHandler(console=Console(force_terminal=False))
     handler("send slack update", session, MagicMock(), logging.getLogger("test.turn_handler"))
 
     tool_provider = agent_cls.return_value.tools_for_test
@@ -179,7 +179,7 @@ def test_turn_handler_continues_outer_loop_for_active_session_goal(
         ),
     )
     sink = MagicMock()
-    handler = GatewayTurnHandler(console=Console(force_terminal=False))
+    handler = TurnHandler(console=Console(force_terminal=False))
     handler("go", session, sink, logging.getLogger("test"))
 
     assert len(calls) == 2
@@ -225,7 +225,7 @@ def test_turn_handler_flushes_session_goal_for_next_resolve(
             host_owned=True,
         ),
     )
-    handler = GatewayTurnHandler(console=Console(force_terminal=False))
+    handler = TurnHandler(console=Console(force_terminal=False))
     handler("side question", session, MagicMock(), logging.getLogger("test"))
 
     goal_records = [
@@ -258,7 +258,7 @@ def test_turn_handler_finalizes_fallback_on_empty_response(monkeypatch: Any) -> 
     """An empty, non-answered turn still finalizes so the placeholder status can't hang."""
     _patch_headless_agent(monkeypatch, _empty_turn_result())
     sink = MagicMock()
-    handler = GatewayTurnHandler(console=Console(force_terminal=False))
+    handler = TurnHandler(console=Console(force_terminal=False))
     handler("/", SessionCore(store=InMemorySessionStore()), sink, logging.getLogger("test"))
     sink.finalize.assert_called_once_with("I didn't have anything to add for that.")
 
@@ -268,7 +268,7 @@ def test_turn_handler_skips_finalize_when_answer_was_streamed(monkeypatch: Any) 
     result = _empty_turn_result(llm_run=MagicMock())  # answered=True
     _patch_headless_agent(monkeypatch, result)
     sink = MagicMock()
-    handler = GatewayTurnHandler(console=Console(force_terminal=False))
+    handler = TurnHandler(console=Console(force_terminal=False))
     handler("hi", SessionCore(store=InMemorySessionStore()), sink, logging.getLogger("test"))
     sink.finalize.assert_not_called()
 
@@ -287,7 +287,7 @@ def test_turn_handler_skips_finalize_when_turn_cancelled(monkeypatch: Any) -> No
         return _empty_turn_result()
 
     agent_cls.return_value.dispatch.side_effect = _dispatch
-    handler = GatewayTurnHandler(console=Console(force_terminal=False))
+    handler = TurnHandler(console=Console(force_terminal=False))
     handler("hi", SessionCore(store=InMemorySessionStore()), sink, logging.getLogger("test"))
     sink.finalize.assert_not_called()
     console = agent_cls.return_value.bind_turn.call_args.args[0].console
@@ -301,7 +301,7 @@ def test_turn_handler_binds_cancel_console_each_turn(monkeypatch: Any) -> None:
 
     agent_cls = _patch_headless_agent(monkeypatch, _empty_turn_result())
     sink = MagicMock()
-    handler = GatewayTurnHandler(console=Console(force_terminal=False))
+    handler = TurnHandler(console=Console(force_terminal=False))
     handler("hi", SessionCore(store=InMemorySessionStore()), sink, logging.getLogger("test"))
     console = agent_cls.return_value.bind_turn.call_args.args[0].console
     assert isinstance(console, CancelConsole)
@@ -315,7 +315,7 @@ def test_turn_handler_forwards_sink_tool_hooks_to_agent(monkeypatch: Any) -> Non
     sink = MagicMock()
     hooks = object()
     sink.tool_hooks = hooks
-    handler = GatewayTurnHandler(console=Console(force_terminal=False))
+    handler = TurnHandler(console=Console(force_terminal=False))
     handler("hi", SessionCore(store=InMemorySessionStore()), sink, logging.getLogger("test"))
     agent = agent_cls.return_value
     assert agent.bind_turn.call_args.args[0].tool_hooks is hooks
@@ -329,7 +329,7 @@ def test_turn_handler_tolerates_sinks_without_tool_hooks(monkeypatch: Any) -> No
             self.finalized = text
 
     agent_cls = _patch_headless_agent(monkeypatch, _empty_turn_result())
-    handler = GatewayTurnHandler(console=Console(force_terminal=False))
+    handler = TurnHandler(console=Console(force_terminal=False))
     handler("hi", SessionCore(store=InMemorySessionStore()), _BareSink(), logging.getLogger("test"))
     agent = agent_cls.return_value
     assert agent.bind_turn.call_args.args[0].tool_hooks is None
@@ -338,12 +338,12 @@ def test_turn_handler_tolerates_sinks_without_tool_hooks(monkeypatch: Any) -> No
 def test_turn_handler_disables_unsupported_gateway_capabilities(monkeypatch: Any) -> None:
     _patch_headless_agent(monkeypatch, _empty_turn_result())
     session = SessionCore(store=InMemorySessionStore())
-    handler = GatewayTurnHandler(console=Console(force_terminal=False))
+    handler = TurnHandler(console=Console(force_terminal=False))
 
     handler(
         "hello",
         session,
-        RecordingGatewayOutputSink(),
+        RecordingTurnOutput(),
         logging.getLogger("test"),
     )
 
@@ -365,11 +365,11 @@ def test_turn_handler_preserves_supported_capabilities(monkeypatch: Any) -> None
         }
     )
 
-    handler = GatewayTurnHandler(console=Console(force_terminal=False))
+    handler = TurnHandler(console=Console(force_terminal=False))
     handler(
         "hello",
         session,
-        RecordingGatewayOutputSink(),
+        RecordingTurnOutput(),
         logging.getLogger("test.gateway.capabilities"),
     )
 
@@ -386,11 +386,11 @@ def test_turn_handler_capability_gating_is_stable_across_turns(monkeypatch: Any)
     session = SessionCore(store=InMemorySessionStore())
     session.available_capabilities["shell_commands"] = ("shell",)
 
-    handler = GatewayTurnHandler(console=Console(force_terminal=False))
+    handler = TurnHandler(console=Console(force_terminal=False))
     logger = logging.getLogger("test.gateway.capabilities")
 
-    handler("first turn", session, RecordingGatewayOutputSink(), logger)
-    handler("second turn", session, RecordingGatewayOutputSink(), logger)
+    handler("first turn", session, RecordingTurnOutput(), logger)
+    handler("second turn", session, RecordingTurnOutput(), logger)
 
     assert session.available_capabilities["investigation"] == ()
     assert session.available_capabilities["llm_provider"] == ()
@@ -415,7 +415,7 @@ def test_turn_handler_emits_gateway_turn_analytics(monkeypatch: Any) -> None:
     from platform.analytics.usage_context import UsageSurface, bound_usage_context
 
     session = SessionCore(store=InMemorySessionStore())
-    handler = GatewayTurnHandler(console=Console(force_terminal=False))
+    handler = TurnHandler(console=Console(force_terminal=False))
     with bound_usage_context(surface=UsageSurface.SLACK, user_id="U1"):
         handler("hi", session, MagicMock(), logging.getLogger("test"))
 
@@ -436,7 +436,7 @@ def test_turn_handler_holds_the_session_lock_for_the_whole_turn(monkeypatch: Any
     # Arrange: record when the lock is held relative to the dispatch.
     _patch_headless_agent(monkeypatch, _empty_turn_result())
     events: list[str] = []
-    handler = GatewayTurnHandler(console=Console(force_terminal=False))
+    handler = TurnHandler(console=Console(force_terminal=False))
     real_session_agent = handler._pool.session_agent
 
     @contextmanager
@@ -468,16 +468,14 @@ def test_turn_handler_forwards_agent_build_to_the_pool(
 
     monkeypatch.setattr(SessionAgentPool, "__init__", _init)
     agent_build = AgentBuildConfig()
-    GatewayTurnHandler(console=Console(force_terminal=False), agent_build=agent_build)
+    TurnHandler(console=Console(force_terminal=False), agent_build=agent_build)
     assert seen == [agent_build]
 
 
-def _handler_with_fake_agent(
-    monkeypatch: Any, result: TurnResult
-) -> tuple[GatewayTurnHandler, MagicMock]:
+def _handler_with_fake_agent(monkeypatch: Any, result: TurnResult) -> tuple[TurnHandler, MagicMock]:
     """A handler plus the fake agent it will build, so tests can read the binding."""
     factory = _patch_headless_agent(monkeypatch, result)
-    return GatewayTurnHandler(console=Console(force_terminal=False)), factory.return_value
+    return TurnHandler(console=Console(force_terminal=False)), factory.return_value
 
 
 def _last_binding(agent: MagicMock) -> Any:
@@ -498,8 +496,8 @@ def test_run_returns_the_turn_result_that_the_callback_discards(monkeypatch: Any
     session = SessionCore(store=InMemorySessionStore())
 
     # Act
-    returned = handler.run("hello", session, RecordingGatewayOutputSink(), logging.getLogger("t"))
-    discarded = handler("hello", session, RecordingGatewayOutputSink(), logging.getLogger("t"))
+    returned = handler.run("hello", session, RecordingTurnOutput(), logging.getLogger("t"))
+    discarded = handler("hello", session, RecordingTurnOutput(), logging.getLogger("t"))
 
     # Assert
     assert returned is expected
@@ -523,7 +521,7 @@ def test_run_forwards_the_callers_terminal_context_to_the_turn(monkeypatch: Any)
     handler.run(
         "hello",
         SessionCore(store=InMemorySessionStore()),
-        RecordingGatewayOutputSink(),
+        RecordingTurnOutput(),
         logging.getLogger("t"),
         console=caller_console,
         confirm_fn=_confirm,
@@ -550,7 +548,7 @@ def test_run_without_caller_context_is_the_transport_path(monkeypatch: Any) -> N
     handler(
         "hello",
         SessionCore(store=InMemorySessionStore()),
-        RecordingGatewayOutputSink(),
+        RecordingTurnOutput(),
         logging.getLogger("t"),
     )
 
@@ -568,8 +566,8 @@ def test_run_returns_none_and_says_at_capacity_when_the_gate_refuses(monkeypatch
     _patch_headless_agent(monkeypatch, _empty_turn_result())
     gate = TurnConcurrencyGate(1)
     assert gate.try_acquire() is True  # the only slot is taken
-    handler = GatewayTurnHandler(console=Console(force_terminal=False), gate=gate)
-    sink = RecordingGatewayOutputSink()
+    handler = TurnHandler(console=Console(force_terminal=False), gate=gate)
+    sink = RecordingTurnOutput()
 
     # Act
     returned = handler.run(

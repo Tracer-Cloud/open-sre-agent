@@ -49,7 +49,7 @@ from gateway.transports.slack.processing.thread_history import (
 from gateway.transports.slack.settings import SlackGatewaySettings
 from integrations.messaging_security import MessagingPlatform
 from platform.analytics.usage_context import UsageSurface, bound_usage_context
-from platform.turn_host.turn_callback import GatewayAgentCallback
+from platform.turn_host.turn_callback import TurnCallback
 
 
 # Only an explicit 402 from the credit ledger posts this; UNCONFIGURED /
@@ -64,7 +64,7 @@ class SlackTurnDispatcher:
         settings: SlackGatewaySettings,
         messaging: SlackMessagingClient,
         session_resolver: SessionResolver,
-        handler: GatewayAgentCallback,
+        handler: TurnCallback,
         logger: logging.Logger,
         bot_user_id: str = "",
         approvals: ApprovalBroker | None = None,

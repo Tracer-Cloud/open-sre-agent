@@ -1,6 +1,6 @@
 """Test-only capacity wrapper for arbitrary gateway callbacks.
 
-Production chat uses :class:`~platform.turn_host.turn_handler.GatewayTurnHandler`
+Production chat uses :class:`~platform.turn_host.turn_handler.TurnHandler`
 with ``gate=``. This helper stays under ``gateway/tests/`` so it cannot be
 mistaken for a second production turn-handler class (Wave C4 quarantine).
 """
@@ -11,17 +11,17 @@ import logging
 
 from core.agent_harness.session import SessionCore
 from platform.turn_host.concurrency import TurnConcurrencyGate
-from platform.turn_host.turn_callback import GatewayAgentCallback
-from platform.turn_host.turn_output import GatewayOutputSink
+from platform.turn_host.turn_callback import TurnCallback
+from platform.turn_host.turn_output import TurnOutput
 
 
 class ConcurrencyLimitedTurnHandler:
-    """Capacity wrapper for arbitrary :data:`GatewayAgentCallback` callables."""
+    """Capacity wrapper for arbitrary :data:`TurnCallback` callables."""
 
     def __init__(
         self,
         *,
-        handler: GatewayAgentCallback,
+        handler: TurnCallback,
         gate: TurnConcurrencyGate,
         busy_message: str = "OpenSRE is at capacity. Please try again shortly.",
     ) -> None:
@@ -33,7 +33,7 @@ class ConcurrencyLimitedTurnHandler:
         self,
         text: str,
         session: SessionCore,
-        output: GatewayOutputSink,
+        output: TurnOutput,
         logger: logging.Logger,
     ) -> None:
         if not self._gate.try_acquire():
@@ -46,8 +46,8 @@ class ConcurrencyLimitedTurnHandler:
 
 
 def gated_callback(
-    handler: GatewayAgentCallback,
+    handler: TurnCallback,
     gate: TurnConcurrencyGate,
-) -> GatewayAgentCallback:
+) -> TurnCallback:
     """Wrap an arbitrary callback with the shared capacity gate (tests only)."""
     return ConcurrencyLimitedTurnHandler(handler=handler, gate=gate)

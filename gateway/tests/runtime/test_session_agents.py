@@ -14,7 +14,7 @@ from core.agent_harness.session.persistence.memory import InMemorySessionStore
 from core.agent_harness.turns.turn_results import ToolCallingTurnResult, TurnResult
 from platform.turn_host.bindable_output import BindableOutput
 from platform.turn_host.session_agents import SessionAgentPool
-from platform.turn_host.turn_handler import GatewayTurnHandler
+from platform.turn_host.turn_handler import TurnHandler
 from tests.shared.default_headless_build_stub import default_headless_build_stub
 from tests.shared.fake_agent import fake_agent
 
@@ -151,7 +151,7 @@ def test_turn_handler_reuses_headless_agent_across_turns(monkeypatch: pytest.Mon
     )
 
     session = SessionCore(store=InMemorySessionStore())
-    handler = GatewayTurnHandler(console=Console(force_terminal=False))
+    handler = TurnHandler(console=Console(force_terminal=False))
     logger = logging.getLogger("test.reuse")
     handler("one", session, MagicMock(), logger)
     handler("two", session, MagicMock(), logger)

@@ -2,7 +2,7 @@
 
 A gateway session reuses one :class:`HeadlessAgent` across inbound messages.
 Each turn has its own transport destination, so this object stays on the agent
-and :meth:`bind` points it at that turn's :class:`GatewayOutputSink` before
+and :meth:`bind` points it at that turn's :class:`TurnOutput` before
 dispatch.
 """
 
@@ -12,7 +12,7 @@ import threading
 from collections.abc import Iterable, Iterator
 from typing import Any
 
-from platform.turn_host.turn_output import GatewayOutputSink
+from platform.turn_host.turn_output import TurnOutput
 
 
 class BindableOutput:
@@ -23,14 +23,14 @@ class BindableOutput:
     """
 
     def __init__(self) -> None:
-        self._inner: GatewayOutputSink | None = None
+        self._inner: TurnOutput | None = None
 
-    def bind(self, output: GatewayOutputSink) -> None:
+    def bind(self, output: TurnOutput) -> None:
         """Point subsequent writes at ``output`` for the current turn."""
         self._inner = output
 
     @property
-    def bound(self) -> GatewayOutputSink | None:
+    def bound(self) -> TurnOutput | None:
         """Currently bound transport destination, if any."""
         return self._inner
 
@@ -48,7 +48,7 @@ class BindableOutput:
         cancel = getattr(inner, "turn_cancel", None)
         return cancel if isinstance(cancel, threading.Event) else None
 
-    def _require(self) -> GatewayOutputSink:
+    def _require(self) -> TurnOutput:
         inner = self._inner
         if inner is None:
             raise RuntimeError("gateway turn output not bound")

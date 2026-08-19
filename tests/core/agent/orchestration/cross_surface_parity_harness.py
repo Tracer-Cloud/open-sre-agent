@@ -28,7 +28,7 @@ from core.agent_harness.turns.turn_results import TurnResult
 from core.domain.types.tools import ToolSurface
 from core.llm.types import AgentLLMResponse, ToolCall
 from core.tool_framework.registered_tool import RegisteredTool
-from platform.turn_host.turn_handler import GatewayTurnHandler
+from platform.turn_host.turn_handler import TurnHandler
 from surfaces.interactive_shell.runtime.shell_turn_execution import execute_shell_turn
 from surfaces.interactive_shell.runtime.slash_adapter import headless_slash_ports
 from surfaces.interactive_shell.session import Session
@@ -177,7 +177,7 @@ class FakeReasoningClient:
         yield PARITY_ANSWER
 
 
-class RecordingGatewayOutputSink:
+class RecordingTurnOutput:
     """Minimal gateway sink that records stream/finalize output for assertions."""
 
     def __init__(self) -> None:
@@ -395,11 +395,11 @@ def snapshot_gateway_handler(
     integrations: dict[str, Any] | None = None,
 ) -> TurnSnapshot:
     session = fresh_session(integrations=integrations)
-    sink = RecordingGatewayOutputSink()
+    sink = RecordingTurnOutput()
     captured: list[TurnResult] = []
     _install_gateway_dispatch_spy(monkeypatch, captured)
     before = probe_run_count()
-    handler = GatewayTurnHandler(
+    handler = TurnHandler(
         console=console(),
         slash_ports_factory=headless_slash_ports,
     )
@@ -460,14 +460,14 @@ def run_gateway_turn_with_sink(
     monkeypatch: Any,
     *,
     integrations: dict[str, Any] | None = None,
-) -> tuple[TurnSnapshot, RecordingGatewayOutputSink]:
+) -> tuple[TurnSnapshot, RecordingTurnOutput]:
     """Run one gateway turn and return both routing snapshot and transport sink."""
     session = fresh_session(integrations=integrations)
-    sink = RecordingGatewayOutputSink()
+    sink = RecordingTurnOutput()
     captured: list[TurnResult] = []
     _install_gateway_dispatch_spy(monkeypatch, captured)
     before = probe_run_count()
-    handler = GatewayTurnHandler(
+    handler = TurnHandler(
         console=console(),
         slash_ports_factory=headless_slash_ports,
     )

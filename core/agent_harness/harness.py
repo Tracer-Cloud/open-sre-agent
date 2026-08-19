@@ -287,7 +287,7 @@ class AgentSession:
         opensre_evaluate: bool = False,
         investigation_metadata: tuple[str, str] | None = None,
     ) -> InvestigationResult:
-        """Run a Path-2 investigation and return a typed result.
+        """Run an investigation and return a typed result.
 
         Uses the payload runner installed at process boot
         (:func:`core.agent_harness.investigation_api.install_investigation_payload_runner`).

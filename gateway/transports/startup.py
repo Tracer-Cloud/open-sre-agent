@@ -28,7 +28,7 @@ from gateway.transports.registration import TransportRegistration
 from gateway.transports.slack.startup import start_slack_worker
 from gateway.transports.telegram.startup import start_telegram_worker
 from gateway.transports.worker import TransportWorker
-from platform.turn_host.turn_callback import GatewayAgentCallback
+from platform.turn_host.turn_callback import TurnCallback
 
 # How long a shutdown waits on each worker before giving up on it.
 DEFAULT_STOP_TIMEOUT_SECONDS = 8.0
@@ -66,7 +66,7 @@ class ChatStartup:
 def start_transports(
     *,
     logger: logging.Logger,
-    handler: GatewayAgentCallback,
+    handler: TurnCallback,
 ) -> ChatStartup:
     """Start every configured transport and report what each one did.
 

@@ -10,7 +10,7 @@ Pinned rules (see ``gateway/AGENTS.md``):
 * ``gateway.startup`` may import peer ``*.startup`` (and ``gateway.web``); peers
   must not import channels.
 * ``gateway.core`` names no chat vendor; a transport names only its own.
-* ``platform.scheduling.scheduler`` never imports ``GatewayTurnHandler`` (producer, not a
+* ``platform.scheduling.scheduler`` never imports ``TurnHandler`` (producer, not a
   chat channel — see ``gateway/AGENTS.md`` Channel vs producer).
 """
 
@@ -244,7 +244,7 @@ def test_scheduler_never_imports_the_gateway_turn_handler() -> None:
 
     The gateway process may host ``platform.scheduling.scheduler`` (same capacity gate).
     Runners still enter through ``AgentSession.run_headless_turn``, not
-    ``GatewayTurnHandler``. Importing the handler here is how someone "fixes"
+    ``TurnHandler``. Importing the handler here is how someone "fixes"
     the scheduler into a fifth chat channel.
     """
     banned = ("platform.turn_host.turn_handler",)
@@ -256,9 +256,9 @@ def test_scheduler_never_imports_the_gateway_turn_handler() -> None:
         for node in ast.walk(tree):
             if isinstance(node, ast.ImportFrom):
                 for alias in node.names:
-                    if alias.name == "GatewayTurnHandler":
+                    if alias.name == "TurnHandler":
                         rel = path.relative_to(REPO_ROOT)
-                        offenders.append(f"{rel} → GatewayTurnHandler")
+                        offenders.append(f"{rel} → TurnHandler")
     assert offenders == [], "scheduler imported the chat turn handler:\n" + "\n".join(offenders)
 
 
@@ -292,7 +292,7 @@ _QUARANTINED_HANDLER_NAMES = frozenset(
 
 
 def test_concurrency_limited_handler_stays_out_of_production_gateway() -> None:
-    """Wave C4: capacity wrapper is tests-only; production uses GatewayTurnHandler(gate=)."""
+    """Wave C4: capacity wrapper is tests-only; production uses TurnHandler(gate=)."""
     offenders: list[str] = []
     for path in _python_files("gateway"):
         if "tests" in path.parts:

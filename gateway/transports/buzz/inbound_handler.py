@@ -24,7 +24,7 @@ from gateway.transports.buzz.session_rotation import conversation_key, resolve_o
 from gateway.transports.buzz.settings import BuzzInboundMessage, GatewaySettings
 from integrations.buzz.client import BuzzClient
 from platform.analytics.usage_context import UsageSurface, bound_usage_context
-from platform.turn_host.turn_callback import GatewayAgentCallback
+from platform.turn_host.turn_callback import TurnCallback
 
 logger = logging.getLogger(__name__)
 
@@ -43,7 +43,7 @@ async def handle_polled_inbound_buzz_message(
     active_cancels: ActiveTurnRegistry,
     turn_cancel: threading.Event | None = None,
     loop: asyncio.AbstractEventLoop | None = None,
-    handle_callback_to_gateway_agent: GatewayAgentCallback,
+    handle_callback_to_gateway_agent: TurnCallback,
     on_handled: Callable[[], None] | None = None,
 ) -> None:
     """Process one long-polled inbound Buzz mention/reply.

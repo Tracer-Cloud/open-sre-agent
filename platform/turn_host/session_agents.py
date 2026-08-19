@@ -1,6 +1,6 @@
-"""Session-scoped :class:`HeadlessAgent` pool for the gateway turn handler.
+"""Session-scoped :class:`HeadlessAgent` pool for the turn handler.
 
-Keeps agent construction out of :class:`GatewayTurnHandler` so the handler
+Keeps agent construction out of :class:`TurnHandler` so the handler
 stays a thin dispatch/finalize orchestrator. Construction goes through
 :meth:`~core.agent_harness.turns.headless_build.DefaultHeadlessBuild.agent`
 once per session — not a second port-construction path.
@@ -28,7 +28,7 @@ from core.agent_harness.runtime import (
 from platform.turn_host.bindable_output import BindableOutput
 from platform.turn_host.capability_policy import ensure_gateway_capability_policy
 from platform.turn_host.status_messages import status_from_tool_start
-from platform.turn_host.turn_output import GatewayOutputSink
+from platform.turn_host.turn_output import TurnOutput
 
 
 class _ToolStatusObserver:
@@ -87,7 +87,7 @@ class SessionAgentPool:
         self,
         *,
         session: SessionCore,
-        output: GatewayOutputSink,
+        output: TurnOutput,
         logger: logging.Logger,
     ) -> Iterator[HeadlessAgent]:
         """Hold this session's agent for the whole turn.
@@ -108,7 +108,7 @@ class SessionAgentPool:
         self,
         *,
         session: SessionCore,
-        output: GatewayOutputSink,
+        output: TurnOutput,
         logger: logging.Logger,
     ) -> HeadlessAgent:
         """Return a session-scoped agent with ``output`` bound for this turn.

@@ -25,7 +25,7 @@ from gateway.transports.buzz.runtime import (
 from gateway.transports.buzz.session_rotation import conversation_key
 from gateway.transports.buzz.settings import BuzzInboundMessage, GatewaySettings
 from integrations.buzz.client import BuzzClient
-from platform.turn_host.turn_callback import GatewayAgentCallback
+from platform.turn_host.turn_callback import TurnCallback
 
 logger = logging.getLogger(__name__)
 
@@ -39,7 +39,7 @@ def start_buzz_gateway_background(
     logger: logging.Logger,
     initialize_runtime: InitializeBuzzPollingRuntime,
     shutdown_runtime: ShutdownBuzzPollingRuntime,
-    handle_callback_to_gateway_agent: GatewayAgentCallback,
+    handle_callback_to_gateway_agent: TurnCallback,
 ) -> PollingBackground:
     """Start Buzz mention polling in a background thread."""
 
@@ -75,7 +75,7 @@ async def _poll_buzz_until_stopped(
     stop_event: threading.Event,
     logger: logging.Logger,
     resources: BuzzPollingRuntime,
-    handle_callback_to_gateway_agent: GatewayAgentCallback,
+    handle_callback_to_gateway_agent: TurnCallback,
 ) -> None:
     """Poll the mention feed and dispatch (or resolve approvals) until shutdown.
 
@@ -225,7 +225,7 @@ async def _dispatch_turn(
     active_cancels: ActiveTurnRegistry,
     turn_cancel: threading.Event | None = None,
     loop: asyncio.AbstractEventLoop,
-    handle_callback_to_gateway_agent: GatewayAgentCallback,
+    handle_callback_to_gateway_agent: TurnCallback,
     logger: logging.Logger,
     acknowledge: Callable[[BuzzInboundMessage], None],
 ) -> None:

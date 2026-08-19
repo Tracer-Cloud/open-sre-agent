@@ -1,6 +1,6 @@
-"""Dispatch one inbound gateway message through the shared headless agent.
+"""Dispatch one inbound message through the shared headless agent.
 
-This is the **only** gateway turn handler. Transport dispatchers
+This is the **only** turn handler. Transport dispatchers
 (Slack/Discord/Telegram) are ingress adapters: they authorize, resolve a
 session, build turn output, then call this callback. Process-wide capacity is an
 optional gate on the same object — not a second handler.
@@ -9,9 +9,9 @@ Transport-agnostic: takes ``(text, session, output, logger)``, runs the turn, an
 finalizes outbound text on the output. Agent reuse is handled by
 :class:`SessionAgentPool`.
 
-Two entries, one turn. :meth:`GatewayTurnHandler.__call__` is the
-``GatewayAgentCallback`` the four chat transports use and returns nothing.
-:meth:`GatewayTurnHandler.run` is the same turn for an in-process caller that
+Two entries, one turn. :meth:`TurnHandler.__call__` is the
+``TurnCallback`` the four chat transports use and returns nothing.
+:meth:`TurnHandler.run` is the same turn for an in-process caller that
 needs the outcome as a value and has a terminal to bind — it returns the
 ``TurnResult`` (``None`` at capacity) and accepts the caller's console,
 ``confirm_fn`` and ``is_tty``. Every keyword defaults to the transport path, so
@@ -52,11 +52,11 @@ from platform.turn_host.cancel_console import CancelConsole
 from platform.turn_host.concurrency import AT_CAPACITY_MESSAGE, TurnConcurrencyGate
 from platform.turn_host.session_agents import SessionAgentPool
 from platform.turn_host.status_messages import EMPTY_RESPONSE_MESSAGE
-from platform.turn_host.turn_output import GatewayOutputSink
+from platform.turn_host.turn_output import TurnOutput
 
 
-class GatewayTurnHandler:
-    """Services one inbound gateway message per call (a :data:`GatewayAgentCallback`).
+class TurnHandler:
+    """Services one inbound gateway message per call (a :data:`TurnCallback`).
 
     One :class:`HeadlessAgent` is kept per logical session and reused across
     turns; each message goes through :meth:`HeadlessAgent.handle` with a
@@ -91,17 +91,17 @@ class GatewayTurnHandler:
         self,
         text: str,
         session: SessionCore,
-        output: GatewayOutputSink,
+        output: TurnOutput,
         logger: logging.Logger,
     ) -> None:
-        """The :data:`GatewayAgentCallback`: chat transports reply through the output."""
+        """The :data:`TurnCallback`: chat transports reply through the output."""
         self.run(text, session, output, logger)
 
     def run(
         self,
         text: str,
         session: SessionCore,
-        output: GatewayOutputSink,
+        output: TurnOutput,
         logger: logging.Logger,
         *,
         console: Console | None = None,
@@ -136,7 +136,7 @@ class GatewayTurnHandler:
         self,
         text: str,
         session: SessionCore,
-        output: GatewayOutputSink,
+        output: TurnOutput,
         logger: logging.Logger,
         *,
         console: Console | None,
@@ -233,4 +233,4 @@ class GatewayTurnHandler:
                 raise
 
 
-__all__ = ["GatewayTurnHandler"]
+__all__ = ["TurnHandler"]

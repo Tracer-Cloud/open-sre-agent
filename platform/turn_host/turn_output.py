@@ -1,8 +1,8 @@
-"""Per-turn output the host writes and a chat transport must accept.
+"""Everything one turn shows the person who asked.
 
-This is the gateway's :class:`~core.agent_harness.OutputSink`: the same
-ephemeral turn-delivery port the harness already names, plus live tool-status
-and the final chat answer. It is not a store, a notifier, or a callback.
+Progress lines, streamed answer text, the live tool status, and the final
+answer all go out through here. A channel implements it; the host only writes
+to it, and never reads back.
 """
 
 from __future__ import annotations
@@ -13,7 +13,7 @@ from core.agent_harness import OutputSink
 
 
 @runtime_checkable
-class GatewayOutputSink(OutputSink, Protocol):
+class TurnOutput(OutputSink, Protocol):
     def set_tool_status(self, text: str) -> None:
         """Show live tool progress for the running turn."""
 

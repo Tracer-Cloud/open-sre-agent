@@ -21,7 +21,7 @@ from gateway.transports.slack.client import SlackWebApiClient
 from gateway.transports.slack.delivery.channel_intro import ChannelIntroGreeter
 from gateway.transports.slack.processing.dispatcher import SlackTurnDispatcher
 from gateway.transports.slack.settings import SlackGatewaySettings
-from platform.turn_host.turn_callback import GatewayAgentCallback
+from platform.turn_host.turn_callback import TurnCallback
 
 _PLATFORM_SLACK = "slack"
 
@@ -65,7 +65,7 @@ def build_slack_turn_stack(
     *,
     settings: SlackGatewaySettings,
     logger: logging.Logger,
-    handler: GatewayAgentCallback,
+    handler: TurnCallback,
 ) -> SlackTurnStack:
     """Construct the Slack turn collaborators for one gateway process."""
     web_client = WebClient(token=settings.bot_token)

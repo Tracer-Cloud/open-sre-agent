@@ -12,9 +12,9 @@ from rich.console import Console
 from core.agent_harness.session import SessionCore
 from core.agent_harness.session.persistence.memory import InMemorySessionStore
 from core.agent_harness.tools.action_tools import get_action_tool
-from platform.turn_host.turn_handler import GatewayTurnHandler
+from platform.turn_host.turn_handler import TurnHandler
 from tests.core.agent.orchestration.cross_surface_parity_harness import (
-    RecordingGatewayOutputSink,
+    RecordingTurnOutput,
     headless_slash_ports,
 )
 
@@ -23,10 +23,10 @@ def _gateway_console() -> Console:
     return Console(file=io.StringIO(), force_terminal=False, highlight=False, width=100)
 
 
-def _run_gateway_slash(message: str) -> RecordingGatewayOutputSink:
+def _run_gateway_slash(message: str) -> RecordingTurnOutput:
     session = SessionCore(store=InMemorySessionStore())
-    sink = RecordingGatewayOutputSink()
-    handler = GatewayTurnHandler(
+    sink = RecordingTurnOutput()
+    handler = TurnHandler(
         console=_gateway_console(),
         slash_ports_factory=headless_slash_ports,
     )

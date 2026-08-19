@@ -35,7 +35,7 @@ from gateway.transports.slack.transport.socket_mode.worker import (
     start_slack_gateway_background,
 )
 from gateway.transports.slack.turn_stack import build_slack_turn_stack
-from platform.turn_host.turn_callback import GatewayAgentCallback
+from platform.turn_host.turn_callback import TurnCallback
 
 SlackWorker = SlackGatewayBackground | SlackHttpServerHandle
 
@@ -48,7 +48,7 @@ def _env_flag(name: str) -> bool:
 
 
 def _start_socket_mode(
-    *, settings: SlackGatewaySettings, logger: logging.Logger, handler: GatewayAgentCallback
+    *, settings: SlackGatewaySettings, logger: logging.Logger, handler: TurnCallback
 ) -> SlackWorker:
     return start_slack_gateway_background(settings=settings, logger=logger, handler=handler)
 
@@ -80,7 +80,7 @@ def _build_handled_event_repository(logger: logging.Logger) -> HandledSlackEvent
 
 
 def _start_events_api_http(
-    *, settings: SlackGatewaySettings, logger: logging.Logger, handler: GatewayAgentCallback
+    *, settings: SlackGatewaySettings, logger: logging.Logger, handler: TurnCallback
 ) -> SlackWorker:
     stack = build_slack_turn_stack(settings=settings, logger=logger, handler=handler)
 
@@ -117,7 +117,7 @@ _TRANSPORT_STARTERS: Mapping[
 def start_slack_worker(
     *,
     logger: logging.Logger,
-    handler: GatewayAgentCallback,
+    handler: TurnCallback,
 ) -> tuple[SlackWorker, SlackGatewaySettings]:
     """Load Slack settings and start the configured inbound transport.
 

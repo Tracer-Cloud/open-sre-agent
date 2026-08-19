@@ -39,21 +39,25 @@ start_gateway()
   → ready
 ```
 
-- **Surface startup:** `gateway/startup.py` starts web and all chat transports.
-  The controller retains `StartedGateway`.
-- Missing chat credentials → `not configured`; readiness/runtime failures →
-  `failed`. The rest still start.
-- **Scheduler** is a **platform** component (`platform.scheduling.scheduler`). The gateway
-  process *may host* it (`start_scheduler()` → `scheduler_runners().gated(…).install()`
-  + `start_background_scheduler()`). It is not a consumer surface, not a
-  transport, and there is no `gateway/scheduler/` package. Do not move runner
-  code into `gateway/core/lifecycle/`.
-- **Daemon** is pidfile + spawn in `core/process/supervision.py`. Do not fold it
-  into a scheduler package. The child argv is surface-owned (`python -m
-  surfaces.gateway_entry`, or `opensre gateway start --foreground` when frozen).
-- `gateway.core` must not import `gateway.transports` / `gateway.web`; only
-  `controller.py` imports `gateway.startup`.
-- Peer transports and `web` must not import `gateway.startup`.
+`gateway/startup.py` starts web and all chat transports; the controller
+retains `StartedGateway`. Missing chat credentials are `not configured`;
+readiness or runtime failures are `failed`; the rest still start.
+
+The scheduler is a platform component (`platform.scheduling.scheduler`).
+This process may host it (`start_scheduler()` →
+`scheduler_runners().gated(…).install()` plus `start_background_scheduler()`).
+It is not a consumer surface or a transport, and there is no
+`gateway/scheduler/` package. Do not move runner code into
+`gateway/core/lifecycle/`.
+
+The daemon is pidfile plus spawn in `core/process/supervision.py`. Do not
+fold it into a scheduler package. The child argv is surface-owned
+(`python -m surfaces.gateway_entry`, or `opensre gateway start --foreground`
+when frozen).
+
+`gateway.core` must not import `gateway.transports` or `gateway.web`; only
+`controller.py` imports `gateway.startup`. Peer transports and `web` must
+not import `gateway.startup`.
 
 ## Layout
 
@@ -97,14 +101,16 @@ flat by surface (do not nest a directory named after the Discord PyPI package).
 
 The package holds two different things, and only one of them faces outward:
 
-- **The deployment** — the daemon, the transports, the web app, storage. A
-  surface may drive the *process* (start, stop, status) and nothing else.
-  The task scheduler is hosted here when this process is the long-lived runner;
-  CLI/shell own loop CRUD and call `request_scheduler_reload()` after writes.
-- **The turn service** — `GatewayTurnHandler`, the middleware steps and the
-  session-agent pool. A surface never imports this. A surface that runs turns
-  is a **channel**: it implements `platform.turn_host` (turn contract) / `gateway.transports` (registry) and is handed to
-  the turn service, the same way the four chat transports are.
+The deployment is the daemon, the transports, the web app, and storage. A
+surface may start, stop, or query that process and nothing else. The task
+scheduler is hosted here when this process is the long-lived runner; CLI
+and shell own loop CRUD and call `request_scheduler_reload()` after writes.
+
+The turn service is `TurnHandler`, the middleware steps, and the
+session-agent pool. A surface never imports that. A surface that runs
+turns is a channel: it implements the `platform.turn_host` turn contract
+and is registered in `gateway.transports`, then handed to the turn
+service the same way the four chat transports are.
 
 ## Channel vs producer
 
@@ -112,7 +118,7 @@ Two ways work reaches the agent. Mixing them is how a second turn engine appears
 
 | | Has a user and turn output? | Entry |
 |--|------------------------|--------|
-| **Channel** (Slack, Telegram, Discord, Buzz) | Yes | `GatewayTurnHandler` — `(text, session, output, logger)` |
+| **Channel** (Slack, Telegram, Discord, Buzz) | Yes | `TurnHandler` — `(text, session, output, logger)` |
 | **Interactive shell** | Yes | *today:* `HeadlessAgent.handle` with `AgentBuildConfig`. *Target:* the **chat** verb, like any other channel — it has a user and turn output, so the rule already covers it. The build config is shared; the turn entry is not yet. |
 | **Producer** (`platform.scheduling.scheduler`, scheduled digest/PR runners) | No | Embed: `AgentSession.run_headless_turn` (and investigation payload runners) |
 
@@ -120,7 +126,7 @@ Agent construction hooks live in `core.agent_harness.agent_build_config.AgentBui
 
 The gateway **process** may host the scheduler (same `process_turn_gate`). That
 does not make the scheduler a channel: `platform.scheduling.scheduler` must not import
-`GatewayTurnHandler`. Pinned by
+`TurnHandler`. Pinned by
 `tests/test_package_borders.py::test_scheduler_never_imports_the_gateway_turn_handler`.
 
 `POST /investigate` is the investigation embed verb (`AgentSession.investigate`),
@@ -139,7 +145,7 @@ to hold, not in how hard the work is.
 
 | Verb | Entry | Shape | Gets |
 |------|-------|-------|------|
-| **chat** | `GatewayTurnHandler.__call__(text, session, output, logger)` | returns `None`; every result reaches the user through turn output | capacity gate, capability policy, `SessionAgentPool` reuse, approvals, cancel console, identity policy, turn timeout, terminal outcome, at-capacity copy |
+| **chat** | `TurnHandler.__call__(text, session, output, logger)` | returns `None`; every result reaches the user through turn output | capacity gate, capability policy, `SessionAgentPool` reuse, approvals, cancel console, identity policy, turn timeout, terminal outcome, at-capacity copy |
 | **investigate** | `AgentSession.investigate(...)` (the harness Embed API) | returns a payload to the caller | the process capacity gate only |
 
 `POST /investigate` and `InvestigationWorker` use **investigate** and that is
@@ -158,38 +164,35 @@ there is nothing to hand back. A caller that needs the turn's outcome as a
 value — the shell wants `TurnResult` for accounting, the prompt recorder, and
 `final_intent` — is not served by this signature as written. Widening it is a
 contract change for all four transports, so decide it deliberately rather than
-adding a second entry beside `GatewayTurnHandler`.
+adding a second entry beside `TurnHandler`.
 
 ## Gateway turn dispatch
 
-- **One turn handler:** `GatewayTurnHandler` (optional `gate=` for capacity).
-  Transport Slack/Discord/Telegram *dispatchers* are ingress only — authorize,
-  resolve session, build turn output, then call the shared callback. Do not add a
-  second production turn-handler class next to `GatewayTurnHandler`.
-- **Logging** is configured once at the gateway process level
-  (`configure_logging` in `GatewayController.start_gateway`) — that is intentional.
-- **No persistent gateway `Agent` instance.** Each inbound message gets a
-  per-chat `Session` from `SessionResolver` and is handled by the shared
-  headless dispatch path (`core.agent_harness.turns.headless_agent`).
-- The turn handler callback signature is exactly four arguments: `text`,
-  `session`, `output`, and `logger`. Do not reintroduce `chat_id` into this
-  contract; the output owns chat transport details.
-- Resolve action tools from the live per-chat `Session` each turn via
-  `DefaultToolProvider(session, console)` — same as the interactive shell.
-  Do **not** precompute tools at process start; chat sessions carry their own
-  integration context after `SessionResolver.resolve`.
-- Per-chat session lifecycle (create / resolve / rotate / restore) is owned by
-  `SessionResolver` → `SessionManager`, not by `GatewayController`.
+Every chat transport uses one `TurnHandler` (optional `gate=` for capacity).
+Slack, Discord, and Telegram dispatchers are ingress only: authorize, resolve
+the session, build turn output, then call the shared callback. Do not add a
+second production turn-handler class.
+
+Logging is configured once at process start (`configure_logging` in
+`GatewayController.start_gateway`). There is no long-lived gateway `Agent`:
+each inbound message gets a per-chat `Session` from `SessionResolver` and
+goes through headless dispatch (`core.agent_harness.turns.headless_agent`).
+
+The callback takes exactly four arguments: `text`, `session`, `output`,
+`logger`. Do not put `chat_id` on this contract; the output owns transport
+details. Resolve action tools from the live per-chat `Session` each turn via
+`DefaultToolProvider(session, console)`, same as the interactive shell. Do
+not precompute tools at process start. Session create / resolve / rotate /
+restore belong to `SessionResolver` → `SessionManager`, not `GatewayController`.
 
 ## Tenancy (principal / actor)
 
 Slack, Discord, and Telegram each resolve a `StorageScope` in their own
-`transports/<peer>/principal.py` (peer isolation — no cross-imports):
+`transports/<peer>/principal.py` (peer isolation — no cross-imports).
 
-- **Principal** = silo `ORGANIZATION_ID` (fail closed if missing)
-- **Actor** = platform user id
-- Turn runs under `bound_storage_scope` so bindings/sessions/integrations land
-  on the org mount or `~/.opensre/orgs/<id>/`
+Principal is the silo `ORGANIZATION_ID` (fail closed if missing). Actor is
+the platform user id. The turn runs under `bound_storage_scope` so bindings,
+sessions, and integrations land on the org mount or `~/.opensre/orgs/<id>/`.
 
 CLI / interactive shell stay unbound (legacy empty principal/actor ids).
 `SessionResolver` may adopt a same-document legacy empty-id row into the scoped
@@ -211,20 +214,22 @@ Two different **in-process** limits — do not conflate them:
 | **Per-transport** | `max_concurrent_turns` (defaults to the same profile limit via `turn_limit_for_profile`; override with `*_GATEWAY_MAX_CONCURRENT`) | Caps how many inbound messages that transport may process in parallel *before* they hit the shared turn handler. Does not replace the process gate. |
 
 ```text
-Telegram/Slack/Discord ──► GatewayTurnHandler.try_acquire ──► process_turn_gate()
+Telegram/Slack/Discord ──► TurnHandler.try_acquire ──► process_turn_gate()
 Scheduler (agent + investigate runners) ──► blocking acquire ──► same gate
 POST /investigate ──► try_acquire (busy → 503) ──► same gate
 InvestigationWorker ──► blocking acquire (already claimed) ──► same gate
 ```
 
-- Production chat capacity is on `GatewayTurnHandler(gate=controller.turn_gate)`.
-- `GatewayController` and Path-2 share :func:`~platform.turn_host.concurrency.process_turn_gate`.
-- `ConcurrencyLimitedTurnHandler` is tests-only. Do not reintroduce it under
-  `gateway/core/` — production uses `gate=` on `GatewayTurnHandler` only.
-- **Chat + Path-2:** HTTP `/investigate` busy-drops like chat; the investigation
-  worker blocks like scheduler runners. Analytics: chat uses `gateway_turn_*`
-  with `surface` ∈ {slack,telegram,discord}; investigate uses separate
-  `investigation_*` events (no dedicated capacity-reject event yet).
+Production chat capacity is on `TurnHandler(gate=controller.turn_gate)`.
+`GatewayController` and HTTP investigate share
+:func:`~platform.turn_host.concurrency.process_turn_gate`.
+`ConcurrencyLimitedTurnHandler` is tests-only; production uses `gate=` on
+`TurnHandler` only.
+
+HTTP `POST /investigate` busy-drops like chat. `InvestigationWorker` waits
+like scheduler runners. Chat analytics use `gateway_turn_*` with `surface`
+in {slack, telegram, discord}; investigate uses `investigation_*` events
+(no dedicated capacity-reject event yet).
 
 ## Agent lifetime
 
@@ -246,14 +251,15 @@ the loop; true one-shot digests may use `AgentSession.run_headless_turn`.
 
 ## Host parity (chat surfaces)
 
-Same turn engine for Slack / Telegram / Discord: ingress → `GatewayTurnHandler`
-→ `SessionAgentPool` → `AgentSession.chat`. Web investigate is Path-2 (separate
-verb) — see Capacity above. Values: **yes** / **partial** / **no** / **n/a**.
+Same turn engine for Slack / Telegram / Discord: ingress → `TurnHandler`
+→ `SessionAgentPool` → `AgentSession.chat`. Web `POST /investigate` is a
+separate verb (`AgentSession.investigate`); see Capacity. Values: **yes** /
+**partial** / **no** / **n/a**.
 
 | Concern | Slack | Telegram | Discord | Web |
 |---------|-------|----------|---------|-----|
 | Cancel / stop mid-turn | **yes** — soft timeout + user `/stop` via `ActiveTurnRegistry` → `output.turn_cancel` | **yes** — same | **yes** — same | **partial** — queued investigate cancel only |
-| Approvals / `before_tool_call` | **yes** — Block Kit + `approval_tool_hooks` | **yes** — inline keyboard + `approval_tool_hooks` | **yes** — components + `approval_tool_hooks` | **n/a** — Path-2 |
+| Approvals / `before_tool_call` | **yes** — Block Kit + `approval_tool_hooks` | **yes** — inline keyboard + `approval_tool_hooks` | **yes** — components + `approval_tool_hooks` | **n/a** — investigate |
 | Tool resolution | **yes** — live `DefaultToolProvider(session)` | **yes** — same | **yes** — same | **n/a** — investigate runner |
 | Output redaction | **yes** — `user_facing_error_message` | **yes** — same | **yes** — same | **yes** — `type(exc).__name__` only |
 | Principal / actor | **yes** — `slack/principal.py` | **yes** — `telegram/principal.py` | **yes** — `discord/principal.py` | **partial** — Clerk org audit; no `StorageScope` |
@@ -263,7 +269,7 @@ verb) — see Capacity above. Values: **yes** / **partial** / **no** / **n/a**.
 
 - Gateway chat disables `task_cancel` / investigation / llm_provider
   (`platform.turn_host.capability_policy.ensure_gateway_capability_policy`).
-- Path-2 web investigate shares the process gate but has no chat approval prompter.
+- Web investigate shares the process gate but has no chat approval prompter.
 - Soft turn timeout **and** user `/stop` / `stop` / `/cancel` set
   `output.turn_cancel` so the ReAct loop / remaining tools stop cooperatively
   (shell `cancel_requested` parity via `CancelConsole` + `ActiveTurnRegistry`).

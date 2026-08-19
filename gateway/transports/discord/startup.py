@@ -13,13 +13,13 @@ from gateway.transports.discord.settings import (
     DiscordGatewaySettings,
     load_discord_gateway_settings,
 )
-from platform.turn_host.turn_callback import GatewayAgentCallback
+from platform.turn_host.turn_callback import TurnCallback
 
 
 def start_discord_worker(
     *,
     logger: logging.Logger,
-    handler: GatewayAgentCallback,
+    handler: TurnCallback,
 ) -> tuple[DiscordGatewayBackground, DiscordGatewaySettings]:
     """Load Discord settings and start the Gateway WebSocket background worker.
 

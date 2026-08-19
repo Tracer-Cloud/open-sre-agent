@@ -20,13 +20,13 @@ from gateway.transports.telegram.settings import (
     GatewaySettings,
     load_gateway_settings,
 )
-from platform.turn_host.turn_callback import GatewayAgentCallback
+from platform.turn_host.turn_callback import TurnCallback
 
 
 def start_telegram_worker(
     *,
     logger: logging.Logger,
-    handler: GatewayAgentCallback,
+    handler: TurnCallback,
 ) -> tuple[PollingBackground, GatewaySettings]:
     """Load Telegram settings and start the long-poll background worker.
 

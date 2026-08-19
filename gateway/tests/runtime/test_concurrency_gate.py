@@ -83,10 +83,10 @@ def test_chat_handler_refuses_excess_turn_without_calling_handler() -> None:
 def test_gateway_turn_handler_gate_refuses_excess_without_second_wrapper(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """Production path: capacity lives on GatewayTurnHandler itself."""
+    """Production path: capacity lives on TurnHandler itself."""
     from rich.console import Console
 
-    from platform.turn_host.turn_handler import GatewayTurnHandler
+    from platform.turn_host.turn_handler import TurnHandler
 
     gate = TurnConcurrencyGate(1)
     entered = threading.Event()
@@ -98,7 +98,7 @@ def test_gateway_turn_handler_gate_refuses_excess_without_second_wrapper(
         def finalize(self, text: str) -> None:
             finalized.append(text)
 
-    handler = GatewayTurnHandler(console=Console(force_terminal=False), gate=gate)
+    handler = TurnHandler(console=Console(force_terminal=False), gate=gate)
 
     def _fake_run(self, text, session, sink, logger, **_kwargs):  # noqa: ANN001
         # ``**_kwargs`` absorbs the caller-context keywords ``run`` forwards.
@@ -107,7 +107,7 @@ def test_gateway_turn_handler_gate_refuses_excess_without_second_wrapper(
         entered.set()
         release.wait(1)
 
-    monkeypatch.setattr(GatewayTurnHandler, "_run_turn", _fake_run)
+    monkeypatch.setattr(TurnHandler, "_run_turn", _fake_run)
 
     first = threading.Thread(
         target=handler,

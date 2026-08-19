@@ -42,7 +42,7 @@ from gateway.transports.discord.thread_history import (
 )
 from integrations.messaging_security import MessagingPlatform
 from platform.analytics.usage_context import UsageSurface, bound_usage_context
-from platform.turn_host.turn_callback import GatewayAgentCallback
+from platform.turn_host.turn_callback import TurnCallback
 
 # Discord's reaction API takes the literal Unicode emoji (URL-encoded), not a name.
 _WORKING_EMOJI = "\N{EYES}"
@@ -59,7 +59,7 @@ class DiscordTurnDispatcher:
         settings: DiscordGatewaySettings,
         bot_token: str,
         session_resolver: SessionResolver,
-        handler: GatewayAgentCallback,
+        handler: TurnCallback,
         logger: logging.Logger,
         bot_user_id: str = "",
         approvals: ApprovalBroker | None = None,

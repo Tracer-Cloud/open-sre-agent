@@ -1,4 +1,4 @@
-"""The per-message entry the host exposes to chat transports.
+"""The per-message entry the host exposes to a channel.
 
 Signature: ``(text, session, output, logger)``. Every inbound chat message ends
 in one call to this. Transports depend on this contract; this module must not
@@ -11,6 +11,6 @@ import logging
 from collections.abc import Callable
 
 from core.agent_harness import SessionCore
-from platform.turn_host.turn_output import GatewayOutputSink
+from platform.turn_host.turn_output import TurnOutput
 
-GatewayAgentCallback = Callable[[str, SessionCore, GatewayOutputSink, logging.Logger], None]
+TurnCallback = Callable[[str, SessionCore, TurnOutput, logging.Logger], None]

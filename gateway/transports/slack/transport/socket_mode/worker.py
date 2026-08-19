@@ -22,7 +22,7 @@ from gateway.transports.slack.transport.socket_mode.heartbeat import (
     ConnectionHeartbeat,
 )
 from gateway.transports.slack.turn_stack import build_slack_turn_stack
-from platform.turn_host.turn_callback import GatewayAgentCallback
+from platform.turn_host.turn_callback import TurnCallback
 
 _PLATFORM_SLACK = "slack"
 _EVENTS_API_REQUEST_TYPE = "events_api"
@@ -74,7 +74,7 @@ def start_slack_gateway_background(
     *,
     settings: SlackGatewaySettings,
     logger: logging.Logger,
-    handler: GatewayAgentCallback,
+    handler: TurnCallback,
 ) -> SlackGatewayBackground:
     """Connect to Slack over Socket Mode and dispatch inbound messages until stopped."""
     stack = build_slack_turn_stack(settings=settings, logger=logger, handler=handler)

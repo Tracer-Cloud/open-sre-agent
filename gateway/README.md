@@ -22,7 +22,7 @@ transport-specific code.
 | **Telegram transport** | `gateway/transports/telegram/startup.py` → `start_telegram_worker` | Via the startup registry |
 | **Slack transport** | `gateway/transports/slack/startup.py` → `start_slack_worker` | Via the startup registry |
 | **Discord transport** | `gateway/transports/discord/startup.py` → `start_discord_worker` | Via the startup registry (includes readiness wait) |
-| **Per-message turn** | `platform/turn_host/turn_handler.py` → `GatewayTurnHandler` | Injected into chat transports as the agent callback |
+| **Per-message turn** | `platform/turn_host/turn_handler.py` → `TurnHandler` | Injected into chat transports as the agent callback |
 
 ```text
 opensre gateway start
@@ -50,25 +50,28 @@ Layout: `core/` (runtime, storage, …), `startup.py` (surface composer),
 
 ## How the pieces fit (surfaces, gateway, integrations)
 
-Three things that are easy to mix up:
+Three things that are easy to mix up.
 
-- **Surface** — a way a person talks *to* the agent (message in, answer out). Today
-  there are three: the interactive shell (`surfaces/interactive_shell`, you type in
-  a terminal), the CLI one-shot (`surfaces/cli`, one command → one answer), and the
-  **gateway** (`gateway/`, you chat with the agent from a chat app).
-- **Gateway** — one specific surface: the always-on process that connects a chat app
-  to the agent. It speaks **Telegram** (long poll), **Slack** (Socket Mode *or*
-  Events API HTTP), and **Discord** (Gateway WebSocket). Slack's two inbound modes
-  share the same turn stack; only how the payload arrives differs
-  (`gateway/transports/slack/transport/`).
-- **Integrations + tools** — the *outbound* / teammate side: the agent reading and
-  posting on a platform. Slack's shared client is `integrations/slack/web_client.py`.
-  Common Slack tools: `slack_send_message` (webhook), `slack_reply_message` (bot
-  token, any channel), `slack_read_messages` (history / thread),
-  `slack_list_team_members` (roster), plus search / join / react helpers under
-  `integrations/slack/tools/`. See `docs/messaging/slack.mdx` for OAuth scopes.
-  Telegram has `telegram_send_message`; Discord is gateway chat + delivery today
-  (no investigation tool pack yet — see `docs/messaging/discord.mdx`).
+A surface is how a person talks to the agent (message in, answer out). Today
+there are three: the interactive shell (`surfaces/interactive_shell`), the
+CLI one-shot (`surfaces/cli`), and the gateway (`gateway/`, chat apps).
+
+The gateway is the always-on process that connects a chat app to the agent.
+It speaks Telegram (long poll), Slack (Socket Mode or Events API HTTP), and
+Discord (Gateway WebSocket). Slack's two inbound modes share the same turn
+stack; only how the payload arrives differs
+(`gateway/transports/slack/transport/`).
+
+Integrations and tools are the outbound / teammate side: the agent reading
+and posting on a platform. Slack's shared client is
+`integrations/slack/web_client.py`. Common Slack tools:
+`slack_send_message` (webhook), `slack_reply_message` (bot token, any
+channel), `slack_read_messages` (history / thread),
+`slack_list_team_members` (roster), plus search / join / react helpers
+under `integrations/slack/tools/`. See `docs/messaging/slack.mdx` for
+OAuth scopes. Telegram has `telegram_send_message`; Discord is gateway
+chat plus delivery today (no investigation tool pack yet — see
+`docs/messaging/discord.mdx`).
 
 Inbound and outbound are independent per platform:
 
@@ -80,7 +83,7 @@ Inbound and outbound are independent per platform:
 
 **One core for every surface.** Shell, CLI, and the gateway transports all hand the
 message to the same place: a session-scoped `HeadlessAgent`
-(`agent.handle(...)` via `GatewayTurnHandler`). They differ only in *how they
+(`agent.handle(...)` via `TurnHandler`). They differ only in *how they
 receive input and send output* — never in how the agent thinks.
 
 ## Quick start
@@ -147,15 +150,15 @@ with the same five pieces `gateway/transports/telegram/` and `gateway/transports
    messages and calls the shared handler with `(text, session, output, logger)`.
 3. **Inbound security**: authorize each message and audit-log it
    (`integrations/messaging_security`).
-4. **Turn output** (implement `GatewayOutputSink` from
+4. **Turn output** (implement `TurnOutput` from
    `platform/turn_host/turn_output.py`): streams status and delivers the answer.
 5. **Session binding** via `gateway/core/storage/session/resolver.py` with a new
    `platform` value: map the platform conversation key to a `Session`.
 
 Then register it in the composition root (`GatewayController` in
 `gateway/core/lifecycle/controller.py`) beside the existing transports. Reuse the handler
-from `GatewayTurnHandler(...)` as-is.
+from `TurnHandler(...)` as-is.
 
-**What you never change:** `GatewayTurnHandler`, harness prompts/tools, or the
+**What you never change:** `TurnHandler`, harness prompts/tools, or the
 session agent pool. Keeping the handler transport-agnostic is exactly what makes
 a new platform a small, self-contained add.
