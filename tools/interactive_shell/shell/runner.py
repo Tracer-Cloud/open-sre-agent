@@ -148,11 +148,7 @@ def run_shell_command(
             response_text = (result.stdout or "").strip()
         elif had_stderr:
             response_text = (result.stderr or "").strip()
-        else:
-            # Outputless success (e.g. ``touch``): there is no stdout to hide.
-            # Quiet already skipped the ``$`` line; still print the same marker
-            # the loud path shows. A quiet turn may also keep a model closing —
-            # the glyph is live feedback, not a second answer.
+        elif not quiet:
             presenter.print(f"[{HIGHLIGHT}]{GLYPH_SUCCESS}[/]")
     else:
         code = result.exit_code if result.exit_code is not None else "?"

@@ -431,13 +431,15 @@ def test_run_shell_command_quiet_hides_command_and_stdout(
     assert session.history[-1]["ok"] is True
 
 
-def test_run_shell_command_quiet_outputless_success_prints_checkmark(
+def test_run_shell_command_quiet_outputless_success_prints_nothing(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """``touch``-style quiet success still prints the success glyph.
+    """Quiet ``touch`` must not print a live success glyph.
 
-    Quiet only hides ``$`` / stdout. There is no stdout to withhold. Print the
-    same live marker as loud mode so an empty closer does not leave a blank turn.
+    Quiet hides ``$`` and stdout. Outputless success has neither; a live
+    marker would still leak intermediate probes before a composed closing.
+    Loud mode prints the glyph. Quiet leaves the terminal blank here — the
+    action closer (kept for quiet ``shell_run``) is the turn's display.
     """
 
     def _fake_execute(**_kwargs: object) -> ShellExecutionResult:
@@ -463,8 +465,9 @@ def test_run_shell_command_quiet_outputless_success_prints_checkmark(
 
     result = run_shell_command("touch file", _presenter(session, console), quiet=True)
 
-    assert GLYPH_SUCCESS in buf.getvalue()
-    assert "$" not in buf.getvalue()
+    out = buf.getvalue()
+    assert out == ""
+    assert GLYPH_SUCCESS not in out
     assert result["ok"] is True
     assert "response_text" not in result
     assert session.history[-1] == {
