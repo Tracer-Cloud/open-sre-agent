@@ -182,6 +182,39 @@ def test_query_metrics_empty_series_preserves_legacy_shape(client, mock_httpx_cl
     assert result == {"success": True, "timestamps": [], "values": [], "series": []}
 
 
+def test_query_metrics_skips_overflowing_timestamp_without_dropping_valid_points(
+    client, mock_httpx_client
+):
+    mock_instance = MagicMock()
+    mock_instance.get.return_value = MagicMock(
+        json=lambda: {
+            "series": [
+                {
+                    "metric": "system.cpu.user",
+                    "scope": "host:web-1",
+                    "pointlist": [
+                        [1_700_000_000_000, 42.5],
+                        [10**1000, 99.0],
+                    ],
+                }
+            ]
+        },
+        raise_for_status=MagicMock(),
+    )
+    mock_httpx_client.return_value = mock_instance
+
+    result = client.query_metrics(
+        "avg:system.cpu.user{*}",
+        start=datetime(2023, 11, 14, 22, 0, tzinfo=UTC),
+        end=datetime(2023, 11, 14, 23, 0, tzinfo=UTC),
+    )
+
+    assert result["success"] is True
+    assert result["timestamps"] == ["2023-11-14T22:13:20Z"]
+    assert result["values"] == [42.5]
+    assert result["series"][0]["points"] == [{"timestamp": "2023-11-14T22:13:20Z", "value": 42.5}]
+
+
 # -------------------------
 # list_monitors
 # -------------------------

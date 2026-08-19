@@ -173,7 +173,7 @@ class DatadogClient:
                                 "value": float(value),
                             }
                         )
-                    except (OSError, TypeError, ValueError):
+                    except (OSError, OverflowError, TypeError, ValueError):
                         continue
                 if not normalized_series:
                     first_points = normalized_points

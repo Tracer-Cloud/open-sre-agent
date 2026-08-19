@@ -540,6 +540,7 @@ RULES: tuple[PathRule, ...] = (
             "tests/tools/test_datadog_metrics_tool.py",
             "tests/tools/test_datadog_monitors_tool.py",
             "tests/tools/test_datadog_node_pods_tool.py",
+            "tests/synthetic/test_datadog_metrics_scenario.py",
         ),
     ),
     PathRule(

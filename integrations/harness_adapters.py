@@ -204,6 +204,7 @@ def _register_preferred_evidence_sources() -> None:
     vendor's ``register_*`` call to stop treating it as preferred (no L0 CTA /
     no dialect draft for that id).
     """
+    from integrations.datadog.metric_drafts import register_datadog_metric_drafts
     from integrations.grafana.metric_drafts import register_grafana_metric_drafts
     from integrations.posthog_mcp.evidence_sources import (
         register_posthog_mcp_evidence_sources,
@@ -218,6 +219,7 @@ def _register_preferred_evidence_sources() -> None:
     clear_metric_query_drafts()
     register_posthog_mcp_evidence_sources()
     register_posthog_mcp_metric_drafts()
+    register_datadog_metric_drafts()
     register_grafana_metric_drafts()
 
 
