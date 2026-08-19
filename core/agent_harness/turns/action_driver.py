@@ -51,6 +51,7 @@ from core.agent_harness.turns.turn_snapshot import TurnSnapshot
 from core.agent_harness.turns.wal_recorder import with_wal_recording
 from core.events import runtime_event_callback_from_observer
 from core.execution import (
+    RESULT_DISPLAYED_FIELD,
     BeforeToolCallResult,
     ToolExecutionHooks,
     ToolExecutionPatch,
@@ -410,22 +411,40 @@ def _preferred_tool_response_text(tool_result: Any) -> str:
     return response_text.strip() if isinstance(response_text, str) else ""
 
 
-def _shell_run_is_quiet(tool_call: Any) -> bool:
-    if tool_call.name != "shell_run":
-        return False
-    args = public_tool_input(tool_call.input)
-    return _coerce_quiet(args.get("quiet", False))
+def _tool_payload_value(tool_result: Any, key: str) -> Any:
+    details = getattr(tool_result, "details", None)
+    if isinstance(details, dict) and key in details:
+        return details[key]
+    content = _content_to_text(getattr(tool_result, "content", "")).strip()
+    if not content:
+        return None
+    try:
+        parsed = json.loads(content)
+    except (TypeError, ValueError, json.JSONDecodeError):
+        return None
+    if isinstance(parsed, dict) and key in parsed:
+        return parsed[key]
+    return None
 
 
-def _response_text_from_quiet_shell_runs(result: Any) -> str:
-    """Join ``response_text`` from ``shell_run`` calls that set ``quiet``.
+def _tool_output_was_displayed(tool_result: Any) -> bool:
+    """True when the tool already showed its output during the call.
 
-    ``quiet`` skips printing the command line and stdout during the tool call.
-    When the action closing is also dropped, this is the stdout still to show.
+    Tools that skip live printing set ``displayed`` to false on the payload.
+    A missing field means displayed — this path must not reprint by default.
+    """
+    value = _tool_payload_value(tool_result, RESULT_DISPLAYED_FIELD)
+    return True if value is None else bool(value)
+
+
+def _response_text_from_undisplayed_results(result: Any) -> str:
+    """Join ``response_text`` from results that did not print during the call.
+
+    When the action closing is also dropped, this is the text still to show.
     """
     chunks: list[str] = []
-    for tool_call, tool_result in getattr(result, "tool_results", []):
-        if not _shell_run_is_quiet(tool_call):
+    for _tool_call, tool_result in getattr(result, "tool_results", []):
+        if _tool_output_was_displayed(tool_result):
             continue
         text = _preferred_tool_response_text(tool_result)
         if text:
@@ -886,13 +905,13 @@ def _compose_response(
     # github_cli / other registry tools without double-printing shell output.
     # response_text still includes history for persistence / non-TTY surfaces.
     #
-    # ``quiet`` shell_run never printed stdout. When the closing is dropped too,
-    # show that stdout so the turn is not a blank line.
+    # Tools that skip live printing still need their response_text on screen
+    # when the closing is dropped too; otherwise the turn is a blank line.
     display_chunks = [chunk for chunk in (display_final, generic_text, hint) if chunk]
     if suppress_final and not generic_text:
-        quiet_text = _response_text_from_quiet_shell_runs(result)
-        if quiet_text:
-            display_chunks = [chunk for chunk in (quiet_text, hint) if chunk]
+        withheld_text = _response_text_from_undisplayed_results(result)
+        if withheld_text:
+            display_chunks = [chunk for chunk in (withheld_text, hint) if chunk]
     response_chunks = [
         chunk
         for chunk in (

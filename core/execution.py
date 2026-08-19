@@ -42,6 +42,12 @@ class ToolExecutionResult:
         return self.details if self.details is not None else self.content
 
 
+# Tool-result payload: whether the tool already showed output during the call.
+# Missing or True → the action closer must not reprint. False → it may surface
+# ``response_text`` when it drops the model closing.
+RESULT_DISPLAYED_FIELD = "displayed"
+
+
 @dataclass(frozen=True)
 class ToolExecutionRequest:
     """Validated tool-call data passed to execution hooks."""

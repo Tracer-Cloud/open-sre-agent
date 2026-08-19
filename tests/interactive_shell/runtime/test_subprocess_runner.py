@@ -403,6 +403,7 @@ def test_run_shell_command_quiet_hides_command_and_stdout(
     assert result["ok"] is True
     assert result["stdout"] == "hi"
     assert result["response_text"] == "hi"
+    assert result["displayed"] is False
     assert session.history[-1]["ok"] is True
 
 

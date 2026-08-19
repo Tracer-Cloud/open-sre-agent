@@ -1,8 +1,8 @@
-"""Quiet ``shell_run`` must still show stdout when the action closing is dropped.
+"""Results that skipped live printing must still show stdout when the closing is dropped.
 
-``quiet=true`` skips the $ line and stdout during the tool call. For a single
-shell step the action closing is also dropped. ``display_chunks`` must then
-carry the tool's ``response_text``, or the REPL is a blank line.
+Tools that withhold live output set ``displayed`` to false on the payload. For a
+single self-recording step the action closing is also dropped. ``display_chunks``
+must then carry the tool's ``response_text``, or the REPL is a blank line.
 """
 
 from __future__ import annotations
@@ -11,6 +11,7 @@ import json
 from typing import Any
 
 from core.agent_harness.turns.action_driver import _compose_response, _TurnCounts
+from core.execution import RESULT_DISPLAYED_FIELD
 from core.llm.types import ToolCall
 
 
@@ -42,6 +43,13 @@ def _shell_call(call_id: str, command: str, *, quiet: bool) -> ToolCall:
     return ToolCall(id=call_id, name="shell_run", input={"command": command, "quiet": quiet})
 
 
+def _payload(response_text: str, *, displayed: bool | None = None) -> dict[str, Any]:
+    payload: dict[str, Any] = {"ok": True, "response_text": response_text}
+    if displayed is not None:
+        payload[RESULT_DISPLAYED_FIELD] = displayed
+    return payload
+
+
 def _counts(steps: int) -> _TurnCounts:
     return _TurnCounts(
         executed_entries=[],
@@ -59,7 +67,7 @@ def test_single_quiet_shell_run_shows_response_text() -> None:
     # Arrange: one quiet step, whose closing the single-step rule drops.
     call = _shell_call("1", "echo hi", quiet=True)
     result = _Result(
-        tool_results=[(call, _ToolResult({"ok": True, "response_text": "hi"}))],
+        tool_results=[(call, _ToolResult(_payload("hi", displayed=False)))],
         final_text="Command completed successfully.",
     )
 
@@ -81,11 +89,11 @@ def test_quiet_probes_stay_hidden_when_a_composed_closing_is_shown() -> None:
         tool_results=[
             (
                 _shell_call("1", "curl wttr.in", quiet=True),
-                _ToolResult({"ok": True, "response_text": "Amsterdam: +18C"}),
+                _ToolResult(_payload("Amsterdam: +18C", displayed=False)),
             ),
             (
                 _shell_call("2", "curl news", quiet=True),
-                _ToolResult({"ok": True, "response_text": "Markets open higher"}),
+                _ToolResult(_payload("Markets open higher", displayed=False)),
             ),
         ],
         final_text=closing,
@@ -107,7 +115,7 @@ def test_loud_shell_run_does_not_reprint_stdout_in_display_chunks() -> None:
     # Arrange: a non-quiet step, whose stdout the runner already painted.
     call = _shell_call("1", "echo hi", quiet=False)
     result = _Result(
-        tool_results=[(call, _ToolResult({"ok": True, "response_text": "hi"}))],
+        tool_results=[(call, _ToolResult(_payload("hi", displayed=True)))],
         final_text="done",
     )
 
@@ -125,10 +133,10 @@ def test_a_generic_tool_result_is_not_replaced_by_quiet_stdout() -> None:
     github = ToolCall(id="1", name="github_cli", input={"command": "run list"})
     result = _Result(
         tool_results=[
-            (github, _ToolResult({"ok": True, "response_text": "3 failed, 59 succeeded"})),
+            (github, _ToolResult(_payload("3 failed, 59 succeeded"))),
             (
                 _shell_call("2", "gh api rate_limit", quiet=True),
-                _ToolResult({"ok": True, "response_text": "rate limit 4998"}),
+                _ToolResult(_payload("rate limit 4998", displayed=False)),
             ),
         ],
         final_text="Here is the run list.",
@@ -143,3 +151,39 @@ def test_a_generic_tool_result_is_not_replaced_by_quiet_stdout() -> None:
     shown = "\n".join(display_chunks)
     assert "3 failed, 59 succeeded" in shown
     assert "rate limit 4998" not in shown
+
+
+def test_undisplayed_result_does_not_depend_on_the_tool_name() -> None:
+    # Arrange: a self-recording tool other than shell_run withheld live output.
+    call = ToolCall(id="1", name="slash_invoke", input={"command": "/health"})
+    result = _Result(
+        tool_results=[(call, _ToolResult(_payload("Oslo: snow", displayed=False)))],
+        final_text="Command completed successfully.",
+    )
+
+    # Act
+    _response_text, display_chunks, _use_final_text = _compose_response(
+        result, _Session(), _counts(1)
+    )
+
+    # Assert
+    shown = "\n".join(display_chunks)
+    assert "Oslo: snow" in shown
+    assert "Command completed successfully." not in shown
+
+
+def test_quiet_on_the_call_without_displayed_false_does_not_reprint() -> None:
+    # Arrange: core must not sniff shell_run/quiet; only the payload flag counts.
+    call = _shell_call("1", "echo hi", quiet=True)
+    result = _Result(
+        tool_results=[(call, _ToolResult(_payload("hi")))],
+        final_text="done",
+    )
+
+    # Act
+    _response_text, display_chunks, _use_final_text = _compose_response(
+        result, _Session(), _counts(1)
+    )
+
+    # Assert
+    assert "\n".join(display_chunks) == ""
