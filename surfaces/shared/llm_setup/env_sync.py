@@ -1,10 +1,8 @@
 """Sync LLM-provider choices into the project .env file.
 
-Generic ``.env`` / keyring writing lives in :mod:`config.env_file` so every
-setup surface shares one implementation. What stays here is the part that is
-specific to the wizard's LLM provider model: which env keys a provider owns,
+Maps a wizard provider selection onto env keys: which keys the provider owns,
 stripping the previous provider's keys on a switch, and mirroring the selection
-into the wizard store.
+into the wizard store. File and keyring I/O uses ``config.env_file``.
 """
 
 from __future__ import annotations

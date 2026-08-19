@@ -1,7 +1,6 @@
 """Terminal rendering for structured OpenSRE errors.
 
-The frontend-agnostic error contract lives in :mod:`platform.errors`.
-This module adds the CLI presentation layer: a ``click.ClickException``
+Adds the CLI presentation layer on the platform error contract: a ``click.ClickException``
 subclass whose :meth:`show` renders a clean, traceback-free panel via
 :func:`render_error`. CLI code raises this subclass so Click's error path
 renders it; non-CLI code (tools, integrations) raises the platform base, and

@@ -231,7 +231,7 @@ async def _dispatch_turn(
 ) -> None:
     """Run one turn, then acknowledge it so the poller's cursor may advance.
 
-    Acknowledgement is wired two ways on purpose. ``on_handled`` fires on the
+    Acknowledgement is sent two ways on purpose. ``on_handled`` fires on the
     executor thread as soon as the turn body returns, which is what keeps a
     turn that finished during a cancelled shutdown from being replayed — the
     thread outlives the cancelled ``await``, so waiting for that ``await`` to

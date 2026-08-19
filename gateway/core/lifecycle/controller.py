@@ -1,18 +1,15 @@
 """Gateway process entrypoint and lifecycle owner.
 
-``GatewayController`` is the **process composition root** for the OpenSRE
-background agent (not a scheduler package, not the daemon):
-logging + credential hydrate, then
-:func:`bootstrap.process.configure_process` (``GATEWAY_PROFILE``), then
-assemble the turn handler and start components —
+``GatewayController`` boots the background agent: logging, credentials,
+:func:`bootstrap.process.configure_process` (``GATEWAY_PROFILE``), then one
+turn handler and the components that use it.
 
-* :meth:`start_surfaces` — web + chat transports via :mod:`gateway.startup`
-* :meth:`start_scheduler` — host ``platform.scheduling.scheduler`` in this process (cron / loops)
+* :meth:`start_surfaces` starts web and chat transports together
+* :meth:`start_scheduler` hosts the process-wide cron/loop runner
 
-Owns signals and ``stop``/``wait``. Component states go through
-:func:`gateway.core.process.component_status.write_component_status`. Channel start/stop
-lives in :mod:`gateway.startup`; turn dispatch lives in
-:mod:`platform.turn_host.turn_handler` — not here.
+Owns signals and ``stop``/``wait``. Component state is written through
+:func:`gateway.core.process.component_status.write_component_status`.
+This class does not start individual workers or execute turns.
 """
 
 from __future__ import annotations
@@ -262,7 +259,7 @@ def start_gateway(
     Production boot goes through the CLI composition root
     (``opensre gateway start``), which injects headless slash ports. The
     gateway package must not import the surfaces layer, so bare
-    ``GatewayController()`` here cannot wire them.
+    ``GatewayController()`` here cannot inject them.
     """
     if slash_ports_factory is None:
         raise SystemExit(_BARE_MANAGER_EXIT)

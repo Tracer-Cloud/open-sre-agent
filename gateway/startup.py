@@ -1,9 +1,8 @@
 """Start and stop everything the gateway serves users through.
 
-The facade the process controller calls: one :func:`start_gateway` that brings
-up the web server and every chat transport together and returns the running
-handle. Worker initialization lives with the transports
-(:mod:`gateway.transports.startup`); this module only composes.
+:func:`start_gateway` brings up the web server and every chat transport and
+returns the running handle. Each transport starts its own worker; this module
+only composes those starts.
 
 Only :class:`~gateway.core.lifecycle.controller.GatewayController` imports this
 module, and only this module imports ``gateway.transports.startup``.

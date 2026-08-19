@@ -12,8 +12,8 @@ tests tree.
 | Process composition root | `core/lifecycle/controller.py` (`GatewayController`; inject `slash_ports_factory`) |
 | Surface startup (web + chat composer) | `startup.py` (`start_gateway` / `StartedGateway`) |
 | Daemon (pidfile + spawn) | `core/process/supervision.py` — caller passes argv; never names CLI or `surfaces.gateway_entry` |
-| Turn callback | `core/host/turn_handler.py` |
-| Turn contract (output, callback) | `core/host/turn_output.py`, `core/host/turn_callback.py` |
+| Turn callback | `platform/turn_host/turn_handler.py` |
+| Turn contract (output, callback) | `platform/turn_host/turn_output.py`, `platform/turn_host/turn_callback.py` |
 | Transport registry (name, registration, worker) | `transports/names.py`, `transports/registration.py`, `transports/startup.py` |
 | Turn middleware (decision, policy, approvals, stop, locks) | `core/middleware/` |
 | Config / transport errors | `core/lifecycle/errors.py` (`GatewayConfigurationError`, `GatewayTransportFailedError`) |
@@ -39,8 +39,8 @@ start_gateway()
   → ready
 ```
 
-- **Surface startup** lives in `gateway/startup.py` — sole composer of web + Telegram /
-  Slack / Discord. The controller keeps only `StartedGateway`.
+- **Surface startup:** `gateway/startup.py` starts web and all chat transports.
+  The controller retains `StartedGateway`.
 - Missing chat credentials → `not configured`; readiness/runtime failures →
   `failed`. The rest still start.
 - **Scheduler** is a **platform** component (`platform.scheduling.scheduler`). The gateway
@@ -60,7 +60,7 @@ start_gateway()
 Packages are split like `core/agent_harness/prompts/`: **core infra** vs
 **peer surfaces** vs **composer**.
 
-- `core/` — process and leaf infrastructure (`host`, `process`, `lifecycle`,
+- `core/` — process and leaf infrastructure (`process`, `lifecycle`,
   `storage`, `billing`, `attachments`, `session`, `config`). No imports from
   transports or `web`. Only `core/lifecycle/controller.py` imports `gateway.startup`.
 - `startup.py` — the facade: web + chat as one consumer set via
@@ -69,8 +69,8 @@ Packages are split like `core/agent_harness/prompts/`: **core infra** vs
 - `transports/` — chat peers (`slack`, `discord`, `telegram`). Each owns
   settings, inbound worker, security, turn output, and `startup.py`. Peers
   never import each other or `gateway.startup`/`web`; anything two need belongs in
-  `core/` (per-turn steps in `gateway.core.middleware`, host wiring in
-  `platform.turn_host`).
+  `core/` (per-turn steps in `gateway.core.middleware`) or
+  `platform.turn_host` (turn handler, output sink, session agents).
 - `web/` — web surface (FastAPI app, investigations API, worker/artifacts).
   May import `core/`; must not import chat transports or `gateway.startup`.
 - `core/storage/session/resolver.py` — per-conversation session binding
@@ -100,7 +100,7 @@ The package holds two different things, and only one of them faces outward:
 - **The deployment** — the daemon, the transports, the web app, storage. A
   surface may drive the *process* (start, stop, status) and nothing else.
   The task scheduler is hosted here when this process is the long-lived runner;
-  loop CRUD lives in CLI/shell and signals reload via `request_scheduler_reload()`.
+  CLI/shell own loop CRUD and call `request_scheduler_reload()` after writes.
 - **The turn service** — `GatewayTurnHandler`, the middleware steps and the
   session-agent pool. A surface never imports this. A surface that runs turns
   is a **channel**: it implements `platform.turn_host` (turn contract) / `gateway.transports` (registry) and is handed to
@@ -283,7 +283,7 @@ approvals, and soft timeout in the gateway test suite.
 | Check | How |
 |-------|-----|
 | Borders + capacity | Gateway border + concurrency gate tests |
-| Smoke gateway wiring | Local smoke suite for gateway / `cli.gateway_*` tags |
+| Smoke gateway startup | Local smoke suite for gateway / `cli.gateway_*` tags |
 | Dogfood (dev silo only) | `@mention` on **dev** Slack — thread continuity, Digging in…, `Want me to:` → `yes`; one Socket Mode consumer. |
 | Not a substitute | Laptop `opensre gateway` + smoke ≠ dogfood |
 
@@ -292,5 +292,5 @@ approvals, and soft timeout in the gateway test suite.
 Gateway E2E regression tests should drive a normalized polled Telegram message
 into `handle_polled_inbound_telegram_message(...)` and let it invoke the turn
 handler. Do not test this path by swapping in fake LLM clients when validating
-dispatch wiring; prefer explicit registered commands such as `/status` when the
+command dispatch; prefer explicit registered commands such as `/status` when the
 test only needs to validate providers and callback plumbing.

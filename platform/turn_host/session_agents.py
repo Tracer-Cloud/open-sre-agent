@@ -3,7 +3,7 @@
 Keeps agent construction out of :class:`GatewayTurnHandler` so the handler
 stays a thin dispatch/finalize orchestrator. Construction goes through
 :meth:`~core.agent_harness.turns.headless_build.DefaultHeadlessBuild.agent`
-once per session — not a second port-wiring stack.
+once per session — not a second port-construction path.
 """
 
 from __future__ import annotations

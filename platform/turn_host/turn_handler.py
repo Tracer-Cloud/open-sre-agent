@@ -223,7 +223,7 @@ class GatewayTurnHandler:
                     )
                 return turn_result
             except Exception as exc:
-                # Always emit failure analytics (surface optional) so miswired
+                # Always emit failure analytics (surface optional) so misconfigured
                 # transports remain visible in PostHog.
                 capture_gateway_turn_failed(
                     surface=surface,

@@ -1,7 +1,7 @@
 # gateway/web/ — web surface
 
 FastAPI app for health probes, alert intake, and investigations.
-Not a chat transport — no turn-handler / output wiring.
+Not a chat transport — does not bind a turn handler or output sink.
 
 | May import | Must not |
 |------------|----------|
@@ -17,7 +17,7 @@ Pinned by `gateway/tests/test_package_borders.py`.
 Importing `gateway.web.webapp` (uvicorn or in-process via
 `serve_webapp_in_thread`) runs `configure_process(WEB_PROFILE)` — env, Sentry
 (`webapp`), and harness adapters. That is intentional so `MODE=web` and
-embedded web both get Path-2 investigate wiring without a CLI/manager boot. Do
+embedded web both get Path-2 investigate registration without a CLI/manager boot. Do
 **not** add a second harness-registration site in `web/`; adapters stay in
 `bootstrap.adapters` only. In a full gateway process, `GATEWAY_PROFILE` already
 ran; `WEB_PROFILE` may still run (separate idempotency key) — steps must stay

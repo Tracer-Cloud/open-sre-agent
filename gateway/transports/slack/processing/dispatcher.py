@@ -395,10 +395,10 @@ def _slack_files_context(files: tuple[SlackInboundFile, ...], logger: logging.Lo
 def _agent_text_with_slack_context(inbound: SlackInboundMessage) -> str:
     """Prefix inbound text with the channel id + speaker for teammate targeting.
 
-    Short metadata line only — tool routing lives in action prompts. The thread
-    ts is omitted so the agent does not copy it into channel reads (which would
-    return one thread instead of channel history); the reply sink and session
-    seeding already target the triggering thread. The speaker is included as a
+    Short metadata line only; do not list tools. Omit thread ts so channel
+    reads stay channel-wide (including it would collapse history to one
+    thread). The reply sink and session seeding already target the triggering
+    thread. The speaker is included as a
     Slack mention token so multi-user threads stay attributable ("what is my
     name?" must resolve to the asker, not whoever spoke earlier); echoed back
     it renders as @name in Slack.

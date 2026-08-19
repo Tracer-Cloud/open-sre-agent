@@ -12,7 +12,7 @@ transport-specific code.
 
 | What you want | File / symbol | How it is started |
 |---------------|---------------|-------------------|
-| **Production entry** | CLI composition root (outside `gateway/`) | `opensre gateway start` / `--foreground` (wires slash ports) |
+| **Production entry** | CLI composition root (outside `gateway/`) | `opensre gateway start` / `--foreground` (injects slash ports) |
 | **Package main** | `gateway/__main__.py` → `main()` | Fails closed — no slash-port glue |
 | **Process composition root** | `gateway/core/lifecycle/controller.py` → `GatewayController` | Injected `slash_ports_factory` from CLI; bare `controller.main` fails closed |
 | **Daemon (pidfile + spawn)** | `gateway/core/process/supervision.py` | Used by CLI `gateway start/stop/status` (pidfile + `components.json`); caller passes argv |
@@ -34,7 +34,7 @@ gateway.core.process.supervision.start_gateway_daemon
         │    frozen: opensre gateway start --foreground
         ▼
 surfaces/gateway_entry.py  (or Click foreground → same composition root)
-        │  wires headless slash ports
+        │  injects headless slash ports
         ▼
 gateway.core.lifecycle.controller.GatewayController.start_gateway
         ├── start_surfaces()  →  gateway.startup.start_gateway
@@ -152,7 +152,7 @@ with the same five pieces `gateway/transports/telegram/` and `gateway/transports
 5. **Session binding** via `gateway/core/storage/session/resolver.py` with a new
    `platform` value: map the platform conversation key to a `Session`.
 
-Then wire it in the composition root (`GatewayController` in
+Then register it in the composition root (`GatewayController` in
 `gateway/core/lifecycle/controller.py`) beside the existing transports. Reuse the handler
 from `GatewayTurnHandler(...)` as-is.
 

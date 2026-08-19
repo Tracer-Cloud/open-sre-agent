@@ -1,4 +1,4 @@
-"""Route wiring: each Slack path uses the admission built for its payload shape.
+"""Route registration: each Slack path uses the admission built for its payload shape.
 
 Admission is unit-tested elsewhere. These tests exist because the two routes
 once shared one handler, so every form-encoded button click was rejected by the

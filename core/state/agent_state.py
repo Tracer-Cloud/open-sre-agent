@@ -1,10 +1,9 @@
 """Cross-turn agent state: the conversation transcript and last observation.
 
-``session.agent`` is a :class:`MutableAgentState` — the mutable state that
+``session.agent`` is a :class:`MutableAgentState` — mutable state that
 persists *across* turns. Production reads and writes ``messages`` (transcript),
-``last_observation``, and ``clear()`` only. Everything a single turn needs
-(tools, resolved integrations, system prompt, iteration cap) lives on
-``TurnSnapshot``, not here.
+``last_observation``, and ``clear()`` only. Per-turn data (tools, resolved
+integrations, system prompt, iteration cap) is on ``TurnSnapshot``.
 """
 
 from __future__ import annotations

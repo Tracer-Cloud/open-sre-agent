@@ -45,8 +45,7 @@ from platform.process.turn_capacity import turn_slot  # noqa: E402
 from tools.investigation.capability import resolve_investigation_context  # noqa: E402
 
 # Standalone uvicorn and in-process gateway both need adapters for /investigate.
-# Shared boot order lives in bootstrap.process (env → sentry → adapters).
-configure_process(WEB_PROFILE)
+configure_process(WEB_PROFILE)  # env → sentry → adapters
 
 logger = logging.getLogger(__name__)
 

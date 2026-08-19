@@ -35,7 +35,7 @@ def _run_gateway_slash(message: str) -> RecordingGatewayOutputSink:
 
 
 def test_gateway_registers_slash_invoke_tool() -> None:
-    """Harness adapters wired at gateway boot must expose slash_invoke to action turns."""
+    """Harness adapters registered at gateway boot must expose slash_invoke to action turns."""
     slash = get_action_tool("slash_invoke")
     assert slash is not None
     assert slash.name == "slash_invoke"

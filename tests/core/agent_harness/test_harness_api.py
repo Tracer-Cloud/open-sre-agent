@@ -164,6 +164,7 @@ RUNTIME = frozenset(
         "AgentBusyError",
         "AgentConfig",
         "DefaultHeadlessBuild",
+        "DescribeTool",
         "DefaultToolProvider",
         "GatherPhase",
         "HeadlessAgent",

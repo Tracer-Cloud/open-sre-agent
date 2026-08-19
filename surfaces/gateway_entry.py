@@ -2,7 +2,7 @@
 
 ``surfaces`` and ``gateway`` are peer packages: gateway must not import
 surfaces. This module owns the glue — headless slash ports from the
-interactive shell wired into :class:`gateway.core.lifecycle.controller.GatewayController`.
+interactive shell passed into :class:`gateway.core.lifecycle.controller.GatewayController`.
 
 Started by the daemon as ``python -m surfaces.gateway_entry`` (also
 ``opensre gateway start`` / ``opensre gateway start --foreground``).
@@ -27,7 +27,7 @@ def gateway_slash_ports_factory() -> SlashPorts:
 
 
 def start_gateway(*, wait: bool = True) -> GatewayController:
-    """Start the gateway with headless slash ports wired for chat turns."""
+    """Start the gateway with headless slash ports injected for chat turns."""
     from config.local_env import bootstrap_opensre_env_once
     from gateway.core.lifecycle.controller import GatewayController
 

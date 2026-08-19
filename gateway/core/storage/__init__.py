@@ -9,10 +9,8 @@ Postgres implementation and a selector (``investigation_repository(database)``).
 ``DATABASE_URL`` is unset. :mod:`gateway.core.storage.security_audit` appends
 approval and investigation actions to a JSONL file on the org home.
 
-Transport-neutral on purpose. Slack principal resolution lives in
-:mod:`gateway.transports.slack`; scope binding lives in :mod:`config.scope_context`.
-This package neither imports a transport nor stands between callers and the
-scope.
+Stores are transport-neutral: they key records by platform id and never
+import a transport package.
 """
 
 from __future__ import annotations

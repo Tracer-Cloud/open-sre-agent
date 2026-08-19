@@ -7,8 +7,8 @@ from core.agent_harness.prompts.action.multi_step_policy import (
     ACTION_LOCAL_SHELL_MULTI_STEP_RULE,
 )
 
-# Biases when the planner offers scheduling, from the CONTEXT setup_state
-# facts. Procedural steps live in skills (morning_report), not here.
+# When the planner should offer scheduling, given CONTEXT setup_state.
+# Skill bodies (e.g. morning_report) own the procedural steps.
 ACTION_SETUP_CAPACITY_SCHEDULE_RULE = (
     "- Read the setup-state block when present: if Integrations connected are "
     "not none and this turn finished a naturally recurring skill (or the user "

@@ -1,4 +1,4 @@
-"""Buzz-specific gateway wiring.
+"""Start the Buzz mention-poll transport.
 
 Owns everything particular to the Buzz mention-poll transport: loading Buzz
 settings and starting the background poller with the Buzz polling runtime.

@@ -272,8 +272,8 @@ def _build_work_item_reminder(task: ScheduledTask) -> str:
     """Build a one-shot reminder for a durable work item.
 
     Missing or already-completed work items produce a quiet tick so stale
-    reminders do not spam the channel. ``last_reminded_at`` is recorded by the
-    executor after successful delivery, not here.
+    reminders do not spam the channel. This builder does not stamp
+    ``last_reminded_at``; the executor does that after a successful send.
     """
     from pathlib import Path
 
