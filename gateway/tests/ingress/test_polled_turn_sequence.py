@@ -27,6 +27,12 @@ from core.agent_harness.session import SessionCore
 from core.agent_harness.session.persistence.memory import InMemorySessionStore
 from gateway.core.middleware.active_turns import ActiveTurnRegistry
 from gateway.core.middleware.approvals import ApprovalBroker
+from gateway.transports.buzz.output_sink import BuzzOutputSink
+from gateway.transports.telegram.output_sink import TelegramOutputSink
+
+_REAL_TRACK = ActiveTurnRegistry.track
+_REAL_TELEGRAM_FINALIZE = TelegramOutputSink.finalize
+_REAL_BUZZ_FINALIZE = BuzzOutputSink.finalize
 
 # Happy-path order both handlers must produce. Reordering claim, timeout,
 # cancel tracking or dispatch changes this list.
@@ -84,7 +90,9 @@ def _recording_callback(recorder: _Recorder):
     return _callback
 
 
-def _instrument_host_sequence(monkeypatch: pytest.MonkeyPatch, recorder: _Recorder) -> None:
+def _instrument_host_sequence(
+    monkeypatch: pytest.MonkeyPatch, recorder: _Recorder
+) -> ActiveTurnRegistry:
     """Record claim, cancel tracking, timeout arming, and sink finalize.
 
     The callback only sees what the host passed *into* the turn. Reordering
@@ -115,34 +123,32 @@ def _instrument_host_sequence(monkeypatch: pytest.MonkeyPatch, recorder: _Record
     monkeypatch.setattr(telegram_handler, "TerminalOutcomeArbiter", _RecordingTerminal)
     monkeypatch.setattr(buzz_handler, "TerminalOutcomeArbiter", _RecordingTerminal)
 
-    original_track = ActiveTurnRegistry.track
+    registry = ActiveTurnRegistry()
 
     @contextmanager
     def recording_track(
-        self: ActiveTurnRegistry,
         key: str,
         event: threading.Event,
         *,
         on_user_stop: Any = None,
     ) -> Any:
         recorder.note("cancel_tracked")
-        with original_track(self, key, event, on_user_stop=on_user_stop):
+        with _REAL_TRACK(registry, key, event, on_user_stop=on_user_stop):
             yield
         recorder.note("cancel_untracked")
 
-    monkeypatch.setattr(ActiveTurnRegistry, "track", recording_track)
+    monkeypatch.setattr(registry, "track", recording_track)
 
-    def _wrap_finalize(cls: type) -> None:
-        original = cls.finalize
-
+    def _wrap_finalize(cls: type, original: Any) -> None:
         def finalize(self: Any, answer: str) -> None:
             recorder.note("sink_finalized")
             original(self, answer)
 
         monkeypatch.setattr(cls, "finalize", finalize)
 
-    _wrap_finalize(TelegramOutputSink)
-    _wrap_finalize(BuzzOutputSink)
+    _wrap_finalize(TelegramOutputSink, _REAL_TELEGRAM_FINALIZE)
+    _wrap_finalize(BuzzOutputSink, _REAL_BUZZ_FINALIZE)
+    return registry
 
 
 class _TelegramClient:
@@ -184,7 +190,7 @@ def _run_telegram_turn(monkeypatch: pytest.MonkeyPatch, recorder: _Recorder) -> 
     from gateway.transports.telegram.inbound_security import InboundDecision
     from gateway.transports.telegram.settings import GatewaySettings, TelegramInboundMessage
 
-    _instrument_host_sequence(monkeypatch, recorder)
+    registry = _instrument_host_sequence(monkeypatch, recorder)
     monkeypatch.setattr(
         "gateway.transports.telegram.inbound_handler.enforce_inbound_telegram_message_security",
         lambda **_kw: InboundDecision(allowed=True),
@@ -213,7 +219,7 @@ def _run_telegram_turn(monkeypatch: pytest.MonkeyPatch, recorder: _Recorder) -> 
                 chat_locks={},
                 turn_semaphore=asyncio.Semaphore(1),
                 approvals=ApprovalBroker(),
-                active_cancels=ActiveTurnRegistry(),
+                active_cancels=registry,
                 handle_callback_to_gateway_agent=_recording_callback(recorder),
             )
         finally:
@@ -228,7 +234,7 @@ def _run_buzz_turn(monkeypatch: pytest.MonkeyPatch, recorder: _Recorder) -> None
     from gateway.transports.buzz.pending_approvals import PendingApprovals
     from gateway.transports.buzz.settings import BuzzInboundMessage, GatewaySettings
 
-    _instrument_host_sequence(monkeypatch, recorder)
+    registry = _instrument_host_sequence(monkeypatch, recorder)
     monkeypatch.setattr(
         "gateway.transports.buzz.inbound_handler.enforce_inbound_buzz_message_security",
         lambda **_kw: InboundDecision(allowed=True),
@@ -260,7 +266,7 @@ def _run_buzz_turn(monkeypatch: pytest.MonkeyPatch, recorder: _Recorder) -> None
                 turn_semaphore=asyncio.Semaphore(1),
                 approvals=ApprovalBroker(),
                 pending_approvals=PendingApprovals(),
-                active_cancels=ActiveTurnRegistry(),
+                active_cancels=registry,
                 handle_callback_to_gateway_agent=_recording_callback(recorder),
             )
         finally:
