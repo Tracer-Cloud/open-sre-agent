@@ -72,7 +72,9 @@ def test_gateway_start_spawns_daemon(runner: CliRunner) -> None:
 
 
 def test_gateway_status_reports_stopped(runner: CliRunner) -> None:
-    with patch("surfaces.cli.commands.gateway.gateway_daemon_pid", return_value=None):
+    # The PID lookup now happens in the shared status builder that both the
+    # CLI and the REPL read from, so that is where it is patched.
+    with patch("surfaces.shared.gateway_status.gateway_daemon_pid", return_value=None):
         result = runner.invoke(cli, ["gateway", "status"])
 
     assert result.exit_code == 0
