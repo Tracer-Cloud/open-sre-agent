@@ -35,7 +35,7 @@ def test_default_headless_build_sets_gateway_surface() -> None:
 
 def test_default_headless_build_is_exported_from_runtime_and_the_buffer_sink_is_not() -> None:
     import core.agent_harness as pkg
-    from core.agent_harness import runtime
+    import core.agent_harness.runtime as runtime
 
     assert runtime.DefaultHeadlessBuild is DefaultHeadlessBuild
     assert not hasattr(pkg, "DefaultHeadlessBuild")
