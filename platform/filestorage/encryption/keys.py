@@ -21,7 +21,7 @@ from contextlib import suppress
 from dataclasses import dataclass
 
 from cryptography.exceptions import InvalidTag
-from cryptography.hazmat.primitives import hashes
+from cryptography.hazmat.primitives import hashes, hmac
 from cryptography.hazmat.primitives.ciphers.aead import AESGCM
 from cryptography.hazmat.primitives.kdf.hkdf import HKDF
 from cryptography.hazmat.primitives.kdf.scrypt import Scrypt
@@ -107,16 +107,20 @@ def generate_salt() -> bytes:
 def derive_kek(passphrase: str, salt: bytes, params: ScryptParams) -> bytes:
     """Key-encryption key for ``passphrase``, using the cache when it applies.
 
-    The cache is keyed by salt and cost parameters, so a rotated store or a
-    changed cost silently misses rather than returning a stale key.
+    The cache entry is bound to the passphrase as well as the salt and cost, so
+    a warm cache can only ever answer for the passphrase that filled it. Keyed
+    on the salt alone it would hand back the previous KEK before the supplied
+    passphrase was looked at, and a wrong one would open the store — checking
+    the unwrap afterwards does not catch that, because the cached KEK unwraps
+    the manifest perfectly well.
     """
-    cached = _cached_kek(salt, params)
+    cached = _cached_kek(passphrase, salt, params)
     if cached is not None:
         return cached
     kek = Scrypt(salt=salt, length=KEK_LEN, n=params.n, r=params.r, p=params.p).derive(
         passphrase.encode("utf-8")
     )
-    _cache_kek(salt, params, kek)
+    _cache_kek(passphrase, salt, params, kek)
     return kek
 
 
@@ -142,7 +146,7 @@ def unwrap_root_secret(kek: bytes, wrapped: bytes) -> bytes:
     except InvalidTag as exc:
         raise WrongPassphraseError(
             "That passphrase does not open this store's key.\n"
-            "Check the passphrase, or point at the prefix it belongs to."
+            "Check the passphrase, or point at the remote store's prefix it belongs to."
         ) from exc
 
 
@@ -172,17 +176,24 @@ def forget_cached_kek() -> None:
     _write_cache("")
 
 
-def _cache_fingerprint(salt: bytes, params: ScryptParams) -> str:
-    return f"{base64.b64encode(salt).decode()}:{params.n}:{params.r}:{params.p}"
+def _cache_fingerprint(passphrase: str, salt: bytes, params: ScryptParams) -> str:
+    """Identity of one cache entry: passphrase, salt, and cost together.
+
+    The passphrase is bound in as a digest keyed by the salt — never stored —
+    so an entry filled by one passphrase cannot be returned for another.
+    """
+    mac = hmac.HMAC(salt, hashes.SHA256())
+    mac.update(passphrase.encode("utf-8"))
+    return f"{base64.b64encode(mac.finalize()).decode()}:{params.n}:{params.r}:{params.p}"
 
 
-def _cached_kek(salt: bytes, params: ScryptParams) -> bytes | None:
+def _cached_kek(passphrase: str, salt: bytes, params: ScryptParams) -> bytes | None:
     raw = resolve_secret(REMOTE_SYNC_KEY_CACHE_ENV)
     if not raw:
         return None
     try:
         entry = json.loads(raw)
-        if entry.get("fingerprint") != _cache_fingerprint(salt, params):
+        if entry.get("fingerprint") != _cache_fingerprint(passphrase, salt, params):
             return None
         return base64.b64decode(entry["kek"])
     except (ValueError, KeyError, TypeError):
@@ -190,11 +201,11 @@ def _cached_kek(salt: bytes, params: ScryptParams) -> bytes | None:
         return None
 
 
-def _cache_kek(salt: bytes, params: ScryptParams, kek: bytes) -> None:
+def _cache_kek(passphrase: str, salt: bytes, params: ScryptParams, kek: bytes) -> None:
     _write_cache(
         json.dumps(
             {
-                "fingerprint": _cache_fingerprint(salt, params),
+                "fingerprint": _cache_fingerprint(passphrase, salt, params),
                 "kek": base64.b64encode(kek).decode(),
             }
         )

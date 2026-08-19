@@ -14,7 +14,7 @@ from pathlib import Path
 
 import pytest
 
-from config.constants.filestorage import REMOTE_SYNC_PASSPHRASE_ENV
+from config.constants.filestorage import REMOTE_SYNC_KEY_CACHE_ENV, REMOTE_SYNC_PASSPHRASE_ENV
 from platform.filestorage.encryption import envelope
 from platform.filestorage.encryption.cipher import ManifestCipher
 from platform.filestorage.encryption.keys import derive_root_key, generate_root_secret
@@ -286,6 +286,36 @@ def test_missing_passphrase_stops_the_run(monkeypatch: pytest.MonkeyPatch) -> No
     # Act / Assert
     with pytest.raises(MissingPassphraseError):
         resolve_cipher(FakeObjectStore(), encrypted=True)
+
+
+def test_a_warm_cache_cannot_answer_for_a_different_passphrase(
+    roots: tuple[SyncRoot, ...], monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """A cached KEK must not stand in for checking the passphrase.
+
+    The cache exists so scrypt is paid once per machine. Keyed on the salt
+    alone it answered before the supplied passphrase was looked at, so a wrong
+    one opened the store — and unwrapping afterwards does not catch it, because
+    the cached KEK unwraps the manifest correctly.
+    """
+    # Arrange: a real credential file, and cache writes actually enabled — the
+    # suite disables them globally, which would make this test prove nothing.
+    from config.constants import paths as paths_mod
+    from config.secrets import local_file
+
+    monkeypatch.setattr(paths_mod, "OPENSRE_HOME_DIR", tmp_path)
+    monkeypatch.delenv("OPENSRE_DISABLE_KEYRING", raising=False)
+
+    store = FakeObjectStore()
+    _encrypted_push(store, roots)
+
+    # Guard: the cache really is warm, so the assertion below has teeth.
+    assert local_file.get(REMOTE_SYNC_KEY_CACHE_ENV), "cache never written; test proves nothing"
+
+    # Act / Assert: a wrong passphrase is refused despite the warm cache.
+    monkeypatch.setenv(REMOTE_SYNC_PASSPHRASE_ENV, "not the right one")
+    with pytest.raises(WrongPassphraseError):
+        resolve_cipher(store, encrypted=True)
 
 
 def test_wrong_passphrase_stops_the_run(
