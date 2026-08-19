@@ -146,8 +146,8 @@ def test_silent_tool_turn_prefers_paint_quiet_stdout_over_blank_print() -> None:
 
 def test_silent_tool_turn_paints_through_bindable_output() -> None:
     """REPL production path: BindableOutput → ShellOutputSink must reach paint."""
-    from platform.turn_host.bindable_output import BindableOutput
     from core.agent_harness.turns.action_driver import _end_silent_tool_turn
+    from platform.turn_host.bindable_output import BindableOutput
     from surfaces.interactive_shell.runtime.agent_harness_adapters import ShellOutputSink
     from tools.interactive_shell.quiet_stdout import buffer_quiet_stdout, clear_quiet_stdout
 
