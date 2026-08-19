@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 import logging
 import re
+from http import HTTPStatus
 
 from platform.scheduling.scheduler.claim_store import complete_run, try_claim
 from platform.scheduling.scheduler.credentials import (
@@ -448,7 +449,7 @@ def _deliver_slack(task: ScheduledTask, message: str) -> tuple[bool, str, str]:
         )
         if not response.ok:
             return False, f"Slack API error: {response.error}", ""
-        if not 200 <= response.status_code < 300:
+        if not HTTPStatus.OK <= response.status_code < HTTPStatus.MULTIPLE_CHOICES:
             error_text = response.text[:200] if response.text else f"HTTP {response.status_code}"
             return False, f"Slack HTTP error: {error_text}", ""
         if response.data.get("ok") is not True:
