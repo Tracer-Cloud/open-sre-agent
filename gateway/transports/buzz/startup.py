@@ -10,8 +10,8 @@ from __future__ import annotations
 
 import logging
 
+from gateway.core.host.turn_callback import GatewayAgentCallback
 from gateway.core.process.polling_thread import PollingBackground
-from gateway.core.transport_api import GatewayAgentCallback
 from gateway.transports.buzz.background import start_buzz_gateway_background
 from gateway.transports.buzz.runtime import (
     initialize_buzz_polling_runtime,

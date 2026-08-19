@@ -46,13 +46,13 @@ def test_gateway_turn_handler_delegates_to_agent_dispatch(monkeypatch: pytest.Mo
 
     # The message is dispatched per-turn; session-stable ports are wired once,
     # with a live sink proxy rebound to the transport sink each turn.
-    from gateway.core.host.live_sink import LiveOutputSink
+    from gateway.core.host.bindable_output import BindableOutput
 
     agent.dispatch.assert_called_once()
     assert agent.dispatch.call_args.args == ("hello gateway",)
     ctor = factory.call_args
     assert ctor.kwargs["session"] is session
-    assert isinstance(ctor.kwargs["output"], LiveOutputSink)
+    assert isinstance(ctor.kwargs["output"], BindableOutput)
     assert ctor.kwargs["output"].bound is sink
     # Gateway turns gather live evidence; the ports object carries that now.
     assert ctor.kwargs["gather"].enabled is True

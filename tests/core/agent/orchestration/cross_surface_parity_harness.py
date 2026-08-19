@@ -177,7 +177,7 @@ class FakeReasoningClient:
         yield PARITY_ANSWER
 
 
-class RecordingGatewaySink:
+class RecordingGatewayOutputSink:
     """Minimal gateway sink that records stream/finalize output for assertions."""
 
     def __init__(self) -> None:
@@ -395,7 +395,7 @@ def snapshot_gateway_handler(
     integrations: dict[str, Any] | None = None,
 ) -> TurnSnapshot:
     session = fresh_session(integrations=integrations)
-    sink = RecordingGatewaySink()
+    sink = RecordingGatewayOutputSink()
     captured: list[TurnResult] = []
     _install_gateway_dispatch_spy(monkeypatch, captured)
     before = probe_run_count()
@@ -460,10 +460,10 @@ def run_gateway_turn_with_sink(
     monkeypatch: Any,
     *,
     integrations: dict[str, Any] | None = None,
-) -> tuple[TurnSnapshot, RecordingGatewaySink]:
+) -> tuple[TurnSnapshot, RecordingGatewayOutputSink]:
     """Run one gateway turn and return both routing snapshot and transport sink."""
     session = fresh_session(integrations=integrations)
-    sink = RecordingGatewaySink()
+    sink = RecordingGatewayOutputSink()
     captured: list[TurnResult] = []
     _install_gateway_dispatch_spy(monkeypatch, captured)
     before = probe_run_count()

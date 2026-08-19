@@ -14,7 +14,8 @@ from __future__ import annotations
 import logging
 from dataclasses import dataclass, field
 
-from gateway.core.transport_api import GatewayAgentCallback, TransportName
+from gateway.core.host.turn_callback import GatewayAgentCallback
+from gateway.transports.names import TransportName
 from gateway.transports.startup import (
     DEFAULT_STOP_TIMEOUT_SECONDS,
     TransportHandle,

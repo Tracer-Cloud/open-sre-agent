@@ -1,7 +1,7 @@
 # gateway/web/ — web surface
 
 FastAPI app for health probes, alert intake, and investigations.
-Not a chat transport — no turn-handler / sink wiring.
+Not a chat transport — no turn-handler / output wiring.
 
 | May import | Must not |
 |------------|----------|

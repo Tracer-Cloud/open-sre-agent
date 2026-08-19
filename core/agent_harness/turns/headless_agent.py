@@ -179,8 +179,8 @@ class HeadlessAgent:
         ``console`` every :class:`ConsoleBindable` port, and a new ``output``
         object every :class:`OutputBindable` port; a new output or a change of
         ``tool_hooks`` also rebuilds the action runner
-        — an unchanged one keeps it. Gateway keeps a stable ``LiveOutputSink``
-        and rebinds the transport sink inside it, so it leaves ``output`` unset.
+        — an unchanged one keeps it. Gateway keeps a stable ``BindableOutput``
+        and rebinds the transport destination inside it, so it leaves ``output`` unset.
         """
         if binding.session is not None:
             self.bind_session(binding.session)

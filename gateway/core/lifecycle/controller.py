@@ -34,6 +34,7 @@ from gateway.core.host.concurrency import (
     process_turn_gate,
     set_process_turn_gate,
 )
+from gateway.core.host.turn_callback import GatewayAgentCallback
 from gateway.core.host.turn_handler import GatewayTurnHandler
 from gateway.core.lifecycle.credential_hydration import (
     GatewayBootstrap,
@@ -43,7 +44,6 @@ from gateway.core.lifecycle.errors import GatewayConfigurationError
 from gateway.core.process.component_status import clear_component_status, write_component_status
 from gateway.core.process.readiness import set_ready
 from gateway.core.process.supervision import GATEWAY_PID_FILE
-from gateway.core.transport_api import GatewayAgentCallback
 
 # The reload watcher only polls a flag, so it should never need the full
 # shutdown budget; cap it so chat workers keep the rest.

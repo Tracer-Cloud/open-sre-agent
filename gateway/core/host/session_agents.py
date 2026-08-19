@@ -24,20 +24,20 @@ from core.agent_harness.runtime import (
     GatherPhase,
     HeadlessAgent,
 )
+from gateway.core.host.bindable_output import BindableOutput
 from gateway.core.host.capability_policy import ensure_gateway_capability_policy
-from gateway.core.host.live_sink import LiveOutputSink
 from gateway.core.host.status_messages import status_from_tool_start
-from gateway.core.transport_api import GatewaySink
+from gateway.core.host.turn_output import GatewayOutputSink
 from tools.interactive_shell.subprocess_presenter import (
     headless_subprocess_presenter_factory,
 )
 
 
 class _ToolStatusObserver:
-    """Push live tool-progress status lines to the turn's bound sink."""
+    """Push live tool-progress status lines to the turn's bound output."""
 
-    def __init__(self, sink: LiveOutputSink) -> None:
-        self._sink = sink
+    def __init__(self, output: BindableOutput) -> None:
+        self._output = output
 
     def __call__(self, kind: str, data: dict[str, object]) -> None:
         if kind != "tool_start":
@@ -45,11 +45,11 @@ class _ToolStatusObserver:
         tool_name = str(data.get("name") or "").strip()
         if not tool_name or tool_name == "assistant_handoff":
             return
-        self._sink.set_tool_status(status_from_tool_start(tool_name, data.get("input")))
+        self._output.set_tool_status(status_from_tool_start(tool_name, data.get("input")))
 
 
 class SessionAgentPool:
-    """One :class:`HeadlessAgent` (+ live sink) per logical session id."""
+    """One :class:`HeadlessAgent` (+ live output) per logical session id."""
 
     def __init__(
         self,
@@ -68,10 +68,10 @@ class SessionAgentPool:
             )
         )
         self._agents: dict[str, HeadlessAgent] = {}
-        self._sinks: dict[str, LiveOutputSink] = {}
+        self._outputs: dict[str, BindableOutput] = {}
         # One agent serves every turn of a session, and each turn rebinds its
-        # session and live sink. Turns for the same session must therefore not
-        # overlap, or one turn's output goes to the other's sink. Different
+        # session and live output. Turns for the same session must therefore not
+        # overlap, or one turn's output goes to the other's output. Different
         # sessions are independent and stay concurrent.
         self._session_locks: dict[str, threading.Lock] = {}
         self._locks_guard = threading.Lock()
@@ -86,7 +86,7 @@ class SessionAgentPool:
         self,
         *,
         session: SessionCore,
-        sink: GatewaySink,
+        output: GatewayOutputSink,
         logger: logging.Logger,
     ) -> Iterator[HeadlessAgent]:
         """Hold this session's agent for the whole turn.
@@ -98,19 +98,19 @@ class SessionAgentPool:
         session_id = str(getattr(session, "session_id", "") or "")
         if not session_id:
             # No id means no cache entry and nothing shared to protect.
-            yield self.agent_for(session=session, sink=sink, logger=logger)
+            yield self.agent_for(session=session, output=output, logger=logger)
             return
         with self._lock_for(session_id):
-            yield self.agent_for(session=session, sink=sink, logger=logger)
+            yield self.agent_for(session=session, output=output, logger=logger)
 
     def agent_for(
         self,
         *,
         session: SessionCore,
-        sink: GatewaySink,
+        output: GatewayOutputSink,
         logger: logging.Logger,
     ) -> HeadlessAgent:
-        """Return a session-scoped agent with ``sink`` bound for this turn.
+        """Return a session-scoped agent with ``output`` bound for this turn.
 
         Prefer :meth:`session_agent`, which holds the session's lock for the
         whole turn. This is the unsynchronised primitive it wraps.
@@ -119,12 +119,12 @@ class SessionAgentPool:
         if policy is not None:
             policy(session)
         session_id = str(getattr(session, "session_id", "") or "")
-        live_sink = self._sinks.get(session_id) if session_id else None
-        if live_sink is None:
-            live_sink = LiveOutputSink()
+        session_output = self._outputs.get(session_id) if session_id else None
+        if session_output is None:
+            session_output = BindableOutput()
             if session_id:
-                self._sinks[session_id] = live_sink
-        live_sink.bind(sink)
+                self._outputs[session_id] = session_output
+        session_output.bind(output)
 
         cached = self._agents.get(session_id) if session_id else None
         if cached is not None:
@@ -133,7 +133,7 @@ class SessionAgentPool:
             cached.bind_session(session)
             return cached
 
-        observer = _ToolStatusObserver(live_sink)
+        observer = _ToolStatusObserver(session_output)
         build = self._build
         if build.build_tools is not None:
             tools = build.build_tools(session, self._console, logger, observer)
@@ -154,7 +154,7 @@ class SessionAgentPool:
         )
         agent = DefaultHeadlessBuild(
             session=session,
-            output=live_sink,
+            output=session_output,
             console=self._console,
             logger=logger,
             surface="gateway",

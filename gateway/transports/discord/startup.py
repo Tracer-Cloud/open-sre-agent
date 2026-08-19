@@ -4,8 +4,8 @@ from __future__ import annotations
 
 import logging
 
+from gateway.core.host.turn_callback import GatewayAgentCallback
 from gateway.core.lifecycle.errors import GatewayTransportFailedError
-from gateway.core.transport_api import GatewayAgentCallback
 from gateway.transports.discord.background import (
     DiscordGatewayBackground,
     start_discord_gateway_background,

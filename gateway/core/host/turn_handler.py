@@ -2,12 +2,20 @@
 
 This is the **only** gateway turn handler. Transport dispatchers
 (Slack/Discord/Telegram) are ingress adapters: they authorize, resolve a
-session, build a sink, then call this callback. Process-wide capacity is an
+session, build turn output, then call this callback. Process-wide capacity is an
 optional gate on the same object — not a second handler.
 
-Transport-agnostic: takes ``(text, session, sink, logger)``, runs the turn, and
-finalizes outbound text on the sink. Agent reuse is handled by
+Transport-agnostic: takes ``(text, session, output, logger)``, runs the turn, and
+finalizes outbound text on the output. Agent reuse is handled by
 :class:`SessionAgentPool`.
+
+Two entries, one turn. :meth:`GatewayTurnHandler.__call__` is the
+``GatewayAgentCallback`` the four chat transports use and returns nothing.
+:meth:`GatewayTurnHandler.run` is the same turn for an in-process caller that
+needs the outcome as a value and has a terminal to bind — it returns the
+``TurnResult`` (``None`` at capacity) and accepts the caller's console,
+``confirm_fn`` and ``is_tty``. Every keyword defaults to the transport path, so
+the two entries cannot drift apart.
 """
 
 from __future__ import annotations
@@ -15,11 +23,12 @@ from __future__ import annotations
 import logging
 import threading
 import time
+from collections.abc import Callable
 
 from rich.console import Console
 
-from core.agent_harness import SessionCore, SessionManager
-from core.agent_harness.ports import SlashPortsFactory
+from core.agent_harness import SessionCore, SessionManager, TurnResult
+from core.agent_harness.ports import ConfirmFn, SlashPortsFactory, TurnAccounting
 from core.agent_harness.runtime import AgentBuildConfig, TurnBinding
 from core.agent_harness.spi.cancel import ensure_turn_cancel
 from core.agent_harness.spi.session_goal import (
@@ -31,7 +40,7 @@ from gateway.core.host.cancel_console import CancelConsole
 from gateway.core.host.concurrency import AT_CAPACITY_MESSAGE, TurnConcurrencyGate
 from gateway.core.host.session_agents import SessionAgentPool
 from gateway.core.host.status_messages import EMPTY_RESPONSE_MESSAGE
-from gateway.core.transport_api import GatewaySink
+from gateway.core.host.turn_output import GatewayOutputSink
 from platform.analytics.cli import (
     capture_gateway_turn_completed,
     capture_gateway_turn_failed,
@@ -51,7 +60,7 @@ class GatewayTurnHandler:
 
     One :class:`HeadlessAgent` is kept per logical session and reused across
     turns; each message goes through :meth:`HeadlessAgent.handle` with a
-    :class:`TurnBinding` (sink hooks, cancel console) — the same call the
+    :class:`TurnBinding` (output hooks, cancel console) — the same call the
     interactive shell makes. Concurrent turns for different sessions stay
     isolated.
 
@@ -82,22 +91,59 @@ class GatewayTurnHandler:
         self,
         text: str,
         session: SessionCore,
-        sink: GatewaySink,
+        output: GatewayOutputSink,
         logger: logging.Logger,
     ) -> None:
+        """The :data:`GatewayAgentCallback`: chat transports reply through the output."""
+        self.run(text, session, output, logger)
+
+    def run(
+        self,
+        text: str,
+        session: SessionCore,
+        output: GatewayOutputSink,
+        logger: logging.Logger,
+        *,
+        console: Console | None = None,
+        confirm_fn: ConfirmFn | None = None,
+        is_tty: bool = False,
+        accounting_factory: Callable[[str], TurnAccounting] | None = None,
+    ) -> TurnResult | None:
+        """Run one turn and return its result, or ``None`` when at capacity.
+
+        Same turn as :meth:`__call__` — one capacity gate, one agent pool, one
+        ``handle`` call. The keywords carry a caller's terminal context; every
+        default is what a chat transport gets, so omitting them all is the
+        transport path exactly. ``None`` means the gate refused the turn and
+        the at-capacity sentence is already on the output.
+        """
         with turn_slot(self._gate) as running:
             if not running:
-                sink.finalize(self._busy_message)
-                return
-            self._run_turn(text, session, sink, logger)
+                output.finalize(self._busy_message)
+                return None
+            return self._run_turn(
+                text,
+                session,
+                output,
+                logger,
+                console=console,
+                confirm_fn=confirm_fn,
+                is_tty=is_tty,
+                accounting_factory=accounting_factory,
+            )
 
     def _run_turn(
         self,
         text: str,
         session: SessionCore,
-        sink: GatewaySink,
+        output: GatewayOutputSink,
         logger: logging.Logger,
-    ) -> None:
+        *,
+        console: Console | None,
+        confirm_fn: ConfirmFn | None,
+        is_tty: bool,
+        accounting_factory: Callable[[str], TurnAccounting] | None,
+    ) -> TurnResult:
         session_id = getattr(session, "session_id", None)
         surface = get_surface()
         if surface not in CANONICAL_SURFACES:
@@ -107,15 +153,15 @@ class GatewayTurnHandler:
             surface = None
         started = time.monotonic()
 
-        cancel = ensure_turn_cancel(sink)
-        turn_console = CancelConsole(self._console, cancel)
+        cancel = ensure_turn_cancel(output)
+        turn_console = CancelConsole(console or self._console, cancel)
         with (
             bound_usage_context(session_id=session_id),
             traced_session(session_id, component="gateway_turn"),
-            # Held for the whole turn: the pooled agent's session, sink and
+            # Held for the whole turn: the pooled agent's session, output and
             # accounting are rebound per message, so an overlapping turn for the
             # same session would retarget an agent that is still dispatching.
-            self._pool.session_agent(session=session, sink=sink, logger=logger) as agent,
+            self._pool.session_agent(session=session, output=output, logger=logger) as agent,
         ):
             try:
                 if surface:
@@ -126,14 +172,14 @@ class GatewayTurnHandler:
 
                 def _on_progress(goal: SessionGoal) -> None:
                     # Same progress contract as the interactive shell: paint mid-loop
-                    # and scrub happens inside the agent's goal loop. Gateway sinks
-                    # get a compact status line; full text goes to debug logs.
+                    # and scrub happens inside the agent's goal loop. Gateway
+                    # output gets a compact status line; full text goes to debug logs.
                     full = format_session_goal_progress(goal, session=session)
                     compact = format_session_goal_status_line(goal, session=session)
                     if full:
                         logger.debug("gateway_session_goal_progress\n%s", full)
                     if compact:
-                        set_status = getattr(sink, "set_tool_status", None)
+                        set_status = getattr(output, "set_tool_status", None)
                         if callable(set_status):
                             set_status(compact)
 
@@ -141,10 +187,12 @@ class GatewayTurnHandler:
                     text,
                     TurnBinding(
                         session=session,
-                        tool_hooks=getattr(sink, "tool_hooks", None),
+                        tool_hooks=getattr(output, "tool_hooks", None),
                         console=turn_console,
-                        is_tty=False,
+                        confirm_fn=confirm_fn,
+                        is_tty=is_tty,
                     ),
+                    accounting_factory=accounting_factory,
                     cancel_requested=_cancel_requested,
                     on_progress=_on_progress,
                 )
@@ -155,14 +203,14 @@ class GatewayTurnHandler:
                     turn_result.answered,
                     len(outbound_text),
                 )
-                # Host soft-timeout (or stop) already owns the sink terminal
+                # Host soft-timeout (or stop) already owns the output terminal
                 # message — do not overwrite it with empty/fallback finalize.
                 cancelled = isinstance(cancel, threading.Event) and cancel.is_set()
                 # A streamed answer (answered=True) already resolved the placeholder status
-                # via the sink. Otherwise always finalize so the placeholder never hangs —
+                # via the output. Otherwise always finalize so the placeholder never hangs —
                 # even when the turn produced no text.
                 if not turn_result.answered and not cancelled:
-                    sink.finalize(outbound_text or EMPTY_RESPONSE_MESSAGE)
+                    output.finalize(outbound_text or EMPTY_RESPONSE_MESSAGE)
                 # Resolve rebuilds SessionCore from disk next inbound message —
                 # persist session_goal (attach / progress / /goal pause) now.
                 SessionManager.for_session(session).flush(session)
@@ -173,6 +221,7 @@ class GatewayTurnHandler:
                         answered=bool(turn_result.answered),
                         final_intent=str(turn_result.final_intent or "") or None,
                     )
+                return turn_result
             except Exception as exc:
                 # Always emit failure analytics (surface optional) so miswired
                 # transports remain visible in PostHog.

@@ -100,7 +100,8 @@ def test_gateway_turn_handler_gate_refuses_excess_without_second_wrapper(
 
     handler = GatewayTurnHandler(console=Console(force_terminal=False), gate=gate)
 
-    def _fake_run(self, text, session, sink, logger):  # noqa: ANN001
+    def _fake_run(self, text, session, sink, logger, **_kwargs):  # noqa: ANN001
+        # ``**_kwargs`` absorbs the caller-context keywords ``run`` forwards.
         _ = (self, session, sink, logger)
         ran.append(text)
         entered.set()

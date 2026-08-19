@@ -240,7 +240,7 @@ def _executable_surface_references(path: Path) -> list[str]:
 
 
 def test_scheduler_never_imports_the_gateway_turn_handler() -> None:
-    """A producer has no user and no sink — it must not call the chat handler.
+    """A producer has no user and no turn output — it must not call the chat handler.
 
     The gateway process may host ``platform.scheduling.scheduler`` (same capacity gate).
     Runners still enter through ``AgentSession.run_headless_turn``, not
@@ -398,14 +398,14 @@ def test_every_transport_package_is_registered_in_the_chat_table() -> None:
     """A transport package on disk must appear in the registry, and vice versa.
 
     Adding a transport used to mean editing the manager; now it means adding a
-    ``TransportSpec`` row. This fails if someone ships the package without the
+    ``TransportRegistration`` row. This fails if someone ships the package without the
     row (the transport never starts) or the row without the package.
     """
     # Arrange / Act.
     from gateway.transports.startup import TRANSPORTS
 
     on_disk = {package.rsplit(".", 1)[-1] for package in _TRANSPORTS}
-    registered = {spec.name.value for spec in TRANSPORTS}
+    registered = {registration.name.value for registration in TRANSPORTS}
 
     # Assert.
     assert on_disk == registered, (

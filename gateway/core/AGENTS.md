@@ -7,7 +7,7 @@ Pinned by `gateway/tests/test_package_borders.py`.
 
 | Package | Role |
 |---------|------|
-| `host/` | The host layer: builds the agent, binds the turn, runs it (`turn_handler`, `session_agents`, `live_sink`, `cancel_console`, capacity) |
+| `host/` | The host layer: builds the agent, binds the turn, runs it (`turn_handler`, `session_agents`, `bindable_output`, `cancel_console`, capacity) |
 | `runtime/` | Composition root (`controller`), credential hydration, security audit |
 | `process/` | Daemon, polling thread, readiness |
 | `middleware/` | Per-turn steps every transport runs (inbound decision, identity policy, approvals, attention, locks) |

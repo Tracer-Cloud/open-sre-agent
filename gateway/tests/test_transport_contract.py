@@ -82,7 +82,7 @@ def test_the_registry_lists_every_discovered_transport() -> None:
     """A transport on disk but absent from ``TRANSPORTS`` never starts."""
     from gateway.transports.startup import TRANSPORTS
 
-    registered = {spec.name for spec in TRANSPORTS}
+    registered = {registration.name for registration in TRANSPORTS}
     assert registered == set(_TRANSPORTS)
 
 

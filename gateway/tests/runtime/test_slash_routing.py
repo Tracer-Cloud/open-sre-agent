@@ -14,7 +14,7 @@ from core.agent_harness.session.persistence.memory import InMemorySessionStore
 from core.agent_harness.tools.action_tools import get_action_tool
 from gateway.core.host.turn_handler import GatewayTurnHandler
 from tests.core.agent.orchestration.cross_surface_parity_harness import (
-    RecordingGatewaySink,
+    RecordingGatewayOutputSink,
     headless_slash_ports,
 )
 
@@ -23,9 +23,9 @@ def _gateway_console() -> Console:
     return Console(file=io.StringIO(), force_terminal=False, highlight=False, width=100)
 
 
-def _run_gateway_slash(message: str) -> RecordingGatewaySink:
+def _run_gateway_slash(message: str) -> RecordingGatewayOutputSink:
     session = SessionCore(store=InMemorySessionStore())
-    sink = RecordingGatewaySink()
+    sink = RecordingGatewayOutputSink()
     handler = GatewayTurnHandler(
         console=_gateway_console(),
         slash_ports_factory=headless_slash_ports,

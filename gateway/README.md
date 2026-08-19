@@ -137,18 +137,18 @@ Pairing via `opensre messaging pair` uses the same integration-store policy as t
 ## Adding a chat platform
 
 The message handler is **transport-agnostic** — it takes
-`(text, session, sink, logger)` and knows nothing about any platform. To add a
+`(text, session, output, logger)` and knows nothing about any platform. To add a
 platform you do **not** touch the agent, prompts, or tools. You add one package
 with the same five pieces `gateway/transports/telegram/` and `gateway/transports/slack/` both have:
 
 1. **Settings** (`settings.py`): env-backed config, raising
    `GatewayConfigurationError` (from `gateway/core/lifecycle/errors.py`) when missing.
 2. **A listener** (`startup.py` + the transport worker): receives inbound
-   messages and calls the shared handler with `(text, session, sink, logger)`.
+   messages and calls the shared handler with `(text, session, output, logger)`.
 3. **Inbound security**: authorize each message and audit-log it
    (`integrations/messaging_security`).
-4. **An output sink** (implement `GatewaySink` from
-   `gateway/core/transport_api/__init__.py`): streams status and delivers the answer.
+4. **Turn output** (implement `GatewayOutputSink` from
+   `gateway/core/host/turn_output.py`): streams status and delivers the answer.
 5. **Session binding** via `gateway/core/storage/session/resolver.py` with a new
    `platform` value: map the platform conversation key to a `Session`.
 

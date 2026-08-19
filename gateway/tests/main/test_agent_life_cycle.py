@@ -27,7 +27,7 @@ from core.agent_harness.tools.tool_provider import DefaultToolProvider
 from core.agent_harness.turns.turn_results import ToolCallingTurnResult, TurnResult
 from gateway.core.lifecycle.controller import GatewayController, start_gateway
 from gateway.core.lifecycle.errors import GatewayConfigurationError
-from gateway.core.transport_api import TransportName
+from gateway.transports.names import TransportName
 from gateway.transports.telegram.inbound_handler import (
     handle_polled_inbound_telegram_message,
 )
@@ -157,9 +157,9 @@ def test_gateway_start_returns_running_gateway_handle(monkeypatch) -> None:
     assert ctor.kwargs["session"] is session
     # Session-scoped agent holds a live sink proxy; the transport sink is bound
     # each turn (not passed as the constructor ``output`` identity).
-    from gateway.core.host.live_sink import LiveOutputSink
+    from gateway.core.host.bindable_output import BindableOutput
 
-    assert isinstance(ctor.kwargs["output"], LiveOutputSink)
+    assert isinstance(ctor.kwargs["output"], BindableOutput)
     assert ctor.kwargs["surface"] == "gateway"
     from core.agent_harness.turns.gather_phase import GatherPhase
 
