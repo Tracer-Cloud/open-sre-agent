@@ -67,6 +67,36 @@ def test_capability_warnings_include_network_default(monkeypatch) -> None:
     assert any("network egress" in w for w in facts["capability_warnings"])
 
 
+def test_capability_warnings_include_missing_shell(monkeypatch) -> None:
+    # Arrange
+    monkeypatch.delenv(OPENSRE_ALLOW_NETWORK_ENV, raising=False)
+    tools = {"bash": "", "sh": ""}
+
+    # Act
+    facts = capability_warning_facts(tools)
+
+    # Assert
+    assert facts["shell_available"] is False
+    assert any("no interactive shell" in warning for warning in facts["capability_warnings"])
+
+
+def test_capability_warnings_include_network_opt_in(monkeypatch) -> None:
+    # Arrange
+    monkeypatch.setenv(OPENSRE_ALLOW_NETWORK_ENV, "1")
+    tools = {
+        "curl": "/usr/bin/curl",
+        "bash": "/bin/bash",
+        "sh": "/bin/sh",
+    }
+
+    # Act
+    facts = capability_warning_facts(tools)
+
+    # Assert
+    assert facts["network_egress"] is True
+    assert not any("network egress" in warning for warning in facts["capability_warnings"])
+
+
 def test_capability_warnings_line_in_prompt() -> None:
     block = render_static_runtime_facts(
         {
