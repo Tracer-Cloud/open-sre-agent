@@ -114,15 +114,12 @@ def test_datadog_metric_fetch_is_live_investigation_evidence() -> None:
     }
 
     try:
-        with (
-            patch(
-                "tools.investigation.stages.gather_evidence.agent.get_llm",
-                return_value=mock_llm,
-            ),
-            patch(
-                "tools.investigation.stages.gather_evidence.agent.get_tracker",
-                return_value=MagicMock(),
-            ),
+        with patch.dict(
+            ConnectedInvestigationAgent.run.__globals__,
+            {
+                "get_llm": lambda _role: mock_llm,
+                "get_tracker": lambda: MagicMock(),
+            },
         ):
             register_harness_adapters()
             result = ConnectedInvestigationAgent().run(state)
