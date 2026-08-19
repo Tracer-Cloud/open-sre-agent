@@ -18,6 +18,7 @@ from config.principal import StorageScope
 from config.scope_context import bound_storage_scope
 from core.agent_harness import SessionCore
 from gateway.core.billing.credits_client import CreditsOutcome, consume_credits
+from gateway.core.host.turn_callback import GatewayAgentCallback
 from gateway.core.middleware.active_turns import ActiveTurnRegistry, is_stop_command
 from gateway.core.middleware.approvals import ApprovalBroker, approval_tool_hooks
 from gateway.core.middleware.attention import GateDecision, ThreadAttentionGate
@@ -25,7 +26,6 @@ from gateway.core.middleware.conversation_locks import ConversationLockRegistry
 from gateway.core.middleware.inbound_decision import apply_inbound_decision
 from gateway.core.middleware.terminal_outcome import TerminalOutcomeArbiter
 from gateway.core.storage import SessionResolver
-from gateway.core.transport_api import GatewayAgentCallback
 from gateway.transports.slack.client import (
     SlackMessagingClient,
     mark_turn_done,
@@ -49,7 +49,7 @@ from gateway.transports.slack.processing.thread_history import (
 )
 from gateway.transports.slack.settings import SlackGatewaySettings
 from integrations.messaging_security import MessagingPlatform
-from platform.analytics.usage_context import SURFACE_SLACK, bound_usage_context
+from platform.analytics.usage_context import UsageSurface, bound_usage_context
 
 
 # Only an explicit 402 from the credit ledger posts this; UNCONFIGURED /
@@ -332,7 +332,7 @@ class SlackTurnDispatcher:
                             on_user_stop=_on_user_stop,
                         ),
                         bound_usage_context(
-                            surface=SURFACE_SLACK,
+                            surface=UsageSurface.SLACK,
                             session_id=session.session_id,
                             user_id=inbound.user_id or None,
                         ),

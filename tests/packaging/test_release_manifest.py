@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from platform.packaging.release_manifest import (
+from platform.deployment.packaging.release_manifest import (
     required_skill_files,
     runtime_hidden_imports,
 )
@@ -57,6 +57,21 @@ def test_required_skill_data_covers_action_and_tool_guidance() -> None:
     assert (
         "tools/system/python_execution_tool/skills/github-star-velocity/SKILL.md" in relative_paths
     )
+
+
+def test_required_data_covers_tool_data_files_that_are_not_documents() -> None:
+    """A tool reading a data file degrades silently when it is left out of the build.
+
+    ``find_yc_api`` reads its endpoint index from a JSON file rather than a
+    document, so the ``SKILL.md`` globs above do not reach it. Left out, the
+    tool reports no endpoints at all instead of failing to import, which reads
+    as "Yandex Cloud exposes nothing" rather than as a broken artifact.
+    """
+    relative_paths = {
+        path.relative_to(_REPO_ROOT).as_posix() for path in required_skill_files(_REPO_ROOT)
+    }
+
+    assert "integrations/yandex_cloud/api_index.json" in relative_paths
 
 
 def test_release_build_uses_checked_in_spec() -> None:

@@ -7,7 +7,7 @@ from collections.abc import Mapping
 from http import HTTPStatus
 from typing import Any
 
-from platform.notifications.delivery_transport import post_json
+from platform.delivery.notifications.delivery_transport import post_json
 
 logger = logging.getLogger(__name__)
 

@@ -120,6 +120,16 @@ opensre remote-sync sync --push-only   # upload only
 
 In the shell: `/remote-sync status` and `/remote-sync sync`.
 
+To run one full sync automatically after an interactive shell session exits:
+
+```bash
+opensre --sync-on-exit
+```
+
+Run setup first. The flag applies only to that invocation; a normal `opensre`
+session remains manual-only. If the automatic sync fails, OpenSRE prints a
+warning without changing the shell's exit status.
+
 <Warning>
 Remote sync is for a **personal machine**. Org-bound Slack/Discord turns are refused — those already persist under the org context root.
 </Warning>

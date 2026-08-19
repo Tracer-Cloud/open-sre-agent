@@ -14,7 +14,7 @@ from integrations.github.tools.ci_fix.errors import (
     GitHubCiFixError,
 )
 from integrations.github.tools.ci_fix.gh import run_gh_json, run_gh_text
-from platform.masking import MaskingContext, MaskingPolicy
+from platform.safety.masking import MaskingContext, MaskingPolicy
 
 _PR_URL_RE = re.compile(
     r"https?://github\.com/"

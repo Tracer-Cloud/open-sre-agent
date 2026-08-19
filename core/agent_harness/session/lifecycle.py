@@ -40,8 +40,8 @@ from core.agent_harness.session.persistence.ports import SessionRepo, SessionSto
 # Import from submodules (not the package __init__) so the session package can
 # re-export SessionManager without a circular import.
 from core.agent_harness.session.session_core import SessionCore
-from platform.common.task_registry import TaskRegistry
 from platform.observability.trace.spans import component_span
+from platform.scheduling.task_registry import TaskRegistry
 
 logger = logging.getLogger(__name__)
 

@@ -171,7 +171,7 @@ def main(argv: list[str] | None = None) -> int:
             print(f"  {violation.edge} (line {violation.lineno})")
 
     print(
-        "\nFix by moving shared code to a lower layer (platform/common, core/contracts) "
+        "\nFix by moving shared code to a lower layer (a job-named platform.* package, core/contracts) "
         "or add a temporary baseline entry in .github/ci/check_direct_imports.py "
         "with a linked issue — do not use function-level lazy imports to hide "
         "new direct edges."

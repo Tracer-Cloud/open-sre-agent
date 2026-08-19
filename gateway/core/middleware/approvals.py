@@ -23,7 +23,7 @@ from dataclasses import dataclass, field
 from typing import Any, Protocol
 
 from core.execution import BeforeToolCallResult, ToolExecutionHooks, ToolExecutionRequest
-from gateway.core.runtime.security_audit import audit_security_action
+from gateway.core.storage.security_audit import audit_security_action
 
 APPROVE_ACTION_ID = "opensre_approval_approve"
 DENY_ACTION_ID = "opensre_approval_deny"

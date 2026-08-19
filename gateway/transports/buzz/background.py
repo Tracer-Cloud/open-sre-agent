@@ -9,11 +9,11 @@ from collections.abc import Callable
 from concurrent.futures import ThreadPoolExecutor
 
 from config.constants.gateway import NO_ACTIVE_TURN_MESSAGE
+from gateway.core.host.turn_callback import GatewayAgentCallback
 from gateway.core.middleware.active_turns import ActiveTurnRegistry, is_stop_command
 from gateway.core.middleware.approvals import ApprovalBroker
-from gateway.core.runtime.polling_thread import PollingBackground, start_polling_background
+from gateway.core.process.polling_thread import PollingBackground, start_polling_background
 from gateway.core.storage import SessionResolver
-from gateway.core.transport_api import GatewayAgentCallback
 from gateway.transports.buzz.inbound_handler import handle_polled_inbound_buzz_message
 from gateway.transports.buzz.inbound_security import is_pubkey_authorized
 from gateway.transports.buzz.pending_approvals import PendingApprovals

@@ -17,7 +17,7 @@ import time
 from collections.abc import Iterable
 
 from core.execution import ToolExecutionHooks
-from gateway.core.runtime.status_messages import (
+from gateway.core.host.status_messages import (
     EMPTY_RESPONSE_MESSAGE,
     initial_status_message,
     normalize_gateway_status,
@@ -33,7 +33,7 @@ from gateway.transports.slack.client import (
 from gateway.transports.slack.delivery.feedback import feedback_block
 from gateway.transports.slack.delivery.turn_stream import TurnStream
 from integrations.slack.formatting import markdown_to_slack_mrkdwn
-from platform.common.truncation import truncate
+from platform.text.truncation import truncate
 
 logger = logging.getLogger("gateway")
 

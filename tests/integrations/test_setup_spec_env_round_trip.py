@@ -30,6 +30,7 @@ from config.env_file import env_assignment_key, read_env_lines, sync_env_values
 from integrations._catalog_impl import load_env_integrations, resolve_effective_integrations
 from integrations.alertmanager.setup import ALERTMANAGER_SETUP
 from integrations.aws.setup import AWS_SETUP
+from integrations.azure.setup import AZURE_SETUP
 from integrations.azure_sql.setup import AZURE_SQL_SETUP
 from integrations.betterstack.setup import BETTERSTACK_SETUP
 from integrations.coralogix.setup import CORALOGIX_SETUP
@@ -246,6 +247,14 @@ _SUBMITTED: dict[str, dict[str, str]] = {
         "driver": "ODBC Driver 18 for SQL Server",
         "encrypt": "true",
     },
+    "azure": {
+        "workspace_id": "11111111-2222-3333-4444-555555555555",
+        "access_token": "azure-log-analytics-token",
+        "endpoint": "https://api.loganalytics.azure.us",
+        "tenant_id": "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee",
+        "subscription_id": "ffffffff-0000-1111-2222-333333333333",
+        "max_results": "150",
+    },
     "grafana": {
         "endpoint": "https://checkout.grafana.net",
         "api_key": "glsa_grafana_token",
@@ -343,6 +352,7 @@ _SPECS = [
     MONGODB_SETUP,
     REDIS_SETUP,
     AZURE_SQL_SETUP,
+    AZURE_SETUP,
     GRAFANA_SETUP,
     ALERTMANAGER_SETUP,
     OPENSEARCH_SETUP,

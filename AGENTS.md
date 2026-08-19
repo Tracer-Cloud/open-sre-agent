@@ -47,7 +47,7 @@
   `...`, no `pass`, no `raise NotImplementedError`, and never a docstring *plus*
   a trailing `...`/`pass`. Precedent (all fully compliant):
   `platform/filestorage/ports.py`, `core/agent/loop_host.py`,
-  `gateway/core/runtime/sink_protocol.py`, `core/llm/types.py`.
+  `gateway/core/host/turn_output.py`, `core/llm/types.py`.
 
   ```python
   class ObjectStore(Protocol):
@@ -201,18 +201,18 @@ When opening a PR, fill out the [**PR template**](.github/PULL_REQUEST_TEMPLATE.
 Main packages one level deeper:
 
 - `platform/analytics/` — Analytics event plumbing and install helpers used by the onboarding flow.
-- `platform/auth/` — JWT and authentication helpers for local and hosted runtime access.
+- `platform/safety/auth/` — JWT and authentication helpers for local and hosted runtime access.
 - `surfaces/interactive_shell/` — REPL watchdog slash commands (`/watch`, `/watches`, `/unwatch`): PR demo steps live under **Interactive shell: REPL watchdog demo** in [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md#interactive-shell-repl-watchdog-demo).
 - `config/constants/` — Shared prompt and other static constants.
-- `platform/deployment_ec2/` — EC2 AWS SDK primitives (`client`, `config`, EC2/IAM, SSM) and Telegram gateway AMI/systemd lifecycle (`telegram_gateway/`). Makefile: `make build-gateway-image`, `make deploy-gateway`.
-- `platform/guardrails/` — Guardrail rules, evaluation engine, audit helpers, and CLI bindings.
-- `platform/harness_ports.py` — Harness port layer (integration resolution, tool registry, investigation tools, GitHub repo scope). Real implementations are wired at startup via `integrations/harness_adapters.py` and `tools/harness_adapters.py` through `install_harness_ports()` in `surfaces/interactive_shell/ui/output/boundary.py`. See `core/agent_harness/AGENTS.md` for the import boundary.
+- `platform/deployment/ec2/` — EC2 AWS SDK primitives (`client`, `config`, EC2/IAM, SSM) and Telegram gateway AMI/systemd lifecycle (`telegram_gateway/`). Makefile: `make build-gateway-image`, `make deploy-gateway`.
+- `platform/safety/guardrails/` — Guardrail rules, evaluation engine, audit helpers, and CLI bindings.
+- `platform/harness_ports.py` — Harness port layer (integration resolution, tool registry, investigation tools, GitHub repo scope). Real implementations are wired at startup via `integrations/harness_adapters.py` and `tools/harness_adapters.py` through `install_harness_ports()` in `surfaces/shared/terminal/output/boundary.py`. See `core/agent_harness/AGENTS.md` for the import boundary.
 - `integrations/hermes/` — Hermes log tailing, incident classification, correlator, sinks, and investigation bridge.
 - `integrations/llm_cli/` — Subprocess-backed LLM CLIs (e.g. Codex). Extension guide: `integrations/llm_cli/AGENTS.md`.
-- `platform/masking/` — Masking utilities for redacting or normalizing sensitive content.
+- `platform/safety/masking/` — Masking utilities for redacting or normalizing sensitive content.
 - `tools/investigation/` — Composite investigation capability, public entrypoints, semantic stages, and reporting.
 - `core/llm/` — Hosted LLM provider clients, retry/schema helpers, and investigation tool-calling adapters.
-- `platform/sandbox/` — Sandboxed execution helpers for controlled runtime actions.
+- `platform/safety/sandbox/` — Sandboxed execution helpers for controlled runtime actions.
 - `core/state/` — Shared agent runtime envelope (`AgentState`), chat slice, investigation pipeline slice contracts, `EvidenceEntry`, state-update helpers, and pure defaults.
 - `core/domain/types/` — Shared typed contracts for evidence, retrieval, and tool-related payloads.
 - `tools/system/watch_dog/` — Watchdog feature: per-threshold alarm dispatch with cooldown (`--provider telegram|rocketchat`), sitting on top of `integrations/telegram/*` and `integrations/rocketchat/*`.

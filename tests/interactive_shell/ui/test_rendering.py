@@ -10,16 +10,15 @@ import pytest
 from rich.console import Console
 
 from surfaces.interactive_shell.runtime.core.state import SpinnerState
-from surfaces.interactive_shell.ui.components.rendering import (
+from surfaces.interactive_shell.ui.poster import refresh_welcome_poster, repl_render_launch_poster
+from surfaces.interactive_shell.ui.streaming.console import StreamingConsole
+from surfaces.shared.terminal.components.rendering import (
     _repl_write_buffer,
     print_repl_json,
-    refresh_welcome_poster,
     repl_print,
-    repl_render_launch_poster,
     repl_table,
 )
-from surfaces.interactive_shell.ui.streaming.console import StreamingConsole
-from surfaces.interactive_shell.ui.tables import (
+from surfaces.shared.terminal.tables import (
     render_integrations_table,
     render_mcp_table,
 )
@@ -71,7 +70,7 @@ def test_print_repl_table_stays_on_the_crlf_path_while_recording(
     """
     from rich.table import Table
 
-    from surfaces.interactive_shell.ui.components.rendering import print_repl_table
+    from surfaces.shared.terminal.components.rendering import print_repl_table
 
     class _FakeStdout:
         def __init__(self) -> None:
@@ -121,7 +120,7 @@ def test_repl_print_resets_before_each_line(monkeypatch) -> None:
     resets: list[bool] = []
 
     monkeypatch.setattr(
-        "surfaces.interactive_shell.ui.components.choice_menu.prepare_repl_output_line",
+        "surfaces.shared.terminal.components.choice_menu.prepare_repl_output_line",
         lambda: resets.append(True),
     )
 
@@ -137,7 +136,7 @@ def test_repl_print_does_not_double_prepare_with_streaming_console(monkeypatch) 
     resets: list[bool] = []
 
     monkeypatch.setattr(
-        "surfaces.interactive_shell.ui.components.choice_menu.prepare_repl_output_line",
+        "surfaces.shared.terminal.components.choice_menu.prepare_repl_output_line",
         lambda: resets.append(True),
     )
 
@@ -173,7 +172,7 @@ def test_repl_print_streaming_console_prepares_tty_once_when_interactive(
     fake_stdout = _FakeStdout()
     monkeypatch.setattr("sys.stdout", fake_stdout)
     monkeypatch.setattr(
-        "surfaces.interactive_shell.ui.components.choice_menu.repl_tty_interactive",
+        "surfaces.shared.terminal.components.choice_menu.repl_tty_interactive",
         lambda: True,
     )
 
@@ -261,15 +260,15 @@ def test_refresh_welcome_poster_drains_cpr_after_clear(monkeypatch: pytest.Monke
     drains: list[str] = []
 
     monkeypatch.setattr(
-        "surfaces.interactive_shell.ui.components.rendering.repl_clear_screen",
+        "surfaces.interactive_shell.ui.poster.repl_clear_screen",
         lambda: drains.append("clear"),
     )
     monkeypatch.setattr(
-        "surfaces.interactive_shell.ui.components.cpr_stdin.drain_stale_cpr_bytes",
+        "surfaces.shared.terminal.components.cpr_stdin.drain_stale_cpr_bytes",
         lambda: drains.append("drain"),
     )
     monkeypatch.setattr(
-        "surfaces.interactive_shell.ui.components.rendering.repl_render_launch_poster",
+        "surfaces.interactive_shell.ui.poster.repl_render_launch_poster",
         lambda *_args, **_kwargs: drains.append("render"),
     )
 

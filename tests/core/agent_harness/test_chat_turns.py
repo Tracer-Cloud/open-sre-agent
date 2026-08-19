@@ -10,7 +10,7 @@ from core.agent_harness.turns.headless_adapters import (
     NullToolProvider,
     StaticReasoningClientProvider,
 )
-from core.agent_harness.turns.port_families import HeadlessPorts
+from core.agent_harness.turns.headless_build import InMemoryHeadlessBuild
 from core.agent_harness.turns.turn_results import ToolCallingTurnResult, TurnResult
 
 
@@ -67,7 +67,7 @@ def test_headless_bind_turn_swaps_output() -> None:
 
     first = BufferOutputSink()
     second = BufferOutputSink()
-    agent = HeadlessPorts(
+    agent = InMemoryHeadlessBuild(
         output=first, reasoning=StaticReasoningClientProvider(client=_Echo())
     ).agent(tools=NullToolProvider())
     before_runner = agent._action_runner  # noqa: SLF001

@@ -60,7 +60,7 @@ def isolated_agents_yaml(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> Pat
 def _clear_sampler_module_state() -> None:
     """Reset module-level state in the sampler before each test (#2023).
 
-    Same isolation pattern as ``tests/interactive_shell/ui/test_agents_view.py``:
+    Same isolation pattern as ``tests/shared/terminal/test_agents_view.py``:
     probe snapshots, the token rate tracker, and the per-tick caches
     all live as module globals and can leak across test files.
     """

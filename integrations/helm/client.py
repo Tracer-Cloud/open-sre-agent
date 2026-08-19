@@ -13,7 +13,7 @@ from typing import Any
 
 from integrations.config_models import HelmIntegrationConfig
 from integrations.probes import ProbeResult
-from platform.notifications.limits import MAX_MESSAGE_SIZE
+from platform.delivery.notifications.limits import MAX_MESSAGE_SIZE
 
 logger = logging.getLogger(__name__)
 

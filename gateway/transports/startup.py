@@ -17,30 +17,28 @@ import logging
 from collections.abc import Sequence
 from dataclasses import dataclass
 
-from gateway.core.runtime.errors import (
+from gateway.core.host.turn_callback import GatewayAgentCallback
+from gateway.core.lifecycle.errors import (
     GatewayConfigurationError,
     GatewayTransportFailedError,
 )
-from gateway.core.transport_api import (
-    GatewayAgentCallback,
-    TransportName,
-    TransportSpec,
-    TransportWorker,
-)
 from gateway.transports.buzz.startup import start_buzz_worker
 from gateway.transports.discord.startup import start_discord_worker
+from gateway.transports.names import TransportName
+from gateway.transports.registration import TransportRegistration
 from gateway.transports.slack.startup import start_slack_worker
 from gateway.transports.telegram.startup import start_telegram_worker
+from gateway.transports.worker import TransportWorker
 
 # How long a shutdown waits on each worker before giving up on it.
 DEFAULT_STOP_TIMEOUT_SECONDS = 8.0
 
 
-TRANSPORTS: tuple[TransportSpec, ...] = (
-    TransportSpec(TransportName.TELEGRAM, start_telegram_worker, "polling for messages"),
-    TransportSpec(TransportName.SLACK, start_slack_worker, "inbound connected"),
-    TransportSpec(TransportName.DISCORD, start_discord_worker, "connected via gateway"),
-    TransportSpec(TransportName.BUZZ, start_buzz_worker, "polling for messages"),
+TRANSPORTS: tuple[TransportRegistration, ...] = (
+    TransportRegistration(TransportName.TELEGRAM, start_telegram_worker, "polling for messages"),
+    TransportRegistration(TransportName.SLACK, start_slack_worker, "inbound connected"),
+    TransportRegistration(TransportName.DISCORD, start_discord_worker, "connected via gateway"),
+    TransportRegistration(TransportName.BUZZ, start_buzz_worker, "polling for messages"),
 )
 
 
@@ -79,19 +77,25 @@ def start_transports(
     """
     handles: list[TransportHandle] = []
     statuses: dict[TransportName, str] = {}
-    for spec in TRANSPORTS:
+    for registration in TRANSPORTS:
         try:
-            worker, _settings = spec.start(logger=logger, handler=handler)
+            worker, _settings = registration.start(logger=logger, handler=handler)
         except GatewayConfigurationError as exc:
-            logger.warning("%s chat disabled: %s", spec.name.capitalize(), exc)
-            statuses[spec.name] = f"not configured ({exc})"
+            logger.warning("%s chat disabled: %s", registration.name.capitalize(), exc)
+            statuses[registration.name] = f"not configured ({exc})"
             continue
         except GatewayTransportFailedError as exc:
-            logger.warning("%s chat failed: %s", spec.name.capitalize(), exc)
-            statuses[spec.name] = f"failed ({exc})"
+            logger.warning("%s chat failed: %s", registration.name.capitalize(), exc)
+            statuses[registration.name] = f"failed ({exc})"
             continue
-        handles.append(TransportHandle(name=spec.name, worker=worker, status=spec.running_status))
-        statuses[spec.name] = spec.running_status
+        handles.append(
+            TransportHandle(
+                name=registration.name,
+                worker=worker,
+                status=registration.running_status,
+            )
+        )
+        statuses[registration.name] = registration.running_status
     return ChatStartup(handles=handles, statuses=statuses)
 
 

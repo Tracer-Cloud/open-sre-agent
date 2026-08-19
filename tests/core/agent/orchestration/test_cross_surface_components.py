@@ -13,9 +13,9 @@ from core.agent_harness.session import InMemorySessionStore
 from core.agent_harness.tools.tool_provider import DefaultToolProvider
 from core.agent_harness.turns.orchestrator import run_turn
 from core.agent_harness.turns.turn_results import ToolCallingTurnResult, TurnResult
-from gateway.core.runtime.turn_handler import GatewayTurnHandler
+from gateway.core.host.turn_handler import GatewayTurnHandler
 from surfaces.interactive_shell.session import Session
-from tests.shared.default_ports_stub import default_ports_stub
+from tests.shared.default_headless_build_stub import default_headless_build_stub
 from tests.shared.fake_agent import fake_agent
 
 
@@ -35,7 +35,8 @@ def test_gateway_turn_handler_delegates_to_agent_dispatch(monkeypatch: pytest.Mo
     )
     factory = MagicMock(return_value=agent)
     monkeypatch.setattr(
-        "gateway.core.runtime.session_agents.DefaultPorts", default_ports_stub(factory)
+        "gateway.core.host.session_agents.DefaultHeadlessBuild",
+        default_headless_build_stub(factory),
     )
 
     session = Session(store=InMemorySessionStore())
@@ -45,13 +46,13 @@ def test_gateway_turn_handler_delegates_to_agent_dispatch(monkeypatch: pytest.Mo
 
     # The message is dispatched per-turn; session-stable ports are wired once,
     # with a live sink proxy rebound to the transport sink each turn.
-    from gateway.core.runtime.live_sink import LiveOutputSink
+    from gateway.core.host.bindable_output import BindableOutput
 
     agent.dispatch.assert_called_once()
     assert agent.dispatch.call_args.args == ("hello gateway",)
     ctor = factory.call_args
     assert ctor.kwargs["session"] is session
-    assert isinstance(ctor.kwargs["output"], LiveOutputSink)
+    assert isinstance(ctor.kwargs["output"], BindableOutput)
     assert ctor.kwargs["output"].bound is sink
     # Gateway turns gather live evidence; the ports object carries that now.
     assert ctor.kwargs["gather"].enabled is True
@@ -79,8 +80,8 @@ def test_gateway_turn_handler_does_not_finalize_answered_turn(
         llm_run=object(),
     )
     monkeypatch.setattr(
-        "gateway.core.runtime.session_agents.DefaultPorts",
-        default_ports_stub(MagicMock(return_value=agent)),
+        "gateway.core.host.session_agents.DefaultHeadlessBuild",
+        default_headless_build_stub(MagicMock(return_value=agent)),
     )
 
     session = Session(store=InMemorySessionStore())

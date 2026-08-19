@@ -9,7 +9,7 @@ from __future__ import annotations
 
 from surfaces.cli.app import cli
 from surfaces.cli.commands import _COMMANDS
-from surfaces.interactive_shell.ui.layout import _commands_from_group
+from surfaces.cli.layout import _commands_from_group
 
 
 def test_registered_commands_match_help_table() -> None:

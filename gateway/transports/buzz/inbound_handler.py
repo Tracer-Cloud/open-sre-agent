@@ -11,11 +11,11 @@ from contextlib import AbstractContextManager, nullcontext
 
 from config.constants.gateway import TURN_ERROR_MESSAGE, TURN_TIMEOUT_MESSAGE, USER_STOP_MESSAGE
 from config.scope_context import bound_storage_scope
+from gateway.core.host.turn_callback import GatewayAgentCallback
 from gateway.core.middleware.active_turns import ActiveTurnRegistry
 from gateway.core.middleware.approvals import ApprovalBroker, approval_tool_hooks
 from gateway.core.middleware.terminal_outcome import TerminalOutcomeArbiter
 from gateway.core.storage import SessionResolver
-from gateway.core.transport_api import GatewayAgentCallback
 from gateway.transports.buzz.approvals import BuzzApprovalPrompter
 from gateway.transports.buzz.inbound_security import enforce_inbound_buzz_message_security
 from gateway.transports.buzz.output_sink import BuzzOutputSink
@@ -24,7 +24,7 @@ from gateway.transports.buzz.principal import PrincipalResolutionError, resolve_
 from gateway.transports.buzz.session_rotation import conversation_key, resolve_or_rotate_session
 from gateway.transports.buzz.settings import BuzzInboundMessage, GatewaySettings
 from integrations.buzz.client import BuzzClient
-from platform.analytics.usage_context import SURFACE_BUZZ, bound_usage_context
+from platform.analytics.usage_context import UsageSurface, bound_usage_context
 
 logger = logging.getLogger(__name__)
 
@@ -148,7 +148,7 @@ async def handle_polled_inbound_buzz_message(
                 with (
                     bound_storage_scope(scope),
                     bound_usage_context(
-                        surface=SURFACE_BUZZ,
+                        surface=UsageSurface.BUZZ,
                         session_id=session.session_id,
                         user_id=event.pubkey or None,
                     ),

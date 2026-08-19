@@ -12,7 +12,7 @@ Embedded scripts that need local adapters use
 :meth:`AgentSession.run_headless_turn`; a loop keeps one agent for the loop.
 
 A host with its own ports (the gateway pool, the REPL) builds the agent through
-:class:`~core.agent_harness.turns.port_families.DefaultPorts` and drives it
+:class:`~core.agent_harness.turns.headless_build.DefaultHeadlessBuild` and drives it
 with :meth:`HeadlessAgent.handle` per message; it may still attach it here to
 use :meth:`chat` and :meth:`investigate`.
 
@@ -38,7 +38,7 @@ if TYPE_CHECKING:
     from core.agent_harness.session.session_core import SessionCore
     from core.agent_harness.session_goal.goal import SessionGoal
     from core.agent_harness.session_goal.run_until import SessionGoalRunResult
-    from core.agent_harness.turns.gather_ports import GatherPorts
+    from core.agent_harness.turns.gather_phase import GatherPhase
     from core.agent_harness.turns.turn_results import TurnResult
 
 
@@ -120,7 +120,7 @@ class AgentSession:
         prompts: PromptContextProvider | None = None,
         prepare_session: Callable[[SessionCore], None] | None = None,
         tools: ToolProvider | None = None,
-        gather: GatherPorts | None = None,
+        gather: GatherPhase | None = None,
         console: Any | None = None,
         logger: logging.Logger | None = None,
         surface: str | None = None,
@@ -145,11 +145,11 @@ class AgentSession:
 
         ``prepare_session`` runs after session create (e.g. pin a project scope)
         and before the agent is built. ``console``, ``logger`` and ``surface``
-        are the :class:`~core.agent_harness.turns.port_families.DefaultPorts`
+        are the :class:`~core.agent_harness.turns.headless_build.DefaultHeadlessBuild`
         fields; ``tools`` and ``gather`` the ports its ``agent()`` takes;
         ``is_tty`` is bound on the first turn. A host that needs more (its own
         sink, prompts, error reporter, an action ``llm_factory``) builds through
-        :class:`DefaultPorts` itself and calls :meth:`attach_agent`.
+        :class:`DefaultHeadlessBuild` itself and calls :meth:`attach_agent`.
         """
         from core.agent_harness.turns.headless_adapters import BufferOutputSink
 
@@ -179,7 +179,7 @@ class AgentSession:
         config: SessionConfig | None = None,
         output: OutputSink | None = None,
         prepare_session: Callable[[SessionCore], None] | None = None,
-        gather: GatherPorts | None = None,
+        gather: GatherPhase | None = None,
         logger: logging.Logger | None = None,
         is_tty: bool | None = None,
     ) -> TurnResult:
@@ -314,7 +314,7 @@ class AgentSession:
         output: OutputSink,
         prompts: PromptContextProvider | None,
         tools: ToolProvider | None = None,
-        gather: GatherPorts | None = None,
+        gather: GatherPhase | None = None,
         console: Any | None = None,
         logger: logging.Logger | None = None,
         surface: str | None = None,
@@ -323,13 +323,13 @@ class AgentSession:
         """Attach the agent built on the default port family (one construction recipe).
 
         Used by :meth:`start` and :meth:`run_headless_turn`. Custom hosts
-        (gateway pool, REPL) build through :class:`DefaultPorts` themselves and
+        (gateway pool, REPL) build through :class:`DefaultHeadlessBuild` themselves and
         call :meth:`attach_agent` — they must not re-copy this wiring ad hoc.
         """
         from core.agent_harness.ports import TurnBinding
-        from core.agent_harness.turns.port_families import DefaultPorts
+        from core.agent_harness.turns.headless_build import DefaultHeadlessBuild
 
-        agent = DefaultPorts(
+        agent = DefaultHeadlessBuild(
             session=session, output=output, console=console, logger=logger, surface=surface
         ).agent(tools=tools, prompts=prompts, gather=gather)
         agent.bind_turn(TurnBinding(is_tty=is_tty))

@@ -126,8 +126,8 @@ class OutputBindable(Protocol):
 
     ``HeadlessAgent.bind_turn(output=…)`` updates the agent's sink and must
     retarget every port that cached the previous sink (e.g. reasoning error
-    rendering). Gateway usually keeps a stable ``LiveOutputSink`` and rebinds
-    the outer transport sink via ``LiveOutputSink.bind`` — that path does not
+    rendering). Gateway usually keeps a stable ``BindableOutput`` and rebinds
+    the outer transport output via ``BindableOutput.bind`` — that path does not
     need ``bind_turn(output=)``. Hosts that swap the ``OutputSink`` object
     itself must pass ``output=`` so :class:`OutputBindable` ports follow.
     """
@@ -337,7 +337,9 @@ __all__ = [
     "EvidenceGatherer",
     "ExecuteActions",
     "GatheredEvidence",
+    "InvestigationPortsFactory",
     "LlmFactory",
+    "LlmProviderPortsFactory",
     "OutputBindable",
     "OutputSink",
     "PromptContextProvider",
@@ -345,7 +347,9 @@ __all__ = [
     "RunRecordFactory",
     "SessionBindable",
     "SessionState",
+    "SlashPortsFactory",
     "SubprocessPresenterFactory",
+    "TaskCancelPortsFactory",
     "ToolEventObserver",
     "ToolProvider",
     "ToolRegistry",
@@ -361,3 +365,15 @@ SubprocessPresenterFactory = Callable[
     [Any, Any, "ConfirmFn | None", bool | None, bool],
     Any,
 ]
+
+
+# Host capabilities an action tool calls back into: named commands, LLM-provider
+# switching, task cancellation and investigation launch. Their contracts live in
+# ``tools`` beside the tools that call them (see
+# ``tools.interactive_shell.shared.host_ports.ExecutionGate``), so the seams stay
+# untyped here — ``core`` only carries a capability from the host to the tool,
+# and typing them here would mean ``core`` importing ``tools``.
+InvestigationPortsFactory = Callable[[], Any]
+LlmProviderPortsFactory = Callable[[], Any]
+TaskCancelPortsFactory = Callable[[], Any]
+SlashPortsFactory = Callable[[], Any]

@@ -3,15 +3,12 @@
 from __future__ import annotations
 
 from core.tool_framework.tool_decorator import tool
-from integrations.aws_lambda.tools.lambda_invocation_logs_tool import (
-    _lambda_available,
-    _lambda_name,
-    get_lambda_invocation_logs,
-)
+from integrations.aws_lambda.availability import lambda_available, lambda_name
+from integrations.aws_lambda.tools.lambda_invocation_logs_tool import get_lambda_invocation_logs
 
 
 def _extract_lambda_errors_params(sources: dict[str, dict]) -> dict:
-    return {"function_name": _lambda_name(sources), "limit": 50}
+    return {"function_name": lambda_name(sources), "limit": 50}
 
 
 @tool(
@@ -33,7 +30,7 @@ def _extract_lambda_errors_params(sources: dict[str, dict]) -> dict:
         },
         "required": ["function_name"],
     },
-    is_available=_lambda_available,
+    is_available=lambda_available,
     extract_params=_extract_lambda_errors_params,
 )
 def get_lambda_errors(function_name: str, limit: int = 50) -> dict:

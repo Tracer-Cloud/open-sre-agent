@@ -1,16 +1,16 @@
 """The agent a host runs turns on.
 
-Built by a port family (:mod:`core.agent_harness.turns.port_families`), then
+Built by a port family (:mod:`core.agent_harness.turns.headless_build`), then
 driven one message at a time::
 
-    from core.agent_harness.runtime import HeadlessPorts, TurnBinding
+    from core.agent_harness.runtime import InMemoryHeadlessBuild, TurnBinding
     from core.agent_harness.turns.headless_adapters import NullToolProvider
 
-    agent = HeadlessPorts().agent(tools=NullToolProvider())
+    agent = InMemoryHeadlessBuild().agent(tools=NullToolProvider())
     result = agent.handle("hi there", TurnBinding())
     print(result.primary_response_text)
 
-A host with real ports uses ``DefaultPorts`` the same way; the gateway and the
+A host with real ports uses ``DefaultHeadlessBuild`` the same way; the gateway and the
 interactive shell are both that program.
 """
 
@@ -48,7 +48,7 @@ from core.agent_harness.turns.action_driver import ActionTurnRunner
 from core.agent_harness.turns.chat_api import ChatTurnBindings, dispatch_chat_turn
 from core.agent_harness.turns.evidence_driver import gather_tool_evidence
 from core.agent_harness.turns.gather_observation import GatheredEvidence
-from core.agent_harness.turns.gather_ports import GatherPorts
+from core.agent_harness.turns.gather_phase import GatherPhase
 from core.agent_harness.turns.headless_adapters import NoopTurnAccounting
 from core.agent_harness.turns.host_cancel import host_cancel_requested
 from core.agent_harness.turns.orchestrator import stream_answer
@@ -70,8 +70,8 @@ class HeadlessAgent:
     """Runs agent turns from a fixed set of ports; built by a port family.
 
     Every port is required here — the two families supply them:
-    :class:`~core.agent_harness.turns.port_families.HeadlessPorts` (in-memory;
-    scripts and tests) and :class:`~core.agent_harness.turns.port_families.DefaultPorts`
+    :class:`~core.agent_harness.turns.headless_build.InMemoryHeadlessBuild` (in-memory;
+    scripts and tests) and :class:`~core.agent_harness.turns.headless_build.DefaultHeadlessBuild`
     (the product defaults; gateway and shell). Hosts do not call this
     constructor.
 
@@ -93,7 +93,7 @@ class HeadlessAgent:
         reasoning: ReasoningClientProvider,
         run_factory: RunRecordFactory,
         error_reporter: ErrorReporter,
-        gather: GatherPorts,
+        gather: GatherPhase,
         llm_factory: LlmFactory | None = None,
     ) -> None:
         self._tools = tools
@@ -104,7 +104,7 @@ class HeadlessAgent:
         self._reasoning = reasoning
         self._run_factory = run_factory
         self._error_reporter = error_reporter
-        self._gather_ports = gather
+        self._gather_phase = gather
         # Turn-scoped state; see bind_turn / bind_stages.
         self._accounting: TurnAccounting | None = None
         self._confirm_fn: ConfirmFn | None = None
@@ -179,8 +179,8 @@ class HeadlessAgent:
         ``console`` every :class:`ConsoleBindable` port, and a new ``output``
         object every :class:`OutputBindable` port; a new output or a change of
         ``tool_hooks`` also rebuilds the action runner
-        — an unchanged one keeps it. Gateway keeps a stable ``LiveOutputSink``
-        and rebinds the transport sink inside it, so it leaves ``output`` unset.
+        — an unchanged one keeps it. Gateway keeps a stable ``BindableOutput``
+        and rebinds the transport destination inside it, so it leaves ``output`` unset.
         """
         if binding.session is not None:
             self.bind_session(binding.session)
@@ -291,7 +291,7 @@ class HeadlessAgent:
     def _gather(
         self, text: str, *, turn_plan: TurnPlan | None = None
     ) -> str | GatheredEvidence | None:
-        if not self._gather_ports.enabled:
+        if not self._gather_phase.enabled:
             return None
         if host_cancel_requested(self._output):
             return None
@@ -301,9 +301,9 @@ class HeadlessAgent:
             self._session,
             error_reporter=self._error_reporter,
             resolved_integrations=resolved,
-            max_iterations=self._gather_ports.max_iterations,
-            on_progress=self._gather_ports.on_progress,
-            persist=self._gather_ports.persist,
+            max_iterations=self._gather_phase.max_iterations,
+            on_progress=self._gather_phase.on_progress,
+            persist=self._gather_phase.persist,
             is_cancelled=lambda: host_cancel_requested(self._output),
         )
 
@@ -315,8 +315,8 @@ class HeadlessAgent:
             self._reasoning,
             self._run_factory,
             self._error_reporter,
-            self._gather_ports.on_progress,
-            self._gather_ports.persist,
+            self._gather_phase.on_progress,
+            self._gather_phase.persist,
         )
 
     def _new_action_runner(self) -> ActionTurnRunner:

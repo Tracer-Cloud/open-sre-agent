@@ -116,16 +116,16 @@ def test_builder_exposes_the_prompts_port() -> None:
     """The port has to be reachable on the documented second path too.
 
     The README shows callers building the agent themselves via
-    ``DefaultPorts(...).agent(...)``; a port only ``start()`` can reach is not
+    ``DefaultHeadlessBuild(...).agent(...)``; a port only ``start()`` can reach is not
     exposed.
     """
     # Arrange
     import inspect
 
-    from core.agent_harness.turns.port_families import DefaultPorts
+    from core.agent_harness.turns.headless_build import DefaultHeadlessBuild
 
     # Act / Assert
-    assert "prompts" in inspect.signature(DefaultPorts.agent).parameters
+    assert "prompts" in inspect.signature(DefaultHeadlessBuild.agent).parameters
 
 
 def test_a_falsy_prompts_provider_is_still_used() -> None:

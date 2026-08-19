@@ -38,10 +38,6 @@ from surfaces.interactive_shell.runtime.investigation_adapter import (
 from surfaces.interactive_shell.runtime.startup import initial_input as startup_initial_input
 from surfaces.interactive_shell.session import Session
 from surfaces.interactive_shell.ui import input_prompt
-from surfaces.interactive_shell.ui.components.cpr_stdin import (
-    strip_cpr_escape_sequences,
-    strip_cpr_sequences,
-)
 from surfaces.interactive_shell.ui.input_prompt import completion as prompt_completion
 from surfaces.interactive_shell.ui.input_prompt.completion import ShellCompleter
 from surfaces.interactive_shell.ui.input_prompt.key_bindings import (
@@ -55,6 +51,10 @@ from surfaces.interactive_shell.ui.input_prompt.rendering import _prompt_message
 from surfaces.interactive_shell.ui.input_prompt.style import _build_prompt_style
 from surfaces.interactive_shell.ui.streaming import _CHARS_PER_TOKEN
 from surfaces.interactive_shell.ui.streaming.console import StreamingConsole
+from surfaces.shared.terminal.components.cpr_stdin import (
+    strip_cpr_escape_sequences,
+    strip_cpr_sequences,
+)
 
 
 def test_agent_presentation_import_does_not_load_shell_turn_execution() -> None:
@@ -1050,11 +1050,11 @@ class TestStreamingConsole:
 
         calls: list[str] = []
         monkeypatch.setattr(
-            "surfaces.interactive_shell.ui.components.choice_menu.ensure_tty_column_zero",
+            "surfaces.shared.terminal.components.choice_menu.ensure_tty_column_zero",
             lambda: calls.append("ensure"),
         )
         monkeypatch.setattr(
-            "surfaces.interactive_shell.ui.components.choice_menu.prepare_repl_output_line",
+            "surfaces.shared.terminal.components.choice_menu.prepare_repl_output_line",
             lambda: calls.append("prepare"),
         )
 
@@ -1796,7 +1796,7 @@ class TestThemeCommand:
             refreshed.append({"console": console, "session": session, "theme_notice": theme_notice})
 
         monkeypatch.setattr(
-            "surfaces.interactive_shell.ui.components.rendering.refresh_welcome_poster",
+            "surfaces.interactive_shell.ui.poster.refresh_welcome_poster",
             _refresh,
         )
 
@@ -1841,7 +1841,7 @@ class TestThemeCommand:
             lambda: drains.append("drain"),
         )
         monkeypatch.setattr(
-            "surfaces.interactive_shell.ui.components.rendering.refresh_welcome_poster",
+            "surfaces.interactive_shell.ui.poster.refresh_welcome_poster",
             lambda *_args, **_kwargs: drains.append("poster"),
         )
         monkeypatch.setattr("config.local_settings.load_local_settings", lambda: {})

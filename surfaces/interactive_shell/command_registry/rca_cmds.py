@@ -24,15 +24,15 @@ from surfaces.interactive_shell.ui import (
     print_repl_table,
     repl_table,
 )
-from surfaces.interactive_shell.ui.components.choice_menu import (
+from surfaces.shared.error_handling.exception_reporting import report_exception
+from surfaces.shared.terminal.components.choice_menu import (
     CRUMB_SEP,
     prepare_repl_output_line,
     repl_choose_one,
     repl_section_break,
     repl_tty_interactive,
 )
-from surfaces.interactive_shell.ui.components.time_format import format_repl_timestamp
-from surfaces.shared.error_handling.exception_reporting import report_exception
+from surfaces.shared.terminal.components.time_format import format_repl_timestamp
 
 _RCA_ROOT = "/rca"
 _RCA_LATEST = "__latest__"

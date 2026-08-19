@@ -18,6 +18,7 @@ from core.domain.alerts.extraction import (
 )
 from core.domain.types.incident_window import resolve_incident_window
 from core.state import InvestigationState
+from platform.delivery.reporting.slack_reactions import SlackReactionsPort, get_slack_reactions_port
 from platform.observability import (
     debug_print,
     render_investigation_header,
@@ -25,7 +26,6 @@ from platform.observability import (
 from platform.observability import (
     get_progress_tracker as get_tracker,
 )
-from platform.reporting.slack_reactions import SlackReactionsPort, get_slack_reactions_port
 from tools.investigation.reporting.delivery.bootstrap import (
     ensure_delivery_adapters_registered,
 )

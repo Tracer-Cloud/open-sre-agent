@@ -26,6 +26,7 @@ from typing import Any
 import pytest
 
 import integrations.alertmanager.setup as alertmanager_setup
+import integrations.azure.setup as azure_setup
 import integrations.azure_sql.setup as azure_sql_setup
 import integrations.betterstack.setup as betterstack_setup
 import integrations.cli as cli
@@ -230,6 +231,14 @@ _ANSWERS: dict[str, dict[str, str]] = {
         "driver": "ODBC Driver 18 for SQL Server",
         "encrypt": "true",
     },
+    "azure": {
+        "workspace_id": "11111111-2222-3333-4444-555555555555",
+        "access_token": "azure-log-analytics-token",
+        "endpoint": "https://api.loganalytics.azure.us",
+        "tenant_id": "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee",
+        "subscription_id": "ffffffff-0000-1111-2222-333333333333",
+        "max_results": "150",
+    },
     "grafana": {
         "endpoint": "https://checkout.grafana.net",
         "api_key": "glsa_grafana_token",
@@ -297,6 +306,7 @@ _CASES = [
     pytest.param(mongodb_setup, "MONGODB_SETUP", cli._setup_mongodb, id="mongodb"),
     pytest.param(redis_setup, "REDIS_SETUP", cli._setup_redis, id="redis"),
     pytest.param(azure_sql_setup, "AZURE_SQL_SETUP", cli._setup_azure_sql, id="azure_sql"),
+    pytest.param(azure_setup, "AZURE_SETUP", cli._setup_azure, id="azure"),
     pytest.param(grafana_setup, "GRAFANA_SETUP", cli._setup_grafana, id="grafana"),
     pytest.param(rds_setup, "RDS_SETUP", cli._setup_rds, id="rds"),
     pytest.param(new_relic_setup, "NEW_RELIC_SETUP", cli._setup_new_relic, id="new_relic"),

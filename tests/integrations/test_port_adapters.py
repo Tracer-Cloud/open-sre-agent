@@ -21,7 +21,7 @@ from platform.observability.render.progress import (
     set_progress_tracker,
     set_progress_tracker_factory,
 )
-from surfaces.interactive_shell.ui.output import boundary as output_boundary
+from surfaces.shared.terminal.output import boundary as output_boundary
 
 
 def _reset_all_ports() -> None:

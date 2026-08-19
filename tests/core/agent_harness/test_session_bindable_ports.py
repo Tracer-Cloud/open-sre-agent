@@ -17,8 +17,8 @@ from core.agent_harness.turns.headless_adapters import (
     SimpleRunRecordFactory,
     StaticReasoningClientProvider,
 )
+from core.agent_harness.turns.headless_build import InMemoryHeadlessBuild
 from core.agent_harness.turns.host_cancel import ensure_turn_cancel
-from core.agent_harness.turns.port_families import HeadlessPorts
 
 
 class _SpyTools:
@@ -68,14 +68,14 @@ def test_headless_agent_bind_session_invokes_session_bindable() -> None:
     first = InMemorySessionState(session_id="a")
     second = InMemorySessionState(session_id="b")
     tools = _SpyTools()
-    agent = HeadlessPorts(session=first).agent(tools=tools)
+    agent = InMemoryHeadlessBuild(session=first).agent(tools=tools)
     agent.bind_session(second)
     assert tools.sessions == [second]
 
 
 def test_headless_agent_bind_turn_console_invokes_console_bindable() -> None:
     tools = _SpyTools()
-    agent = HeadlessPorts(session=InMemorySessionState()).agent(tools=tools)
+    agent = InMemoryHeadlessBuild(session=InMemorySessionState()).agent(tools=tools)
     agent.bind_turn(TurnBinding(console="second"))
     assert tools.consoles == ["second"]
 
@@ -96,9 +96,9 @@ def test_headless_agent_bind_turn_output_retargets_reasoning() -> None:
     first = BufferOutputSink()
     second = BufferOutputSink()
     reasoning = DefaultReasoningClientProvider(output=first)
-    agent = HeadlessPorts(session=InMemorySessionState(), output=first, reasoning=reasoning).agent(
-        tools=NullToolProvider()
-    )
+    agent = InMemoryHeadlessBuild(
+        session=InMemorySessionState(), output=first, reasoning=reasoning
+    ).agent(tools=NullToolProvider())
     agent.bind_turn(TurnBinding(output=second))
     reasoning._handle_unavailable(RuntimeError("boom"), context="test")
     assert "LLM client unavailable" in second.text
@@ -115,8 +115,8 @@ def test_ensure_turn_cancel_reuses_existing_event() -> None:
     assert first is second is sink.turn_cancel
 
 
-def test_live_sink_exposes_turn_cancel_property() -> None:
-    from gateway.core.runtime.live_sink import LiveOutputSink
+def test_bindable_output_exposes_turn_cancel_property() -> None:
+    from gateway.core.host.bindable_output import BindableOutput
 
     class _Inner:
         def __init__(self) -> None:
@@ -139,7 +139,7 @@ def test_live_sink_exposes_turn_cancel_property() -> None:
             _ = text
 
     inner = _Inner()
-    live = LiveOutputSink()
-    assert live.turn_cancel is None
-    live.bind(inner)  # type: ignore[arg-type]
-    assert live.turn_cancel is inner.turn_cancel
+    bindable = BindableOutput()
+    assert bindable.turn_cancel is None
+    bindable.bind(inner)  # type: ignore[arg-type]
+    assert bindable.turn_cancel is inner.turn_cancel

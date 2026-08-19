@@ -303,6 +303,7 @@ _BUILTIN_SPECS: tuple[IntegrationSpec, ...] = (
         aliases=("azure monitor", "azure_monitor"),
         has_verifier=True,
         direct_effective=True,
+        setup_order=44,
         verify_order=30,
     ),
     IntegrationSpec(
@@ -715,7 +716,7 @@ def family_key(service_key: str) -> str:
 # ``integrations`` package (every CLI entry point does so during startup)
 # sees the real mapping instead of the identity fallback.
 def _install_family_key_resolver() -> None:
-    from platform.common.service_families import register_family_key_resolver
+    from platform.service_families.families import register_family_key_resolver
 
     register_family_key_resolver(family_key)
 

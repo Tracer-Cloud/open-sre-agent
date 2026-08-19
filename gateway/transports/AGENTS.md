@@ -3,10 +3,11 @@
 One package per inbound chat platform. Peers: **none imports another**.
 
 In API-framework terms, transports are the ingress adapters: platform inbound that
-authorizes, resolves a session, builds a sink, and calls the turn handler. The
-contract they implement is `gateway.core.transport_api`; the shared per-turn
-steps they compose are `gateway.core.middleware`; the facade that starts them
-is `gateway/startup.py`.
+authorizes, resolves a session, builds turn output, and calls the turn handler. The
+turn contract they implement is `gateway.core.host.turn_callback` /
+`gateway.core.host.turn_output`; the registry they register with is
+`gateway.transports.startup`; the shared per-turn steps they compose are
+`gateway.core.middleware`; the facade that starts them is `gateway/startup.py`.
 
 | Package | Start |
 |---------|--------|
@@ -18,13 +19,13 @@ is `gateway/startup.py`.
 The registry and worker start/stop loop live in this package's own
 `startup.py` — the one module here allowed to import its peers (their
 `startup` submodules only). Web + chat composition stays in
-`gateway/startup.py`. `GatewayController` only holds the opaque `ChannelsHandle`.
+`gateway/startup.py`. `GatewayController` only holds the opaque `StartedGateway`.
 Transport-specific work (settings load, Discord readiness wait) stays in each
 package's `startup.py`.
 
-Each owns settings, inbound worker, security, output sink, and `startup.py`.
+Each owns settings, inbound worker, security, turn output, and `startup.py`.
 Anything two transports need belongs in `gateway.core` (per-turn steps in
-`gateway.core.middleware`, contracts in `gateway.core.transport_api`).
+`gateway.core.middleware`; turn output/callback in `gateway.core.host`).
 Concern completeness per transport is pinned by
 `gateway/tests/test_transport_contract.py` (with its known-gaps ledger).
 

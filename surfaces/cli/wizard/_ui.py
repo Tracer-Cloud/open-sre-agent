@@ -489,7 +489,7 @@ def _render_header() -> None:
       ─────────────────────────────────────────  [DIM rule]
       Setup — Configure your local AI stack …    [SECONDARY subtitle]
     """
-    from surfaces.interactive_shell.ui.components.banner_art import render_art
+    from surfaces.shared.terminal.components.banner_art import render_art
 
     art = render_art()
     version = get_opensre_version()

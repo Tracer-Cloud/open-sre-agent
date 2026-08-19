@@ -24,14 +24,14 @@ from surfaces.interactive_shell.ui import (
     render_mcp_table,
     repl_table,
 )
-from surfaces.interactive_shell.ui.components.choice_menu import (
+from surfaces.shared.terminal.components.choice_menu import (
     CRUMB_SEP,
     prepare_repl_output_line,
     repl_choose_one,
     repl_section_break,
     repl_tty_interactive,
 )
-from surfaces.interactive_shell.ui.components.rendering import (
+from surfaces.shared.terminal.components.rendering import (
     _repl_table_width,
     print_repl_table,
     repl_print,

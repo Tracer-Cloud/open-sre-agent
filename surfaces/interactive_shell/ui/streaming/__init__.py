@@ -44,11 +44,11 @@ from core.agent_harness.spi.prompt_chrome import (
     normalize_three_tier_spacing,
 )
 from core.agent_harness.spi.session_goal import strip_session_goal_progress_tags
-from surfaces.interactive_shell.ui.components.token_format import (
+from surfaces.interactive_shell.ui.streaming.console import StreamingConsole
+from surfaces.shared.terminal.components.token_format import (
     _CHARS_PER_TOKEN,
     format_token_count_short,
 )
-from surfaces.interactive_shell.ui.streaming.console import StreamingConsole
 
 # Throttle for the optional ``update_streaming_progress`` hook on the
 # console — caps cross-thread queueing on long bursts of chunks. Same

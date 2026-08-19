@@ -5,7 +5,7 @@ up the web server and every chat transport together and returns the running
 handle. Worker initialization lives with the transports
 (:mod:`gateway.transports.startup`); this module only composes.
 
-Only :class:`~gateway.core.runtime.controller.GatewayController` imports this
+Only :class:`~gateway.core.lifecycle.controller.GatewayController` imports this
 module, and only this module imports ``gateway.transports.startup``.
 """
 
@@ -14,7 +14,8 @@ from __future__ import annotations
 import logging
 from dataclasses import dataclass, field
 
-from gateway.core.transport_api import GatewayAgentCallback, TransportName
+from gateway.core.host.turn_callback import GatewayAgentCallback
+from gateway.transports.names import TransportName
 from gateway.transports.startup import (
     DEFAULT_STOP_TIMEOUT_SECONDS,
     TransportHandle,

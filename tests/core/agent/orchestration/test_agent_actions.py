@@ -21,7 +21,7 @@ import surfaces.interactive_shell.runtime.slash_adapter as slash_adapter
 import surfaces.interactive_shell.runtime.subprocess_runner as subprocess_runner
 import tools.interactive_shell.shell.execution as shell_execution
 from core.llm.types import AgentLLMResponse, ToolCall
-from platform.common.task_types import TaskKind, TaskStatus
+from platform.scheduling.task_types import TaskKind, TaskStatus
 from surfaces.interactive_shell.session import Session
 from tests.core.agent._planned_action import (
     PlannedAction,

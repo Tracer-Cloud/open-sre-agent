@@ -12,13 +12,13 @@ import logging
 import os
 from collections.abc import Callable, Mapping
 
-from gateway.core.runtime.errors import GatewayConfigurationError
+from gateway.core.host.turn_callback import GatewayAgentCallback
+from gateway.core.lifecycle.errors import GatewayConfigurationError
 from gateway.core.storage import open_database
 from gateway.core.storage.events.repository import (
     HandledSlackEventRepository,
     handled_slack_event_repository,
 )
-from gateway.core.transport_api import GatewayAgentCallback
 from gateway.transports.slack.processing.events import SlackInboundMessage
 from gateway.transports.slack.settings import (
     SlackGatewaySettings,

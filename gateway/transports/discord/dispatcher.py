@@ -19,6 +19,7 @@ from config.principal import StorageScope
 from config.scope_context import bound_storage_scope
 from core.agent_harness import SessionCore
 from gateway.core.billing.credits_client import CreditsOutcome, consume_credits
+from gateway.core.host.turn_callback import GatewayAgentCallback
 from gateway.core.middleware.active_turns import ActiveTurnRegistry, is_stop_command
 from gateway.core.middleware.approvals import ApprovalBroker, approval_tool_hooks
 from gateway.core.middleware.attention import GateDecision, ThreadAttentionGate
@@ -26,7 +27,6 @@ from gateway.core.middleware.conversation_locks import ConversationLockRegistry
 from gateway.core.middleware.inbound_decision import apply_inbound_decision
 from gateway.core.middleware.terminal_outcome import TerminalOutcomeArbiter
 from gateway.core.storage import SessionResolver
-from gateway.core.transport_api import GatewayAgentCallback
 from gateway.transports.discord.approvals import DiscordApprovalPrompter
 from gateway.transports.discord.client import add_reaction, remove_reaction, send_message
 from gateway.transports.discord.events import DiscordInboundMessage
@@ -42,7 +42,7 @@ from gateway.transports.discord.thread_history import (
     session_needs_thread_seed,
 )
 from integrations.messaging_security import MessagingPlatform
-from platform.analytics.usage_context import SURFACE_DISCORD, bound_usage_context
+from platform.analytics.usage_context import UsageSurface, bound_usage_context
 
 # Discord's reaction API takes the literal Unicode emoji (URL-encoded), not a name.
 _WORKING_EMOJI = "\N{EYES}"
@@ -298,7 +298,7 @@ class DiscordTurnDispatcher:
                             on_user_stop=_on_user_stop,
                         ),
                         bound_usage_context(
-                            surface=SURFACE_DISCORD,
+                            surface=UsageSurface.DISCORD,
                             session_id=session.session_id,
                             user_id=inbound.user_id or None,
                         ),

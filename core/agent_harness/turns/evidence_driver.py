@@ -34,7 +34,7 @@ from core.agent_harness.turns.gather_observation import (
     GatheredEvidence,
     tool_results_from_executed,
 )
-from core.agent_harness.turns.gather_ports import PersistToolCalls
+from core.agent_harness.turns.gather_phase import PersistToolCalls
 from core.agent_harness.turns.gather_unreachable import (
     load_gather_unreachable,
     store_gather_unreachable,
@@ -62,7 +62,7 @@ log = logging.getLogger(__name__)
 # so successful schema thrash cannot burn the iteration cap. The full
 # multi-stage ReAct budget belongs to investigations. Headless metric reports
 # (PostHog / digests) may raise this via ``max_iterations``
-# (``gather_ports.MAX_REPORT_GATHER_ITERATIONS``).
+# (``gather_phase.MAX_REPORT_GATHER_ITERATIONS``).
 _MAX_GATHER_ITERATIONS = 6
 
 # Caps so a chatty tool (or many tools) can't blow up the follow-up prompt the

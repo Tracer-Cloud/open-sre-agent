@@ -8,16 +8,16 @@ tests tree.
 | Role | Path |
 |------|------|
 | Production entry (slash ports) | CLI: `opensre gateway start` / `--foreground` (composition root outside this package) |
-| Package main | `main.py` — **fails closed** (no slash-port glue; not a production entry) |
-| Composition root / process | `core/runtime/controller.py` (`GatewayController`; inject `slash_ports_factory`) |
+| Package main | `__main__.py` — **fails closed** (no slash-port glue; not a production entry) |
+| Process composition root | `core/lifecycle/controller.py` (`GatewayController`; inject `slash_ports_factory`) |
 | Surface startup (web + chat composer) | `startup.py` (`start_gateway` / `StartedGateway`) |
-| Daemon pidfile / status | `core/runtime/daemon.py` |
-| Turn callback | `core/runtime/turn_handler.py` |
-| Transport API (spec, worker, sink, callback) | `core/transport_api/` |
+| Daemon (pidfile + spawn) | `core/process/supervision.py` — caller passes argv; never names CLI or `surfaces.gateway_entry` |
+| Turn callback | `core/host/turn_handler.py` |
+| Turn contract (output, callback) | `core/host/turn_output.py`, `core/host/turn_callback.py` |
+| Transport registry (name, registration, worker) | `transports/names.py`, `transports/registration.py`, `transports/startup.py` |
 | Turn middleware (decision, policy, approvals, stop, locks) | `core/middleware/` |
-| Config / transport errors | `core/runtime/errors.py` (`GatewayConfigurationError`, `GatewayTransportFailedError`) |
+| Config / transport errors | `core/lifecycle/errors.py` (`GatewayConfigurationError`, `GatewayTransportFailedError`) |
 | Web surface (FastAPI) | `web/webapp.py` (`app`) |
-| Transport registry + worker start/stop | `transports/startup.py` (`TRANSPORTS` / `start_transports`) |
 | Surface facade | `startup.py` (`start_gateway` / `StartedGateway`) |
 | Telegram start | `transports/telegram/startup.py` (`start_telegram_worker`) |
 | Slack start | `transports/slack/startup.py` (`start_slack_worker`) |
@@ -35,17 +35,22 @@ start_gateway()
   → configure_process(GATEWAY_PROFILE)
   → compose turn handler
   → start_surfaces()   # delegates to gateway/startup.py (web + chat)
-  → start_scheduler()  # peer of the surfaces — not one of them
+  → start_scheduler()  # hosts platform.scheduling.scheduler — not a gateway surface
   → ready
 ```
 
 - **Surface startup** lives in `gateway/startup.py` — sole composer of web + Telegram /
-  Slack / Discord. Manager keeps only `ChannelsHandle`.
+  Slack / Discord. The controller keeps only `StartedGateway`.
 - Missing chat credentials → `not configured`; readiness/runtime failures →
   `failed`. The rest still start.
-- **Scheduler** starts after the surfaces and is a peer (cron / loops), not a
-  transport. Daemon pidfile/status stays in `core/runtime/daemon.py` — do not
-  fold the process daemon into a "scheduler" package.
+- **Scheduler** is a **platform** component (`platform.scheduling.scheduler`). The gateway
+  process *may host* it (`start_scheduler()` → `scheduler_runners().gated(…).install()`
+  + `start_background_scheduler()`). It is not a consumer surface, not a
+  transport, and there is no `gateway/scheduler/` package. Do not move runner
+  code into `gateway/core/lifecycle/`.
+- **Daemon** is pidfile + spawn in `core/process/supervision.py`. Do not fold it
+  into a scheduler package. The child argv is surface-owned (`python -m
+  surfaces.gateway_entry`, or `opensre gateway start --foreground` when frozen).
 - `gateway.core` must not import `gateway.transports` / `gateway.web`; only
   `controller.py` imports `gateway.startup`.
 - Peer transports and `web` must not import `gateway.startup`.
@@ -55,16 +60,17 @@ start_gateway()
 Packages are split like `core/agent_harness/prompts/`: **core infra** vs
 **peer surfaces** vs **composer**.
 
-- `core/` — process and leaf infrastructure (`runtime`, `storage`,
-  `billing`, `attachments`, `session`, `config`). No imports from transports
-  or `web`. Only `core/runtime/controller.py` imports `gateway.startup`.
+- `core/` — process and leaf infrastructure (`host`, `process`, `lifecycle`,
+  `storage`, `billing`, `attachments`, `session`, `config`). No imports from
+  transports or `web`. Only `core/lifecycle/controller.py` imports `gateway.startup`.
 - `startup.py` — the facade: web + chat as one consumer set via
   `transports/startup.py` (which owns the registry and imports each peer's
   `startup` only).
 - `transports/` — chat peers (`slack`, `discord`, `telegram`). Each owns
-  settings, inbound worker, security, output sink, and `startup.py`. Peers
+  settings, inbound worker, security, turn output, and `startup.py`. Peers
   never import each other or `gateway.startup`/`web`; anything two need belongs in
-  `core/` (usually `gateway.core.runtime`).
+  `core/` (per-turn steps in `gateway.core.middleware`, host wiring in
+  `gateway.core.host`).
 - `web/` — web surface (FastAPI app, investigations API, worker/artifacts).
   May import `core/`; must not import chat transports or `gateway.startup`.
 - `core/storage/session/resolver.py` — per-conversation session binding
@@ -87,11 +93,78 @@ peer transports · web  →  core leaves
 Package DAG and peer isolation are pinned by border tests. Keep gateway tests
 flat by surface (do not nest a directory named after the Discord PyPI package).
 
+### What a surface may import
+
+The package holds two different things, and only one of them faces outward:
+
+- **The deployment** — the daemon, the transports, the web app, storage. A
+  surface may drive the *process* (start, stop, status) and nothing else.
+  The task scheduler is hosted here when this process is the long-lived runner;
+  loop CRUD lives in CLI/shell and signals reload via `request_scheduler_reload()`.
+- **The turn service** — `GatewayTurnHandler`, the middleware steps and the
+  session-agent pool. A surface never imports this. A surface that runs turns
+  is a **channel**: it implements `gateway.core.host` (turn contract) / `gateway.transports` (registry) and is handed to
+  the turn service, the same way the four chat transports are.
+
+## Channel vs producer
+
+Two ways work reaches the agent. Mixing them is how a second turn engine appears.
+
+| | Has a user and turn output? | Entry |
+|--|------------------------|--------|
+| **Channel** (Slack, Telegram, Discord, Buzz) | Yes | `GatewayTurnHandler` — `(text, session, output, logger)` |
+| **Interactive shell** | Yes | *today:* `HeadlessAgent.handle` with `AgentBuildConfig`. *Target:* the **chat** verb, like any other channel — it has a user and turn output, so the rule already covers it. The build config is shared; the turn entry is not yet. |
+| **Producer** (`platform.scheduling.scheduler`, scheduled digest/PR runners) | No | Embed: `AgentSession.run_headless_turn` (and investigation payload runners) |
+
+Agent construction hooks live in `core.agent_harness.agent_build_config.AgentBuildConfig` (not the transport registry, not a host re-export). Chat omits the config and the session-agent pool injects gateway capability withholds. The shell sets the build hooks it needs and leaves `apply_capability_policy` unset.
+
+The gateway **process** may host the scheduler (same `process_turn_gate`). That
+does not make the scheduler a channel: `platform.scheduling.scheduler` must not import
+`GatewayTurnHandler`. Pinned by
+`tests/test_package_borders.py::test_scheduler_never_imports_the_gateway_turn_handler`.
+
+`POST /investigate` is the investigation embed verb (`AgentSession.investigate`),
+not a chat turn. It may share the process gate and the at-capacity sentence; it
+must not call the turn handler.
+
+Three modules are surface-facing today — `core.process.supervision`,
+`core.lifecycle.controller`, `web.web_server` — pinned as an exact allowlist in
+`tests/shared/test_surface_border.py`. Widening it is a deliberate change, not
+a new import.
+
+## Facade verbs
+
+The gateway exposes two verbs. They differ in whether there is a conversation
+to hold, not in how hard the work is.
+
+| Verb | Entry | Shape | Gets |
+|------|-------|-------|------|
+| **chat** | `GatewayTurnHandler.__call__(text, session, output, logger)` | returns `None`; every result reaches the user through turn output | capacity gate, capability policy, `SessionAgentPool` reuse, approvals, cancel console, identity policy, turn timeout, terminal outcome, at-capacity copy |
+| **investigate** | `AgentSession.investigate(...)` (the harness Embed API) | returns a payload to the caller | the process capacity gate only |
+
+`POST /investigate` and `InvestigationWorker` use **investigate** and that is
+correct: a one-shot HTTP investigation has no conversation to approve or
+cancel. They share `process_turn_gate()` and the at-capacity sentence
+(`AT_CAPACITY_MESSAGE`); they must not call the turn handler.
+
+Anything with a live user and turn output uses **chat**. That is the rule the
+interactive shell is being moved onto — see the table above for where it
+stands today.
+
+### Why `chat` returns `None`
+
+The four chat transports are fire-and-forget: turn output *is* the reply path, so
+there is nothing to hand back. A caller that needs the turn's outcome as a
+value — the shell wants `TurnResult` for accounting, the prompt recorder, and
+`final_intent` — is not served by this signature as written. Widening it is a
+contract change for all four transports, so decide it deliberately rather than
+adding a second entry beside `GatewayTurnHandler`.
+
 ## Gateway turn dispatch
 
 - **One turn handler:** `GatewayTurnHandler` (optional `gate=` for capacity).
   Transport Slack/Discord/Telegram *dispatchers* are ingress only — authorize,
-  resolve session, build sink, then call the shared callback. Do not add a
+  resolve session, build turn output, then call the shared callback. Do not add a
   second production turn-handler class next to `GatewayTurnHandler`.
 - **Logging** is configured once at the gateway process level
   (`configure_logging` in `GatewayController.start_gateway`) — that is intentional.
@@ -99,8 +172,8 @@ flat by surface (do not nest a directory named after the Discord PyPI package).
   per-chat `Session` from `SessionResolver` and is handled by the shared
   headless dispatch path (`core.agent_harness.turns.headless_agent`).
 - The turn handler callback signature is exactly four arguments: `text`,
-  `session`, `sink`, and `logger`. Do not reintroduce `chat_id` into this
-  contract; the sink owns chat transport details.
+  `session`, `output`, and `logger`. Do not reintroduce `chat_id` into this
+  contract; the output owns chat transport details.
 - Resolve action tools from the live per-chat `Session` each turn via
   `DefaultToolProvider(session, console)` — same as the interactive shell.
   Do **not** precompute tools at process start; chat sessions carry their own
@@ -145,7 +218,7 @@ InvestigationWorker ──► blocking acquire (already claimed) ──► same 
 ```
 
 - Production chat capacity is on `GatewayTurnHandler(gate=controller.turn_gate)`.
-- `GatewayController` and Path-2 share :func:`~gateway.core.runtime.concurrency.process_turn_gate`.
+- `GatewayController` and Path-2 share :func:`~gateway.core.host.concurrency.process_turn_gate`.
 - `ConcurrencyLimitedTurnHandler` is tests-only. Do not reintroduce it under
   `gateway/core/` — production uses `gate=` on `GatewayTurnHandler` only.
 - **Chat + Path-2:** HTTP `/investigate` busy-drops like chat; the investigation
@@ -158,8 +231,8 @@ InvestigationWorker ──► blocking acquire (already claimed) ──► same 
 Construct **one** `HeadlessAgent` per logical chat session
 (`SessionAgentPool`), then many turns. Each inbound message:
 
-1. `LiveOutputSink.bind(outer_gateway_sink)` — stable live sink on the agent;
-   outer transport sink changes per turn.
+1. `BindableOutput.bind(outer_gateway_output)` — session output on the agent;
+   the transport destination changes per turn.
 2. `bind_turn(session=…, accounting=…, console=…, tool_hooks=…)` — session /
    cancel / approvals. Do **not** pass `output=` here unless replacing the
    `OutputSink` object itself (then `OutputBindable` ports, e.g. reasoning,
@@ -179,30 +252,30 @@ verb) — see Capacity above. Values: **yes** / **partial** / **no** / **n/a**.
 
 | Concern | Slack | Telegram | Discord | Web |
 |---------|-------|----------|---------|-----|
-| Cancel / stop mid-turn | **yes** — soft timeout + user `/stop` via `ActiveTurnRegistry` → `sink.turn_cancel` | **yes** — same | **yes** — same | **partial** — queued investigate cancel only |
+| Cancel / stop mid-turn | **yes** — soft timeout + user `/stop` via `ActiveTurnRegistry` → `output.turn_cancel` | **yes** — same | **yes** — same | **partial** — queued investigate cancel only |
 | Approvals / `before_tool_call` | **yes** — Block Kit + `approval_tool_hooks` | **yes** — inline keyboard + `approval_tool_hooks` | **yes** — components + `approval_tool_hooks` | **n/a** — Path-2 |
 | Tool resolution | **yes** — live `DefaultToolProvider(session)` | **yes** — same | **yes** — same | **n/a** — investigate runner |
-| Sink redaction | **yes** — `user_facing_error_message` | **yes** — same | **yes** — same | **yes** — `type(exc).__name__` only |
+| Output redaction | **yes** — `user_facing_error_message` | **yes** — same | **yes** — same | **yes** — `type(exc).__name__` only |
 | Principal / actor | **yes** — `slack/principal.py` | **yes** — `telegram/principal.py` | **yes** — `discord/principal.py` | **partial** — Clerk org audit; no `StorageScope` |
 | Capacity gate | **yes** — process gate + transport pool | **yes** — same + TG semaphore | **yes** — same + executor | **yes** — same `process_turn_gate` (HTTP try_acquire / worker blocking) |
 
 **Documented exceptions (do not “fix” by forking a second loop):**
 
 - Gateway chat disables `task_cancel` / investigation / llm_provider
-  (`gateway.core.runtime.capability_policy.ensure_gateway_capability_policy`).
+  (`gateway.core.host.capability_policy.ensure_gateway_capability_policy`).
 - Path-2 web investigate shares the process gate but has no chat approval prompter.
 - Soft turn timeout **and** user `/stop` / `stop` / `/cancel` set
-  `sink.turn_cancel` so the ReAct loop / remaining tools stop cooperatively
+  `output.turn_cancel` so the ReAct loop / remaining tools stop cooperatively
   (shell `cancel_requested` parity via `CancelConsole` + `ActiveTurnRegistry`).
   Orchestrator skips gather/answer and reports `final_intent=cli_agent_cancelled`;
-  the live sink stops draining stream chunks when the Event fires. `/stop` is
+  live output stops draining stream chunks when the Event fires. `/stop` is
   handled **outside** the per-conversation turn lock so it can interrupt an
   in-flight turn. The executor thread is not killed; in-flight LLM/provider
   calls still finish the current request.
 - Telegram write-tool approvals require a non-empty `allowed_user_ids` allowlist
   (same fail-closed posture as Discord).
 
-**Characterization:** cover live-session tools, sink redaction, Telegram
+**Characterization:** cover live-session tools, output redaction, Telegram
 approvals, and soft timeout in the gateway test suite.
 
 **Dogfood + smoke (turn-engine regressions):**

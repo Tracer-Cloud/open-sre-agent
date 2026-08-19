@@ -10,7 +10,7 @@ import pytest
 
 from core.agent import Agent, AgentRunResult
 from core.agent_harness.runtime import TurnBinding
-from core.agent_harness.turns.port_families import HeadlessPorts
+from core.agent_harness.turns.headless_build import InMemoryHeadlessBuild
 from core.events import (
     MessageUpdateEvent,
     RuntimeEvent,
@@ -146,7 +146,7 @@ def test_agent_exposes_headless_agent_entrypoint(monkeypatch: pytest.MonkeyPatch
         StaticReasoningClientProvider,
     )
 
-    agent = HeadlessPorts(
+    agent = InMemoryHeadlessBuild(
         reasoning=StaticReasoningClientProvider(client=EchoReasoningClient())
     ).agent(tools=NullToolProvider())
     result = agent.dispatch("hello")
@@ -170,7 +170,7 @@ def test_one_headless_agent_dispatches_multiple_messages(monkeypatch: pytest.Mon
         StaticReasoningClientProvider,
     )
 
-    agent = HeadlessPorts(
+    agent = InMemoryHeadlessBuild(
         reasoning=StaticReasoningClientProvider(client=EchoReasoningClient())
     ).agent(tools=NullToolProvider())
     first = agent.dispatch("one")
@@ -187,7 +187,7 @@ def test_provided_accounting_is_consumed_once() -> None:
     from core.agent_harness.turns.headless_adapters import NoopTurnAccounting, NullToolProvider
 
     accounting = NoopTurnAccounting()
-    agent = HeadlessPorts().agent(tools=NullToolProvider())
+    agent = InMemoryHeadlessBuild().agent(tools=NullToolProvider())
     agent.bind_turn(TurnBinding(accounting=accounting))
     assert agent._take_accounting("a") is accounting
     # Slot cleared so a forgotten bind_turn cannot leak the prior turn's prompt.
@@ -201,7 +201,7 @@ def test_default_accounting_is_resolved_fresh_per_message() -> None:
     class _PersistentState(InMemorySessionState):
         store = object()  # persistent-backed session selects DefaultTurnAccounting
 
-    agent = HeadlessPorts(session=_PersistentState()).agent(tools=NullToolProvider())
+    agent = InMemoryHeadlessBuild(session=_PersistentState()).agent(tools=NullToolProvider())
 
     first = agent._take_accounting("msg-a")
     second = agent._take_accounting("msg-b")

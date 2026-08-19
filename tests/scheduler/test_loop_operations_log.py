@@ -9,7 +9,7 @@ import pytest
 
 from config.constants import OPENSRE_OPERATIONS_LOG_PATH_ENV
 from platform.observability.operations_log import read_operations
-from platform.scheduler.loops import create_manual_loop, delete_loop, set_loop_enabled
+from platform.scheduling.scheduler.loops import create_manual_loop, delete_loop, set_loop_enabled
 
 
 def test_manual_loop_lifecycle_is_logged_without_prompt_body(

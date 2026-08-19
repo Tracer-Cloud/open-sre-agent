@@ -7,8 +7,11 @@ Pinned by `gateway/tests/test_package_borders.py`.
 
 | Package | Role |
 |---------|------|
-| `runtime/` | Composition root (`controller`), turn handler, approvals, attention, daemon |
-| `storage/` | Session bindings + investigation stores |
+| `host/` | The host layer: builds the agent, binds the turn, runs it (`turn_handler`, `session_agents`, `bindable_output`, `cancel_console`, capacity) |
+| `runtime/` | Composition root (`controller`), credential hydration, security audit |
+| `process/` | Daemon, polling thread, readiness |
+| `middleware/` | Per-turn steps every transport runs (inbound decision, identity policy, approvals, attention, locks) |
+| `storage/` | Session bindings + investigation, event and feedback stores |
 | `billing/` | Credits client |
 | `attachments/` | Attachment helpers |
 | `session/` | Gateway chat-context helpers |
@@ -17,6 +20,36 @@ Pinned by `gateway/tests/test_package_borders.py`.
 Transports and `web/` may import these packages. Peer chat packages never land
 here.
 
+## Who may drive the agent
+
+`host/` is the only package that calls harness **behaviour** — building ports,
+binding a turn, running or flushing a session, formatting goal progress.
+Everywhere else in `gateway/` may import harness **contracts**
+(`SessionCore`, `OutputSink`, `SlashPortsFactory`, `SessionGoal`) to type a
+parameter, and nothing more: a transport that runs a turn itself has become a
+second turn handler.
+
+Pinned by `gateway/tests/test_harness_behaviour_border.py`, whose allowlist can
+only shrink. `web/` is on it today because `POST /investigate` embeds the agent
+directly and therefore gets none of the host layer's guarantees (agent reuse,
+approvals hooks, cancel console, capability policy).
+
+## Taking a capacity slot
+
+Every turn in this process — chat, `POST /investigate`, the investigation
+worker, a scheduled run — takes one permit from the same
+`process_turn_gate()`. Pick a policy from
+`platform.process.turn_capacity`; do not pair `acquire`/`release` by hand:
+
+- `turn_slot(gate)` — **drop** when full. For a caller holding a connection or
+  a conversation: it yields `False` and the caller answers (chat finalizes
+  `AT_CAPACITY_MESSAGE`, web returns it as a 503 body).
+- `queued_turn_slot(gate)` — **wait** for a slot. For work already claimed from
+  a queue, which cannot be told to try again.
+
+A missing `finally` leaks a permit, and a leaked permit is a process that
+answers "at capacity" forever.
+
 ## Process boot vs lifecycle
 
 Shared process setup (env → Sentry → harness adapters → capability warnings →
@@ -24,11 +57,14 @@ LLM preload) lives in
 :func:`bootstrap.process.configure_process` with ``GATEWAY_PROFILE``.
 `GatewayController.start_gateway` is lifecycle-only after logging + credential
 hydrate: configure process, compose **one** `GatewayTurnHandler(gate=…)`, then
-`start_channels()` (delegates to :func:`gateway.channels.start_channels`) and
-`start_scheduler()` (peer of the channels). Do not wrap the turn handler in a
+`start_surfaces()` (delegates to :func:`gateway.startup.start_gateway`) and
+`start_scheduler()` (hosts `platform.scheduling.scheduler` in this process — not a gateway
+surface and not a `gateway/scheduler/` package). Do not wrap the turn handler in a
 second handler class. Do not reintroduce a bootstrap essay in the controller.
-Scheduler runners register when the scheduler stage starts
-(:func:`bootstrap.adapters.install_scheduler_runners`).
+Hosting is a thin call: `scheduler_runners().gated(turn_gate).install()` then
+:func:`platform.scheduling.scheduler.runner.start_background_scheduler`. Reload is
+:func:`platform.scheduling.scheduler.reload_signal.request_scheduler_reload` (shell/CLI
+writers); the controller only polls and resyncs.
 
 Process boot has one entrypoint: :func:`bootstrap.process.configure_process`
 with ``GATEWAY_PROFILE``. Do not add a gateway-local wrapper around it.

@@ -15,7 +15,7 @@ from integrations.tracer.tracer_pipelines import (
     TracerRunResult,
 )
 from integrations.tracer.tracer_tools import TracerTaskResult
-from platform.auth.jwt_auth import extract_org_id_from_jwt
+from platform.safety.auth.jwt_auth import extract_org_id_from_jwt
 
 __all__ = [
     "AWSBatchJobResult",

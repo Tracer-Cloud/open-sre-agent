@@ -5,9 +5,9 @@ from __future__ import annotations
 import logging
 
 from core.agent_harness import AgentSession
-from core.agent_harness.runtime import GatherPorts
+from core.agent_harness.runtime import GatherPhase
 from platform.harness_ports import configured_integration_services
-from platform.scheduler.agent_runner import AgentPayload
+from platform.scheduling.scheduler.agent_runner import AgentPayload
 
 logger = logging.getLogger(__name__)
 
@@ -35,7 +35,7 @@ def run_github_pr_sweep(payload: AgentPayload) -> str:
     result = AgentSession.run_headless_turn(
         _PR_SWEEP_PROMPT,
         logger=logger,
-        gather=GatherPorts(),
+        gather=GatherPhase(),
         is_tty=False,
     )
     report = result.primary_response_text

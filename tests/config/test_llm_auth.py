@@ -7,6 +7,7 @@ import keyring.errors
 import pytest
 from keyring.backend import KeyringBackend
 
+import config.llm_auth
 from config.llm_auth.credentials import resolve_for_request, status
 from config.llm_auth.records import resolve_provider_auth_record, save_provider_auth_record
 from config.llm_credentials import resolve_env_credential
@@ -35,6 +36,12 @@ class _NoBackendKeyring(MemoryKeyring):
 
     def delete_password(self, _service: str, _username: str) -> None:
         raise keyring.errors.NoKeyringError("No recommended backend was available")
+
+
+def test_package_exports_are_all_defined() -> None:
+    """Every ``__all__`` name must be a real attribute so ``import *`` cannot raise."""
+    for name in config.llm_auth.__all__:
+        assert hasattr(config.llm_auth, name), name
 
 
 def test_resolve_auth_profile_accepts_subscription_aliases() -> None:
