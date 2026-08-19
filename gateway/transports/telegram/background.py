@@ -19,7 +19,7 @@ from gateway.transports.telegram.runtime import (
     ShutdownTelegramPollingRuntime,
     TelegramPollingRuntime,
 )
-from gateway.transports.telegram.settings import GatewaySettings
+from gateway.transports.telegram.settings import GatewaySettings, TelegramInboundMessage
 from infrastructure.turn_host.turn_callback import TurnCallback
 
 
@@ -67,9 +67,19 @@ async def _poll_telegram_until_stopped(
     resources: TelegramPollingRuntime,
     handle_callback_to_gateway_agent: TurnCallback,
 ) -> None:
-    """Poll Telegram updates and dispatch them until shutdown is requested."""
+    """Poll Telegram updates and dispatch them until shutdown is requested.
+
+    Turn dispatch is fired as a background task, never awaited inline: a turn
+    can sit blocked in ``ApprovalBroker.wait`` for up to
+    ``MAX_APPROVAL_WAIT_SECONDS``, and this same loop is the only thing that
+    can ever deliver the button click that unblocks it. Awaiting the turn here
+    would stall polling for the whole approval wait, so the click resolving it
+    could never be observed and every approval would expire to denied. The Buzz
+    transport documents and avoids the same trap.
+    """
     poller = TelegramPoller(settings.bot_token)
     turn_semaphore = asyncio.Semaphore(settings.max_concurrent_turns)
+    pending_tasks: set[asyncio.Task[None]] = set()
 
     resources.client.delete_webhook()
 
@@ -93,20 +103,99 @@ async def _poll_telegram_until_stopped(
                     if not resources.active_cancels.request_stop(event.chat_id):
                         resources.client.send_message(event.chat_id, NO_ACTIVE_TURN_MESSAGE)
                     continue
-                await handle_polled_inbound_telegram_message(
-                    event,
-                    client=resources.client,
-                    session_resolver=resources.session_resolver,
-                    settings=settings,
-                    executor=resources.executor,
-                    chat_locks=resources.chat_locks,
-                    turn_semaphore=turn_semaphore,
-                    approvals=resources.approvals,
-                    active_cancels=resources.active_cancels,
-                    loop=loop,
-                    handle_callback_to_gateway_agent=handle_callback_to_gateway_agent,
+                task = asyncio.create_task(
+                    _dispatch_turn(
+                        event,
+                        settings=settings,
+                        logger=logger,
+                        resources=resources,
+                        turn_semaphore=turn_semaphore,
+                        loop=loop,
+                        handle_callback_to_gateway_agent=handle_callback_to_gateway_agent,
+                    )
                 )
+                pending_tasks.add(task)
+                task.add_done_callback(pending_tasks.discard)
 
         except Exception:
             logger.error("Error while polling Telegram updates", exc_info=True)
             await asyncio.to_thread(stop_event.wait, 2)
+
+    await _drain_active_turns(pending_tasks, settings=settings, logger=logger)
+
+
+async def _dispatch_turn(
+    event: TelegramInboundMessage,
+    *,
+    settings: GatewaySettings,
+    logger: logging.Logger,
+    resources: TelegramPollingRuntime,
+    turn_semaphore: asyncio.Semaphore,
+    loop: asyncio.AbstractEventLoop,
+    handle_callback_to_gateway_agent: TurnCallback,
+) -> None:
+    """Run one turn to completion, logging rather than raising on failure.
+
+    The turn is detached from the poll loop, so its exception has nowhere to
+    surface: the loop's own ``except`` no longer covers it, and an unretrieved
+    task exception is reported only when the task is garbage collected. The
+    turn's own error path has already told the chat by then, so this logs the
+    failure and lets polling carry on.
+    """
+    try:
+        await handle_polled_inbound_telegram_message(
+            event,
+            client=resources.client,
+            session_resolver=resources.session_resolver,
+            settings=settings,
+            executor=resources.executor,
+            chat_locks=resources.chat_locks,
+            turn_semaphore=turn_semaphore,
+            approvals=resources.approvals,
+            active_cancels=resources.active_cancels,
+            loop=loop,
+            handle_callback_to_gateway_agent=handle_callback_to_gateway_agent,
+        )
+    except Exception:
+        logger.error(
+            "[telegram-gateway] turn dispatch failed user=%s chat=%s",
+            event.user_id,
+            event.chat_id,
+            exc_info=True,
+        )
+
+
+async def _drain_active_turns(
+    pending_tasks: set[asyncio.Task[None]],
+    *,
+    settings: GatewaySettings,
+    logger: logging.Logger,
+) -> None:
+    """Let in-flight turns finish before the event loop closes under them.
+
+    ``asyncio.run`` cancels whatever is still pending once this coroutine
+    returns, so a detached turn would otherwise die mid-flight and never post
+    its outcome to the chat.
+
+    The wait is deliberately bounded rather than generous: polling has already
+    stopped, so nothing can deliver a button click any more, and a turn parked
+    in ``ApprovalBroker.wait`` would otherwise hold shutdown for the full
+    ``MAX_APPROVAL_WAIT_SECONDS`` expiry. Whatever misses the budget is
+    cancelled and logged.
+    """
+    if not pending_tasks:
+        return
+
+    _done, still_running = await asyncio.wait(
+        pending_tasks, timeout=settings.shutdown_drain_seconds
+    )
+    for task in still_running:
+        task.cancel()
+    if still_running:
+        logger.warning(
+            "[telegram-gateway] shutting down with %d unfinished turn(s)",
+            len(still_running),
+        )
+
+
+__all__ = ["start_telegram_gateway_background"]
