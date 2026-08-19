@@ -14,6 +14,7 @@ from rich.console import Console
 
 from integrations.llm_cli.base import CLIInvocation, CLIProbe
 from platform.scheduling.task_types import TaskKind, TaskStatus
+from platform.terminal.theme import GLYPH_ERROR, GLYPH_SUCCESS
 from surfaces.interactive_shell.runtime.subprocess_runner import (
     _MIN_SUBPROCESS_TERMINAL_WIDTH,
     _TASK_OUTPUT_PREFIX_WIDTH,
@@ -368,7 +369,7 @@ def test_run_shell_command_silent_success_prints_checkmark(monkeypatch: pytest.M
     console = Console(file=buf, force_terminal=False)
 
     run_shell_command("true", _presenter(session, console))
-    assert "✓" in buf.getvalue()
+    assert GLYPH_SUCCESS in buf.getvalue()
     assert session.history[-1] == {"type": "shell", "text": "true", "ok": True}
 
 
@@ -400,7 +401,7 @@ def test_run_shell_command_quiet_hides_command_and_stdout(
     out = buf.getvalue()
     assert "$" not in out
     assert "hi" not in out
-    assert "✓" not in out
+    assert GLYPH_SUCCESS not in out
     assert result["ok"] is True
     assert result["stdout"] == "hi"
     assert result["response_text"] == "hi"
@@ -408,13 +409,15 @@ def test_run_shell_command_quiet_hides_command_and_stdout(
     clear_quiet_stdout()
 
 
-def test_run_shell_command_quiet_outputless_success_buffers_checkmark(
+def test_run_shell_command_quiet_outputless_success_prints_checkmark(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """``touch``-style quiet success must not leave the REPL with a blank turn.
+    """``touch``-style quiet success still prints the success glyph.
 
-    Loud mode prints ✓ live. Quiet mode buffers the same marker so the sink can
-    paint it when the action closer is suppressed and display_chunks are empty.
+    Quiet only hides ``$`` / stdout. There is no stdout to withhold. Buffering
+    a marker for a later blank-line fallback left the turn empty when that
+    fallback printed nothing. Print the same live marker as loud mode; do not
+    buffer it.
     """
     from tools.interactive_shell.quiet_stdout import clear_quiet_stdout, take_quiet_stdout
 
@@ -443,15 +446,15 @@ def test_run_shell_command_quiet_outputless_success_buffers_checkmark(
 
     result = run_shell_command("touch file", _presenter(session, console), quiet=True)
 
-    assert buf.getvalue() == ""
+    assert GLYPH_SUCCESS in buf.getvalue()
+    assert "$" not in buf.getvalue()
     assert result["ok"] is True
-    assert result["response_text"] == "✓"
-    assert take_quiet_stdout() == "✓"
+    assert "response_text" not in result
+    assert take_quiet_stdout() == ""
     assert session.history[-1] == {
         "type": "shell",
         "text": "touch file",
         "ok": True,
-        "response_text": "✓",
     }
 
 
@@ -517,13 +520,13 @@ def test_run_shell_command_failure_prints_exit_line(monkeypatch: pytest.MonkeyPa
 
     run_shell_command("false", _presenter(session, console))
     out = buf.getvalue()
-    assert "✗" in out
+    assert GLYPH_ERROR in out
     assert "exit 7" in out
     assert session.history[-1] == {
         "type": "shell",
         "text": "false",
         "ok": False,
-        "response_text": "✗ exit 7",
+        "response_text": f"{GLYPH_ERROR} exit 7",
     }
 
 

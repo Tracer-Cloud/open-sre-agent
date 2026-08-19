@@ -8,6 +8,7 @@ from pathlib import Path
 from typing import Any
 
 import config.constants.platform as _platform
+from platform.terminal.theme import ERROR, GLYPH_ERROR, GLYPH_SUCCESS, HIGHLIGHT
 from tools.interactive_shell.quiet_stdout import buffer_quiet_stdout
 from tools.interactive_shell.shell import execution as shell_execution
 from tools.interactive_shell.shell.display import format_shell_command_for_display
@@ -21,9 +22,6 @@ from tools.interactive_shell.subprocess import (
     SHELL_COMMAND_TIMEOUT_SECONDS,
     SubprocessPresenter,
 )
-
-_ERROR_STYLE = "error"
-_HIGHLIGHT_STYLE = "highlight"
 
 
 def _shell_payload(
@@ -128,13 +126,13 @@ def run_shell_command(
 
     if not quiet:
         presenter.print_command_output(result.stdout)
-        presenter.print_command_output(result.stderr, style=_ERROR_STYLE)
+        presenter.print_command_output(result.stderr, style=ERROR)
     if result.timed_out:
         response_text = f"command timed out after {SHELL_COMMAND_TIMEOUT_SECONDS} seconds"
 
         if not quiet:
             presenter.print(
-                f"[error]command timed out after {SHELL_COMMAND_TIMEOUT_SECONDS} seconds[/]"
+                f"[{ERROR}]command timed out after {SHELL_COMMAND_TIMEOUT_SECONDS} seconds[/]"
             )
         session.record("shell", command, ok=False, response_text=response_text)
         return _shell_payload(
@@ -157,18 +155,19 @@ def run_shell_command(
             response_text = (result.stdout or "").strip()
         elif had_stderr:
             response_text = (result.stderr or "").strip()
-        elif not quiet:
-            presenter.print(f"[{_HIGHLIGHT_STYLE}]✓[/]")
         else:
-            # Quiet and outputless (e.g. ``touch``): nothing was painted live.
-            # Buffer the same success marker the loud path prints so the sink
-            # can show it when the turn would otherwise leave a blank line.
-            response_text = "✓"
+            # Outputless success (e.g. ``touch``): there is no stdout to hide.
+            # Quiet already skipped the ``$`` line; still print the same marker
+            # the loud path shows so the turn is not a blank line after the
+            # action closer is dropped. Do not put the marker in
+            # ``response_text`` — that would also buffer it and the sink would
+            # print the glyph a second time.
+            presenter.print(f"[{HIGHLIGHT}]{GLYPH_SUCCESS}[/]")
     else:
         code = result.exit_code if result.exit_code is not None else "?"
-        exit_text = f"✗ exit {code}"
+        exit_text = f"{GLYPH_ERROR} exit {code}"
         if not quiet:
-            presenter.print_error(f"✗ exit {code}")
+            presenter.print_error(exit_text)
 
         response_parts = []
         if had_stdout:

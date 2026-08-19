@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from rich.console import Console
 
+from platform.terminal.theme import GLYPH_SUCCESS
 from surfaces.interactive_shell.runtime.agent_harness_adapters import ShellOutputSink
 from tools.interactive_shell.quiet_stdout import (
     buffer_quiet_stdout,
@@ -36,8 +37,8 @@ def test_paint_quiet_stdout_shows_buffered_text() -> None:
 
 
 def test_paint_quiet_stdout_shows_outputless_success_marker() -> None:
-    # Arrange: quiet ``touch`` buffered ✓ because there was no stdout to show live.
-    buffer_quiet_stdout("✓")
+    # Arrange: quiet outputless success buffered the shared success glyph.
+    buffer_quiet_stdout(GLYPH_SUCCESS)
     lines: list[str] = []
 
     class _Console:
@@ -48,7 +49,7 @@ def test_paint_quiet_stdout_shows_outputless_success_marker() -> None:
 
     # Act / Assert
     assert sink.paint_quiet_stdout() is True
-    assert "✓" in "\n".join(lines)
+    assert GLYPH_SUCCESS in "\n".join(lines)
     assert take_quiet_stdout() == ""
 
 
