@@ -251,9 +251,19 @@ def get_consumer_group_lag(
 
     try:
         from confluent_kafka import TopicPartition
-        from confluent_kafka.admin import (  # type: ignore[attr-defined]
-            ConsumerGroupTopicPartitions,
-        )
+
+        try:
+            # confluent-kafka >=2.15.0 moved this class out of the public
+            # confluent_kafka.admin namespace (now private there as
+            # _ConsumerGroupTopicPartitions); the library's own
+            # list_consumer_group_offsets docstring points at this location.
+            from confluent_kafka._model import (
+                ConsumerGroupTopicPartitions,  # type: ignore[attr-defined]
+            )
+        except ImportError:
+            from confluent_kafka.admin import (  # type: ignore[attr-defined,no-redef]
+                ConsumerGroupTopicPartitions,
+            )
 
         admin = _get_admin_client(config)
         consumer = _get_consumer(config)
