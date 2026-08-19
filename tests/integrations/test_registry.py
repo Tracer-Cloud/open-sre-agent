@@ -87,12 +87,12 @@ def test_railway_is_registered_as_a_configurable_verified_integration() -> None:
 
 
 def test_prefect_is_registered_as_a_directly_effective_integration() -> None:
-    # #(prefect verify sweep): prefect's classify() resolves store credentials
-    # into a config object just like dagster/temporal, but its spec was missing
-    # direct_effective=True — resolve_effective_integrations() only publishes
-    # services listed in DIRECT_CLASSIFIED_EFFECTIVE_SERVICES, so a prefect
-    # integration saved in the local store silently never resolved, breaking
-    # both `opensre integrations verify prefect` and the prefect tools'
+    # prefect's classify() resolves store credentials into a config object
+    # just like dagster/temporal, but its spec was missing direct_effective=True
+    # — resolve_effective_integrations() only publishes services listed in
+    # DIRECT_CLASSIFIED_EFFECTIVE_SERVICES, so a prefect integration saved in
+    # the local store silently never resolved, breaking both
+    # `opensre integrations verify prefect` and the prefect tools'
     # is_available() check for any store-configured instance.
     prefect = next(spec for spec in INTEGRATION_SPECS if spec.service == "prefect")
 
