@@ -12,14 +12,12 @@ from config.constants.filestorage import (
     DEFAULT_REMOTE_SYNC_PROVIDER,
     REMOTE_SYNC_PASSPHRASE_ENV,
 )
-from platform.common.exit_codes import ERROR, SUCCESS
 from platform.filestorage import (
     MissingPassphraseError,
     RemoteSyncConfigError,
     RemoteSyncError,
 )
 from platform.filestorage.encryption.keys import resolve_passphrase, save_passphrase
-from platform.filestorage import RemoteSyncConfigError, RemoteSyncError
 from platform.filestorage.enums import RemoteSyncField, RemoteSyncSubcommand
 from platform.filestorage.messages import (
     DISABLED_HELP,
@@ -418,5 +416,4 @@ def reencrypt_command() -> None:
     raise SystemExit(SUCCESS)
 
 
-__all__ = ["remote_sync_command"]
 __all__ = ["remote_sync_command", "run_remote_sync_on_exit"]
