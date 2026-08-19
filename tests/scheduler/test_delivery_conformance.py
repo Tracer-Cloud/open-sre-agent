@@ -46,23 +46,33 @@ DELIVERY_SPECS_COVER = frozenset({Provider.TELEGRAM, Provider.SLACK, Provider.RO
 WATCHDOG_BRANCHES = frozenset({Provider.ROCKETCHAT, Provider.BUZZ})
 
 
-def _providers_named_in(function: object) -> frozenset[Provider]:
-    """Every ``Provider.MEMBER`` the function's own source mentions."""
+def _providers_branched_on(function: object) -> frozenset[Provider]:
+    """``Provider.MEMBER`` values compared in ``if`` / ``elif`` tests.
+
+    Mentions used only for logging, validation, or diagnostics are ignored:
+    a reference is not a delivery branch.
+    """
     source = textwrap.dedent(inspect.getsource(function))
-    names = {
-        node.attr
-        for node in ast.walk(ast.parse(source))
-        if isinstance(node, ast.Attribute)
-        and isinstance(node.value, ast.Name)
-        and node.value.id == "Provider"
-    }
-    return frozenset(Provider[name] for name in names if name in Provider.__members__)
+    tree = ast.parse(source)
+    names: set[str] = set()
+    for node in ast.walk(tree):
+        if not isinstance(node, ast.If):
+            continue
+        for sub in ast.walk(node.test):
+            if (
+                isinstance(sub, ast.Attribute)
+                and isinstance(sub.value, ast.Name)
+                and sub.value.id == "Provider"
+                and sub.attr in Provider.__members__
+            ):
+                names.add(sub.attr)
+    return frozenset(Provider[name] for name in names)
 
 
 def test_the_executor_delivers_to_exactly_these_providers() -> None:
     """The send path's branches are the real answer to "can this be delivered?"."""
     # Arrange / Act
-    reachable = _providers_named_in(executor._deliver_single)
+    reachable = _providers_branched_on(executor._deliver_single)
 
     # Assert
     assert reachable == EXECUTOR_DELIVERS
@@ -107,7 +117,7 @@ def test_the_watchdog_declares_what_its_dispatcher_can_build() -> None:
     """
     # Arrange / Act
     declared = frozenset(WATCHDOG_SUPPORTED_PROVIDERS)
-    branched = _providers_named_in(runner._build_dispatcher)
+    branched = _providers_branched_on(runner._build_dispatcher)
 
     # Assert
     assert branched == WATCHDOG_BRANCHES

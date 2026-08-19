@@ -3,8 +3,8 @@
 The two polled transports assemble the same turn twice, in their own files.
 Roughly 60 lines of that assembly are identical once the platform name is
 masked, which is why consolidating them keeps being proposed — and why it needs
-a guard first: an extraction must be provable not to reorder claim, finalize or
-dispatch for either transport.
+a guard first: an extraction must be provable not to reorder claim, timeout,
+cancel tracking, dispatch or finalize for either transport.
 
 This records what one turn does, through each transport's real handler, and
 asserts the two recordings match. It is a characterization test: it pins today's
@@ -18,6 +18,7 @@ import asyncio
 import logging
 import threading
 from concurrent.futures import ThreadPoolExecutor
+from contextlib import contextmanager
 from typing import Any
 
 import pytest
@@ -26,6 +27,21 @@ from core.agent_harness.session import SessionCore
 from core.agent_harness.session.persistence.memory import InMemorySessionStore
 from gateway.core.middleware.active_turns import ActiveTurnRegistry
 from gateway.core.middleware.approvals import ApprovalBroker
+
+# Happy-path order both handlers must produce. Reordering claim, timeout,
+# cancel tracking or dispatch changes this list.
+_HAPPY_PATH_STEPS = (
+    "session_resolved",
+    "timeout_armed",
+    "cancel_tracked",
+    "cancel_armed_before_turn",
+    "session_bound_to_turn",
+    "text_delivered",
+    "turn_dispatched",
+    "cancel_untracked",
+    "timeout_disarmed",
+    "terminal_claimed",
+)
 
 
 class _Recorder:
@@ -68,8 +84,70 @@ def _recording_callback(recorder: _Recorder):
     return _callback
 
 
+def _instrument_host_sequence(monkeypatch: pytest.MonkeyPatch, recorder: _Recorder) -> None:
+    """Record claim, cancel tracking, timeout arming, and sink finalize.
+
+    The callback only sees what the host passed *into* the turn. Reordering
+    ``track`` / ``timeout_after`` / ``claim`` / ``finalize`` around that
+    callback would still match if we ignored those operations.
+    """
+    from gateway.core.middleware.active_turns import ActiveTurnRegistry
+    from gateway.core.middleware.terminal_outcome import TerminalOutcomeArbiter
+    from gateway.transports.buzz import inbound_handler as buzz_handler
+    from gateway.transports.buzz.output_sink import BuzzOutputSink
+    from gateway.transports.telegram import inbound_handler as telegram_handler
+    from gateway.transports.telegram.output_sink import TelegramOutputSink
+
+    class _RecordingTerminal(TerminalOutcomeArbiter):
+        def claim(self) -> bool:
+            won = super().claim()
+            if won:
+                recorder.note("terminal_claimed")
+            return won
+
+        @contextmanager
+        def timeout_after(self, timeout_seconds: float, on_timeout: Any) -> Any:
+            recorder.note("timeout_armed")
+            with super().timeout_after(timeout_seconds, on_timeout):
+                yield
+            recorder.note("timeout_disarmed")
+
+    monkeypatch.setattr(telegram_handler, "TerminalOutcomeArbiter", _RecordingTerminal)
+    monkeypatch.setattr(buzz_handler, "TerminalOutcomeArbiter", _RecordingTerminal)
+
+    original_track = ActiveTurnRegistry.track
+
+    @contextmanager
+    def recording_track(
+        self: ActiveTurnRegistry,
+        key: str,
+        event: threading.Event,
+        *,
+        on_user_stop: Any = None,
+    ) -> Any:
+        recorder.note("cancel_tracked")
+        with original_track(self, key, event, on_user_stop=on_user_stop):
+            yield
+        recorder.note("cancel_untracked")
+
+    monkeypatch.setattr(ActiveTurnRegistry, "track", recording_track)
+
+    def _wrap_finalize(cls: type) -> None:
+        original = cls.finalize
+
+        def finalize(self: Any, answer: str) -> None:
+            recorder.note("sink_finalized")
+            original(self, answer)
+
+        monkeypatch.setattr(cls, "finalize", finalize)
+
+    _wrap_finalize(TelegramOutputSink)
+    _wrap_finalize(BuzzOutputSink)
+
+
 class _TelegramClient:
-    def send_chat_action(self, chat_id: str, action: str) -> None: ...
+    def send_chat_action(self, chat_id: str, action: str) -> None:
+        pass
 
     def send_message(self, chat_id: str, text: str, **_kw: Any) -> tuple[bool, str, str]:
         _ = (chat_id, text)
@@ -80,6 +158,14 @@ class _TelegramClient:
     ) -> tuple[bool, str]:
         _ = (chat_id, message_id, text)
         return True, ""
+
+
+class _BuzzClient:
+    def send_message(self, **_kw: Any) -> dict[str, Any]:
+        return {"success": True, "error": "", "event_id": "ev-out"}
+
+    def edit_message(self, **_kw: Any) -> dict[str, Any]:
+        return {"success": True, "error": "", "event_id": "ev-out"}
 
 
 @pytest.fixture(autouse=True)
@@ -98,6 +184,7 @@ def _run_telegram_turn(monkeypatch: pytest.MonkeyPatch, recorder: _Recorder) -> 
     from gateway.transports.telegram.inbound_security import InboundDecision
     from gateway.transports.telegram.settings import GatewaySettings, TelegramInboundMessage
 
+    _instrument_host_sequence(monkeypatch, recorder)
     monkeypatch.setattr(
         "gateway.transports.telegram.inbound_handler.enforce_inbound_telegram_message_security",
         lambda **_kw: InboundDecision(allowed=True),
@@ -118,7 +205,9 @@ def _run_telegram_turn(monkeypatch: pytest.MonkeyPatch, recorder: _Recorder) -> 
                 client=_TelegramClient(),  # type: ignore[arg-type]
                 session_resolver=_RecordingResolver(session, recorder),  # type: ignore[arg-type]
                 settings=GatewaySettings(
-                    bot_token="tok", allowed_user_ids=["user-1"], turn_timeout_seconds=30.0
+                    bot_token="tok",
+                    allowed_user_ids=["user-1"],
+                    turn_timeout_seconds=30.0,
                 ),
                 executor=executor,
                 chat_locks={},
@@ -135,10 +224,15 @@ def _run_telegram_turn(monkeypatch: pytest.MonkeyPatch, recorder: _Recorder) -> 
 
 def _run_buzz_turn(monkeypatch: pytest.MonkeyPatch, recorder: _Recorder) -> None:
     from gateway.transports.buzz.inbound_handler import handle_polled_inbound_buzz_message
+    from gateway.transports.buzz.inbound_security import InboundDecision
     from gateway.transports.buzz.pending_approvals import PendingApprovals
     from gateway.transports.buzz.settings import BuzzInboundMessage, GatewaySettings
 
-    _ = monkeypatch
+    _instrument_host_sequence(monkeypatch, recorder)
+    monkeypatch.setattr(
+        "gateway.transports.buzz.inbound_handler.enforce_inbound_buzz_message_security",
+        lambda **_kw: InboundDecision(allowed=True),
+    )
     session = SessionCore(store=InMemorySessionStore())
     sender = "a" * 64
 
@@ -157,7 +251,9 @@ def _run_buzz_turn(monkeypatch: pytest.MonkeyPatch, recorder: _Recorder) -> None
                 client=_BuzzClient(),  # type: ignore[arg-type]
                 session_resolver=_RecordingResolver(session, recorder),  # type: ignore[arg-type]
                 settings=GatewaySettings(
-                    private_key="k", allowed_pubkeys=[sender], turn_timeout_seconds=30.0
+                    private_key="k",
+                    allowed_pubkeys=[sender],
+                    turn_timeout_seconds=30.0,
                 ),
                 executor=executor,
                 chat_locks={},
@@ -173,21 +269,13 @@ def _run_buzz_turn(monkeypatch: pytest.MonkeyPatch, recorder: _Recorder) -> None
     asyncio.run(_run())
 
 
-class _BuzzClient:
-    def send_message(self, **_kw: Any) -> dict[str, Any]:
-        return {"success": True, "error": "", "event_id": "ev-out"}
-
-    def edit_message(self, **_kw: Any) -> dict[str, Any]:
-        return {"success": True, "error": "", "event_id": "ev-out"}
-
-
 def test_both_polled_transports_run_a_turn_in_the_same_order(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """The shared sequence, recorded from each transport's real handler.
 
-    Equality is the point: an extraction that reorders one transport's claim,
-    dispatch or cancel arming shows up here as two different lists.
+    Equality is the point: an extraction that reorders claim, timeout,
+    cancel tracking, dispatch or finalize shows up as two different lists.
     """
     # Arrange
     telegram, buzz = _Recorder(), _Recorder()
@@ -197,10 +285,9 @@ def test_both_polled_transports_run_a_turn_in_the_same_order(
     _run_buzz_turn(monkeypatch, buzz)
 
     # Assert
-    assert telegram.steps == buzz.steps, (telegram.steps, buzz.steps)
-    assert telegram.steps[0] == "session_resolved"
-    assert "cancel_armed_before_turn" in telegram.steps
-    assert telegram.steps[-1] == "turn_dispatched"
+    assert telegram.steps == list(_HAPPY_PATH_STEPS)
+    assert buzz.steps == list(_HAPPY_PATH_STEPS)
+    assert "sink_finalized" not in telegram.steps
 
 
 def test_both_polled_transports_run_the_turn_off_the_event_loop(
