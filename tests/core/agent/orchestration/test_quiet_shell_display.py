@@ -144,6 +144,29 @@ def test_silent_tool_turn_prefers_paint_quiet_stdout_over_blank_print() -> None:
     assert printed == []
 
 
+def test_silent_tool_turn_paints_through_bindable_output() -> None:
+    """REPL production path: BindableOutput → ShellOutputSink must reach paint."""
+    from platform.turn_host.bindable_output import BindableOutput
+    from core.agent_harness.turns.action_driver import _end_silent_tool_turn
+    from surfaces.interactive_shell.runtime.agent_harness_adapters import ShellOutputSink
+    from tools.interactive_shell.quiet_stdout import buffer_quiet_stdout, clear_quiet_stdout
+
+    clear_quiet_stdout()
+    buffer_quiet_stdout("hi")
+    lines: list[str] = []
+
+    class _Console:
+        def print(self, message: str = "", **_kwargs: object) -> None:
+            lines.append(str(message))
+
+    bindable = BindableOutput()
+    bindable.bind(ShellOutputSink(_Console()))  # type: ignore[arg-type]
+
+    _end_silent_tool_turn(bindable)  # type: ignore[arg-type]
+
+    assert "hi" in "\n".join(lines)
+
+
 def test_silent_tool_turn_falls_back_to_blank_print_without_paint_hook() -> None:
     from core.agent_harness.turns.action_driver import _end_silent_tool_turn
 
