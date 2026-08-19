@@ -19,6 +19,7 @@ from collections.abc import Sequence
 from dataclasses import dataclass
 from typing import Any
 
+from config.constants.tool_results import RESULT_DISPLAYED_FIELD
 from core.agent import Agent
 from core.agent.cancel import tool_resources_cancel_requested
 from core.agent.goals import Goal
@@ -51,7 +52,6 @@ from core.agent_harness.turns.turn_snapshot import TurnSnapshot
 from core.agent_harness.turns.wal_recorder import with_wal_recording
 from core.events import runtime_event_callback_from_observer
 from core.execution import (
-    RESULT_DISPLAYED_FIELD,
     BeforeToolCallResult,
     ToolExecutionHooks,
     ToolExecutionPatch,
@@ -392,61 +392,39 @@ def _format_generic_tool_payload(tool_call: ToolCall, tool_result: Any) -> str:
     return f"{tool_call.name} result: {content}"
 
 
-def _preferred_tool_response_text(tool_result: Any) -> str:
+def _tool_result_payload(tool_result: Any) -> dict[str, Any]:
     details = getattr(tool_result, "details", None)
-    if isinstance(details, dict):
-        response_text = details.get("response_text")
-        if isinstance(response_text, str) and response_text.strip():
-            return response_text.strip()
+    payload: dict[str, Any] = {}
     content = _content_to_text(getattr(tool_result, "content", "")).strip()
-    if not content:
-        return ""
-    try:
-        parsed = json.loads(content)
-    except (TypeError, ValueError, json.JSONDecodeError):
-        return ""
-    if not isinstance(parsed, dict):
-        return ""
-    response_text = parsed.get("response_text")
+    if content:
+        try:
+            parsed = json.loads(content)
+        except (TypeError, ValueError, json.JSONDecodeError):
+            parsed = None
+        if isinstance(parsed, dict):
+            payload.update(parsed)
+    if isinstance(details, dict):
+        payload.update(details)
+    return payload
+
+
+def _preferred_tool_response_text(tool_result: Any) -> str:
+    response_text = _tool_result_payload(tool_result).get("response_text")
     return response_text.strip() if isinstance(response_text, str) else ""
 
 
-def _tool_payload_value(tool_result: Any, key: str) -> Any:
-    details = getattr(tool_result, "details", None)
-    if isinstance(details, dict) and key in details:
-        return details[key]
-    content = _content_to_text(getattr(tool_result, "content", "")).strip()
-    if not content:
-        return None
-    try:
-        parsed = json.loads(content)
-    except (TypeError, ValueError, json.JSONDecodeError):
-        return None
-    if isinstance(parsed, dict) and key in parsed:
-        return parsed[key]
-    return None
+def _response_text_from_unprinted_results(result: Any) -> str:
+    """Join ``response_text`` from results that set ``displayed`` to false.
 
-
-def _tool_output_was_displayed(tool_result: Any) -> bool:
-    """True when the tool already showed its output during the call.
-
-    Tools that skip live printing set ``displayed`` to false on the payload.
-    A missing field means displayed — this path must not reprint by default.
-    """
-    value = _tool_payload_value(tool_result, RESULT_DISPLAYED_FIELD)
-    return True if value is None else bool(value)
-
-
-def _response_text_from_undisplayed_results(result: Any) -> str:
-    """Join ``response_text`` from results that did not print during the call.
-
-    When the action closing is also dropped, this is the text still to show.
+    Duck-typed like ``response_text``. Missing ``displayed`` means already printed.
     """
     chunks: list[str] = []
     for _tool_call, tool_result in getattr(result, "tool_results", []):
-        if _tool_output_was_displayed(tool_result):
+        payload = _tool_result_payload(tool_result)
+        if payload.get(RESULT_DISPLAYED_FIELD, True):
             continue
-        text = _preferred_tool_response_text(tool_result)
+        response_text = payload.get("response_text")
+        text = response_text.strip() if isinstance(response_text, str) else ""
         if text:
             chunks.append(text)
     return "\n".join(chunks)
@@ -905,13 +883,11 @@ def _compose_response(
     # github_cli / other registry tools without double-printing shell output.
     # response_text still includes history for persistence / non-TTY surfaces.
     #
-    # Tools that skip live printing still need their response_text on screen
-    # when the closing is dropped too; otherwise the turn is a blank line.
     display_chunks = [chunk for chunk in (display_final, generic_text, hint) if chunk]
     if suppress_final and not generic_text:
-        withheld_text = _response_text_from_undisplayed_results(result)
-        if withheld_text:
-            display_chunks = [chunk for chunk in (withheld_text, hint) if chunk]
+        unprinted = _response_text_from_unprinted_results(result)
+        if unprinted:
+            display_chunks = [chunk for chunk in (unprinted, hint) if chunk]
     response_chunks = [
         chunk
         for chunk in (

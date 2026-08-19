@@ -11,7 +11,6 @@ import json
 from typing import Any
 
 from core.agent_harness.turns.action_driver import _compose_response, _TurnCounts
-from core.execution import RESULT_DISPLAYED_FIELD
 from core.llm.types import ToolCall
 
 
@@ -46,7 +45,7 @@ def _shell_call(call_id: str, command: str, *, quiet: bool) -> ToolCall:
 def _payload(response_text: str, *, displayed: bool | None = None) -> dict[str, Any]:
     payload: dict[str, Any] = {"ok": True, "response_text": response_text}
     if displayed is not None:
-        payload[RESULT_DISPLAYED_FIELD] = displayed
+        payload["displayed"] = displayed
     return payload
 
 

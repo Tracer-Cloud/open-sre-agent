@@ -8,7 +8,7 @@ from pathlib import Path
 from typing import Any
 
 import config.constants.platform as _platform
-from core.execution import RESULT_DISPLAYED_FIELD
+from config.constants.tool_results import RESULT_DISPLAYED_FIELD
 from tools.interactive_shell.shell import execution as shell_execution
 from tools.interactive_shell.shell.display import format_shell_command_for_display
 from tools.interactive_shell.shell.parsing import (
@@ -49,6 +49,7 @@ def _shell_payload(
         "timed_out": timed_out,
         "truncated": truncated,
         "cancelled": cancelled,
+        # False when quiet: the action closer may print response_text.
         RESULT_DISPLAYED_FIELD: not quiet,
     }
     if executed_with_shell is not None:
@@ -211,9 +212,7 @@ def run_cd_command(
         if not quiet:
             presenter.print_error(f"cd failed: {exc}")
         session.record("shell", command, ok=False, response_text=response_text)
-        return _shell_payload(
-            command=command, ok=False, response_text=response_text, quiet=quiet
-        )
+        return _shell_payload(command=command, ok=False, response_text=response_text, quiet=quiet)
 
     if len(tokens) > 2:
         response_text = "cd failed: too many arguments"
@@ -221,9 +220,7 @@ def run_cd_command(
         if not quiet:
             presenter.print("[error]cd failed:[/] too many arguments")
         session.record("shell", command, ok=False, response_text=response_text)
-        return _shell_payload(
-            command=command, ok=False, response_text=response_text, quiet=quiet
-        )
+        return _shell_payload(command=command, ok=False, response_text=response_text, quiet=quiet)
 
     target = Path(tokens[1]).expanduser() if len(tokens) == 2 else Path.home()
     try:
@@ -236,9 +233,7 @@ def run_cd_command(
         if not quiet:
             presenter.print_error(f"cd failed: {exc}")
         session.record("shell", command, ok=False, response_text=response_text)
-        return _shell_payload(
-            command=command, ok=False, response_text=response_text, quiet=quiet
-        )
+        return _shell_payload(command=command, ok=False, response_text=response_text, quiet=quiet)
 
     cwd = str(Path.cwd())
     if not quiet:
@@ -262,9 +257,7 @@ def run_pwd_command(
         if not quiet:
             presenter.print_error(f"pwd failed: {exc}")
         session.record("shell", command, ok=False, response_text=response_text)
-        return _shell_payload(
-            command=command, ok=False, response_text=response_text, quiet=quiet
-        )
+        return _shell_payload(command=command, ok=False, response_text=response_text, quiet=quiet)
 
     if len(tokens) != 1:
         response_text = "pwd failed: too many arguments"
@@ -272,17 +265,13 @@ def run_pwd_command(
         if not quiet:
             presenter.print("[error]pwd failed:[/] too many arguments")
         session.record("shell", command, ok=False, response_text=response_text)
-        return _shell_payload(
-            command=command, ok=False, response_text=response_text, quiet=quiet
-        )
+        return _shell_payload(command=command, ok=False, response_text=response_text, quiet=quiet)
 
     cwd = str(Path.cwd())
     if not quiet:
         presenter.print_plain(cwd)
     session.record("shell", command)
-    return _shell_payload(
-        command=command, ok=True, response_text=cwd, stdout=cwd, quiet=quiet
-    )
+    return _shell_payload(command=command, ok=True, response_text=cwd, stdout=cwd, quiet=quiet)
 
 
 __all__ = ["run_cd_command", "run_pwd_command", "run_shell_command"]
