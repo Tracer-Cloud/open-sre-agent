@@ -24,7 +24,6 @@ from gateway.transports.slack.transport.socket_mode.heartbeat import (
 from gateway.transports.slack.turn_stack import build_slack_turn_stack
 from platform.turn_host.turn_callback import TurnCallback
 
-_PLATFORM_SLACK = "slack"
 _EVENTS_API_REQUEST_TYPE = "events_api"
 _INTERACTIVE_REQUEST_TYPE = "interactive"
 
