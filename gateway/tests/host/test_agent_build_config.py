@@ -7,7 +7,7 @@ slash ports whose ``tty_interactive()`` defers an interactive picker instead of
 running it against a live prompt.
 
 So the pool accepts what a channel supplies and keeps deciding everything else:
-which agent is reused, when the capability policy applies, how the live sink is
+which agent is reused, when the capability policy applies, how live output is
 bound.
 """
 
@@ -22,7 +22,7 @@ from rich.console import Console
 from core.agent_harness.runtime import AgentBuildConfig
 from core.agent_harness.session import SessionCore
 from core.agent_harness.session.persistence.memory import InMemorySessionStore
-from gateway.core.host.live_sink import LiveOutputSink
+from gateway.core.host.bindable_output import BindableOutput
 from gateway.core.host.session_agents import SessionAgentPool
 from tests.shared.default_headless_build_stub import default_headless_build_stub
 
@@ -45,7 +45,7 @@ def test_a_host_that_supplies_nothing_gets_the_chat_defaults() -> None:
     pool = SessionAgentPool(console=Console(force_terminal=False))
 
     # Act
-    agent = pool.agent_for(session=session, sink=LiveOutputSink(), logger=_LOGGER)
+    agent = pool.agent_for(session=session, output=BindableOutput(), logger=_LOGGER)
 
     # Assert — chat defaults include gateway withholds
     assert agent is not None
@@ -87,7 +87,7 @@ def test_a_host_supplies_its_own_tools_prompts_and_gather() -> None:
     )
 
     # Act
-    pool.agent_for(session=_session(), sink=LiveOutputSink(), logger=_LOGGER)
+    pool.agent_for(session=_session(), output=BindableOutput(), logger=_LOGGER)
 
     # Assert — the channel's builders ran, not the gateway defaults
     assert sorted(used) == ["gather", "prompts", "tools"]
@@ -110,8 +110,8 @@ def test_agent_reuse_stays_the_pool_decision() -> None:
     session = _session()
 
     # Act — two turns of one session
-    first = pool.agent_for(session=session, sink=LiveOutputSink(), logger=_LOGGER)
-    second = pool.agent_for(session=session, sink=LiveOutputSink(), logger=_LOGGER)
+    first = pool.agent_for(session=session, output=BindableOutput(), logger=_LOGGER)
+    second = pool.agent_for(session=session, output=BindableOutput(), logger=_LOGGER)
 
     # Assert — one agent, built once
     assert first is second
@@ -121,7 +121,7 @@ def test_agent_reuse_stays_the_pool_decision() -> None:
 def test_default_path_applies_gateway_capability_policy() -> None:
     session = _session()
     SessionAgentPool(console=Console(force_terminal=False)).agent_for(
-        session=session, sink=LiveOutputSink(), logger=_LOGGER
+        session=session, output=BindableOutput(), logger=_LOGGER
     )
     assert session.available_capabilities["investigation"] == ()
     assert session.available_capabilities["llm_provider"] == ()
@@ -133,7 +133,7 @@ def test_empty_config_does_not_inject_gateway_withholds() -> None:
     SessionAgentPool(
         console=Console(force_terminal=False),
         agent_build=AgentBuildConfig(),
-    ).agent_for(session=session, sink=LiveOutputSink(), logger=_LOGGER)
+    ).agent_for(session=session, output=BindableOutput(), logger=_LOGGER)
     assert "investigation" not in session.available_capabilities
 
 
@@ -143,7 +143,7 @@ def test_host_can_replace_capability_policy() -> None:
     SessionAgentPool(
         console=Console(force_terminal=False),
         agent_build=AgentBuildConfig(apply_capability_policy=seen.append),
-    ).agent_for(session=session, sink=LiveOutputSink(), logger=_LOGGER)
+    ).agent_for(session=session, output=BindableOutput(), logger=_LOGGER)
     assert seen == [session]
     assert "investigation" not in session.available_capabilities
 
@@ -165,7 +165,7 @@ def test_error_reporter_and_surface_reach_default_headless_build(
     SessionAgentPool(
         console=Console(force_terminal=False),
         agent_build=AgentBuildConfig(error_reporter=reporter),
-    ).agent_for(session=_session(), sink=LiveOutputSink(), logger=_LOGGER)
+    ).agent_for(session=_session(), output=BindableOutput(), logger=_LOGGER)
     assert captured["surface"] == "gateway"
     assert captured["error_reporter"] is reporter
 
@@ -187,5 +187,5 @@ def test_default_tools_still_receive_slash_ports_factory(
     SessionAgentPool(
         console=Console(force_terminal=False),
         slash_ports_factory=factory,  # type: ignore[arg-type]
-    ).agent_for(session=_session(), sink=LiveOutputSink(), logger=_LOGGER)
+    ).agent_for(session=_session(), output=BindableOutput(), logger=_LOGGER)
     assert captured["slash_ports_factory"] is factory

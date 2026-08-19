@@ -126,8 +126,8 @@ class OutputBindable(Protocol):
 
     ``HeadlessAgent.bind_turn(output=…)`` updates the agent's sink and must
     retarget every port that cached the previous sink (e.g. reasoning error
-    rendering). Gateway usually keeps a stable ``LiveOutputSink`` and rebinds
-    the outer transport sink via ``LiveOutputSink.bind`` — that path does not
+    rendering). Gateway usually keeps a stable ``BindableOutput`` and rebinds
+    the outer transport output via ``BindableOutput.bind`` — that path does not
     need ``bind_turn(output=)``. Hosts that swap the ``OutputSink`` object
     itself must pass ``output=`` so :class:`OutputBindable` ports follow.
     """

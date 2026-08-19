@@ -23,7 +23,7 @@ from gateway.core.host.turn_handler import GatewayTurnHandler
 from tests.core.agent.orchestration.cross_surface_parity_harness import (
     ALL_SURFACES,
     PARITY_ANSWER,
-    RecordingGatewaySink,
+    RecordingGatewayOutputSink,
     assert_surfaces_match,
     collect_all_surfaces,
     console,
@@ -190,7 +190,7 @@ def test_gateway_handler_outbound_finalize_on_action_only_turn(
     configure(tools=[probe_tool()], action_mode="tool")
 
     session = fresh_session()
-    sink = RecordingGatewaySink()
+    sink = RecordingGatewayOutputSink()
     handler = GatewayTurnHandler(console=console())
     handler("run probe", session, sink, logging.getLogger("test.parity.gateway.outbound"))
 

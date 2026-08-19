@@ -88,8 +88,8 @@ peer `bootstrap.adapters` copies under surfaces or gateway.
 **Bind ports:** session-aware defaults implement
 `SessionBindable` / `ConsoleBindable` / `OutputBindable` (`ports.py`).
 `HeadlessAgent.bind_session` / `bind_turn(console=…, output=…)` only call ports
-that match those Protocols. Gateway usually keeps a stable `LiveOutputSink` and
-rebinds the transport via `LiveOutputSink.bind` (no `output=` each turn).
+that match those Protocols. Gateway usually keeps a stable `BindableOutput` and
+rebinds the transport via `BindableOutput.bind` (no `output=` each turn).
 The mutable session port is **`SessionState`** (field `HeadlessAgent._session`,
 headless impl `InMemorySessionState`) — not `SessionStore`. Durable JSONL is
 `SessionStore` / `SessionRepo` (`docs/NAMING.md`).
@@ -332,7 +332,7 @@ explicit ``boot_process``).
 
 | Lifetime | Construct | Then |
 |----------|-----------|------|
-| Chat session (gateway) | `SessionAgentPool` keeps one `HeadlessAgent` per session id; each turn rebinds outer sink via `LiveOutputSink.bind`, then `bind_turn` (session / accounting / console / tool_hooks) | `AgentSession.chat` / `agent.dispatch` |
+| Chat session (gateway) | `SessionAgentPool` keeps one `HeadlessAgent` per session id; each turn rebinds transport output via `BindableOutput.bind`, then `bind_turn` (session / accounting / console / tool_hooks) | `AgentSession.chat` / `agent.dispatch` |
 | Embedder / script | `start_embedded_session()` or `attach_agent(HeadlessAgent…)` once | repeated `chat` / `dispatch` |
 | Scheduled loop | Prefer one agent for the loop’s lifetime when multi-turn; `run_headless_turn` is OK for true one-shot digests | do not treat one-shot as the multi-turn pattern |
 | Interactive shell | `build_shell_agent` → `DefaultHeadlessBuild.agent` once; `HeadlessAgent.handle` per submission (not `GatewayTurnHandler`) | `HeadlessAgent.handle` |

@@ -115,8 +115,8 @@ def test_ensure_turn_cancel_reuses_existing_event() -> None:
     assert first is second is sink.turn_cancel
 
 
-def test_live_sink_exposes_turn_cancel_property() -> None:
-    from gateway.core.host.live_sink import LiveOutputSink
+def test_bindable_output_exposes_turn_cancel_property() -> None:
+    from gateway.core.host.bindable_output import BindableOutput
 
     class _Inner:
         def __init__(self) -> None:
@@ -139,7 +139,7 @@ def test_live_sink_exposes_turn_cancel_property() -> None:
             _ = text
 
     inner = _Inner()
-    live = LiveOutputSink()
-    assert live.turn_cancel is None
-    live.bind(inner)  # type: ignore[arg-type]
-    assert live.turn_cancel is inner.turn_cancel
+    bindable = BindableOutput()
+    assert bindable.turn_cancel is None
+    bindable.bind(inner)  # type: ignore[arg-type]
+    assert bindable.turn_cancel is inner.turn_cancel

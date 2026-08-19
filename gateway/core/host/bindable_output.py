@@ -1,8 +1,9 @@
-"""Turn-retargetable output sink for session-scoped headless agents.
+"""Output that stays on the session agent and is rebound each turn.
 
 A gateway session reuses one :class:`HeadlessAgent` across inbound messages.
-Transport sinks are per-turn, so this holder stays on the agent and
-:meth:`bind` swaps the inner sink before each dispatch.
+Each turn has its own transport destination, so this object stays on the agent
+and :meth:`bind` points it at that turn's :class:`GatewayOutputSink` before
+dispatch.
 """
 
 from __future__ import annotations
@@ -11,31 +12,31 @@ import threading
 from collections.abc import Iterable, Iterator
 from typing import Any
 
-from gateway.core.transport_api import GatewaySink
+from gateway.core.host.turn_output import GatewayOutputSink
 
 
-class LiveOutputSink:
-    """Delegates :class:`~core.agent_harness.ports.OutputSink` calls to the bound sink.
+class BindableOutput:
+    """Forwards :class:`~core.agent_harness.ports.OutputSink` calls to the bound destination.
 
     Explicit methods (not ``__getattr__``) keep the port structurally typed so
     construction sites do not need ``type: ignore``.
     """
 
     def __init__(self) -> None:
-        self._inner: GatewaySink | None = None
+        self._inner: GatewayOutputSink | None = None
 
-    def bind(self, sink: GatewaySink) -> None:
-        """Point subsequent output at ``sink`` for the current turn."""
-        self._inner = sink
+    def bind(self, output: GatewayOutputSink) -> None:
+        """Point subsequent writes at ``output`` for the current turn."""
+        self._inner = output
 
     @property
-    def bound(self) -> GatewaySink | None:
-        """Currently bound transport sink, if any."""
+    def bound(self) -> GatewayOutputSink | None:
+        """Currently bound transport destination, if any."""
         return self._inner
 
     @property
     def turn_cancel(self) -> threading.Event | None:
-        """Same cancel Event as the bound transport sink (one signal, many readers).
+        """Same cancel Event as the bound transport output (one signal, many readers).
 
         Explicit (not only ``__getattr__``) so
         :func:`~core.agent_harness.turns.host_cancel.host_cancel_requested` and
@@ -47,10 +48,10 @@ class LiveOutputSink:
         cancel = getattr(inner, "turn_cancel", None)
         return cancel if isinstance(cancel, threading.Event) else None
 
-    def _require(self) -> GatewaySink:
+    def _require(self) -> GatewayOutputSink:
         inner = self._inner
         if inner is None:
-            raise RuntimeError("gateway turn sink not bound")
+            raise RuntimeError("gateway turn output not bound")
         return inner
 
     def print(self, message: str = "") -> None:
@@ -109,4 +110,4 @@ class LiveOutputSink:
         return getattr(self._require(), name)
 
 
-__all__ = ["LiveOutputSink"]
+__all__ = ["BindableOutput"]

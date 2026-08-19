@@ -18,7 +18,7 @@ from core.agent_harness.turns.turn_results import ToolCallingTurnResult, TurnRes
 from gateway.core.host.session_agents import SessionAgentPool
 from gateway.core.host.turn_handler import GatewayTurnHandler
 from tests.core.agent.orchestration.cross_surface_parity_harness import (
-    RecordingGatewaySink,
+    RecordingGatewayOutputSink,
 )
 from tests.shared.default_headless_build_stub import default_headless_build_stub
 from tests.shared.fake_agent import fake_agent
@@ -343,7 +343,7 @@ def test_turn_handler_disables_unsupported_gateway_capabilities(monkeypatch: Any
     handler(
         "hello",
         session,
-        RecordingGatewaySink(),
+        RecordingGatewayOutputSink(),
         logging.getLogger("test"),
     )
 
@@ -369,7 +369,7 @@ def test_turn_handler_preserves_supported_capabilities(monkeypatch: Any) -> None
     handler(
         "hello",
         session,
-        RecordingGatewaySink(),
+        RecordingGatewayOutputSink(),
         logging.getLogger("test.gateway.capabilities"),
     )
 
@@ -389,8 +389,8 @@ def test_turn_handler_capability_gating_is_stable_across_turns(monkeypatch: Any)
     handler = GatewayTurnHandler(console=Console(force_terminal=False))
     logger = logging.getLogger("test.gateway.capabilities")
 
-    handler("first turn", session, RecordingGatewaySink(), logger)
-    handler("second turn", session, RecordingGatewaySink(), logger)
+    handler("first turn", session, RecordingGatewayOutputSink(), logger)
+    handler("second turn", session, RecordingGatewayOutputSink(), logger)
 
     assert session.available_capabilities["investigation"] == ()
     assert session.available_capabilities["llm_provider"] == ()
@@ -470,3 +470,112 @@ def test_turn_handler_forwards_agent_build_to_the_pool(
     agent_build = AgentBuildConfig()
     GatewayTurnHandler(console=Console(force_terminal=False), agent_build=agent_build)
     assert seen == [agent_build]
+
+
+def _handler_with_fake_agent(
+    monkeypatch: Any, result: TurnResult
+) -> tuple[GatewayTurnHandler, MagicMock]:
+    """A handler plus the fake agent it will build, so tests can read the binding."""
+    factory = _patch_headless_agent(monkeypatch, result)
+    return GatewayTurnHandler(console=Console(force_terminal=False)), factory.return_value
+
+
+def _last_binding(agent: MagicMock) -> Any:
+    """The ``TurnBinding`` the host applied for the most recent turn."""
+    return agent.bind_turn.call_args.args[0]
+
+
+def test_run_returns_the_turn_result_that_the_callback_discards(monkeypatch: Any) -> None:
+    """``run`` hands the result back; ``__call__`` stays the four-argument callback.
+
+    A caller with a live terminal (the interactive shell) needs ``final_intent``
+    and the response text as values. Chat transports reply through the sink, so
+    ``__call__`` must keep returning ``None`` for the four transports.
+    """
+    # Arrange
+    expected = _empty_turn_result()
+    handler, _agent = _handler_with_fake_agent(monkeypatch, expected)
+    session = SessionCore(store=InMemorySessionStore())
+
+    # Act
+    returned = handler.run("hello", session, RecordingGatewayOutputSink(), logging.getLogger("t"))
+    discarded = handler("hello", session, RecordingGatewayOutputSink(), logging.getLogger("t"))
+
+    # Assert
+    assert returned is expected
+    assert discarded is None
+
+
+def test_run_forwards_the_callers_terminal_context_to_the_turn(monkeypatch: Any) -> None:
+    """A TTY caller's console, confirm callback and tty flag reach the binding.
+
+    Without this the shell cannot route through the gateway: tool confirmation
+    prompts and ``is_tty`` decide whether the agent may ask the user anything.
+    """
+    # Arrange
+    handler, agent = _handler_with_fake_agent(monkeypatch, _empty_turn_result())
+    caller_console = Console(force_terminal=False)
+
+    def _confirm(_prompt: str) -> str:
+        return "y"
+
+    # Act
+    handler.run(
+        "hello",
+        SessionCore(store=InMemorySessionStore()),
+        RecordingGatewayOutputSink(),
+        logging.getLogger("t"),
+        console=caller_console,
+        confirm_fn=_confirm,
+        is_tty=True,
+    )
+
+    # Assert
+    binding = _last_binding(agent)
+    assert binding.is_tty is True
+    assert binding.confirm_fn is _confirm
+    assert binding.console._output is caller_console  # noqa: SLF001 - CancelConsole wraps it
+
+
+def test_run_without_caller_context_is_the_transport_path(monkeypatch: Any) -> None:
+    """Omitting every keyword must reproduce what the four chat transports get.
+
+    This is the no-regression guarantee: ``__call__`` forwards no keywords, so a
+    default that drifted would change every transport's turn at once.
+    """
+    # Arrange
+    handler, agent = _handler_with_fake_agent(monkeypatch, _empty_turn_result())
+
+    # Act
+    handler(
+        "hello",
+        SessionCore(store=InMemorySessionStore()),
+        RecordingGatewayOutputSink(),
+        logging.getLogger("t"),
+    )
+
+    # Assert
+    binding = _last_binding(agent)
+    assert binding.is_tty is False
+    assert binding.confirm_fn is None
+
+
+def test_run_returns_none_and_says_at_capacity_when_the_gate_refuses(monkeypatch: Any) -> None:
+    """At capacity the caller gets ``None``, not a result it would treat as a turn."""
+    # Arrange
+    from gateway.core.host.concurrency import AT_CAPACITY_MESSAGE, TurnConcurrencyGate
+
+    _patch_headless_agent(monkeypatch, _empty_turn_result())
+    gate = TurnConcurrencyGate(1)
+    assert gate.try_acquire() is True  # the only slot is taken
+    handler = GatewayTurnHandler(console=Console(force_terminal=False), gate=gate)
+    sink = RecordingGatewayOutputSink()
+
+    # Act
+    returned = handler.run(
+        "hello", SessionCore(store=InMemorySessionStore()), sink, logging.getLogger("t")
+    )
+
+    # Assert
+    assert returned is None
+    assert sink.finalized == AT_CAPACITY_MESSAGE

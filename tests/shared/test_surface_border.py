@@ -34,7 +34,7 @@ _CLI_IMPORTS_FROM_SHELL: frozenset[str] = frozenset()
 #: Gateway modules a surface may import. All three drive the gateway *process*;
 #: none of them is the gateway's turn service, and none reaches a transport,
 #: a repository or a middleware step. A surface that runs turns is a channel:
-#: it implements ``gateway.core.transport_api`` and is handed to the turn
+#: it implements the host turn contract and is handed to the turn
 #: service — it does not import one.
 _SURFACES_IMPORT_FROM_GATEWAY: frozenset[str] = frozenset(
     {

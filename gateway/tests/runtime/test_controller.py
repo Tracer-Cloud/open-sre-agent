@@ -9,8 +9,8 @@ from unittest.mock import MagicMock
 import pytest
 
 from gateway.core.lifecycle.controller import GatewayController
-from gateway.core.transport_api import TransportName
 from gateway.startup import StartedGateway
+from gateway.transports.names import TransportName
 from gateway.transports.startup import TransportHandle
 
 

@@ -5,8 +5,9 @@ from __future__ import annotations
 import logging
 from unittest.mock import MagicMock
 
-from gateway.core.transport_api import TransportName, TransportSpec
 from gateway.transports import startup
+from gateway.transports.names import TransportName
+from gateway.transports.registration import TransportRegistration
 
 
 def test_start_transports_skips_not_configured_and_failed(
@@ -37,9 +38,9 @@ def test_start_transports_skips_not_configured_and_failed(
         startup,
         "TRANSPORTS",
         (
-            TransportSpec(TransportName.TELEGRAM, _telegram, "polling for messages"),
-            TransportSpec(TransportName.SLACK, _slack, "connected via socket mode"),
-            TransportSpec(TransportName.DISCORD, _discord, "connected via gateway"),
+            TransportRegistration(TransportName.TELEGRAM, _telegram, "polling for messages"),
+            TransportRegistration(TransportName.SLACK, _slack, "connected via socket mode"),
+            TransportRegistration(TransportName.DISCORD, _discord, "connected via gateway"),
         ),
     )
 
