@@ -1,8 +1,8 @@
-"""Results that skipped live printing must still show stdout when the closing is dropped.
+"""Core does not paint quiet shell stdout. That is a surface concern.
 
-Tools that withhold live output set ``displayed`` to false on the payload. For a
-single self-recording step the action closing is also dropped. ``display_chunks``
-must then carry the tool's ``response_text``, or the REPL is a blank line.
+The action closer still drops a single-step self-recording closing. Quiet
+stdout is buffered by the shell tool and shown by the REPL sink when the turn
+would otherwise be blank.
 """
 
 from __future__ import annotations
@@ -42,11 +42,8 @@ def _shell_call(call_id: str, command: str, *, quiet: bool) -> ToolCall:
     return ToolCall(id=call_id, name="shell_run", input={"command": command, "quiet": quiet})
 
 
-def _payload(response_text: str, *, displayed: bool | None = None) -> dict[str, Any]:
-    payload: dict[str, Any] = {"ok": True, "response_text": response_text}
-    if displayed is not None:
-        payload["displayed"] = displayed
-    return payload
+def _payload(response_text: str) -> dict[str, Any]:
+    return {"ok": True, "response_text": response_text}
 
 
 def _counts(steps: int) -> _TurnCounts:
@@ -62,11 +59,11 @@ def _counts(steps: int) -> _TurnCounts:
     )
 
 
-def test_single_quiet_shell_run_shows_response_text() -> None:
+def test_single_quiet_shell_run_does_not_put_stdout_in_display_chunks() -> None:
     # Arrange: one quiet step, whose closing the single-step rule drops.
     call = _shell_call("1", "echo hi", quiet=True)
     result = _Result(
-        tool_results=[(call, _ToolResult(_payload("hi", displayed=False)))],
+        tool_results=[(call, _ToolResult(_payload("hi")))],
         final_text="Command completed successfully.",
     )
 
@@ -75,10 +72,9 @@ def test_single_quiet_shell_run_shows_response_text() -> None:
         result, _Session(), _counts(1)
     )
 
-    # Assert: the withheld stdout is shown, and the dropped closing is not.
-    shown = "\n".join(display_chunks)
-    assert "hi" in shown
-    assert "Command completed successfully." not in shown
+    # Assert: core does not reprint stdout; the dropped closing stays dropped.
+    assert "\n".join(display_chunks) == ""
+    assert "Command completed successfully." not in _response_text
 
 
 def test_quiet_probes_stay_hidden_when_a_composed_closing_is_shown() -> None:
@@ -88,11 +84,11 @@ def test_quiet_probes_stay_hidden_when_a_composed_closing_is_shown() -> None:
         tool_results=[
             (
                 _shell_call("1", "curl wttr.in", quiet=True),
-                _ToolResult(_payload("Amsterdam: +18C", displayed=False)),
+                _ToolResult(_payload("Amsterdam: +18C")),
             ),
             (
                 _shell_call("2", "curl news", quiet=True),
-                _ToolResult(_payload("Markets open higher", displayed=False)),
+                _ToolResult(_payload("Markets open higher")),
             ),
         ],
         final_text=closing,
@@ -114,7 +110,7 @@ def test_loud_shell_run_does_not_reprint_stdout_in_display_chunks() -> None:
     # Arrange: a non-quiet step, whose stdout the runner already painted.
     call = _shell_call("1", "echo hi", quiet=False)
     result = _Result(
-        tool_results=[(call, _ToolResult(_payload("hi", displayed=True)))],
+        tool_results=[(call, _ToolResult(_payload("hi")))],
         final_text="done",
     )
 
@@ -127,6 +123,41 @@ def test_loud_shell_run_does_not_reprint_stdout_in_display_chunks() -> None:
     assert "\n".join(display_chunks) == ""
 
 
+def test_silent_tool_turn_prefers_paint_quiet_stdout_over_blank_print() -> None:
+    """Surface-buffered quiet stdout is painted; empty print is only the fallback."""
+    from core.agent_harness.turns.action_driver import _end_silent_tool_turn
+
+    painted: list[str] = []
+    printed: list[str] = []
+
+    class _Sink:
+        def paint_quiet_stdout(self) -> bool:
+            painted.append("ok")
+            return True
+
+        def print(self, message: str = "") -> None:
+            printed.append(message)
+
+    _end_silent_tool_turn(_Sink())  # type: ignore[arg-type]
+
+    assert painted == ["ok"]
+    assert printed == []
+
+
+def test_silent_tool_turn_falls_back_to_blank_print_without_paint_hook() -> None:
+    from core.agent_harness.turns.action_driver import _end_silent_tool_turn
+
+    printed: list[str] = []
+
+    class _Sink:
+        def print(self, message: str = "") -> None:
+            printed.append(message)
+
+    _end_silent_tool_turn(_Sink())  # type: ignore[arg-type]
+
+    assert printed == [""]
+
+
 def test_a_generic_tool_result_is_not_replaced_by_quiet_stdout() -> None:
     # Arrange: a registry tool answers the turn while a quiet shell step probes.
     github = ToolCall(id="1", name="github_cli", input={"command": "run list"})
@@ -135,7 +166,7 @@ def test_a_generic_tool_result_is_not_replaced_by_quiet_stdout() -> None:
             (github, _ToolResult(_payload("3 failed, 59 succeeded"))),
             (
                 _shell_call("2", "gh api rate_limit", quiet=True),
-                _ToolResult(_payload("rate limit 4998", displayed=False)),
+                _ToolResult(_payload("rate limit 4998")),
             ),
         ],
         final_text="Here is the run list.",
@@ -150,39 +181,3 @@ def test_a_generic_tool_result_is_not_replaced_by_quiet_stdout() -> None:
     shown = "\n".join(display_chunks)
     assert "3 failed, 59 succeeded" in shown
     assert "rate limit 4998" not in shown
-
-
-def test_undisplayed_result_does_not_depend_on_the_tool_name() -> None:
-    # Arrange: a self-recording tool other than shell_run withheld live output.
-    call = ToolCall(id="1", name="slash_invoke", input={"command": "/health"})
-    result = _Result(
-        tool_results=[(call, _ToolResult(_payload("Oslo: snow", displayed=False)))],
-        final_text="Command completed successfully.",
-    )
-
-    # Act
-    _response_text, display_chunks, _use_final_text = _compose_response(
-        result, _Session(), _counts(1)
-    )
-
-    # Assert
-    shown = "\n".join(display_chunks)
-    assert "Oslo: snow" in shown
-    assert "Command completed successfully." not in shown
-
-
-def test_quiet_on_the_call_without_displayed_false_does_not_reprint() -> None:
-    # Arrange: core must not sniff shell_run/quiet; only the payload flag counts.
-    call = _shell_call("1", "echo hi", quiet=True)
-    result = _Result(
-        tool_results=[(call, _ToolResult(_payload("hi")))],
-        final_text="done",
-    )
-
-    # Act
-    _response_text, display_chunks, _use_final_text = _compose_response(
-        result, _Session(), _counts(1)
-    )
-
-    # Assert
-    assert "\n".join(display_chunks) == ""

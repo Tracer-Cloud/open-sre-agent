@@ -8,7 +8,7 @@ from pathlib import Path
 from typing import Any
 
 import config.constants.platform as _platform
-from config.constants.tool_results import RESULT_DISPLAYED_FIELD
+from tools.interactive_shell.quiet_stdout import buffer_quiet_stdout
 from tools.interactive_shell.shell import execution as shell_execution
 from tools.interactive_shell.shell.display import format_shell_command_for_display
 from tools.interactive_shell.shell.parsing import (
@@ -49,13 +49,13 @@ def _shell_payload(
         "timed_out": timed_out,
         "truncated": truncated,
         "cancelled": cancelled,
-        # False when quiet: the action closer may print response_text.
-        RESULT_DISPLAYED_FIELD: not quiet,
     }
     if executed_with_shell is not None:
         payload["executed_with_shell"] = executed_with_shell
     if response_text:
         payload["response_text"] = response_text.strip()
+        if quiet:
+            buffer_quiet_stdout(payload["response_text"])
     return payload
 
 
@@ -159,6 +159,11 @@ def run_shell_command(
             response_text = (result.stderr or "").strip()
         elif not quiet:
             presenter.print(f"[{_HIGHLIGHT_STYLE}]✓[/]")
+        else:
+            # Quiet and outputless (e.g. ``touch``): nothing was painted live.
+            # Buffer the same success marker the loud path prints so the sink
+            # can show it when the turn would otherwise leave a blank line.
+            response_text = "✓"
     else:
         code = result.exit_code if result.exit_code is not None else "?"
         exit_text = f"✗ exit {code}"

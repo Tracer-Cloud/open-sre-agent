@@ -370,7 +370,6 @@ from config.constants.tenancy import (
     INTEGRATIONS_SECRET_ARN_ENV,
     INTEGRATIONS_STORE_PATH_ENV,
 )
-from config.constants.tool_results import RESULT_DISPLAYED_FIELD
 from config.constants.tracer import TRACER_BASE_URL_ENV, TRACER_JWT_TOKEN_ENV
 from config.constants.twilio import (
     TWILIO_ACCOUNT_SID_ENV,
@@ -410,7 +409,6 @@ __all__ = [
     "RELEASE_STAGE_BANNER",
     "RELEASES_API_URL_ENV",
     "UV_RUN_RECURSION_DEPTH_ENV",
-    "RESULT_DISPLAYED_FIELD",
     "ALERT_TEMPLATE_CHOICES",
     "ALERTMANAGER_BEARER_TOKEN_ENV",
     "ALERTMANAGER_PASSWORD_ENV",

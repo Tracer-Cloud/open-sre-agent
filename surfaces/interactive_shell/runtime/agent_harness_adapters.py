@@ -25,6 +25,7 @@ from surfaces.interactive_shell.ui.streaming import (
     stream_to_console_state,
 )
 from surfaces.shared.error_handling.exception_reporting import report_exception
+from tools.interactive_shell.quiet_stdout import clear_quiet_stdout, take_quiet_stdout
 
 
 class ShellOutputSink:
@@ -42,6 +43,7 @@ class ShellOutputSink:
 
     def bind_console(self, console: Console) -> None:
         """Point subsequent output at ``console`` for the current turn."""
+        clear_quiet_stdout()
         self._console = console
 
     def print(self, message: str = "") -> None:
@@ -54,7 +56,13 @@ class ShellOutputSink:
         ``render_*`` methods instead. Session-goal progress tags are scrubbed
         so a non-stream paint path cannot leak ``session_goal:done=`` /
         ``achieved`` into the TTY.
+
+        An empty print is spacing (or a blank line after silent work). It must
+        not drain quiet stdout into the console — that is
+        :meth:`paint_quiet_stdout` only — so error/header paths cannot flash
+        buffered probes.
         """
+        clear_quiet_stdout()
         if message and "session_goal:" in message:
             visible = strip_session_goal_progress_tags(message)
             if not visible.strip():
@@ -62,10 +70,25 @@ class ShellOutputSink:
             message = visible
         self._console.print(message, markup=False)
 
+    def paint_quiet_stdout(self) -> bool:
+        """Show buffered quiet ``shell_run`` stdout, if any.
+
+        Used when the action closer was suppressed and the turn would otherwise
+        leave a blank line. Returns True when something was painted.
+        """
+        message = take_quiet_stdout()
+        if not message:
+            return False
+        self._console.print(message, markup=False)
+        return True
+
     def render_response_header(self, label: str) -> None:
+        clear_quiet_stdout()
+        self._console.print()
         render_response_header(self._console, label)
 
     def render_error(self, message: str) -> None:
+        clear_quiet_stdout()
         self._console.print(f"[yellow]{escape(message)}[/]")
         # On a credit/billing wall, add the in-tool recovery hint.
         if CREDIT_EXHAUSTED_MARKER in message:
@@ -88,8 +111,10 @@ class ShellOutputSink:
         """Do nothing: chat fills a placeholder here, and the terminal has none.
 
         Terminal output lands as it happens, so by the time the host finalizes
-        an unstreamed turn there is nothing left to show.
+        an unstreamed turn there is nothing left to show. Drop any leftover
+        quiet buffer so a cancelled/skipped paint cannot leak into the next turn.
         """
+        clear_quiet_stdout()
         _ = answer
 
     def stream(
@@ -100,6 +125,7 @@ class ShellOutputSink:
         suppress_if_starts_with: str | None = None,
         defer_want_me_to_closer: bool = False,
     ) -> str:
+        clear_quiet_stdout()
         self._defer_want_me_to_closer = defer_want_me_to_closer
         if defer_want_me_to_closer:
             paint = stream_to_console_state(

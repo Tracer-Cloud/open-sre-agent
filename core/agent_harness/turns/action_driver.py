@@ -19,7 +19,6 @@ from collections.abc import Sequence
 from dataclasses import dataclass
 from typing import Any
 
-from config.constants.tool_results import RESULT_DISPLAYED_FIELD
 from core.agent import Agent
 from core.agent.cancel import tool_resources_cancel_requested
 from core.agent.goals import Goal
@@ -77,8 +76,8 @@ _DEDUPE_ACTION_TOOL_NAMES: frozenset[str] = frozenset({"slash_invoke", "shell_ru
 _ActionCallFingerprint = tuple[Any, ...]
 
 
-def _coerce_quiet(value: Any) -> bool:
-    """Same truthy strings ``shell_run`` accepts for ``quiet``."""
+def _coerce_fingerprint_quiet(value: Any) -> bool:
+    """Match ``shell_run`` quiet coercion so retries compare equal."""
     if isinstance(value, bool):
         return value
     if isinstance(value, str):
@@ -104,7 +103,7 @@ def _action_call_fingerprint(name: str, args: Any) -> _ActionCallFingerprint:
     return (
         name,
         str(args.get("command", "")),
-        _coerce_quiet(args.get("quiet", False)),
+        _coerce_fingerprint_quiet(args.get("quiet", False)),
     )
 
 
@@ -392,42 +391,23 @@ def _format_generic_tool_payload(tool_call: ToolCall, tool_result: Any) -> str:
     return f"{tool_call.name} result: {content}"
 
 
-def _tool_result_payload(tool_result: Any) -> dict[str, Any]:
-    details = getattr(tool_result, "details", None)
-    payload: dict[str, Any] = {}
-    content = _content_to_text(getattr(tool_result, "content", "")).strip()
-    if content:
-        try:
-            parsed = json.loads(content)
-        except (TypeError, ValueError, json.JSONDecodeError):
-            parsed = None
-        if isinstance(parsed, dict):
-            payload.update(parsed)
-    if isinstance(details, dict):
-        payload.update(details)
-    return payload
-
-
 def _preferred_tool_response_text(tool_result: Any) -> str:
-    response_text = _tool_result_payload(tool_result).get("response_text")
+    details = getattr(tool_result, "details", None)
+    if isinstance(details, dict):
+        response_text = details.get("response_text")
+        if isinstance(response_text, str) and response_text.strip():
+            return response_text.strip()
+    content = _content_to_text(getattr(tool_result, "content", "")).strip()
+    if not content:
+        return ""
+    try:
+        parsed = json.loads(content)
+    except (TypeError, ValueError, json.JSONDecodeError):
+        return ""
+    if not isinstance(parsed, dict):
+        return ""
+    response_text = parsed.get("response_text")
     return response_text.strip() if isinstance(response_text, str) else ""
-
-
-def _response_text_from_unprinted_results(result: Any) -> str:
-    """Join ``response_text`` from results that set ``displayed`` to false.
-
-    Duck-typed like ``response_text``. Missing ``displayed`` means already printed.
-    """
-    chunks: list[str] = []
-    for _tool_call, tool_result in getattr(result, "tool_results", []):
-        payload = _tool_result_payload(tool_result)
-        if payload.get(RESULT_DISPLAYED_FIELD, True):
-            continue
-        response_text = payload.get("response_text")
-        text = response_text.strip() if isinstance(response_text, str) else ""
-        if text:
-            chunks.append(text)
-    return "\n".join(chunks)
 
 
 def _has_preferred_tool_response_text(result: Any) -> bool:
@@ -882,12 +862,7 @@ def _compose_response(
     # Console display uses final_text + generic results + hints only so users see
     # github_cli / other registry tools without double-printing shell output.
     # response_text still includes history for persistence / non-TTY surfaces.
-    #
     display_chunks = [chunk for chunk in (display_final, generic_text, hint) if chunk]
-    if suppress_final and not generic_text:
-        unprinted = _response_text_from_unprinted_results(result)
-        if unprinted:
-            display_chunks = [chunk for chunk in (unprinted, hint) if chunk]
     response_chunks = [
         chunk
         for chunk in (
@@ -930,16 +905,27 @@ def _show_response(
         visible = strip_session_goal_progress_tags("\n".join(display_chunks))
         if not visible.strip():
             if handled:
-                output.print()
+                _end_silent_tool_turn(output)
             return
-        output.print()
         output.render_response_header("assistant")
         # Literal text: the sink decides how to render it safely. The harness
         # must not reach for terminal-markup helpers.
         output.print(visible)
         return
     if handled:
-        output.print()
+        _end_silent_tool_turn(output)
+
+
+def _end_silent_tool_turn(output: OutputSink) -> None:
+    """After silent tool work: paint surface-buffered output, else a blank line.
+
+    Optional ``paint_quiet_stdout`` (shell sink) shows quiet ``shell_run``
+    stdout the tool withheld. Other sinks get a blank line via ``print()``.
+    """
+    paint = getattr(output, "paint_quiet_stdout", None)
+    if callable(paint) and paint():
+        return
+    output.print()
 
 
 def _count_turn(result: Any, session: SessionState, history_start: int) -> _TurnCounts:

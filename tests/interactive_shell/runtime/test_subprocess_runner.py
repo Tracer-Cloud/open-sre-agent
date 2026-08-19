@@ -31,6 +31,7 @@ from tools.interactive_shell.cli import is_interactive_wizard
 from tools.interactive_shell.implementation.claude_code_executor import (
     run_claude_code_implementation,
 )
+from tools.interactive_shell.quiet_stdout import clear_quiet_stdout
 from tools.interactive_shell.shell.execution import (
     ShellExecutionResult,
 )
@@ -403,8 +404,55 @@ def test_run_shell_command_quiet_hides_command_and_stdout(
     assert result["ok"] is True
     assert result["stdout"] == "hi"
     assert result["response_text"] == "hi"
-    assert result["displayed"] is False
     assert session.history[-1]["ok"] is True
+    clear_quiet_stdout()
+
+
+def test_run_shell_command_quiet_outputless_success_buffers_checkmark(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """``touch``-style quiet success must not leave the REPL with a blank turn.
+
+    Loud mode prints ✓ live. Quiet mode buffers the same marker so the sink can
+    paint it when the action closer is suppressed and display_chunks are empty.
+    """
+    from tools.interactive_shell.quiet_stdout import clear_quiet_stdout, take_quiet_stdout
+
+    clear_quiet_stdout()
+
+    def _fake_execute(**_kwargs: object) -> ShellExecutionResult:
+        return ShellExecutionResult(
+            command="touch file",
+            argv=["touch", "file"],
+            stdout="",
+            stderr="",
+            exit_code=0,
+            timed_out=False,
+            truncated=False,
+            executed_with_shell=False,
+        )
+
+    monkeypatch.setattr(
+        "tools.interactive_shell.shell.execution.execute_shell_command",
+        _fake_execute,
+    )
+
+    session = Session()
+    buf = io.StringIO()
+    console = Console(file=buf, force_terminal=False)
+
+    result = run_shell_command("touch file", _presenter(session, console), quiet=True)
+
+    assert buf.getvalue() == ""
+    assert result["ok"] is True
+    assert result["response_text"] == "✓"
+    assert take_quiet_stdout() == "✓"
+    assert session.history[-1] == {
+        "type": "shell",
+        "text": "touch file",
+        "ok": True,
+        "response_text": "✓",
+    }
 
 
 def test_run_shell_command_success_records_stdout_without_stderr_noise(
