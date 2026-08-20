@@ -17,6 +17,23 @@ from core.agent_harness.session_goal.goal import (
 from core.agent_harness.session_goal.run_until import run_until_session_goal
 from core.agent_harness.turns.assistant_handoff import AssistantHandoff
 from core.agent_harness.turns.turn_results import ToolCallingTurnResult, TurnResult
+from tests.shared.harness_turn_driver import fake_llm_run
+
+
+def _turn_with_answer(response_text: str) -> TurnResult:
+    """A completed answer turn carrying the same text in its run record."""
+    return TurnResult(
+        final_intent="cli_agent_fallback",
+        action_result=ToolCallingTurnResult(
+            planned_count=0,
+            executed_count=0,
+            executed_success_count=0,
+            has_unhandled_clause=False,
+            handled=True,
+        ),
+        assistant_response_text=response_text,
+        llm_run=fake_llm_run(response_text=response_text),
+    )
 
 
 def test_checklist_items_from_structured_handoff_tags() -> None:
@@ -65,7 +82,7 @@ def test_done_tags_mark_checklist_items_and_achieve_when_complete() -> None:
     assert (
         default_evaluate_session_goal(
             after_one,
-            type("R", (), {"assistant_response_text": "session_goal:done=0"})(),
+            _turn_with_answer("session_goal:done=0"),
         )
         == SessionGoalStatus.ACTIVE
     )
@@ -78,7 +95,7 @@ def test_done_tags_mark_checklist_items_and_achieve_when_complete() -> None:
     assert (
         default_evaluate_session_goal(
             after_all,
-            type("R", (), {"assistant_response_text": "session_goal:done=1,2"})(),
+            _turn_with_answer("session_goal:done=1,2"),
         )
         == SessionGoalStatus.ACHIEVED
     )
