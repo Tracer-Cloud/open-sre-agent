@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import signal
 import threading
-from collections.abc import Iterator
+from collections.abc import Iterable, Iterator
 from contextlib import contextmanager
 from dataclasses import dataclass
 from enum import IntEnum, StrEnum
@@ -17,7 +17,6 @@ from rich.console import Console
 from core.agent_harness import AgentSession, SessionConfig, SessionManager, TurnResult
 from core.agent_harness.ports import TurnBinding
 from core.agent_harness.runtime import (
-    BufferOutputSink,
     DefaultHeadlessBuild,
     DefaultToolProvider,
     GatherPhase,
@@ -95,6 +94,33 @@ class _CancellableConsole:
         return getattr(self._console, name)
 
 
+class _AskOutputSink:
+    """Discard intermediate rendering while preserving streamed answer text."""
+
+    def print(self, message: str = "") -> None:
+        _ = message
+
+    def render_response_header(self, label: str) -> None:
+        _ = label
+
+    def render_error(self, message: str) -> None:
+        _ = message
+
+    def stream(
+        self,
+        *,
+        label: str,
+        chunks: Iterable[str],
+        suppress_if_starts_with: str | None = None,
+        defer_want_me_to_closer: bool = False,
+    ) -> str:
+        _ = (label, suppress_if_starts_with, defer_want_me_to_closer)
+        return "".join(str(chunk) for chunk in chunks)
+
+    def finish_streamed_response(self, answer: str) -> None:
+        _ = answer
+
+
 @dataclass(frozen=True, slots=True)
 class _BoundDispatcher:
     agent: HeadlessAgent
@@ -135,7 +161,7 @@ def _run_agent_turn(prompt: str, hooks: ToolExecutionHooks) -> TurnResult:
             session_manager=manager,
         )
     )
-    output = BufferOutputSink()
+    output = _AskOutputSink()
     cancel_event = ensure_turn_cancel(output)
     console = _CancellableConsole(cancel_event)
     session = None
