@@ -305,6 +305,7 @@ class HeadlessAgent:
             on_progress=self._gather_phase.on_progress,
             persist=self._gather_phase.persist,
             is_cancelled=lambda: host_cancel_requested(self._output),
+            tool_hooks=self._tool_hooks,
         )
 
     def _ports(self) -> tuple[object, ...]:

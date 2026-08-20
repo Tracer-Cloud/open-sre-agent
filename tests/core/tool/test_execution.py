@@ -17,6 +17,7 @@ from core.tool.execution import (
     ToolExecutionRequest,
     ToolExecutionResult,
     _requires_sequential_execution,
+    compose_tool_execution_hooks,
     execute_tool_calls,
     execute_tools,
 )
@@ -111,6 +112,60 @@ def test_before_hook_can_block_with_structured_result() -> None:
     assert result.is_error is True
     assert result.content == "blocked"
     assert result.details == {"policy": "deny"}
+
+
+def test_composed_before_hooks_stop_at_first_block() -> None:
+    seen: list[str] = []
+
+    def first(_request: ToolExecutionRequest) -> None:
+        seen.append("first")
+
+    def deny(_request: ToolExecutionRequest) -> BeforeToolCallResult:
+        seen.append("deny")
+        return BeforeToolCallResult(blocked=True, reason="denied")
+
+    def never(_request: ToolExecutionRequest) -> None:
+        seen.append("never")
+
+    hooks = compose_tool_execution_hooks(
+        ToolExecutionHooks(before_tool_call=first),
+        ToolExecutionHooks(before_tool_call=deny),
+        ToolExecutionHooks(before_tool_call=never),
+    )
+
+    result = execute_tool_calls([_call()], [_tool()], {}, hooks=hooks)[0]
+
+    assert result.is_error is True
+    assert result.content == "denied"
+    assert seen == ["first", "deny"]
+
+
+def test_composed_after_hooks_receive_prior_patches() -> None:
+    seen: list[str] = []
+
+    def first(
+        _request: ToolExecutionRequest,
+        _result: ToolExecutionResult,
+    ) -> ToolExecutionPatch:
+        return ToolExecutionPatch(content="first", metadata={"first": True})
+
+    def second(
+        _request: ToolExecutionRequest,
+        result: ToolExecutionResult,
+    ) -> ToolExecutionPatch:
+        seen.append(str(result.content))
+        return ToolExecutionPatch(content="second", metadata={"second": True})
+
+    hooks = compose_tool_execution_hooks(
+        ToolExecutionHooks(after_tool_call=first),
+        ToolExecutionHooks(after_tool_call=second),
+    )
+
+    result = execute_tool_calls([_call()], [_tool()], {}, hooks=hooks)[0]
+
+    assert result.content == "second"
+    assert result.metadata == {"tool_name": "echo", "first": True, "second": True}
+    assert seen == ["first"]
 
 
 def test_before_hook_receives_executed_tools_source() -> None:

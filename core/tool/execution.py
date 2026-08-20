@@ -156,6 +156,73 @@ class ToolExecutionHooks:
     before_tool_batch: BeforeToolBatchHook | None = None
 
 
+def compose_tool_execution_hooks(
+    *candidates: ToolExecutionHooks | None,
+) -> ToolExecutionHooks:
+    """Run multiple hook sets in order without discarding any lifecycle stage."""
+    hooks = tuple(candidate for candidate in candidates if candidate is not None)
+    if not hooks:
+        return ToolExecutionHooks()
+
+    def before_tool_call(request: ToolExecutionRequest) -> BeforeToolCallResult | None:
+        decision: BeforeToolCallResult | None = None
+        for hook_set in hooks:
+            callback = hook_set.before_tool_call
+            if callback is None:
+                continue
+            current = callback(request)
+            if current is None:
+                continue
+            decision = current
+            if current.blocked:
+                return current
+        return decision
+
+    def after_tool_call(
+        request: ToolExecutionRequest,
+        result: ToolExecutionResult,
+    ) -> ToolExecutionPatch | None:
+        patched = result
+        changed = False
+        for hook_set in hooks:
+            callback = hook_set.after_tool_call
+            if callback is None:
+                continue
+            patch = callback(request, patched)
+            if patch is None:
+                continue
+            patched = _apply_patch(patched, patch)
+            changed = True
+        if not changed:
+            return None
+        return ToolExecutionPatch(
+            content=patched.content,
+            details=patched.details,
+            is_error=patched.is_error,
+            terminate=patched.terminate,
+            metadata=patched.metadata,
+        )
+
+    def on_tool_update(request: ToolExecutionRequest, update: Any) -> None:
+        for hook_set in hooks:
+            callback = hook_set.on_tool_update
+            if callback is not None:
+                callback(request, update)
+
+    def before_tool_batch(tool_calls: Sequence[ToolCall]) -> None:
+        for hook_set in hooks:
+            callback = hook_set.before_tool_batch
+            if callback is not None:
+                callback(tool_calls)
+
+    return ToolExecutionHooks(
+        before_tool_call=before_tool_call,
+        after_tool_call=after_tool_call,
+        on_tool_update=on_tool_update,
+        before_tool_batch=before_tool_batch,
+    )
+
+
 def execute_tool_calls(
     tool_calls: list[ToolCall],
     tools: Sequence[RuntimeTool],
