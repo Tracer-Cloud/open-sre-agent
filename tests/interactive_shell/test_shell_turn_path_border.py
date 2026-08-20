@@ -60,9 +60,7 @@ def _references_builder(tree: ast.AST) -> bool:
         if isinstance(node, ast.ImportFrom):
             if any(alias.name == _SHELL_AGENT_BUILDER for alias in node.names):
                 return True
-        elif isinstance(node, ast.Attribute) and node.attr == _SHELL_AGENT_BUILDER:
-            return True
-        elif isinstance(node, ast.Name) and node.id == _SHELL_AGENT_BUILDER:
+        elif isinstance(node, ast.Attribute) and node.attr == _SHELL_AGENT_BUILDER or isinstance(node, ast.Name) and node.id == _SHELL_AGENT_BUILDER:
             return True
     return False
 
@@ -259,12 +257,7 @@ def _block_calls_handler_run(
             continue
         if isinstance(stmt, ast.ClassDef):
             continue
-        if isinstance(stmt, ast.If):
-            if _block_calls_handler_run(stmt.body, current, handler_aliases):
-                return True
-            if _block_calls_handler_run(stmt.orelse, current, handler_aliases):
-                return True
-        elif isinstance(stmt, (ast.For, ast.AsyncFor, ast.While)):
+        if isinstance(stmt, (ast.If, ast.For, ast.AsyncFor, ast.While)):
             if _block_calls_handler_run(stmt.body, current, handler_aliases):
                 return True
             if _block_calls_handler_run(stmt.orelse, current, handler_aliases):
