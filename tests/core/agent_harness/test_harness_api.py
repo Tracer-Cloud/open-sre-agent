@@ -60,7 +60,6 @@ PORTS = frozenset(
         "TaskCancelPortsFactory",
         "ToolEventObserver",
         "ToolProvider",
-        "ToolRegistry",
         "TurnAccounting",
         "TurnBinding",
     }
