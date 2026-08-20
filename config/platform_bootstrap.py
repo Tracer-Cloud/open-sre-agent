@@ -1,21 +1,18 @@
-"""Bootstrap the project ``platform`` package when stdlib ``platform`` loaded first.
+"""Keep OpenSRE's ``platform`` package ahead of stdlib ``platform``.
 
-OpenSRE's first-party ``platform`` package intentionally shares the stdlib name
-and re-exports its API. Console scripts, uvicorn, and other hosts can cache
-stdlib ``platform`` (a module, not a package) in ``sys.modules`` before any
-OpenSRE import. Later ``from platform.analytics…`` then fails.
+The product package re-uses the stdlib name and re-exports its API. Hosts
+(console scripts, uvicorn, …) can cache the stdlib **module** in
+``sys.modules`` first; later ``from platform.analytics…`` then fails because
+that module is not a package.
 
-Design (no per-leaf ensure sprawl):
+Call :func:`ensure_project_platform_package` once at each composition root
+(process entry, ``configure_process``, ``run_repl*``, test confests). It:
 
-1. **Heal** — :func:`ensure_project_platform_package` loads the project package
-   into ``sys.modules["platform"]`` (idempotent).
-2. **Guard** — the same call installs a process-wide import guard once. Any later
-   ``import platform`` / ``from platform…`` / ``importlib.import_module("platform…")``
-   re-heals if a host re-cached the stdlib module mid-process.
+1. Loads the project package into ``sys.modules["platform"]`` if needed.
+2. Installs a process-wide import hook so a later stdlib re-cache self-heals
+   on the next ``platform`` / ``platform.*`` import.
 
-Call ``ensure_project_platform_package`` only at composition roots (process
-entry, ``configure_process``, public ``run_repl*``, test confests). Application
-modules import ``platform.*`` normally.
+Application modules import ``platform.*`` normally — no per-leaf ensure.
 """
 
 from __future__ import annotations
@@ -24,40 +21,73 @@ import builtins
 import importlib
 import importlib.util
 import sys
-from collections.abc import Mapping, Sequence
+from collections.abc import Callable, Mapping, Sequence
+from dataclasses import dataclass
 from types import ModuleType
-from typing import Any, Final
 
 from config.constants.paths import REPO_ROOT
 
-_GUARD_INSTALLED: bool = False
-_ORIGINAL_IMPORT: Any = None
-_ORIGINAL_IMPORT_MODULE: Any = None
+_ImportFn = Callable[..., ModuleType]
+_ImportModuleFn = Callable[..., ModuleType]
 
-# Marker on ``sys`` so tests can detect the guard without importing private flags.
-_GUARD_SYS_ATTR: Final = "_opensre_platform_import_guard"
+
+@dataclass(slots=True)
+class _ImportGuard:
+    """Live import wrappers. ``beneath_*`` are what we call next (usually stock)."""
+
+    beneath_import: _ImportFn
+    beneath_import_module: _ImportModuleFn
+    wrapped_import: _ImportFn
+    wrapped_import_module: _ImportModuleFn
+
+
+_guard: _ImportGuard | None = None
 
 
 def ensure_project_platform_package() -> None:
-    """Ensure ``platform.<opensre module>`` imports resolve to this repository.
-
-    Idempotent heal of ``sys.modules["platform"]``, then install the process
-    import guard once so later re-caches of stdlib ``platform`` self-correct on
-    the next ``platform`` import.
-    """
-    _heal_project_platform_in_sys_modules()
-    _install_platform_import_guard()
+    """Make ``platform.*`` resolve to this repo; install the import guard once."""
+    _ensure_project_platform_loaded()
+    _install_import_guard()
 
 
-def _heal_project_platform_in_sys_modules() -> None:
+def platform_import_guard_is_active() -> bool:
+    """True when our wrappers are the current ``__import__`` / ``import_module``."""
+    return (
+        _guard is not None
+        and builtins.__import__ is _guard.wrapped_import
+        and importlib.import_module is _guard.wrapped_import_module
+    )
+
+
+def reset_platform_import_guard_for_tests() -> None:
+    """Restore stock importers. Production never uninstalls the guard."""
+    global _guard
+    active = _guard
+    if active is None:
+        return
+    if builtins.__import__ is active.wrapped_import:
+        builtins.__import__ = active.beneath_import
+    if importlib.import_module is active.wrapped_import_module:
+        importlib.import_module = active.beneath_import_module  # type: ignore[method-assign]
+    _guard = None
+
+
+def _ensure_project_platform_loaded() -> None:
     current = sys.modules.get("platform")
     if current is not None and hasattr(current, "__path__"):
         return
 
+    _evict_cached_platform_modules()
+    _load_project_platform_into_sys_modules()
+
+
+def _evict_cached_platform_modules() -> None:
     for name in list(sys.modules):
         if name == "platform" or name.startswith("platform."):
             del sys.modules[name]
 
+
+def _load_project_platform_into_sys_modules() -> None:
     package_dir = REPO_ROOT / "platform"
     init_path = package_dir / "__init__.py"
     spec = importlib.util.spec_from_file_location(
@@ -73,55 +103,56 @@ def _heal_project_platform_in_sys_modules() -> None:
     spec.loader.exec_module(module)
 
 
-def _platform_import_name(name: str) -> bool:
-    return name == "platform" or name.startswith("platform.")
+def _targets_project_platform(module_name: str) -> bool:
+    return module_name == "platform" or module_name.startswith("platform.")
 
 
-def _install_platform_import_guard() -> None:
-    """Wrap import so a mid-process stdlib re-cache cannot stick."""
-    global _GUARD_INSTALLED, _ORIGINAL_IMPORT, _ORIGINAL_IMPORT_MODULE
-    if _GUARD_INSTALLED:
+def _install_import_guard() -> None:
+    """Hook ``__import__`` and ``import_module`` so a stdlib re-cache cannot stick.
+
+    Wrappers close over the importer they call next. Re-installing never wraps
+    our own wrapper (that would recurse).
+    """
+    global _guard
+
+    if platform_import_guard_is_active():
         return
 
-    _ORIGINAL_IMPORT = builtins.__import__
-    _ORIGINAL_IMPORT_MODULE = importlib.import_module
+    beneath_import = builtins.__import__
+    beneath_import_module = importlib.import_module
+    if _guard is not None:
+        # Stale state (flag lied): peel back to what our previous wrapper called.
+        if beneath_import is _guard.wrapped_import:
+            beneath_import = _guard.beneath_import
+        if beneath_import_module is _guard.wrapped_import_module:
+            beneath_import_module = _guard.beneath_import_module
 
-    def guarded_import(
+    def wrapped_import(
         name: str,
-        globals: Mapping[str, object] | None = None,  # noqa: A002 — matches builtins
+        globals: Mapping[str, object] | None = None,  # noqa: A002 — builtins signature
         locals: Mapping[str, object] | None = None,  # noqa: A002
-        fromlist: Sequence[str] = (),
+        fromlist: Sequence[str] | None = (),
         level: int = 0,
     ) -> ModuleType:
-        if level == 0 and _platform_import_name(name):
-            _heal_project_platform_in_sys_modules()
-        return _ORIGINAL_IMPORT(name, globals, locals, fromlist, level)
+        if level == 0 and _targets_project_platform(name):
+            _ensure_project_platform_loaded()
+        return beneath_import(name, globals, locals, fromlist, level)
 
-    def guarded_import_module(name: str, package: str | None = None) -> ModuleType:
-        absolute = name
-        if package is not None and name.startswith("."):
-            absolute = importlib.util.resolve_name(name, package)
-        if _platform_import_name(absolute):
-            _heal_project_platform_in_sys_modules()
-        return _ORIGINAL_IMPORT_MODULE(name, package)
+    def wrapped_import_module(name: str, package: str | None = None) -> ModuleType:
+        absolute = (
+            importlib.util.resolve_name(name, package)
+            if package is not None and name.startswith(".")
+            else name
+        )
+        if _targets_project_platform(absolute):
+            _ensure_project_platform_loaded()
+        return beneath_import_module(name, package)
 
-    builtins.__import__ = guarded_import
-    importlib.import_module = guarded_import_module  # type: ignore[method-assign]
-    _GUARD_INSTALLED = True
-    setattr(sys, _GUARD_SYS_ATTR, True)
-
-
-def reset_platform_import_guard_for_tests() -> None:
-    """Restore stock importers. Production never uninstalls the guard."""
-    global _GUARD_INSTALLED, _ORIGINAL_IMPORT, _ORIGINAL_IMPORT_MODULE
-    if not _GUARD_INSTALLED:
-        return
-    if _ORIGINAL_IMPORT is not None:
-        builtins.__import__ = _ORIGINAL_IMPORT
-    if _ORIGINAL_IMPORT_MODULE is not None:
-        importlib.import_module = _ORIGINAL_IMPORT_MODULE  # type: ignore[method-assign]
-    _ORIGINAL_IMPORT = None
-    _ORIGINAL_IMPORT_MODULE = None
-    _GUARD_INSTALLED = False
-    if hasattr(sys, _GUARD_SYS_ATTR):
-        delattr(sys, _GUARD_SYS_ATTR)
+    _guard = _ImportGuard(
+        beneath_import=beneath_import,
+        beneath_import_module=beneath_import_module,
+        wrapped_import=wrapped_import,
+        wrapped_import_module=wrapped_import_module,
+    )
+    builtins.__import__ = wrapped_import
+    importlib.import_module = wrapped_import_module  # type: ignore[method-assign]

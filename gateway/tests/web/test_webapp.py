@@ -33,9 +33,22 @@ def test_webapp_module_calls_init_sentry_on_import(monkeypatch: pytest.MonkeyPat
 
 def test_webapp_imports_after_stdlib_platform_cached(monkeypatch: pytest.MonkeyPatch) -> None:
     """Docker/uvicorn can cache stdlib ``platform`` before loading the ASGI app."""
-    import platform as stdlib_platform
+    import importlib.util
+    import sysconfig
+    from pathlib import Path
+
+    stdlib_path = Path(sysconfig.get_path("stdlib")) / "platform.py"
+    spec = importlib.util.spec_from_file_location("_opensre_test_stdlib_platform", stdlib_path)
+    assert spec is not None and spec.loader is not None
+    stdlib_platform = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(stdlib_platform)
+    assert not hasattr(stdlib_platform, "__path__")
 
     monkeypatch.setitem(sys.modules, "platform", stdlib_platform)
+    for name in list(sys.modules):
+        if name.startswith("platform."):
+            monkeypatch.delitem(sys.modules, name, raising=False)
+    assert not hasattr(sys.modules["platform"], "__path__")
 
     reloaded = importlib.reload(webapp)
 
