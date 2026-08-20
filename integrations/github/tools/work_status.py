@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import math
 from typing import Any, Literal, cast
 
 from core.domain.types.tools import ToolSurface
@@ -593,17 +594,26 @@ def _marker_exists_on_issue(
     repo: str,
     issue_number: int,
     marker: str,
+    total_comments: int,
 ) -> bool:
     """Whether a comment containing ``marker`` already exists on the issue.
 
     Lists the issue's own comments (bounded to one issue, immediately
     consistent) rather than the repo-wide search API, for the same reason as
-    :func:`_recent_issues_with_marker`.
+    :func:`_recent_issues_with_marker`. Unlike the repo-wide comments
+    endpoint, this per-issue one does not support `sort`/`direction` and
+    always returns oldest-first, so a plain first-page fetch would miss a
+    marker on an issue with more than one page of comments -- exactly the
+    case an idempotency check has to catch. Fetches the last page directly,
+    computed from the issue's own comment count, so the newest comments
+    (where a retry's marker lands) are always the ones scanned.
     """
+    per_page = 100
+    last_page = max(1, math.ceil(max(total_comments, 1) / per_page))
     result = client.request(
         "GET",
         f"/repos/{owner}/{repo}/issues/{issue_number}/comments",
-        params={"per_page": 100},
+        params={"per_page": per_page, "page": last_page},
     )
     if not isinstance(result, list):
         return False
@@ -678,7 +688,8 @@ def execute_github_issue_mutation(
         issue_number = parsed.target.get("issue_number")
         if not isinstance(issue_number, int):
             return _mutation_rejected("proposal target.issue_number is required")
-        client.request("GET", f"/repos/{owner}/{repo}/issues/{issue_number}")
+        issue_before = client.request("GET", f"/repos/{owner}/{repo}/issues/{issue_number}")
+        total_comments = issue_before.get("comments", 0) if isinstance(issue_before, dict) else 0
         comment_body = str(parsed.payload.get("comment_body", ""))
         comment_already_recorded = _marker_exists_on_issue(
             client,
@@ -686,6 +697,7 @@ def execute_github_issue_mutation(
             repo=repo,
             issue_number=issue_number,
             marker=parsed.idempotency_marker,
+            total_comments=total_comments,
         )
         if comment_body and not comment_already_recorded:
             client.request(

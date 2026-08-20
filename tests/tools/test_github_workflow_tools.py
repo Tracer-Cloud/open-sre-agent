@@ -413,6 +413,49 @@ def test_execute_update_skips_duplicate_comment_for_seen_marker() -> None:
     ]
 
 
+def test_execute_update_finds_marker_beyond_the_first_comment_page() -> None:
+    """Regression (Greptile): the per-issue comments endpoint does not support
+    sort/direction and always returns oldest-first, unlike the repo-wide
+    comments endpoint used for create-dedup. On an issue with more than one
+    page of comments, fetching only page 1 would miss a marker posted
+    recently -- exactly the case an idempotency check has to catch -- and
+    the tool would post a duplicate follow-up comment."""
+    proposal = propose_github_issue_mutation_from_slack(
+        owner="o",
+        repo="r",
+        operation="update",
+        issue_number=51,
+        slack_text="PR shipped",
+        slack_url="https://slack.example/archives/C/p2",
+        labels=["done"],
+    )["proposal"]
+    marker = proposal["idempotency_marker"]
+    calls: list[tuple[str, str, dict[str, Any]]] = []
+
+    def fake_request(self: GitHubRestClient, method: str, path: str, **kwargs: Any) -> Any:
+        calls.append((method, path, kwargs))
+        if path == "/repos/o/r/issues/51" and method == "GET":
+            # 150 prior comments -> the marker (posted most recently) lives
+            # on page 2, not page 1.
+            return {"number": 51, "body": "original", "comments": 150}
+        if path == "/repos/o/r/issues/51/comments" and method == "GET":
+            assert kwargs["params"]["page"] == 2, "must fetch the last page, not page 1"
+            return [{"id": 200, "body": f"...\n{marker}\n..."}]
+        if path == "/repos/o/r/issues/51/comments" and method == "POST":
+            raise AssertionError("duplicate comment should not be posted")
+        if path == "/repos/o/r/issues/51" and method == "PATCH":
+            return {"number": 51}
+        raise AssertionError((method, path, kwargs))
+
+    with patch.object(GitHubRestClient, "request", fake_request):
+        result = execute_github_issue_mutation(
+            owner="o", repo="r", proposal=proposal, github_token="tok"
+        )
+
+    assert result["executed"] is True
+    assert result["comment_already_recorded"] is True
+
+
 def test_execute_mutation_rejects_malformed_proposal_without_api_call() -> None:
     with patch.object(GitHubRestClient, "request") as request:
         result = execute_github_issue_mutation(
