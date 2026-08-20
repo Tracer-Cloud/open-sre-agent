@@ -231,3 +231,40 @@ async def test_stop_command_is_handled_without_dispatching_a_turn() -> None:
     # Assert
     assert dispatched is False
     resources.client.send_message.assert_called_once()
+
+
+@pytest.mark.asyncio
+async def test_stop_in_same_batch_cancels_the_turn_dispatched_before_it() -> None:
+    """Regression: `/stop` must find a turn dispatched earlier in the same batch.
+
+    Dispatch is detached, so the turn has not reached its own registration by
+    the time `/stop` is read. Unless the cancel Event is registered at dispatch,
+    `/stop` reports "no active turn" and the turn it meant to stop runs on.
+    """
+    # Arrange
+    poller = _FakePoller([TelegramPollResult(messages=[_message("hello"), _message("/stop")])])
+    started = asyncio.Event()
+    cancel_seen: list[bool] = []
+
+    async def _turn(_event, *, turn_cancel=None, **_kwargs) -> None:
+        cancel_seen.append(turn_cancel is not None and turn_cancel.is_set())
+        started.set()
+
+    resources = _resources()
+    stop_event = threading.Event()
+
+    with (
+        patch.object(background, "TelegramPoller", lambda _token: poller),
+        patch.object(background, "handle_polled_inbound_telegram_message", _turn),
+    ):
+        loop_task = _run_loop(resources=resources, stop_event=stop_event)
+
+        # Act
+        await asyncio.wait_for(started.wait(), timeout=2.0)
+        stop_event.set()
+        await asyncio.wait_for(loop_task, timeout=2.0)
+
+    # Assert — /stop found the turn, so no "nothing to stop" reply went out,
+    # and the turn itself observed the cancellation.
+    assert resources.client.send_message.call_args_list == []
+    assert cancel_seen == [True]

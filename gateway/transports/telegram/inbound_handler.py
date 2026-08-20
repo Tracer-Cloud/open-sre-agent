@@ -4,7 +4,9 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import threading
 from concurrent.futures import ThreadPoolExecutor
+from contextlib import AbstractContextManager, nullcontext
 
 from config.constants.gateway import TURN_ERROR_MESSAGE, TURN_TIMEOUT_MESSAGE, USER_STOP_MESSAGE
 from config.scope_context import bound_storage_scope
@@ -41,10 +43,16 @@ async def handle_polled_inbound_telegram_message(
     turn_semaphore: asyncio.Semaphore,
     approvals: ApprovalBroker,
     active_cancels: ActiveTurnRegistry,
+    turn_cancel: threading.Event | None = None,
     loop: asyncio.AbstractEventLoop | None = None,
     handle_callback_to_gateway_agent: TurnCallback,
 ) -> None:
-    """Process one long-polled inbound Telegram update."""
+    """Process one long-polled inbound Telegram update.
+
+    ``turn_cancel`` is the Event the dispatcher already registered for this
+    chat, so a ``/stop`` arriving before the turn started is honoured rather
+    than lost.
+    """
     user_lock = chat_locks.setdefault(event.user_id, asyncio.Lock())
     decision = enforce_inbound_telegram_message_security(
         user_id=event.user_id,
@@ -101,7 +109,7 @@ async def handle_polled_inbound_telegram_message(
             )
 
             event_loop = loop or asyncio.get_running_loop()
-            terminal = TerminalOutcomeArbiter()
+            terminal = TerminalOutcomeArbiter(turn_cancel)
             output.turn_cancel = terminal.cancel_event
 
             def _on_turn_timeout() -> None:
@@ -143,13 +151,29 @@ async def handle_polled_inbound_telegram_message(
                         logger,
                     )
 
+            if turn_cancel is None:
+                registration: AbstractContextManager[None] = active_cancels.track(
+                    event.chat_id,
+                    terminal.cancel_event,
+                    on_user_stop=_on_user_stop,
+                )
+            else:
+                active_cancels.bind_user_stop(event.chat_id, turn_cancel, _on_user_stop)
+                registration = nullcontext()
+
+            # A /stop that landed between dispatch registration and here only set
+            # the Event; nothing has run yet, so answer it instead of the agent.
+            if terminal.cancel_event.is_set():
+                if terminal.claim():
+                    try:
+                        output.finalize(USER_STOP_MESSAGE)
+                    except Exception:
+                        logger.debug("[telegram-gateway] user-stop finalize failed", exc_info=True)
+                return
+
             with terminal.timeout_after(settings.turn_timeout_seconds, _on_turn_timeout):
                 try:
-                    with active_cancels.track(
-                        event.chat_id,
-                        terminal.cancel_event,
-                        on_user_stop=_on_user_stop,
-                    ):
+                    with registration:
                         await event_loop.run_in_executor(executor, _run_turn)
                 except Exception:
                     logger.exception(

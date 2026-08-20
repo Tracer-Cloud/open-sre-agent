@@ -69,13 +69,8 @@ async def _poll_telegram_until_stopped(
 ) -> None:
     """Poll Telegram updates and dispatch them until shutdown is requested.
 
-    Turn dispatch is fired as a background task, never awaited inline: a turn
-    can sit blocked in ``ApprovalBroker.wait`` for up to
-    ``MAX_APPROVAL_WAIT_SECONDS``, and this same loop is the only thing that
-    can ever deliver the button click that unblocks it. Awaiting the turn here
-    would stall polling for the whole approval wait, so the click resolving it
-    could never be observed and every approval would expire to denied. The Buzz
-    transport documents and avoids the same trap.
+    Dispatch is detached, never awaited inline: this loop is the only thing that
+    delivers the button click resolving a turn blocked in ``ApprovalBroker.wait``.
     """
     poller = TelegramPoller(settings.bot_token)
     turn_semaphore = asyncio.Semaphore(settings.max_concurrent_turns)
@@ -103,6 +98,10 @@ async def _poll_telegram_until_stopped(
                     if not resources.active_cancels.request_stop(event.chat_id):
                         resources.client.send_message(event.chat_id, NO_ACTIVE_TURN_MESSAGE)
                     continue
+                # Registered before the task exists: a /stop later in this same
+                # batch must find the accepted turn, not "nothing".
+                turn_cancel = threading.Event()
+                resources.active_cancels.register(event.chat_id, turn_cancel)
                 task = asyncio.create_task(
                     _dispatch_turn(
                         event,
@@ -110,6 +109,7 @@ async def _poll_telegram_until_stopped(
                         logger=logger,
                         resources=resources,
                         turn_semaphore=turn_semaphore,
+                        turn_cancel=turn_cancel,
                         loop=loop,
                         handle_callback_to_gateway_agent=handle_callback_to_gateway_agent,
                     )
@@ -131,16 +131,14 @@ async def _dispatch_turn(
     logger: logging.Logger,
     resources: TelegramPollingRuntime,
     turn_semaphore: asyncio.Semaphore,
+    turn_cancel: threading.Event,
     loop: asyncio.AbstractEventLoop,
     handle_callback_to_gateway_agent: TurnCallback,
 ) -> None:
     """Run one turn to completion, logging rather than raising on failure.
 
-    The turn is detached from the poll loop, so its exception has nowhere to
-    surface: the loop's own ``except`` no longer covers it, and an unretrieved
-    task exception is reported only when the task is garbage collected. The
-    turn's own error path has already told the chat by then, so this logs the
-    failure and lets polling carry on.
+    Detached from the poll loop, so an exception here reaches no other handler.
+    Always unregisters ``turn_cancel``, including on failure.
     """
     try:
         await handle_polled_inbound_telegram_message(
@@ -153,6 +151,7 @@ async def _dispatch_turn(
             turn_semaphore=turn_semaphore,
             approvals=resources.approvals,
             active_cancels=resources.active_cancels,
+            turn_cancel=turn_cancel,
             loop=loop,
             handle_callback_to_gateway_agent=handle_callback_to_gateway_agent,
         )
@@ -163,6 +162,8 @@ async def _dispatch_turn(
             event.chat_id,
             exc_info=True,
         )
+    finally:
+        resources.active_cancels.unregister(event.chat_id, turn_cancel)
 
 
 async def _drain_active_turns(
@@ -171,17 +172,10 @@ async def _drain_active_turns(
     settings: GatewaySettings,
     logger: logging.Logger,
 ) -> None:
-    """Let in-flight turns finish before the event loop closes under them.
+    """Let in-flight turns finish before ``asyncio.run`` closes the loop.
 
-    ``asyncio.run`` cancels whatever is still pending once this coroutine
-    returns, so a detached turn would otherwise die mid-flight and never post
-    its outcome to the chat.
-
-    The wait is deliberately bounded rather than generous: polling has already
-    stopped, so nothing can deliver a button click any more, and a turn parked
-    in ``ApprovalBroker.wait`` would otherwise hold shutdown for the full
-    ``MAX_APPROVAL_WAIT_SECONDS`` expiry. Whatever misses the budget is
-    cancelled and logged.
+    Bounded: polling has stopped, so no click can resolve an approval wait any
+    more. Whatever misses ``shutdown_drain_seconds`` is cancelled.
     """
     if not pending_tasks:
         return
