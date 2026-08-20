@@ -99,6 +99,7 @@
             "group": "Deploy and APIs",
             "pages": [
               "deployment",
+              "ask",
               "api",
               "python-api",
               "hosting-the-agent"
