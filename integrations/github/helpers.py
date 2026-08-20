@@ -123,16 +123,9 @@ def resolve_github_mcp_config(
 
 
 def _structured_content_or_text_fallback(result: dict[str, Any]) -> Any:
-    """Return the MCP tool's structured payload, parsing ``text`` as JSON when
-    the server omitted ``structuredContent``.
+    """Return ``structured_content`` if present, else ``text`` parsed as JSON.
 
-    The real GitHub Copilot MCP server (the default/documented endpoint) does
-    not populate ``structuredContent`` for list_commits, search_issues,
-    search_code, or get_repository_tree — only ``actions.py``'s own
-    ``_extract_json_text`` fallback caught this; the simpler tools
-    (commits/issues/search_code/repository_tree) read ``structured_content``
-    directly and got ``None`` on every real call. ``text`` carries the same
-    data as a raw JSON string for those tools, so it is the fallback source.
+    Returns ``None`` when ``text`` is empty or not valid JSON.
     """
     structured = result.get("structured_content")
     if structured is not None:
@@ -158,8 +151,7 @@ def normalize_github_tool_result(result: dict[str, Any]) -> dict[str, Any]:
     consistent unavailable-source response. Otherwise returns a dict with
     ``source="github"``, ``available=True``, and the original ``tool``,
     ``arguments``, ``text``, ``content`` keys preserved, and
-    ``structured_content`` filled from ``text`` (see
-    :func:`_structured_content_or_text_fallback`) when the server omitted it.
+    ``structured_content`` normalized via :func:`_structured_content_or_text_fallback`.
     """
     if result.get("is_error"):
         return tool_unavailable(
