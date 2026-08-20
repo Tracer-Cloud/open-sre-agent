@@ -17,6 +17,21 @@ from integrations.github.helpers import (
 from integrations.github.mcp import call_github_mcp_tool
 
 
+def _file_from_resource_text(content: list[dict[str, Any]]) -> dict[str, Any] | None:
+    """Fallback file payload built from an EmbeddedResource content item.
+
+    The real GitHub Copilot MCP server does not populate ``structuredContent``
+    for get_file_contents, and its ``text`` is a status line ("successfully
+    downloaded text file..."), not JSON — the file body instead arrives as a
+    ``resource_text`` entry in ``content``. Returns None when no such entry
+    is present (e.g. a binary file returned as ``resource_blob``).
+    """
+    for item in content:
+        if item.get("type") == "resource_text":
+            return {"uri": item.get("uri", ""), "content": item.get("text", "")}
+    return None
+
+
 def _get_github_file_contents_extract_params(sources: dict[str, dict]) -> dict[str, Any]:
     gh = sources["github"]
     return {
@@ -97,5 +112,8 @@ def get_github_file_contents(
         arguments["sha"] = sha
     result = call_github_mcp_tool(config, "get_file_contents", arguments)
     payload = normalize_github_tool_result(result)
-    payload["file"] = payload.pop("structured_content", None)
+    structured = payload.pop("structured_content", None)
+    if structured is None:
+        structured = _file_from_resource_text(payload.get("content", []))
+    payload["file"] = structured
     return payload

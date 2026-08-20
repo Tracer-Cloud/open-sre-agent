@@ -19,6 +19,7 @@ Exports:
 
 from __future__ import annotations
 
+import json
 from typing import Any
 
 from core.tool_framework.utils.tool_availability import tool_unavailable
@@ -121,6 +122,30 @@ def resolve_github_mcp_config(
     )
 
 
+def _structured_content_or_text_fallback(result: dict[str, Any]) -> Any:
+    """Return the MCP tool's structured payload, parsing ``text`` as JSON when
+    the server omitted ``structuredContent``.
+
+    The real GitHub Copilot MCP server (the default/documented endpoint) does
+    not populate ``structuredContent`` for list_commits, search_issues,
+    search_code, or get_repository_tree — only ``actions.py``'s own
+    ``_extract_json_text`` fallback caught this; the simpler tools
+    (commits/issues/search_code/repository_tree) read ``structured_content``
+    directly and got ``None`` on every real call. ``text`` carries the same
+    data as a raw JSON string for those tools, so it is the fallback source.
+    """
+    structured = result.get("structured_content")
+    if structured is not None:
+        return structured
+    text = str(result.get("text") or "").strip()
+    if not text:
+        return None
+    try:
+        return json.loads(text)
+    except json.JSONDecodeError:
+        return None
+
+
 def normalize_github_tool_result(result: dict[str, Any]) -> dict[str, Any]:
     """Normalize a raw GitHub MCP tool result into the tool-framework payload.
 
@@ -132,7 +157,9 @@ def normalize_github_tool_result(result: dict[str, Any]) -> dict[str, Any]:
     ``tool_unavailable("github", ...)`` envelope so the framework surfaces a
     consistent unavailable-source response. Otherwise returns a dict with
     ``source="github"``, ``available=True``, and the original ``tool``,
-    ``arguments``, ``text``, ``structured_content``, ``content`` keys preserved.
+    ``arguments``, ``text``, ``content`` keys preserved, and
+    ``structured_content`` filled from ``text`` (see
+    :func:`_structured_content_or_text_fallback`) when the server omitted it.
     """
     if result.get("is_error"):
         return tool_unavailable(
@@ -147,6 +174,6 @@ def normalize_github_tool_result(result: dict[str, Any]) -> dict[str, Any]:
         "tool": result.get("tool"),
         "arguments": result.get("arguments", {}),
         "text": result.get("text", ""),
-        "structured_content": result.get("structured_content"),
+        "structured_content": _structured_content_or_text_fallback(result),
         "content": result.get("content", []),
     }
