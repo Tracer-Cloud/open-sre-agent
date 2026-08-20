@@ -14,6 +14,26 @@ ensure_project_platform_package()
 
 
 @pytest.fixture(autouse=True)
+def _isolate_opensre_home(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    """Keep every gateway test off the developer's real ``~/.opensre``.
+
+    Patch the attribute, not ``OPENSRE_HOME``: that env var is read once at
+    import, while the root helpers re-read the attribute per call.
+
+    Disabling the keyring is not optional here. Redirecting the home makes
+    credential lookup miss ``integrations.json`` and fall through to the OS
+    keychain, which blocks on a GUI prompt, so the pair must move together the
+    way ``tests/conftest.py`` keeps them.
+    """
+    from config.constants import paths
+    from config.secrets.os_keyring import reset_keyring_state
+
+    reset_keyring_state()
+    monkeypatch.setenv("OPENSRE_DISABLE_KEYRING", "1")
+    monkeypatch.setattr(paths, "OPENSRE_HOME_DIR", tmp_path / "opensre-home")
+
+
+@pytest.fixture(autouse=True)
 def _isolate_gateway_runtime_files(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
     """Keep every gateway test off the developer's real ``~/.opensre/gateway``.
 
