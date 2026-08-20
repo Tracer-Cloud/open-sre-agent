@@ -12,7 +12,7 @@ from core.agent_harness.tools import (
 )
 from core.domain.types.tools import ToolSurface
 from core.tool.contracts import RegisteredTool, SideEffectLevel
-from core.tool_framework.utils.schema import object_schema, string_array_property, string_property
+from core.tool_framework.utils import object_schema, string_array_property, string_property
 
 
 def execute_assistant_handoff_tool(args: dict[str, Any], ctx: ActionToolContext) -> bool:

@@ -14,7 +14,7 @@ from core.agent_harness.tools import (
 )
 from core.domain.types.tools import ToolSurface
 from core.tool.contracts import RegisteredTool, SideEffectLevel
-from core.tool_framework.utils.schema import object_schema
+from core.tool_framework.utils import object_schema
 from tools.interactive_shell.shared import allow_tool
 
 

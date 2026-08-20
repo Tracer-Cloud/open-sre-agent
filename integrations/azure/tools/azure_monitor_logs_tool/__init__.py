@@ -14,7 +14,7 @@ from config.constants.azure import (
 from core.domain.types.tools import ToolSurface
 from core.tool.execution import report_run_error
 from core.tool_framework.tool_decorator import tool
-from core.tool_framework.utils.tool_availability import tool_unavailable
+from core.tool_framework.utils import tool_unavailable
 
 
 def _bounded_limit(limit: int, max_results: int) -> int:

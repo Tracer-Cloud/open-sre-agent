@@ -9,7 +9,7 @@ from typing import Any
 
 from core.tool.contracts import EvidenceType, SideEffectLevel
 from core.tool_framework.tool_decorator import tool
-from core.tool_framework.utils.tool_availability import tool_unavailable
+from core.tool_framework.utils import tool_unavailable
 from integrations.eks.eks_k8s_client import build_k8s_clients
 
 logger = logging.getLogger(__name__)

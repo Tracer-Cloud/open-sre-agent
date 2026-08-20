@@ -20,7 +20,7 @@ from typing import Any
 
 from core.domain.types.tools import ToolSurface
 from core.tool.contracts import BaseTool
-from core.tool_framework.utils.tool_availability import tool_unavailable
+from core.tool_framework.utils import tool_unavailable
 from integrations.victoria_logs.client import make_victoria_logs_client
 
 

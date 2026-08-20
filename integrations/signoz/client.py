@@ -14,7 +14,7 @@ from typing import Any, cast
 
 import httpx
 
-from core.tool_framework.utils.tool_availability import tool_unavailable
+from core.tool_framework.utils import tool_unavailable
 from integrations.signoz import SigNozConfig
 
 logger = logging.getLogger(__name__)

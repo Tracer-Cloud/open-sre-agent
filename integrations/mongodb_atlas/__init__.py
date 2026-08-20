@@ -25,7 +25,7 @@ from config.constants.mongodb_atlas import (
     MONGODB_ATLAS_PUBLIC_KEY_ENV,
 )
 from config.strict_config import StrictConfigModel
-from core.tool_framework.utils.tool_availability import tool_unavailable
+from core.tool_framework.utils import tool_unavailable
 from integrations._validation_helpers import report_classify_failure, report_validation_failure
 
 logger = logging.getLogger(__name__)

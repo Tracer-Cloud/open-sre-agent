@@ -10,7 +10,7 @@ from config.constants.new_relic import (
 )
 from core.tool.contracts import BaseTool, EvidenceType, SideEffectLevel
 from core.tool_framework.tool_decorator import tool
-from core.tool_framework.utils.tool_availability import tool_unavailable
+from core.tool_framework.utils import tool_unavailable
 from integrations.new_relic.client import NewRelicClient
 from integrations.new_relic.config import NewRelicIntegrationConfig
 from integrations.new_relic.tools.new_relic_metrics_tool.validation import (

@@ -22,7 +22,7 @@ from __future__ import annotations
 import json
 from typing import Any
 
-from core.tool_framework.utils.tool_availability import tool_unavailable
+from core.tool_framework.utils import tool_unavailable
 from integrations.github.mcp import (
     DEFAULT_GITHUB_MCP_MODE,
     GitHubMCPConfig,

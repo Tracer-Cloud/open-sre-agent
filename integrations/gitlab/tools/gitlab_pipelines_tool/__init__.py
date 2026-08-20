@@ -6,7 +6,7 @@ from typing import Any
 
 from core.domain.types.tools import ToolSurface
 from core.tool_framework.tool_decorator import tool
-from core.tool_framework.utils.code_host_unavailable import code_host_unavailable_payload
+from core.tool_framework.utils import code_host_unavailable_payload
 from integrations.gitlab import (
     get_gitlab_pipelines,
 )

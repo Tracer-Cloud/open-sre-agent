@@ -8,7 +8,7 @@ from core.domain.types.tools import ToolSurface
 from core.tool.contracts import BaseTool, SideEffectLevel
 from core.tool_framework.tags import SUMMARIZE_OBSERVATION_TAG
 from core.tool_framework.tool_decorator import tool
-from core.tool_framework.utils.tool_availability import tool_unavailable
+from core.tool_framework.utils import tool_unavailable
 from integrations.slack.tools.slack_read_messages_tool.constants import SOURCE
 from integrations.slack.web_client import (
     bot_token_configured,

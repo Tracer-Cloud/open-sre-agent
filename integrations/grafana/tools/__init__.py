@@ -8,7 +8,7 @@ from typing import Any
 
 from core.tool.contracts import EvidenceType, SideEffectLevel
 from core.tool_framework.tool_decorator import tool
-from core.tool_framework.utils.tool_availability import tool_unavailable
+from core.tool_framework.utils import tool_unavailable
 
 _GRAFANA_RUNTIME_PARAMS = (
     "grafana_endpoint",

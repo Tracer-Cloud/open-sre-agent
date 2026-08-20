@@ -11,7 +11,7 @@ from core.agent_harness.tools import (
 )
 from core.domain.types.tools import ToolSurface
 from core.tool.contracts import RegisteredTool, SideEffectLevel
-from core.tool_framework.utils.schema import object_schema, string_property
+from core.tool_framework.utils import object_schema, string_property
 from tools.interactive_shell.cli import run_opensre_cli_command
 from tools.interactive_shell.subprocess import require_subprocess_presenter
 

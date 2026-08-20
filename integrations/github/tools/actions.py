@@ -9,7 +9,7 @@ from typing import Any, cast
 
 from core.domain.types.tools import ToolSurface
 from core.tool_framework.tool_decorator import tool
-from core.tool_framework.utils.code_host_unavailable import code_host_unavailable_payload
+from core.tool_framework.utils import code_host_unavailable_payload
 from integrations.github.helpers import (
     GITHUB_INJECTED_PARAMS,
     github_creds,

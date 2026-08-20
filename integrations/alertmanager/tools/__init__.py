@@ -12,7 +12,7 @@ from __future__ import annotations
 from typing import Any
 
 from core.tool.contracts import BaseTool
-from core.tool_framework.utils.tool_availability import tool_unavailable
+from core.tool_framework.utils import tool_unavailable
 from integrations.alertmanager.client import make_alertmanager_client
 
 _FIRING_STATES = {"active", "unprocessed"}

@@ -1,8 +1,23 @@
-"""Tool utilities — code-host helpers, data validation, and database warnings."""
+"""Tool utilities — the one door consumers import these helpers through.
+
+Schema builders, MCP payload readers, code-host and availability envelopes, and
+database-warning wrappers. Importing the submodules directly still works inside
+this package; everything above the tool tier comes through here so the split
+below can change without a sweep across ``integrations/`` and ``tools/``.
+"""
 
 from core.tool_framework.utils.code_host_unavailable import code_host_unavailable_payload
 from core.tool_framework.utils.data_validation import validate_host_metrics
 from core.tool_framework.utils.db_warnings import default_db_warning
+from core.tool_framework.utils.mcp_bridge import unavailable_response
+from core.tool_framework.utils.mcp_params import first_list, first_string
+from core.tool_framework.utils.mcp_tool_listing import build_mcp_tool_listing
+from core.tool_framework.utils.schema import (
+    object_schema,
+    string_array_property,
+    string_property,
+)
+from core.tool_framework.utils.sql_wrapper import call_db_tool_with_default_db_warning
 from core.tool_framework.utils.tool_availability import (
     envelope_source_id,
     is_tool_unavailable_envelope,
@@ -10,10 +25,18 @@ from core.tool_framework.utils.tool_availability import (
 )
 
 __all__ = [
+    "build_mcp_tool_listing",
+    "call_db_tool_with_default_db_warning",
     "code_host_unavailable_payload",
     "default_db_warning",
     "envelope_source_id",
+    "first_list",
+    "first_string",
     "is_tool_unavailable_envelope",
+    "object_schema",
+    "string_array_property",
+    "string_property",
     "tool_unavailable",
+    "unavailable_response",
     "validate_host_metrics",
 ]
