@@ -67,6 +67,15 @@ def test_tool_specs_include_required_fields() -> None:
         assert "input_schema" in spec
 
 
+def test_action_tools_classify_side_effects() -> None:
+    tools = _action_tools(Session())
+    unclassified = sorted(
+        tool.name for tool in tools if getattr(tool, "side_effect_level", None) is None
+    )
+
+    assert unclassified == []
+
+
 def test_action_kind_to_tool_names_are_openai_compatible() -> None:
     """Guard against the dotted-name regression that broke all 56 live
     planner scenarios on OpenAI-style providers (HTTP 400 on

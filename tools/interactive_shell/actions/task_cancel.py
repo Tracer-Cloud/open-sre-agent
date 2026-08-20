@@ -13,7 +13,7 @@ from core.agent_harness.tools import (
     execute_with_action_context,
 )
 from core.domain.types.tools import ToolSurface
-from core.tool.contracts import RegisteredTool
+from core.tool.contracts import RegisteredTool, SideEffectLevel
 from core.tool_framework.utils.schema import object_schema
 from platform.scheduling.task_types import TaskKind, TaskStatus
 from tools.interactive_shell.shared import plan_foreground_tool
@@ -124,6 +124,7 @@ task_cancel_tool = RegisteredTool(
     ),
     source="interactive_shell",
     surfaces=(ToolSurface.ACTION,),
+    side_effect_level=SideEffectLevel.MUTATING,
     parallel_safe=False,
     accepts_runtime_context=True,
     run=run_task_cancel,
