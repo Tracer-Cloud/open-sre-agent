@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+from datetime import datetime
 from typing import Any
 from unittest.mock import MagicMock, patch
 
@@ -8,26 +9,34 @@ import platform.harness_ports as harness_ports
 from core.agent_harness.turns.gather_discovery_budget import is_live_metric_query_call
 from core.llm.types import ToolCall
 from core.state import InvestigationState
-from integrations.harness_adapters import register_harness_adapters
+from integrations.datadog.metric_drafts import register_datadog_metric_drafts
 from tools.investigation.stages.gather_evidence import ConnectedInvestigationAgent
 
 
-class _FixtureDatadogBackend:
+class _FixtureDatadogClient:
     def __init__(self) -> None:
         self.queries: list[dict[str, Any]] = []
 
-    def query_metrics(self, **kwargs: Any) -> dict[str, Any]:
-        self.queries.append(kwargs)
-        metric_name = str(kwargs["metric_name"])
+    def query_metrics(
+        self,
+        query: str,
+        *,
+        start: datetime,
+        end: datetime,
+    ) -> dict[str, Any]:
+        self.queries.append(
+            {
+                "query": query,
+                "time_range_minutes": round((end - start).total_seconds() / 60),
+            }
+        )
         return {
-            "source": "datadog_metrics",
-            "available": True,
-            "metric_name": metric_name,
-            "metrics": [
+            "success": True,
+            "series": [
                 {
-                    "metric": metric_name,
+                    "metric": "system.cpu.user",
                     "scope": "service:checkout-api,env:prod",
-                    "expression": f"avg:{metric_name}{{service:checkout-api,env:prod}}",
+                    "expression": query,
                     "points": [
                         {"timestamp": "2026-08-17T09:30:00Z", "value": 0.91},
                         {"timestamp": "2026-08-17T09:31:00Z", "value": 0.96},
@@ -70,7 +79,7 @@ def _text_response(text: str) -> MagicMock:
 
 def test_datadog_metric_fetch_is_live_investigation_evidence() -> None:
     harness_ports.reset_harness_ports()
-    backend = _FixtureDatadogBackend()
+    client = _FixtureDatadogClient()
     query = "avg:system.cpu.user{service:checkout-api,env:prod}"
     diagnosis = (
         "Triage complete: checkout CPU saturation confirmed.\n"
@@ -105,31 +114,28 @@ def test_datadog_metric_fetch_is_live_investigation_evidence() -> None:
         "resolved_integrations": {
             "datadog": {
                 "connection_verified": True,
+                "api_key": "datadog-api-key",
+                "app_key": "datadog-app-key",
                 "metric_name": "system.cpu.user",
                 "metric_query": query,
                 "time_range_minutes": 15,
-                "_backend": backend,
             }
         },
     }
 
     try:
-        with patch.dict(
-            ConnectedInvestigationAgent.run.__globals__,
-            {
-                "get_llm": lambda _role: mock_llm,
-                "get_tracker": lambda: MagicMock(),
-            },
+        register_datadog_metric_drafts()
+        with (
+            patch("tools.investigation.stages.gather_evidence.agent.get_tracker", MagicMock),
+            patch("integrations.datadog.tools.make_client", return_value=client),
         ):
-            register_harness_adapters()
-            result = ConnectedInvestigationAgent().run(state)
+            result = ConnectedInvestigationAgent(llm_factory=lambda: mock_llm).run(state)
 
         assert is_live_metric_query_call("query_datadog_metrics", {}) is True
-        assert backend.queries == [
+        assert client.queries == [
             {
-                "metric_name": "system.cpu.user",
-                "time_range_minutes": 15,
                 "query": query,
+                "time_range_minutes": 15,
             }
         ]
         assert any(message.get("content") == diagnosis for message in result["agent_messages"])
