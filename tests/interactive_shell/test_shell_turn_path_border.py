@@ -60,12 +60,9 @@ def _references_builder(tree: ast.AST) -> bool:
         if isinstance(node, ast.ImportFrom):
             if any(alias.name == _SHELL_AGENT_BUILDER for alias in node.names):
                 return True
-        elif (
-            isinstance(node, ast.Attribute)
-            and node.attr == _SHELL_AGENT_BUILDER
-            or isinstance(node, ast.Name)
-            and node.id == _SHELL_AGENT_BUILDER
-        ):
+        elif isinstance(node, ast.Attribute) and node.attr == _SHELL_AGENT_BUILDER:
+            return True
+        elif isinstance(node, ast.Name) and node.id == _SHELL_AGENT_BUILDER:
             return True
     return False
 
@@ -98,37 +95,143 @@ def _is_turn_handler_call(node: ast.AST, handler_aliases: set[str]) -> bool:
     )
 
 
-def _handler_bound_names(tree: ast.AST, handler_aliases: set[str]) -> set[str]:
-    """Names that are typed or constructed as ``TurnHandler`` in this module."""
-    bound: set[str] = set()
-    for node in ast.walk(tree):
-        if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
-            for arg in (*node.args.posonlyargs, *node.args.args, *node.args.kwonlyargs):
-                if _annotation_names(arg.annotation) & handler_aliases:
-                    bound.add(arg.arg)
-        elif isinstance(node, ast.AnnAssign) and isinstance(node.target, ast.Name):
-            if _annotation_names(node.annotation) & handler_aliases:
-                bound.add(node.target.id)
-            if node.value is not None and _is_turn_handler_call(node.value, handler_aliases):
-                bound.add(node.target.id)
-        elif isinstance(node, ast.Assign) and _is_turn_handler_call(node.value, handler_aliases):
-            for target in node.targets:
-                if isinstance(target, ast.Name):
-                    bound.add(target.id)
-    return bound
+def _walk_excluding_nested_scopes(node: ast.AST) -> list[ast.AST]:
+    """AST nodes under ``node``, skipping nested function/class bodies."""
+    out: list[ast.AST] = []
+
+    def _visit(current: ast.AST, *, skip_self: bool = False) -> None:
+        if not skip_self:
+            if isinstance(current, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)):
+                return
+            out.append(current)
+        for child in ast.iter_child_nodes(current):
+            _visit(child)
+
+    _visit(node, skip_self=True)
+    return out
 
 
-def _calls_turn_handler_run(tree: ast.AST) -> bool:
-    """True when ``run`` is invoked on a ``TurnHandler`` name or construction.
+def _assign_target_names(target: ast.AST) -> list[str]:
+    if isinstance(target, ast.Name):
+        return [target.id]
+    if isinstance(target, (ast.Tuple, ast.List)):
+        names: list[str] = []
+        for elt in target.elts:
+            names.extend(_assign_target_names(elt))
+        return names
+    return []
 
-    A bare ``something.run(...)`` is not enough — the receiver must be bound to
-    the imported turn host, or be ``TurnHandler(...).run(...)``.
-    """
-    handler_aliases = _turn_handler_aliases(tree)
-    if not handler_aliases:
-        return False
-    bound = _handler_bound_names(tree, handler_aliases)
-    for node in ast.walk(tree):
+
+def _bind_from_assignment(
+    bound: set[str],
+    *,
+    names: list[str],
+    value: ast.AST | None,
+    annotation: ast.AST | None,
+    handler_aliases: set[str],
+) -> set[str]:
+    """Update handler bindings after one name assignment in the current scope."""
+    next_bound = set(bound)
+    if not names:
+        return next_bound
+    keeps_handler = False
+    if value is not None and _is_turn_handler_call(value, handler_aliases):
+        keeps_handler = True
+    elif value is None and annotation is not None:
+        keeps_handler = bool(_annotation_names(annotation) & handler_aliases)
+    elif (
+        value is not None
+        and annotation is not None
+        and _annotation_names(annotation) & handler_aliases
+        and isinstance(value, ast.Constant)
+        and value.value is None
+    ):
+        # ``handler: TurnHandler | None = None`` — still a TurnHandler slot.
+        keeps_handler = True
+    if keeps_handler:
+        next_bound.update(names)
+    else:
+        next_bound.difference_update(names)
+    return next_bound
+
+
+def _bindings_after_block(
+    stmts: list[ast.stmt],
+    bound: set[str],
+    handler_aliases: set[str],
+) -> set[str]:
+    """Handler names still bound after ``stmts`` run in order in one scope."""
+    current = set(bound)
+    for stmt in stmts:
+        if isinstance(stmt, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)):
+            continue
+        if isinstance(stmt, ast.Assign):
+            names = [name for target in stmt.targets for name in _assign_target_names(target)]
+            current = _bind_from_assignment(
+                current,
+                names=names,
+                value=stmt.value,
+                annotation=None,
+                handler_aliases=handler_aliases,
+            )
+        elif isinstance(stmt, ast.AnnAssign):
+            current = _bind_from_assignment(
+                current,
+                names=_assign_target_names(stmt.target),
+                value=stmt.value,
+                annotation=stmt.annotation,
+                handler_aliases=handler_aliases,
+            )
+        elif isinstance(stmt, ast.AugAssign):
+            current = _bind_from_assignment(
+                current,
+                names=_assign_target_names(stmt.target),
+                value=stmt.value,
+                annotation=None,
+                handler_aliases=handler_aliases,
+            )
+        elif isinstance(stmt, ast.If):
+            after_body = _bindings_after_block(stmt.body, current, handler_aliases)
+            after_else = (
+                _bindings_after_block(stmt.orelse, current, handler_aliases)
+                if stmt.orelse
+                else set(current)
+            )
+            current = after_body & after_else
+        elif isinstance(stmt, (ast.For, ast.AsyncFor, ast.While)):
+            after_body = _bindings_after_block(stmt.body, current, handler_aliases)
+            after_else = (
+                _bindings_after_block(stmt.orelse, current, handler_aliases)
+                if getattr(stmt, "orelse", None)
+                else set(current)
+            )
+            # Body may not run — keep only names still bound on every path.
+            current = current & after_body & after_else
+        elif isinstance(stmt, (ast.With, ast.AsyncWith)):
+            current = _bindings_after_block(stmt.body, current, handler_aliases)
+        elif isinstance(stmt, ast.Try):
+            after_body = _bindings_after_block(stmt.body, current, handler_aliases)
+            handler_states = [
+                _bindings_after_block(handler.body, after_body, handler_aliases)
+                for handler in stmt.handlers
+            ]
+            after_else = (
+                _bindings_after_block(stmt.orelse, after_body, handler_aliases)
+                if stmt.orelse
+                else set(after_body)
+            )
+            paths = [after_body, after_else, *handler_states]
+            current = set.intersection(*paths) if paths else set(after_body)
+            current = _bindings_after_block(stmt.finalbody, current, handler_aliases)
+    return current
+
+
+def _statement_calls_handler_run(
+    stmt: ast.stmt,
+    bound: set[str],
+    handler_aliases: set[str],
+) -> bool:
+    for node in _walk_excluding_nested_scopes(stmt):
         if not isinstance(node, ast.Call):
             continue
         func = node.func
@@ -140,6 +243,75 @@ def _calls_turn_handler_run(tree: ast.AST) -> bool:
         if _is_turn_handler_call(receiver, handler_aliases):
             return True
     return False
+
+
+def _block_calls_handler_run(
+    stmts: list[ast.stmt],
+    bound: set[str],
+    handler_aliases: set[str],
+) -> bool:
+    """True when a statement in this scope calls ``run`` on a live TurnHandler binding."""
+    current = set(bound)
+    for stmt in stmts:
+        if isinstance(stmt, (ast.FunctionDef, ast.AsyncFunctionDef)):
+            if _function_calls_handler_run(stmt, handler_aliases):
+                return True
+            continue
+        if isinstance(stmt, ast.ClassDef):
+            continue
+        if isinstance(stmt, ast.If):
+            if _block_calls_handler_run(stmt.body, current, handler_aliases):
+                return True
+            if _block_calls_handler_run(stmt.orelse, current, handler_aliases):
+                return True
+        elif isinstance(stmt, (ast.For, ast.AsyncFor, ast.While)):
+            if _block_calls_handler_run(stmt.body, current, handler_aliases):
+                return True
+            if _block_calls_handler_run(stmt.orelse, current, handler_aliases):
+                return True
+        elif isinstance(stmt, (ast.With, ast.AsyncWith)):
+            if _block_calls_handler_run(stmt.body, current, handler_aliases):
+                return True
+        elif isinstance(stmt, ast.Try):
+            if _block_calls_handler_run(stmt.body, current, handler_aliases):
+                return True
+            for handler in stmt.handlers:
+                if _block_calls_handler_run(handler.body, current, handler_aliases):
+                    return True
+            if _block_calls_handler_run(stmt.orelse, current, handler_aliases):
+                return True
+            if _block_calls_handler_run(stmt.finalbody, current, handler_aliases):
+                return True
+        elif _statement_calls_handler_run(stmt, current, handler_aliases):
+            return True
+        current = _bindings_after_block([stmt], current, handler_aliases)
+    return False
+
+
+def _function_calls_handler_run(
+    fn: ast.FunctionDef | ast.AsyncFunctionDef,
+    handler_aliases: set[str],
+) -> bool:
+    bound = {
+        arg.arg
+        for arg in (*fn.args.posonlyargs, *fn.args.args, *fn.args.kwonlyargs)
+        if _annotation_names(arg.annotation) & handler_aliases
+    }
+    return _block_calls_handler_run(fn.body, bound, handler_aliases)
+
+
+def _calls_turn_handler_run(tree: ast.AST) -> bool:
+    """True when ``run`` is invoked on a ``TurnHandler`` in the same scope that binds it.
+
+    Bindings do not leak across functions. Reassigning a tracked name to a
+    non-``TurnHandler`` value clears it before a later ``.run()`` can count.
+    """
+    handler_aliases = _turn_handler_aliases(tree)
+    if not handler_aliases:
+        return False
+    if not isinstance(tree, ast.Module):
+        return False
+    return _block_calls_handler_run(tree.body, set(), handler_aliases)
 
 
 def test_no_shipped_module_builds_a_second_shell_agent() -> None:
@@ -208,5 +380,49 @@ def test_turn_host_guard_accepts_handler_run_on_a_typed_parameter() -> None:
         "from platform.turn_host.turn_handler import TurnHandler\n"
         "def execute_shell_turn(handler: TurnHandler | None = None):\n"
         "    return handler.run('hi', None, None, None)\n"
+    )
+    assert _calls_turn_handler_run(tree) is True
+
+
+def test_turn_host_guard_does_not_leak_bindings_across_functions() -> None:
+    tree = ast.parse(
+        "from platform.turn_host.turn_handler import TurnHandler\n"
+        "def _other():\n"
+        "    handler = TurnHandler()\n"
+        "def execute_shell_turn():\n"
+        "    handler = object()\n"
+        "    return handler.run()\n"
+    )
+    assert _calls_turn_handler_run(tree) is False
+
+
+def test_turn_host_guard_rejects_run_after_reassignment() -> None:
+    tree = ast.parse(
+        "from platform.turn_host.turn_handler import TurnHandler\n"
+        "def execute_shell_turn(handler: TurnHandler | None = None):\n"
+        "    handler = object()\n"
+        "    return handler.run()\n"
+    )
+    assert _calls_turn_handler_run(tree) is False
+
+
+def test_turn_host_guard_accepts_run_after_optional_construction() -> None:
+    tree = ast.parse(
+        "from platform.turn_host.turn_handler import TurnHandler\n"
+        "def execute_shell_turn(handler: TurnHandler | None = None):\n"
+        "    if handler is None:\n"
+        "        handler = TurnHandler()\n"
+        "    return handler.run('hi', None, None, None)\n"
+    )
+    assert _calls_turn_handler_run(tree) is True
+
+
+def test_turn_host_guard_accepts_run_on_handler_built_inside_if() -> None:
+    tree = ast.parse(
+        "from platform.turn_host.turn_handler import TurnHandler\n"
+        "def execute_shell_turn():\n"
+        "    if True:\n"
+        "        handler = TurnHandler()\n"
+        "        return handler.run()\n"
     )
     assert _calls_turn_handler_run(tree) is True
