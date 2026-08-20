@@ -140,6 +140,14 @@ opensre onboard
 opensre
 ```
 
+**Headless CLI** — run one agent turn non-interactively from a terminal, script, or CI job:
+
+```bash
+opensre ask "why is checkout-api slow?"
+```
+
+See **[Headless CLI](https://www.opensre.com/docs/headless-cli)** for stdin prompts, JSON output, and tool approvals.
+
 **One-shot investigation** — run the agent once against an alert file:
 
 ```bash
