@@ -81,7 +81,11 @@ def summarize_community_followups(
         if comments is not None:
             normalized_comments = comments
         else:
-            since = datetime.now(UTC) - timedelta(days=max(1, since_days))
+            # Upper bound avoids OverflowError from timedelta's own bounded
+            # range (~2.7M days) on an absurd caller-supplied value; 10 years is
+            # already far beyond what "recent" means for this tool.
+            bounded_since_days = min(max(1, since_days), 3650)
+            since = datetime.now(UTC) - timedelta(days=bounded_since_days)
             normalized_comments = GitHubRestClient(github_token).paginate(
                 f"/repos/{owner}/{repo}/issues/comments",
                 params={

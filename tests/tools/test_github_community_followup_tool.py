@@ -39,3 +39,23 @@ def test_run_skips_the_api_call_when_comments_are_supplied() -> None:
         comments=[{"id": 1, "body": "any questions?", "user": {"login": "someone"}}],
     )
     assert result["available"] is True
+
+
+def test_run_clamps_absurd_since_days_instead_of_overflowing() -> None:
+    """Regression (Greptile): since_days was only lower-bounded before being
+    passed to timedelta(days=...). An absurdly large caller-supplied value
+    (the public schema accepts any integer) raises OverflowError, which
+    propagates uncaught past the tool framework's structured
+    tool_unavailable() error contract entirely."""
+    mock_client = MagicMock()
+    mock_client.paginate.return_value = []
+    with patch(
+        "integrations.github.tools.community_followup_tool.GitHubRestClient",
+        return_value=mock_client,
+    ):
+        result = summarize_community_followups(
+            owner="org", repo="repo", since_days=10**18, github_token="tok"
+        )
+
+    assert result["available"] is True
+    mock_client.paginate.assert_called_once()
