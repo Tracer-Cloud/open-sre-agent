@@ -80,8 +80,11 @@ def home(tmp_path: Path) -> Path:
     """A laptop ~/.opensre with sessions, memory, and credential files."""
     (tmp_path / "sessions").mkdir()
     (tmp_path / "memory").mkdir()
-    (tmp_path / "sessions" / "abc.jsonl").write_text('{"turn": 1}\n', encoding="utf-8")
-    (tmp_path / "memory" / "a-fact.md").write_text("remembered\n", encoding="utf-8")
+    # newline="" keeps the bytes on disk exactly as written. The engine syncs in
+    # binary, so tests assert on read_bytes(); without this, Windows stores CRLF
+    # here and those assertions compare \r\n against \n.
+    (tmp_path / "sessions" / "abc.jsonl").write_text('{"turn": 1}\n', encoding="utf-8", newline="")
+    (tmp_path / "memory" / "a-fact.md").write_text("remembered\n", encoding="utf-8", newline="")
     # Credentials live beside them and must not move.
     (tmp_path / "integrations.json").write_text(
         f'{{"datadog": {{"api_key": "{LEAKED_SECRET}"}}}}', encoding="utf-8"
@@ -308,8 +311,8 @@ def test_dry_runs_skipped_tally_matches_a_real_sync_for_a_brand_new_remote_file(
     real_home = tmp_path / "real"
     (real_home / "sessions").mkdir(parents=True)
     (real_home / "memory").mkdir(parents=True)
-    (real_home / "sessions" / "abc.jsonl").write_text('{"turn": 1}\n', encoding="utf-8")
-    (real_home / "memory" / "a-fact.md").write_text("remembered\n", encoding="utf-8")
+    (real_home / "sessions" / "abc.jsonl").write_text('{"turn": 1}\n', encoding="utf-8", newline="")
+    (real_home / "memory" / "a-fact.md").write_text("remembered\n", encoding="utf-8", newline="")
     real_roots = (
         SyncRoot(name=SyncRootName.SESSIONS, path=real_home / "sessions"),
         SyncRoot(name=SyncRootName.MEMORY, path=real_home / "memory"),
