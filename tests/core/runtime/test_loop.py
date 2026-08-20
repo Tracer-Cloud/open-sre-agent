@@ -136,7 +136,7 @@ def test_agent_exposes_headless_agent_entrypoint(monkeypatch: pytest.MonkeyPatch
             yield "hello from headless"
 
     monkeypatch.setattr(
-        "core.agent_harness.turns.action_driver.default_llm_factory",
+        "core.agent_harness.turns.headless_build.default_llm_factory",
         lambda: FakeLLM(iter([AgentLLMResponse(content="", tool_calls=[], raw_content=None)])),
     )
 
@@ -161,7 +161,7 @@ def test_one_headless_agent_dispatches_multiple_messages(monkeypatch: pytest.Mon
             yield "hello from headless"
 
     monkeypatch.setattr(
-        "core.agent_harness.turns.action_driver.default_llm_factory",
+        "core.agent_harness.turns.headless_build.default_llm_factory",
         lambda: FakeLLM(iter([AgentLLMResponse(content="", tool_calls=[], raw_content=None)])),
     )
     from core.agent_harness.turns.headless_adapters import (

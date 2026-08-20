@@ -24,6 +24,7 @@ from rich.console import Console
 
 from core.agent_harness.accounting.run_record import DefaultRunRecordFactory
 from core.agent_harness.error_reporting import DefaultErrorReporter
+from core.agent_harness.llm_resolution import default_llm_factory
 from core.agent_harness.ports import (
     ErrorReporter,
     LlmFactory,
@@ -102,7 +103,7 @@ class InMemoryHeadlessBuild:
             run_factory=SimpleRunRecordFactory(),
             error_reporter=NoopErrorReporter(),
             gather=gather if gather is not None else GATHER_DISABLED,
-            llm_factory=llm_factory,
+            llm_factory=llm_factory if llm_factory is not None else default_llm_factory,
         )
 
 
@@ -184,7 +185,7 @@ class DefaultHeadlessBuild:
             run_factory=self.run_factory(),
             error_reporter=self._error_reporter,
             gather=gather if gather is not None else GATHER_DISABLED,
-            llm_factory=llm_factory,
+            llm_factory=llm_factory if llm_factory is not None else default_llm_factory,
         )
 
 

@@ -14,14 +14,40 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from core.agent_harness.runtime import ActionTurnRunner, TurnBinding
+from core.agent_harness.runtime import ActionTurnRunner, TurnBinding, default_llm_factory
 from core.agent_harness.turns.headless_adapters import BufferOutputSink, NullToolProvider
 from core.agent_harness.turns.headless_agent import HeadlessAgent
 from core.agent_harness.turns.headless_build import InMemoryHeadlessBuild
 from core.agent_harness.turns.turn_results import ToolCallingTurnResult
+from core.llm_invoke_errors import ProviderFailureKind, classify_llm_provider_failure
 from core.tool.execution import ToolExecutionHooks
 from surfaces.interactive_shell.runtime.turn_seams import bind_injected_stages
 from surfaces.interactive_shell.session import Session
+
+
+def test_action_turn_runner_requires_llm_factory_at_construction() -> None:
+    """Issue #5235: a missing llm_factory must fail loudly at construction
+    (the "composition seam"), not silently mid-turn via a hidden fallback.
+    The error message must classify as NOT_CONFIGURED so existing provider-
+    failure rendering/remediation picks it up correctly."""
+    with pytest.raises(ValueError) as exc_info:
+        ActionTurnRunner(
+            output=BufferOutputSink(),
+            tools=NullToolProvider(),
+            llm_factory=None,  # type: ignore[arg-type]
+        )
+
+    assert classify_llm_provider_failure(str(exc_info.value)) is ProviderFailureKind.NOT_CONFIGURED
+
+
+def test_action_turn_runner_accepts_a_real_default_llm_factory() -> None:
+    """The composition-root default (core.agent_harness.llm_resolution.default_llm_factory)
+    must satisfy the required field without raising at construction."""
+    ActionTurnRunner(
+        output=BufferOutputSink(),
+        tools=NullToolProvider(),
+        llm_factory=default_llm_factory,
+    )
 
 
 def test_action_turn_runner_is_exported_from_runtime_not_the_root() -> None:
@@ -52,9 +78,13 @@ def test_action_turn_runner_run_accepts_confirm_fn(monkeypatch: Any) -> None:
     def _confirm(_prompt: str) -> str:
         return "y"
 
+    def _unused_llm_factory() -> Any:
+        raise AssertionError("llm_factory should not be called; _run_action_turn is mocked")
+
     result = ActionTurnRunner(
         output=BufferOutputSink(),
         tools=NullToolProvider(),
+        llm_factory=_unused_llm_factory,
     ).run("hi", Session(), confirm_fn=_confirm, is_tty=False)
 
     assert result.handled is False

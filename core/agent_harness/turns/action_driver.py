@@ -24,7 +24,6 @@ from core.agent.cancel import tool_resources_cancel_requested
 from core.agent.goals import Goal
 from core.agent_harness.accounting.self_recording_tools import SELF_RECORDING_ACTION_TOOL_NAMES
 from core.agent_harness.agent_builder import AgentConfig, build_agent
-from core.agent_harness.llm_resolution import default_llm_factory
 from core.agent_harness.ports import (
     ConfirmFn,
     ErrorReporter,
@@ -662,7 +661,7 @@ def _build_action_agent(
     agent_tools: list[Any],
     turn_snapshot: TurnSnapshot | None,
     resolved_integrations: dict[str, Any],
-    llm_factory: LlmFactory | None,
+    llm_factory: LlmFactory,
     tool_hooks: ToolExecutionHooks | None,
     tool_resources: dict[str, Any],
     observer: Any,
@@ -706,8 +705,7 @@ def _build_action_agent(
         system = "Execute the explicit slash_invoke tool call."
         user_message = message
     else:
-        factory = llm_factory if llm_factory is not None else default_llm_factory
-        llm = factory()
+        llm = llm_factory()
         envelope = build_action_system_prompt_envelope(
             # No turn plan means no surface is known here; setup facts are
             # omitted rather than guessed (see _setup_state_for_surface).
@@ -762,9 +760,9 @@ class _ActionTurnArgs:
 
     output: OutputSink
     tools: ToolProvider
+    llm_factory: LlmFactory
     confirm_fn: ConfirmFn | None = None
     is_tty: bool | None = None
-    llm_factory: LlmFactory | None = None
     turn_plan: TurnPlan | None = None
     error_reporter: ErrorReporter | None = None
     tool_hooks: ToolExecutionHooks | None = None
@@ -780,13 +778,26 @@ class ActionTurnRunner:
 
     Only ``turn_plan``, ``is_tty`` and ``confirm_fn`` change between turns, so
     they stay arguments to :meth:`run`.
+
+    ``llm_factory`` is required: the composition root must wire a real factory
+    (e.g. :func:`~core.agent_harness.llm_resolution.default_llm_factory`)
+    explicitly rather than relying on a silent fallback deep in the turn
+    driver. A missing factory fails here, at construction, not mid-turn.
     """
 
     output: OutputSink
     tools: ToolProvider
-    llm_factory: LlmFactory | None = None
+    llm_factory: LlmFactory
     error_reporter: ErrorReporter | None = None
     tool_hooks: ToolExecutionHooks | None = None
+
+    def __post_init__(self) -> None:
+        if self.llm_factory is None:
+            raise ValueError(
+                "No LLM provider configured for the action turn: ActionTurnRunner "
+                "requires an explicit llm_factory. Wire one at the composition root "
+                "(e.g. core.agent_harness.llm_resolution.default_llm_factory)."
+            )
 
     def run(
         self,

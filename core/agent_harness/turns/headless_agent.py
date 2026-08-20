@@ -94,7 +94,7 @@ class HeadlessAgent:
         run_factory: RunRecordFactory,
         error_reporter: ErrorReporter,
         gather: GatherPhase,
-        llm_factory: LlmFactory | None = None,
+        llm_factory: LlmFactory,
     ) -> None:
         self._tools = tools
         self._llm_factory = llm_factory

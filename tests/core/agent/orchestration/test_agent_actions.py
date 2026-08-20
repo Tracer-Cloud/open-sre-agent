@@ -35,7 +35,25 @@ from tools.interactive_shell.action_names import (
     ToolKind,
 )
 
-_ACTION_LLM_FACTORY_PATCH = "core.agent_harness.turns.action_driver.default_llm_factory"
+_ACTION_LLM_FACTORY_PATCHES = (
+    "core.agent_harness.turns.headless_build.default_llm_factory",
+    "surfaces.interactive_shell.runtime.action_turn.default_llm_factory",
+)
+
+
+def _patch_action_llm_factory(monkeypatch: pytest.MonkeyPatch, value: object) -> None:
+    """Patch the default LLM factory wherever the exercised call path resolves it.
+
+    Tests in this file drive the action turn through both entry points --
+    ``run_harness_turn`` (-> HeadlessAgent -> headless_build.default_llm_factory)
+    and ``action_turn.run_action_tool_turn`` directly (its own module-level
+    default_llm_factory binding) -- so both locations are patched; the unused
+    one is simply never read.
+    """
+    for target in _ACTION_LLM_FACTORY_PATCHES:
+        monkeypatch.setattr(target, value)
+
+
 run_harness_turn = harness_turn_driver.run_harness_turn
 
 
@@ -271,7 +289,7 @@ def _llm_response(
 
 @pytest.fixture(autouse=True)
 def _llm_planner_bridge(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setattr(_ACTION_LLM_FACTORY_PATCH, _MessageMappedActionLLM)
+    _patch_action_llm_factory(monkeypatch, _MessageMappedActionLLM)
 
 
 def test_execute_cli_actions_dispatches_planned_commands(monkeypatch: object) -> None:
@@ -470,8 +488,8 @@ def test_execute_cli_actions_sets_bare_model_for_active_provider(
 ) -> None:
     reasoning_models: list[str] = []
 
-    monkeypatch.setattr(
-        _ACTION_LLM_FACTORY_PATCH,
+    _patch_action_llm_factory(
+        monkeypatch,
         lambda: FakeActionLLM(
             [
                 _llm_response(
@@ -1309,7 +1327,7 @@ def test_execute_cli_actions_persists_action_agent_llm_unavailable(
     def _raise() -> object:
         raise RuntimeError("action agent unavailable")
 
-    monkeypatch.setattr(_ACTION_LLM_FACTORY_PATCH, _raise)
+    _patch_action_llm_factory(monkeypatch, _raise)
 
     session = Session()
     console, buf = _capture()
@@ -1327,8 +1345,8 @@ def test_execute_cli_actions_persists_action_agent_llm_unavailable(
 def test_execute_cli_actions_executes_matched_clause_ignoring_unhandled(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    monkeypatch.setattr(
-        _ACTION_LLM_FACTORY_PATCH,
+    _patch_action_llm_factory(
+        monkeypatch,
         lambda: FakeActionLLM([_llm_response([_action("slash", "/health")], has_unhandled=True)]),
     )
 
@@ -1391,7 +1409,7 @@ def test_execute_cli_actions_bang_prefix_uses_only_explicit_shell_escape(
         llm_called.append("called")
         raise AssertionError("LLM planner must not be called for !cmd input")
 
-    monkeypatch.setattr(_ACTION_LLM_FACTORY_PATCH, _fail_if_called)
+    _patch_action_llm_factory(monkeypatch, _fail_if_called)
 
     calls: list[tuple[list[str], dict[str, object]]] = []
 
@@ -1431,7 +1449,7 @@ def test_execute_cli_actions_bang_prefix_single_line_dispatches_to_shell(
         llm_called.append("called")
         raise AssertionError("LLM planner must not be called for !cmd input")
 
-    monkeypatch.setattr(_ACTION_LLM_FACTORY_PATCH, _fail_if_called)
+    _patch_action_llm_factory(monkeypatch, _fail_if_called)
 
     calls: list[tuple[list[str], dict[str, object]]] = []
 
@@ -1468,8 +1486,8 @@ def test_execute_cli_actions_handoff_only_plan_falls_through_silently(
     before the real LLM reply ran.  The user saw two assistant headers and internal
     planner reasoning that should have been invisible.
     """
-    monkeypatch.setattr(
-        _ACTION_LLM_FACTORY_PATCH,
+    _patch_action_llm_factory(
+        monkeypatch,
         lambda: FakeActionLLM(
             [
                 _llm_response(

@@ -13,7 +13,7 @@ from rich.console import Console
 
 from core.agent_harness import OutputSink, ToolCallingTurnResult
 from core.agent_harness.ports import LlmFactory
-from core.agent_harness.runtime import ActionTurnRunner, TurnPlan
+from core.agent_harness.runtime import ActionTurnRunner, TurnPlan, default_llm_factory
 from core.agent_harness.spi.defaults import DefaultErrorReporter
 from core.tool.execution import ToolExecutionHooks
 from surfaces.interactive_shell.command_registry import SLASH_COMMANDS
@@ -65,7 +65,7 @@ def run_action_tool_turn(
     runner = ActionTurnRunner(
         output=sink,
         tools=shell_tool_provider(session, console, request_exit=request_exit),
-        llm_factory=llm_factory,
+        llm_factory=llm_factory if llm_factory is not None else default_llm_factory,
         error_reporter=DefaultErrorReporter(),
         tool_hooks=tool_hooks,
     )

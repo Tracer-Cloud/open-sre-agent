@@ -316,7 +316,7 @@ def test_run_harness_turn_nitro_prompt_executes_remote_then_investigation(
         call_order.append(f"investigation:{alert_text}")
 
     monkeypatch.setattr(
-        "core.agent_harness.turns.action_driver.default_llm_factory",
+        "core.agent_harness.turns.headless_build.default_llm_factory",
         lambda: FakeActionLLM(
             [
                 AgentLLMResponse(
