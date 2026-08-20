@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+from datetime import UTC, datetime, timedelta
 from typing import Any, cast
 
 from core.domain.types.tools import ToolSurface
@@ -158,6 +159,60 @@ def _normalize_run(run: dict[str, Any]) -> dict[str, Any]:
     }
 
 
+#: The window a rate question should ask for. Not the tool default: this listing
+#: also answers "which deploy failed right before the incident", where a run days
+#: old is the whole point, so defaulting to a window would hide it from every
+#: caller that never asked for one. Rate callers pass this explicitly.
+RATE_WINDOW_HOURS = 24
+
+#: No window: return the page as fetched, whatever the age of its runs.
+NO_RUN_WINDOW = 0
+
+
+def _run_started_at(run: dict[str, Any]) -> datetime | None:
+    """Parse a run's ``created_at``; ``None`` when absent or unparsable."""
+    raw = str(run.get("created_at") or "").strip()
+    if not raw:
+        return None
+    try:
+        parsed = datetime.fromisoformat(raw.replace("Z", "+00:00"))
+    except ValueError:
+        return None
+    return parsed if parsed.tzinfo is not None else parsed.replace(tzinfo=UTC)
+
+
+def runs_within_window(
+    runs: list[dict[str, Any]],
+    window_hours: int,
+    *,
+    now: datetime | None = None,
+) -> tuple[list[dict[str, Any]], bool]:
+    """Return the runs started within ``window_hours``, and whether the page covered it.
+
+    ``window_hours <= 0`` disables the window and returns every run.
+
+    Coverage is the honest half. The listing is one page, so a window can hold
+    more runs than were fetched. Coverage is true only when a run older than the
+    window came back — proof the page reached past the window's edge. A caller
+    counting failures over a partial page must say so rather than report a rate.
+    """
+    if window_hours <= 0:
+        return runs, True
+    moment = now if now is not None else datetime.now(UTC)
+    cutoff = moment - timedelta(hours=window_hours)
+    inside: list[dict[str, Any]] = []
+    saw_older = False
+    for run in runs:
+        started = _run_started_at(run)
+        if started is None:
+            continue
+        if started >= cutoff:
+            inside.append(run)
+        else:
+            saw_older = True
+    return inside, saw_older
+
+
 UNGROUPED_SECTION_NAME = "ungrouped"
 
 
@@ -289,7 +344,7 @@ def _github_actions_run_params(sources: dict[str, dict]) -> dict[str, Any]:
         "Finding a run that matches an outage window or rollback event",
     ],
     requires=["owner", "repo"],
-    surfaces=(ToolSurface.INVESTIGATION, ToolSurface.CHAT),
+    surfaces=(ToolSurface.INVESTIGATION, ToolSurface.CHAT, ToolSurface.ACTION),
     input_schema={
         "type": "object",
         "properties": {
@@ -299,6 +354,16 @@ def _github_actions_run_params(sources: dict[str, dict]) -> dict[str, Any]:
             "status": {"type": "string", "default": ""},
             "event": {"type": "string", "default": ""},
             "per_page": {"type": "integer", "default": 30},
+            "window_hours": {
+                "type": "integer",
+                "default": NO_RUN_WINDOW,
+                "description": (
+                    "Only return runs started within this many hours; 0 (the default) "
+                    "returns the page as fetched. Pass 24 for a rate or count over the "
+                    "last day. The result reports window_covered — when false the page "
+                    "ended inside the window, so counts over it are partial."
+                ),
+            },
             "github_url": {"type": "string"},
             "github_mode": {"type": "string"},
             "github_token": {"type": "string"},
@@ -316,6 +381,7 @@ def list_github_actions_workflow_runs(
     status: str = "",
     event: str = "",
     per_page: int = 30,
+    window_hours: int = NO_RUN_WINDOW,
     github_url: str | None = None,
     github_mode: str | None = None,
     github_token: str | None = None,
@@ -360,12 +426,16 @@ def list_github_actions_workflow_runs(
     if payload.get("available"):
         workflow_runs_raw = _extract_list(result, "workflow_runs")
         workflow_runs = [_normalize_run(item) for item in workflow_runs_raw]
+        workflow_runs, window_covered = runs_within_window(workflow_runs, window_hours)
         payload["workflow_runs"] = workflow_runs
         payload["total"] = len(workflow_runs)
+        payload["window_covered"] = window_covered
     else:
         payload["workflow_runs"] = []
         payload["total"] = 0
+        payload["window_covered"] = False
 
+    payload["window_hours"] = window_hours
     payload["branch"] = branch
     payload["status"] = status
     payload["event"] = event
