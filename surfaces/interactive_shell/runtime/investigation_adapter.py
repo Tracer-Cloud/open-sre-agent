@@ -11,6 +11,7 @@ from rich.console import Console
 from core.agent_harness.spi.session_state import background_mode_enabled
 from core.domain.stream import StreamEvent
 from platform.scheduling.task_types import TaskRecord
+from surfaces.interactive_shell.runtime.background.runner import BackgroundRunResult
 from surfaces.interactive_shell.session import Session
 from surfaces.interactive_shell.ui.execution_confirm import execution_allowed
 from surfaces.interactive_shell.ui.foreground_investigation import run_foreground_investigation
@@ -126,13 +127,16 @@ def run_investigation_for_session_background(
     alert_text: str,
     context_overrides: dict[str, Any] | None = None,
     cancel_requested: threading.Event | None = None,
-) -> dict[str, Any]:
+) -> BackgroundRunResult:
     """Run a silent background investigation in the REPL."""
-    return session_runner.run_investigation_for_session_background(
-        alert_text=alert_text,
-        context_overrides=context_overrides,
-        cancel_requested=cancel_requested,
-        render_stream=repl_background_renderer(),
+    return cast(
+        BackgroundRunResult,
+        session_runner.run_investigation_for_session_background(
+            alert_text=alert_text,
+            context_overrides=context_overrides,
+            cancel_requested=cancel_requested,
+            render_stream=repl_background_renderer(),
+        ),
     )
 
 
@@ -141,13 +145,16 @@ def run_sample_alert_for_session_background(
     template_name: str = "generic",
     context_overrides: dict[str, Any] | None = None,
     cancel_requested: threading.Event | None = None,
-) -> dict[str, Any]:
+) -> BackgroundRunResult:
     """Run a silent background sample-alert investigation in the REPL."""
-    return session_runner.run_sample_alert_for_session_background(
-        template_name=template_name,
-        context_overrides=context_overrides,
-        cancel_requested=cancel_requested,
-        render_stream=repl_background_renderer(),
+    return cast(
+        BackgroundRunResult,
+        session_runner.run_sample_alert_for_session_background(
+            template_name=template_name,
+            context_overrides=context_overrides,
+            cancel_requested=cancel_requested,
+            render_stream=repl_background_renderer(),
+        ),
     )
 
 
