@@ -79,10 +79,13 @@ assistant_handoff_tool = RegisteredTool(
             HandoffField.EVIDENCE_KIND: string_property(
                 description=(
                     "Closed evidence category for harness policy. Use metric_read for "
-                    "product-analytics metrics/counts over a time window; incident for "
-                    "bare symptom/incident handoffs; setup for connect/configure asks; "
-                    "other only when none of those apply. Enum is derived from "
-                    "EvidenceKind — do not hard-code a parallel list."
+                    "product-analytics metrics/counts over a time window (the product's "
+                    "own users, events, retention). Use service_metric_read when the user "
+                    "names the system that holds the number (GitHub, a CI system, a cloud "
+                    "or monitoring provider) so the named system is read instead of the "
+                    "analytics vendor. incident for bare symptom/incident handoffs; setup "
+                    "for connect/configure asks; other only when none of those apply. Enum "
+                    "is derived from EvidenceKind — do not hard-code a parallel list."
                 ),
                 enum=EVIDENCE_KIND_VALUES,
             ),

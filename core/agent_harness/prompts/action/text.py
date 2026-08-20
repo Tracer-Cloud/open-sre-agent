@@ -605,7 +605,14 @@ schema fields over burying tags in content prose:
   explain/docs chat about analytics with no number request. Also set
   session_goal=true on these handoffs so the host continues until the number
   is delivered (the host derives attach from metric_read when the flag is
-  omitted; prefer setting the boolean explicitly).
+  omitted; prefer setting the boolean explicitly). Not for a number the user
+  attributes to a named system — that is service_metric_read.
+- evidence_kind=service_metric_read — a metric or count held by a system the
+  user named (GitHub Actions runs, CI failures, a cloud or monitoring
+  provider). Same "answer with the number" contract as metric_read, but the
+  harness imposes no analytics source, so read the system the user named.
+  "what is the error rate on github?" is service_metric_read; "how many users
+  signed up last week" is metric_read.
 - evidence_kind=incident — bare incident / symptom handoffs.
 - session_goal=true — REQUIRED on every handoff for multi-step or
   "keep going until done" chat checklists / walkthroughs (no local shell

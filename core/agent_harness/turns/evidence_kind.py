@@ -21,6 +21,7 @@ class EvidenceKind(StrEnum):
     """What the action planner said this turn is asking for."""
 
     METRIC_READ = "metric_read"
+    SERVICE_METRIC_READ = "service_metric_read"
     INCIDENT = "incident"
     SETUP = "setup"
     OTHER = "other"
@@ -39,11 +40,15 @@ class EvidenceKindPolicy:
     ``suppress_investigation_offer``: do not close with Want-me-to investigate.
     ``ignore_preferred_sources``: never attach preferred ids on the need
     (incident handoffs are not metric-source asks).
+    ``implies_session_goal``: a handoff of this kind attaches a session goal when
+    the planner leaves the flag unset — a number question needs the host loop to
+    continue until the number is delivered.
     """
 
     requires_authoritative_source: bool = False
     suppress_investigation_offer: bool = False
     ignore_preferred_sources: bool = False
+    implies_session_goal: bool = False
 
 
 _DEFAULT_POLICY = EvidenceKindPolicy()
@@ -53,6 +58,16 @@ _KIND_POLICIES: dict[EvidenceKind, EvidenceKindPolicy] = {
     EvidenceKind.METRIC_READ: EvidenceKindPolicy(
         requires_authoritative_source=True,
         suppress_investigation_offer=True,
+        implies_session_goal=True,
+    ),
+    # The user named the system holding the number (GitHub, a CI or cloud
+    # provider). No authoritative analytics source is imposed: forcing one made
+    # every such question answer from the product-analytics vendor, whatever it
+    # asked about. With no preferred ids the need falls through to an ordinary
+    # gather, so the action phase reads the system the user actually named.
+    EvidenceKind.SERVICE_METRIC_READ: EvidenceKindPolicy(
+        suppress_investigation_offer=True,
+        implies_session_goal=True,
     ),
     EvidenceKind.INCIDENT: EvidenceKindPolicy(
         ignore_preferred_sources=True,
