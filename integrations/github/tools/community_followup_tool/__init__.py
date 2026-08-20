@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from datetime import UTC, datetime, timedelta
 from typing import Any
 
 from core.domain.types.tools import ToolSurface
@@ -53,6 +54,11 @@ def _community_extract_params(sources: dict[str, dict]) -> dict[str, Any]:
             "comments": {"type": "array"},
             "maintainer_logins": {"type": "array", "items": {"type": "string"}},
             "per_page": {"type": "integer"},
+            "since_days": {
+                "type": "integer",
+                "default": 30,
+                "description": "Only consider comments updated in the last N days.",
+            },
             "github_token": {"type": "string"},
         },
         "required": [],
@@ -67,18 +73,24 @@ def summarize_community_followups(
     comments: list[dict[str, Any]] | None = None,
     maintainer_logins: list[str] | None = None,
     per_page: int = 100,
+    since_days: int = 30,
     github_token: str | None = None,
     **_kwargs: Any,
 ) -> dict[str, Any]:
     try:
-        normalized_comments = (
-            comments
-            if comments is not None
-            else GitHubRestClient(github_token).paginate(
+        if comments is not None:
+            normalized_comments = comments
+        else:
+            since = datetime.now(UTC) - timedelta(days=max(1, since_days))
+            normalized_comments = GitHubRestClient(github_token).paginate(
                 f"/repos/{owner}/{repo}/issues/comments",
-                params={"per_page": max(1, min(per_page, 100))},
+                params={
+                    "per_page": max(1, min(per_page, 100)),
+                    "since": since.strftime("%Y-%m-%dT%H:%M:%SZ"),
+                    "sort": "updated",
+                    "direction": "desc",
+                },
             )
-        )
     except GitHubApiError as exc:
         return tool_unavailable(
             "github",
