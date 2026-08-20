@@ -38,10 +38,22 @@ HARD RULES:
   codespace / ssh-key / gpg-key / config — those are blocked (token leakage /
   CI code execution / secret mutation).
 - Pass args after the gh binary; optional repo as owner/name → -R.
-- For workflow-run counts or failure rates, call
-  `list_github_actions_workflow_runs` instead of building a `gh api` query, and
-  pass `window_hours=24` unless the user named a window. The tool defaults to no
-  window because it also answers "which deploy failed before the incident".
+- A failure RATE over a window is two counts, not a list of runs. Ask GitHub to
+  count, with `created` scoping the window server-side — never page through runs
+  to compute a rate. A busy repo runs thousands per week; enumeration times out
+  and a partial page gives a biased number.
+
+      gh api "/repos/OWNER/REPO/actions/runs?created=%3E%3D2026-08-13&per_page=1" --jq '.total_count'
+      gh api "/repos/OWNER/REPO/actions/runs?created=%3E%3D2026-08-13&status=failure&per_page=1" --jq '.total_count'
+
+  `per_page=1` because only `total_count` is read. Report the window you passed
+  and which conclusions `status=failure` covers — a strict failure count and a
+  broader error count are different numbers and must not be swapped between
+  turns.
+- To LIST which runs failed (not a rate), call
+  `list_github_actions_workflow_runs`, and pass `window_hours=24` unless the
+  user named a window. The tool defaults to no window because it also answers
+  "which deploy failed before the incident".
   It reports `window_fully_fetched`: when false the page ended inside the
   window, so counts are a floor — say so or re-ask with a larger `per_page`,
   never publish a rate over it. `undated_runs` counts runs whose timestamp could
