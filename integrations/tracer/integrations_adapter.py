@@ -4,7 +4,7 @@
 Lives in ``integrations/tracer/`` so the Tracer-specific dependency stays
 inside the Tracer integration package. Core code calls
 :func:`platform.harness_ports.fetch_remote_integrations`; the boundary
-(``interactive_shell.ui.output.boundary``) registers this
+(``surfaces.shared.terminal.output.boundary``) registers this
 adapter at startup so the call routes through ``TracerClient``.
 """
 

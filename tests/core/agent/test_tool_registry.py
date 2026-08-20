@@ -13,9 +13,9 @@ from core.agent_harness.tools.action_tools import (
 from core.agent_harness.tools.tool_context import (
     ActionToolContext,
 )
-from surfaces.cli.wizard.config import PROVIDER_BY_VALUE
 from surfaces.interactive_shell.command_registry import SLASH_COMMANDS
 from surfaces.interactive_shell.session import Session
+from surfaces.shared.llm_setup.catalog import PROVIDER_BY_VALUE
 from tools.interactive_shell.action_names import TOOL_KIND_TO_NAME
 
 
@@ -65,6 +65,15 @@ def test_tool_specs_include_required_fields() -> None:
         assert spec["name"]
         assert spec["description"]
         assert "input_schema" in spec
+
+
+def test_action_tools_classify_side_effects() -> None:
+    tools = _action_tools(Session())
+    unclassified = sorted(
+        tool.name for tool in tools if getattr(tool, "side_effect_level", None) is None
+    )
+
+    assert unclassified == []
 
 
 def test_action_kind_to_tool_names_are_openai_compatible() -> None:

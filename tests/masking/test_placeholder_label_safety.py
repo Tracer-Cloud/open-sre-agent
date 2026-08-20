@@ -11,8 +11,8 @@ from __future__ import annotations
 
 import re
 
-from platform.masking.context import MaskingContext
-from platform.masking.policy import MaskingPolicy
+from platform.safety.masking.context import MaskingContext
+from platform.safety.masking.policy import MaskingPolicy
 
 _SINGLE_TOKEN = re.compile(r"^<[A-Z0-9_]+>$")
 

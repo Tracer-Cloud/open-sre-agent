@@ -21,10 +21,10 @@ from typing import TYPE_CHECKING, Any
 from rich.console import Console
 
 if TYPE_CHECKING:
-    from surfaces.interactive_shell.runtime.action_turn import ShellActionRunner
+    from platform.turn_host.turn_handler import TurnHandler
 
 from platform.analytics.repl_context import bound_repl_turn_context
-from platform.analytics.usage_context import SURFACE_CLI, bound_usage_context
+from platform.analytics.usage_context import UsageSurface, bound_usage_context
 from platform.observability.trace.spans import bind_session_trace, emit_thread_boundary
 from surfaces.interactive_shell.runtime.agent_presentation import (
     AgentEvent,
@@ -47,11 +47,11 @@ from surfaces.interactive_shell.runtime.utils.input_policy import (
     turn_needs_exclusive_stdin,
 )
 from surfaces.interactive_shell.session import Session
-from surfaces.interactive_shell.ui.output.console_state import set_investigation_spinner
-from surfaces.interactive_shell.ui.output.repl_progress import repl_safe_progress_scope
 from surfaces.interactive_shell.ui.streaming.console import StreamingConsole
-from surfaces.interactive_shell.utils.error_handling.exception_reporting import report_exception
 from surfaces.interactive_shell.utils.telemetry import PromptRecorder
+from surfaces.shared.error_handling.exception_reporting import report_exception
+from surfaces.shared.terminal.output.console_state import set_investigation_spinner
+from surfaces.shared.terminal.output.repl_progress import repl_safe_progress_scope
 
 _logger = logging.getLogger(__name__)
 
@@ -71,8 +71,8 @@ class AgentTurnResources:
     #: terminal; an embedding caller passes its console so agent responses and
     #: tool output land in the same stream as the startup renders.
     console: Console | None = None
-    #: Session-scoped action runner; rebound to each turn's streaming console.
-    action_runner: ShellActionRunner | None = None
+    #: Session-scoped turn host; each turn binds its own streaming console.
+    turn_handler: TurnHandler | None = None
 
 
 def _streaming_console(
@@ -180,7 +180,7 @@ async def _run_agent_turn_loop(
 
         with (
             bound_usage_context(
-                surface=SURFACE_CLI,
+                surface=UsageSurface.CLI,
                 session_id=runtime.session.session_id,
             ),
             bound_repl_turn_context(
@@ -198,7 +198,7 @@ async def _run_agent_turn_loop(
                 confirm_fn=confirm,
                 is_tty=None,
                 request_exit=runtime.request_exit,
-                action_runner=runtime.action_runner,
+                handler=runtime.turn_handler,
             )
     except asyncio.CancelledError:
         await emit(AgentEvent(type="turn_interrupted"))

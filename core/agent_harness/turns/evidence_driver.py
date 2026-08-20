@@ -34,6 +34,7 @@ from core.agent_harness.turns.gather_observation import (
     GatheredEvidence,
     tool_results_from_executed,
 )
+from core.agent_harness.turns.gather_phase import PersistToolCalls
 from core.agent_harness.turns.gather_unreachable import (
     load_gather_unreachable,
     store_gather_unreachable,
@@ -46,6 +47,7 @@ from core.agent_harness.turns.source_circuit_breaker import SourceCircuitBreaker
 from core.domain.alerts.alert_source import secondary_tool_sources
 from core.events import runtime_event_callback_from_observer
 from core.state import MAX_CONVERSATION_MESSAGES
+from core.tool.execution import ToolExecutionHooks, compose_tool_execution_hooks
 from platform.analytics.react_turn import run_react_agent_with_telemetry
 from platform.harness_ports import enrich_resolved_with_repo_scopes
 from platform.observability.trace.prompts import persist_turn_system_prompt
@@ -60,9 +62,9 @@ log = logging.getLogger(__name__)
 # PostHog count query never ran. Pair with :func:`with_gather_discovery_budget`
 # so successful schema thrash cannot burn the iteration cap. The full
 # multi-stage ReAct budget belongs to investigations. Headless metric reports
-# (PostHog / digests) may raise this via ``max_iterations``.
+# (PostHog / digests) may raise this via ``max_iterations``
+# (``gather_phase.MAX_REPORT_GATHER_ITERATIONS``).
 _MAX_GATHER_ITERATIONS = 6
-MAX_REPORT_GATHER_ITERATIONS = 12
 
 # Caps so a chatty tool (or many tools) can't blow up the follow-up prompt the
 # assistant must summarize.
@@ -71,7 +73,6 @@ _MAX_PER_TOOL_CHARS = 4_000
 
 # A persistence sink for gathered tool calls: ``persist(executed)`` where
 # ``executed`` is a list of ``(tool_call, output)`` pairs.
-PersistToolCalls = Callable[[list[tuple[Any, Any]]], None]
 
 
 class GatherAgentFactory(Protocol):
@@ -289,6 +290,7 @@ def gather_tool_evidence(
     resolved_integrations: dict[str, Any] | None = None,
     max_iterations: int | None = None,
     is_cancelled: Callable[[], bool] | None = None,
+    tool_hooks: ToolExecutionHooks | None = None,
 ) -> GatheredEvidence | None:
     """Run a bounded tool-calling loop and return collected evidence, or None.
 
@@ -331,7 +333,9 @@ def gather_tool_evidence(
         tool_resources = cancel_tool_resources(is_cancelled)
         seed_tools, seed_sources = load_gather_unreachable(session)
         breaker = SourceCircuitBreaker(seed_tools=seed_tools, seed_sources=seed_sources)
-        gather_hooks = with_gather_discovery_budget(breaker.hooks())
+        gather_hooks = with_gather_discovery_budget(
+            compose_tool_execution_hooks(tool_hooks, breaker.hooks())
+        )
         if agent_factory is None:
             agent = _build_evidence_agent(
                 llm=llm,
@@ -408,7 +412,6 @@ def gather_tool_evidence(
 __all__ = [
     "GatherAgentFactory",
     "GatheredEvidence",
-    "MAX_REPORT_GATHER_ITERATIONS",
     "PersistToolCalls",
     "gather_tool_evidence",
 ]

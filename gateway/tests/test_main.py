@@ -14,14 +14,14 @@ def test_gateway_main_fails_closed_without_slash_ports() -> None:
 
 
 def test_manager_main_fails_closed_without_slash_ports() -> None:
-    from gateway.core.runtime import controller as manager_module
+    from gateway.core.lifecycle import controller as manager_module
 
     with pytest.raises(SystemExit, match="slash_ports_factory"):
         manager_module.main()
 
 
 def test_manager_start_gateway_wrapper_requires_slash_ports() -> None:
-    from gateway.core.runtime.controller import start_gateway
+    from gateway.core.lifecycle.controller import start_gateway
 
     with pytest.raises(SystemExit, match="slash_ports_factory"):
         start_gateway(wait=False)

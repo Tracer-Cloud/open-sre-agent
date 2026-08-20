@@ -18,12 +18,12 @@ from platform.terminal.prompt_support import (
     questionary_prompt_style,
 )
 from platform.terminal.theme import BOLD_BRAND, ERROR, HIGHLIGHT, SECONDARY, WARNING
-from surfaces.cli.llm_auth.providers import (
+from surfaces.shared.llm_setup.auth_profiles import (
     ProviderAuthProfile,
     iter_auth_profiles,
     resolve_auth_profile,
 )
-from surfaces.cli.llm_auth.service import (
+from surfaces.shared.llm_setup.auth_service import (
     AuthSetupError,
     cli_subscription_install_error,
     configure_api_key_provider,
@@ -110,7 +110,7 @@ def _maybe_open_setup_page(profile: ProviderAuthProfile, *, enabled: bool) -> No
         webbrowser.open(profile.setup_url)
 
 
-# Mirrors render_health_report's table style (surfaces/interactive_shell/ui/health) so
+# Mirrors render_health_report's table style (surfaces/shared/terminal/health) so
 # /auth and /health read consistently. Real ANSI colour is intentional: run_cli_command
 # captures this command's stdout with FORCE_COLOR=1 and Text.from_ansi() re-parses it
 # for the REPL, so force_terminal=True here is what makes that styling survive.

@@ -9,7 +9,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 from gateway.web import webapp
-from platform.auth.jwt_auth import JWTClaims
+from platform.safety.auth.jwt_auth import JWTClaims
 
 
 def _claims(*, org: str = "org_test") -> JWTClaims:
@@ -59,7 +59,7 @@ def test_get_investigation_requires_auth() -> None:
 
 
 def test_invalid_token_is_rejected(monkeypatch: pytest.MonkeyPatch) -> None:
-    from platform.auth.jwt_auth import JWTVerificationError
+    from platform.safety.auth.jwt_auth import JWTVerificationError
 
     monkeypatch.setattr(
         "gateway.web.clerk_deps.verify_jwt_async",
@@ -190,15 +190,13 @@ def test_cancel_unknown_investigation_is_not_found(client: TestClient) -> None:
 
 
 def test_cancel_running_investigation_returns_current_status(client: TestClient) -> None:
-    from gateway.web import investigations
-
     created = client.post(
         "/api/investigations",
         json={"raw_alert": {}},
         headers={"Authorization": "Bearer fake"},
     ).json()
     investigation_id = created["investigation_id"]
-    store = investigations._store()
+    store = webapp.app.state.investigations
     # Drain leftovers from earlier tests sharing the process-local store.
     claimed = None
     for _ in range(32):
@@ -245,7 +243,7 @@ def test_create_investigation_writes_security_audit(
 ) -> None:
     from pathlib import Path
 
-    from gateway.core.runtime import security_audit
+    from gateway.core.storage import security_audit
 
     path = Path(str(tmp_path)) / "security-audit.jsonl"
     monkeypatch.setattr(security_audit, "security_audit_path", lambda: path)
@@ -269,7 +267,7 @@ def test_cancel_investigation_writes_security_audit(
 ) -> None:
     from pathlib import Path
 
-    from gateway.core.runtime import security_audit
+    from gateway.core.storage import security_audit
 
     path = Path(str(tmp_path)) / "security-audit.jsonl"
     monkeypatch.setattr(security_audit, "security_audit_path", lambda: path)

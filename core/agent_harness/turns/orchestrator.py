@@ -536,6 +536,12 @@ def run_turn(
     )
 
     handoff_contents = action_result.handoff_contents
+    # Routing keys off what the *planner* asked for. The tags appended below are
+    # harness guidance for the assistant (evidence tier, goal continuation), not
+    # a request to answer. Letting them reach the router turned a turn the action
+    # had already answered into a gather turn, which answered it a second time
+    # with a different number under a different label.
+    planner_handoffs = action_result.handoff_contents
     tier_tag = handoff_tag_for(evidence_need)
     if tier_tag is not None and tier_tag not in handoff_contents:
         handoff_contents = (*handoff_contents, tier_tag)
@@ -554,7 +560,7 @@ def run_turn(
     route = _route_turn(
         _routing_input_from_result(action_result, observation),
         user_text=text,
-        handoff_contents=handoff_contents,
+        handoff_contents=planner_handoffs,
     )
     log.debug(
         "turn route=%s planned=%s executed=%s handled=%s observation=%s",

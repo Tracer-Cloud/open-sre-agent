@@ -6,16 +6,16 @@ when no email channel was configured. It lives here now, so the lookup happens
 only when email was actually requested.
 
 Email keeps the full report. The chat channels carry the bounded summary from
-``platform.notifications.rca_summary``.
+``platform.delivery.notifications.rca_summary``.
 """
 
 from __future__ import annotations
 
-from platform.background_investigations.types import BackgroundInvestigationRecord
-from platform.notifications.outbound_registry import (
+from platform.delivery.notifications.outbound_registry import (
     BACKGROUND_RCA,
     register_outbound_adapter,
 )
+from platform.scheduling.background_investigations.types import BackgroundInvestigationRecord
 
 
 def deliver_email_notification(record: BackgroundInvestigationRecord) -> str:

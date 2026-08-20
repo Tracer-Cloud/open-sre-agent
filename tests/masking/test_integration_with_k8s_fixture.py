@@ -10,8 +10,8 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-from platform.masking.context import MaskingContext
-from platform.masking.policy import ALL_KINDS, MaskingPolicy
+from platform.safety.masking.context import MaskingContext
+from platform.safety.masking.policy import ALL_KINDS, MaskingPolicy
 
 FIXTURE = (
     Path(__file__).parent.parent / "e2e" / "kubernetes" / "fixtures" / "datadog_k8s_alert.json"

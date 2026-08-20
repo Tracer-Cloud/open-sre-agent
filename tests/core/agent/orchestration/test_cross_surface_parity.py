@@ -4,7 +4,7 @@ Surfaces under test:
 
 * ``shell`` — ``execute_shell_turn`` (interactive REPL / CLI one-shot)
 * ``headless`` — ``HeadlessAgent.dispatch``
-* ``gateway_handler`` — ``GatewayTurnHandler`` (Telegram/API gateway)
+* ``gateway_handler`` — ``TurnHandler`` (Telegram/API gateway)
 
 Each test wires ONE tool registry and ONE pair of LLMs, drives the same message
 through all three entry points, and asserts identical routing + response shape.
@@ -19,11 +19,11 @@ import pytest
 
 import surfaces.interactive_shell.runtime.slash_adapter as slash_adapter
 from core.agent_harness.tools.action_tools import get_action_tool
-from gateway.core.runtime.turn_handler import GatewayTurnHandler
+from platform.turn_host.turn_handler import TurnHandler
 from tests.core.agent.orchestration.cross_surface_parity_harness import (
     ALL_SURFACES,
     PARITY_ANSWER,
-    RecordingGatewaySink,
+    RecordingTurnOutput,
     assert_surfaces_match,
     collect_all_surfaces,
     console,
@@ -190,8 +190,8 @@ def test_gateway_handler_outbound_finalize_on_action_only_turn(
     configure(tools=[probe_tool()], action_mode="tool")
 
     session = fresh_session()
-    sink = RecordingGatewaySink()
-    handler = GatewayTurnHandler(console=console())
+    sink = RecordingTurnOutput()
+    handler = TurnHandler(console=console())
     handler("run probe", session, sink, logging.getLogger("test.parity.gateway.outbound"))
 
     assert sink.finalized is not None

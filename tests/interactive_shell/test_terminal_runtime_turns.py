@@ -13,13 +13,13 @@ from core.llm.types import AgentLLMResponse, ToolCall
 from surfaces.interactive_shell.runtime.core.turn_accounting import (
     ToolCallingTurnResult,
 )
-from surfaces.interactive_shell.runtime.shell_turn_execution import execute_shell_turn
 from surfaces.interactive_shell.runtime.turn_host import run_agent_turn_queue
 from surfaces.interactive_shell.runtime.utils import input_policy as loop_input_policy
 from surfaces.interactive_shell.session import Session
 from tests.core.agent.orchestration.action_execution_test_harness import (
     FakeActionLLM,
 )
+from tests.shared.harness_turn_driver import run_harness_turn
 from tools.interactive_shell.actions import (
     investigation as _investigation_tool,
 )
@@ -217,7 +217,7 @@ def test_queued_literal_quit_requests_runtime_exit() -> None:
 
         async def _run_turn(text: str) -> None:
             await asyncio.to_thread(
-                execute_shell_turn,
+                run_harness_turn,
                 text,
                 session,
                 console,
@@ -237,7 +237,7 @@ def test_queued_literal_quit_requests_runtime_exit() -> None:
     asyncio.run(_scenario())
 
 
-def test_execute_shell_turn_nitro_prompt_uses_cli_agent_actions(
+def test_run_harness_turn_nitro_prompt_uses_cli_agent_actions(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     nitro_prompt = (
@@ -272,7 +272,7 @@ def test_execute_shell_turn_nitro_prompt_uses_cli_agent_actions(
 
     session = Session()
     console = Console(file=io.StringIO(), force_terminal=False, highlight=False)
-    execute_shell_turn(
+    run_harness_turn(
         nitro_prompt,
         session,
         console,
@@ -287,7 +287,7 @@ def test_execute_shell_turn_nitro_prompt_uses_cli_agent_actions(
     assert llm_calls == []
 
 
-def test_execute_shell_turn_nitro_prompt_executes_remote_then_investigation(
+def test_run_harness_turn_nitro_prompt_executes_remote_then_investigation(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     nitro_prompt = (
@@ -316,7 +316,7 @@ def test_execute_shell_turn_nitro_prompt_executes_remote_then_investigation(
         call_order.append(f"investigation:{alert_text}")
 
     monkeypatch.setattr(
-        "surfaces.interactive_shell.runtime.action_turn.default_llm_factory",
+        "core.agent_harness.turns.headless_build.default_llm_factory",
         lambda: FakeActionLLM(
             [
                 AgentLLMResponse(
@@ -343,7 +343,7 @@ def test_execute_shell_turn_nitro_prompt_executes_remote_then_investigation(
 
     session = Session()
     console = Console(file=io.StringIO(), force_terminal=False, highlight=False)
-    execute_shell_turn(
+    run_harness_turn(
         nitro_prompt,
         session,
         console,

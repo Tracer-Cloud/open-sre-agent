@@ -35,7 +35,7 @@ Tool packages must be substantive production modules — no empty or discovery-o
 - [ ] Reusable transport or integration-specific parsing lives in `integrations/<name>/` or `core/tool_framework/utils/`, not copied into the tool body
 - [ ] Failure responses have a stable, investigation-friendly shape; expected external failures (missing config, auth, rate limit, upstream 4xx/5xx) return structured errors rather than raising — unexpected exceptions use the global `BaseTool` wrapper intentionally or are migrated with telemetry coverage
 - [ ] Output is normalized enough for the planner/LLM to consume reliably
-- [ ] Secrets never leak through `extract_params`, return values, logs, or traceable tool-call kwargs; secret/PII output is run through `platform/masking/` before return
+- [ ] Secrets never leak through `extract_params`, return values, logs, or traceable tool-call kwargs; secret/PII output is run through `platform/safety/masking/` before return
 - [ ] External side effects declare `side_effect_level`, `requires_approval`, and `approval_reason` where appropriate
 - [ ] To appear in both investigation and chat, set `surfaces=(ToolSurface.INVESTIGATION, ToolSurface.CHAT)`
 
@@ -96,17 +96,19 @@ Add `integrations/<name>/background_adapter.py` with three members:
 
 ```python
 class _MyChannelBackgroundAdapter:
-    name = "mychannel"                             # the literal a user types
-    capabilities = frozenset({BACKGROUND_RCA})     # from platform.notifications.outbound_registry
+    name = "mychannel"  # the literal a user types
+    capabilities = frozenset(
+        {BACKGROUND_RCA}
+    )  # from platform.delivery.notifications.outbound_registry
 
     def deliver(self, record: BackgroundInvestigationRecord) -> str:
-        return deliver_mychannel_notification(record)   # module-level function, see below
+        return deliver_mychannel_notification(record)  # module-level function, see below
 ```
 
 - [ ] Register the adapter object in `bootstrap/adapters.py`. Nothing auto-discovers it, and importing the module is **not** enough: imports are cached, so a re-import after the registry is cleared runs no module body.
 - [ ] `deliver` **never raises**. Return `"sent"`, `"failed: <reason>"`, or `"missing <name> integration: <what to configure>"`. The string is persisted on the record and shown by `/background show`, so redact any credential in the reason.
 - [ ] Import the vendor client **inside** `deliver`, not at module scope. These modules are imported when a user runs `/background notify set`, so a module-level client lands on that path.
-- [ ] Send the bounded summary from `platform.notifications.rca_summary`, not the full report, for any channel with a message-size limit.
+- [ ] Send the bounded summary from `platform.delivery.notifications.rca_summary`, not the full report, for any channel with a message-size limit.
 
 The channel becomes selectable as soon as it is registered — `/background notify set` derives its allowed list from the registry, so there is no channel list to edit.
 

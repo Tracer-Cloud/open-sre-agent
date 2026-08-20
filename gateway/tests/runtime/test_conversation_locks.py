@@ -64,11 +64,15 @@ def test_idle_entries_are_pruned_at_capacity() -> None:
     assert len(registry) <= 2
 
 
+def _fail_turn() -> None:
+    raise RuntimeError("turn failed")
+
+
 def test_exception_releases_conversation_for_next_turn() -> None:
     registry = ConversationLockRegistry()
 
     with pytest.raises(RuntimeError, match="turn failed"), registry.hold("conversation"):
-        raise RuntimeError("turn failed")
+        _fail_turn()
 
     with registry.hold("conversation"):
         pass

@@ -1,126 +1,33 @@
-"""Compose one interactive-shell turn from its action/gather/answer adapters.
+"""One interactive-shell turn: build (or reuse) the shell agent, then ``handle``.
 
-Adapter-only: binds the shell's action-turn (``action_turn``), gather pass
-(``integration_tool_gathering``), and answer (``answer_turn``) adapters, then
-calls the public host API (:meth:`AgentSession.chat`). Each adapter owns its
-own binding; this file only composes them and attaches turn accounting.
-The injection contracts live in ``turn_seams``.
+The shell's ports are supplied by ``shell_agent``; the agent's own stages run.
+A test that injects a whole stage (``execute_actions`` / ``gather_evidence`` /
+``answer_agent``) goes through the seams in ``turn_seams``.
 """
 
 from __future__ import annotations
 
+import logging
 from collections.abc import Callable
-from dataclasses import dataclass
 
 from rich.console import Console
 
 from core.agent_harness import (
-    AgentSession,
-    ChatTurnBindings,
-    SessionConfig,
     ToolCallingTurnResult,
     TurnResult,
-    dispatch_chat_turn,
-    format_session_goal_progress,
-    run_until_session_goal,
 )
-from core.agent_harness.ports import AnswerRequest, OutputSink
-from core.agent_harness.session_goal.goal import (
+from core.agent_harness.spi.session_goal import (
     SessionGoal,
+    format_session_goal_progress,
 )
-from core.agent_harness.turns.gather_observation import GatheredEvidence
-from core.agent_harness.turns.host_cancel import host_cancel_requested
-from core.agent_harness.turns.turn_plan import TurnPlan
-from core.execution import ToolExecutionHooks
-from surfaces.interactive_shell.runtime.action_turn import ShellActionRunner
-from surfaces.interactive_shell.runtime.agent_harness_adapters import resolve_output_sink
-from surfaces.interactive_shell.runtime.answer_turn import answer_shell_question
+from core.tool import ToolExecutionHooks
+from platform.turn_host.turn_handler import TurnHandler
+from platform.turn_host.turn_output import TurnOutput
+from surfaces.interactive_shell.runtime.agent_harness_adapters import ShellOutputSink
 from surfaces.interactive_shell.runtime.core.turn_accounting import ShellTurnAccounting
-from surfaces.interactive_shell.runtime.integration_tool_gathering import (
-    gather_integration_tool_evidence,
-)
-from surfaces.interactive_shell.runtime.turn_seams import (
-    AnswerShellQuestion,
-    GatherEvidence,
-    RunActionToolTurn,
-)
+from surfaces.interactive_shell.runtime.shell_agent import shell_agent_build_config
 from surfaces.interactive_shell.session import Session
-from surfaces.interactive_shell.utils.telemetry import LlmRunInfo, PromptRecorder
-
-
-@dataclass(frozen=True)
-class _ShellTurnBindings:
-    """Session/console-bound seams handed to ``run_turn`` for one shell turn."""
-
-    session: Session
-    console: Console
-    gather: GatherEvidence
-    answer: AnswerShellQuestion
-    output: OutputSink
-    action_runner: ShellActionRunner | None = None
-    execute: RunActionToolTurn | None = None
-    request_exit: Callable[[], None] | None = None
-    tool_hooks: ToolExecutionHooks | None = None
-
-    def execute_actions(
-        self,
-        text: str,
-        *,
-        confirm_fn: Callable[[str], str] | None = None,
-        is_tty: bool | None = None,
-        turn_plan: TurnPlan | None = None,
-    ) -> ToolCallingTurnResult:
-        if self.action_runner is not None:
-            return self.action_runner.run(
-                text,
-                confirm_fn=confirm_fn,
-                is_tty=is_tty,
-                turn_plan=turn_plan,
-            )
-        if self.execute is None:
-            raise RuntimeError("shell turn bindings missing action runner or execute seam")
-        return self.execute(
-            text,
-            self.session,
-            self.console,
-            confirm_fn=confirm_fn,
-            is_tty=is_tty,
-            request_exit=self.request_exit,
-            turn_plan=turn_plan,
-            output=self.output,
-            tool_hooks=self.tool_hooks,
-        )
-
-    def answer_question(self, text: str, request: AnswerRequest) -> LlmRunInfo | None:
-        return self.answer(
-            text,
-            self.session,
-            self.console,
-            output=self.output,
-            request=request,
-        )
-
-    def gather_evidence(
-        self, text: str, *, turn_plan: TurnPlan | None = None
-    ) -> str | GatheredEvidence | None:
-        resolved = turn_plan.resolved_integrations if turn_plan is not None else None
-        return self.gather(
-            text,
-            self.session,
-            self.console,
-            resolved_integrations=resolved,
-        )
-
-
-@dataclass(frozen=True, slots=True)
-class _ShellChatDispatcher:
-    """TTY adapter: satisfies :class:`ChatDispatcher` for :meth:`AgentSession.chat`."""
-
-    session: Session
-    bindings: ChatTurnBindings
-
-    def dispatch(self, message: str) -> TurnResult:
-        return dispatch_chat_turn(message, self.session, self.bindings)
+from surfaces.interactive_shell.utils.telemetry import PromptRecorder
 
 
 def execute_shell_turn(
@@ -132,64 +39,26 @@ def execute_shell_turn(
     confirm_fn: Callable[[str], str] | None = None,
     is_tty: bool | None = None,
     request_exit: Callable[[], None] | None = None,
-    action_runner: ShellActionRunner | None = None,
-    execute_actions: RunActionToolTurn | None = None,
-    gather_evidence: GatherEvidence | None = None,
-    answer_agent: AnswerShellQuestion | None = None,
-    output: OutputSink | None = None,
+    handler: TurnHandler | None = None,
+    output: TurnOutput | None = None,
     tool_hooks: ToolExecutionHooks | None = None,
 ) -> TurnResult:
-    """Execute one submitted interactive-shell turn via :meth:`AgentSession.chat`.
+    """Run one submitted shell turn through the shared turn host.
 
-    The action driver, gather pass, and conversational assistant default to the
-    shell adapters but are overridable via ``execute_actions`` / ``gather_evidence``
-    / ``answer_agent`` (the test injection seams, typed in ``turn_seams``). Prefer
-    a long-lived ``action_runner`` for the REPL so the core action stack is not
-    rebuilt every turn; the one-shot path is only for tests and cold entrypoints.
+    The same :class:`TurnHandler` the chat transports use, built with the
+    shell's own :func:`shell_agent_build_config` so the REPL keeps its tools,
+    prompts and gather phase. Pass a long-lived ``handler`` (the REPL builds one
+    at startup) so the tool stack is not rebuilt every turn.
     """
-    resolved_output = resolve_output_sink(console, output)
-    runner: ShellActionRunner | None = None
-    injected_execute: RunActionToolTurn | None = execute_actions
-    if injected_execute is None:
-        runner = action_runner or ShellActionRunner(
-            session=session,
+    resolved_output: TurnOutput = output if output is not None else ShellOutputSink(console)
+    # The host reads per-turn tool hooks off the output, the same way a chat
+    # transport supplies them.
+    resolved_output.tool_hooks = tool_hooks  # type: ignore[attr-defined]
+    if handler is None:
+        handler = TurnHandler(
             console=console,
-            request_exit=request_exit,
-            output=output,
-            tool_hooks=tool_hooks,
-        )
-        if action_runner is not None:
-            runner.bind_turn(console=console, output=output, tool_hooks=tool_hooks)
-
-    bindings = _ShellTurnBindings(
-        session=session,
-        console=console,
-        gather=gather_evidence or gather_integration_tool_evidence,
-        answer=answer_agent or answer_shell_question,
-        output=resolved_output,
-        action_runner=runner,
-        execute=injected_execute,
-        request_exit=request_exit,
-        tool_hooks=tool_hooks,
-    )
-
-    def _chat(message: str) -> TurnResult:
-        # Fresh accounting per outer iteration (nudge text changes each turn).
-        chat_bindings = ChatTurnBindings(
-            execute_actions=bindings.execute_actions,
-            answer=bindings.answer_question,
-            gather=bindings.gather_evidence,
-            accounting=ShellTurnAccounting(session=session, text=message, recorder=recorder),
-            confirm_fn=confirm_fn,
-            is_tty=is_tty,
-            surface="interactive_shell",
-            output=resolved_output,
-        )
-        # Shell already owns env/session boot; do not reload env per turn.
-        agent_session = AgentSession(SessionConfig(load_env=False))
-        return agent_session.chat(
-            message,
-            agent=_ShellChatDispatcher(session=session, bindings=chat_bindings),
+            agent_build=shell_agent_build_config(request_exit=request_exit),
+            retain_only_current_session=True,
         )
 
     def _on_progress(goal: SessionGoal) -> None:
@@ -198,16 +67,34 @@ def execute_shell_turn(
             # Checklist uses ``[x]`` / ``[ ]`` — Rich markup must stay off.
             console.print(rendered, markup=False)
 
-    # Always one action-agent turn first. Session-goal loop continues only when that
-    # turn (or a prior turn) attached a SessionGoal via structured handoff /
-    # explicit host attach — never via user-text keyword detection.
-    return run_until_session_goal(
-        _chat,
-        session,
+    def _accounting(message: str) -> ShellTurnAccounting:
+        return ShellTurnAccounting(session=session, text=message, recorder=recorder)
+
+    result = handler.run(
         text,
-        cancel_requested=lambda: host_cancel_requested(resolved_output),
+        session,
+        resolved_output,
+        logging.getLogger("opensre.interactive_shell"),
+        console=console,
+        confirm_fn=confirm_fn,
+        is_tty=is_tty,
+        accounting_factory=_accounting,
         on_progress=_on_progress,
-    ).last_result
+    )
+    if result is None:
+        # The process gate refused the turn; the host already said so on the
+        # output. Report a turn that ran nothing rather than inventing an answer.
+        return TurnResult(
+            final_intent="cli_agent_at_capacity",
+            action_result=ToolCallingTurnResult(
+                planned_count=0,
+                executed_count=0,
+                executed_success_count=0,
+                has_unhandled_clause=False,
+                handled=False,
+            ),
+        )
+    return result
 
 
 __all__ = ["execute_shell_turn"]

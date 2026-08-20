@@ -64,6 +64,35 @@ def test_missing_token_raises_typed_error(monkeypatch: pytest.MonkeyPatch) -> No
     assert "GitHub token is required" in str(exc.value)
 
 
+def test_public_read_can_omit_authorization(monkeypatch: pytest.MonkeyPatch) -> None:
+    seen_headers: dict[str, str] = {}
+
+    def fake_urlopen(req: request.Request, timeout: int = 0) -> _Response:  # noqa: ARG001
+        seen_headers.update(req.headers)
+        return _Response({"stargazers_count": 42})
+
+    monkeypatch.delenv("GITHUB_MCP_AUTH_TOKEN", raising=False)
+    monkeypatch.delenv("GITHUB_TOKEN", raising=False)
+    monkeypatch.delenv("GH_TOKEN", raising=False)
+    monkeypatch.setattr("integrations.github.client.request.urlopen", fake_urlopen)
+    client = GitHubRestClient(github_token=None, allow_unauthenticated_read=True)
+
+    assert client.request("GET", "/repos/Tracer-Cloud/opensre") == {"stargazers_count": 42}
+    assert "Authorization" not in seen_headers
+
+
+def test_public_read_mode_still_rejects_unauthenticated_writes(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.delenv("GITHUB_MCP_AUTH_TOKEN", raising=False)
+    monkeypatch.delenv("GITHUB_TOKEN", raising=False)
+    monkeypatch.delenv("GH_TOKEN", raising=False)
+    client = GitHubRestClient(github_token=None, allow_unauthenticated_read=True)
+
+    with pytest.raises(GitHubApiError, match="GitHub token is required"):
+        client.request("POST", "/repos/Tracer-Cloud/opensre/issues", body={"title": "x"})
+
+
 def test_paginate_follows_link_header(monkeypatch: pytest.MonkeyPatch) -> None:
     calls: list[str] = []
 
@@ -82,6 +111,32 @@ def test_paginate_follows_link_header(monkeypatch: pytest.MonkeyPatch) -> None:
 
     assert client.paginate("/repos/o/r/issues") == [{"number": 1}, {"number": 2}]
     assert len(calls) == 2
+
+
+def test_paginate_stops_at_max_pages(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Regression: paginate() followed every Link-header page with no cap, so
+    an endpoint that returns the whole repository's history (e.g.
+    /issues/comments, not scoped to one issue) could run to thousands of
+    pages on an active repo -- observed live as a 100+ second hang against
+    Tracer-Cloud/opensre before this fix."""
+    calls: list[str] = []
+
+    def fake_urlopen(req: request.Request, timeout: int = 0) -> _Response:  # noqa: ARG001
+        calls.append(req.full_url)
+        return _Response(
+            [{"id": len(calls)}],
+            headers={
+                "Link": '<https://api.github.com/repos/o/r/issues/comments?page=X>; rel="next"'
+            },
+        )
+
+    monkeypatch.setattr("integrations.github.client.request.urlopen", fake_urlopen)
+    client = GitHubRestClient(github_token="tok")
+
+    items = client.paginate("/repos/o/r/issues/comments", max_pages=3)
+
+    assert len(calls) == 3
+    assert len(items) == 3
 
 
 def test_http_error_preserves_status_and_rate_limit_headers(

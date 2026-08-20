@@ -6,7 +6,7 @@ pure dict reads over the ``openclaw`` source, with no bridge traffic.
 
 from __future__ import annotations
 
-from core.tool_framework.utils.mcp_params import first_list, first_string
+from core.tool_framework.utils import first_list, first_string
 from integrations.openclaw.tools.openclaw_mcp_tool.models import OpenClawParams
 
 __all__ = [

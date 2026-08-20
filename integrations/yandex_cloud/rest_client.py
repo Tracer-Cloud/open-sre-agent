@@ -92,6 +92,14 @@ def close_pool() -> None:
             _pool = None
 
 
+#: Action suffixes that change something even though Yandex binds them to GET.
+#: ``/operations/{id}:cancel`` is the one that exists today: a plain GET there
+#: cancels a running operation. Read-only rests on the index carrying no write
+#: path, and this is the backstop for when one slips in anyway - the generator
+#: also drops mutating verbs, and a test asserts the index stays clean.
+_MUTATING_ACTIONS: Final = (":cancel", ":stop", ":start", ":restart", ":delete", ":move")
+
+
 def _reject_path(path: str) -> str | None:
     """Return why *path* is unusable, or None when it is fine."""
     if not path.startswith("/"):
@@ -100,7 +108,21 @@ def _reject_path(path: str) -> str | None:
         return "path must be a path, not a URL"
     if ".." in path:
         return "path must not contain '..'"
+    action = path.rsplit("/", 1)[-1]
+    lowered = action.lower()
+    for mutating in _MUTATING_ACTIONS:
+        if lowered.endswith(mutating):
+            return f"'{mutating}' changes state, and this integration only reads"
     return None
+
+
+def reject_path(path: str) -> str | None:
+    """Return why *path* may not be read, or None when it is fine.
+
+    Public so a caller that never reaches the client - the synthetic backend
+    path - can apply the same rule.
+    """
+    return _reject_path(path)
 
 
 def is_collection_path(path: str) -> bool:
@@ -123,6 +145,25 @@ def is_collection_path(path: str) -> bool:
     for index, segment in enumerate(segments):
         if _VERSION_SEGMENT.fullmatch(segment):
             return len(segments[index + 1 :]) % 2 == 1
+    return False
+
+
+def is_folder_scoped_collection(path: str) -> bool:
+    """Whether a folder is what scopes this collection, rather than a parent resource.
+
+    ``/compute/v1/instances`` lists everything in a folder, so it needs one.
+    ``/compute/v1/instances/{id}/operations`` is already scoped by the instance
+    named in the path, and Yandex answers a stray ``folderId`` there with the
+    same bare ``404`` it gives a single-resource read — so the operations of a
+    perfectly healthy instance come back as if the instance did not exist.
+
+    The distinction is one segment deep: a collection directly under the version
+    is folder-scoped, anything nested beneath a named resource is not.
+    """
+    segments = [segment for segment in path.split("/") if segment]
+    for index, segment in enumerate(segments):
+        if _VERSION_SEGMENT.fullmatch(segment):
+            return len(segments[index + 1 :]) == 1
     return False
 
 
@@ -243,7 +284,7 @@ class YandexCloudClient:
             return self._failure(
                 service,
                 path,
-                f"Unknown Yandex Cloud service '{service}'. Call list_yc_services "
+                f"Unknown Yandex Cloud service '{service}'. Call find_yc_api "
                 "to see what is available.",
                 metadata={"unknown_service": True},
             )
@@ -258,6 +299,30 @@ class YandexCloudClient:
             query["pageToken"] = page_token
 
         return self._request(service, f"https://{host}{path}", path, query)
+
+    def post(
+        self,
+        service: str,
+        path: str,
+        body: dict[str, Any],
+        params: dict[str, Any] | None = None,
+    ) -> dict[str, Any]:
+        """Read via POST, for the few APIs whose reads take a request body.
+
+        Monitoring's metric read and Cloud Logging's reader are the two that
+        need this. It is not reachable from the generic tool - callers are the
+        curated per-service tools in this package, which name the exact endpoint
+        they talk to, so read-only stays a property of the client.
+        """
+        host = resolve_endpoint(service)
+        if host is None:
+            return self._failure(service, path, f"Unknown Yandex Cloud service '{service}'.")
+        rejected = _reject_path(path)
+        if rejected is not None:
+            return self._failure(service, path, f"Invalid path: {rejected}.")
+        return self._request(
+            service, f"https://{host}{path}", path, dict(params or {}), body=body, method="POST"
+        )
 
     def _request(
         self,
@@ -424,6 +489,8 @@ __all__ = [
     "DEFAULT_PAGE_SIZE",
     "accepts_folder_scope",
     "is_collection_path",
+    "reject_path",
+    "is_folder_scoped_collection",
     "MAX_LIST_ITEMS",
     "MAX_STRING_LENGTH",
     "YandexCloudClient",

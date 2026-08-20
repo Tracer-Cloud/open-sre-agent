@@ -38,8 +38,8 @@ owner module instead of broadening module responsibilities.
   `core.agent_harness.session.background`).
 - `core/state.py` — `ReplState`, `SpinnerState`: runtime state and transition
   helpers only (see State ownership rules below).
-- `core/turn_detection.py` — pure text classifiers for cancel/confirm/
-  correction detection only.
+- `core/turn_detection.py` — pure text classifiers for cancel/confirm
+  detection only.
 - `core/confirmation.py` — prompt-mediated confirmation waiting only.
 - `turn_host.py` — `run_input_loop` (read/handle input until exit),
   `run_agent_turn_queue` (consume queued prompts via an injected `run_turn`),

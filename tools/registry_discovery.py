@@ -16,8 +16,7 @@ import pkgutil
 from dataclasses import replace
 from types import ModuleType
 
-from core.tool_framework.base import BaseTool
-from core.tool_framework.registered_tool import REGISTERED_TOOL_ATTR, RegisteredTool
+from core.tool import REGISTERED_TOOL_ATTR, BaseTool, RegisteredTool
 
 logger = logging.getLogger(__name__)
 
@@ -94,6 +93,7 @@ INTEGRATION_TOOL_PACKAGES: tuple[str, ...] = (
     "integrations.vercel.tools",
     "integrations.victoria_logs.tools",
     "integrations.x_mcp.tools",
+    "integrations.yandex_cloud.tools",
 )
 
 _SKIP_MODULE_NAMES = {

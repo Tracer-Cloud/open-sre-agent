@@ -1,4 +1,4 @@
-"""Smoke tests for per-org credit metering: safe default posture + wired happy path.
+"""Smoke tests for per-org credit metering: safe default posture + happy path.
 
 These exercise the whole path through real env resolution (not surgical patches of
 internals), covering the two operational states a deploy actually sees: metering

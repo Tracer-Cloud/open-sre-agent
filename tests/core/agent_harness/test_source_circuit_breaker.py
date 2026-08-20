@@ -10,28 +10,34 @@ model through the block reason. SessionGoal gathers seed from
 from __future__ import annotations
 
 import threading
-from types import SimpleNamespace
 from typing import Any
 
+from core.agent_harness.session.persistence.memory import InMemorySessionStore
+from core.agent_harness.session.session_core import SessionCore
 from core.agent_harness.turns.gather_unreachable import (
     load_gather_unreachable,
     store_gather_unreachable,
 )
 from core.agent_harness.turns.source_circuit_breaker import SourceCircuitBreaker
-from core.execution import (
+from core.llm.types import ToolCall
+from core.tool.execution import (
     ToolExecutionHooks,
     ToolExecutionRequest,
     ToolExecutionResult,
     execute_tool_calls,
 )
-from core.llm.types import ToolCall
 
 _TIMEOUT_MARKER = "Connection to 172.29.99.99 timed out. (connect timeout=10)"
 _APP_ERROR_MARKER = "Mimir datasource not found"
 
 
+class _SourceToolStub:
+    def __init__(self, source: str) -> None:
+        self.source = source
+
+
 def _request(source: str, tool_name: str = "query_metrics") -> ToolExecutionRequest:
-    tool = type("T", (), {"source": source})()
+    tool = _SourceToolStub(source=source)
     return ToolExecutionRequest(
         tool_call=ToolCall(id="tc-1", name=tool_name, input={}),
         tool=tool,  # type: ignore[arg-type]
@@ -341,7 +347,7 @@ def test_execute_tool_calls_blocks_second_call_through_real_seam() -> None:
 
 def test_session_seed_blocks_sibling_on_next_gather_turn() -> None:
     """Next SessionGoal gather must not re-hit a source marked dead earlier."""
-    session = SimpleNamespace()
+    session = SessionCore(store=InMemorySessionStore())
     first = SourceCircuitBreaker()
     hooks = first.hooks()
     assert hooks.after_tool_call is not None
@@ -372,9 +378,6 @@ def test_session_seed_blocks_sibling_on_next_gather_turn() -> None:
 
 
 def test_session_core_clear_drops_gather_unreachable_carry() -> None:
-    from core.agent_harness.session.persistence.memory import InMemorySessionStore
-    from core.agent_harness.session.session_core import SessionCore
-
     session = SessionCore(store=InMemorySessionStore())
     store_gather_unreachable(
         session,

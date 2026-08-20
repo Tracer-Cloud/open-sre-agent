@@ -4,15 +4,14 @@ from __future__ import annotations
 
 from typing import Any
 
-from core.agent_harness.tools.tool_context import (
+from core.agent_harness.tools import (
     ActionToolContext,
     capability_available_from_sources,
     execute_with_action_context,
-    object_schema,
-    string_property,
 )
 from core.domain.types.tools import ToolSurface
-from core.tool_framework.registered_tool import RegisteredTool
+from core.tool import RegisteredTool, SideEffectLevel
+from core.tool_framework.utils import object_schema, string_property
 from tools.interactive_shell.shell.runner import run_shell_command
 from tools.interactive_shell.subprocess import require_subprocess_presenter
 
@@ -79,6 +78,7 @@ shell_run_tool = RegisteredTool(
     ),
     source="interactive_shell",
     surfaces=(ToolSurface.ACTION,),
+    side_effect_level=SideEffectLevel.MUTATING,
     parallel_safe=False,
     accepts_runtime_context=True,
     run=run_shell,

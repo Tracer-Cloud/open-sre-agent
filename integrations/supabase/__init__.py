@@ -18,7 +18,7 @@ from urllib.parse import urlparse
 from pydantic import Field, field_validator
 
 from config.strict_config import StrictConfigModel
-from core.tool_framework.utils.tool_availability import tool_unavailable
+from core.tool_framework.utils import tool_unavailable
 from integrations._validation_helpers import report_classify_failure
 
 logger = logging.getLogger(__name__)

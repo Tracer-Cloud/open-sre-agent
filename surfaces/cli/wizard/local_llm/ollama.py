@@ -13,6 +13,7 @@ import httpx
 
 from config.config import DEFAULT_OLLAMA_HOST
 from platform.terminal.theme import DIM, WARNING
+from surfaces.shared.llm_setup.ollama import normalize_model_tag
 
 if TYPE_CHECKING:
     from rich.console import Console
@@ -74,11 +75,6 @@ def wait_for_server(host: str, timeout_s: int = 30) -> bool:
             return True
         time.sleep(1)
     return False
-
-
-def normalize_model_tag(model: str) -> str:
-    """Ensure model has explicit tag. If no tag specified, append :latest to match Ollama behavior."""
-    return model if ":" in model else f"{model}:latest"
 
 
 def is_model_present(model: str, host: str = DEFAULT_OLLAMA_HOST) -> bool:

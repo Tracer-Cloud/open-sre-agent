@@ -11,7 +11,7 @@ from core.agent.run_io import AgentRunInput
 from core.agent_harness.prompts import PromptEnvelope
 from core.agent_harness.turns.turn_snapshot import TurnSnapshot
 from core.llm.types import AgentLLMResponse
-from core.types import AgentTool
+from core.tool.contracts import AgentTool
 
 
 class _NoToolLLM:
@@ -66,22 +66,54 @@ def _runtime_request() -> TurnSnapshot:
     )
 
 
+def test_construction_requires_llm() -> None:
+    with pytest.raises(ValueError, match="llm= must be set at construction"):
+        Agent(
+            llm=None,  # type: ignore[arg-type]
+            system="sys",
+            tools=[],
+            resolved_integrations={},
+            max_iterations=1,
+        )
+
+
+def test_construction_requires_llm_keyword() -> None:
+    with pytest.raises(TypeError):
+        Agent(system="sys", tools=[], resolved_integrations={}, max_iterations=1)  # type: ignore[call-arg]
+
+
 def test_run_requires_initial_messages_or_runtime_request() -> None:
-    agent = Agent(system="sys", tools=[], resolved_integrations={}, max_iterations=1)
+    agent = Agent(
+        llm=_NoToolLLM(),
+        system="sys",
+        tools=[],
+        resolved_integrations={},
+        max_iterations=1,
+    )
 
     with pytest.raises(ValueError, match="requires initial_messages or runtime_request"):
         agent.run()
 
 
 def test_run_with_initial_messages_requires_system_at_construction() -> None:
-    agent = Agent(tools=[], resolved_integrations={}, max_iterations=1)
+    agent = Agent(
+        llm=_NoToolLLM(),
+        tools=[],
+        resolved_integrations={},
+        max_iterations=1,
+    )
 
     with pytest.raises(ValueError, match="system= must be set"):
         agent.run([{"role": "user", "content": "hello"}])
 
 
 def test_run_with_initial_messages_requires_max_iterations_at_construction() -> None:
-    agent = Agent(system="sys", tools=[], resolved_integrations={})
+    agent = Agent(
+        llm=_NoToolLLM(),
+        system="sys",
+        tools=[],
+        resolved_integrations={},
+    )
 
     with pytest.raises(ValueError, match="max_iterations= must be set"):
         agent.run([{"role": "user", "content": "hello"}])
@@ -127,29 +159,8 @@ def test_build_run_input_from_messages_uses_construction_config() -> None:
     assert run_input.max_iterations == 3
 
 
-def test_get_llm_caches_process_wide_client(monkeypatch: pytest.MonkeyPatch) -> None:
-    calls = {"count": 0}
-
-    def _factory() -> _NoToolLLM:
-        calls["count"] += 1
-        return _NoToolLLM()
-
-    monkeypatch.setattr("core.llm.factory.get_llm", lambda _role: _factory())
-    agent = Agent(system="sys", tools=[], resolved_integrations={}, max_iterations=1)
-
-    first = agent._get_llm()
-    second = agent._get_llm()
-
-    assert first is second
-    assert calls["count"] == 1
-
-
-def test_runtime_request_path_uses_explicit_construction_llm_not_process_default(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
+def test_runtime_request_path_uses_explicit_construction_llm() -> None:
     explicit = _NoToolLLM()
-    default = _NoToolLLM()
-    monkeypatch.setattr("core.llm.factory.get_llm", lambda _role: default)
 
     agent = Agent(
         llm=explicit,
@@ -162,4 +173,3 @@ def test_runtime_request_path_uses_explicit_construction_llm_not_process_default
     run_input = agent._build_run_input(None, _runtime_request())
 
     assert run_input.llm is explicit
-    assert run_input.llm is not default

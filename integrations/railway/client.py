@@ -12,7 +12,7 @@ from config.constants.railway import RAILWAY_TOKEN_ENV
 from integrations.config_models import RailwayIntegrationConfig
 from integrations.probes import ProbeResult
 from integrations.railway.models import DeploymentInfo, RailwayScope, RedeployInfo
-from platform.notifications.redaction import redact_token
+from platform.delivery.notifications.redaction import redact_token
 
 _TIMEOUT_SECONDS = 10
 _ERROR_LIMIT = 500

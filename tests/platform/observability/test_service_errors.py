@@ -56,20 +56,29 @@ class TestCaptureServiceError:
             assert mock_report.call_args.kwargs["severity"] == "error"
 
     def test_generic_exception_uses_error_severity(self, mock_logger: logging.Logger) -> None:
-        exc = ConnectionError("refused")
+        exc = KeyError("items")
         with patch("platform.observability.errors.service.report_exception") as mock_report:
             capture_service_error(
                 exc, logger=mock_logger, integration="datadog", method="search_logs"
             )
             assert mock_report.call_args.kwargs["severity"] == "error"
 
-    def test_timeout_exception_uses_error_severity(self, mock_logger: logging.Logger) -> None:
+    def test_connection_refused_uses_warning_severity(self, mock_logger: logging.Logger) -> None:
+        # Unreachable service: an operational fact, same rule that drops its traceback.
+        exc = ConnectionError("refused")
+        with patch("platform.observability.errors.service.report_exception") as mock_report:
+            capture_service_error(
+                exc, logger=mock_logger, integration="datadog", method="search_logs"
+            )
+            assert mock_report.call_args.kwargs["severity"] == "warning"
+
+    def test_timeout_exception_uses_warning_severity(self, mock_logger: logging.Logger) -> None:
         exc = httpx.ReadTimeout("timed out")
         with patch("platform.observability.errors.service.report_exception") as mock_report:
             capture_service_error(
                 exc, logger=mock_logger, integration="splunk", method="search_logs"
             )
-            assert mock_report.call_args.kwargs["severity"] == "error"
+            assert mock_report.call_args.kwargs["severity"] == "warning"
 
     def test_tags_contain_surface_and_integration(self, mock_logger: logging.Logger) -> None:
         exc = RuntimeError("boom")

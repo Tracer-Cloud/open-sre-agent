@@ -26,6 +26,7 @@ from typing import Any
 import pytest
 
 import integrations.alertmanager.setup as alertmanager_setup
+import integrations.azure.setup as azure_setup
 import integrations.azure_sql.setup as azure_sql_setup
 import integrations.betterstack.setup as betterstack_setup
 import integrations.cli as cli
@@ -230,6 +231,14 @@ _ANSWERS: dict[str, dict[str, str]] = {
         "driver": "ODBC Driver 18 for SQL Server",
         "encrypt": "true",
     },
+    "azure": {
+        "workspace_id": "11111111-2222-3333-4444-555555555555",
+        "access_token": "azure-log-analytics-token",
+        "endpoint": "https://api.loganalytics.azure.us",
+        "tenant_id": "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee",
+        "subscription_id": "ffffffff-0000-1111-2222-333333333333",
+        "max_results": "150",
+    },
     "grafana": {
         "endpoint": "https://checkout.grafana.net",
         "api_key": "glsa_grafana_token",
@@ -297,6 +306,7 @@ _CASES = [
     pytest.param(mongodb_setup, "MONGODB_SETUP", cli._setup_mongodb, id="mongodb"),
     pytest.param(redis_setup, "REDIS_SETUP", cli._setup_redis, id="redis"),
     pytest.param(azure_sql_setup, "AZURE_SQL_SETUP", cli._setup_azure_sql, id="azure_sql"),
+    pytest.param(azure_setup, "AZURE_SETUP", cli._setup_azure, id="azure"),
     pytest.param(grafana_setup, "GRAFANA_SETUP", cli._setup_grafana, id="grafana"),
     pytest.param(rds_setup, "RDS_SETUP", cli._setup_rds, id="rds"),
     pytest.param(new_relic_setup, "NEW_RELIC_SETUP", cli._setup_new_relic, id="new_relic"),
@@ -454,22 +464,48 @@ def test_failed_verification_exits_without_saving(
 
 
 @pytest.mark.parametrize(("module", "attr", "handler"), _CASES)
-def test_blank_required_field_exits_before_the_next_prompt(
+def test_blank_required_field_is_asked_again_not_fatal(
     monkeypatch: pytest.MonkeyPatch, run: _Run, module: Any, attr: str, handler: Any
 ) -> None:
-    """Fail on the field that is blank, not after working through the rest."""
+    """A blank required answer re-asks that field; it never exits the setup.
+
+    An empty answer at an interactive prompt is a normal thing to type, not an
+    error to bail on — bailing left the user with "X is required", a non-zero
+    exit, and no way forward but starting over. Ctrl+C is the way out.
+    """
     spec = getattr(module, attr)
     prompted = _prompted(spec)
     first_required = next((f for f in prompted if f.required and not f.default), None)
     if first_required is None:
         pytest.skip(f"{spec.service} has no required prompted field without a default")
-    _install(monkeypatch, module, attr, run, blank=first_required.name)
 
-    with pytest.raises(SystemExit):
-        handler()
+    # Arrange — script the prompts: every field answered normally, except the
+    # required one is answered blank first and with the real value on re-ask.
+    def _fake_verify(_source: str, config: dict[str, Any]) -> dict[str, str]:
+        run.verified.append(dict(config))
+        return {"status": "passed", "detail": "ok"}
 
-    assert len(run.asked) == 1 + [f.name for f in prompted].index(first_required.name)
-    assert (run.verified, run.store) == ([], [])
+    monkeypatch.setattr(module, attr, dataclasses.replace(spec, verify=_fake_verify))
+    answers = _ANSWERS[spec.service]
+    queue: list[str] = []
+    for field in prompted:
+        if field.name == first_required.name:
+            queue.append("")
+        queue.append(answers[field.name])
+
+    def _fake_p(label: str, default: str = "", secret: bool = False) -> str:
+        run.asked.append((label, default, secret))
+        return queue.pop(0)
+
+    monkeypatch.setattr(cli, "_p", _fake_p)
+
+    # Act
+    handler()
+
+    # Assert — asked twice (blank, then real), then verified and saved
+    labels = [label for label, _default, _secret in run.asked]
+    assert labels.count(first_required.question) == 2
+    assert run.verified and run.store
 
 
 # --- Mode-picker integrations (Slack, Alertmanager, OpenSearch) ----------------
@@ -537,7 +573,17 @@ def test_slack_webhook_mode_clears_socket_tokens(
         values={"webhook_url": hook},
     )
     assert run.store == [
-        ("slack", {"credentials": {"webhook_url": hook, "bot_token": None, "app_token": None}})
+        (
+            "slack",
+            {
+                "credentials": {
+                    "webhook_url": hook,
+                    "bot_token": None,
+                    "app_token": None,
+                    "default_chat_id": None,
+                }
+            },
+        )
     ]
     # Webhook is store-only (no env_var). The unchosen socket tokens clear their
     # keyring slots so a prior Socket Mode setup does not linger in the env.
@@ -558,7 +604,14 @@ def test_slack_both_mode_stores_all_three(monkeypatch: pytest.MonkeyPatch, run: 
     assert run.store == [
         (
             "slack",
-            {"credentials": {"webhook_url": hook, "bot_token": "xoxb-1", "app_token": "xapp-1"}},
+            {
+                "credentials": {
+                    "webhook_url": hook,
+                    "bot_token": "xoxb-1",
+                    "app_token": "xapp-1",
+                    "default_chat_id": None,
+                }
+            },
         )
     ]
 
@@ -571,6 +624,7 @@ def test_slack_both_mode_prefills_stored_tokens_on_rerun(
         "webhook_url": "https://hooks.slack.com/services/T/B/x",
         "bot_token": "xoxb-1",
         "app_token": "xapp-1",
+        "default_chat_id": None,
     }
     _drive_picker(
         monkeypatch,

@@ -6,8 +6,7 @@ from typing import Any
 
 import pytest
 
-from core.tool_framework.base import BaseTool
-from core.tool_framework.registered_tool import REGISTERED_TOOL_ATTR, RegisteredTool
+from core.tool.contracts import REGISTERED_TOOL_ATTR, BaseTool, RegisteredTool
 from core.tool_framework.tool_decorator import tool
 
 # ---------------------------------------------------------------------------

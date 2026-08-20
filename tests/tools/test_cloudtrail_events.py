@@ -422,7 +422,7 @@ def test_realistic_page_shapes_every_event(mock_call) -> None:
 def test_success_payload_omits_error_key(mock_call) -> None:
     """The success payload must NOT carry an "error" key.
 
-    The runtime tool loop (core.execution._normalize_result) flags a result as a
+    The runtime tool loop (core.tool.execution._normalize_result) flags a result as a
     failure on the mere presence of an "error" key (is_error = "error" in raw) and
     replaces the whole payload with {"error": ...} before the agent sees it. A
     success dict with "error": None therefore hides every event from the

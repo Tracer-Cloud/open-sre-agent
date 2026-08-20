@@ -126,3 +126,40 @@ def test_truncate_analytics_text() -> None:
     truncated = truncate_analytics_text(long_text, max_chars=50)
     assert len(truncated) <= 50
     assert truncated.endswith("[truncated]")
+
+
+def test_exit_does_not_replay_its_farewell_to_the_user() -> None:
+    """``/exit`` records the outcome line only, not the console text it just printed.
+
+    Every slash command runs under ``capture_console_segment``, which tees: the
+    output renders live *and* is recorded, and the recording becomes the turn's
+    ``response_text``. For ``/exit`` that meant the resume hint and the goodbye
+    were printed once by the command and once more as the turn's response.
+
+    The spinner made it obvious. ``console.status`` animates by rewriting one
+    line, but ``export_text`` records every frame it wrote, so the replay showed
+    ``⠋ finishing up…⠙ finishing up…⠹ finishing up…`` as plain text.
+    """
+    # Arrange: what the exit path actually prints, spinner frames included.
+    captured = (
+        "Resume this session with:\n"
+        "/resume f659a4f9-3911-4ed2-bc8c-8e02da5f887c\n"
+        "opensre --resume f659a4f9-3911-4ed2-bc8c-8e02da5f887c\n"
+        "⠋ finishing up…⠙ finishing up…⠹ finishing up…\n"
+        "goodbye."
+    )
+
+    # Act
+    outcome = format_terminal_turn_outcome("/exit", kind="slash", ok=True, captured_output=captured)
+
+    # Assert
+    assert outcome == "slash /exit (succeeded)"
+    assert "goodbye." not in outcome
+    assert "finishing up" not in outcome
+
+
+def test_quit_is_summary_only_like_its_alias() -> None:
+    """``/quit`` runs the same handler, so it must not replay either."""
+    # Assert
+    assert slash_command_is_summary_only("/exit") is True
+    assert slash_command_is_summary_only("/quit") is True

@@ -8,9 +8,22 @@ from dataclasses import dataclass
 from typing import Any
 from urllib import error, parse, request
 
-from config.constants import GH_TOKEN_ENV, GITHUB_MCP_AUTH_TOKEN_ENV, GITHUB_TOKEN_ENV
+from config.constants import (
+    GH_TOKEN_ENV,
+    GITHUB_API_BASE_URL,
+    GITHUB_MCP_AUTH_TOKEN_ENV,
+    GITHUB_TOKEN_ENV,
+)
 
 JsonPayload = dict[str, Any] | list[Any]
+
+# Safety net for paginate(): GitHub's Link-header pagination has no inherent
+# upper bound, and some endpoints (e.g. /issues/comments, which returns every
+# comment across the whole repository rather than one issue) can run to
+# thousands of pages on an active repo, turning one tool call into a
+# multi-minute scan. 50 pages at the default 100/page is 5,000 items -- ample
+# for any bounded listing (open issues/PRs), while capping runaway endpoints.
+_DEFAULT_PAGINATE_MAX_PAGES = 50
 
 
 @dataclass(frozen=True)
@@ -67,10 +80,15 @@ class GitHubRestClient:
     """Minimal GitHub REST API client with pagination and typed errors."""
 
     def __init__(
-        self, github_token: str | None = None, *, base_url: str = "https://api.github.com"
+        self,
+        github_token: str | None = None,
+        *,
+        base_url: str = GITHUB_API_BASE_URL,
+        allow_unauthenticated_read: bool = False,
     ) -> None:
         self._token = resolve_github_token(github_token)
         self._base_url = base_url.rstrip("/")
+        self._allow_unauthenticated_read = allow_unauthenticated_read
 
     def request(
         self,
@@ -82,7 +100,7 @@ class GitHubRestClient:
         accept: str = "application/vnd.github+json",
         api_version: str = "2022-11-28",
     ) -> JsonPayload:
-        if not self._token:
+        if not self._token and not (self._allow_unauthenticated_read and method.upper() == "GET"):
             raise GitHubApiError(
                 "GitHub token is required. Configure github_token, GITHUB_TOKEN, or GH_TOKEN."
             )
@@ -95,9 +113,9 @@ class GitHubRestClient:
             method=method.upper(),
             headers={
                 "Accept": accept,
-                "Authorization": f"Bearer {self._token}",
                 "Content-Type": "application/json; charset=utf-8",
                 "X-GitHub-Api-Version": api_version,
+                **({"Authorization": f"Bearer {self._token}"} if self._token else {}),
             },
         )
         try:
@@ -129,22 +147,32 @@ class GitHubRestClient:
         params: dict[str, Any] | None = None,
         accept: str = "application/vnd.github+json",
         api_version: str = "2022-11-28",
+        max_pages: int = _DEFAULT_PAGINATE_MAX_PAGES,
     ) -> list[dict[str, Any]]:
-        if not self._token:
+        """Follow Link-header pagination, stopping after ``max_pages`` pages.
+
+        Silently returns whatever was collected so far once the cap is hit,
+        rather than raising -- callers on a bounded listing never reach the
+        cap; callers on an unbounded one get a usable partial result instead
+        of an effectively hung tool call.
+        """
+        if not self._token and not self._allow_unauthenticated_read:
             raise GitHubApiError(
                 "GitHub token is required. Configure github_token, GITHUB_TOKEN, or GH_TOKEN."
             )
 
         url: str | None = self._url(path, params=params)
         items: list[dict[str, Any]] = []
-        while url:
+        pages_fetched = 0
+        while url and pages_fetched < max_pages:
+            pages_fetched += 1
             req = request.Request(
                 url,
                 method="GET",
                 headers={
                     "Accept": accept,
-                    "Authorization": f"Bearer {self._token}",
                     "X-GitHub-Api-Version": api_version,
+                    **({"Authorization": f"Bearer {self._token}"} if self._token else {}),
                 },
             )
             try:

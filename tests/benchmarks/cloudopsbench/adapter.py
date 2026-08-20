@@ -426,7 +426,7 @@ class CloudOpsBenchAdapter(BenchmarkAdapter):
             },
             # CloudOpsBenchK8sTools read from sources["eks"]["_bench_backend"].
             # Deliberately distinct from the ``_backend`` slot used by synthetic
-            # tests — production tool availability checks (_eks_available,
+            # tests — production tool availability checks (eks_available,
             # eks_available_or_backend) read only ``_backend`` and
             # ``connection_verified``, so this key stays invisible to them and
             # they correctly skip activation for bench cells.

@@ -113,7 +113,7 @@ def _cloudops_backend(sources: dict[str, dict]) -> Any:
     ``_backend``) deliberately: ``_backend`` is the slot for synthetic-test
     fixture backends that share the EKS tool API, and the replay backend
     speaks a different (paper-protocol) API. Using a separate slot means
-    production tools that read ``_backend`` (``_eks_available``,
+    production tools that read ``_backend`` (``eks_available``,
     ``eks_available_or_backend``) stay completely unaware of bench
     backends — no provider-specific branching needed in their availability
     checks.

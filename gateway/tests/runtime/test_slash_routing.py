@@ -12,9 +12,9 @@ from rich.console import Console
 from core.agent_harness.session import SessionCore
 from core.agent_harness.session.persistence.memory import InMemorySessionStore
 from core.agent_harness.tools.action_tools import get_action_tool
-from gateway.core.runtime.turn_handler import GatewayTurnHandler
+from platform.turn_host.turn_handler import TurnHandler
 from tests.core.agent.orchestration.cross_surface_parity_harness import (
-    RecordingGatewaySink,
+    RecordingTurnOutput,
     headless_slash_ports,
 )
 
@@ -23,10 +23,10 @@ def _gateway_console() -> Console:
     return Console(file=io.StringIO(), force_terminal=False, highlight=False, width=100)
 
 
-def _run_gateway_slash(message: str) -> RecordingGatewaySink:
+def _run_gateway_slash(message: str) -> RecordingTurnOutput:
     session = SessionCore(store=InMemorySessionStore())
-    sink = RecordingGatewaySink()
-    handler = GatewayTurnHandler(
+    sink = RecordingTurnOutput()
+    handler = TurnHandler(
         console=_gateway_console(),
         slash_ports_factory=headless_slash_ports,
     )
@@ -35,7 +35,7 @@ def _run_gateway_slash(message: str) -> RecordingGatewaySink:
 
 
 def test_gateway_registers_slash_invoke_tool() -> None:
-    """Harness adapters wired at gateway boot must expose slash_invoke to action turns."""
+    """Harness adapters registered at gateway boot must expose slash_invoke to action turns."""
     slash = get_action_tool("slash_invoke")
     assert slash is not None
     assert slash.name == "slash_invoke"
@@ -155,7 +155,7 @@ def test_gateway_integrations_setup_returns_headless_guidance_even_with_tty(
 ) -> None:
     """Gateway SessionCore returns headless guidance even when stdin is a TTY (e.g. tmux)."""
     monkeypatch.setattr(
-        "surfaces.interactive_shell.ui.components.choice_menu.repl_tty_interactive",
+        "surfaces.shared.terminal.components.choice_menu.repl_tty_interactive",
         lambda: True,
     )
     recorded: list[list[str]] = []
@@ -205,26 +205,26 @@ def test_gateway_manager_registers_harness_adapters(monkeypatch: pytest.MonkeyPa
         lambda: None,
     )
     monkeypatch.setattr(
-        "platform.sandbox.capabilities.boot_capability_warnings",
+        "platform.safety.sandbox.capabilities.boot_capability_warnings",
         lambda: [],
     )
     from gateway.startup import StartedGateway
 
     monkeypatch.setattr(
-        "gateway.core.runtime.controller.gateway_startup.start_gateway",
+        "gateway.core.lifecycle.controller.gateway_startup.start_gateway",
         lambda **_kwargs: StartedGateway(),
     )
     # Keep this test focused on adapter registration (life-cycle tests cover scheduler).
     monkeypatch.setattr(
-        "gateway.core.runtime.controller.GatewayController.start_scheduler",
+        "gateway.core.lifecycle.controller.GatewayController.start_scheduler",
         lambda *_args, **_kwargs: None,
     )
     monkeypatch.setattr(
-        "gateway.core.runtime.controller.GatewayController._publish_status",
+        "gateway.core.lifecycle.controller.GatewayController._publish_status",
         lambda *_args, **_kwargs: None,
     )
 
-    from gateway.core.runtime.controller import GatewayController
+    from gateway.core.lifecycle.controller import GatewayController
 
     GatewayController().start_gateway(wait=False)
 

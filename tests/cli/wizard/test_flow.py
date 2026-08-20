@@ -8,18 +8,18 @@ from unittest.mock import MagicMock
 import pytest
 
 import integrations.setup_flow as _setup_flow
+from config import setup_store as wizard_store
 from config.secrets.store import SecretSaveResult
 from integrations.llm_cli.codex_oauth import CodexOAuthResult
 from surfaces.cli.wizard import _ui, azure_openai, flow, llm_credential
-from surfaces.cli.wizard import store as wizard_store
 from surfaces.cli.wizard.configurators import chat_notifications as _chat_notifications_configurator
 from surfaces.cli.wizard.configurators import dagster as _dagster_configurator
 from surfaces.cli.wizard.configurators import github as _github_configurator
 from surfaces.cli.wizard.configurators import gitlab as _gitlab_configurator
 from surfaces.cli.wizard.configurators import observability as _observability_configurator
-from surfaces.cli.wizard.env_sync import sync_provider_env
 from surfaces.cli.wizard.probes import ProbeResult
-from surfaces.cli.wizard.validation import ValidationResult
+from surfaces.shared.llm_setup.env_sync import sync_provider_env
+from surfaces.shared.llm_setup.validation import ValidationResult
 from tests.integrations.llm_cli.testing_helpers import write_fake_runnable_cli_bin
 
 # Persisting a secret reports which storage tier accepted it, so stubs have to
@@ -781,12 +781,14 @@ def test_run_wizard_configures_slack_persists_webhook(monkeypatch, tmp_path) -> 
                     "webhook_url": "https://hooks.slack.com/services/T0/B0/XXXXX",
                     "bot_token": None,
                     "app_token": None,
+                    "default_chat_id": None,
                 }
             },
         )
     ]
     # Webhook is store-only; blank Socket Mode tokens still clear keyring slots.
-    assert synced_env_values == [{}]
+    # Unchosen default_chat_id is a non-secret env field, so it is cleared in .env.
+    assert synced_env_values == [{"SLACK_DEFAULT_CHAT_ID": ""}]
     assert synced_env_secrets == [("SLACK_BOT_TOKEN", ""), ("SLACK_APP_TOKEN", "")]
 
 
@@ -1766,7 +1768,7 @@ def test_run_cli_llm_onboarding_abort_after_max_retries(monkeypatch) -> None:
 
 
 def test_credential_line_for_saved_summary_cli_codex() -> None:
-    from surfaces.cli.wizard import config as wizard_config
+    from surfaces.shared.llm_setup import catalog as wizard_config
 
     codex = next(p for p in wizard_config.SUPPORTED_PROVIDERS if p.value == "codex")
     assert (
@@ -1776,7 +1778,7 @@ def test_credential_line_for_saved_summary_cli_codex() -> None:
 
 
 def test_credential_line_for_saved_summary_cli_claude_code() -> None:
-    from surfaces.cli.wizard import config as wizard_config
+    from surfaces.shared.llm_setup import catalog as wizard_config
 
     claude_code = next(p for p in wizard_config.SUPPORTED_PROVIDERS if p.value == "claude-code")
     assert llm_credential._credential_line_for_saved_summary(claude_code) == (
@@ -1785,7 +1787,7 @@ def test_credential_line_for_saved_summary_cli_claude_code() -> None:
 
 
 def test_credential_line_for_saved_summary_cli_gemini_cli() -> None:
-    from surfaces.cli.wizard import config as wizard_config
+    from surfaces.shared.llm_setup import catalog as wizard_config
 
     gemini_cli = next(p for p in wizard_config.SUPPORTED_PROVIDERS if p.value == "gemini-cli")
     assert llm_credential._credential_line_for_saved_summary(gemini_cli) == (
@@ -1794,7 +1796,7 @@ def test_credential_line_for_saved_summary_cli_gemini_cli() -> None:
 
 
 def test_credential_line_for_saved_summary_cli_copilot() -> None:
-    from surfaces.cli.wizard import config as wizard_config
+    from surfaces.shared.llm_setup import catalog as wizard_config
 
     copilot = next(p for p in wizard_config.SUPPORTED_PROVIDERS if p.value == "copilot")
     line = llm_credential._credential_line_for_saved_summary(copilot)
@@ -1806,14 +1808,14 @@ def test_credential_line_for_saved_summary_cli_copilot() -> None:
 
 
 def test_credential_line_for_saved_summary_anthropic() -> None:
-    from surfaces.cli.wizard import config as wizard_config
+    from surfaces.shared.llm_setup import catalog as wizard_config
 
     anthropic = next(p for p in wizard_config.SUPPORTED_PROVIDERS if p.value == "anthropic")
     assert llm_credential._credential_line_for_saved_summary(anthropic) == "system keychain"
 
 
 def test_credential_line_for_saved_summary_cli_without_factory() -> None:
-    from surfaces.cli.wizard.config import ModelOption, ProviderOption
+    from surfaces.shared.llm_setup.catalog import ModelOption, ProviderOption
 
     p = ProviderOption(
         value="codex",
@@ -2581,7 +2583,7 @@ def test_run_wizard_telegram_retries_on_validation_failure(monkeypatch, tmp_path
 
 def test_persist_llm_credential_host_kind_writes_env_not_keyring(monkeypatch, tmp_path) -> None:
     """#3291: a host credential lands where the runtime reads it (.env), never the keyring."""
-    from surfaces.cli.wizard.config import PROVIDER_BY_VALUE
+    from surfaces.shared.llm_setup.catalog import PROVIDER_BY_VALUE
 
     synced: dict[str, str] = {}
     monkeypatch.setattr(
@@ -2605,7 +2607,7 @@ def test_persist_llm_credential_host_kind_writes_env_not_keyring(monkeypatch, tm
 
 
 def test_persist_llm_credential_secret_kind_keeps_keyring(monkeypatch, tmp_path) -> None:
-    from surfaces.cli.wizard.config import PROVIDER_BY_VALUE
+    from surfaces.shared.llm_setup.catalog import PROVIDER_BY_VALUE
 
     monkeypatch.setattr(
         llm_credential, "sync_env_values", lambda _values: pytest.fail("secret must not hit .env")
@@ -5011,9 +5013,9 @@ def test_credential_line_for_saved_summary_ollama_host_verified() -> None:
     )
 
 
-@pytest.mark.parametrize("stale_mode", ["aha", "banana", ""])
+@pytest.mark.parametrize("stale_mode", ["aha", "focused", "banana", ""])
 def test_run_wizard_falls_back_when_saved_mode_is_not_offered(monkeypatch, stale_mode) -> None:
-    """A saved mode that is no longer offered must default to 'focused'.
+    """A saved mode that is no longer offered must default to 'quickstart'.
 
     Saved defaults outlive the modes they name — a value persisted by an older
     build, or a mode removed in a refactor, must not be passed to the chooser as
@@ -5040,7 +5042,7 @@ def test_run_wizard_falls_back_when_saved_mode_is_not_offered(monkeypatch, stale
         flow.run_wizard()
 
     # Assert
-    assert seen["default"] == "focused"
+    assert seen["default"] == "quickstart"
 
 
 def test_run_wizard_blank_llm_key_defers_setup_instead_of_ending(monkeypatch, tmp_path) -> None:

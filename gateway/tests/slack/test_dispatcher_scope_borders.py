@@ -28,7 +28,6 @@ from gateway.transports.slack.processing.events import SlackInboundMessage
 from gateway.transports.slack.processing.principal import slack_scope
 from gateway.transports.slack.settings import SlackGatewaySettings
 
-_SECURITY = "gateway.transports.slack.processing.security"
 TEST_ORG = "org_border_acme"
 
 

@@ -22,11 +22,11 @@ from config.constants.mariadb import (
     MARIADB_USERNAME_ENV,
 )
 from config.llm_credentials import resolve_env_credential
-from core.tool_framework.utils.tool_availability import tool_unavailable
+from core.tool_framework.utils import tool_unavailable
 from integrations._relational import RelationalConfigBase, env_bool, env_str
 from integrations._validation_helpers import report_classify_failure, report_validation_failure
-from platform.common.coercion import safe_int
-from platform.common.truncation import truncate
+from platform.text.coercion import safe_int
+from platform.text.truncation import truncate
 
 logger = logging.getLogger(__name__)
 

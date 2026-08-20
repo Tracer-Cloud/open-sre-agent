@@ -40,7 +40,7 @@ def test_configure_process_gateway_order(monkeypatch: pytest.MonkeyPatch) -> Non
         lambda: order.append("runners"),
     )
     monkeypatch.setattr(
-        "platform.sandbox.capabilities.boot_capability_warnings",
+        "platform.safety.sandbox.capabilities.boot_capability_warnings",
         lambda: order.append("caps") or ["curl missing"],
     )
     monkeypatch.setattr(
@@ -176,7 +176,7 @@ def test_gateway_reports_missing_capabilities_at_boot(monkeypatch: pytest.Monkey
     monkeypatch.setattr("platform.observability.errors.sentry.init_sentry", lambda **_kw: None)
     monkeypatch.setattr("core.llm.internal.preload.preload_llm_clients", lambda: None)
     monkeypatch.setattr(
-        "platform.sandbox.capabilities.boot_capability_warnings",
+        "platform.safety.sandbox.capabilities.boot_capability_warnings",
         lambda: ["kubectl missing"],
     )
 

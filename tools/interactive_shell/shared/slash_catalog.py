@@ -5,11 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any, Protocol
 
-from core.agent_harness.tools.tool_context import (
-    object_schema,
-    string_array_property,
-    string_property,
-)
+from core.tool_framework.utils import object_schema, string_array_property, string_property
 
 _MAX_COMPACT_DESC_CHARS = 120
 

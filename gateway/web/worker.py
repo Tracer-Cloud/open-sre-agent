@@ -10,7 +10,10 @@ from pathlib import Path
 from typing import Any
 
 from gateway.core.billing.credits_client import CreditsOutcome, consume_credits
-from gateway.core.storage.investigations.store import InvestigationStatus, InvestigationStore
+from gateway.core.storage.investigations.repository import (
+    InvestigationRepository,
+    InvestigationStatus,
+)
 from gateway.web.artifacts import upload_report_to_s3, write_local_report
 
 # The worker is opt-in so API-only processes (and tests) never run the pipeline.
@@ -46,7 +49,7 @@ class InvestigationWorker:
 
     def __init__(
         self,
-        store: InvestigationStore,
+        store: InvestigationRepository,
         *,
         runner: InvestigationRunner = _run_pipeline,
         poll_interval_seconds: float = 2.0,
@@ -76,12 +79,17 @@ class InvestigationWorker:
                 error="insufficient_credits",
             )
             return True
-        from gateway.core.runtime.concurrency import process_turn_gate
+        from platform.process.turn_capacity import queued_turn_slot
+        from platform.turn_host.concurrency import process_turn_gate
 
-        # Already claimed from the queue — block like scheduler runners so the
-        # work waits for a chat/Path-2 slot instead of racing the process gate.
-        gate = process_turn_gate()
-        gate.acquire()
+        # Already claimed from the queue, so it waits for a slot rather than
+        # being dropped — the same policy scheduled runs take.
+        with queued_turn_slot(process_turn_gate()):
+            self._investigate(record)
+        return True
+
+    def _investigate(self, record: Any) -> None:
+        """Run one claimed investigation and record its outcome; capacity is the caller's."""
         try:
             from platform.analytics.cli import track_investigation
             from platform.analytics.source import EntrypointSource, TriggerMode
@@ -125,9 +133,6 @@ class InvestigationWorker:
                 status=InvestigationStatus.FAILED,
                 error=type(exc).__name__,
             )
-        finally:
-            gate.release()
-        return True
 
     def start(self) -> threading.Thread:
         thread = threading.Thread(target=self._loop, name="InvestigationWorker", daemon=True)
@@ -155,7 +160,7 @@ def worker_enabled() -> bool:
     return os.getenv(WORKER_ENABLED_ENV, "").strip().lower() in {"1", "true", "yes", "on"}
 
 
-def ensure_worker_started(store: InvestigationStore) -> InvestigationWorker | None:
+def ensure_worker_started(store: InvestigationRepository) -> InvestigationWorker | None:
     """Start the process-wide worker on first call; no-op unless enabled by env."""
     global _worker
     if not worker_enabled():

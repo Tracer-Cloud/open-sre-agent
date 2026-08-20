@@ -24,7 +24,7 @@ _DISABLED_ENV_VALUES = {"0", "false", "no", "off"}
 
 
 def _load_local_config() -> dict[str, Any]:
-    from surfaces.cli.wizard.store import get_store_path, load_local_config
+    from config.setup_store import get_store_path, load_local_config
 
     return load_local_config(get_store_path())
 
@@ -35,7 +35,7 @@ def _run_onboarding_command(
     ctx: click.Context | None = None,
     load_config: ConfigLoader = _load_local_config,
 ) -> None:
-    from surfaces.interactive_shell.utils.error_handling.errors import OpenSREError
+    from surfaces.shared.error_handling.errors import OpenSREError
 
     capture_onboard_started()
     try:
@@ -53,7 +53,7 @@ def _run_onboarding_command(
     if exit_code == 0:
         capture_onboard_completed(load_config())
         if _should_launch_shell_after_onboarding(ctx):
-            exit_code = _launch_interactive_shell()
+            exit_code = _launch_interactive_shell(ctx)
     else:
         capture_onboard_failed()
     raise SystemExit(exit_code)
@@ -83,11 +83,14 @@ def _should_launch_shell_after_onboarding(ctx: click.Context | None) -> bool:
     return sys.stdin.isatty() and sys.stdout.isatty()
 
 
-def _launch_interactive_shell() -> int:
+def _launch_interactive_shell(ctx: click.Context | None) -> int:
     from config.repl_config import ReplConfig
-    from surfaces.interactive_shell import run_repl
+    from surfaces.cli.host import cli_host
 
-    return run_repl(config=ReplConfig.load(cli_enabled=True))
+    launch_shell = cli_host(ctx).launch_shell if ctx is not None else None
+    if launch_shell is None:
+        return 0
+    return launch_shell(ReplConfig.load(cli_enabled=True), None)
 
 
 @click.group(name="onboard", invoke_without_command=True)

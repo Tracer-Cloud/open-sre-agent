@@ -3,6 +3,8 @@ title: "Google Docs"
 description: "Connect Google Docs so OpenSRE can write investigation reports to your Google Drive"
 ---
 
+## Overview
+
 OpenSRE can write investigation findings directly to Google Drive as formatted Google Docs — creating a persistent, shareable record of each incident investigation linked to your team's existing Drive folder.
 
 ## Prerequisites
@@ -12,10 +14,12 @@ OpenSRE can write investigation findings directly to Google Drive as formatted G
 
 ## Setup
 
-### Option 1: Interactive CLI
+There is no dedicated `opensre integrations setup google_docs` command today. Configure Google Docs through the onboarding wizard, environment variables, or the persistent store.
+
+### Option 1: Onboarding wizard
 
 ```bash
-opensre integrations setup
+opensre onboard
 ```
 
 Select **Google Docs** when prompted and provide your credentials file path and folder ID.
@@ -53,26 +57,37 @@ GOOGLE_DRIVE_FOLDER_ID=your-google-drive-folder-id
 }
 ```
 
-## Creating a service account
+## Credentials
+
+### Creating a service account
 
 1. In Google Cloud Console, go to **IAM & Admin** → **Service Accounts**
 2. Click **Create Service Account**
-3. Give it a name (e.g., `opensre-docs`) and click **Create**
+3. Give it a name (for example `opensre-docs`) and click **Create**
 4. Skip role assignment and click **Done**
 5. Click on the service account → **Keys** → **Add Key** → **Create new key** (JSON)
 6. Download the JSON file
 
-## Granting Drive folder access
+Auth uses a **service account** only (Google Docs + Drive API scopes) — not end-user OAuth.
+
+### Granting Drive folder access
 
 1. In Google Drive, open the folder where reports should be saved
 2. Click **Share**
-3. Add the service account email (e.g., `opensre-docs@your-project.iam.gserviceaccount.com`)
+3. Add the service account email (for example `opensre-docs@your-project.iam.gserviceaccount.com`)
 4. Set the permission to **Editor**
 
-## Finding the folder ID
+### Finding the folder ID
 
 The folder ID appears in the Drive URL:
+
 `https://drive.google.com/drive/folders/<folder-id>`
+
+## Investigation tools
+
+| Tool | What it does |
+| --- | --- |
+| `create_google_docs_incident_report` | Creates a Google Doc in the configured Drive folder and inserts the investigation / postmortem content. Can optionally share the doc (`reader` / `writer` / `owner`). |
 
 ## Verify
 
@@ -88,6 +103,8 @@ Status: passed
 Detail: Connected to Drive folder 1BxiMVs0XRA5nFMdKvBdBZjgmUUqptlbs74OgVE2upms (3 items in folder)
 ```
 
+Verification probes Drive access to the configured folder.
+
 ## Troubleshooting
 
 | Symptom | Fix |
@@ -97,7 +114,7 @@ Detail: Connected to Drive folder 1BxiMVs0XRA5nFMdKvBdBZjgmUUqptlbs74OgVE2upms (
 | **Drive API not enabled** | Enable the **Google Drive API** in your Google Cloud project |
 | **Folder not found** | Confirm the folder ID and that the service account has access |
 
-## Security best practices
+## Security
 
 - Keep the service account JSON file outside of your repository — add it to `.gitignore`.
 - Grant the service account access **only** to the specific Drive folder it needs.

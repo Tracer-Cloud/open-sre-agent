@@ -7,7 +7,7 @@ from typing import Any
 
 import boto3
 
-from core.tool_framework.telemetry import report_run_error
+from core.tool import report_run_error
 from core.tool_framework.tool_decorator import tool
 
 

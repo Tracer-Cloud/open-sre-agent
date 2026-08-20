@@ -6,7 +6,7 @@ from unittest.mock import MagicMock, patch
 from rich.console import Console
 
 from platform.terminal.theme import ERROR, HIGHLIGHT, WARNING
-from surfaces.interactive_shell.ui.health import (
+from surfaces.shared.terminal.health import (
     _summary_counts,
     render_health_json,
     render_health_report,
@@ -129,7 +129,7 @@ def test_render_health_json(capsys) -> None:
     assert data["results"][1]["status"] == "failed"
 
 
-@patch("platform.guardrails.rules.get_default_rules_path")
+@patch("platform.safety.guardrails.rules.get_default_rules_path")
 def test_render_health_report_action_messages(mock_rules_path: MagicMock) -> None:
     mock_rules_path.return_value = Path("/nonexistent/rules")
 

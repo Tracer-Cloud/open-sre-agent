@@ -13,12 +13,14 @@ from core.agent_harness.session import InMemorySessionStore
 from core.agent_harness.tools.tool_provider import DefaultToolProvider
 from core.agent_harness.turns.orchestrator import run_turn
 from core.agent_harness.turns.turn_results import ToolCallingTurnResult, TurnResult
-from gateway.core.runtime.turn_handler import GatewayTurnHandler
+from platform.turn_host.turn_handler import TurnHandler
 from surfaces.interactive_shell.session import Session
+from tests.shared.default_headless_build_stub import default_headless_build_stub
+from tests.shared.fake_agent import fake_agent
 
 
 def test_gateway_turn_handler_delegates_to_agent_dispatch(monkeypatch: pytest.MonkeyPatch) -> None:
-    agent = MagicMock()
+    agent = fake_agent()
     agent.dispatch.return_value = TurnResult(
         final_intent="cli_agent_handled",
         action_result=ToolCallingTurnResult(
@@ -33,24 +35,24 @@ def test_gateway_turn_handler_delegates_to_agent_dispatch(monkeypatch: pytest.Mo
     )
     factory = MagicMock(return_value=agent)
     monkeypatch.setattr(
-        "gateway.core.runtime.session_agents.build_default_headless_agent",
-        factory,
+        "platform.turn_host.session_agents.DefaultHeadlessBuild",
+        default_headless_build_stub(factory),
     )
 
     session = Session(store=InMemorySessionStore())
     sink = MagicMock()
-    handler = GatewayTurnHandler(console=Console(force_terminal=False))
+    handler = TurnHandler(console=Console(force_terminal=False))
     handler("hello gateway", session, sink, logging.getLogger("test.gateway.module"))
 
     # The message is dispatched per-turn; session-stable ports are wired once,
     # with a live sink proxy rebound to the transport sink each turn.
-    from gateway.core.runtime.live_sink import LiveOutputSink
+    from platform.turn_host.bindable_output import BindableOutput
 
     agent.dispatch.assert_called_once()
     assert agent.dispatch.call_args.args == ("hello gateway",)
     ctor = factory.call_args
     assert ctor.kwargs["session"] is session
-    assert isinstance(ctor.kwargs["output"], LiveOutputSink)
+    assert isinstance(ctor.kwargs["output"], BindableOutput)
     assert ctor.kwargs["output"].bound is sink
     # Gateway turns gather live evidence; the ports object carries that now.
     assert ctor.kwargs["gather"].enabled is True
@@ -70,7 +72,7 @@ def test_gateway_turn_handler_delegates_to_agent_dispatch(monkeypatch: pytest.Mo
 def test_gateway_turn_handler_does_not_finalize_answered_turn(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    agent = MagicMock()
+    agent = fake_agent()
     agent.dispatch.return_value = TurnResult(
         final_intent="cli_agent_fallback",
         action_result=ToolCallingTurnResult(0, 0, 0, False, False),
@@ -78,13 +80,13 @@ def test_gateway_turn_handler_does_not_finalize_answered_turn(
         llm_run=object(),
     )
     monkeypatch.setattr(
-        "gateway.core.runtime.session_agents.build_default_headless_agent",
-        MagicMock(return_value=agent),
+        "platform.turn_host.session_agents.DefaultHeadlessBuild",
+        default_headless_build_stub(MagicMock(return_value=agent)),
     )
 
     session = Session(store=InMemorySessionStore())
     sink = MagicMock()
-    handler = GatewayTurnHandler(console=Console(force_terminal=False))
+    handler = TurnHandler(console=Console(force_terminal=False))
     handler("why", session, sink, logging.getLogger("test.gateway.module.answer"))
 
     sink.finalize.assert_not_called()

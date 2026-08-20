@@ -7,18 +7,18 @@ from typing import Any
 
 from rich.markup import escape
 
-from core.agent_harness.session.terminal_access import (
+from core.agent_harness.spi.session_state import (
     exclusive_stdin_active,
     session_terminal,
     set_auto_command,
 )
-from core.agent_harness.tools.tool_context import (
+from core.agent_harness.tools import (
     ActionToolContext,
     capability_available_from_sources,
     execute_with_action_context,
 )
 from core.domain.types.tools import ToolSurface
-from core.tool_framework.registered_tool import RegisteredTool
+from core.tool import RegisteredTool, SideEffectLevel
 from tools.interactive_shell.shared import plan_foreground_tool
 from tools.interactive_shell.shared.slash_catalog import (
     slash_invoke_input_schema,
@@ -266,6 +266,7 @@ slash_invoke_tool = RegisteredTool(
     input_schema=slash_invoke_input_schema(),
     source="interactive_shell",
     surfaces=(ToolSurface.ACTION,),
+    side_effect_level=SideEffectLevel.MUTATING,
     parallel_safe=False,
     accepts_runtime_context=True,
     run=run_slash,

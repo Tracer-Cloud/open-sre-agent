@@ -1,135 +1,139 @@
 ---
 title: "Local and on-prem setup"
-description: "Run OpenSRE locally with the CLI binary and onboard integrations from your environment"
+description: "Run OpenSRE on your laptop, a VM, or an on-prem host with the local CLI."
 ---
 
-This guide is for teams running OpenSRE with the local `opensre` binary on developer machines, virtual machines, or on-prem
-hosts.
+Use this guide when you're installing the `opensre` binary yourself — on a laptop, a shared VM, or a machine in your own network.
 
-## What mode should I use?
+## Which setup fits you?
 
-Use the mode that matches where your workloads and alerts live:
+| Setup | Best for |
+| --- | --- |
+| **Laptop** | Trying OpenSRE, local debugging, personal use |
+| **On-prem VM / server** | A shared box your team can reach |
+| **Docker** | Same install every time, in a container |
 
-- **Local laptop mode** for fast setup, testing, and debugging
-- **On-prem VM/server mode** for shared internal environments
-- **Container mode** for reproducible deployments in Docker
-
-Environment-specific install steps live under the `Installation` tab:
+Platform steps:
 
 - [macOS](/environments/macos)
 - [Linux (local)](/environments/linux-local)
 - [Windows (local)](/environments/windows-local)
 - [Docker](/environments/docker)
 
-## Local setup workflow
-
-### 1) Install the OpenSRE CLI
+## 1. Install the CLI
 
 ```bash
+# Homebrew
 brew tap tracer-cloud/tap
 brew install tracer-cloud/tap/opensre
-# or
+
+# or one-line installer
 curl -fsSL https://install.opensre.com | bash
 ```
 
-The macOS/Linux installer does not require `sudo`. It uses a writable bin directory already on your `PATH` when possible; otherwise it installs to `~/.local/bin` and prints the command to apply the PATH update in your shell.
+On Windows (PowerShell):
 
-The installer makes `opensre` available on your PATH without sudo: it installs into (or links the binary from) a user-writable directory that is already on your PATH, so the command works in the current terminal right away. Only when no such directory exists does it fall back to updating your shell profile for new terminals.
+```powershell
+irm https://install.opensre.com | iex
+```
 
-When you run the installer from an interactive terminal — including the piped `curl … | bash` form above — it launches `opensre onboard` automatically once the install finishes, so you can set up your LLM provider and integrations right away. In non-interactive environments (CI, scripts, provisioning) the auto-launch is skipped and a "Next steps" hint is printed instead. To opt out of the auto-launch entirely:
+You usually don't need `sudo`. The installer puts `opensre` somewhere already on your PATH when it can. If it can't, it uses `~/.local/bin` and prints how to add that to PATH.
+
+**Auto onboard:** In a normal interactive terminal, install often starts `opensre onboard` when it finishes. In CI or scripts it skips that. To turn auto-onboard off:
 
 ```bash
 curl -fsSL https://install.opensre.com | OPENSRE_AUTO_LAUNCH=0 bash
 ```
 
-The curl installer also soft-installs the [GitHub CLI](https://cli.github.com/) (`gh`) when it is missing (via Homebrew or apt). The Windows PowerShell installer does the same via `winget install --id GitHub.cli`. OpenSRE's `github_cli` chat tools need `gh` on `PATH`. Skip that step with:
+**GitHub CLI:** The installer also tries to install `gh` if it's missing (OpenSRE's GitHub tools need it). Skip that with:
 
 ```bash
 curl -fsSL https://install.opensre.com | OPENSRE_SKIP_GH_INSTALL=1 bash
 ```
 
-Homebrew installs pull `gh` automatically via `depends_on "gh"` in the OpenSRE formula.
+Homebrew installs pull in `gh` automatically.
 
-### 2) Enter the OpenSRE shell
+Shorter overview: [Install OpenSRE](/install).
+
+## 2. Open the shell
 
 ```bash
 opensre
 ```
 
-### 3) Run onboarding
+That starts the interactive prompt. You can also run commands as `opensre …` from a normal terminal without entering the shell.
 
-From inside the OpenSRE shell:
+## 3. Run onboarding
+
+Inside the shell:
 
 ```bash
 onboard
 ```
 
-`onboard` helps you configure:
-
-- LLM provider (for investigation reasoning)
-- integration credentials
-- optional communication/reporting integrations
-
-#### Where credentials are saved
-
-OpenSRE keeps environment variables as the first lookup tier. When onboarding
-saves a credential, keyring writes are **opt-in**: by default the value is
-written to an owner-only fallback file under `~/.opensre/`, so first-run setup
-does not trigger an operating-system keychain prompt. The file is local to your
-user account and is created with owner-only permissions.
-
-To prefer the system keychain for new writes, set the flag before onboarding:
+Or from a normal terminal:
 
 ```bash
-export OPENSRE_USE_KEYRING=1
 opensre onboard
 ```
 
-With that flag enabled, OpenSRE writes to the system keychain and uses the
-owner-only fallback file only when the keychain is unavailable. You can also
-provide a credential directly through your shell or project `.env`; environment
-values take precedence over both local stores. Never commit real credentials to
-`.env` or source control.
+You'll set up:
 
-### 4) Verify integration health
+- Your LLM (so OpenSRE can reason about incidents)
+- Tool credentials (Datadog, Grafana, Slack, and so on)
+- Optional messaging and reporting
 
-From inside the OpenSRE shell:
+#### Where credentials are saved
+
+OpenSRE checks environment variables first. When onboarding saves a credential,
+it writes to an owner-only file at `~/.opensre/credentials.json` (mode `0600`).
+That keeps first-run setup from opening an OS keychain prompt.
+
+You can also provide a credential through your shell or project `.env`;
+environment values take precedence. Never commit real credentials to `.env` or
+source control.
+
+To keep credentials only in the environment (nothing written to disk), set
+`OPENSRE_DISABLE_KEYRING=1`.
+
+## 4. Check your tools
+
+Inside the shell:
 
 ```bash
 integrations verify
 ```
 
-To verify one integration:
+One tool only:
 
 ```bash
-integrations verify <integration-name>
+integrations verify datadog
 ```
 
-### 5) Run your first investigation
+From a normal terminal, prefix with `opensre` (for example `opensre integrations verify`).
 
-**From inside the OpenSRE shell** (after running bare `opensre`):
+## 5. Run a first investigation
+
+**Inside the shell:**
 
 ```bash
 investigate -i tests/e2e/kubernetes/fixtures/datadog_k8s_alert.json
 ```
 
-**From your normal terminal** (direct investigation, no shell):
+**From your normal terminal:**
 
 ```bash
 opensre investigate -i tests/e2e/kubernetes/fixtures/datadog_k8s_alert.json
 ```
 
-## Integration catalog
+## Where to connect tools
 
-The full integration catalog is maintained under the `Integrations` tab, not the `Installation` tab.
+The full tool list lives under **Integrations**, not Install.
 
-Start here:
+Start at [Integrations overview](/integrations-overview), then open each provider page for keys, permissions, and examples.
 
-- [Integrations overview](/integrations-overview)
+## Related
 
-Then open each provider page for credentials, minimum permissions, and setup examples.
-
-## Related guides
-
-- [Quickstart](/quickstart)
-- [Investigations overview](/investigation-overview)
+- [Quickstart](/quickstart) — install + onboard + sample run with GIFs
+- [Investigations overview](/investigation-overview) — how investigations work end to end
+- [Deployment](/deployment) — gateway and hosted options beyond a single laptop

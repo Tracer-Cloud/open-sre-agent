@@ -6,7 +6,7 @@ import logging
 from typing import Any, cast
 
 from core.tool_framework.tool_decorator import tool
-from core.tool_framework.utils.tool_availability import tool_unavailable
+from core.tool_framework.utils import tool_unavailable
 from integrations.aws.aws_sdk_client import execute_aws_sdk_call
 from integrations.rds import (
     DEFAULT_RDS_REGION,

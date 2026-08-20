@@ -4,9 +4,10 @@ from __future__ import annotations
 
 import logging
 from collections.abc import Mapping
+from http import HTTPStatus
 from typing import Any
 
-from platform.notifications.delivery_transport import post_json
+from platform.delivery.notifications.delivery_transport import post_json
 
 logger = logging.getLogger(__name__)
 
@@ -26,7 +27,7 @@ class TelegramBotClient:
         )
         if not response.ok:
             return False, {}, response.error
-        if response.status_code != 200 or not isinstance(response.data, Mapping):
+        if response.status_code != HTTPStatus.OK or not isinstance(response.data, Mapping):
             return False, {}, response.text or f"HTTP {response.status_code}"
         if not response.data.get("ok"):
             description = str(response.data.get("description", "unknown"))

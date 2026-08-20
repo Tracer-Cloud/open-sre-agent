@@ -12,7 +12,8 @@ from rich.console import Console
 from rich.table import Table
 
 from bootstrap.process import SCHEDULED_COMMAND_PROFILE, configure_process
-from platform.scheduler.delivery import SUPPORTED_DELIVERY_PROVIDERS
+from platform.scheduling.scheduler.delivery import SUPPORTED_DELIVERY_PROVIDERS
+from platform.terminal.theme import GLYPH_ERROR, GLYPH_SUCCESS
 from surfaces.cli.commands.scheduling import add_task_and_echo, validate_cron_and_timezone
 
 _console = Console()
@@ -133,7 +134,7 @@ def sentry_uptime_watch_add(
         require_digest_delivery_provider,
         require_sentry_integration,
     )
-    from platform.scheduler.types import Provider, ScheduledTask, TaskKind
+    from platform.scheduling.scheduler.types import Provider, ScheduledTask, TaskKind
 
     require_sentry_integration()
     require_digest_delivery_provider(provider)
@@ -159,7 +160,7 @@ def sentry_uptime_watch_add(
         _console.print(f"  Project: {params['project_slug']}")
 
     from integrations.sentry.uptime import format_uptime_watch_active_message
-    from platform.scheduler.executor import deliver_scheduled_message
+    from platform.scheduling.scheduler.executor import deliver_scheduled_message
 
     active_message = format_uptime_watch_active_message(
         task_id=added.id,
@@ -177,8 +178,8 @@ def sentry_uptime_watch_add(
 @sentry_uptime_watch_command.command(name="list")
 def sentry_uptime_watch_list() -> None:
     """List scheduled Sentry uptime watch tasks."""
-    from platform.scheduler.store import list_tasks
-    from platform.scheduler.types import TaskKind
+    from platform.scheduling.scheduler.store import list_tasks
+    from platform.scheduling.scheduler.types import TaskKind
 
     tasks = [task for task in list_tasks() if task.kind == TaskKind.SENTRY_UPTIME_WATCH]
     if not tasks:
@@ -204,7 +205,7 @@ def sentry_uptime_watch_list() -> None:
             task.provider.value,
             task.chat_id,
             project or "—",
-            "✓" if task.enabled else "✗",
+            GLYPH_SUCCESS if task.enabled else GLYPH_ERROR,
             task.last_run or "—",
         )
     _console.print(table)
@@ -214,8 +215,8 @@ def sentry_uptime_watch_list() -> None:
 @click.argument("task_id")
 def sentry_uptime_watch_remove(task_id: str) -> None:
     """Remove a scheduled Sentry uptime watch task."""
-    from platform.scheduler.store import get_task, remove_task
-    from platform.scheduler.types import TaskKind
+    from platform.scheduling.scheduler.store import get_task, remove_task
+    from platform.scheduling.scheduler.types import TaskKind
 
     task = get_task(task_id)
     if task is None or task.kind != TaskKind.SENTRY_UPTIME_WATCH:
@@ -234,9 +235,9 @@ def sentry_uptime_watch_remove(task_id: str) -> None:
 def sentry_uptime_watch_run(task_id: str) -> None:
     """Run a scheduled Sentry uptime watch task immediately."""
     from integrations.sentry.digest_prerequisites import require_digest_delivery_provider
-    from platform.scheduler.runner import run_task_now
-    from platform.scheduler.store import get_task
-    from platform.scheduler.types import TaskKind
+    from platform.scheduling.scheduler.runner import run_task_now
+    from platform.scheduling.scheduler.store import get_task
+    from platform.scheduling.scheduler.types import TaskKind
 
     configure_process(SCHEDULED_COMMAND_PROFILE)
     task = get_task(task_id)
@@ -265,7 +266,7 @@ def sentry_uptime_watch_run(task_id: str) -> None:
 )
 def sentry_digest_run(project_slug: str) -> None:
     """Run the morning digest once and print the report to stdout."""
-    from platform.scheduler.agent_runner import invoke_agent_runner
+    from platform.scheduling.scheduler.agent_runner import invoke_agent_runner
 
     configure_process(SCHEDULED_COMMAND_PROFILE)
     payload: dict[str, str] = {
@@ -337,7 +338,7 @@ def sentry_digest_schedule_add(
         require_digest_delivery_provider,
         require_sentry_integration,
     )
-    from platform.scheduler.types import Provider, ScheduledTask, TaskKind
+    from platform.scheduling.scheduler.types import Provider, ScheduledTask, TaskKind
 
     require_sentry_integration()
     require_digest_delivery_provider(provider)
@@ -364,8 +365,8 @@ def sentry_digest_schedule_add(
 @sentry_digest_schedule_command.command(name="list")
 def sentry_digest_schedule_list() -> None:
     """List scheduled Sentry morning digest tasks."""
-    from platform.scheduler.store import list_tasks
-    from platform.scheduler.types import TaskKind
+    from platform.scheduling.scheduler.store import list_tasks
+    from platform.scheduling.scheduler.types import TaskKind
 
     tasks = [task for task in list_tasks() if task.kind == TaskKind.SENTRY_MORNING_DIGEST]
     if not tasks:
@@ -391,7 +392,7 @@ def sentry_digest_schedule_list() -> None:
             task.provider.value,
             task.chat_id,
             project or "—",
-            "✓" if task.enabled else "✗",
+            GLYPH_SUCCESS if task.enabled else GLYPH_ERROR,
             task.last_run or "—",
         )
 
@@ -402,8 +403,8 @@ def sentry_digest_schedule_list() -> None:
 @click.argument("task_id")
 def sentry_digest_schedule_remove(task_id: str) -> None:
     """Remove a scheduled Sentry morning digest task."""
-    from platform.scheduler.store import get_task, remove_task
-    from platform.scheduler.types import TaskKind
+    from platform.scheduling.scheduler.store import get_task, remove_task
+    from platform.scheduling.scheduler.types import TaskKind
 
     task = get_task(task_id)
     if task is None or task.kind != TaskKind.SENTRY_MORNING_DIGEST:
@@ -422,9 +423,9 @@ def sentry_digest_schedule_remove(task_id: str) -> None:
 def sentry_digest_schedule_run(task_id: str) -> None:
     """Run a scheduled Sentry digest task immediately."""
     from integrations.sentry.digest_prerequisites import require_digest_delivery_provider
-    from platform.scheduler.runner import run_task_now
-    from platform.scheduler.store import get_task
-    from platform.scheduler.types import TaskKind
+    from platform.scheduling.scheduler.runner import run_task_now
+    from platform.scheduling.scheduler.store import get_task
+    from platform.scheduling.scheduler.types import TaskKind
 
     configure_process(SCHEDULED_COMMAND_PROFILE)
     task = get_task(task_id)

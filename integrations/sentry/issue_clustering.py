@@ -199,7 +199,3 @@ def structural_cluster_label(key: str, *, sample_titles: tuple[str, ...] = ()) -
     if sample_titles:
         return f"{base} — e.g. {_truncate(sample_titles[0], 72)}"
     return base
-
-
-# Backward-compatible alias used by older tests/callers.
-cluster_name_for_issue = structural_cluster_key_for_issue

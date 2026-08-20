@@ -5,10 +5,9 @@ from __future__ import annotations
 from typing import Any
 
 from core.domain.types.tools import ToolSurface
-from core.tool_framework.metadata import SideEffectLevel
-from core.tool_framework.telemetry import report_run_error
+from core.tool import SideEffectLevel, report_run_error
 from core.tool_framework.tool_decorator import tool
-from core.tool_framework.utils.tool_availability import tool_unavailable
+from core.tool_framework.utils import tool_unavailable
 from integrations.github.client import GitHubApiError, GitHubRestClient, resolve_github_token
 from integrations.github.helpers import (
     GITHUB_INJECTED_PARAMS,

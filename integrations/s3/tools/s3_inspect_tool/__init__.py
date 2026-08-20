@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from core.tool_framework.tool_decorator import tool
 from integrations.aws.s3_client import get_object_metadata, get_object_sample
-from platform.notifications.limits import MAX_MESSAGE_SIZE
+from platform.delivery.notifications.limits import MAX_MESSAGE_SIZE
 
 
 def _inspect_s3_available(sources: dict[str, dict]) -> bool:

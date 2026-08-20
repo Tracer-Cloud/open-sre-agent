@@ -12,7 +12,7 @@ from typing import Any
 
 from pydantic import ValidationError
 
-from core.tool_framework.utils.tool_availability import tool_unavailable
+from core.tool_framework.utils import tool_unavailable
 from integrations.config_models import HelmIntegrationConfig
 from integrations.helm.client import HelmClient
 

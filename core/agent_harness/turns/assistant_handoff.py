@@ -12,7 +12,7 @@ from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from typing import Any
 
-from core.agent_harness.turns.evidence_kind import EvidenceKind
+from core.agent_harness.turns.evidence_kind import EvidenceKind, policy_for
 from core.agent_harness.turns.handoff_keys import HandoffField
 from core.agent_harness.turns.handoff_tag_parse import find_tag_suffix, first_tag_token
 
@@ -105,7 +105,7 @@ class AssistantHandoff:
         # Metric counts need a number; omitting session_goal would drop the
         # host continuation loop after an incomplete gather/answer turn.
         # Explicit ``session_goal=false`` still opts out of attach.
-        if session_goal is None and kind == EvidenceKind.METRIC_READ:
+        if session_goal is None and kind is not None and policy_for(kind).implies_session_goal:
             session_goal = True
 
         requires_gather = handoff_input.get(HandoffField.REQUIRES_GATHER, True) is not False

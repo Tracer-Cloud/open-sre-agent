@@ -14,7 +14,7 @@ import pytest
 from click.testing import CliRunner
 
 from surfaces.cli.app import cli
-from surfaces.cli.gateway_entry import gateway_slash_ports_factory
+from surfaces.gateway_entry import gateway_slash_ports_factory
 from surfaces.interactive_shell.command_registry import SLASH_COMMANDS
 from surfaces.interactive_shell.command_registry.help import _help_sections
 from tools.interactive_shell.shared.slash_catalog import MCP_BY_COMMAND

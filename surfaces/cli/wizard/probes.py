@@ -4,13 +4,14 @@ from __future__ import annotations
 
 import os
 from dataclasses import asdict, dataclass
+from http import HTTPStatus
 from pathlib import Path
 from urllib.error import URLError
 from urllib.parse import urlparse
 from urllib.request import Request, urlopen
 
 from config.config import get_tracer_base_url
-from surfaces.cli.wizard.config import PROJECT_ENV_PATH
+from surfaces.shared.llm_setup.catalog import PROJECT_ENV_PATH
 
 
 @dataclass(frozen=True)
@@ -61,10 +62,10 @@ def probe_remote_target(timeout_seconds: float = 3.0) -> ProbeResult:
     request = Request(url, method="GET")
     try:
         with _open_probe_request(request, timeout_seconds) as response:
-            status = getattr(response, "status", 200)
+            status = getattr(response, "status", HTTPStatus.OK)
             return ProbeResult(
                 target="remote",
-                reachable=200 <= status < 500,
+                reachable=HTTPStatus.OK <= status < HTTPStatus.INTERNAL_SERVER_ERROR,
                 detail=f"Tracer remote target reachable at {url} (HTTP {status})",
             )
     except URLError as err:

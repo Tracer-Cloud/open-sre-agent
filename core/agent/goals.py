@@ -29,6 +29,7 @@ class Goal:
     description: str
     success_criteria: str
     verify: Callable[[GoalObservation], bool] | None = None
+    nudge: Callable[[GoalObservation], str] | None = None
 
 
 def goal_met(goal: Goal, observation: GoalObservation) -> bool:
@@ -80,6 +81,8 @@ def should_accept_with_goal(
         return True, None
     if at_ceiling:
         return True, None
+    if goal.nudge is not None:
+        return False, goal.nudge(observation)
     nudge = (
         f"Goal not yet met: {goal.description}. "
         f"Success criteria: {goal.success_criteria}. "

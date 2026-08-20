@@ -18,7 +18,7 @@ from pathlib import Path
 
 from config.constants.paths import get_memory_dir
 from config.constants.secrets import CREDENTIAL_FALLBACK_FILENAME
-from core.agent_harness.session.persistence.paths import sessions_dir
+from core.agent_harness.spi.defaults import sessions_dir
 from platform.filestorage.enums import SyncRootName
 
 # Never uploaded, whatever else changes. Redundant with the allowlist of roots

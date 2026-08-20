@@ -10,7 +10,7 @@ delivery bootstrap) so the investigation pipeline never touches
 from __future__ import annotations
 
 from integrations.datadog.correlation.factory import build_datadog_provider
-from platform.reporting.upstream_registry import register_upstream_provider_builder
+from platform.delivery.reporting.upstream_registry import register_upstream_provider_builder
 
 
 def register() -> None:

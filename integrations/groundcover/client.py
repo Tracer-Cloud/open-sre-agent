@@ -23,7 +23,7 @@ from typing import Any, cast
 import httpx
 from mcp import ClientSession, types  # type: ignore[import-not-found]
 
-from integrations.config_models import GroundcoverIntegrationConfig
+from integrations.groundcover.config import GroundcoverIntegrationConfig
 from integrations.mcp_streamable_http_compat import streamable_http_client
 from integrations.probes import ProbeResult
 from platform.observability.errors.service import capture_service_error

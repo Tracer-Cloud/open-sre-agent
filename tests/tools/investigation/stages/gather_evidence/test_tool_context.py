@@ -4,7 +4,7 @@ from collections.abc import Callable
 from typing import Any, cast
 
 from core.domain.types.retrieval import RetrievalControls
-from core.tool_framework.registered_tool import RegisteredTool
+from core.tool.contracts import RegisteredTool
 from tools.investigation.stages.gather_evidence.tools import build_connected_tool_context
 
 

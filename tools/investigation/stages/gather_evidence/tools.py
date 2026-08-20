@@ -13,8 +13,7 @@ from core.domain.alerts.alert_source import (
 )
 from core.domain.types.tools import ToolSurface
 from core.llm.types import ToolCall
-from core.tool_framework.registered_tool import RegisteredTool
-from core.tool_framework.utils.integration_sources import availability_view
+from core.tool import RegisteredTool, availability_view
 from platform.observability.trace.redaction import RedactedToolView, redact_tool_view
 from tools.registry import get_registered_tools
 
@@ -166,10 +165,10 @@ def build_connected_tool_context(
     from pydantic import BaseModel
 
     # ``family_key`` is a platform-level seam (populated by the ``integrations``
-    # layer at import time). Importing it from ``platform.common`` keeps this
+    # layer at import time). Importing it from ``platform.service_families`` keeps this
     # module free of ``tools -> integrations`` edges (T-4 layering audit,
     # issue #3352, item 27).
-    from platform.common.service_families import family_key
+    from platform.service_families.families import family_key
 
     connected_integrations = sorted(
         key

@@ -187,7 +187,8 @@ class InteractiveShellController:
             self.spinner,
             self.runtime_context.pt_session,
         )
-        from surfaces.interactive_shell.runtime.action_turn import ShellActionRunner
+        from platform.turn_host.turn_handler import TurnHandler
+        from surfaces.interactive_shell.runtime.shell_agent import shell_agent_build_config
 
         self.turn_runtime = AgentTurnResources(
             session=self.session,
@@ -196,10 +197,12 @@ class InteractiveShellController:
             invalidate_prompt=lambda: self.prompt.invalidate_prompt(),
             request_exit=self.prompt.request_exit,
             console=self.service_console,
-            action_runner=ShellActionRunner(
-                session=self.session,
+            turn_handler=TurnHandler(
                 console=self.service_console,
-                request_exit=self.prompt.request_exit,
+                agent_build=shell_agent_build_config(request_exit=self.prompt.request_exit),
+                # One handler for the REPL lifetime; /new and /resume rotate
+                # session_id on the live handle — keep only that id's agent.
+                retain_only_current_session=True,
             ),
         )
         # Prompt echoes belong in the same stream as everything else this turn

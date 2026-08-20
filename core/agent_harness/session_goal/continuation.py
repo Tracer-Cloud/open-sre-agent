@@ -24,6 +24,13 @@ def continuation_nudge(goal: SessionGoal) -> str:
             "done and do not report them as unavailable:\n"
             f"{established}\n\n"
         )
+    if goal.last_answer:
+        reason_block += (
+            "The previous turn of this goal already told the user:\n"
+            f"  {goal.last_answer}\n"
+            "Re-derive it if you must, but if your answer differs, say why — do "
+            "not replace it with a different number silently.\n\n"
+        )
     unfinished = goal.unfinished_items
     if unfinished:
         pending = "\n".join(f"  - [{index}] {item}" for index, item in unfinished)

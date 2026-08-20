@@ -33,16 +33,16 @@ ignore_imports =
     # platform -> integrations (T-4 debt — scheduler / observability)
     platform.analytics.cli -> integrations.github.identity
     platform.observability.errors.sentry -> integrations.llm_cli.errors
-    platform.scheduler.credentials -> integrations.catalog
-    platform.scheduler.executor -> integrations.discord.delivery
-    platform.scheduler.executor -> integrations.rocketchat.delivery
-    platform.scheduler.executor -> integrations.slack.delivery
-    platform.scheduler.executor -> integrations.telegram.delivery
-    platform.scheduler.executor -> integrations.telegram.formatting
+    platform.scheduling.scheduler.credentials -> integrations.catalog
+    platform.scheduling.scheduler.executor -> integrations.discord.delivery
+    platform.scheduling.scheduler.executor -> integrations.rocketchat.delivery
+    platform.scheduling.scheduler.executor -> integrations.slack.delivery
+    platform.scheduling.scheduler.executor -> integrations.telegram.delivery
+    platform.scheduling.scheduler.executor -> integrations.telegram.formatting
     # surfaces -> gateway (cli + repl gateway commands)
-    surfaces.cli.commands.gateway -> gateway.core.runtime.daemon
-    surfaces.cli.gateway_entry -> gateway.core.runtime.controller
-    surfaces.interactive_shell.command_registry.gateway_cmds -> gateway.core.runtime.daemon
+    surfaces.cli.commands.gateway -> gateway.core.process
+    surfaces.gateway_entry -> gateway.core.lifecycle.controller
+    surfaces.interactive_shell.command_registry.gateway_cmds -> gateway.core.process
     surfaces.interactive_shell.controller -> gateway.web.web_server
     # tools -> integrations (T-4 debt — vendor tools / reporting)
     tools.cross_vendor.fix_sentry_issue.context -> integrations.sentry

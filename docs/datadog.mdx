@@ -3,7 +3,9 @@ title: "Datadog"
 description: "Connect Datadog so OpenSRE can query logs, metrics, monitors, and events during investigations"
 ---
 
-OpenSRE queries Datadog during alert investigations — pulling logs, metrics, monitor state, and events correlated with incidents.
+## Overview
+
+OpenSRE queries Datadog during alert investigations — logs, metrics, monitor state, and events correlated with the incident.
 
 ## Prerequisites
 
@@ -37,7 +39,7 @@ DD_SITE=datadoghq.com          # optional — default datadoghq.com; use datadog
 | `DD_APP_KEY` | — | **Required.** Datadog application key |
 | `DD_SITE` | `datadoghq.com` | Datadog site hostname (EU: `datadoghq.eu`) |
 
-For multiple Datadog orgs or sites, use [multi-instance](/multi-instance-integrations) with `DD_INSTANCES`.
+For multiple Datadog orgs or sites, use [multi-instance](/multi-instance-integrations) with `DD_INSTANCES` (not `DATADOG_INSTANCES`).
 
 ### Option 3: Persistent store
 
@@ -61,13 +63,20 @@ For multiple Datadog orgs or sites, use [multi-instance](/multi-instance-integra
 
 ### Option 4: Hosted web app (OpenSRE Cloud)
 
-In the OpenSRE Cloud web app at [app.tracer.cloud](https://app.tracer.cloud), go to **Integrations** → **Datadog**, enter a name, and paste your API and application keys.
+<Info>
+Hosted OpenSRE Cloud is **coming soon**. Until then, use the local CLI, environment variables, or persistent store above.
+</Info>
+
+When available, organization-wide Datadog connectors will be configured in the hosted web app:
+
+1. In [app.tracer.cloud](https://app.tracer.cloud), go to **Integrations** → **Datadog**
+2. Enter a name, and paste your API and application keys
 
 <Frame>
   ![Connect Datadog](/images/connect_datadog.png)
 </Frame>
 
-## Creating Datadog keys
+## Credentials
 
 ### API key
 
@@ -99,6 +108,16 @@ In the OpenSRE Cloud web app at [app.tracer.cloud](https://app.tracer.cloud), go
   Some Datadog UI labels may still show an older product name. Any key name works — use `opensre` for clarity.
 </Note>
 
+## Investigation tools
+
+| Tool | Use it for |
+| --- | --- |
+| `query_datadog_logs` | Search logs with a concrete query (for example `service:checkout status:error`) |
+| `query_datadog_metrics` | Infrastructure and application metrics |
+| `query_datadog_monitors` | Monitor configuration and current states |
+| `query_datadog_events` | Deployments, alerts, and system change events |
+| `query_datadog_all` | Logs, monitors, and events in parallel for a fast first pass |
+
 ## Verify
 
 ```bash
@@ -110,7 +129,13 @@ Expected output:
 ```
 Service: datadog
 Status: passed
-Detail: Connected to datadoghq.com and validated API access
+Detail: Connected to api.{site} and listed {N} monitors.
+```
+
+Example for the default US site with 12 monitors:
+
+```
+Detail: Connected to api.datadoghq.com and listed 12 monitors.
 ```
 
 Inside the REPL: `/integrations verify datadog` or `/verify datadog`.
@@ -124,7 +149,7 @@ Inside the REPL: `/integrations verify datadog` or `/verify datadog`.
 | **Verify passes but no logs in investigation** | Check index retention and that the app key can read the target log index |
 | **Multiple Datadog accounts** | Use `DD_INSTANCES` — see [Multi-instance integrations](/multi-instance-integrations) |
 
-## Security best practices
+## Security
 
 - Create a dedicated application key with read-only scopes for investigations.
 - Store keys in `.env` or your secret manager — not in source control.

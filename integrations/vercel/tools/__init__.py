@@ -6,8 +6,8 @@ from __future__ import annotations
 
 from typing import Any
 
-from core.tool_framework.base import BaseTool
-from core.tool_framework.utils.tool_availability import tool_unavailable
+from core.tool import BaseTool
+from core.tool_framework.utils import tool_unavailable
 from integrations.vercel.client import make_vercel_client
 
 _ERROR_STATES = {"ERROR", "CANCELED"}
@@ -123,7 +123,7 @@ vercel_deployment_status = VercelDeploymentStatusTool()
 """Vercel deployment logs investigation tool."""
 
 
-from core.tool_framework.base import BaseTool
+from core.tool import BaseTool
 
 _ERROR_KEYWORDS = ("error", "failed", "exception", "fatal", "crash", "panic", "unhandled")
 

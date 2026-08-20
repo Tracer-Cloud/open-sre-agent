@@ -18,4 +18,15 @@ RELEASE_STAGE_BANNER: Final[str] = (
     "and APIs and integrations may still change."
 )
 
-__all__ = ["RELEASE_STAGE", "RELEASE_STAGE_BANNER"]
+#: Overrides the GitHub releases endpoint the update check reads (tests, mirrors).
+RELEASES_API_URL_ENV: Final[str] = "OPENSRE_RELEASES_API_URL"
+
+#: Set by ``uv run`` on child processes; its presence marks a development checkout.
+UV_RUN_RECURSION_DEPTH_ENV: Final[str] = "UV_RUN_RECURSION_DEPTH"
+
+__all__ = [
+    "RELEASES_API_URL_ENV",
+    "RELEASE_STAGE",
+    "RELEASE_STAGE_BANNER",
+    "UV_RUN_RECURSION_DEPTH_ENV",
+]

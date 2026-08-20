@@ -1,13 +1,9 @@
 """Load and persist a chat transport's inbound identity policy.
 
-The policy lives in the integration store under the platform's record
-(``credentials["identity_policy"]``). Every transport shared this logic as a
-local copy differing only in the platform string; per the transports boundary
-rule, anything two transports need belongs here.
-
-``gateway.core`` must not import ``gateway.transports.*`` — this module depends
-only on the integrations store and the messaging-security primitives, and takes
-the platform as an argument.
+Stored on the platform's integration record
+(``credentials["identity_policy"]``). Transports pass the platform name;
+this module talks only to the integration store and messaging-security
+primitives so ``gateway.core`` stays free of transport imports.
 """
 
 from __future__ import annotations

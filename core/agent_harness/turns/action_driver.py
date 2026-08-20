@@ -15,18 +15,19 @@ from __future__ import annotations
 import json
 import logging
 import shlex
-from collections.abc import Callable, Sequence
+from collections.abc import Sequence
 from dataclasses import dataclass
 from typing import Any
 
 from core.agent import Agent
 from core.agent.cancel import tool_resources_cancel_requested
 from core.agent.goals import Goal
+from core.agent_harness.accounting.self_recording_tools import SELF_RECORDING_ACTION_TOOL_NAMES
 from core.agent_harness.agent_builder import AgentConfig, build_agent
-from core.agent_harness.llm_resolution import default_llm_factory
 from core.agent_harness.ports import (
     ConfirmFn,
     ErrorReporter,
+    LlmFactory,
     OutputSink,
     SessionState,
     ToolProvider,
@@ -48,7 +49,10 @@ from core.agent_harness.turns.turn_results import ToolCallingTurnResult
 from core.agent_harness.turns.turn_snapshot import TurnSnapshot
 from core.agent_harness.turns.wal_recorder import with_wal_recording
 from core.events import runtime_event_callback_from_observer
-from core.execution import (
+from core.llm.failure_classification import is_context_length_overflow
+from core.llm.types import AgentLLMResponse, SchemaDescribedTool, ToolCall
+from core.llm_invoke_errors import remediate_missing_llm_credentials
+from core.tool.execution import (
     BeforeToolCallResult,
     ToolExecutionHooks,
     ToolExecutionPatch,
@@ -56,9 +60,6 @@ from core.execution import (
     ToolExecutionResult,
     public_tool_input,
 )
-from core.llm.failure_classification import is_context_length_overflow
-from core.llm.types import AgentLLMResponse, ToolCall
-from core.llm_invoke_errors import remediate_missing_llm_credentials
 from core.tool_framework.tags import SUMMARIZE_OBSERVATION_TAG
 from platform.analytics.react_turn import run_react_agent_with_telemetry
 from platform.observability.trace.prompts import persist_turn_system_prompt
@@ -224,22 +225,6 @@ _EXECUTED_HISTORY_TYPES = {
     "implementation",
     "cli_command",
 }
-# Action tools that append their own ``session.history`` row when executed.
-# Keep this as the single catalogue: the shell observer and generic tool-result
-# accounting both key off it so new tools cannot silently double-record turns.
-SELF_RECORDING_ACTION_TOOL_NAMES: frozenset[str] = frozenset(
-    {
-        "alert_sample",
-        "cli_exec",
-        "code_implement",
-        "investigation_start",
-        "llm_set_provider",
-        "shell_run",
-        "slash_invoke",
-        "synthetic_run",
-        "task_cancel",
-    }
-)
 INVESTIGATION_DISPATCH_TOOL_NAMES: frozenset[str] = frozenset(
     {"investigation_start", "alert_sample"}
 )
@@ -258,13 +243,6 @@ class ActionTurnPlan:
     max_iterations: int
 
 
-@dataclass(frozen=True)
-class ToolCallingDeps:
-    """Optional dependency seams used by tests/harnesses."""
-
-    llm_factory: Callable[[], Any] | None = None
-
-
 class _StaticToolCallLLM:
     """Deterministic one-shot LLM used for explicit non-LLM shell commands."""
 
@@ -272,7 +250,7 @@ class _StaticToolCallLLM:
         self._tool_calls = tool_calls
         self._used = False
 
-    def tool_schemas(self, _tools: list[Any]) -> list[dict[str, Any]]:
+    def tool_schemas(self, _tools: Sequence[SchemaDescribedTool]) -> list[dict[str, Any]]:
         return []
 
     def invoke(
@@ -494,6 +472,24 @@ def _asks_the_user(final_text: str) -> bool:
     return final_text.rstrip().endswith("?")
 
 
+def _has_quiet_shell_run(result: Any) -> bool:
+    """True when any ``shell_run`` this turn opted into quiet mode.
+
+    Quiet withholds live ``$``/stdout, so the usual self-recording assumption
+    ("output is already on screen") is false. The model closing is the
+    display — do not suppress it.
+    """
+    for tool_call, _tool_result in getattr(result, "tool_results", []):
+        if getattr(tool_call, "name", None) != "shell_run":
+            continue
+        raw = getattr(tool_call, "input", None)
+        if not isinstance(raw, dict):
+            continue
+        if _coerce_fingerprint_quiet(public_tool_input(raw).get("quiet", False)):
+            return True
+    return False
+
+
 def _response_text_from_generic_results(result: Any) -> str:
     chunks: list[str] = []
     for tool_call, tool_result in _generic_tool_results(result):
@@ -665,7 +661,7 @@ def _build_action_agent(
     agent_tools: list[Any],
     turn_snapshot: TurnSnapshot | None,
     resolved_integrations: dict[str, Any],
-    deps: ToolCallingDeps | None,
+    llm_factory: LlmFactory,
     tool_hooks: ToolExecutionHooks | None,
     tool_resources: dict[str, Any],
     observer: Any,
@@ -709,8 +705,7 @@ def _build_action_agent(
         system = "Execute the explicit slash_invoke tool call."
         user_message = message
     else:
-        factory = deps.llm_factory if deps is not None and deps.llm_factory else default_llm_factory
-        llm = factory()
+        llm = llm_factory()
         envelope = build_action_system_prompt_envelope(
             # No turn plan means no surface is known here; setup facts are
             # omitted rather than guessed (see _setup_state_for_surface).
@@ -765,9 +760,9 @@ class _ActionTurnArgs:
 
     output: OutputSink
     tools: ToolProvider
+    llm_factory: LlmFactory
     confirm_fn: ConfirmFn | None = None
     is_tty: bool | None = None
-    deps: ToolCallingDeps | None = None
     turn_plan: TurnPlan | None = None
     error_reporter: ErrorReporter | None = None
     tool_hooks: ToolExecutionHooks | None = None
@@ -783,13 +778,26 @@ class ActionTurnRunner:
 
     Only ``turn_plan``, ``is_tty`` and ``confirm_fn`` change between turns, so
     they stay arguments to :meth:`run`.
+
+    ``llm_factory`` is required: the composition root must wire a real factory
+    (e.g. :func:`~core.agent_harness.llm_resolution.default_llm_factory`)
+    explicitly rather than relying on a silent fallback deep in the turn
+    driver. A missing factory fails here, at construction, not mid-turn.
     """
 
     output: OutputSink
     tools: ToolProvider
-    deps: ToolCallingDeps | None = None
+    llm_factory: LlmFactory
     error_reporter: ErrorReporter | None = None
     tool_hooks: ToolExecutionHooks | None = None
+
+    def __post_init__(self) -> None:
+        if self.llm_factory is None:
+            raise ValueError(
+                "No LLM provider configured for the action turn: ActionTurnRunner "
+                "requires an explicit llm_factory. Wire one at the composition root "
+                "(e.g. core.agent_harness.llm_resolution.default_llm_factory)."
+            )
 
     def run(
         self,
@@ -812,7 +820,7 @@ class ActionTurnRunner:
             tools=self.tools,
             confirm_fn=confirm_fn,
             is_tty=is_tty,
-            deps=self.deps,
+            llm_factory=self.llm_factory,
             turn_plan=turn_plan,
             error_reporter=self.error_reporter,
             tool_hooks=self.tool_hooks,
@@ -860,8 +868,10 @@ def _compose_response(
     # Drop model closings so they cannot contradict what the user just saw
     # (classic failure: inventing "health check passed" after a failed /health).
     # Exceptions: a multi-step shell/slash chain, whose closing summary is
-    # grounded in the output the model observed between steps, and a closing
-    # question, which seeks direction instead of restating output.
+    # grounded in the output the model observed between steps; a closing
+    # question, which seeks direction instead of restating output; and any
+    # quiet ``shell_run``, which withheld live stdout so the closing *is*
+    # the turn's display.
     # A handoff means the assistant answers this turn, so the action's closing
     # prose would be a second reply to one message ("good morning" twice).
     suppress_final = (
@@ -870,6 +880,7 @@ def _compose_response(
             _self_recording_tools_only(result)
             and not _multi_step_grounded_chain(result)
             and not _asks_the_user(final_text)
+            and not _has_quiet_shell_run(result)
         )
         or bool(counts.handoff_contents)
     )
@@ -926,16 +937,20 @@ def _show_response(
         visible = strip_session_goal_progress_tags("\n".join(display_chunks))
         if not visible.strip():
             if handled:
-                output.print()
+                _end_silent_tool_turn(output)
             return
-        output.print()
         output.render_response_header("assistant")
         # Literal text: the sink decides how to render it safely. The harness
         # must not reach for terminal-markup helpers.
         output.print(visible)
         return
     if handled:
-        output.print()
+        _end_silent_tool_turn(output)
+
+
+def _end_silent_tool_turn(output: OutputSink) -> None:
+    """After silent tool work with nothing to show: leave a blank line."""
+    output.print()
 
 
 def _count_turn(result: Any, session: SessionState, history_start: int) -> _TurnCounts:
@@ -1017,7 +1032,7 @@ def _run_action_turn(
             agent_tools=agent_tools,
             turn_snapshot=turn_snapshot,
             resolved_integrations=resolved_integrations,
-            deps=args.deps,
+            llm_factory=args.llm_factory,
             tool_hooks=with_duplicate_action_call_guard(args.tool_hooks),
             tool_resources=tool_resources,
             observer=observer,
@@ -1129,6 +1144,5 @@ __all__ = [
     "ActionTurnPlan",
     "ActionTurnRunner",
     "SELF_RECORDING_ACTION_TOOL_NAMES",
-    "ToolCallingDeps",
     "with_duplicate_action_call_guard",
 ]

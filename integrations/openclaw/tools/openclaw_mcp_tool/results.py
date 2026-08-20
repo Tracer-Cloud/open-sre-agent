@@ -6,7 +6,7 @@ agent sees. Nothing here talks to the bridge — dispatch lives in ``__init__``.
 
 from __future__ import annotations
 
-from core.tool_framework.utils.mcp_bridge import unavailable_response
+from core.tool_framework.utils import unavailable_response
 from integrations.openclaw import OpenClawToolCallResult
 from integrations.openclaw.tools.openclaw_mcp_tool.models import (
     OpenClawBridgeResponse,

@@ -9,7 +9,7 @@ from unittest.mock import MagicMock
 import pytest
 from rich.console import Console
 
-from platform.background_investigations.store import (
+from platform.scheduling.background_investigations.store import (
     BackgroundInvestigationStore,
     BackgroundInvestigationStoreLockTimeout,
 )
@@ -20,7 +20,9 @@ from surfaces.interactive_shell.runtime.background.runner import (
 )
 from surfaces.interactive_shell.session import Session
 
-_STORE_FACTORY = "platform.background_investigations.store.background_investigation_store"
+_STORE_FACTORY = (
+    "platform.scheduling.background_investigations.store.background_investigation_store"
+)
 
 
 def _noop_tracker(**_kwargs: Any) -> Any:
@@ -185,7 +187,7 @@ def test_a_raising_notification_channel_does_not_fail_the_investigation(
     blows up is a per-channel outcome, not an investigation failure. Before this
     the exception reached the worker's ``except`` arm, which rewrote a completed
     record to ``failed`` and persisted it that way."""
-    from platform.notifications.outbound_registry import (
+    from platform.delivery.notifications.outbound_registry import (
         clear_outbound_adapters,
         register_outbound_adapter,
     )

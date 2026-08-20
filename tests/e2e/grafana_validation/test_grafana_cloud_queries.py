@@ -1,19 +1,35 @@
 import pytest
 from _pytest.outcomes import Skipped
 
+from integrations.grafana.base import _is_transport_failure
 from integrations.grafana.client import get_grafana_client
 from tests.e2e.grafana_validation.env_requirements import require_grafana_query_env
 
 
-@pytest.fixture(scope="session")
-def grafana_client():
+def _grafana_client_or_skip():
+    """Build a live client, or skip when Grafana is unreachable (CI flake).
+
+    ``get_grafana_client`` discovers datasources and re-raises transport
+    timeouts so the product circuit breaker can trip. Live validation must
+    treat the same failures as skips, not ERROR.
+    """
     require_grafana_query_env()
-    client = get_grafana_client()
+    try:
+        client = get_grafana_client()
+    except Exception as exc:
+        if _is_transport_failure(exc):
+            pytest.skip(f"Grafana live query hit a transient network failure: {exc}")
+        raise
     if not client.is_configured:
         pytest.skip(
             "Grafana client not configured (set GRAFANA_READ_TOKEN and GRAFANA_INSTANCE_URL if needed)"
         )
     return client
+
+
+@pytest.fixture(scope="session")
+def grafana_client():
+    return _grafana_client_or_skip()
 
 
 def _assert_query_success_or_skip_auth(result: dict) -> None:
@@ -71,6 +87,28 @@ def test_assert_query_success_or_skip_auth_skips_timeout():
                 ),
             }
         )
+
+
+def test_grafana_client_or_skip_skips_read_timeout_during_build(monkeypatch):
+    import requests
+
+    monkeypatch.setattr(
+        "tests.e2e.grafana_validation.test_grafana_cloud_queries.require_grafana_query_env",
+        lambda: None,
+    )
+
+    def _boom() -> object:
+        raise requests.exceptions.ReadTimeout(
+            "HTTPSConnectionPool(host='tracerbio.grafana.net', port=443): "
+            "Read timed out. (read timeout=10)"
+        )
+
+    monkeypatch.setattr(
+        "tests.e2e.grafana_validation.test_grafana_cloud_queries.get_grafana_client",
+        _boom,
+    )
+    with pytest.raises(Skipped, match="transient network failure"):
+        _grafana_client_or_skip()
 
 
 def test_assert_query_success_or_skip_auth_skips_tempo_ring_failure():

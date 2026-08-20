@@ -131,6 +131,51 @@ def test_classify_aws_with_role_arn_in_instance_credentials_works() -> None:
     assert resolved["aws"].region == "us-east-1"
 
 
+def test_classify_aws_static_keys_saved_by_setup_resolve() -> None:
+    """The wizard's keys mode must round-trip through the store.
+
+    ``setup_flow._collect_credentials`` stores an unset optional field as
+    ``None`` (a tested contract), so a record written by "Access Key + Secret"
+    carries ``role_arn=None``, ``external_id=None``, ``session_token=None``.
+    ``classify`` used ``.get(key, "")``, whose default only applies to a
+    *missing* key, and passed ``None`` into ``str`` fields — STS verification
+    passed, the wizard said "Saved", and the very same record then failed to
+    resolve ("did not resolve into a usable runtime config").
+    """
+    # Arrange — exactly the shape apply_setup persists for the keys mode
+    saved_by_setup = {
+        "id": "aws-99986a60",
+        "service": "aws",
+        "status": "active",
+        "instances": [
+            {
+                "name": "default",
+                "tags": {},
+                "credentials": {
+                    "region": "us-east-1",
+                    "role_arn": None,
+                    "external_id": None,
+                    "access_key_id": "AKIAEXAMPLE",
+                    "secret_access_key": "secret",
+                    "session_token": None,
+                },
+            }
+        ],
+    }
+
+    # Act
+    resolved = classify_integrations([saved_by_setup])
+
+    # Assert — resolves as static-key auth with the optionals normalized to ""
+    assert "aws" in resolved
+    aws = resolved["aws"]
+    assert aws.credentials is not None
+    assert aws.credentials.access_key_id == "AKIAEXAMPLE"
+    assert aws.credentials.session_token == ""
+    assert aws.role_arn == ""
+    assert aws.external_id == ""
+
+
 def test_classify_with_migrated_v1_aws_record_works() -> None:
     """Backward compat: passing a v1 AWS record with top-level role_arn still
     works because classify migrates on the fly."""
@@ -288,3 +333,25 @@ def test_resolve_effective_integrations_carries_instances_through_pydantic() -> 
     assert [i["name"] for i in all_inst] == ["prod", "staging"]
     assert "config" in all_inst[0]  # shape preserved through Pydantic
     assert "integration_id" in all_inst[0]
+
+
+def test_resolve_effective_integrations_publishes_store_configured_prefect() -> None:
+    """Regression: prefect's IntegrationSpec was missing direct_effective=True,
+    so classify_integrations() resolved a store-saved prefect config correctly
+    but resolve_effective_integrations() silently dropped it — it only
+    publishes services listed in DIRECT_CLASSIFIED_EFFECTIVE_SERVICES. This
+    broke `opensre integrations verify prefect` ("missing" even with valid
+    store credentials) and the prefect tools' is_available() check, which
+    reads from this same resolution."""
+    from integrations.catalog import resolve_effective_integrations
+
+    store_record = {
+        "id": "prefect-1",
+        "service": "prefect",
+        "status": "active",
+        "credentials": {"api_url": "http://localhost:4200/api", "api_key": ""},
+    }
+    resolved = resolve_effective_integrations(store_integrations=[store_record])
+    assert "prefect" in resolved
+    assert resolved["prefect"]["source"] == "local store"
+    assert resolved["prefect"]["config"]["api_url"] == "http://localhost:4200/api"

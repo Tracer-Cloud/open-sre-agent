@@ -22,11 +22,11 @@ from core.agent.provider_hooks import ProviderHookDelegate
 from core.agent.react_loop import run_react_loop
 from core.agent.run_io import AgentRunInput, AgentRunResult
 from core.events import RuntimeEventCallback, TupleEventCallback
-from core.execution import ToolExecutionHooks
-from core.llm.factory import LLMRole
+from core.llm.types import AgentLLMClient
 from core.messages import ProviderMessage, RuntimeMessage, RuntimeMessageLike
 from core.provider import ProviderHooks, ProviderRequest
-from core.types import RuntimeTool
+from core.tool.contracts import RuntimeTool
+from core.tool.execution import ToolExecutionHooks
 
 if TYPE_CHECKING:
     from core.agent.goals import Goal
@@ -45,7 +45,7 @@ class Agent[RuntimeToolT: RuntimeTool](EventEmitterMixin, ToolFilterMixin, Steer
     def __init__(
         self,
         *,
-        llm: Any | None = None,
+        llm: AgentLLMClient,
         system: str | None = None,
         tools: Sequence[RuntimeToolT] | None = None,
         resolved_integrations: dict[str, Any] | None = None,
@@ -57,6 +57,8 @@ class Agent[RuntimeToolT: RuntimeTool](EventEmitterMixin, ToolFilterMixin, Steer
         provider_hooks: ProviderHooks | None = None,
         goal: Goal | None = None,
     ) -> None:
+        if llm is None:
+            raise ValueError("Agent: llm= must be set at construction.")
         self._llm = llm
         self._system = system
         self._tools: list[RuntimeToolT] | None = list(tools) if tools is not None else None
@@ -118,9 +120,7 @@ class Agent[RuntimeToolT: RuntimeTool](EventEmitterMixin, ToolFilterMixin, Steer
         """
         if runtime_request is not None:
             runtime_request.validate_runtime_request()
-            return AgentRunInput[RuntimeToolT].from_runtime_request(
-                runtime_request, llm=self._get_llm()
-            )
+            return AgentRunInput[RuntimeToolT].from_runtime_request(runtime_request, llm=self._llm)
         if initial_messages is not None:
             if self._system is None:
                 raise ValueError("Agent.run: system= must be set at construction.")
@@ -128,7 +128,7 @@ class Agent[RuntimeToolT: RuntimeTool](EventEmitterMixin, ToolFilterMixin, Steer
                 raise ValueError("Agent.run: max_iterations= must be set at construction.")
             return AgentRunInput[RuntimeToolT].from_messages(
                 initial_messages,
-                llm=self._get_llm(),
+                llm=self._llm,
                 system=self._system,
                 tools=self._tools,
                 resolved=self._resolved,
@@ -136,16 +136,6 @@ class Agent[RuntimeToolT: RuntimeTool](EventEmitterMixin, ToolFilterMixin, Steer
                 max_iterations=self._max_iterations,
             )
         raise ValueError("Agent.run requires initial_messages or runtime_request.")
-
-    def _get_llm(self) -> Any:
-        """Return the run's LLM: the instance given at construction, or the process-wide singleton."""
-        if self._llm is None:
-            from core.llm import factory
-
-            self._llm = factory.get_llm(LLMRole.AGENT)
-        if self._llm is None:
-            raise RuntimeError("Agent.run: llm must be set before the loop")
-        return self._llm
 
     def _should_accept_conclusion(
         self,

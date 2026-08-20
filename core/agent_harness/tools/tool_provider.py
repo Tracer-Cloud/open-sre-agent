@@ -8,7 +8,11 @@ from typing import Any
 
 from core.agent_harness.ports import (
     ConfirmFn,
+    InvestigationPortsFactory,
+    LlmProviderPortsFactory,
+    SlashPortsFactory,
     SubprocessPresenterFactory,
+    TaskCancelPortsFactory,
     ToolEventObserver,
 )
 from core.agent_harness.tools.action_tools import get_action_tools_from_integrations_context
@@ -20,11 +24,6 @@ from core.agent_harness.tools.tool_context import (
 ActionObserverFactory = Callable[[str], ToolEventObserver]
 # Return value is tools.interactive_shell.subprocess.SubprocessPresenter (surface-injected).
 
-
-InvestigationPortsFactory = Callable[[], Any]
-LlmProviderPortsFactory = Callable[[], Any]
-TaskCancelPortsFactory = Callable[[], Any]
-SlashPortsFactory = Callable[[], Any]
 
 _TOOL_INPUT_LOG_PREVIEW_LIMIT = 500
 
@@ -85,8 +84,9 @@ class DefaultToolProvider:
         resolved_integrations: dict[str, Any] | None = None,
     ) -> list[Any]:
         subprocess_presenter = None
-        if self._subprocess_presenter_factory is not None:
-            subprocess_presenter = self._subprocess_presenter_factory(
+        presenter_factory = self._subprocess_presenter_factory
+        if presenter_factory is not None:
+            subprocess_presenter = presenter_factory(
                 self._session,
                 self._console,
                 confirm_fn,

@@ -4,9 +4,9 @@ from __future__ import annotations
 
 from typing import Any
 
-from core.agent_harness.tools.tool_context import action_context_from_agent_context
+from core.agent_harness.tools import action_context_from_agent_context
 from core.domain.types.tools import ToolSurface
-from core.tool_framework.metadata import SideEffectLevel
+from core.tool import SideEffectLevel
 from core.tool_framework.tool_decorator import tool
 from integrations.github.tools.architecture_issue_tool.repo_workspace import (
     WorkspaceError,

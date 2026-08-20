@@ -5,7 +5,7 @@ tool-calling loop (`core.agent.Agent` via `build_agent`) and the direct-answer
 path (`stream_answer` via the `StreamAnswerFn` seam in `ports.py`, no tools).
 It was extracted out of `interactive_shell` so the same harness can run the
 interactive terminal and be invoked headlessly via
-`agent_harness.turns.headless_dispatch`.
+`agent_harness.turns.headless_agent`.
 
 ## Host API (teach this)
 
@@ -13,7 +13,7 @@ Prefer `AgentSession.start()` / `start_embedded_session()` → `.chat` /
 `.investigate` — not free-function turn dumps. Construct one agent per logical
 session (or scheduled loop), then many turns — do not rebuild every message.
 Process boot (`configure_process`) and headless construction
-(`build_default_headless_agent`) are separate layers. `core` must not import
+(`DefaultHeadlessBuild.agent`) are separate layers. `core` must not import
 `bootstrap`; embedded hosts use `bootstrap.embedded.start_embedded_session`.
 
 | Path | Call |
@@ -22,8 +22,9 @@ Process boot (`configure_process`) and headless construction
 | Happy path (already booted) | `AgentSession.start()` → repeated `.chat` / `.investigate` |
 | Embedded / script | `start_embedded_session()` → repeated `.chat` / `.investigate` |
 | Multi-step / keep-going | `start` / `start_embedded_session` → `.chat_until_goal(...)` (`SessionGoal` loop) |
-| Custom host | **`build_default_headless_agent(...)`** (only factory) → `attach_agent` once → many `.chat` |
-| Gateway | `SessionAgentPool` → factory once / session → `bind_turn` → `run_until_session_goal` (same SessionGoal policy as shell) |
+| Custom host | **`DefaultHeadlessBuild(...).agent(...)`** (or `InMemoryHeadlessBuild` in-memory; the only construction seam) → `agent.handle(text, TurnBinding(...))` per message |
+| Gateway | `SessionAgentPool` → `DefaultHeadlessBuild.agent` once / session → `agent.handle(text, TurnBinding(...))` per message (the goal loop lives inside `handle`; same policy as shell) |
+| Host-specific construction | Optional `AgentBuildConfig` (`agent_build_config.py`) — tools / prompts / gather / capability policy. `None` on a field keeps the host default; `apply_capability_policy=None` means do not mutate the session |
 | Scheduled one-shot | `AgentSession.run_headless_turn(...)` (not the multi-turn pattern) |
 
 `SessionGoal` (`session_goal/` component — `goal` + `run_until`) is
@@ -43,7 +44,7 @@ never embed `session_goal:…` tag grammar in painted reasons. Reason derive:
 `session_goal/continuation.py`. Flush/restore: `session_goal/persist.py`. Optional LLM
 confirm for the tool-evidence path: `build_session_goal_llm_evaluator` in
 `session_goal/confirm.py` (pass as `evaluate=` to the session-goal loop) —
-closed `SessionGoalConfirmVerdict` via structured output, not free-text scrape.
+closed `ClosedGoalVerdict` via structured output, not free-text scrape.
 No host wires it by default; opt in when a second opinion is worth the tokens.
 Package rules: `session_goal/AGENTS.md`. Borders SoT (local notes):
 `opensre-notes/goal-core-system-design-aug2026.html`.
@@ -79,16 +80,16 @@ schema fields first; content tags are decode fallback only. Legacy tag tuples
 and explicit host APIs remain for older readers. Checklist progress uses
 `session_goal:done=<index>` in replies.
 
-Do **not** duplicate the default port stack outside `build_default_headless_agent`.
-Shell uses a TTY `ChatDispatcher` (same `AgentSession.chat` / `run_turn`) —
-intentional, not a second headless factory. Do not reintroduce peer
-`bootstrap.adapters` copies under surfaces or gateway.
+Do **not** duplicate the default port stack outside `DefaultHeadlessBuild`.
+The interactive shell builds a `HeadlessAgent` via `AgentBuildConfig` and
+`DefaultHeadlessBuild.agent` (not `TurnHandler`). Do not reintroduce
+peer `bootstrap.adapters` copies under surfaces or gateway.
 
 **Bind ports:** session-aware defaults implement
 `SessionBindable` / `ConsoleBindable` / `OutputBindable` (`ports.py`).
 `HeadlessAgent.bind_session` / `bind_turn(console=…, output=…)` only call ports
-that match those Protocols. Gateway usually keeps a stable `LiveOutputSink` and
-rebinds the transport via `LiveOutputSink.bind` (no `output=` each turn).
+that match those Protocols. Gateway usually keeps a stable `BindableOutput` and
+rebinds the transport via `BindableOutput.bind` (no `output=` each turn).
 The mutable session port is **`SessionState`** (field `HeadlessAgent._session`,
 headless impl `InMemorySessionState`) — not `SessionStore`. Durable JSONL is
 `SessionStore` / `SessionRepo` (`docs/NAMING.md`).
@@ -151,8 +152,8 @@ subpackage. Default port implementations live with the concern they serve, not i
   - `evidence_driver.py` — bounded evidence-gather loop, via a
     `_build_evidence_agent` factory that returns an `AgentConfig` handed to
     `build_agent`.
-  - `headless_dispatch.py` — headless programmatic entry point
-    (`HeadlessAgent`, constructed with the ports then `.dispatch(message)` per turn)
+  - `headless_agent.py` — headless programmatic entry point
+    (`HeadlessAgent`, built by a port family; `.handle(text, binding)` per message, `.dispatch` underneath)
     plus in-memory port adapters for
     API / test runs. `tools` is required — surfaces that want a text-only
     turn pass `NullToolProvider()` explicitly.
@@ -203,15 +204,15 @@ to it instead of re-implementing bootstrap + persistence:
   transports). Per-chat session create/resolve stays on
   `gateway/core/storage/session/resolver.py::SessionResolver` →
   `SessionManager`. Turn dispatch uses `HeadlessAgent` via
-  `gateway/core/runtime/turn_handler.py`'s `GatewayTurnHandler` with
+  `platform/turn_host/turn_handler.py`'s `TurnHandler` with
   :class:`~core.agent_harness.tools.tool_provider.DefaultToolProvider`
   built from the **live per-chat session** each turn (same tool resolution as
   shell). There is no separate gateway-owned ``Agent`` instance.
 - **headless / scheduled** — non-TTY hosts use
   :meth:`AgentSession.run_headless_turn` (or ``start`` + ``chat``).
   That is the same ``run_turn`` engine as the shell; do not reassemble
-  ``BufferOutputSink`` + ``build_default_headless_agent`` in integrations.
-  Ephemeral in-memory sessions (``headless_dispatch.InMemorySessionState``)
+  ``BufferOutputSink`` + ``DefaultHeadlessBuild`` in integrations.
+  Ephemeral in-memory sessions (``headless_adapters.InMemorySessionState``)
   bypass ``SessionManager`` by design when tests need no JSONL.
 
 `Session` (formerly `ReplSession`) is the in-memory session object used by every
@@ -234,7 +235,7 @@ the single instantiation site — when `Agent.__init__`'s signature changes,
 from core.agent_harness.agent_builder import AgentConfig, build_agent
 
 config = AgentConfig(
-    llm=llm_client,  # or None to fall back to get_llm(LLMRole.AGENT)
+    llm=llm_client,
     system=system_prompt,
     tools=tuple(agent_tools),
     resolved_integrations=resolved,
@@ -299,13 +300,12 @@ shape; if it answers directly without tools it is the direct-answer shape.
 `turns/orchestrator.py` (`run_turn`) → `core/agent/agent.py` (facade + wiring)
 → `core/agent/react_loop.py` (`run_react_loop`, the tool-calling algorithm).
 
-## Investigation agent — the tool-calling shape with a custom loop
+## Investigation agent — shared loop, investigation-owned policy
 
 `tools/investigation/stages/gather_evidence/agent.py::ConnectedInvestigationAgent`
-composes the shared `EventEmitterMixin` and `ToolFilterMixin` mixins
-(`core.agent.mixins`) instead of subclassing `Agent`, with a specialised ReAct
-`run()` (seed calls, evidence collection, duplicate detection, stagnation
-handling). It is still the tool-calling shape — composition, not a forked loop.
+assembles an `AgentConfig` and calls `build_agent()`. Seed calls, evidence
+collection, duplicate detection, and stagnation handling remain
+investigation-owned policy around the shared `Agent.run()` loop.
 
 ## Construct once → many turns
 
@@ -321,7 +321,7 @@ from bootstrap.embedded import start_embedded_session
 session = start_embedded_session()    # EMBEDDED_PROFILE + default agent
 result = session.chat("…")            # turn 1
 result = session.chat("…")            # turn 2 — same attached agent
-report = session.investigate({…})     # Path-2 verb (separate stage machine)
+report = session.investigate({…})     # investigation pipeline (separate stage machine)
 ```
 
 ``AgentSession.start`` must not import ``bootstrap`` (layer contract). Surfaces
@@ -332,10 +332,10 @@ explicit ``boot_process``).
 
 | Lifetime | Construct | Then |
 |----------|-----------|------|
-| Chat session (gateway) | `SessionAgentPool` keeps one `HeadlessAgent` per session id; each turn rebinds outer sink via `LiveOutputSink.bind`, then `bind_turn` (session / accounting / console / tool_hooks) | `AgentSession.chat` / `agent.dispatch` |
+| Chat session (gateway) | `SessionAgentPool` keeps one `HeadlessAgent` per session id; each turn rebinds transport output via `BindableOutput.bind`, then `bind_turn` (session / accounting / console / tool_hooks) | `AgentSession.chat` / `agent.dispatch` |
 | Embedder / script | `start_embedded_session()` or `attach_agent(HeadlessAgent…)` once | repeated `chat` / `dispatch` |
 | Scheduled loop | Prefer one agent for the loop’s lifetime when multi-turn; `run_headless_turn` is OK for true one-shot digests | do not treat one-shot as the multi-turn pattern |
-| Interactive shell | TTY `ChatDispatcher` bound for the REPL lifetime (not `HeadlessAgent`) | `AgentSession.chat` per submission |
+| Interactive shell | `build_shell_agent` → `DefaultHeadlessBuild.agent` once; `HeadlessAgent.handle` per submission (not `TurnHandler`) | `HeadlessAgent.handle` |
 
 Same-session turns must not overlap on one pooled agent (gateway holds a
 per-session lock). Different sessions stay concurrent under the capacity gate.
@@ -345,7 +345,7 @@ per-session lock). Different sessions stay concurrent under the capacity gate.
 | **`AgentSession`** + **`chat` / `investigate`** | **Public host API** — prefer in all new code |
 | **`HeadlessAgent`** + **`dispatch`** | Non-TTY `ChatDispatcher` (ports object); gateway / embedders / tests |
 | **`SessionAgentPool`** | Gateway: one headless agent per logical session across turns |
-| **`build_default_headless_agent`** | Factory for the standard port stack when a surface supplies its own sink |
+| **`DefaultHeadlessBuild`** | The default port family for one session; `.agent(tools=…, prompts=…, gather=…)` builds the agent on it |
 | **`run_headless_turn`** | One-shot convenience for scheduler digests — not the multi-turn pattern |
 | **`dispatch_chat_turn`** | **Internal** seam over `run_turn` — adapters only |
 
@@ -378,14 +378,15 @@ over ``run_turn``). Do **not** add new top-level chat entrypoints that call
 
 | Host | Process boot | Host call |
 |------|--------------|-----------|
-| CLI / interactive shell | `configure_process(CLI_PROFILE)` + shell Rich adapters | `execute_shell_turn` → TTY `ChatDispatcher` → `AgentSession.chat` |
-| Gateway chat | `configure_process(GATEWAY_PROFILE)` | `GatewayTurnHandler` → `SessionAgentPool` → `AgentSession.chat` |
-| Standalone web | `configure_process(WEB_PROFILE)` | `AgentSession.investigate` (Path 2) |
+| CLI / interactive shell | `configure_process(CLI_PROFILE)` + shell Rich adapters | `build_shell_agent` → `HeadlessAgent.handle` |
+| Gateway chat | `configure_process(GATEWAY_PROFILE)` | `TurnHandler` → `SessionAgentPool` → `AgentSession.chat` |
+| Standalone web | `configure_process(WEB_PROFILE)` | `AgentSession.investigate` |
 | Scheduled digests | adapters via profile; runners via `install_scheduler_runners` | `AgentSession.run_headless_turn` → `chat` |
 
-Do **not** force the REPL through `HeadlessAgent`. Shell is the TTY adapter of
-the same engine; headless agents are for non-TTY hosts. Do **not** invent a
-second public investigate entrypoint beside ``AgentSession.investigate``.
+Do **not** route the REPL through `TurnHandler` (that callback
+finalizes a chat sink with `is_tty=False`). The shell is a TTY host of the
+same `HeadlessAgent` construction seam. Do **not** invent a second public
+investigate entrypoint beside ``AgentSession.investigate``.
 
 ## Keep the loop primitive in core
 
@@ -402,9 +403,8 @@ which owns the actual think → call-tools → observe algorithm.
 
 - `core/agent/mixins.py` — `EventEmitterMixin` (event dispatch),
   `ToolFilterMixin` (tool-narrowing hook), `SteeringMixin` (`steer`/`follow_up`
-  to nudge a run in progress). `Agent` composes all three;
-  `ConnectedInvestigationAgent` composes the first two instead of subclassing
-  `Agent` (see "Investigation agent" above).
+  to nudge a run in progress). `Agent` composes all three; investigation policy
+  reaches them through the built `Agent` (see "Investigation agent" above).
 - `core/agent/provider_hooks.py` — `ProviderHookDelegate`, a fail-open wrapper
   around `core.provider.ProviderHooks` applied around each LLM call. A raised
   hook exception is logged and swallowed; it never breaks the loop.

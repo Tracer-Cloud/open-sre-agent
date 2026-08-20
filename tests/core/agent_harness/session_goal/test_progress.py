@@ -161,6 +161,16 @@ def test_format_duration_and_token_compacts() -> None:
     assert format_token_count_compact(3_400_000) == "3.4M"
 
 
+def test_format_token_count_compact_rolls_over_at_the_million_boundary() -> None:
+    """A count that rounds to 1000k at one-decimal precision must read as 1M."""
+    from core.agent_harness.session_goal.progress import format_token_count_compact
+
+    assert format_token_count_compact(999_949) == "999.9k"
+    assert format_token_count_compact(999_950) == "1M"
+    assert format_token_count_compact(999_999) == "1M"
+    assert format_token_count_compact(1_000_000) == "1M"
+
+
 def test_session_goal_payload_round_trips_started_at_and_token_baseline() -> None:
     from core.agent_harness.session_goal.goal import mark_session_goal_started
     from core.agent_harness.session_goal.persist import (

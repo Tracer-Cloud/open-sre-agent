@@ -13,7 +13,7 @@ from platform.observability.errors.service import capture_service_error
 
 logger = logging.getLogger(__name__)
 
-_DEFAULT_TIMEOUT = 30
+_DEFAULT_TIMEOUT_SECONDS = 30
 
 
 class JiraClient:
@@ -30,7 +30,7 @@ class JiraClient:
         return httpx.Client(
             auth=(self.config.email, self.config.api_token),
             headers={"Content-Type": "application/json", "Accept": "application/json"},
-            timeout=_DEFAULT_TIMEOUT,
+            timeout=_DEFAULT_TIMEOUT_SECONDS,
         )
 
     def create_issue(

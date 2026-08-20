@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import json
 import sys
+from collections.abc import Callable
 from typing import TYPE_CHECKING, Any, NoReturn, cast
 
 import questionary
@@ -25,6 +26,7 @@ from platform.terminal.theme import (
     ANSI_DIM,
     ANSI_RESET,
     DEVICE_CODE_ANSI,
+    GLYPH_SUCCESS,
 )
 
 if TYPE_CHECKING:
@@ -203,9 +205,41 @@ def _setup_new_relic() -> None:
 
 
 def _setup_aws() -> None:
+    from integrations.aws.role_mode_gate import (
+        CONFIGURE_FIRST_INSTRUCTION,
+        GATE_OPTIONS,
+        GATE_QUESTION,
+        NO_AMBIENT_CREDENTIALS_NOTICE,
+        ConfigureCredentialsFirst,
+        RoleGateChoice,
+        gate_role_mode,
+    )
     from integrations.aws.setup import AWS_SETUP
 
-    _run_spec_setup(AWS_SETUP)
+    def _ask_gate() -> RoleGateChoice | None:
+        print(f"\n  {NO_AMBIENT_CREDENTIALS_NOTICE}\n")
+        print("  Your options:")
+        for number, option in enumerate(GATE_OPTIONS, start=1):
+            print(f"    {number}. {option.label}")
+            print(f"       {option.hint}")
+        print()
+        picked = _select(
+            GATE_QUESTION,
+            choices=[questionary.Choice(o.label, value=str(o.value)) for o in GATE_OPTIONS],
+            use_shortcuts=True,
+            instruction="(press 1-3, or use arrow keys and Enter)",
+        )
+        return None if picked is None else RoleGateChoice(picked)
+
+    def _gate(mode: str) -> str:
+        try:
+            return gate_role_mode(mode, ask=_ask_gate)
+        except ConfigureCredentialsFirst:
+            print(f"\n  {CONFIGURE_FIRST_INSTRUCTION}")
+            print("  Nothing was saved.")
+            raise SystemExit(0) from None
+
+    _run_spec_setup(AWS_SETUP, on_mode_chosen=_gate)
 
 
 def _setup_slack() -> None:
@@ -303,6 +337,15 @@ def _github_browser_authorize() -> str | None:
     return token.access_token
 
 
+def _github_browser_auth_token() -> str:
+    """Authorize in the browser, falling back to manual token entry."""
+    token = _github_browser_authorize()
+    if token:
+        return token
+    print("  Falling back to manual token entry.")
+    return _p("GitHub PAT / auth token", secret=True)
+
+
 def _setup_github_auth_token(mode: str) -> str:
     """Resolve a GitHub MCP auth token, offering browser sign-in for remote modes."""
     if mode == "stdio":
@@ -329,10 +372,7 @@ def _setup_github_auth_token(mode: str) -> str:
     if auth_method == "none":
         return ""
     if auth_method == "browser":
-        token = _github_browser_authorize()
-        if token:
-            return token
-        print("  Falling back to manual token entry.")
+        return _github_browser_auth_token()
     return _p("GitHub PAT / auth token", secret=True)
 
 
@@ -417,25 +457,30 @@ def _setup_github() -> str | None:
     from integrations.github.setup import GITHUB_SETUP
     from integrations.setup_flow import apply_setup
 
-    print("  Connect OpenSRE to GitHub through the hosted GitHub MCP server.")
-    advanced = _confirm(
-        "Customize advanced settings (transport, server URL, toolsets, repo scope)?",
-        default=False,
+    print("  Connect OpenSRE to your GitHub repositories.")
+    setup_path = _select(
+        "How would you like to connect?",
+        choices=[
+            questionary.Choice("Sign in with GitHub (recommended)", value="recommended"),
+            questionary.Choice("Customize connection", value="customize"),
+        ],
+        default="recommended",
     )
-    if advanced is None:
+    if setup_path is None:
         print("\nAborted.")
         sys.exit(1)
+    customize = setup_path == "customize"
 
     credentials: dict[str, Any] = {}
     repo_view: str = "auto"
     repo_visibility: str = "any"
 
-    if advanced:
+    if customize:
         repo_view, repo_visibility = _github_advanced_setup(credentials)
     else:
         credentials["mode"] = DEFAULT_GITHUB_MCP_MODE
         credentials["url"] = DEFAULT_GITHUB_MCP_URL
-        credentials["auth_token"] = _setup_github_auth_token(DEFAULT_GITHUB_MCP_MODE)
+        credentials["auth_token"] = _github_browser_auth_token()
         credentials["toolsets"] = list(DEFAULT_GITHUB_MCP_TOOLSETS)
 
     print("\n  Validating GitHub MCP integration...")
@@ -450,7 +495,7 @@ def _setup_github() -> str | None:
         # Only the advanced path offers the verbose repo listing.
         level = (
             _prompt_github_repo_report_level()
-            if advanced
+            if customize
             else cast(GitHubMcpDisplayDetailLevel, "summary")
         )
         print()
@@ -519,7 +564,11 @@ def _setup_discord() -> None:
     _run_spec_setup(DISCORD_SETUP)
 
 
-def _run_spec_setup(spec: IntegrationSetupSpec) -> None:
+def _run_spec_setup(
+    spec: IntegrationSetupSpec,
+    *,
+    on_mode_chosen: Callable[[str], str] | None = None,
+) -> None:
     """Prompt for a spec's fields, then validate, verify, and persist them.
 
     Fields are prefilled from the stored credentials so re-running setup is a
@@ -527,9 +576,9 @@ def _run_spec_setup(spec: IntegrationSetupSpec) -> None:
     did not re-type. When the spec declares a picker (``mode_prompt``), only the
     chosen mode's fields are asked; fields belonging to another mode are cleared.
 
-    Each field is checked as it is answered so a blank required value fails
-    immediately, rather than after the user has worked through the rest of the
-    prompts.
+    Each field is checked as it is answered so a blank required value is
+    re-asked immediately, rather than surfacing after the user has worked
+    through the rest of the prompts.
     """
     from integrations.setup_flow import apply_setup
     from integrations.store import get_integration
@@ -546,6 +595,10 @@ def _run_spec_setup(spec: IntegrationSetupSpec) -> None:
         if mode is None:
             print("\nAborted.")
             sys.exit(1)
+        if on_mode_chosen is not None:
+            # A vendor may check the mode's prerequisite the moment it is
+            # picked and steer to another mode before any credential is typed.
+            mode = on_mode_chosen(mode)
 
     collectable = {field.name for field in spec.collectable_fields(mode)}
 
@@ -560,17 +613,28 @@ def _run_spec_setup(spec: IntegrationSetupSpec) -> None:
             values[field.name] = ""
             continue
         default = str(stored.get(field.name) or "") or field.default
-        value = _p(field.question, default=default, secret=field.secret)
         # A field with a default is never missing — apply_setup substitutes it —
-        # so only a defaultless required field can fail here.
-        if not value and field.required and not field.default:
-            _die(f"{field.label} is required.")
+        # so only a defaultless required field can be blank here. Ask again
+        # rather than exit: an empty answer at an interactive prompt is not a
+        # fatal error, and Ctrl+C is the way out.
+        while True:
+            value = _p(field.question, default=default, secret=field.secret)
+            if not value and spec.is_required(field, mode) and not field.default:
+                print(f"  {field.label} is required. Enter a value, or press Ctrl+C to cancel.")
+                continue
+            problem = field.validate(value) if value and field.validate else None
+            if problem is not None:
+                print(f"  {problem}")
+                continue
+            break
         values[field.name] = value
 
     print(f"\n  Validating {spec.service} credentials...")
     outcome = apply_setup(spec, values)
     if not outcome.ok:
-        _die(outcome.detail)
+        print(f"  error: {outcome.detail}", file=sys.stderr)
+        print(f"  Nothing was saved. Run `opensre integrations setup {spec.service}` to try again.")
+        sys.exit(1)
     print(f"  {outcome.detail}")
     print("  Next:")
     print(f"    - opensre integrations verify {spec.service}")
@@ -784,6 +848,15 @@ def _setup_temporal() -> None:
 _HANDLERS["temporal"] = _setup_temporal
 
 
+def _setup_azure() -> None:
+    from integrations.azure.setup import AZURE_SETUP
+
+    _run_spec_setup(AZURE_SETUP)
+
+
+_HANDLERS["azure"] = _setup_azure
+
+
 def _setup_azure_sql() -> None:
     from integrations.azure_sql.setup import AZURE_SQL_SETUP
 
@@ -822,12 +895,12 @@ def cmd_setup(service: str | None) -> str:
         _die(f"Usage: setup <service>. Supported: {', '.join(available)}")
     print(f"\n  Setting up {_B}{service}{_R}\n")
     _HANDLERS[service]()
-    print(f"\n  ✓ Saved → {STORE_PATH}\n")
+    print(f"\n  {GLYPH_SUCCESS} Saved → {STORE_PATH}\n")
     return service
 
 
 def cmd_list() -> None:
-    from platform.common.runtime_flags import is_json_output
+    from platform.process.runtime_flags import is_json_output
 
     items = list_integrations()
 
@@ -845,7 +918,7 @@ def cmd_list() -> None:
     from rich.markup import escape
 
     from integrations._table_render import new_table, render_table
-    from platform.terminal.theme import GLYPH_SUCCESS, HIGHLIGHT, SECONDARY, TEXT
+    from platform.terminal.theme import HIGHLIGHT, SECONDARY, TEXT
 
     table = new_table()
     table.add_column("SERVICE", style=TEXT, no_wrap=True)
@@ -876,7 +949,7 @@ def cmd_show(service: str | None) -> None:
 
 
 def cmd_remove(service: str | None) -> None:
-    from platform.common.runtime_flags import is_yes
+    from platform.process.runtime_flags import is_yes
 
     if not service:
         _die("Usage: remove <service>")
@@ -892,13 +965,13 @@ def cmd_remove(service: str | None) -> None:
             return
     if remove_integration(service):
         delete_webapp_org_integration(service)
-        print(f"  ✓ Removed '{service}'.")
+        print(f"  {GLYPH_SUCCESS} Removed '{service}'.")
     else:
         print(f"  No integration found for '{service}'.")
 
 
 def cmd_verify(service: str | None, *, send_slack_test: bool = False) -> int:
-    from platform.common.runtime_flags import is_json_output
+    from platform.process.runtime_flags import is_json_output
 
     if service:
         service = resolve_management_service(service)

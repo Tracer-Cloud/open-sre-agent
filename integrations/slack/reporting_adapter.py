@@ -11,11 +11,11 @@ from __future__ import annotations
 import logging
 from typing import Any
 
-from platform.reporting.delivery_registry import (
+from platform.delivery.reporting.delivery_registry import (
     DeliveryContext,
     register_delivery_adapter,
 )
-from platform.reporting.slack_reactions import (
+from platform.delivery.reporting.slack_reactions import (
     SlackReactionsPort,
     register_slack_reactions_port,
 )

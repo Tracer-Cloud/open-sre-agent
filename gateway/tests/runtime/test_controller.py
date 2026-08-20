@@ -1,4 +1,4 @@
-"""Tests for :mod:`gateway.core.runtime.controller` lifecycle behavior."""
+"""Tests for :mod:`gateway.core.lifecycle.controller` lifecycle behavior."""
 
 from __future__ import annotations
 
@@ -8,9 +8,9 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from gateway.core.runtime.controller import GatewayController
-from gateway.core.transport_api import TransportName
+from gateway.core.lifecycle.controller import GatewayController
 from gateway.startup import StartedGateway
+from gateway.transports.names import TransportName
 from gateway.transports.startup import TransportHandle
 
 
@@ -35,7 +35,7 @@ def test_start_surfaces_delegates_to_the_startup_module(
         captured["handler"] = handler
         return expected
 
-    monkeypatch.setattr("gateway.core.runtime.controller.gateway_startup.start_gateway", _boot)
+    monkeypatch.setattr("gateway.core.lifecycle.controller.gateway_startup.start_gateway", _boot)
     manager = GatewayController()
     handler = MagicMock(name="chat-handler")
     logger = logging.getLogger("test.manager.surfaces")
@@ -90,14 +90,14 @@ def test_manager_stop_never_touches_the_real_gateway_directory() -> None:
     ``gateway/tests/conftest.py`` this test deleted
     ``~/.opensre/gateway/components.json`` on the developer's machine.
     """
-    from gateway.core.runtime import daemon
+    from gateway.core.process import component_status, supervision
 
     real_gateway_dir = Path.home() / ".opensre" / "gateway"
 
     GatewayController().stop()
 
-    assert real_gateway_dir not in daemon.GATEWAY_COMPONENTS_FILE.parents
-    assert real_gateway_dir not in daemon.GATEWAY_PID_FILE.parents
+    assert real_gateway_dir not in component_status.GATEWAY_COMPONENTS_FILE.parents
+    assert real_gateway_dir not in supervision.GATEWAY_PID_FILE.parents
 
 
 def test_manager_reload_scheduler_refreshes_component_status(
@@ -112,7 +112,7 @@ def test_manager_reload_scheduler_refreshes_component_status(
         return object(), 3
 
     monkeypatch.setattr(
-        "platform.scheduler.runner.refresh_background_scheduler",
+        "platform.scheduling.scheduler.runner.refresh_background_scheduler",
         _refresh,
     )
     manager = GatewayController()

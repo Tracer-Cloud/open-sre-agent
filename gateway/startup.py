@@ -1,11 +1,10 @@
 """Start and stop everything the gateway serves users through.
 
-The facade the process controller calls: one :func:`start_gateway` that brings
-up the web server and every chat transport together and returns the running
-handle. Worker initialization lives with the transports
-(:mod:`gateway.transports.startup`); this module only composes.
+:func:`start_gateway` brings up the web server and every chat transport and
+returns the running handle. Each transport starts its own worker; this module
+only composes those starts.
 
-Only :class:`~gateway.core.runtime.controller.GatewayController` imports this
+Only :class:`~gateway.core.lifecycle.controller.GatewayController` imports this
 module, and only this module imports ``gateway.transports.startup``.
 """
 
@@ -14,7 +13,7 @@ from __future__ import annotations
 import logging
 from dataclasses import dataclass, field
 
-from gateway.core.transport_api import GatewayAgentCallback, TransportName
+from gateway.transports.names import TransportName
 from gateway.transports.startup import (
     DEFAULT_STOP_TIMEOUT_SECONDS,
     TransportHandle,
@@ -23,6 +22,7 @@ from gateway.transports.startup import (
 )
 from gateway.web.startup import start_web_server
 from gateway.web.web_server import WebAppServerHandle
+from platform.turn_host.turn_callback import TurnCallback
 
 # The web app is a thread join, not a network drain, so it gets a smaller slice
 # of the shutdown budget and leaves the rest for in-flight chat turns.
@@ -52,7 +52,7 @@ class StartedGateway:
 def start_gateway(
     *,
     logger: logging.Logger,
-    handler: GatewayAgentCallback,
+    handler: TurnCallback,
 ) -> StartedGateway:
     """Start web and every chat transport together.
 

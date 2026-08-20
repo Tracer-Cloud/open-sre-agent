@@ -1,7 +1,9 @@
 """Agent-harness ports — integrations, tools, and repository scope without tier violations.
 
-Adapters register at startup via :func:`surfaces.interactive_shell.ui.output.boundary.install_harness_ports`
-(shell/tests) or the gateway boot path in :mod:`gateway.core.runtime.controller` (duplicate wiring).
+Adapters register at process boot via
+:func:`bootstrap.adapters.install_harness_adapters` (CLI, gateway, web, and
+embedded profiles). Do not reintroduce a second registration site in a surface
+or in :mod:`gateway.core.lifecycle.controller`.
 """
 
 from __future__ import annotations
@@ -19,12 +21,11 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from config.strict_config import StrictConfigModel
 from core.domain.types.tools import ToolSurface
-from core.tool_framework.registered_tool import RegisteredTool
+from core.tool import RegisteredTool
 
 if TYPE_CHECKING:
-    from core.agent_harness.ports import ToolRegistry
-
-from core.agent_harness.ports import SubprocessPresenterFactory
+    from core.agent_harness.ports import SubprocessPresenterFactory
+    from core.tool import ToolRegistry
 
 logger = logging.getLogger(__name__)
 

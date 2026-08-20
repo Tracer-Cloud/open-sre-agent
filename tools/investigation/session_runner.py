@@ -13,12 +13,12 @@ from typing import Any, NoReturn
 
 from config.config import resolve_llm_settings
 from core.domain.stream import StreamEvent
-from platform.common.errors import OpenSREError
+from platform.errors import OpenSREError
 from tools.investigation.alert_templates import build_alert_template
 
 _logger = logging.getLogger(__name__)
 
-_SESSION_EVENT_POLL_S = 0.25
+_SESSION_EVENT_POLL_SECONDS = 0.25
 
 StreamRendererFn = Callable[[Iterator[StreamEvent]], dict[str, Any]]
 
@@ -163,7 +163,7 @@ def run_session_alert_payload(
                     _cancel_pump()
                     raise KeyboardInterrupt
                 try:
-                    item = event_queue.get(timeout=_SESSION_EVENT_POLL_S)
+                    item = event_queue.get(timeout=_SESSION_EVENT_POLL_SECONDS)
                 except queue.Empty:
                     continue
                 if isinstance(item, BaseException):

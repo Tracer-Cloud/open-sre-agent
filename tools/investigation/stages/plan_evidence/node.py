@@ -13,7 +13,7 @@ from core.domain.types.planning import PlannedInvestigationAction
 from core.domain.types.retrieval import RetrievalControlsMap, RetrievalIntent, TimeBounds
 from core.domain.types.tools import ToolSurface
 from core.state import InvestigationState
-from core.tool_framework.registered_tool import RegisteredTool
+from core.tool import RegisteredTool
 from tools.investigation.stages.gather_evidence.tools import (
     availability_view,
     build_connected_tool_context,
@@ -29,6 +29,8 @@ def plan_actions(state: InvestigationState) -> dict[str, Any]:
         return {}
 
     state_any = dict(state)
+    # Integration resolution is owned by the preceding pipeline stage; planning
+    # only consumes that snapshot and never resolves providers itself.
     raw_resolved = state_any.get("resolved_integrations")
     resolved = raw_resolved if isinstance(raw_resolved, dict) else {}
     available_tools = _available_investigation_tools(resolved)

@@ -1,9 +1,8 @@
 """Availability and parameter extraction shared by the Yandex Cloud family.
 
-Only one integration record is registered for Yandex Cloud, and every sibling
-package — logging, monitoring, compute and the rest — reads its credentials
-from that single ``yandex_cloud`` source entry. The helpers here are how they
-do it, mirroring how the AWS sub-service tools share the ``aws`` record.
+Only one integration record is registered for Yandex Cloud. Every tool under
+``integrations/yandex_cloud/tools/`` reads credentials from that single
+``yandex_cloud`` source entry. The helpers here are how they do it.
 
 Synthetic tests inject a fixture through the ``_backend`` slot on the source
 dict, so availability accepts either real credentials or a backend.

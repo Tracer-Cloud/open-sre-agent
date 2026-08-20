@@ -8,10 +8,9 @@ from config.constants.new_relic import (
     NEW_RELIC_DEFAULT_INCIDENT_LIMIT,
     NEW_RELIC_DEFAULT_WINDOW_MINUTES,
 )
-from core.tool_framework.base import BaseTool
-from core.tool_framework.metadata import EvidenceType, SideEffectLevel
+from core.tool import BaseTool, EvidenceType, SideEffectLevel
 from core.tool_framework.tool_decorator import tool
-from core.tool_framework.utils.tool_availability import tool_unavailable
+from core.tool_framework.utils import tool_unavailable
 from integrations.new_relic.client import NewRelicClient
 from integrations.new_relic.config import NewRelicIntegrationConfig
 from integrations.new_relic.tools.new_relic_alerts_tool.results import parse_incident_rows

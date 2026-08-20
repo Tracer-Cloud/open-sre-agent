@@ -12,12 +12,10 @@ from gateway.core.middleware.active_turns import ActiveTurnRegistry
 from gateway.core.middleware.approvals import ApprovalBroker, approval_tool_hooks
 from gateway.core.middleware.terminal_outcome import TerminalOutcomeArbiter
 from gateway.core.storage import SessionResolver
-from gateway.core.transport_api import GatewayAgentCallback
 from gateway.transports.telegram.approvals import TelegramApprovalPrompter
 from gateway.transports.telegram.inbound_security import (
     enforce_inbound_telegram_message_security,
 )
-from gateway.transports.telegram.output_sink import TelegramOutputSink
 from gateway.transports.telegram.poller.client import TelegramBotClient
 from gateway.transports.telegram.principal import (
     PrincipalResolutionError,
@@ -25,7 +23,9 @@ from gateway.transports.telegram.principal import (
 )
 from gateway.transports.telegram.session_rotation import resolve_or_rotate_session
 from gateway.transports.telegram.settings import GatewaySettings, TelegramInboundMessage
-from platform.analytics.usage_context import SURFACE_TELEGRAM, bound_usage_context
+from gateway.transports.telegram.turn_output import TelegramTurnOutput
+from platform.analytics.usage_context import UsageSurface, bound_usage_context
+from platform.turn_host.turn_callback import TurnCallback
 
 logger = logging.getLogger(__name__)
 
@@ -42,7 +42,7 @@ async def handle_polled_inbound_telegram_message(
     approvals: ApprovalBroker,
     active_cancels: ActiveTurnRegistry,
     loop: asyncio.AbstractEventLoop | None = None,
-    handle_callback_to_gateway_agent: GatewayAgentCallback,
+    handle_callback_to_gateway_agent: TurnCallback,
 ) -> None:
     """Process one long-polled inbound Telegram update."""
     user_lock = chat_locks.setdefault(event.user_id, asyncio.Lock())
@@ -87,7 +87,7 @@ async def handle_polled_inbound_telegram_message(
                 preview,
             )
 
-            sink = TelegramOutputSink(
+            output = TelegramTurnOutput(
                 client=client,
                 chat_id=event.chat_id,
                 edit_interval_seconds=settings.stream_edit_interval_seconds,
@@ -102,7 +102,7 @@ async def handle_polled_inbound_telegram_message(
 
             event_loop = loop or asyncio.get_running_loop()
             terminal = TerminalOutcomeArbiter()
-            sink.turn_cancel = terminal.cancel_event
+            output.turn_cancel = terminal.cancel_event
 
             def _on_turn_timeout() -> None:
                 logger.warning(
@@ -112,7 +112,7 @@ async def handle_polled_inbound_telegram_message(
                     session.session_id[:8],
                 )
                 try:
-                    sink.finalize(TURN_TIMEOUT_MESSAGE)
+                    output.finalize(TURN_TIMEOUT_MESSAGE)
                 except Exception:
                     logger.debug(
                         "[telegram-gateway] timeout finalize failed",
@@ -123,7 +123,7 @@ async def handle_polled_inbound_telegram_message(
                 if not terminal.claim():
                     return
                 try:
-                    sink.finalize(USER_STOP_MESSAGE)
+                    output.finalize(USER_STOP_MESSAGE)
                 except Exception:
                     logger.debug("[telegram-gateway] user-stop finalize failed", exc_info=True)
 
@@ -131,7 +131,7 @@ async def handle_polled_inbound_telegram_message(
                 with (
                     bound_storage_scope(scope),
                     bound_usage_context(
-                        surface=SURFACE_TELEGRAM,
+                        surface=UsageSurface.TELEGRAM,
                         session_id=session.session_id,
                         user_id=event.user_id or None,
                     ),
@@ -139,7 +139,7 @@ async def handle_polled_inbound_telegram_message(
                     handle_callback_to_gateway_agent(
                         event.text,
                         session,
-                        sink,
+                        output,
                         logger,
                     )
 
@@ -159,7 +159,7 @@ async def handle_polled_inbound_telegram_message(
                     )
                     if terminal.claim():
                         try:
-                            sink.render_error(TURN_ERROR_MESSAGE)
+                            output.render_error(TURN_ERROR_MESSAGE)
                         except Exception:
                             logger.debug(
                                 "[telegram-gateway] error finalize failed",
