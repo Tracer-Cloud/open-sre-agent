@@ -23,6 +23,7 @@ from core.agent_harness.turns.turn_results import (
     ToolCallingTurnResult,
     TurnResult,
 )
+from core.llm.types import StreamingReasoningClient
 
 
 @dataclass
@@ -227,7 +228,7 @@ class SimpleRunRecordFactory:
 class StaticReasoningClientProvider:
     """Provides a fixed reasoning client (or None to skip the assistant)."""
 
-    client: Any | None = None
+    client: StreamingReasoningClient | None = None
 
     def bind_session(self, session: Any) -> None:
         """Client is fixed at construction — ignore session retargets."""
@@ -237,5 +238,5 @@ class StaticReasoningClientProvider:
         """No sink of its own — accept rebind for :class:`OutputBindable` parity."""
         _ = output
 
-    def get(self) -> Any | None:
+    def get(self) -> StreamingReasoningClient | None:
         return self.client

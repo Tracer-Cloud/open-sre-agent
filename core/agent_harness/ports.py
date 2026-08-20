@@ -16,7 +16,7 @@ from typing import Any, Protocol, runtime_checkable
 
 from core.agent_harness.turns.gather_observation import GatheredEvidence
 from core.agent_harness.turns.turn_results import ToolCallingTurnResult, TurnResult
-from core.llm.types import AgentLLMClient
+from core.llm.types import AgentLLMClient, StreamingReasoningClient
 from core.tool.execution import ToolExecutionHooks
 
 # A tool-loop event callback: ``(kind, data)`` where kind is e.g. "tool_start".
@@ -220,8 +220,8 @@ class PromptContextProvider(Protocol):
 class ReasoningClientProvider(Protocol):
     """Provides the streaming reasoning LLM client for the assistant answer."""
 
-    def get(self) -> Any | None:
-        raise NotImplementedError
+    def get(self) -> StreamingReasoningClient | None:
+        """Return the reasoning client, or ``None`` when one cannot be built."""
 
 
 @runtime_checkable
