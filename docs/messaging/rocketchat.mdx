@@ -120,7 +120,7 @@ docker run -d --name rc-dev --network rc-net --platform linux/amd64 -p 3201:3000
   -e 'ADMIN_PASS=verify-admin-pass' \
   -e 'ADMIN_EMAIL=verifyadmin@example.com' \
   -e 'OVERWRITE_SETTING_Show_Setup_Wizard=completed' \
-  rocket.chat:latest
+  rocket.chat:8.5.1
 ```
 
 The `OVERWRITE_SETTING_Show_Setup_Wizard=completed` + `ADMIN_*` vars skip the manual setup wizard entirely. Wait for `curl http://localhost:3201/api/info` to return `200`, then log in and generate a PAT via the API:
@@ -165,7 +165,7 @@ SERVICE    │ SOURCE    │ STATUS   │ DETAIL
 rocketchat │ local env │ ✓ passed │ Connected to Rocket.Chat as @verifyadmin.
 ```
 
-Call `rocketchat_send_message` directly:
+`RocketChatSendMessageTool` is the internal class the agent calls during an investigation — invoke it directly here only to see the real shape of its result (internal, not a public API, and may move):
 
 ```python
 from integrations.rocketchat.tools.rocketchat_send_message_tool.tool import RocketChatSendMessageTool
