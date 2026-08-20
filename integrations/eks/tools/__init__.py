@@ -112,7 +112,7 @@ def get_eks_deployment_status(
 
 from botocore.exceptions import ClientError
 
-from core.tool_framework.telemetry import report_run_error
+from core.tool.execution import report_run_error
 from core.tool_framework.tool_decorator import tool
 from integrations.eks.eks_client import EKSClient
 

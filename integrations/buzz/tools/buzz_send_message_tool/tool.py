@@ -5,8 +5,7 @@ from __future__ import annotations
 from typing import Any
 
 from core.domain.types.tools import ToolSurface
-from core.tool.contracts import BaseTool
-from core.tool.contracts import SideEffectLevel
+from core.tool.contracts import BaseTool, SideEffectLevel
 from core.tool_framework.tool_decorator import tool
 from integrations.buzz.tools.buzz_send_message_tool.constants import SOURCE
 from integrations.buzz.tools.buzz_send_message_tool.delivery import (

@@ -4,8 +4,7 @@ from typing import Any, ClassVar
 
 from core.domain.types.evidence import EvidenceSource
 from core.domain.types.tools import ToolSurface
-from core.tool.contracts import BaseTool
-from core.tool.contracts import SideEffectLevel
+from core.tool.contracts import BaseTool, SideEffectLevel
 from core.tool_framework.tool_decorator import tool
 from integrations.config_models import RailwayIntegrationConfig
 from integrations.railway.client import (

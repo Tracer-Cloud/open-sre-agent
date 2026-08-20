@@ -9,7 +9,7 @@ from typing import Any
 
 from core.domain.types.tools import ToolSurface
 from core.tool.contracts import SideEffectLevel
-from core.tool_framework.telemetry import report_run_error
+from core.tool.execution import report_run_error
 from core.tool_framework.tool_decorator import tool
 from core.tool_framework.utils.tool_availability import tool_unavailable
 from integrations.github.client import GitHubApiError, GitHubRestClient, resolve_github_token

@@ -1,4 +1,4 @@
-"""Unit tests for core.tool_framework.schema."""
+"""Unit tests for core.tool.contracts."""
 
 from __future__ import annotations
 
@@ -7,7 +7,7 @@ from typing import Any
 import pytest
 from pydantic import BaseModel
 
-from core.tool_framework.schema import (
+from core.tool.contracts import (
     _value_matches_schema,
     infer_input_schema,
     model_to_json_schema,

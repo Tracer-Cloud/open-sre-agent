@@ -7,18 +7,81 @@ import logging
 from collections.abc import Callable, Mapping, Sequence
 from concurrent.futures import Future, ThreadPoolExecutor, as_completed
 from dataclasses import dataclass, field, replace
-from typing import Any
+from typing import Any, Literal
+
+from pydantic import BaseModel
 
 from core.llm.types import ToolCall
 from core.tool.contracts import AgentTool, AgentToolContext, RuntimeTool
-from core.tool_framework.utils.integration_sources import availability_view
+from platform.observability.errors.boundary import report_exception
 from platform.observability.trace.redaction import redact_sensitive
 from platform.observability.trace.spans import mark_span_outcome, tool_span
 
 logger = logging.getLogger(__name__)
+_TOOL_LOGGER = logging.getLogger("tools")
 
 _TOOL_EXECUTOR_WORKERS = 10
 _UNSET: object = object()
+
+
+def availability_view(resolved_integrations: dict[str, Any]) -> dict[str, Any]:
+    """Convert classified integration configs into dicts tools can consume."""
+    view: dict[str, Any] = {}
+    for key, value in resolved_integrations.items():
+        if key.startswith("_"):
+            view[key] = value
+            continue
+        if isinstance(value, BaseModel):
+            item = value.model_dump(exclude_none=True)
+            item.setdefault("connection_verified", True)
+            view[key] = item
+        elif isinstance(value, dict) and value:
+            item = dict(value)
+            item.setdefault("connection_verified", True)
+            view[key] = item
+        else:
+            view[key] = value
+    return view
+
+
+ToolErrorSeverity = Literal["error", "warning"]
+
+
+def report_run_error(
+    exc: BaseException,
+    *,
+    tool_name: str,
+    source: str,
+    component: str,
+    method: str | None = None,
+    severity: ToolErrorSeverity = "error",
+    logger: logging.Logger | None = None,
+    extras: dict[str, Any] | None = None,
+) -> None:
+    """Log + Sentry-capture an error swallowed by a tool wrapper.
+
+    ``tool_name`` and ``source`` come from the tool's metadata (the
+    ``name=``/``source=`` arguments of ``@tool`` or the corresponding
+    ``BaseTool`` ClassVars). ``component`` should identify the call site —
+    typically ``"<module>.<function_or_class>"`` — so Sentry groups events
+    per tool implementation, not per top-level surface tag.
+    """
+    tags: dict[str, str] = {
+        "surface": "tool",
+        "tool_name": tool_name,
+        "source": source,
+        "component": component,
+    }
+    if method:
+        tags["method"] = method
+    report_exception(
+        exc,
+        logger=logger or _TOOL_LOGGER,
+        message=f"Tool {tool_name} failed: {type(exc).__name__}",
+        severity=severity,
+        tags=tags,
+        extras=extras,
+    )
 
 
 @dataclass(frozen=True)

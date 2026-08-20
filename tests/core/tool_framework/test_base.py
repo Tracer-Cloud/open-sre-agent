@@ -7,10 +7,8 @@ from typing import Any
 import pytest
 from pydantic import ValidationError
 
-import core.tool_framework.telemetry as telemetry_mod
-from core.tool.contracts import BaseTool
-from core.tool.contracts import ToolMetadata
-from core.tool.contracts import REGISTERED_TOOL_ATTR, RegisteredTool
+import core.tool.contracts as tool_contracts
+from core.tool.contracts import REGISTERED_TOOL_ATTR, BaseTool, RegisteredTool, ToolMetadata
 from core.tool_framework.tool_decorator import tool
 
 # ---------------------------------------------------------------------------
@@ -187,7 +185,7 @@ def test_base_tool_exception_is_captured_with_tool_tag(
     def report_stub(exc: BaseException, **kwargs: object) -> None:
         captured.append((exc, kwargs))
 
-    monkeypatch.setattr(telemetry_mod, "report_exception", report_stub)
+    monkeypatch.setattr(tool_contracts, "report_exception", report_stub)
 
     result = _ExplodingTool()()
 
@@ -271,7 +269,7 @@ def test_decorated_function_tool_exception_is_captured_with_tool_tag(
     def report_stub(exc: BaseException, **kwargs: object) -> None:
         captured.append((exc, kwargs))
 
-    monkeypatch.setattr(telemetry_mod, "report_exception", report_stub)
+    monkeypatch.setattr(tool_contracts, "report_exception", report_stub)
 
     @tool(
         name="decorated_failure",

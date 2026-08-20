@@ -1,4 +1,4 @@
-"""Unit tests for core.tool_framework.telemetry (report_run_error helper)."""
+"""Unit tests for core.tool.execution (report_run_error helper)."""
 
 from __future__ import annotations
 
@@ -12,7 +12,7 @@ from unittest.mock import MagicMock
 import pytest
 from pydantic import BaseModel, ValidationError, model_validator
 
-from core.tool_framework.telemetry import report_run_error
+from core.tool.execution import report_run_error
 
 # ---------------------------------------------------------------------------
 # Fixture: captured Sentry events

@@ -10,7 +10,7 @@ X adds or renames individual MCP-side tools.
 from __future__ import annotations
 
 from core.domain.types.tools import ToolSurface
-from core.tool_framework.telemetry import report_run_error
+from core.tool.execution import report_run_error
 from core.tool_framework.tool_decorator import tool
 from core.tool_framework.utils.mcp_bridge import unavailable_response
 from core.tool_framework.utils.mcp_params import first_list, first_string
