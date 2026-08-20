@@ -9,7 +9,7 @@ import platform.harness_ports as harness_ports
 from core.agent_harness.turns.gather_discovery_budget import is_live_metric_query_call
 from core.llm.types import ToolCall
 from core.state import InvestigationState
-from integrations.datadog.metric_drafts import register_datadog_metric_drafts
+from integrations.harness_adapters import register_harness_adapters
 from tools.investigation.stages.gather_evidence import ConnectedInvestigationAgent
 
 
@@ -124,7 +124,7 @@ def test_datadog_metric_fetch_is_live_investigation_evidence() -> None:
     }
 
     try:
-        register_datadog_metric_drafts()
+        register_harness_adapters()
         with (
             patch("tools.investigation.stages.gather_evidence.agent.get_tracker", MagicMock),
             patch("integrations.datadog.tools.make_client", return_value=client),
