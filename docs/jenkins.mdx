@@ -84,7 +84,7 @@ docker run -d --name jenkins-dev -p 8090:8080 \
 Wait for it to come up, then create and run a job so there is a real build to inspect:
 
 ```bash
-until curl -sf -o /dev/null -u admin:admin http://localhost:8090/api/json; do sleep 2; done
+until curl -sf -o /dev/null -u admin:admin http://localhost:8090/crumbIssuer/api/json; do sleep 2; done
 
 COOKIE_JAR=/tmp/jenkins-init/cookies.txt
 CRUMB=$(curl -s -c "$COOKIE_JAR" -u admin:admin http://localhost:8090/crumbIssuer/api/json | python3 -c "import json,sys;print(json.load(sys.stdin)['crumb'])")
