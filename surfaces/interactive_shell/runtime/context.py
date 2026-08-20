@@ -9,7 +9,6 @@ from pydantic import BaseModel, ConfigDict, Field, InstanceOf, field_validator, 
 
 from core.agent_harness import SessionManager
 from core.domain.alerts import inbox as _alert_inbox
-from platform.observability.trace.spans import set_session_trace_store
 from surfaces.interactive_shell.runtime.core.state import (
     ReplState,
     SpinnerState,
@@ -141,6 +140,8 @@ def create_repl_runtime_context(
         hydrate_integrations=hydrate_integrations,
         persistent_tasks=persistent_tasks,
     )
+    from platform.observability.trace.spans import set_session_trace_store
+
     set_session_trace_store(jsonl_trace_store_for_session(prepared_session))
     mutable_state = create_repl_mutable_state(state=state, spinner=spinner)
     return ReplRuntimeContext(

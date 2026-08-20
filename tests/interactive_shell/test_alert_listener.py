@@ -111,3 +111,22 @@ def test_controller_constructs_when_stdlib_platform_is_cached(monkeypatch) -> No
     )
     assert controller.turn_runtime.turn_handler is not None
     assert hasattr(sys.modules["platform"], "__path__")
+
+
+def test_create_repl_runtime_context_bootstraps_when_stdlib_platform_cached(
+    monkeypatch,
+) -> None:
+    """``run_repl_async`` builds context before the controller — bootstrap there."""
+    ensure_project_platform_package()
+    from surfaces.interactive_shell.runtime.context import create_repl_runtime_context
+
+    stub = types.ModuleType("platform")
+    monkeypatch.setitem(sys.modules, "platform", stub)
+    for name in list(sys.modules):
+        if name.startswith("platform."):
+            monkeypatch.delitem(sys.modules, name, raising=False)
+    assert not hasattr(sys.modules["platform"], "__path__")
+
+    ctx = create_repl_runtime_context()
+    assert ctx.session is not None
+    assert hasattr(sys.modules["platform"], "__path__")

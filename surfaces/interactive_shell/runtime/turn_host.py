@@ -20,6 +20,8 @@ from typing import TYPE_CHECKING, Any
 
 from rich.console import Console
 
+import surfaces.interactive_shell.ensure_platform  # noqa: F401
+
 if TYPE_CHECKING:
     from platform.turn_host.turn_handler import TurnHandler
 

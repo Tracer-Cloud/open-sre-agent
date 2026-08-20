@@ -12,31 +12,25 @@ from prompt_toolkit import PromptSession
 from prompt_toolkit.patch_stdout import patch_stdout
 from rich.console import Console
 
+import surfaces.interactive_shell.ensure_platform  # noqa: F401
 from config.platform_bootstrap import ensure_project_platform_package
 from config.repl_config import ReplConfig
-
-# Embedding hosts (and some tooling) may cache stdlib ``platform`` before this
-# module loads. ``runtime.turn_host`` and construction import ``platform.*``;
-# bootstrap before those imports or construction fails with ModuleNotFoundError.
-ensure_project_platform_package()
-
-from core.domain.alerts import inbox as _alert_inbox  # noqa: E402
-from surfaces.interactive_shell.runtime.background.workers import (  # noqa: E402
-    BackgroundTaskManager,
-)
-from surfaces.interactive_shell.runtime.context import (  # noqa: E402
+from core.domain.alerts import inbox as _alert_inbox
+from platform.turn_host.turn_handler import TurnHandler
+from surfaces.interactive_shell.runtime.background.workers import BackgroundTaskManager
+from surfaces.interactive_shell.runtime.context import (
     ReplRuntimeContext,
     create_repl_runtime_context,
 )
-from surfaces.interactive_shell.runtime.core.prompt_manager import PromptManager  # noqa: E402
-from surfaces.interactive_shell.runtime.core.state import (  # noqa: E402
+from surfaces.interactive_shell.runtime.core.prompt_manager import PromptManager
+from surfaces.interactive_shell.runtime.core.state import (
     ReplState,
     SpinnerState,
 )
-from surfaces.interactive_shell.runtime.input import (  # noqa: E402
+from surfaces.interactive_shell.runtime.input import (
     PromptInputReader,
 )
-from surfaces.interactive_shell.runtime.input.actions import (  # noqa: E402
+from surfaces.interactive_shell.runtime.input.actions import (
     CancelTurn,
     CloseShell,
     DeliverConfirmation,
@@ -44,18 +38,19 @@ from surfaces.interactive_shell.runtime.input.actions import (  # noqa: E402
     InputAction,
     SubmitTurn,
 )
-from surfaces.interactive_shell.runtime.loop_scheduler import (  # noqa: E402
+from surfaces.interactive_shell.runtime.loop_scheduler import (
     shutdown_loop_scheduler,
     start_loop_scheduler,
 )
-from surfaces.interactive_shell.runtime.turn_host import (  # noqa: E402
+from surfaces.interactive_shell.runtime.shell_agent import shell_agent_build_config
+from surfaces.interactive_shell.runtime.turn_host import (
     AgentTurnResources,
     run_agent_turn,
     run_agent_turn_queue,
     run_input_loop,
 )
-from surfaces.interactive_shell.session import Session  # noqa: E402
-from surfaces.interactive_shell.ui import DIM  # noqa: E402
+from surfaces.interactive_shell.session import Session
+from surfaces.interactive_shell.ui import DIM
 
 log = logging.getLogger(__name__)
 
@@ -92,9 +87,7 @@ def _alert_listener(
         yield None
         return
 
-    # Re-run in case an embedding host re-cached stdlib ``platform`` after this
-    # module loaded; without it, ``platform.alert_intake`` fails and the
-    # listener exception path leaves the shell with no intake.
+    # Fresh ``from platform…`` after a possible stdlib re-cache.
     ensure_project_platform_package()
     from platform.alert_intake import build_alert_intake_app
     from platform.asgi_server import AsgiServerHandle, serve_asgi_in_thread
@@ -178,10 +171,6 @@ class InteractiveShellController:
         inbox: _alert_inbox.AlertInbox | None = None,
         console: Console | None = None,
     ) -> None:
-        # Construction (session bootstrap + TurnHandler) imports ``platform.*``.
-        # Re-run in case an embedding host re-cached stdlib ``platform`` after
-        # this module loaded.
-        ensure_project_platform_package()
         self.runtime_context = _resolve_runtime_context(
             session,
             state=state,
@@ -206,9 +195,6 @@ class InteractiveShellController:
             self.spinner,
             self.runtime_context.pt_session,
         )
-        from platform.turn_host.turn_handler import TurnHandler
-        from surfaces.interactive_shell.runtime.shell_agent import shell_agent_build_config
-
         self.turn_runtime = AgentTurnResources(
             session=self.session,
             state=self.state,
