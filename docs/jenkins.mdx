@@ -55,6 +55,100 @@ In Jenkins: click your **username** (top-right) → **Security** → **API Token
 
 API access uses HTTP Basic auth with your **username** and this **token** (not your password).
 
+### Quick local test with Docker
+
+Bring up a disposable Jenkins with a pre-configured admin account (no setup wizard):
+
+```bash
+mkdir -p /tmp/jenkins-init
+cat > /tmp/jenkins-init/basic-security.groovy << 'EOF'
+import jenkins.model.*
+import hudson.security.*
+
+def instance = Jenkins.get()
+def realm = new HudsonPrivateSecurityRealm(false)
+realm.createAccount("admin", "admin")
+instance.setSecurityRealm(realm)
+def strategy = new FullControlOnceLoggedInAuthorizationStrategy()
+strategy.setAllowAnonymousRead(false)
+instance.setAuthorizationStrategy(strategy)
+instance.save()
+EOF
+
+docker run -d --name jenkins-dev -p 8090:8080 \
+  -e JAVA_OPTS="-Djenkins.install.runSetupWizard=false" \
+  -v /tmp/jenkins-init/basic-security.groovy:/usr/share/jenkins/ref/init.groovy.d/basic-security.groovy \
+  jenkins/jenkins:lts-jdk17
+```
+
+Wait for it to come up, then create and run a job so there is a real build to inspect:
+
+```bash
+COOKIE_JAR=/tmp/jenkins-init/cookies.txt
+CRUMB=$(curl -s -c "$COOKIE_JAR" -u admin:admin http://localhost:8090/crumbIssuer/api/json | python3 -c "import json,sys;print(json.load(sys.stdin)['crumb'])")
+
+curl -s -b "$COOKIE_JAR" -u admin:admin -H "Jenkins-Crumb: $CRUMB" -H "Content-Type: application/xml" \
+  --data-binary '<project><builders><hudson.tasks.Shell><command>echo deploying</command></hudson.tasks.Shell></builders></project>' \
+  "http://localhost:8090/createItem?name=payment-service-deploy"
+
+curl -s -b "$COOKIE_JAR" -u admin:admin -H "Jenkins-Crumb: $CRUMB" -X POST \
+  "http://localhost:8090/job/payment-service-deploy/build"
+```
+
+```bash
+export JENKINS_URL="http://localhost:8090"
+export JENKINS_USER="admin"
+export JENKINS_API_TOKEN="admin"  # local demo only — real deployments must use a token, not a password
+```
+
+`admin`/`admin` is only valid because this is a disposable local instance with anonymous read disabled — Jenkins accepts a real password over Basic auth the same way it accepts a token when no token is configured. Never do this against a real server.
+
+Verify:
+
+```bash
+opensre integrations verify jenkins
+```
+
+```
+SERVICE │ SOURCE    │ STATUS   │ DETAIL
+jenkins │ local env │ ✓ passed │ Jenkins connectivity successful at
+        │           │          │ http://localhost:8090 (node: built-in)
+```
+
+Call `list_jenkins_builds` directly for the real build you just ran:
+
+```python
+from integrations.jenkins.tools import list_jenkins_builds
+list_jenkins_builds(job_name="payment-service-deploy")
+```
+
+```json
+{
+  "source": "jenkins",
+  "available": true,
+  "job": "payment-service-deploy",
+  "builds": [
+    {
+      "job": "payment-service-deploy",
+      "number": 1,
+      "status": "SUCCESS",
+      "building": false,
+      "timestamp": "2026-08-20T15:57:21.969000+00:00",
+      "duration_ms": 2103,
+      "url": "http://localhost:8090/job/payment-service-deploy/1/"
+    }
+  ],
+  "failed_builds": [],
+  "total": 1
+}
+```
+
+Teardown:
+
+```bash
+docker rm -f jenkins-dev
+```
+
 ## Investigation tools
 
 | Tool | What it does |
