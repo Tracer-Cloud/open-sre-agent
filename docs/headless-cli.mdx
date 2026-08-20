@@ -1,11 +1,12 @@
 ---
-title: "Ask from the CLI"
-slug: "ask"
-description: "Run one configured OpenSRE agent request from a script or terminal."
+title: "Headless CLI"
+slug: "headless-cli"
+description: "Run one OpenSRE agent turn non-interactively from a terminal, script, or CI job."
 ---
 
-Use `opensre ask` for a single agent turn that prints its response and exits. It
-uses the provider, integrations, and tools configured by `opensre onboard`.
+`opensre ask` is OpenSRE’s headless, one-shot CLI command. It runs one agent
+turn, prints the response, and exits instead of opening the interactive shell.
+It uses the provider, integrations, and tools configured by `opensre onboard`.
 
 ```bash
 opensre ask "why did checkout latency increase today?"
