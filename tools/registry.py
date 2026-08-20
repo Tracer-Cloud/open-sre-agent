@@ -17,7 +17,7 @@ from types import ModuleType
 from typing import TYPE_CHECKING
 
 import tools as tools_package
-from core.tool.contracts import RegisteredTool, ToolSurface
+from core.tool import RegisteredTool, ToolSurface
 from tools.registry_discovery import (
     INTEGRATION_TOOL_PACKAGES,
     collect_registered_tools_from_module,

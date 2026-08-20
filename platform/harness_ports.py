@@ -21,11 +21,11 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from config.strict_config import StrictConfigModel
 from core.domain.types.tools import ToolSurface
-from core.tool.contracts import RegisteredTool
+from core.tool import RegisteredTool
 
 if TYPE_CHECKING:
     from core.agent_harness.ports import SubprocessPresenterFactory
-    from core.tool.registry import ToolRegistry
+    from core.tool import ToolRegistry
 
 logger = logging.getLogger(__name__)
 

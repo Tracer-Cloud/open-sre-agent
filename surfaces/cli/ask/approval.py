@@ -6,8 +6,13 @@ import threading
 from collections.abc import Iterable
 
 from core.domain.types.tools import ToolSurface
-from core.tool.contracts import RuntimeTool, SideEffectLevel
-from core.tool.execution import BeforeToolCallResult, ToolExecutionHooks, ToolExecutionRequest
+from core.tool import (
+    BeforeToolCallResult,
+    RuntimeTool,
+    SideEffectLevel,
+    ToolExecutionHooks,
+    ToolExecutionRequest,
+)
 from platform.harness_ports import get_surface_tool_map
 
 _GATED_SIDE_EFFECTS = frozenset({SideEffectLevel.MUTATING, SideEffectLevel.EXTERNAL})

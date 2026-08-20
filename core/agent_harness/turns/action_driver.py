@@ -50,7 +50,7 @@ from core.agent_harness.turns.turn_snapshot import TurnSnapshot
 from core.agent_harness.turns.wal_recorder import with_wal_recording
 from core.events import runtime_event_callback_from_observer
 from core.llm.failure_classification import is_context_length_overflow
-from core.llm.types import AgentLLMResponse, ToolCall
+from core.llm.types import AgentLLMResponse, SchemaDescribedTool, ToolCall
 from core.llm_invoke_errors import remediate_missing_llm_credentials
 from core.tool.execution import (
     BeforeToolCallResult,
@@ -250,7 +250,7 @@ class _StaticToolCallLLM:
         self._tool_calls = tool_calls
         self._used = False
 
-    def tool_schemas(self, _tools: list[Any]) -> list[dict[str, Any]]:
+    def tool_schemas(self, _tools: Sequence[SchemaDescribedTool]) -> list[dict[str, Any]]:
         return []
 
     def invoke(

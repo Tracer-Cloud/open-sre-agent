@@ -1,7 +1,7 @@
 """Registry of all available investigation actions."""
 
 from core.domain.types.tools import ToolSurface
-from core.tool.contracts import RegisteredTool
+from core.tool import RegisteredTool
 from tools.registry import get_registered_tools
 
 

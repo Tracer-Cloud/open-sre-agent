@@ -5,7 +5,7 @@ from __future__ import annotations
 from typing import Any
 
 from core.domain.types.tools import ToolSurface
-from core.tool.contracts import BaseTool, SideEffectLevel
+from core.tool import BaseTool, SideEffectLevel
 from core.tool_framework.tool_decorator import tool
 from integrations.rocketchat.tools.rocketchat_send_message_tool.constants import SOURCE
 from integrations.rocketchat.tools.rocketchat_send_message_tool.delivery import (

@@ -7,7 +7,7 @@ from typing import Any
 from pydantic import BaseModel, Field
 
 from core.domain.types.tools import ToolSurface
-from core.tool.contracts import EvidenceType, SideEffectLevel
+from core.tool import EvidenceType, SideEffectLevel
 from core.tool_framework.tool_decorator import tool
 from core.tool_framework.utils import call_db_tool_with_default_db_warning
 from integrations.postgresql import (

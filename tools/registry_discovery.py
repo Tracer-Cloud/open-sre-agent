@@ -16,7 +16,7 @@ import pkgutil
 from dataclasses import replace
 from types import ModuleType
 
-from core.tool.contracts import REGISTERED_TOOL_ATTR, BaseTool, RegisteredTool
+from core.tool import REGISTERED_TOOL_ATTR, BaseTool, RegisteredTool
 
 logger = logging.getLogger(__name__)
 

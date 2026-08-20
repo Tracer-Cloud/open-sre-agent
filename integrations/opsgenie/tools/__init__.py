@@ -6,7 +6,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from core.tool.contracts import BaseTool
+from core.tool import BaseTool
 from core.tool_framework.utils import tool_unavailable
 from integrations.opsgenie.client import make_opsgenie_client
 
@@ -128,7 +128,7 @@ opsgenie_alert_detail = OpsGenieAlertDetailTool()
 """OpsGenie alert listing and search investigation tool."""
 
 
-from core.tool.contracts import BaseTool
+from core.tool import BaseTool
 
 _OPEN_STATUSES = {"open"}
 

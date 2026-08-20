@@ -17,7 +17,7 @@ from config.constants.investigation import (
 from core.llm.types import ToolCall
 from core.llm_invoke_errors import LLMInvokeFailure
 from core.state.evidence import EvidenceEntry
-from core.tool.execution import (
+from core.tool import (
     BeforeToolCallResult,
     ToolExecutionHooks,
     ToolExecutionRequest,

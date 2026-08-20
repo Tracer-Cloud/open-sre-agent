@@ -32,7 +32,7 @@ from __future__ import annotations
 from typing import Any
 
 from core.domain.types.tools import ToolSurface
-from core.tool.contracts import BaseTool, SideEffectLevel
+from core.tool import BaseTool, SideEffectLevel
 from integrations.pi import is_pi_coding_enabled
 from integrations.pi.tools.pi_coding_tool.errors import PiCodingError
 from integrations.pi.tools.pi_coding_tool.runner import (

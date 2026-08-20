@@ -7,7 +7,7 @@ from typing import Any
 import httpx
 
 from core.domain.types.tools import ToolSurface
-from core.tool.execution import report_run_error
+from core.tool import report_run_error
 from core.tool_framework.tool_decorator import tool
 from core.tool_framework.utils import tool_unavailable
 from integrations.sentry import (

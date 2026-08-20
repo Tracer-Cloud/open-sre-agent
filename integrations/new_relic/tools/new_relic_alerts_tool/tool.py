@@ -8,7 +8,7 @@ from config.constants.new_relic import (
     NEW_RELIC_DEFAULT_INCIDENT_LIMIT,
     NEW_RELIC_DEFAULT_WINDOW_MINUTES,
 )
-from core.tool.contracts import BaseTool, EvidenceType, SideEffectLevel
+from core.tool import BaseTool, EvidenceType, SideEffectLevel
 from core.tool_framework.tool_decorator import tool
 from core.tool_framework.utils import tool_unavailable
 from integrations.new_relic.client import NewRelicClient

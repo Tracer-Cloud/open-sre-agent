@@ -2,10 +2,14 @@
 
 ``core/tool/`` (contract, execution, registry port) and ``core/tool_framework/``
 (``@tool``, skill guidance, payload utilities) are one tier to everything above
-them. ``core.tool_framework.utils`` is already a door — it curates ``__all__``
-over nine helper submodules — so an import of it is not internal. The package
-roots export nothing yet; everything reaching past them is listed below, and
-these allowlists are the measurement of the seam.
+them. Three doors are open: ``core.tool`` (the contract — what a tool is, how
+it runs, where it is registered), ``core.tool_framework.utils`` (schema builders,
+MCP readers, availability envelopes), and the ``core.tool_framework`` root, which
+exports nothing yet. Everything reaching past a door is listed below, and these
+allowlists are the measurement of the seam.
+
+``gateway``, ``surfaces`` and ``platform`` are at zero: they use the contract and
+nothing behind it.
 
 Each allowlist is compared exactly in both directions: a new internal import
 fails immediately, and an entry no longer imported must be removed. Widening a
@@ -14,6 +18,8 @@ door and moving callers onto it is how these get shorter.
 
 from __future__ import annotations
 
+import subprocess
+import sys
 from pathlib import Path
 
 import pytest
@@ -26,9 +32,6 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 _ALLOWED: dict[str, frozenset[str]] = {
     "tools": frozenset(
         {
-            "core.tool.contracts",
-            "core.tool.execution",
-            "core.tool.registry",
             "core.tool_framework.skill_guidance",
             "core.tool_framework.tags",
             "core.tool_framework.tool_decorator",
@@ -36,25 +39,13 @@ _ALLOWED: dict[str, frozenset[str]] = {
     ),
     "integrations": frozenset(
         {
-            "core.tool.contracts",
-            "core.tool.execution",
             "core.tool_framework.tags",
             "core.tool_framework.tool_decorator",
         }
     ),
-    "gateway": frozenset({"core.tool.execution"}),
-    "surfaces": frozenset(
-        {
-            "core.tool.contracts",
-            "core.tool.execution",
-        }
-    ),
-    "platform": frozenset(
-        {
-            "core.tool.contracts",
-            "core.tool.registry",
-        }
-    ),
+    "gateway": frozenset(),
+    "surfaces": frozenset(),
+    "platform": frozenset(),
 }
 
 
@@ -76,3 +67,30 @@ def test_bootstrap_reaches_the_tool_tier_only_through_its_api() -> None:
 
     # Assert
     assert imported == set()
+
+
+def test_the_contract_door_survives_being_imported_second() -> None:
+    """``import core.llm.types`` must not re-enter a half-built ``core.tool``.
+
+    ``core.tool.execution`` needs ``ToolCall`` from ``core.llm.types``, which in
+    turn names ``RuntimeTool`` as a PEP 695 bound. Once ``core/tool/__init__``
+    imports execution, a runtime import of that bound makes importing
+    ``core.llm.types`` first fail with ``cannot import name 'ToolCall' from
+    partially initialized module``. The bound is lazy, so the import stays under
+    ``TYPE_CHECKING`` — and this test is what says so out loud.
+    """
+    # Arrange: a fresh interpreter, importing the risky order first.
+    script = "import core.llm.types, core.tool; print(len(core.tool.__all__))"
+
+    # Act
+    proc = subprocess.run(
+        [sys.executable, "-c", script],
+        cwd=str(REPO_ROOT),
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+
+    # Assert
+    assert proc.returncode == 0, proc.stderr.strip()[-400:]
+    assert proc.stdout.strip() == "16"
