@@ -112,6 +112,13 @@ the repository's merge requirements are satisfied: required GitHub checks are
 green, actionable human or automated review feedback (including Greptile) is
 addressed, and resolved conversations are closed out.
 
+A green check does not mean review feedback is clear. GitHub Code Quality and
+GitHub Advanced Security can post inline review threads even when their checks
+pass. After checks complete, and again after every push, inspect all unresolved
+conversations and latest reviews, including feedback from
+`github-code-quality` and `github-advanced-security`. Validate each finding,
+push an appropriate fix, reply, and resolve the addressed thread.
+
 After each completed PR update, once commits are pushed, the PR description is
 current, and addressed threads are resolved, trigger a Greptile re-review by
 following [CONTRIBUTING.md](CONTRIBUTING.md#greptile-code-review). Repeat until
