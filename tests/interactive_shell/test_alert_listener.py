@@ -5,13 +5,27 @@ from __future__ import annotations
 import os
 import sys
 import types
+from collections.abc import Iterator
 from unittest.mock import MagicMock
 
+import pytest
 from rich.console import Console
 
 from config.platform_bootstrap import ensure_project_platform_package
 from config.repl_config import ReplConfig
 from surfaces.interactive_shell.controller import _alert_listener
+
+
+@pytest.fixture(autouse=True)
+def _reload_platform_after_poison() -> Iterator[None]:
+    """Poison tests replace ``sys.modules['platform']``; monkeypatch undo can leave
+    a parent/child split-brain that breaks later ``monkeypatch.setattr('platform…')``.
+    """
+    yield
+    for name in list(sys.modules):
+        if name == "platform" or name.startswith("platform."):
+            del sys.modules[name]
+    ensure_project_platform_package()
 
 
 def test_alert_listener_replaces_stale_process_token(monkeypatch) -> None:

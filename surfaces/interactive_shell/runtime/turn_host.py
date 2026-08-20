@@ -62,7 +62,6 @@ _logger = logging.getLogger(__name__)
 
 _AGENT_TURN_KIND = "agent"
 
-
 @dataclass(frozen=True)
 class AgentTurnResources:
     """Immutable dependencies for running one submitted shell turn."""
@@ -78,7 +77,6 @@ class AgentTurnResources:
     console: Console | None = None
     #: Session-scoped turn host; each turn binds its own streaming console.
     turn_handler: TurnHandler | None = None
-
 
 def _streaming_console(
     runtime: AgentTurnResources, cancel_event: threading.Event
@@ -107,7 +105,6 @@ def _streaming_console(
         highlight=False,
         force_terminal=base.is_terminal,
     )
-
 
 async def run_agent_turn(runtime: AgentTurnResources, text: str) -> None:
     """Set up shell presentation for one turn and drive its lifecycle."""
@@ -158,7 +155,6 @@ async def run_agent_turn(runtime: AgentTurnResources, text: str) -> None:
             name="turn_boundary",
             phase="turn_end",
         )
-
 
 async def _run_agent_turn_loop(
     *,
@@ -217,7 +213,6 @@ async def _run_agent_turn_loop(
         runtime.state.finish_dispatch(dispatch_cancel)
         await emit(AgentEvent(type="turn_end"))
 
-
 async def run_input_loop(
     *,
     state: ReplState,
@@ -260,7 +255,6 @@ async def run_input_loop(
         if not should_continue:
             return
 
-
 async def run_agent_turn_queue(
     *,
     state: ReplState,
@@ -287,7 +281,6 @@ async def run_agent_turn_queue(
         finally:
             state.clear_current_task()
             state.queue.task_done()
-
 
 __all__ = [
     "AgentTurnResources",

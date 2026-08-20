@@ -2,9 +2,8 @@
 
 An embedding host can import the shell (running the module-level bootstrap),
 then re-cache stdlib ``platform`` in ``sys.modules``, then call an entrypoint.
-The call-time ``platform.analytics`` / ``platform.logging`` imports inside
-``run_repl_async`` must not fail: each entrypoint re-runs
-``ensure_project_platform_package`` first.
+``run_repl*`` calls ``ensure_project_platform_package`` (heal + import guard);
+later ``platform.*`` imports self-heal through the guard.
 """
 
 from __future__ import annotations
@@ -37,6 +36,16 @@ def restore_logging() -> Iterator[None]:
     root.handlers[:] = saved
 
 
+@pytest.fixture(autouse=True)
+def _reload_platform_after_shadow() -> Iterator[None]:
+    """Shadow tests can leave parent/child ``platform`` split-brain for later tests."""
+    yield
+    for name in list(sys.modules):
+        if name == "platform" or name.startswith("platform."):
+            del sys.modules[name]
+    ensure_project_platform_package()
+
+
 def _shadow_stdlib_platform(monkeypatch: pytest.MonkeyPatch) -> None:
     """Simulate a host that re-cached stdlib ``platform`` after the shell loaded."""
     stub = types.ModuleType("platform")  # a plain module has no __path__ → not a package
@@ -55,7 +64,7 @@ def test_run_repl_async_bootstraps_before_platform_analytics_import(
     cfg = ReplConfig.load()
     _shadow_stdlib_platform(monkeypatch)
 
-    monkeypatch.setattr(main, "build_prompt_session", lambda: object())
+    monkeypatch.setattr(main, "build_prompt_session", object)
 
     def _raise_reached(**_kwargs: Any) -> None:
         raise _Reached
@@ -85,3 +94,30 @@ def test_run_repl_bootstraps_platform_before_any_work(
     # Assert
     assert rc == 0
     assert hasattr(sys.modules["platform"], "__path__")
+
+
+def test_submodule_import_after_platform_recache_survives() -> None:
+    """Import guard heals ``platform.*`` after a mid-process stdlib re-cache.
+
+    Composition roots call ``ensure`` once (installs the guard). Leaves import
+    ``platform.*`` normally; a fresh interpreter pins first-import order.
+    """
+    import subprocess
+
+    code = (
+        "from config.platform_bootstrap import ensure_project_platform_package\n"
+        "ensure_project_platform_package()\n"
+        "import surfaces.interactive_shell.runtime\n"
+        "import sys, types\n"
+        "sys.modules['platform'] = types.ModuleType('platform')\n"
+        "[sys.modules.pop(n) for n in list(sys.modules) if n.startswith('platform.')]\n"
+        "import surfaces.interactive_shell.runtime.turn_host as th\n"
+        "assert hasattr(th, 'run_agent_turn')\n"
+        "assert hasattr(sys.modules['platform'], '__path__')\n"
+        "print('OK')\n"
+    )
+    result = subprocess.run(
+        [sys.executable, "-c", code], capture_output=True, text=True, timeout=60
+    )
+    assert result.returncode == 0, result.stderr
+    assert "OK" in result.stdout

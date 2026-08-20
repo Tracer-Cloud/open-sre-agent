@@ -182,10 +182,15 @@ def configure_process(
 ) -> None:
     """Run the steps ``profile`` opted into, in the shared order. Idempotent.
 
-    Logging configuration is the caller's responsibility.
+    Always establishes the first-party ``platform`` package (and its import
+    guard) before any profile step that may ``from platform…``. Logging
+    configuration is the caller's responsibility.
     """
     if profile.name in _configured_profiles:
         return
+    from config.platform_bootstrap import ensure_project_platform_package
+
+    ensure_project_platform_package()
     log = logger or _LOG
     for step, run in _STEP_ORDER:
         if step in profile.steps:

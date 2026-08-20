@@ -332,12 +332,7 @@ class SessionCore:
 
     def refresh_runtime_metadata(self) -> None:
         """Rebuild :attr:`runtime_metadata`, including merged capability warnings."""
-        from config.platform_bootstrap import ensure_project_platform_package
         from config.runtime_metadata import build_runtime_metadata
-
-        # Call-time ensure: embedding hosts may re-cache stdlib ``platform``
-        # after import; this is the shared session-bootstrap choke point.
-        ensure_project_platform_package()
         from platform.safety.sandbox.capabilities import boot_capability_warnings
 
         meta = build_runtime_metadata()

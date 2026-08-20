@@ -12,7 +12,6 @@ from prompt_toolkit import PromptSession
 from prompt_toolkit.patch_stdout import patch_stdout
 from rich.console import Console
 
-from config.platform_bootstrap import ensure_project_platform_package
 from config.repl_config import ReplConfig
 from core.domain.alerts import inbox as _alert_inbox
 from surfaces.interactive_shell.runtime.background.workers import BackgroundTaskManager
@@ -84,8 +83,6 @@ def _alert_listener(
         yield None
         return
 
-    # Fresh ``from platform…`` after a possible stdlib re-cache.
-    ensure_project_platform_package()
     from platform.alert_intake import build_alert_intake_app
     from platform.asgi_server import AsgiServerHandle, serve_asgi_in_thread
 
@@ -193,9 +190,7 @@ class InteractiveShellController:
             self.runtime_context.pt_session,
         )
         # Lazy: TurnHandler pulls the agent/action stack — must not load at
-        # ``import surfaces.interactive_shell.main``. Ensure first in case an
-        # embedding host re-cached stdlib ``platform`` after this module loaded.
-        ensure_project_platform_package()
+        # ``import surfaces.interactive_shell.main``.
         from platform.turn_host.turn_handler import TurnHandler
         from surfaces.interactive_shell.runtime.shell_agent import shell_agent_build_config
 

@@ -1,3 +1,11 @@
+"""Interactive-shell runtime package.
+
+Re-exports session / scheduling names used by the shell. Importing this package
+assumes process boot (or a public entrypoint) has already run
+:func:`config.platform_bootstrap.ensure_project_platform_package` so the
+first-party ``platform`` package wins over stdlib.
+"""
+
 from __future__ import annotations
 
 from platform.scheduling.task_registry import TaskRegistry
