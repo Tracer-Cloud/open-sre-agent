@@ -100,6 +100,100 @@ Make sure the token's account is a member of the channel (or has permission to p
 2. Enable the integration, set a name (e.g. `opensre`), pick the destination **channel**, and choose the user the messages post as.
 3. Select **Save**. Rocket.Chat shows the **Webhook URL** (`https://<server>/hooks/<id>/<token>`). Copy it — treat the whole URL like a password.
 
+### Quick local test with Docker (token mode)
+
+Requires `--platform linux/amd64` on Apple Silicon (no arm64 image) and **MongoDB 7.0**, not 8.0 — 8.0 refuses to start under Docker Desktop's Linux VM ("kernel versions 6.19 and newer has a known incompatibility").
+
+```bash
+docker network create rc-net
+
+docker run -d --name rc-mongo --network rc-net --platform linux/amd64 \
+  mongo:7.0 --replSet rs0 --bind_ip_all
+sleep 8
+docker exec rc-mongo mongosh --eval "rs.initiate()"
+
+docker run -d --name rc-dev --network rc-net --platform linux/amd64 -p 3201:3000 \
+  -e 'MONGO_URL=mongodb://rc-mongo:27017/rocketchat?replicaSet=rs0' \
+  -e 'MONGO_OPLOG_URL=mongodb://rc-mongo:27017/local?replicaSet=rs0' \
+  -e 'ROOT_URL=http://localhost:3201' \
+  -e 'ADMIN_USERNAME=verifyadmin' \
+  -e 'ADMIN_PASS=verify-admin-pass' \
+  -e 'ADMIN_EMAIL=verifyadmin@example.com' \
+  -e 'OVERWRITE_SETTING_Show_Setup_Wizard=completed' \
+  rocket.chat:latest
+```
+
+The `OVERWRITE_SETTING_Show_Setup_Wizard=completed` + `ADMIN_*` vars skip the manual setup wizard entirely. Wait for `curl http://localhost:3201/api/info` to return `200`, then log in and generate a PAT via the API:
+
+```bash
+curl -s -X POST http://localhost:3201/api/v1/login -d "user=verifyadmin&password=verify-admin-pass"
+# copy data.authToken and data.userId from the response, then:
+curl -s -X POST http://localhost:3201/api/v1/users.generatePersonalAccessToken \
+  -H "X-Auth-Token: <authToken>" -H "X-User-Id: <userId>" \
+  -d "tokenName=opensre-verify"
+```
+
+<Warning>
+This will fail with `{"error":"TOTP Required [totp-required]"}` — the image ships with global two-factor auth (`Accounts_TwoFactorAuthentication_Enabled`) on by default, and email-based 2FA auto-opts in every user. Reproduced live. Fix for a disposable local instance:
+
+```bash
+docker exec rc-mongo mongosh rocketchat --quiet --eval '
+db.rocketchat_settings.updateOne(
+  {_id:"Accounts_TwoFactorAuthentication_Enabled"}, {$set:{value:false}})
+'
+docker restart rc-dev   # settings are cached in-process; a restart forces a fresh read
+```
+
+Then log in again (the old auth token is invalidated by the restart) and retry `generatePersonalAccessToken` — it succeeds. Never disable 2FA this way on a real workspace.
+</Warning>
+
+```bash
+export ROCKETCHAT_SERVER_URL="http://localhost:3201"
+export ROCKETCHAT_AUTH_TOKEN="<token from generatePersonalAccessToken>"
+export ROCKETCHAT_USER_ID="<userId from login>"
+export ROCKETCHAT_DEFAULT_CHANNEL="#general"
+```
+
+Verify:
+
+```bash
+opensre integrations verify rocketchat
+```
+
+```
+SERVICE    │ SOURCE    │ STATUS   │ DETAIL
+rocketchat │ local env │ ✓ passed │ Connected to Rocket.Chat as @verifyadmin.
+```
+
+Call `rocketchat_send_message` directly:
+
+```python
+from integrations.rocketchat.tools.rocketchat_send_message_tool.tool import RocketChatSendMessageTool
+RocketChatSendMessageTool().run(
+    message="DB CPU is back below 70%; keeping the incident open for 10 minutes.",
+    channel="#general",
+)
+```
+
+```json
+{
+  "source": "rocketchat",
+  "available": true,
+  "status": "sent",
+  "sent": true,
+  "error": "",
+  "error_type": "",
+  "channel": "#general",
+  "message_length": 67
+}
+```
+
+Teardown:
+
+```bash
+docker rm -f rc-dev rc-mongo && docker network rm rc-net
+```
+
 ## Investigation tools
 
 | Tool | What it does |
