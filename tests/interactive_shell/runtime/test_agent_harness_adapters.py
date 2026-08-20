@@ -105,3 +105,22 @@ def test_finalize_satisfies_the_host_contract_while_staying_silent() -> None:
 
     # Assert
     assert isinstance(sink, TurnOutput)
+
+
+def test_response_header_opens_with_a_blank_line() -> None:
+    """The sink owns this spacing: the turn engine no longer emits it.
+
+    ``_show_response`` used to print a blank line before the header. That was
+    terminal layout living in the shared turn engine — chat sinks route
+    ``print`` to a placeholder status and never wanted it. Moving it here kept
+    the REPL looking the same; without a test, deleting it stays green.
+    """
+    # Arrange
+    console = _RecordingConsole()
+
+    # Act
+    ShellOutputSink(console).render_response_header("assistant")  # type: ignore[arg-type]
+
+    # Assert: blank line first, then the ● marker.
+    assert console.lines[0] == ""
+    assert "●" in console.lines[1]
