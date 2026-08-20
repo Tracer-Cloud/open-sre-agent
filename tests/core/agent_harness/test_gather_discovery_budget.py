@@ -13,6 +13,8 @@ This guard caps discovery-style MCP bridge calls (``list_*_tools`` /
 
 from __future__ import annotations
 
+from typing import Any
+
 from core.agent_harness.turns.gather_discovery_budget import (
     DEFAULT_MAX_DISCOVERY_CALLS,
     is_gather_discovery_call,
@@ -23,17 +25,35 @@ from core.agent_harness.turns.gather_discovery_budget import (
 )
 from core.execution import ToolExecutionRequest, ToolExecutionResult
 from core.llm.types import ToolCall
+from core.types import AgentTool, AgentToolContext
+
+
+def _execute_test_tool(
+    _arguments: dict[str, Any],
+    _context: AgentToolContext,
+) -> str:
+    raise AssertionError("test tool should not execute")
+
+
+def _test_tool(name: str, source: str) -> AgentTool:
+    return AgentTool(
+        name=name,
+        description="test tool",
+        input_schema={"type": "object", "properties": {}},
+        execute=_execute_test_tool,
+        source=source,
+    )
 
 
 def _request(
-    tool: str,
+    tool_name: str,
     arguments: dict,
     *,
     source: str = "posthog_mcp",
 ) -> ToolExecutionRequest:
     return ToolExecutionRequest(
-        tool_call=ToolCall(id="tc", name=tool, input=arguments),
-        tool=type("T", (), {"source": source})(),  # type: ignore[arg-type]
+        tool_call=ToolCall(id="tc", name=tool_name, input=arguments),
+        tool=_test_tool(tool_name, source),
         arguments=arguments,
         source=source,
         resolved_integrations={},
