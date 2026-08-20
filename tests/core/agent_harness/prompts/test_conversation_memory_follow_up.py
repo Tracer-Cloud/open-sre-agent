@@ -2,10 +2,18 @@
 
 from __future__ import annotations
 
+from core.agent_harness.ports import AnswerRequest
 from core.agent_harness.prompts.memory.conversation import expand_affirmative_follow_up
+from core.agent_harness.spi.accounting import LlmRunInfo
 from core.agent_harness.turns.headless_adapters import InMemorySessionState, NoopTurnAccounting
 from core.agent_harness.turns.orchestrator import run_turn
 from core.agent_harness.turns.turn_results import ToolCallingTurnResult
+from tests.shared.harness_turn_driver import no_evidence
+
+
+def no_answer(text: str, request: AnswerRequest) -> LlmRunInfo | None:
+    """A StreamAnswerFn that produces no answer."""
+    return None
 
 
 def test_expands_yes_after_roster_want_me_to_offer() -> None:
@@ -128,8 +136,8 @@ def test_run_turn_expands_yes_before_execute_actions() -> None:
         "[Slack channel_id=C1]\nyes",
         session,
         execute_actions=execute_actions,
-        answer=lambda *_a, **_k: None,
-        gather=lambda *_a, **_k: None,
+        answer=no_answer,
+        gather=no_evidence,
         accounting=NoopTurnAccounting(),
     )
 
