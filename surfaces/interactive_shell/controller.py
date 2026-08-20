@@ -83,15 +83,17 @@ def _alert_listener(
         yield None
         return
 
-    from gateway.web.web_server import WebAppServerHandle, serve_webapp_in_thread
+    from platform.alert_intake import build_alert_intake_app
+    from platform.asgi_server import AsgiServerHandle, serve_asgi_in_thread
 
     inbox: _alert_inbox.AlertInbox | None = None
-    handle: WebAppServerHandle | None = None
+    handle: AsgiServerHandle | None = None
     try:
         inbox = _alert_inbox.AlertInbox()
         _alert_inbox.set_current_inbox(inbox)
         with _alert_listener_token(cfg.alert_listener_token):
-            handle = serve_webapp_in_thread(
+            handle = serve_asgi_in_thread(
+                build_alert_intake_app(),
                 host=cfg.alert_listener_host,
                 port=cfg.alert_listener_port,
             )

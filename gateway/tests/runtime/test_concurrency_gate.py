@@ -159,7 +159,7 @@ def test_path2_sync_investigate_busy_drops_when_gate_full(
     gate = TurnConcurrencyGate(1)
     assert gate.try_acquire() is True  # simulate active chat turn
     set_process_turn_gate(gate)
-    monkeypatch.setattr(webapp, "_gateway_auth_error", lambda _req: None)
+    monkeypatch.setattr(webapp, "require_local_or_token", lambda _req: None)
 
     client = TestClient(webapp.app)
     resp = client.post("/investigate", json={"raw_alert": {"alert_name": "x"}})
