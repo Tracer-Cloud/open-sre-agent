@@ -92,15 +92,23 @@ docker run -d --name opensearch-dev -p 9201:9200 \
   -e "DISABLE_SECURITY_PLUGIN=true" \
   -e "OPENSEARCH_JAVA_OPTS=-Xms256m -Xmx256m" \
   opensearchproject/opensearch:2
+
+until curl -sf -o /dev/null http://localhost:9201; do sleep 2; done
 ```
 
-Seed one index with an error and a non-error log line. The tools sort on `@timestamp`, so use that field name, not `timestamp`:
+Seed the index with an error **and** a non-error log line — both are needed to match the two-record output shown below. The tools sort on `@timestamp`, so use that field name, not `timestamp`:
 
 ```bash
 curl -s -X POST "http://localhost:9201/logs-app/_doc" -H "Content-Type: application/json" -d '{
   "@timestamp": "'"$(date -u +%Y-%m-%dT%H:%M:%S)"'Z",
   "level": "ERROR",
   "message": "payment-service: connection timeout while calling billing-api",
+  "service": "payment-service"
+}'
+curl -s -X POST "http://localhost:9201/logs-app/_doc" -H "Content-Type: application/json" -d '{
+  "@timestamp": "'"$(date -u +%Y-%m-%dT%H:%M:%S)"'Z",
+  "level": "INFO",
+  "message": "payment-service: request completed",
   "service": "payment-service"
 }'
 curl -s -X POST "http://localhost:9201/logs-app/_refresh"
@@ -122,7 +130,7 @@ opensearch │ local env │ ✓ passed │ Configured for OpenSearch at
            │           │          │ http://localhost:9201.
 ```
 
-Call both tools directly against the seeded index:
+Both are the internal functions the agent calls during an investigation — invoke them directly here only to see the real shape of their results (internal, not a public API, and may move):
 
 ```python
 from integrations.opensearch.tools.opensearch_analytics_tool import query_opensearch_analytics
