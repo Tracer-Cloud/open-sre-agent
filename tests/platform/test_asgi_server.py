@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import urllib.request
+from http import HTTPStatus
 
 from platform.asgi_server import AsgiServerHandle, serve_asgi_in_thread
 
@@ -13,7 +14,7 @@ async def _tiny_app(scope: dict, receive: object, send: object) -> None:
     await send(  # type: ignore[operator]
         {
             "type": "http.response.start",
-            "status": 200,
+            "status": int(HTTPStatus.OK),
             "headers": [(b"content-type", b"text/plain")],
         }
     )
@@ -27,7 +28,7 @@ def test_serves_an_injected_app_and_stops_cleanly() -> None:
         assert isinstance(handle, AsgiServerHandle)
         assert handle.bound_port > 0
         with urllib.request.urlopen(f"http://{handle.bound_address}/", timeout=5) as resp:
-            assert resp.status == 200
+            assert resp.status == HTTPStatus.OK
             assert resp.read() == b"served"
     finally:
         handle.stop()

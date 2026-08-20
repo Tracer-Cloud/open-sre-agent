@@ -83,6 +83,12 @@ def _alert_listener(
         yield None
         return
 
+    from config.platform_bootstrap import ensure_project_platform_package
+
+    # Embedding callers may hit this after stdlib ``platform`` is already in
+    # ``sys.modules``; without the bootstrap, ``platform.alert_intake`` fails
+    # and the listener exception path leaves the shell with no intake.
+    ensure_project_platform_package()
     from platform.alert_intake import build_alert_intake_app
     from platform.asgi_server import AsgiServerHandle, serve_asgi_in_thread
 

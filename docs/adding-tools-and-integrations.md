@@ -52,6 +52,49 @@ If the tool parses API, MCP, log, or webhook payloads:
 
 Common failure modes to consider: grouped + ungrouped log content; nested/foldered resources; paginated responses; `hasMore` / cursor mismatches; content-vs-pointer shapes (`logs_content` vs `logs_url`-style payloads).
 
+### Skill guidance (optional)
+
+A tool can carry workflow guidance the model reads on every call by shipping a `SKILL.md`. The guidance is **appended to the tool's `description`** under a `Workflow guidance:` heading — it is permanent schema text, not a side channel. All guidance targeting one tool is combined and truncated at **2400 characters** (`tools/registry_skill_guidance.py`), so budget it like description text: the longer the guidance, the more of every request it consumes.
+
+Skill guidance and a harness playbook are **independent and composable** — a tool may have both. Skill guidance rewrites one tool's description; it does not replace agent- or harness-level guidance for a multi-step flow. The GitHub tools (`github_cli`, `ci_fix`, `security_fix`) each ship a `SKILL.md`; adding one never means removing broader guidance.
+
+**When to add (two independent axes — evaluate both):**
+
+| Axis | Add when | Skip when |
+| --- | --- | --- |
+| **Tool `SKILL.md`** (this section) | ≥2 of: misuse is expensive; not obvious from the tool `description`; reused across many turns | One clear tool; thin/rare vendor; tip that fits in `description` |
+| **Harness playbook** (`core/agent_harness/prompts/skills/*/SKILL.md` + `skill_view`) | Multi-step WHEN / DO NOT, sibling carve-outs, same-turn vs next-turn, or a report template | Single-tool tip with no cross-turn flow |
+
+**Neither** is the default for most of ~70 `tools/` packages. Missing `SKILL.md` is usually correct. **Never** add one-per-vendor stubs, or one skill per observability vendor when the failure mode is shared (query hygiene is one class, not Datadog + Grafana + CloudWatch copies).
+
+Harness authoring template: `core/agent_harness/prompts/skills/_template/SKILL_TEMPLATE.md`.
+
+**File.** A `SKILL.md` with YAML frontmatter and a markdown body:
+
+```yaml
+---
+name: github-cli          # required — lowercase kebab-case, ≤ 64 chars
+description: >            # required — ≤ 1024 chars; the model reads this to decide relevance
+  One or two sentences: when to reach for these tools.
+tools:                    # required — the registered tool name(s) this guidance applies to
+  - github_cli
+disable-model-invocation: false   # optional — set true to suppress attachment entirely
+---
+
+# Body — markdown workflow guidance shown after the tool's own description.
+```
+
+**Register it, or it is silently ignored.** The loader reads only files it is told about:
+
+- [ ] **Explicit:** add the file's path to `_skill_guidance_files()` in `tools/registry_skill_guidance.py`. A `SKILL.md` that exists on disk but is absent from that tuple is **never loaded** — unlisted and missing files are skipped with no diagnostic, the same trap as forgetting a `docs.json` entry.
+- [ ] Or place it under `tools/system/python_execution_tool/skills/*/SKILL.md`, which is discovered automatically.
+
+**Check the registry-load logs** — the loader warns and skips rather than failing the build:
+
+- `unknown_tool` — a name under `tools:` matches no registered tool; that target is dropped.
+- `invalid_metadata` — missing `name`/`description`/`tools`, an over-long `name`/`description`, or a `name` that is not lowercase kebab-case; the whole skill is skipped.
+- `parse_failed` — malformed frontmatter YAML.
+
 ## 2. Integration checklist
 
 ### Files usually involved
