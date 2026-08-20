@@ -19,6 +19,7 @@ from core.agent_harness.ports import TurnBinding
 from core.agent_harness.tools.tool_provider import DefaultToolProvider
 from core.agent_harness.turns.action_driver import ActionTurnRunner
 from core.agent_harness.turns.gather_phase import MAX_REPORT_GATHER_ITERATIONS, GatherPhase
+from core.agent_harness.turns.headless_adapters import BufferOutputSink
 from core.agent_harness.turns.headless_agent import AgentBusyError, HeadlessAgent
 from core.agent_harness.turns.headless_build import DefaultHeadlessBuild, InMemoryHeadlessBuild
 from core.agent_harness.turns.turn_plan import TurnPlan
@@ -29,6 +30,7 @@ __all__ = [
     "AgentBuildConfig",
     "AgentBusyError",
     "AgentConfig",
+    "BufferOutputSink",
     "DefaultHeadlessBuild",
     "DescribeTool",
     "DefaultToolProvider",

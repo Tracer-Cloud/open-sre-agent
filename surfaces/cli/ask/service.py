@@ -14,16 +14,16 @@ from typing import Any
 
 from rich.console import Console
 
-from core.agent_harness.harness import AgentSession, SessionConfig
+from core.agent_harness import AgentSession, SessionConfig, SessionManager, TurnResult
 from core.agent_harness.ports import TurnBinding
-from core.agent_harness.session import SessionManager
-from core.agent_harness.tools.tool_provider import DefaultToolProvider
-from core.agent_harness.turns.gather_phase import GatherPhase
-from core.agent_harness.turns.headless_adapters import BufferOutputSink
-from core.agent_harness.turns.headless_agent import HeadlessAgent
-from core.agent_harness.turns.headless_build import DefaultHeadlessBuild
-from core.agent_harness.turns.host_cancel import ensure_turn_cancel
-from core.agent_harness.turns.turn_results import TurnResult
+from core.agent_harness.runtime import (
+    BufferOutputSink,
+    DefaultHeadlessBuild,
+    DefaultToolProvider,
+    GatherPhase,
+    HeadlessAgent,
+)
+from core.agent_harness.spi.cancel import ensure_turn_cancel
 from core.tool.execution import ToolExecutionHooks
 from platform.errors import OpenSREError
 from surfaces.cli.ask.approval import ApprovalTracker, build_approval_hooks
@@ -143,16 +143,15 @@ def _run_agent_turn(prompt: str, hooks: ToolExecutionHooks) -> TurnResult:
         with _ask_signal_scope(cancel_event):
             startup = agent_session.startup()
             session = startup.session
-            for capability in ("investigation", "llm_provider", "task_cancel"):
+            for capability in (
+                "investigation",
+                "llm_provider",
+                "slash_commands",
+                "task_cancel",
+            ):
                 session.available_capabilities[capability] = ()
 
-            from surfaces.interactive_shell.runtime.slash_adapter import headless_slash_ports
-
-            tools = DefaultToolProvider(
-                session,
-                console,
-                slash_ports_factory=headless_slash_ports,
-            )
+            tools = DefaultToolProvider(session, console)
             agent = DefaultHeadlessBuild(
                 session=session,
                 output=output,
