@@ -74,7 +74,7 @@ def test_alert_listener_bootstraps_when_stdlib_platform_is_cached(monkeypatch) -
         return handle
 
     monkeypatch.setattr("platform.asgi_server.serve_asgi_in_thread", _fake_serve)
-    monkeypatch.setattr("platform.alert_intake.build_alert_intake_app", lambda: object())
+    monkeypatch.setattr("platform.alert_intake.build_alert_intake_app", object)
 
     stub = types.ModuleType("platform")
     monkeypatch.setitem(sys.modules, "platform", stub)
