@@ -355,3 +355,40 @@ def test_resolve_effective_integrations_publishes_store_configured_prefect() -> 
     assert "prefect" in resolved
     assert resolved["prefect"]["source"] == "local store"
     assert resolved["prefect"]["config"]["api_url"] == "http://localhost:4200/api"
+
+
+def test_resolve_effective_integrations_publishes_store_configured_bitbucket() -> None:
+    """Regression: same missing direct_effective=True as prefect (#5147) —
+    classify_integrations() resolved a store-saved bitbucket config, then
+    resolve_effective_integrations() silently dropped it, so
+    `opensre integrations verify bitbucket` reported "missing" even with
+    valid store credentials."""
+    from integrations.catalog import resolve_effective_integrations
+
+    store_record = {
+        "id": "bitbucket-1",
+        "service": "bitbucket",
+        "status": "active",
+        "credentials": {"workspace": "acme", "username": "dev", "app_password": "secret"},
+    }
+    resolved = resolve_effective_integrations(store_integrations=[store_record])
+    assert "bitbucket" in resolved
+    assert resolved["bitbucket"]["source"] == "local store"
+    assert resolved["bitbucket"]["config"]["workspace"] == "acme"
+
+
+def test_resolve_effective_integrations_publishes_store_configured_supabase() -> None:
+    """Regression: same missing direct_effective=True as prefect (#5147),
+    for supabase — classification succeeded and the resolution dropped it."""
+    from integrations.catalog import resolve_effective_integrations
+
+    store_record = {
+        "id": "supabase-1",
+        "service": "supabase",
+        "status": "active",
+        "credentials": {"url": "https://proj.supabase.co", "service_key": "sk"},
+    }
+    resolved = resolve_effective_integrations(store_integrations=[store_record])
+    assert "supabase" in resolved
+    assert resolved["supabase"]["source"] == "local store"
+    assert resolved["supabase"]["config"]["project_url"] == "https://proj.supabase.co"

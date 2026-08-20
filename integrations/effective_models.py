@@ -87,6 +87,7 @@ class EffectiveIntegrations(StrictConfigModel):
     victoria_logs: EffectiveIntegrationEntry | None = None
     alicloud: EffectiveIntegrationEntry | None = None
     signoz: EffectiveIntegrationEntry | None = None
+    supabase: EffectiveIntegrationEntry | None = None
     jenkins: EffectiveIntegrationEntry | None = None
     tempo: EffectiveIntegrationEntry | None = None
     temporal: EffectiveIntegrationEntry | None = None
