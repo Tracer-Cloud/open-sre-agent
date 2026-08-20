@@ -84,6 +84,82 @@ Use API key **or** basic auth, not both — verify rejects both set together. If
 
 Prefer a dedicated read-only user (or API key) scoped to the indices OpenSRE should search. For AWS ES, use fine-grained access control with an internal user — see [AWS Elasticsearch](/elasticsearch).
 
+### Quick local test with Docker
+
+```bash
+docker run -d --name opensearch-dev -p 9201:9200 \
+  -e "discovery.type=single-node" \
+  -e "DISABLE_SECURITY_PLUGIN=true" \
+  -e "OPENSEARCH_JAVA_OPTS=-Xms256m -Xmx256m" \
+  opensearchproject/opensearch:2
+```
+
+Seed one index with an error and a non-error log line. The tools sort on `@timestamp`, so use that field name, not `timestamp`:
+
+```bash
+curl -s -X POST "http://localhost:9201/logs-app/_doc" -H "Content-Type: application/json" -d '{
+  "@timestamp": "'"$(date -u +%Y-%m-%dT%H:%M:%S)"'Z",
+  "level": "ERROR",
+  "message": "payment-service: connection timeout while calling billing-api",
+  "service": "payment-service"
+}'
+curl -s -X POST "http://localhost:9201/logs-app/_refresh"
+```
+
+```bash
+export OPENSEARCH_URL="http://localhost:9201"
+```
+
+Verify:
+
+```bash
+opensre integrations verify opensearch
+```
+
+```
+SERVICE    │ SOURCE    │ STATUS   │ DETAIL
+opensearch │ local env │ ✓ passed │ Configured for OpenSearch at
+           │           │          │ http://localhost:9201.
+```
+
+Call both tools directly against the seeded index:
+
+```python
+from integrations.opensearch.tools.opensearch_analytics_tool import query_opensearch_analytics
+from integrations.elasticsearch.tools import query_elasticsearch_logs
+
+query_opensearch_analytics(url="http://localhost:9201", index_pattern="logs-app", query="*", limit=5)
+query_elasticsearch_logs.run(url="http://localhost:9201", query="timeout", index_pattern="logs-app")
+```
+
+```json
+{
+  "source": "opensearch", "available": true, "total_returned": 2,
+  "logs": [
+    {"timestamp": "2026-08-20T16:07:21Z", "level": "ERROR",
+     "message": "payment-service: connection timeout while calling billing-api"},
+    {"timestamp": "2026-08-20T16:07:21Z", "level": "INFO",
+     "message": "payment-service: request completed"}
+  ]
+}
+```
+
+```json
+{
+  "source": "elasticsearch_logs", "available": true, "total": 1,
+  "logs": [{"timestamp": "2026-08-20T16:07:21Z", "level": "ERROR",
+            "message": "payment-service: connection timeout while calling billing-api"}],
+  "error_logs": [{"timestamp": "2026-08-20T16:07:21Z", "level": "ERROR",
+                  "message": "payment-service: connection timeout while calling billing-api"}]
+}
+```
+
+Teardown:
+
+```bash
+docker rm -f opensearch-dev
+```
+
 ## Investigation tools
 
 | Tool | What it does |
