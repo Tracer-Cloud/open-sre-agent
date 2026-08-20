@@ -104,6 +104,47 @@ Confirm the HTTP API answers before configuring the integration:
 curl -s http://localhost:7243/api/v1/namespaces/default
 ```
 
+```bash
+export TEMPORAL_API_URL="http://localhost:7243"
+```
+
+Verify:
+
+```bash
+opensre integrations verify temporal
+```
+
+```
+SERVICE  │ SOURCE    │ STATUS   │ DETAIL
+temporal │ local env │ ✓ passed │ Successfully connected to Temporal.
+```
+
+Call `temporal_namespace_info` directly:
+
+```python
+from integrations.temporal.tools import TemporalNamespaceInfoTool
+TemporalNamespaceInfoTool().run(base_url="http://localhost:7243", namespace="default")
+```
+
+```json
+{
+  "source": "temporal",
+  "available": true,
+  "name": "default",
+  "state": "NAMESPACE_STATE_REGISTERED",
+  "workflow_count": "0",
+  "groups": []
+}
+```
+
+`workflow_count` is `0` on a fresh instance — start a workflow with the `temporal` CLI or an SDK worker to see non-zero groups.
+
+Teardown:
+
+```bash
+docker rm -f temporal-dev
+```
+
 ## Investigation tools
 
 | Tool | What it does |
