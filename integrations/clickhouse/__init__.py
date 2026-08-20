@@ -166,15 +166,9 @@ def get_query_activity(
 ) -> dict[str, Any]:
     """Retrieve recent query activity from system.query_log.
 
-    Read-only: queries system.query_log for recent completed *and* failed
-    queries (``type != 'QueryStart'``: ClickHouse logs a failed query as
-    ``ExceptionBeforeStart``/``ExceptionWhileProcessing``, distinct from the
-    successful ``QueryFinish`` row -- a bare ``type = 'QueryFinish'`` filter
-    silently excludes every failure, which defeats the point of surfacing
-    "recent slow / failed queries" during an incident). ``QueryStart`` rows
-    are excluded since they precede the query's own duration/result being
-    known and would otherwise duplicate its later QueryFinish/Exception row.
-    Results capped at config.max_results.
+    Read-only: queries system.query_log for recent completed and failed
+    queries, excluding QueryStart records whose duration and result are not
+    yet known. Results capped at config.max_results.
     """
     if not config.is_configured:
         return tool_unavailable("clickhouse", "Not configured.")
