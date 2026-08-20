@@ -84,6 +84,8 @@ docker run -d --name jenkins-dev -p 8090:8080 \
 Wait for it to come up, then create and run a job so there is a real build to inspect:
 
 ```bash
+until curl -sf -o /dev/null -u admin:admin http://localhost:8090/api/json; do sleep 2; done
+
 COOKIE_JAR=/tmp/jenkins-init/cookies.txt
 CRUMB=$(curl -s -c "$COOKIE_JAR" -u admin:admin http://localhost:8090/crumbIssuer/api/json | python3 -c "import json,sys;print(json.load(sys.stdin)['crumb'])")
 
@@ -93,6 +95,10 @@ curl -s -b "$COOKIE_JAR" -u admin:admin -H "Jenkins-Crumb: $CRUMB" -H "Content-T
 
 curl -s -b "$COOKIE_JAR" -u admin:admin -H "Jenkins-Crumb: $CRUMB" -X POST \
   "http://localhost:8090/job/payment-service-deploy/build"
+
+# The build runs async — wait for it to leave the queue and finish before inspecting it
+until curl -s -u admin:admin "http://localhost:8090/job/payment-service-deploy/lastBuild/api/json" \
+  | python3 -c "import json,sys; sys.exit(0 if json.load(sys.stdin).get('result') else 1)" 2>/dev/null; do sleep 2; done
 ```
 
 ```bash
@@ -115,7 +121,7 @@ jenkins │ local env │ ✓ passed │ Jenkins connectivity successful at
         │           │          │ http://localhost:8090 (node: built-in)
 ```
 
-Call `list_jenkins_builds` directly for the real build you just ran:
+`list_jenkins_builds` is what the agent calls internally during an investigation — call it directly here only to see the real shape of its result (it is an internal function, not a public API, and may move):
 
 ```python
 from integrations.jenkins.tools import list_jenkins_builds
