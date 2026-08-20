@@ -239,7 +239,7 @@ def test_execute_tool_schema_has_no_confirm_parameter() -> None:
     assert tool.requires_approval is False
 
 
-def test_execute_create_searches_idempotency_marker_before_create() -> None:
+def test_execute_create_lists_recent_issues_for_idempotency_marker_before_create() -> None:
     proposal = propose_github_issue_mutation_from_slack(
         owner="o",
         repo="r",
@@ -251,9 +251,9 @@ def test_execute_create_searches_idempotency_marker_before_create() -> None:
 
     def fake_request(self: GitHubRestClient, method: str, path: str, **kwargs: Any) -> Any:
         calls.append((method, path, kwargs))
-        if path == "/search/issues":
-            return {"total_count": 0, "items": []}
-        if path == "/repos/o/r/issues":
+        if path == "/repos/o/r/issues" and method == "GET":
+            return []
+        if path == "/repos/o/r/issues" and method == "POST":
             return {"number": 99, "html_url": "https://github.com/o/r/issues/99"}
         raise AssertionError((method, path))
 
@@ -264,9 +264,11 @@ def test_execute_create_searches_idempotency_marker_before_create() -> None:
 
     assert result["executed"] is True
     assert result["side_effect"] == "created_github_issue"
-    assert [call[1] for call in calls] == ["/search/issues", "/repos/o/r/issues"]
-    assert "in:body" in calls[0][2]["params"]["q"]
-    assert proposal["idempotency_marker"] in calls[0][2]["params"]["q"]
+    assert [(call[0], call[1]) for call in calls] == [
+        ("GET", "/repos/o/r/issues"),
+        ("POST", "/repos/o/r/issues"),
+    ]
+    assert calls[0][2]["params"]["sort"] == "created"
 
 
 def test_execute_create_returns_existing_issue_for_idempotency_marker() -> None:
@@ -277,10 +279,11 @@ def test_execute_create_returns_existing_issue_for_idempotency_marker() -> None:
         slack_text="ship this",
         slack_url="https://slack.example/archives/C/p1",
     )["proposal"]
+    marker = proposal["idempotency_marker"]
 
     def fake_request(self: GitHubRestClient, method: str, path: str, **_kwargs: Any) -> Any:
-        if path == "/search/issues":
-            return {"total_count": 1, "items": [{"number": 12, "html_url": "existing"}]}
+        if path == "/repos/o/r/issues" and method == "GET":
+            return [{"number": 12, "html_url": "existing", "body": f"...\n{marker}\n..."}]
         raise AssertionError((method, path))
 
     with patch.object(GitHubRestClient, "request", fake_request):
@@ -308,10 +311,9 @@ def test_execute_update_adds_comment_and_preserves_body() -> None:
         calls.append((method, path, kwargs))
         if path == "/repos/o/r/issues/51" and method == "GET":
             return {"number": 51, "body": "original"}
-        if path == "/search/issues":
-            assert "in:comments" in kwargs["params"]["q"]
-            return {"total_count": 0, "items": []}
-        if path == "/repos/o/r/issues/51/comments":
+        if path == "/repos/o/r/issues/51/comments" and method == "GET":
+            return []
+        if path == "/repos/o/r/issues/51/comments" and method == "POST":
             assert "PR shipped" in kwargs["body"]["body"]
             return {"id": 1}
         if path == "/repos/o/r/issues/51" and method == "PATCH":
@@ -326,11 +328,11 @@ def test_execute_update_adds_comment_and_preserves_body() -> None:
         )
 
     assert result["executed"] is True
-    assert [call[1] for call in calls] == [
-        "/repos/o/r/issues/51",
-        "/search/issues",
-        "/repos/o/r/issues/51/comments",
-        "/repos/o/r/issues/51",
+    assert [(call[0], call[1]) for call in calls] == [
+        ("GET", "/repos/o/r/issues/51"),
+        ("GET", "/repos/o/r/issues/51/comments"),
+        ("POST", "/repos/o/r/issues/51/comments"),
+        ("PATCH", "/repos/o/r/issues/51"),
     ]
 
 
@@ -349,10 +351,9 @@ def test_execute_close_comments_before_closing_and_preserves_body() -> None:
         calls.append((method, path, kwargs))
         if path == "/repos/o/r/issues/51" and method == "GET":
             return {"number": 51, "body": "original"}
-        if path == "/search/issues":
-            assert "in:comments" in kwargs["params"]["q"]
-            return {"total_count": 0, "items": []}
-        if path == "/repos/o/r/issues/51/comments":
+        if path == "/repos/o/r/issues/51/comments" and method == "GET":
+            return []
+        if path == "/repos/o/r/issues/51/comments" and method == "POST":
             return {"id": 1}
         if path == "/repos/o/r/issues/51" and method == "PATCH":
             assert kwargs["body"] == {"state": "closed", "state_reason": "completed"}
@@ -365,11 +366,11 @@ def test_execute_close_comments_before_closing_and_preserves_body() -> None:
         )
 
     assert result["executed"] is True
-    assert [call[1] for call in calls] == [
-        "/repos/o/r/issues/51",
-        "/search/issues",
-        "/repos/o/r/issues/51/comments",
-        "/repos/o/r/issues/51",
+    assert [(call[0], call[1]) for call in calls] == [
+        ("GET", "/repos/o/r/issues/51"),
+        ("GET", "/repos/o/r/issues/51/comments"),
+        ("POST", "/repos/o/r/issues/51/comments"),
+        ("PATCH", "/repos/o/r/issues/51"),
     ]
 
 
@@ -383,15 +384,16 @@ def test_execute_update_skips_duplicate_comment_for_seen_marker() -> None:
         slack_url="https://slack.example/archives/C/p2",
         labels=["done"],
     )["proposal"]
+    marker = proposal["idempotency_marker"]
     calls: list[tuple[str, str, dict[str, Any]]] = []
 
     def fake_request(self: GitHubRestClient, method: str, path: str, **kwargs: Any) -> Any:
         calls.append((method, path, kwargs))
         if path == "/repos/o/r/issues/51" and method == "GET":
             return {"number": 51, "body": "original"}
-        if path == "/search/issues":
-            return {"total_count": 1, "items": [{"number": 51}]}
-        if path == "/repos/o/r/issues/51/comments":
+        if path == "/repos/o/r/issues/51/comments" and method == "GET":
+            return [{"id": 1, "body": f"...\n{marker}\n..."}]
+        if path == "/repos/o/r/issues/51/comments" and method == "POST":
             raise AssertionError("duplicate comment should not be posted")
         if path == "/repos/o/r/issues/51" and method == "PATCH":
             return {"number": 51}
@@ -404,10 +406,10 @@ def test_execute_update_skips_duplicate_comment_for_seen_marker() -> None:
 
     assert result["executed"] is True
     assert result["comment_already_recorded"] is True
-    assert [call[1] for call in calls] == [
-        "/repos/o/r/issues/51",
-        "/search/issues",
-        "/repos/o/r/issues/51",
+    assert [(call[0], call[1]) for call in calls] == [
+        ("GET", "/repos/o/r/issues/51"),
+        ("GET", "/repos/o/r/issues/51/comments"),
+        ("PATCH", "/repos/o/r/issues/51"),
     ]
 
 
@@ -442,6 +444,38 @@ def test_execute_mutation_rejects_payload_without_marker() -> None:
     assert result["executed"] is False
     assert result["side_effect"] == "github_issue_mutation_rejected"
     assert "idempotency marker" in result["error"]
+
+
+def test_execute_create_does_not_rely_on_search_issues_endpoint() -> None:
+    """Regression: the create-dedup check used to query /search/issues, whose
+    index has an observed multi-second propagation lag after issue creation
+    (reproduced live against a real repo). A rapid idempotent retry could
+    slip past the search-based check and create a duplicate issue. The dedup
+    check must use the immediately-consistent issues list endpoint instead,
+    never /search/issues."""
+    proposal = propose_github_issue_mutation_from_slack(
+        owner="o",
+        repo="r",
+        operation="create",
+        slack_text="ship this",
+        slack_url="https://slack.example/archives/C/p1",
+    )["proposal"]
+
+    def fake_request(self: GitHubRestClient, method: str, path: str, **_kwargs: Any) -> Any:
+        if path == "/search/issues":
+            raise AssertionError("dedup check must not use the eventually-consistent search API")
+        if path == "/repos/o/r/issues" and method == "GET":
+            return []
+        if path == "/repos/o/r/issues" and method == "POST":
+            return {"number": 99, "html_url": "https://github.com/o/r/issues/99"}
+        raise AssertionError((method, path))
+
+    with patch.object(GitHubRestClient, "request", fake_request):
+        result = execute_github_issue_mutation(
+            owner="o", repo="r", proposal=proposal, github_token="tok"
+        )
+
+    assert result["executed"] is True
 
 
 def test_execute_mutation_returns_api_errors() -> None:

@@ -550,32 +550,40 @@ def _validate_proposal_marker(proposal: GitHubIssueMutationProposal) -> str | No
     return None
 
 
-def _quoted_search_term(term: str) -> str:
-    cleaned = term.replace('"', "")
-    return f'"{cleaned}"'
+# One page of the most-recent issues is enough to catch an idempotent retry,
+# which lands within moments of the original creation, not months later.
+_RECENT_ISSUES_SCAN_LIMIT = 100
 
 
-def _search_issues_for_marker(
+def _recent_issues_with_marker(
     client: GitHubRestClient,
     *,
     owner: str,
     repo: str,
     marker: str,
-    search_area: Literal["body", "comments"],
 ) -> list[dict[str, Any]]:
+    """Recently-created issues whose body contains ``marker``.
+
+    Uses the issues list endpoint rather than /search/issues: GitHub's search
+    index has an observed multi-second propagation lag after issue creation,
+    which lets a rapid idempotent retry slip past a search-based dedup check
+    and create a duplicate issue (reproduced live).
+    """
     result = client.request(
         "GET",
-        "/search/issues",
+        f"/repos/{owner}/{repo}/issues",
         params={
-            "q": (f"repo:{owner}/{repo} is:issue in:{search_area} {_quoted_search_term(marker)}")
+            "state": "all",
+            "per_page": _RECENT_ISSUES_SCAN_LIMIT,
+            "sort": "created",
+            "direction": "desc",
         },
     )
-    if not isinstance(result, dict):
+    if not isinstance(result, list):
         return []
-    items = result.get("items")
-    if not isinstance(items, list):
-        return []
-    return [item for item in items if isinstance(item, dict)]
+    return [
+        item for item in result if isinstance(item, dict) and marker in str(item.get("body") or "")
+    ]
 
 
 def _marker_exists_on_issue(
@@ -586,16 +594,20 @@ def _marker_exists_on_issue(
     issue_number: int,
     marker: str,
 ) -> bool:
-    return any(
-        item.get("number") == issue_number
-        for item in _search_issues_for_marker(
-            client,
-            owner=owner,
-            repo=repo,
-            marker=marker,
-            search_area="comments",
-        )
+    """Whether a comment containing ``marker`` already exists on the issue.
+
+    Lists the issue's own comments (bounded to one issue, immediately
+    consistent) rather than the repo-wide search API, for the same reason as
+    :func:`_recent_issues_with_marker`.
+    """
+    result = client.request(
+        "GET",
+        f"/repos/{owner}/{repo}/issues/{issue_number}/comments",
+        params={"per_page": 100},
     )
+    if not isinstance(result, list):
+        return False
+    return any(isinstance(item, dict) and marker in str(item.get("body") or "") for item in result)
 
 
 @tool(
@@ -641,12 +653,11 @@ def execute_github_issue_mutation(
         return _mutation_rejected(marker_error)
     try:
         if parsed.operation == "create":
-            existing_items = _search_issues_for_marker(
+            existing_items = _recent_issues_with_marker(
                 client,
                 owner=owner,
                 repo=repo,
                 marker=parsed.idempotency_marker,
-                search_area="body",
             )
             if existing_items:
                 return {
