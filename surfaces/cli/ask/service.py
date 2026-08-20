@@ -1,0 +1,289 @@
+"""Run one configured agent turn and normalize its CLI outcome."""
+
+from __future__ import annotations
+
+import signal
+import threading
+from collections.abc import Iterator
+from contextlib import contextmanager
+from dataclasses import dataclass
+from enum import IntEnum, StrEnum
+from io import StringIO
+from types import FrameType
+from typing import Any
+
+from rich.console import Console
+
+from core.agent_harness.harness import AgentSession, SessionConfig
+from core.agent_harness.ports import TurnBinding
+from core.agent_harness.session import SessionManager
+from core.agent_harness.tools.tool_provider import DefaultToolProvider
+from core.agent_harness.turns.gather_phase import GatherPhase
+from core.agent_harness.turns.headless_adapters import BufferOutputSink
+from core.agent_harness.turns.headless_agent import HeadlessAgent
+from core.agent_harness.turns.headless_build import DefaultHeadlessBuild
+from core.agent_harness.turns.host_cancel import ensure_turn_cancel
+from core.agent_harness.turns.turn_results import TurnResult
+from core.tool.execution import ToolExecutionHooks
+from platform.errors import OpenSREError
+from surfaces.cli.ask.approval import ApprovalTracker, build_approval_hooks
+
+
+class AskStatus(StrEnum):
+    SUCCESS = "success"
+    APPROVAL_DENIED = "approval_denied"
+    ERROR = "error"
+    CANCELLED = "cancelled"
+
+
+class AskExitCode(IntEnum):
+    SUCCESS = 0
+    ERROR = 1
+    APPROVAL_DENIED = 3
+    SIGINT = 130
+    SIGTERM = 143
+
+
+@dataclass(frozen=True, slots=True)
+class AskError:
+    """Stable structured error returned by ``opensre --json ask``."""
+
+    message: str
+    suggestion: str | None = None
+
+    def as_dict(self) -> dict[str, str | None]:
+        return {"message": self.message, "suggestion": self.suggestion}
+
+
+@dataclass(frozen=True, slots=True)
+class AskOutcome:
+    """Normalized process outcome for one ask invocation."""
+
+    status: AskStatus
+    response: str
+    denied_tools: tuple[str, ...] = ()
+    error: AskError | None = None
+    exit_code: AskExitCode = AskExitCode.SUCCESS
+
+    def as_dict(self) -> dict[str, object]:
+        return {
+            "status": self.status.value,
+            "response": self.response,
+            "denied_tools": list(self.denied_tools),
+            "error": self.error.as_dict() if self.error is not None else None,
+        }
+
+
+class AskSignal(BaseException):
+    """Signal raised inside the command so session cleanup can finish."""
+
+    def __init__(self, signum: int) -> None:
+        super().__init__(signum)
+        self.signum = signum
+
+
+class _CancellableConsole:
+    def __init__(self, cancel_event: threading.Event) -> None:
+        self._cancel_event = cancel_event
+        self._console = Console(force_terminal=False, file=StringIO())
+
+    @property
+    def cancel_requested(self) -> bool:
+        return self._cancel_event.is_set()
+
+    def __getattr__(self, name: str) -> Any:
+        return getattr(self._console, name)
+
+
+@dataclass(frozen=True, slots=True)
+class _BoundDispatcher:
+    agent: HeadlessAgent
+    binding: TurnBinding
+
+    def dispatch(self, message: str) -> TurnResult:
+        """Run one message through the shared host entrypoint."""
+        return self.agent.handle(message, self.binding)
+
+
+@contextmanager
+def _ask_signal_scope(cancel_event: threading.Event) -> Iterator[None]:
+    previous: dict[signal.Signals, Any] = {}
+
+    def handle(signum: int, _frame: FrameType | None) -> None:
+        cancel_event.set()
+        raise AskSignal(signum)
+
+    for sig in (signal.SIGINT, signal.SIGTERM):
+        previous[sig] = signal.getsignal(sig)
+        signal.signal(sig, handle)
+    try:
+        yield
+    finally:
+        for sig, handler in previous.items():
+            signal.signal(sig, handler)
+
+
+def _run_agent_turn(prompt: str, hooks: ToolExecutionHooks) -> TurnResult:
+    manager = SessionManager()
+    agent_session = AgentSession(
+        SessionConfig(
+            load_env=True,
+            hydrate_integrations=True,
+            warm_integrations=True,
+            persistent_tasks=False,
+            open_store=False,
+            session_manager=manager,
+        )
+    )
+    output = BufferOutputSink()
+    cancel_event = ensure_turn_cancel(output)
+    console = _CancellableConsole(cancel_event)
+    session = None
+    try:
+        with _ask_signal_scope(cancel_event):
+            startup = agent_session.startup()
+            session = startup.session
+            for capability in ("investigation", "llm_provider", "task_cancel"):
+                session.available_capabilities[capability] = ()
+
+            from surfaces.interactive_shell.runtime.slash_adapter import headless_slash_ports
+
+            tools = DefaultToolProvider(
+                session,
+                console,
+                slash_ports_factory=headless_slash_ports,
+            )
+            agent = DefaultHeadlessBuild(
+                session=session,
+                output=output,
+                console=console,
+            ).agent(
+                tools=tools,
+                prompts=startup.prompts,
+                gather=GatherPhase(),
+            )
+            agent_session.attach_agent(
+                _BoundDispatcher(
+                    agent=agent,
+                    binding=TurnBinding(
+                        session=session,
+                        output=output,
+                        tool_hooks=hooks,
+                        console=console,
+                        is_tty=False,
+                    ),
+                )
+            )
+            return agent_session.chat(prompt)
+    finally:
+        if session is not None:
+            manager.close(session, extract_memory=False)
+
+
+def _successful_turn(result: TurnResult) -> bool:
+    action = result.action_result
+    action_ok = (
+        action.handled
+        and not action.has_unhandled_clause
+        and action.accounting_status == "completed"
+    )
+    return bool(
+        (result.answered or action_ok) and not result.cancelled and result.primary_response_text
+    )
+
+
+def _approval_denied_outcome(
+    tracker: ApprovalTracker,
+    *,
+    response: str = "",
+) -> AskOutcome | None:
+    denied_tools = tracker.denied_tools
+    if not denied_tools:
+        return None
+    return AskOutcome(
+        status=AskStatus.APPROVAL_DENIED,
+        response=response or "Approval denied for: " + ", ".join(denied_tools),
+        denied_tools=denied_tools,
+        exit_code=AskExitCode.APPROVAL_DENIED,
+    )
+
+
+def run_ask(
+    prompt: str,
+    *,
+    allowed_tools: tuple[str, ...],
+    bypass_approvals: bool,
+) -> AskOutcome:
+    """Execute one ask turn with invocation-scoped approval authority."""
+    tracker = ApprovalTracker()
+    hooks = build_approval_hooks(
+        allowed_tools=allowed_tools,
+        bypass_approvals=bypass_approvals,
+        tracker=tracker,
+    )
+    try:
+        result = _run_agent_turn(prompt, hooks)
+    except AskSignal as exc:
+        code = AskExitCode.SIGINT if exc.signum == signal.SIGINT else AskExitCode.SIGTERM
+        return AskOutcome(
+            status=AskStatus.CANCELLED,
+            response="Agent execution cancelled.",
+            exit_code=code,
+        )
+    except OpenSREError as exc:
+        denied = _approval_denied_outcome(tracker)
+        if denied is not None:
+            return denied
+        return AskOutcome(
+            status=AskStatus.ERROR,
+            response="",
+            error=AskError(message=exc.message, suggestion=exc.suggestion),
+            exit_code=AskExitCode.ERROR,
+        )
+    except Exception as exc:
+        denied = _approval_denied_outcome(tracker)
+        if denied is not None:
+            return denied
+        from surfaces.cli.telemetry import report_exception
+
+        report_exception(exc, context="surfaces.cli.ask")
+        return AskOutcome(
+            status=AskStatus.ERROR,
+            response="",
+            error=AskError(message=str(exc) or type(exc).__name__),
+            exit_code=AskExitCode.ERROR,
+        )
+
+    denied = _approval_denied_outcome(
+        tracker,
+        response=result.primary_response_text,
+    )
+    if denied is not None:
+        return denied
+    if result.cancelled:
+        return AskOutcome(
+            status=AskStatus.CANCELLED,
+            response=result.primary_response_text or "Agent execution cancelled.",
+            exit_code=AskExitCode.SIGINT,
+        )
+    if not _successful_turn(result):
+        response = result.primary_response_text
+        return AskOutcome(
+            status=AskStatus.ERROR,
+            response=response,
+            error=AskError(message=response or "The agent did not complete the request."),
+            exit_code=AskExitCode.ERROR,
+        )
+    return AskOutcome(
+        status=AskStatus.SUCCESS,
+        response=result.primary_response_text,
+    )
+
+
+__all__ = [
+    "AskError",
+    "AskExitCode",
+    "AskOutcome",
+    "AskStatus",
+    "run_ask",
+]
