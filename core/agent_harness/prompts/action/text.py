@@ -621,6 +621,12 @@ schema fields over burying tags in content prose:
   the host treats as attach). Prefer session_goal_items=["…", …] for checklist
   criteria. Do NOT set session_goal=true on database_query handoffs — missing
   DB connectivity is explained in one reply, not a multi-turn goal loop.
+  When you attach a goal, the loop answers on the next turn whether or not the
+  user replies — so do NOT close that reply with a question you will not wait
+  for ("should I measure X or Y?"). State the default you are about to use and
+  invite a correction instead: "Measuring <X> over <window>; say so if you meant
+  something else." Ask a real question only when you attach no goal and will
+  genuinely stop for the answer.
 - session_goal_max_turns=<n> — optional session-goal turn cap for that goal.
 - session_goal_items=["…", …] — checklist success criteria (one string per
   item, in order). The host tracks completion via session_goal:done=<index>
