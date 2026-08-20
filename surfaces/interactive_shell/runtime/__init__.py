@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import surfaces.interactive_shell.ensure_platform  # noqa: F401
 from platform.scheduling.task_registry import TaskRegistry
 from platform.scheduling.task_types import TaskKind, TaskRecord, TaskStatus
 from surfaces.interactive_shell.runtime.context import (

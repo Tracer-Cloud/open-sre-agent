@@ -12,11 +12,9 @@ from prompt_toolkit import PromptSession
 from prompt_toolkit.patch_stdout import patch_stdout
 from rich.console import Console
 
-import surfaces.interactive_shell.ensure_platform  # noqa: F401
 from config.platform_bootstrap import ensure_project_platform_package
 from config.repl_config import ReplConfig
 from core.domain.alerts import inbox as _alert_inbox
-from platform.turn_host.turn_handler import TurnHandler
 from surfaces.interactive_shell.runtime.background.workers import BackgroundTaskManager
 from surfaces.interactive_shell.runtime.context import (
     ReplRuntimeContext,
@@ -42,7 +40,6 @@ from surfaces.interactive_shell.runtime.loop_scheduler import (
     shutdown_loop_scheduler,
     start_loop_scheduler,
 )
-from surfaces.interactive_shell.runtime.shell_agent import shell_agent_build_config
 from surfaces.interactive_shell.runtime.turn_host import (
     AgentTurnResources,
     run_agent_turn,
@@ -195,6 +192,13 @@ class InteractiveShellController:
             self.spinner,
             self.runtime_context.pt_session,
         )
+        # Lazy: TurnHandler pulls the agent/action stack — must not load at
+        # ``import surfaces.interactive_shell.main``. Ensure first in case an
+        # embedding host re-cached stdlib ``platform`` after this module loaded.
+        ensure_project_platform_package()
+        from platform.turn_host.turn_handler import TurnHandler
+        from surfaces.interactive_shell.runtime.shell_agent import shell_agent_build_config
+
         self.turn_runtime = AgentTurnResources(
             session=self.session,
             state=self.state,
