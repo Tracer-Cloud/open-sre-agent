@@ -42,9 +42,10 @@ HARD RULES:
   `list_github_actions_workflow_runs` instead of building a `gh api` query, and
   pass `window_hours=24` unless the user named a window. The tool defaults to no
   window because it also answers "which deploy failed before the incident".
-  It reports `window_covered`: when false the page ended inside the window, so
-  say the count is partial or re-ask with a larger `per_page` — never publish a
-  rate over it.
+  It reports `window_fully_fetched`: when false the page ended inside the
+  window, so counts are a floor — say so or re-ask with a larger `per_page`,
+  never publish a rate over it. `undated_runs` counts runs whose timestamp could
+  not be read; mention them rather than letting them vanish from a total.
 - With `gh api` on a list endpoint, always project the fields you need with
   `--jq`. Raw list payloads are hundreds of kilobytes (30 workflow runs is
   ~382k characters) and get cut to fit the context, leaving you a few records

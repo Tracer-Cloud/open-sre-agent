@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from typing import Any, cast
 
@@ -181,36 +182,42 @@ def _run_started_at(run: dict[str, Any]) -> datetime | None:
     return parsed if parsed.tzinfo is not None else parsed.replace(tzinfo=UTC)
 
 
-def runs_within_window(
-    runs: list[dict[str, Any]],
-    window_hours: int,
-    *,
-    now: datetime | None = None,
-) -> tuple[list[dict[str, Any]], bool]:
-    """Return the runs started within ``window_hours``, and whether the page covered it.
+@dataclass(frozen=True, slots=True)
+class WindowedRuns:
+    """One page of runs narrowed to a time window.
 
-    ``window_hours <= 0`` disables the window and returns every run.
-
-    Coverage is the honest half. The listing is one page, so a window can hold
-    more runs than were fetched. Coverage is true only when a run older than the
-    window came back — proof the page reached past the window's edge. A caller
-    counting failures over a partial page must say so rather than report a rate.
+    ``window_fully_fetched`` is False when every dated run on the page falls
+    inside the window: older runs may exist that were never fetched, so counts
+    over ``runs`` are a floor rather than a total. ``undated`` counts runs whose
+    ``created_at`` could not be read; they are in neither ``runs`` nor the
+    evidence for ``window_fully_fetched``.
     """
-    if window_hours <= 0:
-        return runs, True
-    moment = now if now is not None else datetime.now(UTC)
-    cutoff = moment - timedelta(hours=window_hours)
+
+    runs: list[dict[str, Any]]
+    window_fully_fetched: bool
+    undated: int
+
+
+def window_runs(
+    runs: list[dict[str, Any]],
+    *,
+    window_hours: int,
+    now: datetime,
+) -> WindowedRuns:
+    """Narrow ``runs`` to those started within ``window_hours`` before ``now``."""
+    cutoff = now - timedelta(hours=window_hours)
     inside: list[dict[str, Any]] = []
-    saw_older = False
+    older = 0
+    undated = 0
     for run in runs:
         started = _run_started_at(run)
         if started is None:
-            continue
-        if started >= cutoff:
+            undated += 1
+        elif started >= cutoff:
             inside.append(run)
         else:
-            saw_older = True
-    return inside, saw_older
+            older += 1
+    return WindowedRuns(runs=inside, window_fully_fetched=older > 0, undated=undated)
 
 
 UNGROUPED_SECTION_NAME = "ungrouped"
@@ -426,14 +433,16 @@ def list_github_actions_workflow_runs(
     if payload.get("available"):
         workflow_runs_raw = _extract_list(result, "workflow_runs")
         workflow_runs = [_normalize_run(item) for item in workflow_runs_raw]
-        workflow_runs, window_covered = runs_within_window(workflow_runs, window_hours)
+        if window_hours > NO_RUN_WINDOW:
+            windowed = window_runs(workflow_runs, window_hours=window_hours, now=datetime.now(UTC))
+            workflow_runs = windowed.runs
+            payload["window_fully_fetched"] = windowed.window_fully_fetched
+            payload["undated_runs"] = windowed.undated
         payload["workflow_runs"] = workflow_runs
         payload["total"] = len(workflow_runs)
-        payload["window_covered"] = window_covered
     else:
         payload["workflow_runs"] = []
         payload["total"] = 0
-        payload["window_covered"] = False
 
     payload["window_hours"] = window_hours
     payload["branch"] = branch
