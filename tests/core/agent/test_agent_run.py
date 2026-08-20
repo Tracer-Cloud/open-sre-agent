@@ -11,7 +11,7 @@ from core.agent.run_io import AgentRunInput
 from core.agent_harness.prompts import PromptEnvelope
 from core.agent_harness.turns.turn_snapshot import TurnSnapshot
 from core.llm.types import AgentLLMResponse
-from core.types import AgentTool
+from core.tool.contracts import AgentTool
 
 
 class _NoToolLLM:

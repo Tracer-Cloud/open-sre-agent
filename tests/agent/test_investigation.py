@@ -462,7 +462,7 @@ def testexecute_tools_handles_interpreter_shutdown() -> None:
 
     shutdown_msg = "cannot schedule new futures after interpreter shutdown"
 
-    with patch("core.execution.ThreadPoolExecutor") as mock_executor_cls:
+    with patch("core.tool.execution.ThreadPoolExecutor") as mock_executor_cls:
         mock_pool = MagicMock()
         mock_pool.__enter__ = lambda s: s
         mock_pool.__exit__ = MagicMock(return_value=False)

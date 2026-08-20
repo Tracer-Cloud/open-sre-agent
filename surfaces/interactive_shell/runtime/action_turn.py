@@ -15,7 +15,7 @@ from core.agent_harness import OutputSink, ToolCallingTurnResult
 from core.agent_harness.ports import LlmFactory
 from core.agent_harness.runtime import ActionTurnRunner, TurnPlan
 from core.agent_harness.spi.defaults import DefaultErrorReporter
-from core.execution import ToolExecutionHooks
+from core.tool.execution import ToolExecutionHooks
 from surfaces.interactive_shell.command_registry import SLASH_COMMANDS
 from surfaces.interactive_shell.command_registry.suggestions import resolve_literal_slash_typo
 from surfaces.interactive_shell.runtime.agent_harness_adapters import resolve_output_sink

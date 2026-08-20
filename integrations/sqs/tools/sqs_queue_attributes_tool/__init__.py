@@ -221,7 +221,7 @@ def get_sqs_queue_attributes(
         queues.append({"name": name, "url": url, **_parse_attributes(raw_attrs)})
 
     # No "error" key on success: the runtime tool loop flags failure on a truthy
-    # "error" (core.execution._normalize_result).
+    # "error" (core.tool.execution._normalize_result).
     return {
         "source": "sqs",
         "available": True,

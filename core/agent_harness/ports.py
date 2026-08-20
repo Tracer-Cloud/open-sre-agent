@@ -17,7 +17,7 @@ from typing import Any, Protocol, runtime_checkable
 from core.agent_harness.turns.gather_observation import GatheredEvidence
 from core.agent_harness.turns.turn_results import ToolCallingTurnResult, TurnResult
 from core.domain.types.tools import ToolSurface
-from core.execution import ToolExecutionHooks
+from core.tool.execution import ToolExecutionHooks
 from core.llm.types import AgentLLMClient
 
 # A tool-loop event callback: ``(kind, data)`` where kind is e.g. "tool_start".

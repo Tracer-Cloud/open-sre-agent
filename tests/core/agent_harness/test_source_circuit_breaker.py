@@ -19,7 +19,7 @@ from core.agent_harness.turns.gather_unreachable import (
     store_gather_unreachable,
 )
 from core.agent_harness.turns.source_circuit_breaker import SourceCircuitBreaker
-from core.execution import (
+from core.tool.execution import (
     ToolExecutionHooks,
     ToolExecutionRequest,
     ToolExecutionResult,

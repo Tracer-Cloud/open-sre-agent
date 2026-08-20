@@ -11,7 +11,7 @@ from typing import Any
 
 from core.llm.types import ToolCall
 from core.tool_framework.utils.integration_sources import availability_view
-from core.types import AgentTool, AgentToolContext, RuntimeTool
+from core.tool.contracts import AgentTool, AgentToolContext, RuntimeTool
 from platform.observability.trace.redaction import redact_sensitive
 from platform.observability.trace.spans import mark_span_outcome, tool_span
 

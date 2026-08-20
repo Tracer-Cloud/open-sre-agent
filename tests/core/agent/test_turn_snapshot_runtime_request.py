@@ -12,7 +12,7 @@ from core.llm.types import AgentLLMResponse
 from core.messages import UserRuntimeMessage
 from core.state import MAX_CONVERSATION_MESSAGES
 from core.state.transcript_window import SESSION_SUMMARY_PREFIX
-from core.types import AgentTool
+from core.tool.contracts import AgentTool
 
 
 class _NoToolLLM:

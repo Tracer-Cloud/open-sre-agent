@@ -19,7 +19,7 @@ from core.agent_harness.turns.headless_adapters import BufferOutputSink, NullToo
 from core.agent_harness.turns.headless_agent import HeadlessAgent
 from core.agent_harness.turns.headless_build import InMemoryHeadlessBuild
 from core.agent_harness.turns.turn_results import ToolCallingTurnResult
-from core.execution import ToolExecutionHooks
+from core.tool.execution import ToolExecutionHooks
 from surfaces.interactive_shell.runtime.turn_seams import bind_injected_stages
 from surfaces.interactive_shell.session import Session
 

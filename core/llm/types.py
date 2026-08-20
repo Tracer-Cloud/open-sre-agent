@@ -7,7 +7,7 @@ from dataclasses import dataclass, field
 from enum import StrEnum
 from typing import Any, Protocol, TypeAlias, runtime_checkable
 
-from core.types import RuntimeTool
+from core.tool.contracts import RuntimeTool
 
 ResolvedIntegrations: TypeAlias = dict[str, Any]  # noqa: UP040
 

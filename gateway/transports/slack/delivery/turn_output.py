@@ -16,7 +16,7 @@ import threading
 import time
 from collections.abc import Iterable
 
-from core.execution import ToolExecutionHooks
+from core.tool.execution import ToolExecutionHooks
 from gateway.transports.slack.client import (
     SLACK_MAX_MARKDOWN_BLOCK_CHARS,
     SLACK_MAX_MESSAGE_CHARS,

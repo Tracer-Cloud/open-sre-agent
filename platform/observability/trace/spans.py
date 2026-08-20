@@ -234,7 +234,7 @@ def tool_span(
     tool_call_id: str,
     attributes: dict[str, Any] | None = None,
 ) -> AbstractContextManager[dict[str, Any]]:
-    """Time one tool execution (universal choke point in ``core.execution``)."""
+    """Time one tool execution (universal choke point in ``core.tool.execution``)."""
     attrs = {"tool_call_id": tool_call_id, **(attributes or {})}
     return timed_span(span_kind="tool", name=name, attributes=attrs)
 

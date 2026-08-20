@@ -16,7 +16,7 @@ from core.agent_harness.turns.source_circuit_breaker import (
     SourceCircuitBreaker,
     _is_connectivity_error,
 )
-from core.execution import (
+from core.tool.execution import (
     ToolExecutionRequest,
     execute_tool_calls,
 )

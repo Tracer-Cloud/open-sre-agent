@@ -267,7 +267,7 @@ def lookup_cloudtrail_events(
     returned_token = data.get("NextToken") or None
 
     # NOTE: the success payload must NOT carry an "error" key. The runtime tool
-    # loop (core.execution._normalize_result) treats the mere presence of an
+    # loop (core.tool.execution._normalize_result) treats the mere presence of an
     # "error" key as a failure (is_error = "error" in raw) and replaces the whole
     # payload with {"error": ...} before the agent sees it — so a success dict
     # with "error": None would hide every event from the investigation. Only the

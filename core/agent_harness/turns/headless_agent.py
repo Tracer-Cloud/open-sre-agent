@@ -54,7 +54,7 @@ from core.agent_harness.turns.host_cancel import host_cancel_requested
 from core.agent_harness.turns.orchestrator import stream_answer
 from core.agent_harness.turns.turn_plan import TurnPlan
 from core.agent_harness.turns.turn_results import ToolCallingTurnResult, TurnResult
-from core.execution import ToolExecutionHooks
+from core.tool.execution import ToolExecutionHooks
 
 
 class AgentBusyError(RuntimeError):

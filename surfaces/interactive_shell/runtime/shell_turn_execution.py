@@ -20,7 +20,7 @@ from core.agent_harness.spi.session_goal import (
     SessionGoal,
     format_session_goal_progress,
 )
-from core.execution import ToolExecutionHooks
+from core.tool.execution import ToolExecutionHooks
 from platform.turn_host.turn_handler import TurnHandler
 from platform.turn_host.turn_output import TurnOutput
 from surfaces.interactive_shell.runtime.agent_harness_adapters import ShellOutputSink

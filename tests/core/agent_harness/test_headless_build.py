@@ -13,7 +13,7 @@ from core.agent_harness.session.persistence.memory import InMemorySessionStore
 from core.agent_harness.turns.headless_adapters import BufferOutputSink
 from core.agent_harness.turns.headless_build import DefaultHeadlessBuild
 from core.agent_harness.turns.turn_results import ToolCallingTurnResult, TurnResult
-from core.execution import ToolExecutionHooks
+from core.tool.execution import ToolExecutionHooks
 
 
 def test_default_headless_build_sets_gateway_surface() -> None:

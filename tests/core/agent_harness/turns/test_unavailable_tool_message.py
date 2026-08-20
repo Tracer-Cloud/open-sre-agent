@@ -12,7 +12,7 @@ bare internal identifier.
 
 from __future__ import annotations
 
-from core.execution import execute_tools
+from core.tool.execution import execute_tools
 from core.llm.types import ToolCall
 
 

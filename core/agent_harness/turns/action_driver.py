@@ -50,7 +50,7 @@ from core.agent_harness.turns.turn_results import ToolCallingTurnResult
 from core.agent_harness.turns.turn_snapshot import TurnSnapshot
 from core.agent_harness.turns.wal_recorder import with_wal_recording
 from core.events import runtime_event_callback_from_observer
-from core.execution import (
+from core.tool.execution import (
     BeforeToolCallResult,
     ToolExecutionHooks,
     ToolExecutionPatch,

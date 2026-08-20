@@ -14,7 +14,7 @@ from config.constants.investigation import (
     INVESTIGATION_TOOL_CACHE_MAX_ENTRIES,
     MAX_INVESTIGATION_LOOPS,
 )
-from core.execution import (
+from core.tool.execution import (
     BeforeToolCallResult,
     ToolExecutionHooks,
     ToolExecutionRequest,

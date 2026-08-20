@@ -13,7 +13,7 @@ from core.agent_harness.tools.tool_context import (
     ActionToolContext,
 )
 from core.tool_framework.registered_tool import RegisteredTool
-from core.types import AgentToolContext
+from core.tool.contracts import AgentToolContext
 from integrations.coding_agent import CodingResult
 from integrations.github.client import GitHubRestClient
 from integrations.github.pull_requests import PullRequest

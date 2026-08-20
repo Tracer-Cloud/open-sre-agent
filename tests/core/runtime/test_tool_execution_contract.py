@@ -7,7 +7,7 @@ from typing import Any
 import pytest
 
 from core.agent import Agent
-from core.execution import (
+from core.tool.execution import (
     BeforeToolCallResult,
     ToolExecutionHooks,
     ToolExecutionPatch,
@@ -20,7 +20,7 @@ from core.execution import (
 from core.llm.types import AgentLLMResponse, ToolCall
 from core.provider import ProviderHooks, ProviderRequest
 from core.tool_framework.registered_tool import RegisteredTool
-from core.types import AgentTool, AgentToolContext
+from core.tool.contracts import AgentTool, AgentToolContext
 
 
 def _schema(required: list[str] | None = None) -> dict[str, Any]:
@@ -350,7 +350,7 @@ def _record_pool_constructions(monkeypatch: pytest.MonkeyPatch) -> list[int]:
             constructions.append(1)
             super().__init__(*args, **kwargs)
 
-    monkeypatch.setattr("core.execution.ThreadPoolExecutor", _RecordingPool)
+    monkeypatch.setattr("core.tool.execution.ThreadPoolExecutor", _RecordingPool)
     return constructions
 
 
