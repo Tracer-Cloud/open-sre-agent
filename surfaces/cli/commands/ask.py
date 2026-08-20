@@ -9,7 +9,14 @@ import click
 
 from platform.process.runtime_flags import is_json_output
 from surfaces.cli.ask.approval import unknown_allowed_tools
-from surfaces.cli.ask.service import AskOutcome, AskStatus, run_ask
+from surfaces.cli.ask.service import (
+    AskOutcome,
+    AskSignal,
+    AskStatus,
+    ask_signal_scope,
+    cancelled_outcome,
+    run_ask,
+)
 
 
 def _resolve_prompt(value: str) -> str:
@@ -66,11 +73,15 @@ def ask_command(
             f"unknown registered tool name(s): {names}",
             param_hint="--allowed-tool",
         )
-    outcome = run_ask(
-        _resolve_prompt(prompt),
-        allowed_tools=allowed_tools,
-        bypass_approvals=dangerously_bypass_approvals,
-    )
+    try:
+        with ask_signal_scope():
+            outcome = run_ask(
+                _resolve_prompt(prompt),
+                allowed_tools=allowed_tools,
+                bypass_approvals=dangerously_bypass_approvals,
+            )
+    except AskSignal as exc:
+        outcome = cancelled_outcome(exc.signum)
     _render_outcome(outcome)
     if outcome.exit_code:
         raise SystemExit(int(outcome.exit_code))

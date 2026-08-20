@@ -132,11 +132,13 @@ class _BoundDispatcher:
 
 
 @contextmanager
-def _ask_signal_scope(cancel_event: threading.Event) -> Iterator[None]:
+def ask_signal_scope(cancel_event: threading.Event | None = None) -> Iterator[None]:
+    """Map process termination signals to ``AskSignal`` within one CLI scope."""
+    event = cancel_event or threading.Event()
     previous: dict[signal.Signals, Any] = {}
 
     def handle(signum: int, _frame: FrameType | None) -> None:
-        cancel_event.set()
+        event.set()
         raise AskSignal(signum)
 
     for sig in (signal.SIGINT, signal.SIGTERM):
@@ -166,7 +168,7 @@ def _run_agent_turn(prompt: str, hooks: ToolExecutionHooks) -> TurnResult:
     console = _CancellableConsole(cancel_event)
     session = None
     try:
-        with _ask_signal_scope(cancel_event):
+        with ask_signal_scope(cancel_event):
             startup = agent_session.startup()
             session = startup.session
             for capability in (
@@ -233,6 +235,16 @@ def _approval_denied_outcome(
     )
 
 
+def cancelled_outcome(signum: int) -> AskOutcome:
+    """Return the stable cancelled result for an ask process signal."""
+    code = AskExitCode.SIGINT if signum == signal.SIGINT else AskExitCode.SIGTERM
+    return AskOutcome(
+        status=AskStatus.CANCELLED,
+        response="Agent execution cancelled.",
+        exit_code=code,
+    )
+
+
 def run_ask(
     prompt: str,
     *,
@@ -249,12 +261,7 @@ def run_ask(
     try:
         result = _run_agent_turn(prompt, hooks)
     except AskSignal as exc:
-        code = AskExitCode.SIGINT if exc.signum == signal.SIGINT else AskExitCode.SIGTERM
-        return AskOutcome(
-            status=AskStatus.CANCELLED,
-            response="Agent execution cancelled.",
-            exit_code=code,
-        )
+        return cancelled_outcome(exc.signum)
     except OpenSREError as exc:
         denied = _approval_denied_outcome(tracker)
         if denied is not None:
@@ -309,6 +316,9 @@ __all__ = [
     "AskError",
     "AskExitCode",
     "AskOutcome",
+    "AskSignal",
     "AskStatus",
+    "ask_signal_scope",
+    "cancelled_outcome",
     "run_ask",
 ]

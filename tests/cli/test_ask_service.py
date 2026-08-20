@@ -131,7 +131,7 @@ def test_signal_scope_requests_cancel_and_restores_handlers(monkeypatch) -> None
     monkeypatch.setattr(signal, "signal", fake_signal)
     cancel_event = threading.Event()
 
-    with pytest.raises(AskSignal), service._ask_signal_scope(cancel_event):
+    with pytest.raises(AskSignal), service.ask_signal_scope(cancel_event):
         handler = installed[signal.SIGINT]
         assert callable(handler)
         handler(signal.SIGINT, None)

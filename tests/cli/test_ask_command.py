@@ -1,10 +1,17 @@
 from __future__ import annotations
 
 import json
+import signal
 
 from click.testing import CliRunner
 
-from surfaces.cli.ask.service import AskError, AskExitCode, AskOutcome, AskStatus
+from surfaces.cli.ask.service import (
+    AskError,
+    AskExitCode,
+    AskOutcome,
+    AskSignal,
+    AskStatus,
+)
 from surfaces.cli.commands.ask import ask_command
 
 
@@ -50,6 +57,20 @@ def test_ask_reads_prompt_from_stdin(monkeypatch) -> None:
 
     assert result.exit_code == 0
     assert seen == ["from stdin"]
+
+
+def test_ask_interrupt_while_reading_stdin_returns_signal_exit(monkeypatch) -> None:
+    def interrupt(_value: str) -> str:
+        raise AskSignal(signal.SIGINT)
+
+    monkeypatch.setattr("surfaces.cli.commands.ask.unknown_allowed_tools", lambda _v: ())
+    monkeypatch.setattr("surfaces.cli.commands.ask._resolve_prompt", interrupt)
+    monkeypatch.setattr("surfaces.cli.commands.ask.is_json_output", lambda: True)
+
+    result = CliRunner().invoke(ask_command, ["-"])
+
+    assert result.exit_code == 130
+    assert json.loads(result.output)["status"] == "cancelled"
 
 
 def test_ask_rejects_empty_prompt(monkeypatch) -> None:
