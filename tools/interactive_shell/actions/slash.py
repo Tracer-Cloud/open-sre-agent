@@ -18,7 +18,7 @@ from core.agent_harness.tools import (
     execute_with_action_context,
 )
 from core.domain.types.tools import ToolSurface
-from core.tool_framework.registered_tool import RegisteredTool
+from core.tool.contracts import RegisteredTool
 from tools.interactive_shell.shared import plan_foreground_tool
 from tools.interactive_shell.shared.slash_catalog import (
     slash_invoke_input_schema,

@@ -6,7 +6,7 @@ from pathlib import Path
 
 import pytest
 
-from core.tool_framework.registered_tool import REGISTERED_TOOL_ATTR, RegisteredTool
+from core.tool.contracts import REGISTERED_TOOL_ATTR, RegisteredTool
 from integrations.hermes.poller import HermesLogCursor
 from integrations.hermes.tools.hermes_logs_tool import get_hermes_logs
 

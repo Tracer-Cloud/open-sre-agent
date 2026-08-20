@@ -7,7 +7,7 @@ from __future__ import annotations
 from typing import Any
 
 from core.domain.types.tools import ToolSurface
-from core.tool_framework.base import BaseTool
+from core.tool.contracts import BaseTool
 from integrations.splunk._client import make_client, unavailable
 from platform.evidence.evidence_compaction import compact_logs, summarize_counts
 

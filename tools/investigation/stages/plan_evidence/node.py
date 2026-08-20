@@ -13,7 +13,7 @@ from core.domain.types.planning import PlannedInvestigationAction
 from core.domain.types.retrieval import RetrievalControlsMap, RetrievalIntent, TimeBounds
 from core.domain.types.tools import ToolSurface
 from core.state import InvestigationState
-from core.tool_framework.registered_tool import RegisteredTool
+from core.tool.contracts import RegisteredTool
 from tools.investigation.stages.gather_evidence.tools import (
     availability_view,
     build_connected_tool_context,

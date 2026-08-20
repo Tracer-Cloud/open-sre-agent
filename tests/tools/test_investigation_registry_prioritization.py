@@ -3,7 +3,7 @@ from __future__ import annotations
 from collections.abc import Callable
 from typing import Any, cast
 
-from core.tool_framework.registered_tool import RegisteredTool
+from core.tool.contracts import RegisteredTool
 from tools.investigation_registry import prioritization
 
 

@@ -13,7 +13,7 @@ from core.domain.alerts.alert_source import (
 )
 from core.domain.types.tools import ToolSurface
 from core.llm.types import ToolCall
-from core.tool_framework.registered_tool import RegisteredTool
+from core.tool.contracts import RegisteredTool
 from core.tool_framework.utils.integration_sources import availability_view
 from platform.observability.trace.redaction import RedactedToolView, redact_tool_view
 from tools.registry import get_registered_tools

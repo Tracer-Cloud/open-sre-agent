@@ -7,7 +7,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from core.tool_framework.registered_tool import RegisteredTool
+from core.tool.contracts import RegisteredTool
 from integrations.github.tools.github_cli.credentials import resolve_github_token
 from integrations.github.tools.github_cli.runner import build_gh_argv, denied_gh_command, run_gh
 from integrations.github.tools.github_cli.summary import summarize_gh_result

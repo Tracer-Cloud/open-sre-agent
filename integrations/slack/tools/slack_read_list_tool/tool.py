@@ -7,8 +7,8 @@ import re
 from typing import Any
 
 from core.domain.types.tools import ToolSurface
-from core.tool_framework.base import BaseTool
-from core.tool_framework.metadata import SideEffectLevel
+from core.tool.contracts import BaseTool
+from core.tool.contracts import SideEffectLevel
 from core.tool_framework.tool_decorator import tool
 from core.tool_framework.utils.tool_availability import tool_unavailable
 from integrations.slack.tools.slack_read_list_tool.constants import (

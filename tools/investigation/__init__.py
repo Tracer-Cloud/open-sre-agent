@@ -5,7 +5,7 @@ from __future__ import annotations
 from typing import Any
 
 from core.domain.types.tools import ToolSurface
-from core.tool_framework.metadata import SideEffectLevel
+from core.tool.contracts import SideEffectLevel
 from core.tool_framework.tool_decorator import tool
 from tools.investigation.capability import (
     astream_investigation,

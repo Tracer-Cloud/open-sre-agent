@@ -6,7 +6,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from core.tool_framework.metadata import EvidenceType, SideEffectLevel
+from core.tool.contracts import EvidenceType, SideEffectLevel
 from core.tool_framework.tool_decorator import tool
 from core.tool_framework.utils.tool_availability import tool_unavailable
 

@@ -10,7 +10,7 @@ from core.agent_harness.tools.tool_context import (
     ACTION_TOOL_CONTEXT_RESOURCE_KEY,
     ActionToolContext,
 )
-from core.tool_framework.registered_tool import RegisteredTool
+from core.tool.contracts import RegisteredTool
 from core.tool.contracts import AgentToolContext
 from integrations.coding_agent import CodingResult
 from integrations.github.tools.ci_fix.context import (

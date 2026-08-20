@@ -1,11 +1,11 @@
-"""Unit tests for core.tool_framework.registry_metadata."""
+"""Unit tests for core.tool.registry."""
 
 from __future__ import annotations
 
 import pytest
 from pydantic import ValidationError
 
-from core.tool_framework.registry_metadata import (
+from core.tool.registry import (
     BaseToolRegistryMetadata,
     normalize_surfaces,
     normalize_tags,

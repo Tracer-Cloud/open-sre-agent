@@ -5,8 +5,8 @@ from __future__ import annotations
 from typing import Any
 
 from core.domain.types.tools import ToolSurface
-from core.tool_framework.base import BaseTool
-from core.tool_framework.metadata import SideEffectLevel
+from core.tool.contracts import BaseTool
+from core.tool.contracts import SideEffectLevel
 from core.tool_framework.tags import SUMMARIZE_OBSERVATION_TAG
 from core.tool_framework.tool_decorator import tool
 from integrations.slack.tools.slack_read_messages_tool.constants import (

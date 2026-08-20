@@ -6,7 +6,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from core.tool_framework.base import BaseTool
+from core.tool.contracts import BaseTool
 from core.tool_framework.utils.tool_availability import tool_unavailable
 from integrations.temporal.client import TemporalClient, TemporalConfig
 
@@ -110,7 +110,7 @@ temporal_namespace_info = TemporalNamespaceInfoTool()
 """Temporal task queue description tool."""
 
 
-from core.tool_framework.base import BaseTool
+from core.tool.contracts import BaseTool
 
 
 class TemporalTaskQueueTool(BaseTool):
@@ -236,7 +236,7 @@ temporal_task_queue = TemporalTaskQueueTool()
 """Temporal workflow execution history tool."""
 
 
-from core.tool_framework.base import BaseTool
+from core.tool.contracts import BaseTool
 
 
 class TemporalWorkflowHistoryTool(BaseTool):
@@ -374,7 +374,7 @@ temporal_workflow_history = TemporalWorkflowHistoryTool()
 """Temporal workflow executions listing tool."""
 
 
-from core.tool_framework.base import BaseTool
+from core.tool.contracts import BaseTool
 
 
 class TemporalWorkflowsTool(BaseTool):

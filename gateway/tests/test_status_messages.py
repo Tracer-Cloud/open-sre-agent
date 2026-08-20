@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from core.llm.shared.llm_retry import CREDIT_EXHAUSTED_MARKER
-from core.tool_framework.registered_tool import RegisteredTool
+from core.tool.contracts import RegisteredTool
 from platform.turn_host.status_messages import (
     INITIAL_STATUSES,
     _tool_label,

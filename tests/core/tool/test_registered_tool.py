@@ -1,4 +1,4 @@
-"""Unit tests for core.tool_framework.registered_tool (RegisteredTool contract)."""
+"""Unit tests for core.tool.contracts (RegisteredTool contract)."""
 
 from __future__ import annotations
 
@@ -8,8 +8,7 @@ import pytest
 
 from core.domain.types.evidence import EvidenceSource
 from core.domain.types.tools import ToolSurface
-from core.tool_framework.base import BaseTool
-from core.tool_framework.registered_tool import RegisteredTool, _normalize_surfaces
+from core.tool.contracts import BaseTool, RegisteredTool, _normalize_surfaces
 from core.tool_framework.tool_decorator import tool
 
 # ---------------------------------------------------------------------------

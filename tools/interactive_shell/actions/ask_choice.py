@@ -20,8 +20,8 @@ from core.agent_harness.spi.session_state import (
 )
 from core.agent_harness.tools import ActionToolContext, execute_with_action_context
 from core.domain.types.tools import ToolSurface
-from core.tool_framework.metadata import SideEffectLevel
-from core.tool_framework.registered_tool import RegisteredTool
+from core.tool.contracts import SideEffectLevel
+from core.tool.contracts import RegisteredTool
 from core.tool_framework.utils.schema import object_schema, string_array_property, string_property
 
 _MIN_OPTIONS = 2

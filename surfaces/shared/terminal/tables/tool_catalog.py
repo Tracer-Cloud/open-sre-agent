@@ -36,7 +36,7 @@ from typing import Any
 
 from config.constants.paths import REPO_ROOT
 from core.domain.types.tools import ToolSurface
-from core.tool_framework.registered_tool import RegisteredTool
+from core.tool.contracts import RegisteredTool
 from tools.registry import get_registered_tools
 
 # Cap one-line schema summaries so wide registries don't break terminal

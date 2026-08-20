@@ -7,6 +7,9 @@ from typing import Any
 import pytest
 
 from core.agent import Agent
+from core.llm.types import AgentLLMResponse, ToolCall
+from core.provider import ProviderHooks, ProviderRequest
+from core.tool.contracts import AgentTool, AgentToolContext, RegisteredTool
 from core.tool.execution import (
     BeforeToolCallResult,
     ToolExecutionHooks,
@@ -17,10 +20,6 @@ from core.tool.execution import (
     execute_tool_calls,
     execute_tools,
 )
-from core.llm.types import AgentLLMResponse, ToolCall
-from core.provider import ProviderHooks, ProviderRequest
-from core.tool_framework.registered_tool import RegisteredTool
-from core.tool.contracts import AgentTool, AgentToolContext
 
 
 def _schema(required: list[str] | None = None) -> dict[str, Any]:

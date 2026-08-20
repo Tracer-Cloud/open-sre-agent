@@ -31,8 +31,8 @@ from __future__ import annotations
 from typing import Any
 
 from core.domain.types.tools import ToolSurface
-from core.tool_framework.base import BaseTool
-from core.tool_framework.metadata import SideEffectLevel
+from core.tool.contracts import BaseTool
+from core.tool.contracts import SideEffectLevel
 from tools.cross_vendor.fix_sentry_issue.context import gather_issue_context
 from tools.cross_vendor.fix_sentry_issue.errors import FixIssueError
 from tools.cross_vendor.fix_sentry_issue.runner import (

@@ -7,7 +7,7 @@ from typing import Any, cast
 
 from pydantic import BaseModel, Field
 
-from core.tool_framework.metadata import EvidenceType, SideEffectLevel
+from core.tool.contracts import EvidenceType, SideEffectLevel
 from core.tool_framework.tool_decorator import tool
 from core.tool_framework.utils.tool_availability import tool_unavailable
 from integrations.aws.aws_sdk_client import execute_aws_sdk_call

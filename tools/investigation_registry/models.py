@@ -1,6 +1,6 @@
 """Investigation action type — RegisteredTool is the canonical representation."""
 
-from core.tool_framework.registered_tool import RegisteredTool
+from core.tool.contracts import RegisteredTool
 
 # InvestigationAction is now an alias for RegisteredTool.
 # All callers that import InvestigationAction continue to work unchanged.

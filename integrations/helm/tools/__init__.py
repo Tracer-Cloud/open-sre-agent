@@ -6,7 +6,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from core.tool_framework.base import BaseTool
+from core.tool.contracts import BaseTool
 from integrations.helm.helpers import helm_base_unavailable, helm_client_for_run
 
 

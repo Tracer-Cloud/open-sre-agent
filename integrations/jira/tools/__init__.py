@@ -6,7 +6,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from core.tool_framework.base import BaseTool
+from core.tool.contracts import BaseTool
 from core.tool_framework.utils.tool_availability import tool_unavailable
 from integrations.jira.client import make_jira_client
 
@@ -105,7 +105,7 @@ jira_add_comment = JiraAddCommentTool()
 """Jira issue creation tool for investigation workflows."""
 
 
-from core.tool_framework.base import BaseTool
+from core.tool.contracts import BaseTool
 
 
 class JiraCreateIssueTool(BaseTool):
@@ -234,7 +234,7 @@ jira_create_issue = JiraCreateIssueTool()
 """Jira issue detail tool for investigation workflows."""
 
 
-from core.tool_framework.base import BaseTool
+from core.tool.contracts import BaseTool
 
 
 class JiraIssueDetailTool(BaseTool):
@@ -333,7 +333,7 @@ jira_issue_detail = JiraIssueDetailTool()
 """Jira issue search tool for investigation workflows."""
 
 
-from core.tool_framework.base import BaseTool
+from core.tool.contracts import BaseTool
 
 
 class JiraSearchIssuesTool(BaseTool):

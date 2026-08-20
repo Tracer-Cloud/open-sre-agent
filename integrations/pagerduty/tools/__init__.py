@@ -6,7 +6,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from core.tool_framework.base import BaseTool
+from core.tool.contracts import BaseTool
 from core.tool_framework.utils.tool_availability import tool_unavailable
 from integrations.pagerduty.client import make_pagerduty_client
 
@@ -131,7 +131,7 @@ pagerduty_incident_detail = PagerDutyIncidentDetailTool()
 """PagerDuty incident listing and search investigation tool."""
 
 
-from core.tool_framework.base import BaseTool
+from core.tool.contracts import BaseTool
 
 _ACTIVE_STATUSES = {"triggered", "acknowledged"}
 
@@ -280,7 +280,7 @@ pagerduty_incidents = PagerDutyIncidentsTool()
 """PagerDuty on-call schedule investigation tool."""
 
 
-from core.tool_framework.base import BaseTool
+from core.tool.contracts import BaseTool
 
 
 class PagerDutyOnCallTool(BaseTool):
@@ -382,7 +382,7 @@ pagerduty_oncall = PagerDutyOnCallTool()
 """PagerDuty services and escalation policies investigation tool."""
 
 
-from core.tool_framework.base import BaseTool
+from core.tool.contracts import BaseTool
 
 
 class PagerDutyServicesTool(BaseTool):

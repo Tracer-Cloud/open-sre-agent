@@ -8,7 +8,7 @@ contract in ``ToolMetadata``.
 from __future__ import annotations
 
 from collections.abc import Iterable
-from typing import cast
+from typing import Any, Protocol, cast, runtime_checkable
 
 from pydantic import Field, field_validator
 
@@ -76,8 +76,20 @@ class BaseToolRegistryMetadata(StrictConfigModel):
         return normalize_tags(cast(Iterable[str], value))
 
 
+@runtime_checkable
+class ToolRegistry(Protocol):
+    """Resolves the registered tools available to a named surface."""
+
+    def tools_for_surface(self, surface: ToolSurface) -> list[Any]:
+        """Return the registered tools for ``surface``."""
+
+    def tool_map_for_surface(self, surface: ToolSurface) -> dict[str, Any]:
+        """Return the registered tools for ``surface`` keyed by tool name."""
+
+
 __all__ = [
     "BaseToolRegistryMetadata",
+    "ToolRegistry",
     "normalize_surfaces",
     "normalize_tags",
 ]

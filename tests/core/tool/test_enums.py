@@ -3,8 +3,8 @@ from __future__ import annotations
 import pytest
 
 from core.domain.types.tools import ToolSurface
-from core.tool_framework.metadata import EvidenceType, SideEffectLevel
-from core.tool_framework.registry_metadata import normalize_surfaces
+from core.tool.contracts import EvidenceType, SideEffectLevel
+from core.tool.registry import normalize_surfaces
 
 
 def test_tool_surface_members_round_trip_from_string() -> None:

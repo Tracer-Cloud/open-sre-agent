@@ -12,7 +12,7 @@ from dataclasses import replace
 from pathlib import Path
 
 from config.constants.paths import REPO_ROOT
-from core.tool_framework.registered_tool import RegisteredTool
+from core.tool.contracts import RegisteredTool
 from core.tool_framework.skill_guidance import format_tool_skill_guidance, load_tool_skill_guidance
 
 logger = logging.getLogger(__name__)

@@ -19,7 +19,7 @@ from core import (
 from core.llm.transports.sdk.agent_clients import CLIBackedAgentClient
 from core.llm.types import ToolCall
 from core.messages import MessageMapper
-from core.tool_framework.registered_tool import RegisteredTool
+from core.tool.contracts import RegisteredTool
 from integrations.llm_cli.errors import CLITimeoutError
 from tools.investigation.stages.gather_evidence import (
     ConnectedInvestigationAgent,

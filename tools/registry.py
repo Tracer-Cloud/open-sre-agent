@@ -17,7 +17,7 @@ from types import ModuleType
 from typing import TYPE_CHECKING
 
 import tools as tools_package
-from core.tool_framework.registered_tool import RegisteredTool, ToolSurface
+from core.tool.contracts import RegisteredTool, ToolSurface
 from tools.registry_discovery import (
     INTEGRATION_TOOL_PACKAGES,
     collect_registered_tools_from_module,
@@ -237,7 +237,7 @@ def load_tool(descriptor: ToolDescriptor) -> RegisteredTool | None:
 
 
 class RegisteredToolRegistry:
-    """:class:`~core.agent_harness.ports.ToolRegistry` backed by discovered tool packages."""
+    """:class:`~core.tool.registry.ToolRegistry` backed by discovered tool packages."""
 
     def tools_for_surface(self, surface: ToolSurface) -> list[RegisteredTool]:
         return get_registered_tools(surface)

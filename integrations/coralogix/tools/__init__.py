@@ -6,7 +6,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from core.tool_framework.base import BaseTool
+from core.tool.contracts import BaseTool
 from core.tool_framework.utils.tool_availability import tool_unavailable
 from integrations.config_models import CoralogixIntegrationConfig
 from integrations.coralogix.client import (

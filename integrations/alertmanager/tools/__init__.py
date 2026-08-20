@@ -11,7 +11,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from core.tool_framework.base import BaseTool
+from core.tool.contracts import BaseTool
 from core.tool_framework.utils.tool_availability import tool_unavailable
 from integrations.alertmanager.client import make_alertmanager_client
 
@@ -179,7 +179,7 @@ Useful for understanding whether an alert was intentionally suppressed
 """
 
 
-from core.tool_framework.base import BaseTool
+from core.tool.contracts import BaseTool
 
 
 class AlertmanagerSilencesTool(BaseTool):

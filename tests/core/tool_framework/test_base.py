@@ -1,4 +1,4 @@
-"""Unit tests for core.tool_framework.base (BaseTool contract)."""
+"""Unit tests for core.tool.contracts (BaseTool contract)."""
 
 from __future__ import annotations
 
@@ -8,9 +8,9 @@ import pytest
 from pydantic import ValidationError
 
 import core.tool_framework.telemetry as telemetry_mod
-from core.tool_framework.base import BaseTool
-from core.tool_framework.metadata import ToolMetadata
-from core.tool_framework.registered_tool import REGISTERED_TOOL_ATTR, RegisteredTool
+from core.tool.contracts import BaseTool
+from core.tool.contracts import ToolMetadata
+from core.tool.contracts import REGISTERED_TOOL_ATTR, RegisteredTool
 from core.tool_framework.tool_decorator import tool
 
 # ---------------------------------------------------------------------------

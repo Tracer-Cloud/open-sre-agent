@@ -7,7 +7,7 @@ from __future__ import annotations
 import logging
 from typing import Any
 
-from core.tool_framework.metadata import EvidenceType, SideEffectLevel
+from core.tool.contracts import EvidenceType, SideEffectLevel
 from core.tool_framework.tool_decorator import tool
 from core.tool_framework.utils.tool_availability import tool_unavailable
 from integrations.eks.eks_k8s_client import build_k8s_clients

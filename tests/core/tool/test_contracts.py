@@ -1,4 +1,4 @@
-"""Unit tests for core.tool_framework.metadata (ToolMetadata contract)."""
+"""Unit tests for core.tool.contracts (ToolMetadata contract)."""
 
 from __future__ import annotations
 
@@ -6,7 +6,7 @@ import pytest
 from pydantic import ValidationError
 
 from core.domain.types.retrieval import RetrievalControls
-from core.tool_framework.metadata import EvidenceType, SideEffectLevel, ToolMetadata
+from core.tool.contracts import EvidenceType, SideEffectLevel, ToolMetadata
 
 
 def _valid_kwargs(**overrides: object) -> dict[str, object]:
@@ -143,7 +143,7 @@ def _run_mypy_snippet(code: str) -> str:
 
 def test_static_typechecking_rejects_side_effect_level_typos() -> None:
     """Verify that static typechecking with mypy fails on invalid side_effect_level strings."""
-    code = """from core.tool_framework.base import BaseTool
+    code = """from core.tool.contracts import BaseTool
 
 class Tool(BaseTool):
     side_effect_level = "reed_only"
@@ -154,7 +154,7 @@ class Tool(BaseTool):
 
 def test_static_typechecking_rejects_evidence_type_typos() -> None:
     """Verify that static typechecking with mypy fails on invalid evidence_type strings."""
-    code = """from core.tool_framework.base import BaseTool
+    code = """from core.tool.contracts import BaseTool
 
 class Tool(BaseTool):
     evidence_type = "metricz"
@@ -175,7 +175,7 @@ def test_static_typechecking_rejects_surfaces_typos() -> None:
 
     Currently xfail: BaseTool.surfaces intentionally permits str until Phase B.
     """
-    code = """from core.tool_framework.base import BaseTool
+    code = """from core.tool.contracts import BaseTool
 
 class Tool(BaseTool):
     surfaces = ("investigaton",)
