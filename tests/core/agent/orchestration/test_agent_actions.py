@@ -34,6 +34,8 @@ from tools.interactive_shell.action_names import (
     TOOL_KIND_TO_NAME,
     ToolKind,
 )
+from core.agent_harness.ports import AnswerRequest, OutputSink
+from core.agent_harness.accounting.token_accounting import LlmRunInfo
 
 _ACTION_LLM_FACTORY_PATCH = "core.agent_harness.turns.action_driver.default_llm_factory"
 run_harness_turn = harness_turn_driver.run_harness_turn
@@ -42,6 +44,17 @@ run_harness_turn = harness_turn_driver.run_harness_turn
 def _capture() -> tuple[Console, io.StringIO]:
     buf = io.StringIO()
     return Console(file=buf, force_terminal=False, highlight=False), buf
+
+
+def _no_answer_agent (
+    message : str,
+    session : Session,
+    console : Console,
+    *,
+    request : AnswerRequest,
+    output : OutputSink | None = None
+) -> LlmRunInfo | None :
+    return None
 
 
 def _action(
@@ -1291,7 +1304,7 @@ def test_execute_cli_actions_counts_planned_and_executed(monkeypatch: object) ->
         session,
         console,
         recorder=None,
-        answer_agent=lambda *_a, **_k: None,
+        answer_agent = _no_answer_agent,
     )
 
     action_result = result.action_result
@@ -1367,7 +1380,7 @@ def test_execute_cli_actions_executes_matched_clause_ignoring_unhandled(
         session,
         console,
         recorder=None,
-        answer_agent=lambda *_a, **_k: None,
+        answer_agent = _no_answer_agent,
     )
 
     # The unhandled flag no longer denies the turn: the matched /health runs.
