@@ -6,7 +6,7 @@ The product package re-uses the stdlib name and re-exports its API. Hosts
 that module is not a package.
 
 Call :func:`ensure_project_platform_package` once at each composition root
-(process entry, ``configure_process``, ``run_repl*``, test confests). It:
+(process entry, ``configure_process``, ``run_repl*``, test conftests). It:
 
 1. Loads the project package into ``sys.modules["platform"]`` if needed.
 2. Installs a process-wide import hook so a later stdlib re-cache self-heals
@@ -21,6 +21,7 @@ import builtins
 import importlib
 import importlib.util
 import sys
+import threading
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
 from types import ModuleType
@@ -42,6 +43,10 @@ class _ImportGuard:
 
 
 _guard: _ImportGuard | None = None
+
+#: Serializes the rare eviction+reload so parallel gateway turns cannot heal a
+#: re-cached ``platform`` against a half-populated ``sys.modules``.
+_load_lock = threading.Lock()
 
 
 def ensure_project_platform_package() -> None:
@@ -73,12 +78,20 @@ def reset_platform_import_guard_for_tests() -> None:
 
 
 def _ensure_project_platform_loaded() -> None:
-    current = sys.modules.get("platform")
-    if current is not None and hasattr(current, "__path__"):
+    if _project_platform_is_loaded():
         return
 
-    _evict_cached_platform_modules()
-    _load_project_platform_into_sys_modules()
+    with _load_lock:
+        # Re-check under the lock: another thread may have healed while we waited.
+        if _project_platform_is_loaded():
+            return
+        _evict_cached_platform_modules()
+        _load_project_platform_into_sys_modules()
+
+
+def _project_platform_is_loaded() -> bool:
+    current = sys.modules.get("platform")
+    return current is not None and hasattr(current, "__path__")
 
 
 def _evict_cached_platform_modules() -> None:

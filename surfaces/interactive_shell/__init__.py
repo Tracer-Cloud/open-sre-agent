@@ -28,6 +28,10 @@ def run_repl(
     to be repeated too: one omitted here is unreachable through this facade,
     which is the seam embedding callers import.
     """
+    # Before importing ``main`` (SessionManager / runtime → ``platform.*``).
+    from config.platform_bootstrap import ensure_project_platform_package
+
+    ensure_project_platform_package()
     from surfaces.interactive_shell.main import run_repl as runtime_run_repl
 
     return runtime_run_repl(

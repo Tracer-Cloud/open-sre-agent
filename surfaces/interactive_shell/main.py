@@ -4,23 +4,21 @@ from __future__ import annotations
 
 import asyncio
 import sys
+from typing import TYPE_CHECKING
 
 import click
 from rich.console import Console
 
 from config.platform_bootstrap import ensure_project_platform_package
-from config.repl_config import ReplConfig
-from core.agent_harness import SessionManager
-from surfaces.interactive_shell.controller import InteractiveShellController
-from surfaces.interactive_shell.runtime.context import create_repl_runtime_context
-from surfaces.interactive_shell.runtime.startup.first_launch_github import (
-    require_startup_github_login,
-)
-from surfaces.interactive_shell.runtime.startup.initial_input import run_initial_input
-from surfaces.interactive_shell.runtime.startup.loop_suggestions import offer_loop_suggestions
-from surfaces.interactive_shell.ui.input_prompt import build_prompt_session
-from surfaces.interactive_shell.ui.terminal_ui import render_terminal_ui
-from tools.system.fleet_monitoring.sweep import run_startup_sweep
+
+if TYPE_CHECKING:
+    from config.repl_config import ReplConfig
+
+# The shell stack (``core`` / ``surfaces`` / ``platform.*``) is imported inside
+# the entry functions, after ``ensure_project_platform_package``. That keeps
+# module import cheap and side-effect free — no import-time monkeypatch of
+# ``builtins.__import__`` — and lets an embedding host that cached stdlib
+# ``platform`` first import this module without a ModuleNotFoundError.
 
 # Fallback when a caller does not supply one. Forces a terminal because the
 # shell owns the screen; an embedding caller passes its own instead.
@@ -44,8 +42,15 @@ async def run_repl_async(
     # Public entry: establish project ``platform`` + import guard before any
     # ``platform.*`` import (idempotent; hosts may have cached stdlib first).
     ensure_project_platform_package()
+    from config.repl_config import ReplConfig
+    from core.agent_harness import SessionManager
     from platform.analytics.cli import identify_saved_github_username
     from platform.logging import install_shell_log_handler, quiet_noisy_third_party_loggers
+    from surfaces.interactive_shell.controller import InteractiveShellController
+    from surfaces.interactive_shell.runtime.context import create_repl_runtime_context
+    from surfaces.interactive_shell.runtime.startup.initial_input import run_initial_input
+    from surfaces.interactive_shell.runtime.startup.loop_suggestions import offer_loop_suggestions
+    from surfaces.interactive_shell.ui.input_prompt import build_prompt_session
 
     # Keep MCP schema-cache warnings / httpx chatter off the transcript —
     # progress is soft status lines, not library WARNINGs.
@@ -110,6 +115,13 @@ def run_repl(
 ) -> int:
     """Run the shell on a new event loop and return its exit code."""
     ensure_project_platform_package()
+    from config.repl_config import ReplConfig
+    from surfaces.interactive_shell.runtime.startup.first_launch_github import (
+        require_startup_github_login,
+    )
+    from surfaces.interactive_shell.ui.terminal_ui import render_terminal_ui
+    from tools.system.fleet_monitoring.sweep import run_startup_sweep
+
     cfg = config or ReplConfig.load()
     out = console or _DEFAULT_CONSOLE
     if not cfg.enabled and not resume_session_id:

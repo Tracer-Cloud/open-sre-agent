@@ -1,123 +1,146 @@
 """REPL entrypoints re-establish the first-party ``platform`` package.
 
-An embedding host can import the shell (running the module-level bootstrap),
-then re-cache stdlib ``platform`` in ``sys.modules``, then call an entrypoint.
-``run_repl*`` calls ``ensure_project_platform_package`` (heal + import guard);
-later ``platform.*`` imports self-heal through the guard.
+Poison / re-cache scenarios run in a fresh interpreter. Healing replaces
+``sys.modules['platform*']`` and would orphan imports already bound by other
+test modules in this process.
 """
 
 from __future__ import annotations
 
-import asyncio
-import logging
+import subprocess
 import sys
-import types
-from collections.abc import Iterator
-from typing import Any
+import textwrap
+from pathlib import Path
 
-import pytest
-from rich.console import Console
-
-import surfaces.interactive_shell.main as main
-from config.platform_bootstrap import ensure_project_platform_package
-from config.repl_config import ReplConfig
+_REPO_ROOT = Path(__file__).resolve().parents[2]
 
 
-class _Reached(Exception):
-    """Raised from a patched seam once the platform imports have succeeded."""
+def _run_in_fresh_interpreter(code: str) -> subprocess.CompletedProcess[str]:
+    return subprocess.run(
+        [sys.executable, "-c", textwrap.dedent(code)],
+        capture_output=True,
+        text=True,
+        timeout=60,
+        cwd=str(_REPO_ROOT),
+    )
 
 
-@pytest.fixture
-def restore_logging() -> Iterator[None]:
-    """Contain the real ``install_shell_log_handler`` side effect."""
-    root = logging.getLogger()
-    saved = root.handlers[:]
-    yield
-    root.handlers[:] = saved
+def test_run_repl_async_bootstraps_before_platform_analytics_import() -> None:
+    result = _run_in_fresh_interpreter(
+        """
+        import asyncio, sys, types
+        from rich.console import Console
+        from config.platform_bootstrap import ensure_project_platform_package
+        from config.repl_config import ReplConfig
+        import surfaces.interactive_shell.main as main
+        import surfaces.interactive_shell.runtime.context as context
+
+        class _Reached(Exception):
+            pass
+
+        ensure_project_platform_package()
+        cfg = ReplConfig.load()
+        sys.modules["platform"] = types.ModuleType("platform")
+        [sys.modules.pop(n) for n in list(sys.modules) if n.startswith("platform.")]
+
+        def _raise_reached(**_k):
+            raise _Reached
+
+        # Patched where ``run_repl_async`` imports them (call-time), not on ``main``.
+        import surfaces.interactive_shell.ui.input_prompt as input_prompt
+
+        input_prompt.build_prompt_session = lambda: object()
+        context.create_repl_runtime_context = _raise_reached
+        try:
+            asyncio.run(main.run_repl_async(config=cfg, console=Console(force_terminal=False)))
+        except _Reached:
+            pass
+        else:
+            raise SystemExit("expected _Reached")
+        assert hasattr(sys.modules["platform"], "__path__")
+        print("OK")
+        """
+    )
+    assert result.returncode == 0, result.stderr
+    assert "OK" in result.stdout
 
 
-@pytest.fixture(autouse=True)
-def _reload_platform_after_shadow() -> Iterator[None]:
-    """Shadow tests can leave parent/child ``platform`` split-brain for later tests."""
-    yield
-    for name in list(sys.modules):
-        if name == "platform" or name.startswith("platform."):
-            del sys.modules[name]
-    ensure_project_platform_package()
+def test_run_repl_bootstraps_platform_before_any_work() -> None:
+    result = _run_in_fresh_interpreter(
+        """
+        import sys, types
+        from rich.console import Console
+        from config.platform_bootstrap import ensure_project_platform_package
+        from config.repl_config import ReplConfig
+        import surfaces.interactive_shell.main as main
 
-
-def _shadow_stdlib_platform(monkeypatch: pytest.MonkeyPatch) -> None:
-    """Simulate a host that re-cached stdlib ``platform`` after the shell loaded."""
-    stub = types.ModuleType("platform")  # a plain module has no __path__ → not a package
-    monkeypatch.setitem(sys.modules, "platform", stub)
-    for name in list(sys.modules):
-        if name.startswith("platform."):
-            monkeypatch.delitem(sys.modules, name, raising=False)
-    assert not hasattr(sys.modules["platform"], "__path__")
-
-
-def test_run_repl_async_bootstraps_before_platform_analytics_import(
-    monkeypatch: pytest.MonkeyPatch, restore_logging: None
-) -> None:
-    # Arrange: package available, load config, then a host shadows the package.
-    ensure_project_platform_package()
-    cfg = ReplConfig.load()
-    _shadow_stdlib_platform(monkeypatch)
-
-    monkeypatch.setattr(main, "build_prompt_session", object)
-
-    def _raise_reached(**_kwargs: Any) -> None:
-        raise _Reached
-
-    monkeypatch.setattr(main, "create_repl_runtime_context", _raise_reached)
-
-    # Act / Assert: reaching the patched seam proves the `platform.analytics` /
-    # `platform.logging` imports succeeded. Without the ensure, a
-    # ModuleNotFoundError would escape here instead of _Reached.
-    with pytest.raises(_Reached):
-        asyncio.run(main.run_repl_async(config=cfg, console=Console(force_terminal=False)))
-    assert hasattr(sys.modules["platform"], "__path__")
-
-
-def test_run_repl_bootstraps_platform_before_any_work(
-    monkeypatch: pytest.MonkeyPatch, restore_logging: None
-) -> None:
-    # Arrange
-    ensure_project_platform_package()
-    cfg = ReplConfig.load()
-    _shadow_stdlib_platform(monkeypatch)
-
-    # Act: non-tty stdin with no initial input returns 0 early — but only after
-    # the entrypoint's ensure has re-established the package.
-    rc = main.run_repl(config=cfg, console=Console(force_terminal=False))
-
-    # Assert
-    assert rc == 0
-    assert hasattr(sys.modules["platform"], "__path__")
+        ensure_project_platform_package()
+        cfg = ReplConfig.load()
+        sys.modules["platform"] = types.ModuleType("platform")
+        [sys.modules.pop(n) for n in list(sys.modules) if n.startswith("platform.")]
+        rc = main.run_repl(config=cfg, console=Console(force_terminal=False))
+        assert rc == 0
+        assert hasattr(sys.modules["platform"], "__path__")
+        print("OK")
+        """
+    )
+    assert result.returncode == 0, result.stderr
+    assert "OK" in result.stdout
 
 
 def test_submodule_import_after_platform_recache_survives() -> None:
-    """Import guard heals ``platform.*`` after a mid-process stdlib re-cache.
-
-    Composition roots call ``ensure`` once (installs the guard). Leaves import
-    ``platform.*`` normally; a fresh interpreter pins first-import order.
-    """
-    import subprocess
-
-    code = (
-        "from config.platform_bootstrap import ensure_project_platform_package\n"
-        "ensure_project_platform_package()\n"
-        "import surfaces.interactive_shell.runtime\n"
-        "import sys, types\n"
-        "sys.modules['platform'] = types.ModuleType('platform')\n"
-        "[sys.modules.pop(n) for n in list(sys.modules) if n.startswith('platform.')]\n"
-        "import surfaces.interactive_shell.runtime.turn_host as th\n"
-        "assert hasattr(th, 'run_agent_turn')\n"
-        "assert hasattr(sys.modules['platform'], '__path__')\n"
-        "print('OK')\n"
+    result = _run_in_fresh_interpreter(
+        """
+        from config.platform_bootstrap import ensure_project_platform_package
+        ensure_project_platform_package()
+        import surfaces.interactive_shell.runtime
+        import sys, types
+        sys.modules["platform"] = types.ModuleType("platform")
+        [sys.modules.pop(n) for n in list(sys.modules) if n.startswith("platform.")]
+        import surfaces.interactive_shell.runtime.turn_host as th
+        assert hasattr(th, "run_agent_turn")
+        assert hasattr(sys.modules["platform"], "__path__")
+        print("OK")
+        """
     )
-    result = subprocess.run(
-        [sys.executable, "-c", code], capture_output=True, text=True, timeout=60
+    assert result.returncode == 0, result.stderr
+    assert "OK" in result.stdout
+
+
+def test_runtime_package_import_survives_stdlib_platform_cached_first() -> None:
+    """The runtime package re-exports ``platform.scheduling`` symbols as its API.
+
+    Its module-level ``platform.*`` imports must heal a stdlib re-cache on import.
+    ``main`` is an entrypoint with no module-level ``platform`` imports; its
+    healing contract is covered by the ``run_repl*`` tests above instead.
+    """
+    result = _run_in_fresh_interpreter(
+        """
+        import sys, types
+        sys.modules["platform"] = types.ModuleType("platform")
+        __import__("surfaces.interactive_shell.runtime")
+        assert hasattr(sys.modules["platform"], "__path__")
+        print("OK")
+        """
+    )
+    assert result.returncode == 0, result.stderr
+    assert "OK" in result.stdout
+
+
+def test_facade_run_repl_import_survives_stdlib_platform_cached_first() -> None:
+    result = _run_in_fresh_interpreter(
+        """
+        import sys, types
+        sys.modules["platform"] = types.ModuleType("platform")
+        import surfaces.interactive_shell as shell
+        sys.modules["platform"] = types.ModuleType("platform")
+        [sys.modules.pop(n) for n in list(sys.modules) if n.startswith("platform.")]
+        assert not hasattr(sys.modules["platform"], "__path__")
+        rc = shell.run_repl()
+        assert hasattr(sys.modules["platform"], "__path__")
+        assert rc == 0
+        print("OK")
+        """
     )
     assert result.returncode == 0, result.stderr
     assert "OK" in result.stdout

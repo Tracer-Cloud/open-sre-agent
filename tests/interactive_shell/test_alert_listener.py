@@ -3,29 +3,28 @@
 from __future__ import annotations
 
 import os
+import subprocess
 import sys
-import types
-from collections.abc import Iterator
+import textwrap
+from pathlib import Path
 from unittest.mock import MagicMock
 
-import pytest
 from rich.console import Console
 
-from config.platform_bootstrap import ensure_project_platform_package
 from config.repl_config import ReplConfig
 from surfaces.interactive_shell.controller import _alert_listener
 
+_REPO_ROOT = Path(__file__).resolve().parents[2]
 
-@pytest.fixture(autouse=True)
-def _reload_platform_after_poison() -> Iterator[None]:
-    """Poison tests replace ``sys.modules['platform']``; monkeypatch undo can leave
-    a parent/child split-brain that breaks later ``monkeypatch.setattr('platform…')``.
-    """
-    yield
-    for name in list(sys.modules):
-        if name == "platform" or name.startswith("platform."):
-            del sys.modules[name]
-    ensure_project_platform_package()
+
+def _run_in_fresh_interpreter(code: str) -> subprocess.CompletedProcess[str]:
+    return subprocess.run(
+        [sys.executable, "-c", textwrap.dedent(code)],
+        capture_output=True,
+        text=True,
+        timeout=60,
+        cwd=str(_REPO_ROOT),
+    )
 
 
 def test_alert_listener_replaces_stale_process_token(monkeypatch) -> None:
@@ -74,73 +73,73 @@ def test_alert_listener_clears_token_when_unconfigured(monkeypatch) -> None:
     assert os.environ.get("OPENSRE_ALERT_LISTENER_TOKEN") == "stale"
 
 
-def test_alert_listener_bootstraps_when_stdlib_platform_is_cached(monkeypatch) -> None:
-    """Embedding hosts may cache stdlib ``platform`` before the shell starts.
-
-    Without ``ensure_project_platform_package``, ``from platform.alert_intake``
-    fails and the listener exception path leaves the shell with no intake.
-    """
-    ensure_project_platform_package()
-
-    def _fake_serve(*_args: object, **_kwargs: object) -> MagicMock:
-        handle = MagicMock()
-        handle.bound_address = "127.0.0.1:8765"
-        return handle
-
-    monkeypatch.setattr("platform.asgi_server.serve_asgi_in_thread", _fake_serve)
-    monkeypatch.setattr("platform.alert_intake.build_alert_intake_app", object)
-
-    stub = types.ModuleType("platform")
-    monkeypatch.setitem(sys.modules, "platform", stub)
-    assert not hasattr(sys.modules["platform"], "__path__")
-
-    cfg = ReplConfig(alert_listener_enabled=True, alert_listener_token="fresh")
-
-    with _alert_listener(cfg, Console(force_terminal=False)) as inbox:
-        assert inbox is not None
-        assert hasattr(sys.modules["platform"], "__path__")
-
-
-def test_controller_constructs_when_stdlib_platform_is_cached(monkeypatch) -> None:
-    """``InteractiveShellController`` must bootstrap before importing turn_host.
-
-    Embedding hosts that cache stdlib ``platform`` after the controller module
-    loaded would otherwise fail construction with ModuleNotFoundError on
-    ``platform.turn_host``.
-    """
-    ensure_project_platform_package()
-    from surfaces.interactive_shell.controller import InteractiveShellController
-    from surfaces.interactive_shell.session import Session
-
-    stub = types.ModuleType("platform")
-    monkeypatch.setitem(sys.modules, "platform", stub)
-    for name in list(sys.modules):
-        if name.startswith("platform."):
-            monkeypatch.delitem(sys.modules, name, raising=False)
-    assert not hasattr(sys.modules["platform"], "__path__")
-
-    controller = InteractiveShellController(
-        Session(),
-        console=Console(force_terminal=False),
+def test_alert_listener_bootstraps_when_stdlib_platform_is_cached() -> None:
+    """Embedding hosts may cache stdlib ``platform`` before the shell starts."""
+    result = _run_in_fresh_interpreter(
+        """
+        from config.platform_bootstrap import ensure_project_platform_package
+        from config.repl_config import ReplConfig
+        from rich.console import Console
+        from unittest.mock import MagicMock
+        import sys, types
+        ensure_project_platform_package()
+        from surfaces.interactive_shell.controller import _alert_listener
+        def _fake_serve(*_a, **_k):
+            h = MagicMock()
+            h.bound_address = "127.0.0.1:8765"
+            return h
+        import platform.asgi_server as asgi
+        import platform.alert_intake as intake
+        asgi.serve_asgi_in_thread = _fake_serve
+        intake.build_alert_intake_app = object
+        sys.modules["platform"] = types.ModuleType("platform")
+        [sys.modules.pop(n) for n in list(sys.modules) if n.startswith("platform.")]
+        cfg = ReplConfig(alert_listener_enabled=True, alert_listener_token="fresh")
+        with _alert_listener(cfg, Console(force_terminal=False)) as inbox:
+            assert inbox is not None
+            assert hasattr(sys.modules["platform"], "__path__")
+        print("OK")
+        """
     )
-    assert controller.turn_runtime.turn_handler is not None
-    assert hasattr(sys.modules["platform"], "__path__")
+    assert result.returncode == 0, result.stderr
+    assert "OK" in result.stdout
 
 
-def test_create_repl_runtime_context_bootstraps_when_stdlib_platform_cached(
-    monkeypatch,
-) -> None:
-    """``run_repl_async`` builds context before the controller — bootstrap there."""
-    ensure_project_platform_package()
-    from surfaces.interactive_shell.runtime.context import create_repl_runtime_context
+def test_controller_constructs_when_stdlib_platform_is_cached() -> None:
+    result = _run_in_fresh_interpreter(
+        """
+        from config.platform_bootstrap import ensure_project_platform_package
+        from rich.console import Console
+        import sys, types
+        ensure_project_platform_package()
+        from surfaces.interactive_shell.controller import InteractiveShellController
+        from surfaces.interactive_shell.session import Session
+        sys.modules["platform"] = types.ModuleType("platform")
+        [sys.modules.pop(n) for n in list(sys.modules) if n.startswith("platform.")]
+        controller = InteractiveShellController(Session(), console=Console(force_terminal=False))
+        assert controller.turn_runtime.turn_handler is not None
+        assert hasattr(sys.modules["platform"], "__path__")
+        print("OK")
+        """
+    )
+    assert result.returncode == 0, result.stderr
+    assert "OK" in result.stdout
 
-    stub = types.ModuleType("platform")
-    monkeypatch.setitem(sys.modules, "platform", stub)
-    for name in list(sys.modules):
-        if name.startswith("platform."):
-            monkeypatch.delitem(sys.modules, name, raising=False)
-    assert not hasattr(sys.modules["platform"], "__path__")
 
-    ctx = create_repl_runtime_context()
-    assert ctx.session is not None
-    assert hasattr(sys.modules["platform"], "__path__")
+def test_create_repl_runtime_context_bootstraps_when_stdlib_platform_cached() -> None:
+    result = _run_in_fresh_interpreter(
+        """
+        from config.platform_bootstrap import ensure_project_platform_package
+        import sys, types
+        ensure_project_platform_package()
+        from surfaces.interactive_shell.runtime.context import create_repl_runtime_context
+        sys.modules["platform"] = types.ModuleType("platform")
+        [sys.modules.pop(n) for n in list(sys.modules) if n.startswith("platform.")]
+        ctx = create_repl_runtime_context()
+        assert ctx.session is not None
+        assert hasattr(sys.modules["platform"], "__path__")
+        print("OK")
+        """
+    )
+    assert result.returncode == 0, result.stderr
+    assert "OK" in result.stdout
