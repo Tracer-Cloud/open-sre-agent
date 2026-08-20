@@ -17,6 +17,16 @@ from config.constants import OPENSRE_TMP_DIR, ensure_opensre_tmp_dir
 DEFAULT_TIMEOUT: int = 30
 MAX_TIMEOUT: int = 60
 _SANDBOX_TMP_ROOT = os.path.realpath(os.fspath(OPENSRE_TMP_DIR))
+# An allowlist, not a passthrough: anything absent here is dropped. The second
+# group is the Windows spelling of entries in the first, plus the keys the OS
+# itself requires — without SYSTEMROOT, Winsock cannot initialise and every
+# socket call fails with WinError 10106. SYSTEMDRIVE travels with it: shell
+# folder lookups expand "%SystemDrive%" from the environment, so forwarding
+# SYSTEMROOT without it leaves the reference literal and Windows creates a
+# "%SystemDrive%" directory under the child's cwd — a write outside the sandbox
+# root, made by the OS rather than through the guarded open() below.
+# Deliberately excluded: COMSPEC (the preamble blocks subprocess spawning) and
+# APPDATA/LOCALAPPDATA (config homes, matching the omission of XDG_CONFIG_HOME).
 _BASE_ENV_KEYS = (
     "HOME",
     "LANG",
@@ -26,6 +36,13 @@ _BASE_ENV_KEYS = (
     "REQUESTS_CA_BUNDLE",
     "SSL_CERT_FILE",
     "TMPDIR",
+    "PATHEXT",
+    "SYSTEMDRIVE",
+    "SYSTEMROOT",
+    "TEMP",
+    "TMP",
+    "USERPROFILE",
+    "WINDIR",
 )
 
 # Preamble injected before user code when network access is disabled.

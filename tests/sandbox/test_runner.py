@@ -4,11 +4,16 @@ from __future__ import annotations
 
 import os
 import tempfile
+from pathlib import Path
+
+import pytest
 
 from config.constants import OPENSRE_TMP_DIR, ensure_opensre_tmp_dir
 from platform.safety.sandbox.runner import (
+    _BASE_ENV_KEYS,
     MAX_TIMEOUT,
     SandboxResult,
+    _sandbox_env,
     run_python_sandbox,
 )
 
@@ -144,6 +149,72 @@ class TestSandboxTimeout:
         result = run_python_sandbox("print('fast')", timeout=30)
         assert result.success
         assert not result.timed_out
+
+
+_WINDOWS_ENV_KEYS = (
+    "SYSTEMDRIVE",
+    "SYSTEMROOT",
+    "WINDIR",
+    "TMP",
+    "TEMP",
+    "USERPROFILE",
+    "PATHEXT",
+)
+
+
+class TestSandboxEnvironment:
+    # Set the values explicitly rather than reading os.environ: the Windows keys
+    # are absent on POSIX and vice versa, so the allowlist is asserted the same
+    # way on every platform.
+    def test_windows_keys_are_forwarded_when_set(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        for key in _WINDOWS_ENV_KEYS:
+            monkeypatch.setenv(key, f"value-for-{key}")
+
+        env = _sandbox_env(None)
+
+        for key in _WINDOWS_ENV_KEYS:
+            assert env[key] == f"value-for-{key}"
+
+    def test_systemdrive_travels_with_systemroot(self) -> None:
+        # Forwarding SYSTEMROOT alone leaves "%SystemDrive%" unexpanded in shell
+        # folder lookups, and Windows then creates a directory by that literal
+        # name under the child's cwd. Keeping the pair together is what stops a
+        # write escaping the sandbox root.
+        assert ("SYSTEMROOT" in _BASE_ENV_KEYS) == ("SYSTEMDRIVE" in _BASE_ENV_KEYS)
+
+    def test_unlisted_variables_are_still_not_forwarded(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        # _BASE_ENV_KEYS is a security control. Widening it must not turn it into
+        # a passthrough, so the keys held back on purpose are named here.
+        for key in ("AWS_SECRET_ACCESS_KEY", "COMSPEC", "APPDATA", "LOCALAPPDATA"):
+            monkeypatch.setenv(key, "should-not-cross")
+
+        env = _sandbox_env(None)
+
+        assert set(env) <= set(_BASE_ENV_KEYS)
+        for key in ("AWS_SECRET_ACCESS_KEY", "COMSPEC", "APPDATA", "LOCALAPPDATA"):
+            assert key not in env
+
+    def test_sandbox_can_open_a_socket_when_network_is_allowed(self) -> None:
+        # Regression for the Windows failure in #4937: without SYSTEMROOT the
+        # child raised OSError [WinError 10106] before reaching this assertion.
+        code = "import socket; s = socket.socket(); print(s.fileno() >= 0); s.close()"
+        result = run_python_sandbox(code, allow_network=True)
+        assert result.success, result.stderr
+        assert "True" in result.stdout
+
+    def test_sandbox_run_leaves_no_directory_behind(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        # The %SystemDrive% escape appeared in the *cwd* of the child, so this
+        # runs from an empty directory and asserts it stays empty. monkeypatch
+        # restores the cwd even if the assertion below raises.
+        monkeypatch.chdir(tmp_path)
+        result = run_python_sandbox("import socket; socket.socket().close()", allow_network=True)
+
+        assert result.success, result.stderr
+        assert list(tmp_path.iterdir()) == []
 
 
 class TestSandboxResultModel:
