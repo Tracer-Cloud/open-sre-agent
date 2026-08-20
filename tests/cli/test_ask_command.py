@@ -5,6 +5,7 @@ import signal
 
 from click.testing import CliRunner
 
+from surfaces.cli.app import cli
 from surfaces.cli.ask.service import (
     AskError,
     AskExitCode,
@@ -41,6 +42,22 @@ def test_ask_passes_prompt_and_invocation_authority(monkeypatch) -> None:
         "allowed_tools": ("grafana_query",),
         "bypass_approvals": False,
     }
+
+
+def test_root_yes_does_not_bypass_ask_approvals(monkeypatch) -> None:
+    captured: dict[str, object] = {}
+
+    def fake_run(prompt: str, **kwargs: object) -> AskOutcome:
+        captured.update(prompt=prompt, **kwargs)
+        return _success()
+
+    monkeypatch.setattr("surfaces.cli.commands.ask.unknown_allowed_tools", lambda _v: ())
+    monkeypatch.setattr("surfaces.cli.commands.ask.run_ask", fake_run)
+
+    result = CliRunner().invoke(cli, ["-y", "ask", "check latency"])
+
+    assert result.exit_code == 0
+    assert captured["bypass_approvals"] is False
 
 
 def test_ask_reads_prompt_from_stdin(monkeypatch) -> None:
@@ -135,4 +152,5 @@ def test_ask_json_output_is_one_stable_document(monkeypatch) -> None:
         "denied_tools": [],
         "error": {"message": "failed", "suggestion": "retry"},
     }
+    assert result.stderr == ""
     assert result.output.count("\n") == 1

@@ -8,7 +8,7 @@ import pytest
 from core.agent_harness.turns.turn_results import ToolCallingTurnResult, TurnResult
 from core.llm.types import ToolCall
 from core.tool.contracts import RegisteredTool, SideEffectLevel
-from core.tool.execution import ToolExecutionRequest
+from core.tool.execution import ToolExecutionHooks, ToolExecutionRequest
 from surfaces.cli.ask import service
 from surfaces.cli.ask.service import AskExitCode, AskSignal, AskStatus
 
@@ -51,6 +51,47 @@ def _risky_request() -> ToolExecutionRequest:
     )
 
 
+class _FakeSessionManager:
+    def __init__(self) -> None:
+        self.closed: list[tuple[object, bool]] = []
+
+    def close(self, session: object, *, extract_memory: bool) -> None:
+        self.closed.append((session, extract_memory))
+
+
+class _FakeSession:
+    def __init__(self) -> None:
+        self.available_capabilities: dict[str, object] = {}
+
+
+class _FakeAgentSession:
+    session = _FakeSession()
+
+    def __init__(self, _config: object) -> None:
+        self.attached: object | None = None
+
+    def startup(self) -> object:
+        return type(
+            "Startup",
+            (),
+            {"session": self.session, "prompts": object()},
+        )()
+
+    def attach_agent(self, agent: object) -> None:
+        self.attached = agent
+
+    def chat(self, _prompt: str) -> TurnResult:
+        raise RuntimeError("turn failed")
+
+
+class _FakeHeadlessBuild:
+    def __init__(self, **_kwargs: object) -> None:
+        pass
+
+    def agent(self, **_kwargs: object) -> object:
+        return object()
+
+
 def test_run_ask_returns_success(monkeypatch) -> None:
     monkeypatch.setattr(service, "_run_agent_turn", lambda _prompt, _hooks: _turn())
 
@@ -59,6 +100,24 @@ def test_run_ask_returns_success(monkeypatch) -> None:
     assert outcome.status is AskStatus.SUCCESS
     assert outcome.response == "answer"
     assert outcome.exit_code is AskExitCode.SUCCESS
+
+
+def test_agent_turn_closes_ephemeral_session_after_failure(monkeypatch) -> None:
+    manager = _FakeSessionManager()
+    _FakeAgentSession.session = _FakeSession()
+    monkeypatch.setattr(service, "SessionManager", lambda: manager)
+    monkeypatch.setattr(service, "AgentSession", _FakeAgentSession)
+    monkeypatch.setattr(service, "DefaultHeadlessBuild", _FakeHeadlessBuild)
+    monkeypatch.setattr(
+        service,
+        "DefaultToolProvider",
+        lambda *_args, **_kwargs: object(),
+    )
+
+    with pytest.raises(RuntimeError, match="turn failed"):
+        service._run_agent_turn("prompt", ToolExecutionHooks())
+
+    assert manager.closed == [(_FakeAgentSession.session, False)]
 
 
 def test_run_ask_reports_denial_before_agent_failure(monkeypatch) -> None:

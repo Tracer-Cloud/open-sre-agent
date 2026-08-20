@@ -76,6 +76,22 @@ def test_default_policy_denies_and_records_tool() -> None:
     assert tracker.denied_tools == ("example_tool",)
 
 
+def test_allowlist_matching_is_exact_and_case_sensitive() -> None:
+    tracker = ApprovalTracker()
+    hooks = build_approval_hooks(
+        allowed_tools=("EXAMPLE_TOOL",),
+        bypass_approvals=False,
+        tracker=tracker,
+    )
+
+    assert hooks.before_tool_call is not None
+    decision = hooks.before_tool_call(_request(_tool(side_effect_level=SideEffectLevel.MUTATING)))
+
+    assert decision is not None
+    assert decision.blocked is True
+    assert tracker.denied_tools == ("example_tool",)
+
+
 @pytest.mark.parametrize(
     ("allowed_tools", "bypass"),
     [(("example_tool",), False), ((), True)],
