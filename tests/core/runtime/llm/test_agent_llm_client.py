@@ -783,6 +783,130 @@ def test_openai_agent_client_omits_parallel_tool_calls_for_compat_provider(
     assert "parallel_tool_calls" not in captured
 
 
+def test_gemini_agent_client_replays_signed_tool_call_as_raw_message(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _install_fake_openai(monkeypatch)
+    captured: dict[str, Any] = {}
+
+    def capture_create(**kwargs: Any) -> Any:
+        captured.update(kwargs)
+        return _make_fake_openai_response(content="ok")
+
+    signed_assistant_message = {
+        "role": "assistant",
+        "tool_calls": [
+            {
+                "id": "call_1",
+                "type": "function",
+                "function": {"name": "lookup", "arguments": "{}"},
+                "extra_content": {"google": {"thought_signature": "signature-1"}},
+            },
+            {
+                "id": "call_2",
+                "type": "function",
+                "function": {"name": "lookup_more", "arguments": "{}"},
+            },
+        ],
+    }
+    messages: list[dict[str, Any]] = [
+        {"role": "user", "content": "call lookup"},
+        signed_assistant_message,
+        {"role": "tool", "tool_call_id": "call_1", "content": "done"},
+    ]
+    client = OpenAIAgentClient.__new__(OpenAIAgentClient)
+    monkeypatch.setattr(
+        client,
+        "_client",
+        types.SimpleNamespace(
+            chat=types.SimpleNamespace(completions=types.SimpleNamespace(create=capture_create))
+        ),
+        raising=False,
+    )
+    client._model = "gemini-3.1-pro-preview"
+    client._max_tokens = 4096
+    client._api_key_env = "GEMINI_API_KEY"
+
+    client.invoke(messages=messages)
+
+    assert captured["extra_body"] == {"messages": messages}
+
+
+def test_gemini_3_agent_client_marks_synthetic_tool_call_history(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _install_fake_openai(monkeypatch)
+    captured: dict[str, Any] = {}
+
+    def capture_create(**kwargs: Any) -> Any:
+        captured.update(kwargs)
+        return _make_fake_openai_response(content="ok")
+
+    synthetic_assistant_message = {
+        "role": "assistant",
+        "tool_calls": [
+            {
+                "id": "call_1",
+                "type": "function",
+                "function": {"name": "lookup", "arguments": "{}"},
+            },
+            {
+                "id": "call_2",
+                "type": "function",
+                "function": {"name": "lookup_more", "arguments": "{}"},
+            },
+        ],
+    }
+    messages: list[dict[str, Any]] = [
+        {"role": "user", "content": "call lookup"},
+        synthetic_assistant_message,
+        {"role": "tool", "tool_call_id": "call_1", "content": "done"},
+        {"role": "tool", "tool_call_id": "call_2", "content": "done"},
+    ]
+    original_messages = [
+        {"role": "user", "content": "call lookup"},
+        {
+            "role": "assistant",
+            "tool_calls": [
+                {
+                    "id": "call_1",
+                    "type": "function",
+                    "function": {"name": "lookup", "arguments": "{}"},
+                },
+                {
+                    "id": "call_2",
+                    "type": "function",
+                    "function": {"name": "lookup_more", "arguments": "{}"},
+                },
+            ],
+        },
+        {"role": "tool", "tool_call_id": "call_1", "content": "done"},
+        {"role": "tool", "tool_call_id": "call_2", "content": "done"},
+    ]
+    client = OpenAIAgentClient.__new__(OpenAIAgentClient)
+    monkeypatch.setattr(
+        client,
+        "_client",
+        types.SimpleNamespace(
+            chat=types.SimpleNamespace(completions=types.SimpleNamespace(create=capture_create))
+        ),
+        raising=False,
+    )
+    client._model = "gemini-3.1-pro-preview"
+    client._max_tokens = 4096
+    client._api_key_env = "GEMINI_API_KEY"
+
+    client.invoke(messages=messages)
+
+    raw_messages = captured["extra_body"]["messages"]
+    tool_calls = raw_messages[1]["tool_calls"]
+    assert tool_calls[0]["extra_content"] == {
+        "google": {"thought_signature": "skip_thought_signature_validator"}
+    }
+    assert "extra_content" not in tool_calls[1]
+    assert messages == original_messages
+
+
 def test_openai_o_series_uses_max_completion_tokens(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

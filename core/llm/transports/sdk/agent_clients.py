@@ -14,6 +14,7 @@ from collections.abc import Callable, Sequence
 from typing import Any
 
 from core.context_budget import strip_internal_message_markers
+from core.llm.providers.gemini import signed_messages_extra_body
 from core.llm.shared.llm_retry import (
     maybe_raise_credit_exhausted,
     rate_limit_sleep_seconds,
@@ -654,6 +655,9 @@ class OpenAIAgentClient:
                 _openai_max_token_kwarg(self._model): self._max_tokens,
                 "messages": msgs,
             }
+            gemini_extra_body = signed_messages_extra_body(msgs, api_key_env, self._model)
+            if gemini_extra_body is not None:
+                kwargs["extra_body"] = gemini_extra_body
             if tools:
                 kwargs["tools"] = tools
                 kwargs["tool_choice"] = "auto"
