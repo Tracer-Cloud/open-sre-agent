@@ -9,10 +9,7 @@ from typing import Any, Protocol, TypeAlias, runtime_checkable
 
 from pydantic import BaseModel
 
-from core.tool import RuntimeTool
-
 ResolvedIntegrations: TypeAlias = dict[str, Any]  # noqa: UP040
-
 
 @runtime_checkable
 class SchemaDescribedTool(Protocol):
