@@ -1,0 +1,11 @@
+expected_incidents:
+  - rule: "session_history_unavailable"
+    severity: "medium"
+    logger: "gateway.platforms.api_server"
+    title_contains: "Session history unavailable"
+
+expected_incident_count:
+  session_history_unavailable: "==1"
+  warning_burst: "==0"
+  error_severity: "==0"
+  traceback: "==0"

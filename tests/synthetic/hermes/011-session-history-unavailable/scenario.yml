@@ -1,0 +1,4 @@
+scenario_id: "011-session-history-unavailable"
+title: "Hermes API session history lookup fails open"
+source: "https://github.com/NousResearch/hermes-agent/blob/739bc555b1932e66c169b20edec3a48368e2dd3f/gateway/platforms/api_server.py#L4211-L4219"
+log_file: "errors.log"

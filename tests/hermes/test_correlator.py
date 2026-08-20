@@ -15,6 +15,7 @@ from integrations.hermes.correlator import (
     default_routing_matrix,
 )
 from integrations.hermes.incident import HermesIncident, IncidentSeverity, LogLevel, LogRecord
+from integrations.hermes.rules import default_pattern_rules
 
 
 def _record(seconds: int = 0) -> LogRecord:
@@ -193,6 +194,12 @@ class TestCorrelateAllAndDefaults:
         assert matrix["disk_full"] is RouteDestination.PAGER
         assert matrix["oom_killed"] is RouteDestination.TELEGRAM_WITH_RCA
         assert matrix["rate_limit"] is RouteDestination.TELEGRAM
+        assert matrix["session_history_unavailable"] is RouteDestination.TELEGRAM
+
+    def test_default_routing_matrix_covers_every_pattern_rule(self) -> None:
+        matrix = default_routing_matrix()
+        pattern_rule_names = {rule.name for rule in default_pattern_rules()}
+        assert pattern_rule_names <= matrix.keys()
 
 
 class TestCorrelatingSink:

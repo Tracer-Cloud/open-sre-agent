@@ -91,6 +91,7 @@ def default_routing_matrix() -> dict[str, RouteDestination]:
         "oom_killed": RouteDestination.TELEGRAM_WITH_RCA,
         "crash_loop": RouteDestination.PAGER,
         "context_window_exceeded": RouteDestination.TELEGRAM,
+        "session_history_unavailable": RouteDestination.TELEGRAM,
         "auth_failure": RouteDestination.TELEGRAM_WITH_RCA,
         "rate_limit": RouteDestination.TELEGRAM,
         "database_wal_growth": RouteDestination.TELEGRAM_WITH_RCA,

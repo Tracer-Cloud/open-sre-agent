@@ -95,6 +95,62 @@ def test_default_pattern_rules_match_metamorphic_message_variants(
         assert incident.rule == rule_name
 
 
+def test_session_history_rule_matches_pinned_stock_emitter() -> None:
+    rules = {r.name: r for r in default_pattern_rules()}
+    rule = rules["session_history_unavailable"]
+    record = _rec(
+        "Failed to load session history for session_opaque: database unavailable",
+        level=LogLevel.WARNING,
+        logger_name="gateway.platforms.api_server",
+    )
+    incident = rule.evaluate(record)
+    assert incident is not None
+    assert incident.rule == "session_history_unavailable"
+
+
+@pytest.mark.parametrize(
+    "message,logger_name",
+    [
+        (
+            "Failed to load session history for session_opaque: database unavailable",
+            "third_party.bridge",
+        ),
+        (
+            "conversation history fetch failed status=unavailable",
+            "gateway.platforms.api_server",
+        ),
+        (
+            "[discord] Failed to fetch channel history: forbidden",
+            "gateway.platforms.api_server",
+        ),
+        (
+            "[Slack] Failed to fetch thread context: timeout",
+            "gateway.platforms.api_server",
+        ),
+        (
+            "Matrix: fetch history error: unavailable",
+            "gateway.platforms.api_server",
+        ),
+        (
+            'operator quoted "Failed to load session history for session_opaque: timeout"',
+            "gateway.platforms.api_server",
+        ),
+        (
+            "FAILED TO LOAD SESSION HISTORY FOR session_opaque: timeout",
+            "gateway.platforms.api_server",
+        ),
+    ],
+)
+def test_session_history_rule_rejects_other_emitters_and_messages(
+    message: str,
+    logger_name: str,
+) -> None:
+    rules = {r.name: r for r in default_pattern_rules()}
+    rule = rules["session_history_unavailable"]
+    record = _rec(message, level=LogLevel.WARNING, logger_name=logger_name)
+    assert rule.evaluate(record) is None
+
+
 def test_pattern_rules_respect_min_level() -> None:
     rules = {r.name: r for r in default_pattern_rules()}
     rule = rules["oom_killed"]

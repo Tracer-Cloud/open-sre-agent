@@ -26,6 +26,7 @@ real hermes-agent GitHub issues:
 * ``database_wal_growth``      — sqlite / postgres WAL pressure
 * ``deadlock``                 — explicit deadlock detection
 * ``disk_full``                — ENOSPC / no space left on device
+* ``session_history_unavailable`` — persisted API session history failed open
 """
 
 from __future__ import annotations
@@ -44,11 +45,11 @@ from integrations.hermes.incident import HermesIncident, IncidentSeverity, LogLe
 class PatternRule:
     """Rule that emits one incident per matching log record.
 
-    Patterns are matched case-insensitively against ``record.message``
-    only. ``record.raw`` (which includes the timestamp/level/logger
-    prefix) is intentionally excluded so a keyword appearing in a
-    logger name — e.g. ``oom_monitor`` — cannot fire an OOM rule on
-    an otherwise benign message.
+    Patterns are matched against ``record.message`` only. ``record.raw``
+    (which includes the timestamp/level/logger prefix) is intentionally
+    excluded so a keyword appearing in a logger name — e.g.
+    ``oom_monitor`` — cannot fire an OOM rule on an otherwise benign
+    message. ``logger_names`` optionally binds a rule to named emitters.
     """
 
     name: str
@@ -56,11 +57,14 @@ class PatternRule:
     title_template: str
     patterns: tuple[re.Pattern[str], ...]
     min_level: LogLevel = LogLevel.WARNING
+    logger_names: frozenset[str] | None = None
 
     def evaluate(self, record: LogRecord) -> HermesIncident | None:
         if record.is_continuation:
             return None
         if record.level.severity_rank < self.min_level.severity_rank:
+            return None
+        if self.logger_names is not None and record.logger not in self.logger_names:
             return None
         for pattern in self.patterns:
             if pattern.search(record.message):
@@ -228,6 +232,14 @@ def default_pattern_rules() -> list[PatternRule | RepeatRule]:
                 re.compile(r"disk (?:is )?full", re.IGNORECASE),
             ),
             min_level=LogLevel.WARNING,
+        ),
+        PatternRule(
+            name="session_history_unavailable",
+            severity=IncidentSeverity.MEDIUM,
+            title_template="Session history unavailable in {logger}",
+            patterns=(re.compile(r"^Failed to load session history for .+: .+$"),),
+            min_level=LogLevel.WARNING,
+            logger_names=frozenset({"gateway.platforms.api_server"}),
         ),
         RepeatRule(
             name="crash_loop",

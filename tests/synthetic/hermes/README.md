@@ -1,10 +1,11 @@
 # Hermes Synthetic Suite
 
-Real-world Hermes log fixtures used to lock in the behavior of
-`integrations.hermes.IncidentClassifier`. Each scenario captures a production
-pattern observed on a Hermes deployment, ships the raw `errors.log`
-slice that triggered it, and declares — in `answer.yml` — the incidents
-the classifier is expected to emit.
+Hermes log fixtures used to lock in the behavior of
+`integrations.hermes.IncidentClassifier`. A scenario must use either a captured
+log slice or a sanitized, byte-faithful rendering of a named first-party emitter
+pinned to a source commit. Its README must state the provenance. A reconstructed
+warning with self-authored vocabulary is not evidence for a default rule. Each
+scenario declares the expected incidents in `answer.yml`.
 
 The suite runs offline: there is no LLM, no live infrastructure, and no
 mocking. The classifier is rule-based, so the assertions are exact.
@@ -65,9 +66,10 @@ asserts the total per-rule emission count using the operators `==`,
 
 ## Adding a new scenario
 
-1. Capture a slice of the Hermes log that demonstrates the pattern.
-   Strip irrelevant lines but keep timestamps intact — the classifier
-   uses them for the warning-burst window.
+1. Capture a Hermes log slice, or pin a named first-party emitter and create a
+   sanitized byte-faithful line in the supported parser format. Document which
+   provenance type you used. Strip irrelevant captured lines but keep timestamps
+   intact — the classifier uses them for the warning-burst window.
 2. Create a new numbered directory `NNN-short-name/` under this folder.
 3. Drop the log into `errors.log` and write the two YAML files.
 4. Run `uv run pytest tests/synthetic/hermes -q` to confirm the
