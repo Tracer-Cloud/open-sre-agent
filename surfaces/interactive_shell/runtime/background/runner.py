@@ -6,7 +6,7 @@ import contextvars
 import threading
 from collections.abc import Mapping
 from contextlib import nullcontext
-from typing import Any, Protocol, TypedDict
+from typing import Any
 from uuid import uuid4
 
 from prompt_toolkit.patch_stdout import patch_stdout
@@ -24,26 +24,9 @@ from surfaces.interactive_shell.runtime import (
 from surfaces.interactive_shell.runtime.background.notifications import (
     deliver_background_notifications,
 )
+from surfaces.interactive_shell.runtime.background.types import BackgroundRunFn
 from surfaces.interactive_shell.ui import DIM, ERROR, HIGHLIGHT, WARNING
 from surfaces.shared.error_handling.exception_reporting import report_exception
-
-
-class BackgroundRunResult(TypedDict, total=False):
-    """Result payload produced by a background investigation run."""
-
-    root_cause: str
-    validated_claims: list[dict[str, Any]]
-    remediation_steps: list[str]
-    evidence_entries: list[Any]
-    investigation_loop_count: int
-    validity_score: float
-
-
-class BackgroundRunFn(Protocol):
-    """Callable contract for executing a background investigation."""
-
-    def __call__(self, *args: Any, **kwargs: Any) -> BackgroundRunResult:
-        """Run the background investigation and return its result payload."""
 
 
 def _persist_record(session: Session, record: BackgroundInvestigationRecord) -> None:
