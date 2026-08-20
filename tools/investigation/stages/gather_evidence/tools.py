@@ -9,12 +9,12 @@ from core.domain.alerts.alert_source import (
     primary_sources_for_alert,
     relevant_sources_for_alert,
     secondary_tool_sources,
-    seed_tool_sources_for_alert,
 )
 from core.domain.types.tools import ToolSurface
 from core.llm.types import ToolCall
 from core.tool import RegisteredTool, availability_view
 from platform.observability.trace.redaction import RedactedToolView, redact_tool_view
+from tools.investigation.stages.gather_evidence.seed_inputs import build_seed_tool_sources
 from tools.registry import get_registered_tools
 
 # Consecutive iterations made up ENTIRELY of duplicate (already-seen) tool calls
@@ -205,23 +205,9 @@ def build_seed_calls(
     llm: Any,
 ) -> list[ToolCall]:
     """Return tool calls to run before the LLM loop based on the alert source."""
-    target_sources = set(seed_tool_sources_for_alert(state))
+    target_sources, tool_sources = build_seed_tool_sources(state, tools)
     if not target_sources:
         return []
-
-    resolved = state.get("resolved_integrations") or {}
-    tool_sources = availability_view(resolved)
-
-    # Enrich kubernetes tool_sources with alert-extracted context so seed calls
-    # use the correct namespace/pod rather than the default from the integration config.
-    alert_json = state.get("alert_json") or {}
-    if "kubernetes" in tool_sources and alert_json:
-        k8s_src = dict(tool_sources["kubernetes"])
-        if alert_json.get("kube_namespace"):
-            k8s_src["namespace"] = alert_json["kube_namespace"]
-        if alert_json.get("pod_name"):
-            k8s_src["pod_name"] = alert_json["pod_name"]
-        tool_sources = {**tool_sources, "kubernetes": k8s_src}
 
     seed_tools = [t for t in tools if str(t.source) in target_sources]
     if not seed_tools:

@@ -541,7 +541,7 @@ def _metrics_extract_params(sources: dict[str, dict]) -> dict[str, Any]:
     return {
         "metric_name": dd.get("metric_name", ""),
         "time_range_minutes": dd.get("time_range_minutes", 60),
-        "query": dd.get("metric_query"),
+        "query": dd.get("query") or dd.get("metric_query"),
         "datadog_backend": dd.get("_backend"),
         **_dd_creds(dd),
     }
