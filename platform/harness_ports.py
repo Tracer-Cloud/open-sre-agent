@@ -285,7 +285,7 @@ def _resolved_message(resolved: dict[str, Any]) -> str:
 
 def _resolve_from_local_sources() -> IntegrationResolutionResult:
     store_integrations = _load_integrations()
-    env_integrations = _load_env_integrations() if not store_integrations else []
+    env_integrations = _load_env_integrations()
     integrations = _merge_local_integrations(store_integrations, env_integrations)
     if not integrations:
         return IntegrationResolutionResult(

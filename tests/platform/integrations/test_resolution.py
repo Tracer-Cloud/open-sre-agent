@@ -87,6 +87,38 @@ def test_resolve_local_store_sources_returns_progress_metadata(monkeypatch: Any)
     assert result.progress_message == "Resolved local integrations from store: ['datadog']"
 
 
+def test_resolve_local_sources_merges_store_and_env(monkeypatch: Any) -> None:
+    store_records = [{"service": "github", "status": "active", "credentials": {}}]
+    env_records = [{"service": "datadog", "status": "active", "credentials": {}}]
+    captured_merge: dict[str, list[dict[str, Any]]] = {}
+
+    def _merge(
+        store_integrations: list[dict[str, Any]],
+        env_integrations: list[dict[str, Any]],
+    ) -> list[dict[str, Any]]:
+        captured_merge["store"] = store_integrations
+        captured_merge["env"] = env_integrations
+        return [*store_integrations, *env_integrations]
+
+    monkeypatch.delenv("JWT_TOKEN", raising=False)
+    monkeypatch.setattr(harness_ports, "_load_integrations", lambda: store_records)
+    monkeypatch.setattr(harness_ports, "_load_env_integrations", lambda: env_records)
+    monkeypatch.setattr(harness_ports, "_merge_local_integrations", _merge)
+    monkeypatch.setattr(
+        harness_ports,
+        "_classify_integrations",
+        lambda _records: {"github": {}, "datadog": {}},
+    )
+
+    result = harness_ports.resolve_integrations_with_metadata()
+
+    assert captured_merge == {"store": store_records, "env": env_records}
+    assert result.resolved_integrations == {"github": {}, "datadog": {}}
+    assert result.progress_message == (
+        "Resolved local integrations from store, env: ['github', 'datadog']"
+    )
+
+
 def test_resolution_result_is_strict_pydantic_model() -> None:
     result = harness_ports.IntegrationResolutionResult(
         resolved_integrations={
