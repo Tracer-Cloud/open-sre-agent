@@ -81,7 +81,7 @@ Set `base_url` / `TEMPORAL_API_URL` to the frontend's HTTP API endpoint. Leave `
 ### Quick local test with Docker
 
 ```bash
-docker run --rm \
+docker run -d --rm \
   --name temporal-dev \
   -p 7233:7233 \
   -p 8233:8233 \
@@ -90,6 +90,8 @@ docker run --rm \
   server start-dev \
     --ip 0.0.0.0 \
     --http-port 7243
+
+until curl -sf -o /dev/null http://localhost:7243/api/v1/namespaces/default; do sleep 2; done
 ```
 
 | Port | Purpose |
@@ -98,7 +100,7 @@ docker run --rm \
 | `8233` | Web UI (`http://localhost:8233`) |
 | `7243` | **HTTP API** — set this as `base_url` |
 
-Confirm the HTTP API answers before configuring the integration:
+Confirm the HTTP API answers:
 
 ```bash
 curl -s http://localhost:7243/api/v1/namespaces/default
@@ -119,7 +121,7 @@ SERVICE  │ SOURCE    │ STATUS   │ DETAIL
 temporal │ local env │ ✓ passed │ Successfully connected to Temporal.
 ```
 
-Call `temporal_namespace_info` directly:
+`TemporalNamespaceInfoTool` is the internal class the agent calls during an investigation — invoke it directly here only to see the real shape of its result (internal, not a public API, and may move):
 
 ```python
 from integrations.temporal.tools import TemporalNamespaceInfoTool
