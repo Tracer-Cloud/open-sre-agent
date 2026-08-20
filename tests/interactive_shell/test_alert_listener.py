@@ -85,3 +85,29 @@ def test_alert_listener_bootstraps_when_stdlib_platform_is_cached(monkeypatch) -
     with _alert_listener(cfg, Console(force_terminal=False)) as inbox:
         assert inbox is not None
         assert hasattr(sys.modules["platform"], "__path__")
+
+
+def test_controller_constructs_when_stdlib_platform_is_cached(monkeypatch) -> None:
+    """``InteractiveShellController`` must bootstrap before importing turn_host.
+
+    Embedding hosts that cache stdlib ``platform`` after the controller module
+    loaded would otherwise fail construction with ModuleNotFoundError on
+    ``platform.turn_host``.
+    """
+    ensure_project_platform_package()
+    from surfaces.interactive_shell.controller import InteractiveShellController
+    from surfaces.interactive_shell.session import Session
+
+    stub = types.ModuleType("platform")
+    monkeypatch.setitem(sys.modules, "platform", stub)
+    for name in list(sys.modules):
+        if name.startswith("platform."):
+            monkeypatch.delitem(sys.modules, name, raising=False)
+    assert not hasattr(sys.modules["platform"], "__path__")
+
+    controller = InteractiveShellController(
+        Session(),
+        console=Console(force_terminal=False),
+    )
+    assert controller.turn_runtime.turn_handler is not None
+    assert hasattr(sys.modules["platform"], "__path__")
