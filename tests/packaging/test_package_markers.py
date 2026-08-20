@@ -17,6 +17,8 @@ from pathlib import Path
 
 import pytest
 
+from tests.shared.product_sources import product_python_files
+
 _REPO_ROOT = Path(__file__).resolve().parents[2]
 
 #: Roots listed in ``[tool.setuptools.packages.find]``.
@@ -34,7 +36,7 @@ def _directories_needing_a_marker(root: Path) -> list[Path]:
     without its own ``__init__.py`` setuptools drops the whole branch.
     """
     found: list[Path] = []
-    for path in sorted(root.rglob("*.py")):
+    for path in product_python_files(root):
         directory = path.parent
         if any(part in _NOT_PACKAGES for part in directory.relative_to(_REPO_ROOT).parts):
             continue

@@ -15,6 +15,8 @@ from __future__ import annotations
 import ast
 from pathlib import Path
 
+from tests.shared.product_sources import product_python_files
+
 REPO_ROOT = Path(__file__).resolve().parents[2]
 
 #: Same list the Makefile type-checks and lints (``PYTHON_SOURCE_PATHS``).
@@ -39,21 +41,10 @@ _DEFINING_MODULE = Path("surfaces/interactive_shell/runtime/shell_agent.py")
 _ALLOWED_CALLERS: frozenset[str] = frozenset()
 
 
-def _is_vendored(path: Path) -> bool:
-    """True for caches and any virtualenv checked out inside a product package."""
-    return any(part == "__pycache__" or part.startswith(".") for part in path.parts) or (
-        "site-packages" in path.parts
-    )
-
-
 def _product_files() -> list[Path]:
     files: list[Path] = []
     for package in _PRODUCT_PACKAGES:
-        root = REPO_ROOT / package
-        if root.is_dir():
-            files.extend(
-                p for p in root.rglob("*.py") if not _is_vendored(p.relative_to(REPO_ROOT))
-            )
+        files.extend(product_python_files(REPO_ROOT / package))
     return sorted(files)
 
 
