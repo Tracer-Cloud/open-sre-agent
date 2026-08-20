@@ -8,7 +8,6 @@ import pytest
 from pydantic import ValidationError
 
 import core.tool.contracts as tool_contracts
-from core.tool.contracts import REGISTERED_TOOL_ATTR, BaseTool, RegisteredTool, ToolMetadata
 from core.tool_framework.tool_decorator import tool
 
 # ---------------------------------------------------------------------------
@@ -16,7 +15,7 @@ from core.tool_framework.tool_decorator import tool
 # ---------------------------------------------------------------------------
 
 
-class _MinimalTool(BaseTool):
+class _MinimalTool(tool_contracts.BaseTool):
     name = "minimal_tool"
     description = "A minimal tool for testing."
     input_schema = {"type": "object", "properties": {}}
@@ -35,7 +34,7 @@ def test_base_tool_rejects_blank_name() -> None:
     with pytest.raises(ValidationError, match="name"):
         type(
             "BlankNameTool",
-            (BaseTool,),
+            (tool_contracts.BaseTool,),
             {
                 "name": "   ",
                 "description": "Valid description",
@@ -50,7 +49,7 @@ def test_base_tool_rejects_blank_description() -> None:
     with pytest.raises(ValidationError, match="description"):
         type(
             "BlankDescriptionTool",
-            (BaseTool,),
+            (tool_contracts.BaseTool,),
             {
                 "name": "valid_tool",
                 "description": "   ",
@@ -62,7 +61,7 @@ def test_base_tool_rejects_blank_description() -> None:
 
 
 def test_init_subclass_normalises_and_writes_back_metadata() -> None:
-    class _Normalised(BaseTool):
+    class _Normalised(tool_contracts.BaseTool):
         name = "  padded_name  "
         description = "  padded description  "
         input_schema = {"type": "object", "properties": {}}
@@ -82,7 +81,7 @@ def test_init_subclass_normalises_and_writes_back_metadata() -> None:
 
 def test_metadata_classmethod_returns_tool_metadata() -> None:
     meta = _MinimalTool.metadata()
-    assert isinstance(meta, ToolMetadata)
+    assert isinstance(meta, tool_contracts.ToolMetadata)
     assert meta.name == "minimal_tool"
     assert meta.description == "A minimal tool for testing."
 
@@ -95,7 +94,7 @@ def test_registry_metadata_classmethod_returns_defaults() -> None:
 
 
 def test_init_subclass_normalizes_registry_metadata() -> None:
-    class _RegistryTool(BaseTool):
+    class _RegistryTool(tool_contracts.BaseTool):
         name = "registry_tool"
         description = "Registry metadata tool."
         input_schema = {"type": "object", "properties": {}}
@@ -116,7 +115,7 @@ def test_init_subclass_rejects_invalid_surfaces() -> None:
     with pytest.raises(ValidationError):
         type(
             "InvalidSurfaceTool",
-            (BaseTool,),
+            (tool_contracts.BaseTool,),
             {
                 "name": "invalid_surface_tool",
                 "description": "Bad surfaces.",
@@ -129,7 +128,7 @@ def test_init_subclass_rejects_invalid_surfaces() -> None:
 
 
 def test_from_base_tool_reads_registry_metadata_from_class() -> None:
-    class _ChatTool(BaseTool):
+    class _ChatTool(tool_contracts.BaseTool):
         name = "chat_tool"
         description = "Chat-facing tool."
         input_schema = {"type": "object", "properties": {}}
@@ -141,7 +140,7 @@ def test_from_base_tool_reads_registry_metadata_from_class() -> None:
         def run(self) -> dict[str, Any]:
             return {}
 
-    registered = RegisteredTool.from_base_tool(_ChatTool())
+    registered = tool_contracts.RegisteredTool.from_base_tool(_ChatTool())
     assert registered.surfaces == ("investigation", "chat")
     assert registered.tags == ("safe",)
     assert registered.parallel_safe is False
@@ -167,7 +166,7 @@ def test_default_extract_params_returns_empty_dict() -> None:
 # ---------------------------------------------------------------------------
 
 
-class _ExplodingTool(BaseTool):
+class _ExplodingTool(tool_contracts.BaseTool):
     name = "exploding_base_tool"
     description = "Tool that raises for telemetry coverage."
     input_schema = {"type": "object", "properties": {}}
@@ -208,7 +207,7 @@ def test_base_tool_exception_is_captured_with_tool_tag(
 def test_subclass_use_cases_do_not_bleed_into_base() -> None:
     """Mutating BaseTool.use_cases must not affect subclasses defined later."""
 
-    class _ToolA(BaseTool):
+    class _ToolA(tool_contracts.BaseTool):
         name = "tool_a"
         description = "Tool A."
         input_schema = {"type": "object", "properties": {}}
@@ -218,7 +217,7 @@ def test_subclass_use_cases_do_not_bleed_into_base() -> None:
         def run(self) -> dict[str, Any]:
             return {}
 
-    class _ToolB(BaseTool):
+    class _ToolB(tool_contracts.BaseTool):
         name = "tool_b"
         description = "Tool B."
         input_schema = {"type": "object", "properties": {}}
@@ -235,7 +234,7 @@ def test_subclass_use_cases_do_not_bleed_into_base() -> None:
 def test_base_tool_mutable_defaults_are_distinct_between_subclasses() -> None:
     """Each subclass gets its own copy of use_cases/examples/requires/outputs."""
 
-    class _ToolX(BaseTool):
+    class _ToolX(tool_contracts.BaseTool):
         name = "tool_x"
         description = "Tool X."
         input_schema = {"type": "object", "properties": {}}
@@ -246,7 +245,7 @@ def test_base_tool_mutable_defaults_are_distinct_between_subclasses() -> None:
         def run(self) -> dict[str, Any]:
             return {}
 
-    class _ToolY(BaseTool):
+    class _ToolY(tool_contracts.BaseTool):
         name = "tool_y"
         description = "Tool Y."
         input_schema = {"type": "object", "properties": {}}
@@ -280,7 +279,7 @@ def test_decorated_function_tool_exception_is_captured_with_tool_tag(
     def decorated_failure() -> dict[str, Any]:
         raise ValueError("decorated boom")
 
-    registered = getattr(decorated_failure, REGISTERED_TOOL_ATTR)
+    registered = getattr(decorated_failure, tool_contracts.REGISTERED_TOOL_ATTR)
     result = registered()
 
     assert result == {"error": "decorated boom", "exception_type": "ValueError"}
