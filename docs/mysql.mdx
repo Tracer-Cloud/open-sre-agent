@@ -71,18 +71,23 @@ MYSQL_SSL_MODE=preferred   # preferred, required, or disabled
 ```sql
 CREATE USER 'opensre_readonly'@'%' IDENTIFIED BY 'secure-password';
 GRANT PROCESS ON *.* TO 'opensre_readonly'@'%';
+GRANT REPLICATION CLIENT ON *.* TO 'opensre_readonly'@'%';
 GRANT SELECT ON performance_schema.* TO 'opensre_readonly'@'%';
 GRANT SELECT ON your_database.* TO 'opensre_readonly'@'%';
 FLUSH PRIVILEGES;
 ```
 
-`information_schema` needs no explicit grant — MySQL exposes it automatically based on a
-user's other privileges, and `GRANT SELECT ON information_schema.*` is rejected outright
-(`ERROR 1044`). Reproduced live: that line aborts the script before the `performance_schema`
-grant runs, silently leaving slow-query data unavailable. The grant on the **target
-database** (`MYSQL_DATABASE`) is also required — the connector selects it as the default
-schema on connect, and without at least `SELECT` there, every tool call fails with
-`Access denied ... to database`, even though the user is otherwise fully configured.
+Three notes on these grants, each confirmed against a real server:
+
+- `information_schema` needs no explicit grant — MySQL exposes it automatically based on a
+  user's other privileges. `GRANT SELECT ON information_schema.*` is rejected outright
+  (`ERROR 1044`) and aborts the script before later grants run.
+- The grant on the **target database** (`MYSQL_DATABASE`) is required — the connector
+  selects it as the default schema on connect, and without it every tool call fails with
+  `Access denied ... to database`.
+- `REPLICATION CLIENT` is required for `get_mysql_replication_status` (`SHOW REPLICA STATUS`
+  / `SHOW SLAVE STATUS`) — without it, that one tool returns an access-denied error even
+  though `integrations verify mysql` and the other four tools pass.
 
 <Info>
 `performance_schema` is enabled by default in MySQL 5.7+. Slow query data will not be available if it has been explicitly disabled in `my.cnf`.
@@ -103,6 +108,7 @@ Wait for it to become healthy, then create the read-only user and a table to ins
 docker exec mysql-dev mysql -uroot -prootpass -e "
 CREATE USER 'opensre_readonly'@'%' IDENTIFIED BY 'secure-password';
 GRANT PROCESS ON *.* TO 'opensre_readonly'@'%';
+GRANT REPLICATION CLIENT ON *.* TO 'opensre_readonly'@'%';
 GRANT SELECT ON performance_schema.* TO 'opensre_readonly'@'%';
 GRANT SELECT ON app_db.* TO 'opensre_readonly'@'%';
 FLUSH PRIVILEGES;
@@ -132,7 +138,7 @@ mysql   │ local env │ ✓ passed │ Connected to MySQL 8.0.46
         │           │          │ target database: app_db.
 ```
 
-Call `get_mysql_table_stats` directly:
+`get_mysql_table_stats` is what the agent calls internally during an investigation — call it directly here only to see the real shape of its result (internal, not a public API, and may move):
 
 ```python
 from integrations.mysql.tools.mysql_table_stats_tool import get_mysql_table_stats
