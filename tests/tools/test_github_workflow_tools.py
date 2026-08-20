@@ -5,14 +5,14 @@ from __future__ import annotations
 from typing import Any
 from unittest.mock import patch
 
+from core.llm.types import ToolCall
+from core.tool.contracts import RegisteredTool
 from core.tool.execution import (
     BeforeToolCallResult,
     ToolExecutionHooks,
     ToolExecutionRequest,
     execute_tool_calls,
 )
-from core.llm.types import ToolCall
-from core.tool.contracts import RegisteredTool
 from integrations.github.tools.work_status import (
     execute_github_issue_mutation,
     list_github_security_alerts,

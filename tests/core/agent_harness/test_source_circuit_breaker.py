@@ -19,13 +19,13 @@ from core.agent_harness.turns.gather_unreachable import (
     store_gather_unreachable,
 )
 from core.agent_harness.turns.source_circuit_breaker import SourceCircuitBreaker
+from core.llm.types import ToolCall
 from core.tool.execution import (
     ToolExecutionHooks,
     ToolExecutionRequest,
     ToolExecutionResult,
     execute_tool_calls,
 )
-from core.llm.types import ToolCall
 
 _TIMEOUT_MARKER = "Connection to 172.29.99.99 timed out. (connect timeout=10)"
 _APP_ERROR_MARKER = "Mimir datasource not found"

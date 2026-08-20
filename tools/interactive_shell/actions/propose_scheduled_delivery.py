@@ -10,8 +10,7 @@ from core.agent_harness.spi.session_state import (
 )
 from core.agent_harness.tools import ActionToolContext, execute_with_action_context
 from core.domain.types.tools import ToolSurface
-from core.tool.contracts import SideEffectLevel
-from core.tool.contracts import RegisteredTool
+from core.tool.contracts import RegisteredTool, SideEffectLevel
 from core.tool_framework.utils.schema import object_schema, string_property
 from platform.scheduling.scheduler.credentials import requires_explicit_chat_id
 from platform.scheduling.scheduler.types import Provider, TaskKind

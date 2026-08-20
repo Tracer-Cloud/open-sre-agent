@@ -24,8 +24,7 @@ from core.messages import (
     UserRuntimeMessage,
 )
 from core.provider import ProviderHooks
-from core.tool.contracts import RegisteredTool
-from core.tool.contracts import AgentTool, AgentToolContext
+from core.tool.contracts import AgentTool, AgentToolContext, RegisteredTool
 
 
 class FakeLLM:
