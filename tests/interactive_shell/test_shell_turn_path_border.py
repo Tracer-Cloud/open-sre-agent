@@ -60,7 +60,12 @@ def _references_builder(tree: ast.AST) -> bool:
         if isinstance(node, ast.ImportFrom):
             if any(alias.name == _SHELL_AGENT_BUILDER for alias in node.names):
                 return True
-        elif isinstance(node, ast.Attribute) and node.attr == _SHELL_AGENT_BUILDER or isinstance(node, ast.Name) and node.id == _SHELL_AGENT_BUILDER:
+        elif (
+            isinstance(node, ast.Attribute)
+            and node.attr == _SHELL_AGENT_BUILDER
+            or isinstance(node, ast.Name)
+            and node.id == _SHELL_AGENT_BUILDER
+        ):
             return True
     return False
 
