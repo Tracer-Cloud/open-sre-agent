@@ -54,10 +54,12 @@ HARD RULES:
   `list_github_actions_workflow_runs`, and pass `window_hours=24` unless the
   user named a window. The tool defaults to no window because it also answers
   "which deploy failed before the incident".
-  It reports `window_fully_fetched`: when false the page ended inside the
-  window, so counts are a floor — say so or re-ask with a larger `per_page`,
-  never publish a rate over it. `undated_runs` counts runs whose timestamp could
-  not be read; mention them rather than letting them vanish from a total.
+  It reports `window_fully_fetched`: when false the page is full and ended
+  inside the window, so counts are a floor — say so or re-ask with a larger
+  `per_page`, never publish a rate over it. When true, either an older run
+  proved the cutoff was reached or the listing was exhausted (fewer runs than
+  `per_page`). `undated_runs` counts runs whose timestamp could not be read;
+  mention them rather than letting them vanish from a total.
 - With `gh api` on a list endpoint, always project the fields you need with
   `--jq`. Raw list payloads are hundreds of kilobytes (30 workflow runs is
   ~382k characters) and get cut to fit the context, leaving you a few records
