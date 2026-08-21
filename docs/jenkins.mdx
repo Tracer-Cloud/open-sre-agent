@@ -191,6 +191,8 @@ Cited Evidence: list jenkins jobs, list jenkins running builds,
                 get jenkins pipeline stages, get jenkins build log
 ```
 
+`list_jenkins_builds` is the one registered tool not called here -- `list_jenkins_jobs` already returned this job's last-build number and status, so the agent went straight to `get_jenkins_pipeline_stages`/`get_jenkins_build_log` for that specific build instead of a redundant builds listing.
+
 Teardown — since the demo config lived entirely in its own file, deleting it is enough (no edit to your real store needed):
 
 ```bash
