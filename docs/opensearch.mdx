@@ -87,7 +87,7 @@ Prefer a dedicated read-only user (or API key) scoped to the indices OpenSRE sho
 ### Quick local test with Docker
 
 ```bash
-docker run -d --name opensearch-dev -p 9201:9200 \
+docker run -d --name opensearch-dev -p 127.0.0.1:9201:9200 \
   -e "discovery.type=single-node" \
   -e "DISABLE_SECURITY_PLUGIN=true" \
   -e "OPENSEARCH_JAVA_OPTS=-Xms256m -Xmx256m" \
