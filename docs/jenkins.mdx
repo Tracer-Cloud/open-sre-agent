@@ -84,8 +84,12 @@ docker run -d --name jenkins-dev -p 127.0.0.1:8090:8080 \
 Wait for it to come up, then create and run a job so there is a real build to inspect:
 
 ```bash
-i=0; until curl -sf -o /dev/null -u admin:admin http://localhost:8090/crumbIssuer/api/json || [ $i -ge 30 ]; do sleep 2; i=$((i+1)); done
-[ $i -lt 30 ] || { echo "ERROR: Jenkins never became ready" >&2; exit 1; }
+i=0
+until curl -sf -o /dev/null -u admin:admin http://localhost:8090/crumbIssuer/api/json; do
+  i=$((i + 1))
+  [ "$i" -ge 30 ] && { echo "ERROR: Jenkins never became ready" >&2; exit 1; }
+  sleep 2
+done
 
 COOKIE_JAR=/tmp/jenkins-init/cookies.txt
 CRUMB=$(curl -s -c "$COOKIE_JAR" -u admin:admin http://localhost:8090/crumbIssuer/api/json | python3 -c "import json,sys;print(json.load(sys.stdin)['crumb'])")
@@ -100,16 +104,21 @@ curl -s -b "$COOKIE_JAR" -u admin:admin -H "Jenkins-Crumb: $CRUMB" -X POST \
 # The build runs async — wait for it to leave the queue and finish before inspecting it
 i=0
 until curl -s -u admin:admin "http://localhost:8090/job/payment-service-deploy/lastBuild/api/json" \
-  | python3 -c "import json,sys; sys.exit(0 if json.load(sys.stdin).get('result') else 1)" 2>/dev/null || [ $i -ge 30 ]; do
-  sleep 2; i=$((i+1))
+  | python3 -c "import json,sys; sys.exit(0 if json.load(sys.stdin).get('result') else 1)" 2>/dev/null; do
+  i=$((i + 1))
+  [ "$i" -ge 30 ] && { echo "ERROR: build never finished" >&2; exit 1; }
+  sleep 2
 done
-[ $i -lt 30 ] || { echo "ERROR: build never finished" >&2; exit 1; }
 ```
 
 ```bash
 export JENKINS_URL="http://localhost:8090"
 export JENKINS_USER="admin"
 export JENKINS_API_TOKEN="admin"  # local demo only — real deployments must use a token, not a password
+
+# Isolate the demo integration from your real config -- every command below
+# reads and writes only this file, never ~/.opensre/integrations.json
+export OPENSRE_INTEGRATIONS_STORE_PATH=$(mktemp /tmp/opensre-jenkins-demo.XXXXXX)
 ```
 
 `admin`/`admin` is only valid because this is a disposable local instance with anonymous read disabled — Jenkins accepts a real password over Basic auth the same way it accepts a token when no token is configured. Never do this against a real server.
@@ -126,15 +135,14 @@ jenkins │ local env │ ✓ passed │ Jenkins connectivity successful at
         │           │          │ http://localhost:8090 (node: built-in)
 ```
 
-Register the local instance in the persistent store. Plain env vars are read by `opensre integrations verify`, but `opensre investigate` only treats an integration as active once it is in the store — this appends to `~/.opensre/integrations.json` without touching anything already there:
+Register the local instance in the store. `opensre integrations setup jenkins` is interactive; for a scriptable demo, write directly into the isolated store path set above — this is a genuine, first-class override (see `config/constants/tenancy.py`, `INTEGRATIONS_STORE_PATH_ENV`), so it never touches your real config or credentials:
 
 ```bash
 python3 <<'PYEOF'
-import json, pathlib
+import json, os, pathlib
 
-path = pathlib.Path.home() / ".opensre" / "integrations.json"
-store = json.loads(path.read_text()) if path.exists() else {"version": 2, "integrations": []}
-store["integrations"] = [i for i in store["integrations"] if i["id"] != "jenkins-local-demo"]
+path = pathlib.Path(os.environ["OPENSRE_INTEGRATIONS_STORE_PATH"])
+store = json.loads(path.read_text()) if path.stat().st_size else {"version": 2, "integrations": []}
 store["integrations"].append({
     "id": "jenkins-local-demo",
     "service": "jenkins",
@@ -183,20 +191,11 @@ Cited Evidence: list jenkins jobs, list jenkins running builds,
                 get jenkins pipeline stages, get jenkins build log
 ```
 
-Remove the demo entry when done:
+Teardown — since the demo config lived entirely in its own file, deleting it is enough (no edit to your real store needed):
 
 ```bash
-python3 <<'PYEOF'
-import json, pathlib
-
-path = pathlib.Path.home() / ".opensre" / "integrations.json"
-store = json.loads(path.read_text())
-store["integrations"] = [i for i in store["integrations"] if i["id"] != "jenkins-local-demo"]
-path.write_text(json.dumps(store, indent=2))
-PYEOF
+rm -f "$OPENSRE_INTEGRATIONS_STORE_PATH"
 ```
-
-Teardown:
 
 ```bash
 docker rm -f jenkins-dev
