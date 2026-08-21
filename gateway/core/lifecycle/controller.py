@@ -129,7 +129,7 @@ class GatewayController:
         :func:`request_scheduler_reload`; this process only installs gated
         runners and starts :func:`start_background_scheduler`.
         """
-        from bootstrap.adapters import scheduler_runners
+        from bootstrap.adapters import install_scheduled_delivery_adapters, scheduler_runners
         from infrastructure.scheduling.scheduler.reload_signal import (
             consume_scheduler_reload_request,
         )
@@ -139,6 +139,7 @@ class GatewayController:
         # A scheduled run costs a turn, so both take the same capacity gate chat
         # turns take — stated here, once, rather than rewritten in afterwards.
         scheduler_runners().gated(self.turn_gate).install()
+        install_scheduled_delivery_adapters()
         # Drop any reload request queued before this process owned the scheduler.
         consume_scheduler_reload_request()
         scheduler, task_count = start_background_scheduler()

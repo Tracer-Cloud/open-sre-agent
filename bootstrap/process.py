@@ -21,7 +21,11 @@ from dataclasses import dataclass
 from enum import StrEnum
 from typing import Final
 
-from bootstrap.adapters import install_harness_adapters, install_scheduler_runners
+from bootstrap.adapters import (
+    install_harness_adapters,
+    install_scheduled_delivery_adapters,
+    install_scheduler_runners,
+)
 from config.local_env import bootstrap_opensre_env_once
 
 _LOG = logging.getLogger(__name__)
@@ -144,6 +148,7 @@ def _run_harness_adapters(_profile: ProcessProfile, _log: logging.Logger) -> Non
 
 def _run_scheduler_runners(_profile: ProcessProfile, _log: logging.Logger) -> None:
     install_scheduler_runners()
+    install_scheduled_delivery_adapters()
 
 
 def _run_capability_warnings(profile: ProcessProfile, log: logging.Logger) -> None:

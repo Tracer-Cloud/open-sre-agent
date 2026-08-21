@@ -14,6 +14,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
+    from infrastructure.scheduling.scheduler.delivery_bundle import ScheduledDeliveryAdapters
     from infrastructure.scheduling.scheduler.runners import SchedulerRunners
 
 
@@ -112,10 +113,44 @@ def install_scheduler_runners() -> None:
     scheduler_runners().install()
 
 
+def scheduled_delivery_adapters() -> ScheduledDeliveryAdapters:
+    """Assemble the per-provider adapters scheduled delivery dispatches through.
+
+    The only layer that may see both ``integrations`` and ``infrastructure``, so
+    the vendor adapters are bundled here and handed to whichever host installs it.
+    """
+    from infrastructure.scheduling.scheduler.delivery_bundle import ScheduledDeliveryAdapters
+    from infrastructure.scheduling.scheduler.interactive_shell_delivery import (
+        InteractiveShellScheduledDelivery,
+    )
+    from infrastructure.scheduling.scheduler.types import Provider
+    from integrations.discord.scheduled_delivery import DiscordScheduledDelivery
+    from integrations.rocketchat.scheduled_delivery import RocketChatScheduledDelivery
+    from integrations.slack.scheduled_delivery import SlackScheduledDelivery
+    from integrations.telegram.scheduled_delivery import TelegramScheduledDelivery
+
+    return ScheduledDeliveryAdapters(
+        {
+            Provider.TELEGRAM: TelegramScheduledDelivery(),
+            Provider.SLACK: SlackScheduledDelivery(),
+            Provider.DISCORD: DiscordScheduledDelivery(),
+            Provider.ROCKETCHAT: RocketChatScheduledDelivery(),
+            Provider.INTERACTIVE_SHELL: InteractiveShellScheduledDelivery(),
+        }
+    )
+
+
+def install_scheduled_delivery_adapters() -> None:
+    """Bind the scheduled-delivery adapters (worker and CLI hosts)."""
+    scheduled_delivery_adapters().install()
+
+
 __all__ = [
     "install_harness_adapters",
     "install_investigation_api",
     "install_notification_adapters",
     "scheduler_runners",
     "install_scheduler_runners",
+    "scheduled_delivery_adapters",
+    "install_scheduled_delivery_adapters",
 ]
