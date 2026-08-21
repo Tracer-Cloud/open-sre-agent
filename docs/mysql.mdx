@@ -106,12 +106,11 @@ Wait for it to become healthy, then create the read-only user and a table to ins
 
 ```bash
 i=0
-until docker exec mysql-dev mysqladmin ping -uroot -prootpass --silent 2>/dev/null; do
+until docker logs mysql-dev 2>&1 | grep -q "ready for connections.*port: 3306"; do
   i=$((i + 1))
   [ "$i" -ge 30 ] && { echo "ERROR: MySQL never became ready" >&2; exit 1; }
   sleep 2
 done
-[ $i -lt 30 ] || { echo "ERROR: MySQL never became ready" >&2; exit 1; }
 ```
 
 ```bash
@@ -148,28 +147,14 @@ mysql   │ local env │ ✓ passed │ Connected to MySQL 8.0.46
         │           │          │ target database: app_db.
 ```
 
-Register the local instance in the store. `opensre integrations setup mysql` is interactive; for a scriptable demo, write directly into an isolated store file instead of `~/.opensre/integrations.json` — `OPENSRE_INTEGRATIONS_STORE_PATH` is a genuine, first-class override (`config/constants/tenancy.py`), so this never touches your real config or exposes the demo password there:
+`opensre investigate` only treats an integration as active once the store resolution has *something* to fall through to env vars with -- an untouched `~/.opensre/integrations.json` with an unrelated integration in it blocks env-var fallback entirely. Point `OPENSRE_INTEGRATIONS_STORE_PATH` at an empty, valid store instead, so your real config is never read or written and the exported `MYSQL_*` vars above are the only source of credentials:
 
 ```bash
 export OPENSRE_INTEGRATIONS_STORE_PATH=$(mktemp /tmp/opensre-mysql-demo.XXXXXX)
-python3 <<'PYEOF'
-import json, os, pathlib
-
-path = pathlib.Path(os.environ["OPENSRE_INTEGRATIONS_STORE_PATH"])
-store = json.loads(path.read_text()) if path.stat().st_size else {"version": 2, "integrations": []}
-store["integrations"].append({
-    "id": "mysql-local-demo",
-    "service": "mysql",
-    "status": "active",
-    "instances": [{"name": "default", "tags": {}, "credentials": {
-        "host": "127.0.0.1", "port": 3307, "database": "app_db",
-        "username": "opensre_readonly", "password": "secure-password", "ssl_mode": "disabled",
-    }}],
-})
-path.parent.mkdir(parents=True, exist_ok=True)
-path.write_text(json.dumps(store, indent=2))
-PYEOF
+echo '{"version": 2, "integrations": []}' > "$OPENSRE_INTEGRATIONS_STORE_PATH"
 ```
+
+A literal zero-byte file does not work here -- the store loader expects valid JSON and raises on an empty read, so this writes an explicitly empty (but valid) store rather than just creating the file with `mktemp` alone.
 
 Kick off a long-running query so there is something real to investigate, then trigger a real investigation — this is the actual supported entrypoint, not an internal import:
 
@@ -185,10 +170,10 @@ opensre investigate --input-json '{
 }'
 ```
 
-Real output from a run against this exact local instance (edited for length):
+Real output from a run against this exact local instance (edited for length). An empty store makes `opensre investigate` fall through to env-var resolution for *every* integration, not just MySQL -- if your shell or machine already resolves another integration from its own env vars, it rides along too (harmless; it just means extra unrelated tool availability, not incorrect MySQL results). Here `telegram` appears because this environment happens to resolve it:
 
 ```
-Loading integrations: mysql
+Loading integrations: telegram, mysql
 ↳ MySQL · get mysql current processes
 ↳ MySQL · get mysql server status
 ↳ MySQL · get mysql slow queries
@@ -203,15 +188,14 @@ indicating no real workload impact -- this is a synthetic/manual probe,
 not a real incident."
 ```
 
-All 5 registered tools were exercised in this single turn, and the agent correctly identified the exact synthetic probe query. Remove the demo store file when done (no edit to your real store needed):
+All 5 registered tools were exercised in this single turn, and the agent correctly identified the exact synthetic probe query.
+
+Teardown -- remove the demo store file and unset every demo variable, so nothing lingers in the shell to affect a later command:
 
 ```bash
 rm -f "$OPENSRE_INTEGRATIONS_STORE_PATH"
-```
-
-Teardown:
-
-```bash
+unset OPENSRE_INTEGRATIONS_STORE_PATH
+unset MYSQL_HOST MYSQL_PORT MYSQL_DATABASE MYSQL_USERNAME MYSQL_PASSWORD MYSQL_SSL_MODE
 docker rm -f mysql-dev
 ```
 
