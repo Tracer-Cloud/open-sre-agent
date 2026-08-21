@@ -75,7 +75,7 @@ junk drawer. Prefer leaf imports over re-export shims.
   runtime by the gateway capacity gate, so this is not build-time-only code.
 
 The Cloudflare Worker for `install.opensre.com` is not Python and lives at
-`infra/cloudflare_install_proxy/`.
+`deployment/cloudflare_install_proxy/`.
 
 Future migrations should move existing modules into this folder incrementally
 with import updates and tests. Avoid compatibility-only forwarding modules;

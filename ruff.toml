@@ -64,6 +64,7 @@ known-first-party = [
     "bootstrap",
     "config",
     "core",
+    "gateway",
     "integrations",
     "infrastructure",
     "surfaces",

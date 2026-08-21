@@ -159,9 +159,9 @@ The shared runtime and cross-cutting services the capability layer is built on.
   session handling (`core/agent_harness`), and pure domain rules (`core/domain`).
 - **`infrastructure/`** — cross-cutting services with no investigation logic of their
   own: guardrails, masking, sandbox, analytics, auth, notifications,
-  observability, scheduler, and deployment. Not to be confused with the
-  top-level `infra/` directory (e.g. `infra/cloudflare_install_proxy`), which
-  holds ops/deploy assets, not a first-party Python package.
+  observability, scheduler, and deployment. Deploy-time assets live under
+  `infrastructure/deployment/` (EC2/packaging Python tooling plus the
+  `cloudflare_install_proxy` edge worker); these are not imported by the app.
 
 These two are the one bidirectional pair by design: `core` reaches `infrastructure`
 for guardrails, masking, observability, and evidence/log compaction, while
