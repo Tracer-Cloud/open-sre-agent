@@ -412,3 +412,93 @@ def test_list_recent_is_newest_first_when_the_document_is_not_ascending(tmp_path
     store.save(_record(task_id="stepped-back"))
 
     assert [r.task_id for r in store.list_recent()] == ["newer", "older", "stepped-back"]
+
+
+def test_the_shell_and_a_chat_turn_share_one_document(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The shell binds no storage scope and a chat transport binds the deployment's
+    organization, so the two otherwise write and read different files and a chat
+    lookup finds nothing. Both must land on the org root."""
+    from config.constants import paths
+    from config.constants.billing import ORGANIZATION_ID_ENV
+    from config.principal import Actor, Principal, StorageScope
+    from config.scope_context import bound_storage_scope
+
+    monkeypatch.setattr(paths, "OPENSRE_HOME_DIR", tmp_path)
+    monkeypatch.delenv(paths.CONTEXT_ROOT_ENV, raising=False)
+    monkeypatch.setenv(ORGANIZATION_ID_ENV, "org_acme")
+
+    # The shell writes with nothing bound.
+    BackgroundInvestigationStore().save(_record(task_id="bg-shell"))
+
+    # A Telegram turn reads with the organization bound.
+    scope = StorageScope(principal=Principal.org("org_acme"), actor=Actor(id="U_ALICE"))
+    with bound_storage_scope(scope):
+        found = BackgroundInvestigationStore().get("bg-shell")
+
+    assert found is not None
+    assert found.root_cause == "pool saturation"
+    assert (tmp_path / "orgs" / "org_acme" / "background" / "investigations.json").is_file()
+
+
+def test_a_machine_with_no_organization_keeps_the_plain_layout(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A laptop names no organization and has no second surface to share with."""
+    from config.constants import paths
+    from config.constants.billing import ORGANIZATION_ID_ENV
+
+    monkeypatch.setattr(paths, "OPENSRE_HOME_DIR", tmp_path)
+    monkeypatch.delenv(paths.CONTEXT_ROOT_ENV, raising=False)
+    monkeypatch.delenv(ORGANIZATION_ID_ENV, raising=False)
+
+    BackgroundInvestigationStore().save(_record(task_id="bg-laptop"))
+
+    assert (tmp_path / "background" / "investigations.json").is_file()
+    assert not (tmp_path / "orgs").exists()
+
+
+def test_notify_channels_survive_a_record_save(tmp_path: Path) -> None:
+    """Records and preferences share one document, so each write must carry the
+    other through. save() re-reads channels inside the lock it already holds."""
+    store = _store(tmp_path)
+    store.set_notify_channels(("telegram", "email"))
+
+    store.save(_record(task_id="bg-after-prefs"))
+
+    assert store.notify_channels() == ("telegram", "email")
+    assert store.get("bg-after-prefs") is not None
+
+
+def test_notify_channels_survive_rotation(tmp_path: Path) -> None:
+    """Rotation rewrites the whole document. Preferences must not age out with the
+    records they sit beside."""
+    store = _store(tmp_path, max_records=3)
+    store.set_notify_channels(("rocketchat",))
+    for index in range(6):
+        store.save(_record(task_id=f"bg-{index}"))
+
+    assert store.notify_channels() == ("rocketchat",)
+    assert len(store.list_recent(limit=100)) == 3
+
+
+def test_setting_channels_preserves_stored_records(tmp_path: Path) -> None:
+    store = _store(tmp_path)
+    store.save(_record(task_id="bg-keep"))
+
+    store.set_notify_channels(("buzz",))
+
+    assert store.get("bg-keep") is not None
+    assert store.notify_channels() == ("buzz",)
+
+
+def test_an_explicit_clear_is_not_read_as_unset(tmp_path: Path) -> None:
+    """Clearing channels must persist as an empty list rather than falling back to
+    a default, or turning notifications off would silently not stick."""
+    store = _store(tmp_path)
+    store.set_notify_channels(("telegram",))
+
+    store.set_notify_channels(())
+
+    assert store.notify_channels() == ()

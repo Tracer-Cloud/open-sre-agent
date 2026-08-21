@@ -166,8 +166,9 @@ def get_query_activity(
 ) -> dict[str, Any]:
     """Retrieve recent query activity from system.query_log.
 
-    Read-only: queries system.query_log for recent completed queries.
-    Results capped at config.max_results.
+    Read-only: queries system.query_log for recent completed and failed
+    queries, excluding QueryStart records whose duration and result are not
+    yet known. Results capped at config.max_results.
     """
     if not config.is_configured:
         return tool_unavailable("clickhouse", "Not configured.")
@@ -188,7 +189,7 @@ def get_query_activity(
                 "  memory_usage, "
                 "  event_time "
                 "FROM system.query_log "
-                "WHERE type = 'QueryFinish' "
+                "WHERE type != 'QueryStart' "
                 "ORDER BY event_time DESC "
                 "LIMIT %(limit)s",
                 parameters={"limit": effective_limit},

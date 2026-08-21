@@ -193,7 +193,11 @@ def contribute_cli_terminology(
 def contribute_markdown_rule(
     parts: AssistantPromptParts, profile: SurfaceProfile
 ) -> list[PromptBlock]:
-    _ = parts, profile
+    _ = parts
+    # Terminal markdown guidance is CLI-only. Slack/gateway formatting lives
+    # on the vendor persona (tight **bold**, native markdown, no terminal talk).
+    if not profile.cli_rules:
+        return []
     return [
         _block(
             "assistant-markdown-rule",

@@ -20,6 +20,8 @@ import surfaces.interactive_shell.runtime.slash_adapter as slash_adapter
 import surfaces.interactive_shell.runtime.subprocess_runner as subprocess_runner
 import tests.shared.harness_turn_driver as harness_turn_driver
 import tools.interactive_shell.shell.execution as shell_execution
+from core.agent_harness.accounting.token_accounting import LlmRunInfo
+from core.agent_harness.ports import AnswerRequest, OutputSink
 from core.llm.types import AgentLLMResponse, ToolCall
 from infrastructure.scheduling.task_types import TaskKind, TaskStatus
 from surfaces.interactive_shell.session import Session
@@ -60,6 +62,17 @@ run_harness_turn = harness_turn_driver.run_harness_turn
 def _capture() -> tuple[Console, io.StringIO]:
     buf = io.StringIO()
     return Console(file=buf, force_terminal=False, highlight=False), buf
+
+
+def _no_answer_agent(
+    message: str,
+    session: Session,
+    console: Console,
+    *,
+    request: AnswerRequest,
+    output: OutputSink | None = None,
+) -> LlmRunInfo | None:
+    return None
 
 
 def _action(
@@ -1309,7 +1322,7 @@ def test_execute_cli_actions_counts_planned_and_executed(monkeypatch: object) ->
         session,
         console,
         recorder=None,
-        answer_agent=lambda *_a, **_k: None,
+        answer_agent=_no_answer_agent,
     )
 
     action_result = result.action_result
@@ -1385,7 +1398,7 @@ def test_execute_cli_actions_executes_matched_clause_ignoring_unhandled(
         session,
         console,
         recorder=None,
-        answer_agent=lambda *_a, **_k: None,
+        answer_agent=_no_answer_agent,
     )
 
     # The unhandled flag no longer denies the turn: the matched /health runs.

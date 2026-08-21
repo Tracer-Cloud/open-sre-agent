@@ -10,15 +10,15 @@ When background mode is on:
 
 - New investigations start in the background
 - The shell stays free for follow-up questions
-- Finished RCAs are tracked in the current session
+- Completed RCAs are kept and can be looked up later from the shell or chat
 - Completion notifications can go to email ([SMTP](/smtp)), Telegram
   ([Telegram](/messaging/telegram)), Rocket.Chat
   ([Rocket.Chat](/messaging/rocketchat)), Buzz
   ([Buzz](/messaging/buzz)), or any combination of those
 
 <Note>
-This feature is **session-local**. If the REPL process exits, in-flight
-background jobs stop with it.
+In-flight jobs stop if the shell exits. Completed RCAs are kept, and you can look
+them up later from the shell or from a chat channel.
 </Note>
 
 This is not the hosted async HTTP API (`POST /api/investigations` and
@@ -39,6 +39,12 @@ This is not the hosted async HTTP API (`POST /api/investigations` and
 | `/tasks` | List session tasks (including background investigations) |
 | `/cancel <task_id>` | Cancel a running background investigation |
 
+From Telegram, Slack, or Discord, use `/background status`, `/background list`,
+`/background show <task_id>`, or `/background notify list` to look up a finished
+RCA. Starting investigations, promoting an RCA with `/background use`, and
+changing channels remain shell-only. The completion notification includes the
+task ID needed for `/background show`.
+
 There is no `opensre background …` CLI command. Background mode is interactive
 shell only.
 
@@ -58,6 +64,8 @@ shell only.
 /background notify set telegram    # or: email, rocketchat, buzz, or email,telegram
 /background notify list            # confirm
 ```
+
+   Channels are remembered, so you only set them once.
 
 4. Start an investigation:
 
@@ -167,7 +175,17 @@ Proactive Slack delivery and further enhancements to chat-based monitoring are c
 
 ## Current limits
 
-- Interactive shell only — no `opensre background …` CLI command
-- Jobs are not persisted across REPL restarts
-- Completion does not automatically replace your active follow-up context
-- You must run `/background use <task_id>` to promote a finished RCA
+- investigations can only be **started** from the interactive shell; chat can look
+  them up but not launch one, and there is no `opensre background …` CLI command
+- in-flight jobs stop if the shell exits; only completed RCAs are kept
+- `/background use` needs the shell, because the full investigation state it
+  promotes is not part of what gets kept
+- completion does not automatically replace your active follow-up context
+- you must run `/background use <task_id>` to promote a finished RCA
+
+## Who can see a completed RCA
+
+Completed RCAs belong to your organization, not to you personally: anyone who can
+message the bot for the same organization can list them and read them. Keep that
+in mind if an investigation touches something you would not post in a team
+channel.

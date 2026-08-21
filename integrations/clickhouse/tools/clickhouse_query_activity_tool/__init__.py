@@ -14,7 +14,7 @@ from integrations.clickhouse import (
 
 @tool(
     name="get_clickhouse_query_activity",
-    description="Retrieve recent query activity from a ClickHouse instance, including query duration, rows read, and memory usage.",
+    description="Retrieve recent query activity (including failed queries) from a ClickHouse instance, with query duration, rows read, and memory usage.",
     source="clickhouse",
     surfaces=(ToolSurface.INVESTIGATION, ToolSurface.CHAT),
     use_cases=[

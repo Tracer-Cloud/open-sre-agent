@@ -32,6 +32,11 @@ def time_ago(then: datetime | None) -> str:
     if then is None:
         return "unknown"
 
+    # POST /alerts accepts sender-supplied timestamps, so ``received_at`` may be
+    # offset-naive; treat it as UTC like format_repl_timestamp does.
+    if then.tzinfo is None:
+        then = then.replace(tzinfo=UTC)
+
     now = datetime.now(UTC)
     delta = now - then
     seconds = int(delta.total_seconds())
