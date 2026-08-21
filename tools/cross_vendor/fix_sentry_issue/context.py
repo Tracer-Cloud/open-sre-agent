@@ -11,9 +11,9 @@ from dataclasses import dataclass
 
 import httpx
 
+from infrastructure.safety.masking import MaskingContext, MaskingPolicy
 from integrations.sentry import SentryConfig, get_sentry_issue, sentry_config_from_env
 from integrations.sentry.issue_url import parse_sentry_issue_url
-from platform.safety.masking import MaskingContext, MaskingPolicy
 from tools.cross_vendor.fix_sentry_issue.errors import (
     ERR_INVALID_INPUT,
     ERR_ISSUE_NOT_FOUND,

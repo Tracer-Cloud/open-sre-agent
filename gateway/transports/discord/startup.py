@@ -13,7 +13,7 @@ from gateway.transports.discord.settings import (
     DiscordGatewaySettings,
     load_discord_gateway_settings,
 )
-from platform.turn_host.turn_callback import TurnCallback
+from infrastructure.turn_host.turn_callback import TurnCallback
 
 
 def start_discord_worker(

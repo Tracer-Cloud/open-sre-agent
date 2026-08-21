@@ -27,8 +27,8 @@ from core.agent_harness.spi.session_goal import (
     session_goal_is_paused,
 )
 from core.agent_harness.spi.session_state import clear_pending_autosubmit, set_auto_command
-from platform.evidence.evidence_compaction import truncate_message
-from platform.terminal.theme import DIM, ERROR, HIGHLIGHT
+from infrastructure.evidence.evidence_compaction import truncate_message
+from infrastructure.terminal.theme import DIM, ERROR, HIGHLIGHT
 from surfaces.interactive_shell.runtime import Session
 
 _USAGE = "/goal [show|set|pause|resume|edit|clear|help]  or  /goal <condition>"

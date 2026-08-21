@@ -38,7 +38,7 @@ _SOURCE_ROOTS = (
     "core",
     "deployment",
     "integrations",
-    "platform",
+    "infrastructure",
     "services",
     "tools",
 )

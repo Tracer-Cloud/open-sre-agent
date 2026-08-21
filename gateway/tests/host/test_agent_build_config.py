@@ -22,8 +22,8 @@ from rich.console import Console
 from core.agent_harness.runtime import AgentBuildConfig
 from core.agent_harness.session import SessionCore
 from core.agent_harness.session.persistence.memory import InMemorySessionStore
-from platform.turn_host.bindable_output import BindableOutput
-from platform.turn_host.session_agents import SessionAgentPool
+from infrastructure.turn_host.bindable_output import BindableOutput
+from infrastructure.turn_host.session_agents import SessionAgentPool
 from tests.shared.default_headless_build_stub import default_headless_build_stub
 
 _LOGGER = logging.getLogger("channel.ports.test")
@@ -158,7 +158,7 @@ def test_error_reporter_and_surface_reach_default_headless_build(
         return _null_tools()
 
     monkeypatch.setattr(
-        "platform.turn_host.session_agents.DefaultHeadlessBuild",
+        "infrastructure.turn_host.session_agents.DefaultHeadlessBuild",
         default_headless_build_stub(_build),
     )
     reporter = object()
@@ -180,7 +180,7 @@ def test_default_tools_still_receive_slash_ports_factory(
         return _null_tools()
 
     monkeypatch.setattr(
-        "platform.turn_host.session_agents.DefaultToolProvider",
+        "infrastructure.turn_host.session_agents.DefaultToolProvider",
         _tools,
     )
     factory = object()

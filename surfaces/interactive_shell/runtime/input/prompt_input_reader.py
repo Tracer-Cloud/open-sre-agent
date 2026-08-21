@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from rich.console import Console
 
-from platform.terminal.prompt_support import (
+from infrastructure.terminal.prompt_support import (
     print_session_resume_hint,
     repl_prompt_note_ctrl_c,
     repl_reset_ctrl_c_gate,

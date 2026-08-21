@@ -17,7 +17,7 @@ from typing import Any, Protocol, runtime_checkable
 from rich.console import Console
 from rich.markup import escape
 
-from platform.scheduling.task_types import TaskRecord
+from infrastructure.scheduling.task_types import TaskRecord
 from tools.interactive_shell.shared.execution_policy import (
     plan_foreground_tool,
 )

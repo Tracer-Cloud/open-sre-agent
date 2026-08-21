@@ -562,23 +562,23 @@ RULES: tuple[PathRule, ...] = (
     PathRule("gateway/", ("gateway/tests/",)),
     PathRule("tools/system/watch_dog/", ("tests/watch_dog/",)),
     PathRule("tools/", ("tests/tools/",)),
-    PathRule("platform/analytics/", ("tests/analytics/",)),
-    # Without this rule a change under platform/filestorage/ matches nothing,
+    PathRule("infrastructure/analytics/", ("tests/analytics/",)),
+    # Without this rule a change under infrastructure/filestorage/ matches nothing,
     # and the credential deny-list tests only run via the no-targets fallback —
     # which a diff that also touches any test file silently defeats.
     PathRule(
-        "platform/filestorage/",
+        "infrastructure/filestorage/",
         ("tests/filestorage/", "tests/surfaces/test_remote_sync_surface_contract.py"),
     ),
-    PathRule("platform/safety/guardrails/", ("tests/platform/safety/guardrails/",)),
-    PathRule("platform/safety/masking/", ("tests/masking/",)),
-    PathRule("platform/deployment/packaging/", ("tests/packaging/",)),
-    PathRule("platform/safety/sandbox/", ("tests/sandbox/",)),
+    PathRule("infrastructure/safety/guardrails/", ("tests/infrastructure/safety/guardrails/",)),
+    PathRule("infrastructure/safety/masking/", ("tests/masking/",)),
+    PathRule("infrastructure/deployment/packaging/", ("tests/packaging/",)),
+    PathRule("infrastructure/safety/sandbox/", ("tests/sandbox/",)),
     PathRule(
-        "platform/deployment/ec2/",
-        ("tests/platform/deployment/ec2/",),
+        "infrastructure/deployment/ec2/",
+        ("tests/infrastructure/deployment/ec2/",),
     ),
-    PathRule("platform/safety/auth/", ("tests/platform/safety/auth/",)),
+    PathRule("infrastructure/safety/auth/", ("tests/infrastructure/safety/auth/",)),
     PathRule("gateway/web/webapp.py", ("gateway/tests/web/test_webapp.py",)),
     # Repo-wide config
     PathRule("pyproject.toml", (), always_escalate=True),
@@ -596,7 +596,9 @@ def _matches(path: str, prefix: str) -> bool:
 def _area_key(prefix: str) -> str:
     parts = prefix.split("/")
     if parts[0] == "deployment" or (
-        len(parts) >= 2 and parts[0] == "platform" and parts[1].startswith("deployment")
+        len(parts) >= 2
+        and parts[0] == "infrastructure"
+        and parts[1].startswith("deployment")
     ):
         return "deployment"
     return prefix

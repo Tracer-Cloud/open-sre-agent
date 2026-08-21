@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from rich.text import Text
 
-from platform.terminal.theme import (
+from infrastructure.terminal.theme import (
     BRAND,
     DIM,
     ERROR,

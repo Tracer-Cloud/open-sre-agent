@@ -10,8 +10,8 @@ from __future__ import annotations
 
 from typing import Any
 
-from platform.evidence.evidence_compaction import compact_traces, summarize_counts
-from platform.evidence.log_compaction import build_error_taxonomy, deduplicate_logs
+from infrastructure.evidence.evidence_compaction import compact_traces, summarize_counts
+from infrastructure.evidence.log_compaction import build_error_taxonomy, deduplicate_logs
 
 
 def query_logs_from_backend(

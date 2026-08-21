@@ -1,7 +1,7 @@
 """Rocket.Chat credential resolution for alarm dispatch (watchdog, Hermes).
 
 ``server_url``/``auth_token``/``user_id``/``webhook_url`` reuse the
-scheduler's resolver (:func:`platform.scheduling.scheduler.credentials.resolve_rocketchat_credentials`)
+scheduler's resolver (:func:`infrastructure.scheduling.scheduler.credentials.resolve_rocketchat_credentials`)
 so task-params > integration-store > environment precedence stays identical
 across the cron provider, Sentry digest, and alarm dispatchers. This module
 adds channel resolution (explicit override -> store ``default_channel`` ->
@@ -21,7 +21,7 @@ import os
 from dataclasses import dataclass, field
 
 from config.constants.rocketchat import ROCKETCHAT_DEFAULT_CHANNEL_ENV
-from platform.errors import OpenSREError
+from infrastructure.errors import OpenSREError
 
 logger = logging.getLogger(__name__)
 
@@ -91,7 +91,7 @@ def load_credentials_from_env(
     Raises :class:`OpenSREError` with a setup-friendly suggestion when
     neither a usable token+channel combination nor a webhook is configured.
     """
-    from platform.scheduling.scheduler.credentials import resolve_rocketchat_credentials
+    from infrastructure.scheduling.scheduler.credentials import resolve_rocketchat_credentials
 
     creds = resolve_rocketchat_credentials({})
     server_url = creds.get("server_url", "")

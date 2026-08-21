@@ -5,13 +5,13 @@ from __future__ import annotations
 import pytest
 
 from core.agent_harness.turns.gather_observation import GatheredEvidence
+from infrastructure.harness_ports import (
+    clear_metric_query_drafts,
+    metric_query_draft_for,
+)
 from integrations.posthog_mcp.metric_drafts import (
     posthog_signup_cohort_resolved,
     register_posthog_mcp_metric_drafts,
-)
-from platform.harness_ports import (
-    clear_metric_query_drafts,
-    metric_query_draft_for,
 )
 
 

@@ -12,11 +12,6 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from config.platform_bootstrap import ensure_project_platform_package
-
-# Before any first-party import that may resolve ``platform`` (mirrors surfaces.cli.app).
-ensure_project_platform_package()
-
 if TYPE_CHECKING:
     from config.repl_config import ReplConfig
     from surfaces.cli.host import CliHost

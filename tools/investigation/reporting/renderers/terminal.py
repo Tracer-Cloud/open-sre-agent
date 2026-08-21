@@ -9,8 +9,8 @@ from rich.console import Console
 from rich.text import Text
 
 from config.constants import SLACK_LINK_RE
-from platform.observability import get_output_format
-from platform.terminal.theme import BRAND, DIM, HIGHLIGHT, WARNING
+from infrastructure.observability import get_output_format
+from infrastructure.terminal.theme import BRAND, DIM, HIGHLIGHT, WARNING
 from tools.investigation.reporting.formatters.base import slack_links_to_plain_text
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -136,7 +136,7 @@ def _emit(rendered: str) -> None:
 
 def render_report(slack_message: str) -> None:
     """Render the final RCA report to terminal."""
-    from platform.observability import (
+    from infrastructure.observability import (
         get_progress_tracker,
         render_completed_investigation_footer,
     )

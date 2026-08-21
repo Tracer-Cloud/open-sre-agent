@@ -12,8 +12,8 @@ from typing import NoReturn
 
 import pytest
 
-from platform.analytics import install, provider
-from platform.analytics.events import Event
+from infrastructure.analytics import install, provider
+from infrastructure.analytics.events import Event
 
 
 @pytest.fixture(autouse=True)
@@ -469,7 +469,7 @@ import sys
 import time
 from pathlib import Path
 
-from platform.analytics import provider
+from infrastructure.analytics import provider
 
 config_dir = Path(sys.argv[1])
 start_file = Path(sys.argv[2])

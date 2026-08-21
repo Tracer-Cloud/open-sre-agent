@@ -8,8 +8,8 @@ from collections.abc import Callable
 from rich.console import Console
 from rich.markup import escape
 
-from platform.analytics.events import Event
-from platform.analytics.provider import get_analytics
+from infrastructure.analytics.events import Event
+from infrastructure.analytics.provider import get_analytics
 from surfaces.interactive_shell.runtime import Session
 from surfaces.interactive_shell.ui import DIM, ERROR, HIGHLIGHT, WARNING
 from tools.system.fleet_monitoring.lifecycle import TerminateResult, terminate

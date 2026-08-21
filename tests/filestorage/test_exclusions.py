@@ -19,13 +19,13 @@ from config.constants.filestorage import (
     REMOTE_SYNC_EXCLUDE_ENV,
     REMOTE_SYNC_EXCLUDE_OFF_ENV,
 )
-from platform.filestorage.config import load_remote_sync_config
-from platform.filestorage.engine import pull, push, run_sync
-from platform.filestorage.enums import SyncDirection, SyncRootName
-from platform.filestorage.errors import RemoteSyncConfigError, UnsyncablePathError
-from platform.filestorage.exclusions import NO_EXCLUSIONS, ExclusionRules, parse_exclusions
-from platform.filestorage.ports import RemoteObject
-from platform.filestorage.syncable import SyncRoot
+from infrastructure.filestorage.config import load_remote_sync_config
+from infrastructure.filestorage.engine import pull, push, run_sync
+from infrastructure.filestorage.enums import SyncDirection, SyncRootName
+from infrastructure.filestorage.errors import RemoteSyncConfigError, UnsyncablePathError
+from infrastructure.filestorage.exclusions import NO_EXCLUSIONS, ExclusionRules, parse_exclusions
+from infrastructure.filestorage.ports import RemoteObject
+from infrastructure.filestorage.syncable import SyncRoot
 from tests.filestorage.test_remote_sync import LEAKED_SECRET, FakeObjectStore
 
 
@@ -450,8 +450,8 @@ def configured(monkeypatch: pytest.MonkeyPatch, home: Path, roots: tuple[SyncRoo
     """Sync switched on against an in-memory store, with the given roots."""
     from config.constants import paths
     from config.constants.filestorage import REMOTE_SYNC_PROVIDER_ENV
-    from platform.filestorage import operations as sync_service
-    from platform.filestorage.providers.registry import register_object_store
+    from infrastructure.filestorage import operations as sync_service
+    from infrastructure.filestorage.providers.registry import register_object_store
 
     monkeypatch.setattr(paths, "OPENSRE_HOME_DIR", home)
     register_object_store("excl-memory", lambda _cfg: FakeObjectStore())
@@ -466,8 +466,8 @@ def test_status_reports_the_patterns_and_what_they_hold_back(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """A count per root is the only way to tell a live pattern from a typo."""
-    from platform.filestorage.messages import format_status_lines
-    from platform.filestorage.operations import get_sync_status
+    from infrastructure.filestorage.messages import format_status_lines
+    from infrastructure.filestorage.operations import get_sync_status
 
     monkeypatch.setenv(REMOTE_SYNC_EXCLUDE_ENV, "*.tmp,sessions/scratch-*")
 
@@ -486,8 +486,8 @@ def test_status_reports_the_patterns_and_what_they_hold_back(
 
 @pytest.mark.usefixtures("configured")
 def test_status_says_so_when_nothing_is_excluded(monkeypatch: pytest.MonkeyPatch) -> None:
-    from platform.filestorage.messages import NO_EXCLUSIONS_HELP, format_status_lines
-    from platform.filestorage.operations import get_sync_status
+    from infrastructure.filestorage.messages import NO_EXCLUSIONS_HELP, format_status_lines
+    from infrastructure.filestorage.operations import get_sync_status
 
     monkeypatch.setenv(REMOTE_SYNC_EXCLUDE_ENV, "")
 
@@ -546,8 +546,8 @@ def test_the_slash_surface_survives_bracket_patterns(monkeypatch: pytest.MonkeyP
 
 def test_the_report_line_is_unchanged_when_nothing_is_excluded() -> None:
     """Existing surfaces assert this line exactly; the feature must not touch it."""
-    from platform.filestorage.engine import SyncReport
-    from platform.filestorage.messages import format_report_lines
+    from infrastructure.filestorage.engine import SyncReport
+    from infrastructure.filestorage.messages import format_report_lines
 
     report = SyncReport(uploaded=["a"], downloaded=["b"], skipped=2)
 
@@ -558,8 +558,8 @@ def test_the_report_line_is_unchanged_when_nothing_is_excluded() -> None:
 
 
 def test_the_report_names_how_many_were_held_back() -> None:
-    from platform.filestorage.engine import SyncReport
-    from platform.filestorage.messages import format_report_lines
+    from infrastructure.filestorage.engine import SyncReport
+    from infrastructure.filestorage.messages import format_report_lines
 
     report = SyncReport(skipped=0, excluded={"memory/notes.tmp", "sessions/scratch-1.jsonl"})
 

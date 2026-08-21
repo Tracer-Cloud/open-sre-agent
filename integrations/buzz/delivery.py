@@ -5,11 +5,11 @@ from __future__ import annotations
 import logging
 from typing import Any
 
+from infrastructure.delivery.notifications.limits import MAX_MESSAGE_SIZE
+from infrastructure.delivery.notifications.redaction import redact_token
+from infrastructure.text.truncation import truncate
 from integrations.buzz.client import BuzzClient
 from integrations.config_models import BuzzConfig
-from platform.delivery.notifications.limits import MAX_MESSAGE_SIZE
-from platform.delivery.notifications.redaction import redact_token
-from platform.text.truncation import truncate
 
 logger = logging.getLogger(__name__)
 

@@ -12,10 +12,10 @@ from config.constants.filestorage import (
     DEFAULT_REMOTE_SYNC_PREFIX,
     DEFAULT_REMOTE_SYNC_PROVIDER,
 )
-from platform.filestorage import OrgScopeNotSupportedError, RemoteSyncError
-from platform.filestorage.engine import SyncProgress
-from platform.filestorage.enums import BucketExposure, RemoteSyncSubcommand, SyncDirection
-from platform.filestorage.messages import (
+from infrastructure.filestorage import OrgScopeNotSupportedError, RemoteSyncError
+from infrastructure.filestorage.engine import SyncProgress
+from infrastructure.filestorage.enums import BucketExposure, RemoteSyncSubcommand, SyncDirection
+from infrastructure.filestorage.messages import (
     DISABLED_HELP,
     direction_label,
     format_exclusion_lines,
@@ -25,9 +25,9 @@ from platform.filestorage.messages import (
     root_state,
     sanitize_terminal_text,
 )
-from platform.filestorage.operations import get_sync_status, run_remote_sync
-from platform.filestorage.providers.registry import builtin_providers
-from platform.filestorage.setup import RemoteSyncSetupRequest, save_remote_sync_settings
+from infrastructure.filestorage.operations import get_sync_status, run_remote_sync
+from infrastructure.filestorage.providers.registry import builtin_providers
+from infrastructure.filestorage.setup import RemoteSyncSetupRequest, save_remote_sync_settings
 from surfaces.interactive_shell.command_registry.types import SlashCommand
 from surfaces.interactive_shell.runtime import Session
 from surfaces.interactive_shell.ui import DIM, ERROR, HIGHLIGHT

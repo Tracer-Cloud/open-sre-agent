@@ -8,7 +8,7 @@ from collections.abc import Callable
 from datetime import UTC, datetime
 from typing import Protocol, runtime_checkable
 
-from platform.scheduling.task_types import TaskRecord, TaskStatus
+from infrastructure.scheduling.task_types import TaskRecord, TaskStatus
 from tools.system.fleet_monitoring.probe import pid_exists, probe
 
 

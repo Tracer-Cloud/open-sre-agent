@@ -1,6 +1,6 @@
 """Slack tool-usage recipe for the evidence-gather prompt.
 
-Registered with :func:`platform.harness_ports.register_gather_prompt_fragment`
+Registered with :func:`infrastructure.harness_ports.register_gather_prompt_fragment`
 from ``integrations/harness_adapters.py``.
 """
 

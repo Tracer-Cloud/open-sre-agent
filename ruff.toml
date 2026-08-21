@@ -61,10 +61,11 @@ ignore = [
 
 [lint.isort]
 known-first-party = [
+    "bootstrap",
     "config",
     "core",
     "integrations",
-    "platform",
+    "infrastructure",
     "surfaces",
     "tests",
     "tools",

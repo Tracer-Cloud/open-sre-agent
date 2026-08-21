@@ -1,4 +1,4 @@
-"""``opensre remote-sync`` — thin Click adapter over :mod:`platform.filestorage`."""
+"""``opensre remote-sync`` — thin Click adapter over :mod:`infrastructure.filestorage`."""
 
 from __future__ import annotations
 
@@ -10,23 +10,23 @@ from config.constants.filestorage import (
     DEFAULT_REMOTE_SYNC_PREFIX,
     DEFAULT_REMOTE_SYNC_PROVIDER,
 )
-from platform.filestorage import RemoteSyncConfigError, RemoteSyncError
-from platform.filestorage.enums import RemoteSyncField, RemoteSyncSubcommand
-from platform.filestorage.messages import (
+from infrastructure.filestorage import RemoteSyncConfigError, RemoteSyncError
+from infrastructure.filestorage.enums import RemoteSyncField, RemoteSyncSubcommand
+from infrastructure.filestorage.messages import (
     DISABLED_HELP,
     SETUP_DISABLED_CONFIRM,
     format_report_lines,
     format_setup_lines,
     format_status_lines,
 )
-from platform.filestorage.operations import get_sync_status, run_remote_sync
-from platform.filestorage.providers.registry import builtin_providers, provider_extra_fields
-from platform.filestorage.setup import (
+from infrastructure.filestorage.operations import get_sync_status, run_remote_sync
+from infrastructure.filestorage.providers.registry import builtin_providers, provider_extra_fields
+from infrastructure.filestorage.setup import (
     RemoteSyncSetupRequest,
     disable_remote_sync,
     save_remote_sync_settings,
 )
-from platform.process.exit_codes import ERROR, SUCCESS
+from infrastructure.process.exit_codes import ERROR, SUCCESS
 from surfaces.cli.commands.remote_sync_progress import CliProgress
 from surfaces.cli.telemetry import capture_exception
 
@@ -245,7 +245,7 @@ def _prompt_extra_field(field: RemoteSyncField, provider: str, current: str | No
     """Prompt for ``field`` only if ``provider`` declared it; otherwise leave it unset.
 
     The declaration (and its prompt text) lives with the provider — see
-    :func:`platform.filestorage.providers.registry.provider_extra_fields` —
+    :func:`infrastructure.filestorage.providers.registry.provider_extra_fields` —
     so this stays generic across every registered provider, built-in or
     community, instead of hardcoding which providers use which field.
     """

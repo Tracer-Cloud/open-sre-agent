@@ -254,6 +254,8 @@ from config.constants.yandex_cloud import (
     YC_USE_METADATA_ENV,
 )
 from config.llm_credentials import resolve_env_credential
+from infrastructure.observability.errors.boundary import report_exception
+from infrastructure.text.coercion import safe_int
 from integrations.airflow.config import airflow_config_from_env
 from integrations.airflow.config import classify as _classify_airflow
 from integrations.alertmanager import classify as _classify_alertmanager
@@ -383,8 +385,6 @@ from integrations.x_mcp import build_x_mcp_config
 from integrations.x_mcp import classify as _classify_x_mcp
 from integrations.yandex_cloud import classify as _classify_yandex_cloud
 from integrations.yandex_cloud.config import YandexCloudIntegrationConfig
-from platform.observability.errors.boundary import report_exception
-from platform.text.coercion import safe_int
 
 logger = logging.getLogger(__name__)
 

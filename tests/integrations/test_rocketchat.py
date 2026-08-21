@@ -111,7 +111,7 @@ def test_classify_validation_error_returns_none_and_reports() -> None:
     sanitized wrapper (no secret field values), mirroring the Discord rule."""
     secret_value = "leaked-secret-token"
 
-    with patch("platform.observability.errors.boundary.capture_exception") as mock_report:
+    with patch("infrastructure.observability.errors.boundary.capture_exception") as mock_report:
         result = classify(
             {"auth_token": secret_value, "server_url": "not-a-url", "user_id": "u1"},
             record_id="rec-rocketchat",

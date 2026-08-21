@@ -7,7 +7,7 @@ without misreading spikes and baselines.
 
 from __future__ import annotations
 
-from platform.evidence.metric_summary import summarize_prometheus_metrics
+from infrastructure.evidence.metric_summary import summarize_prometheus_metrics
 
 
 def _series(metric_name: str, points: list[tuple[float, float]]) -> dict[str, object]:
@@ -68,7 +68,7 @@ def test_format_bytes_rolls_up_at_rendered_boundaries() -> None:
     """Regression: the unit advanced on the raw amount but rendered rounded,
     so 1023.5 showed "1024 B" and 1048570.9 showed "1024.00 KiB" (see #5179
     for the same round-before-branch class)."""
-    from platform.evidence.metric_summary import _format_bytes
+    from infrastructure.evidence.metric_summary import _format_bytes
 
     assert _format_bytes(1023.4) == "1023 B"
     assert _format_bytes(1023.5) == "1.00 KiB"

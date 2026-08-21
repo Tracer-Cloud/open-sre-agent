@@ -15,14 +15,14 @@ from config.constants.filestorage import (
     REMOTE_SYNC_PROVIDER_ENV,
 )
 from config.repl_config import ReplConfig
-from platform.filestorage import operations as sync_operations
-from platform.filestorage.enums import SyncRootName
-from platform.filestorage.ports import RemoteObject
-from platform.filestorage.providers.registry import (
+from infrastructure.filestorage import operations as sync_operations
+from infrastructure.filestorage.enums import SyncRootName
+from infrastructure.filestorage.ports import RemoteObject
+from infrastructure.filestorage.providers.registry import (
     register_object_store,
     unregister_object_store,
 )
-from platform.filestorage.syncable import SyncRoot
+from infrastructure.filestorage.syncable import SyncRoot
 from surfaces.entrypoint import main
 
 

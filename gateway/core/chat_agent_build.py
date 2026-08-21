@@ -9,7 +9,7 @@ headless subprocess rendering.
 from __future__ import annotations
 
 from core.agent_harness.runtime import AgentBuildConfig
-from platform.turn_host.capability_policy import ensure_gateway_capability_policy
+from infrastructure.turn_host.capability_policy import ensure_gateway_capability_policy
 from tools.interactive_shell.subprocess_presenter import (
     headless_subprocess_presenter_factory,
 )

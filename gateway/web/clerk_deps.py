@@ -7,7 +7,7 @@ from typing import Annotated
 from fastapi import Depends, HTTPException, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 
-from platform.safety.auth.jwt_auth import JWTClaims, JWTVerificationError, verify_jwt_async
+from infrastructure.safety.auth.jwt_auth import JWTClaims, JWTVerificationError, verify_jwt_async
 
 _bearer = HTTPBearer(auto_error=False)
 

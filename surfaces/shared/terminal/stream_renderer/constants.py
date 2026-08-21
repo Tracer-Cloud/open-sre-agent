@@ -2,8 +2,8 @@
 
 from __future__ import annotations
 
-from platform.analytics.source import EntrypointSource
-from platform.terminal.theme import (
+from infrastructure.analytics.source import EntrypointSource
+from infrastructure.terminal.theme import (
     ANSI_BOLD,
     ANSI_DIM,
     ANSI_RESET,

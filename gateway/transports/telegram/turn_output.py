@@ -8,16 +8,16 @@ import time
 from collections.abc import Iterable
 
 from gateway.transports.telegram.poller.client import TelegramBotClient
-from integrations.telegram.formatting import markdown_to_telegram_html
-from platform.delivery.notifications.limits import MAX_MESSAGE_SIZE
-from platform.text.truncation import truncate
-from platform.turn_host.status_messages import (
+from infrastructure.delivery.notifications.limits import MAX_MESSAGE_SIZE
+from infrastructure.text.truncation import truncate
+from infrastructure.turn_host.status_messages import (
     EMPTY_RESPONSE_MESSAGE,
     initial_status_message,
     normalize_gateway_status,
     status_from_response_label,
     user_facing_error_message,
 )
+from integrations.telegram.formatting import markdown_to_telegram_html
 
 _LOG_PREVIEW_LIMIT = 500
 logger = logging.getLogger("gateway")

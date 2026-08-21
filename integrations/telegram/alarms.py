@@ -16,14 +16,14 @@ from __future__ import annotations
 import logging
 import time
 
+from infrastructure.delivery.notifications.cooldown import CooldownGate
+from infrastructure.delivery.notifications.limits import MAX_MESSAGE_SIZE
+from infrastructure.text.truncation import truncate
 from integrations.telegram.credentials import TelegramCredentials
 from integrations.telegram.delivery import (
     post_telegram_message,
     truncate_for_telegram_html,
 )
-from platform.delivery.notifications.cooldown import CooldownGate
-from platform.delivery.notifications.limits import MAX_MESSAGE_SIZE
-from platform.text.truncation import truncate
 
 logger = logging.getLogger(__name__)
 

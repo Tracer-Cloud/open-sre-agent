@@ -6,7 +6,7 @@ the Grafana dialect.
 
 from __future__ import annotations
 
-from platform.harness_ports import register_metric_query_draft, register_metric_query_tools
+from infrastructure.harness_ports import register_metric_query_draft, register_metric_query_tools
 
 # Grafana tools that return a series / log-derived metric.
 _METRIC_QUERY_TOOLS = ("query_grafana_metrics", "query_grafana_logs")

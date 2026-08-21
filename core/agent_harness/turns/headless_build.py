@@ -51,7 +51,7 @@ from core.agent_harness.turns.headless_adapters import (
     StaticReasoningClientProvider,
 )
 from core.agent_harness.turns.headless_agent import HeadlessAgent
-from platform.harness_ports import get_subprocess_presenter_factory
+from infrastructure.harness_ports import get_subprocess_presenter_factory
 
 if TYPE_CHECKING:
     from core.agent_harness.session.session_core import SessionCore

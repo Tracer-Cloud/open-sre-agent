@@ -6,15 +6,15 @@ from pathlib import Path
 
 import pytest
 
-from platform.scheduling.scheduler import claim_store
-from platform.scheduling.scheduler.claim_store import (
+from infrastructure.scheduling.scheduler import claim_store
+from infrastructure.scheduling.scheduler.claim_store import (
     complete_run,
     delete_runs,
     get_latest_finished_run,
     get_runs,
     try_claim,
 )
-from platform.scheduling.scheduler.types import TaskStatus
+from infrastructure.scheduling.scheduler.types import TaskStatus
 
 
 @pytest.fixture()

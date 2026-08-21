@@ -14,7 +14,7 @@ connected.
 
 This policy applies for every preferred metric source — not a single vendor.
 Only the draft *text* and optional observation parsers are integration-owned
-via :mod:`platform.harness_ports`.
+via :mod:`infrastructure.harness_ports`.
 """
 
 from __future__ import annotations
@@ -35,7 +35,7 @@ from core.agent_harness.turns.gather_observation import (
     GatheredEvidence,
     coerce_gathered_evidence,
 )
-from platform.harness_ports import (
+from infrastructure.harness_ports import (
     metric_cohort_resolved_for,
     metric_query_draft_for,
 )

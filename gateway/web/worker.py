@@ -79,8 +79,8 @@ class InvestigationWorker:
                 error="insufficient_credits",
             )
             return True
-        from platform.process.turn_capacity import queued_turn_slot
-        from platform.turn_host.concurrency import process_turn_gate
+        from infrastructure.process.turn_capacity import queued_turn_slot
+        from infrastructure.turn_host.concurrency import process_turn_gate
 
         # Already claimed from the queue, so it waits for a slot rather than
         # being dropped — the same policy scheduled runs take.
@@ -91,9 +91,9 @@ class InvestigationWorker:
     def _investigate(self, record: Any) -> None:
         """Run one claimed investigation and record its outcome; capacity is the caller's."""
         try:
-            from platform.analytics.cli import track_investigation
-            from platform.analytics.source import EntrypointSource, TriggerMode
-            from platform.analytics.usage_context import (
+            from infrastructure.analytics.cli import track_investigation
+            from infrastructure.analytics.source import EntrypointSource, TriggerMode
+            from infrastructure.analytics.usage_context import (
                 bound_usage_context,
                 ensure_process_session_id,
             )

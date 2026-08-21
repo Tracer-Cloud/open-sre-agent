@@ -16,7 +16,7 @@ from surfaces.cli.commands.cron import cron_add
 
 
 def _patch_scheduler_store(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
-    from platform.scheduling.scheduler import store as scheduler_store
+    from infrastructure.scheduling.scheduler import store as scheduler_store
 
     monkeypatch.setattr(
         scheduler_store,
@@ -39,11 +39,11 @@ def test_slack_without_a_webhook_or_chat_id_is_rejected(
 ) -> None:
     """Bot-token-only installs must not store a task with no destination."""
     monkeypatch.setattr(
-        "platform.scheduling.scheduler.credentials.resolve_slack_credentials",
+        "infrastructure.scheduling.scheduler.credentials.resolve_slack_credentials",
         lambda _params: {"access_token": "xoxb-test"},
     )
     monkeypatch.setattr(
-        "platform.scheduling.scheduler.credentials.resolve_slack_default_chat_id",
+        "infrastructure.scheduling.scheduler.credentials.resolve_slack_default_chat_id",
         lambda _params: "",
     )
 
@@ -59,11 +59,11 @@ def test_slack_with_default_channel_and_no_chat_id_is_accepted(
 ) -> None:
     """Bot-token installs with SLACK_DEFAULT_CHAT_ID may omit --chat-id."""
     monkeypatch.setattr(
-        "platform.scheduling.scheduler.credentials.resolve_slack_credentials",
+        "infrastructure.scheduling.scheduler.credentials.resolve_slack_credentials",
         lambda _params: {"access_token": "xoxb-test"},
     )
     monkeypatch.setattr(
-        "platform.scheduling.scheduler.credentials.resolve_slack_default_chat_id",
+        "infrastructure.scheduling.scheduler.credentials.resolve_slack_default_chat_id",
         lambda _params: "C0123ABCD",
     )
 

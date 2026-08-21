@@ -14,7 +14,7 @@ from typing import Any
 from pydantic import BaseModel
 
 from config.llm_credentials import resolve_env_credential
-from platform.delivery.reporting.delivery_registry import (
+from infrastructure.delivery.reporting.delivery_registry import (
     DeliveryContext,
     register_delivery_adapter,
 )

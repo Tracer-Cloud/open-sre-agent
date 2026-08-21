@@ -49,9 +49,9 @@ from core.tool.execution import (
     execute_tool_calls,
     public_tool_input,
 )
-from platform.observability.operations_log import record_operation
-from platform.observability.trace.redaction import redact_sensitive
-from platform.observability.trace.spans import (
+from infrastructure.observability.operations_log import record_operation
+from infrastructure.observability.trace.redaction import redact_sensitive
+from infrastructure.observability.trace.spans import (
     llm_span,
     loop_iteration_span,
     loop_span,

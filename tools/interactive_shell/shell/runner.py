@@ -8,7 +8,7 @@ from pathlib import Path
 from typing import Any
 
 import config.constants.platform as _platform
-from platform.terminal.theme import ERROR, GLYPH_ERROR, GLYPH_SUCCESS, HIGHLIGHT
+from infrastructure.terminal.theme import ERROR, GLYPH_ERROR, GLYPH_SUCCESS, HIGHLIGHT
 from tools.interactive_shell.shell import execution as shell_execution
 from tools.interactive_shell.shell.display import format_shell_command_for_display
 from tools.interactive_shell.shell.parsing import (

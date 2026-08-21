@@ -27,7 +27,7 @@ import time
 from dataclasses import dataclass
 from typing import IO
 
-from platform.safety.masking import MaskingContext, MaskingPolicy
+from infrastructure.safety.masking import MaskingContext, MaskingPolicy
 
 _MAX_OUTPUT_CHARS = 8000
 _POLL_INTERVAL_SEC = 0.5

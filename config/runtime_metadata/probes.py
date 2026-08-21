@@ -151,9 +151,8 @@ def host_os_facts() -> dict[str, str]:
     as the OS release states a false fact in the block that exists to prevent
     them.
 
-    ``sys.platform`` rather than ``platform.system()``: this repo ships its own
-    ``platform`` package (see ``config/secrets/os_keyring.py``), so the stdlib
-    name only resolves through a shim.
+    ``sys.platform`` is a plain string, so it avoids importing the stdlib
+    ``platform`` module just for ``platform.system()``.
     """
     identifier = sys.platform
     for prefix, family in _OS_FAMILY_BY_PLATFORM_PREFIX:

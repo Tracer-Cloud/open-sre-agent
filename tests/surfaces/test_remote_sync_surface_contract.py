@@ -80,7 +80,7 @@ def test_top_level_cli_remote_sync_status_off(
 
 
 def test_top_level_cli_remote_sync_sync_uses_service(monkeypatch: pytest.MonkeyPatch) -> None:
-    from platform.filestorage.engine import SyncReport
+    from infrastructure.filestorage.engine import SyncReport
 
     monkeypatch.setattr(
         "surfaces.cli.commands.remote_sync.run_remote_sync",

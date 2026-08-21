@@ -4,8 +4,8 @@ One package per inbound chat platform. Peers: **none imports another**.
 
 In API-framework terms, transports are the ingress adapters: platform inbound that
 authorizes, resolves a session, builds turn output, and calls the turn handler. The
-turn contract they implement is `platform.turn_host.turn_callback` /
-`platform.turn_host.turn_output`; the registry they register with is
+turn contract they implement is `infrastructure.turn_host.turn_callback` /
+`infrastructure.turn_host.turn_output`; the registry they register with is
 `gateway.transports.startup`; the shared per-turn steps they compose are
 `gateway.core.middleware`; the facade that starts them is `gateway/startup.py`.
 
@@ -25,7 +25,7 @@ package's `startup.py`.
 
 Each owns settings, inbound worker, security, turn output, and `startup.py`.
 Anything two transports need belongs in `gateway.core` (per-turn steps in
-`gateway.core.middleware`; turn output/callback in `platform.turn_host`).
+`gateway.core.middleware`; turn output/callback in `infrastructure.turn_host`).
 Concern completeness per transport is pinned by
 `gateway/tests/test_transport_contract.py` (with its known-gaps ledger).
 

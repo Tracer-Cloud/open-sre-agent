@@ -227,7 +227,7 @@ class LiteLLMLLMClient:
         return True
 
     def _build_request_kwargs(self, prompt_or_messages: Any) -> dict[str, Any]:
-        from platform.safety.guardrails.apply import apply_guardrails_to_messages
+        from infrastructure.safety.guardrails.apply import apply_guardrails_to_messages
 
         # normalize_messages_openai already keeps only role/content, but strip explicitly
         # so this stays safe if a future caller ever routes marked agent-history dicts here.

@@ -21,7 +21,7 @@ class ThemeParamType(click.ParamType):
     name = "theme"
 
     def _choices(self) -> tuple[str, ...]:
-        from platform.terminal.theme import list_theme_names
+        from infrastructure.terminal.theme import list_theme_names
 
         return list_theme_names()
 

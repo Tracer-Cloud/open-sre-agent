@@ -14,7 +14,7 @@ from typing import TYPE_CHECKING
 from rich.console import Console
 
 if TYPE_CHECKING:
-    from platform.scheduling.scheduler.types import ScheduledTask
+    from infrastructure.scheduling.scheduler.types import ScheduledTask
 
 _console = Console()
 
@@ -52,7 +52,7 @@ def add_task_and_echo(task: ScheduledTask, *, label: str) -> ScheduledTask:
     ``"Sentry digest"``). Returns the stored task, whose ``id`` may differ from
     the requested one when the store deduplicates an equivalent schedule.
     """
-    from platform.scheduling.scheduler.store import add_task
+    from infrastructure.scheduling.scheduler.store import add_task
 
     added = add_task(task)
     _console.print(f"[green]{label} task {added.id} created.[/green]")

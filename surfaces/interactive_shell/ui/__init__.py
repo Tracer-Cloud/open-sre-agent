@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any
 
-from platform.terminal.theme import (
+from infrastructure.terminal.theme import (
     ANSI_DIM,
     ANSI_RESET,
     BG,

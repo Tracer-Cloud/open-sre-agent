@@ -2,12 +2,12 @@
 
 from __future__ import annotations
 
+from infrastructure.scheduling.scheduler.agent_runner import AgentPayload, register_agent_runner
 from integrations.github.pr_sweep_runner import run_github_pr_sweep
 from integrations.manual_loop_runner import run_manual_prompt_loop
 from integrations.posthog.report_runner import run_posthog_report
 from integrations.sentry.morning_digest_runner import run_sentry_morning_digest
 from integrations.sentry.uptime import run_uptime_watch_tick
-from platform.scheduling.scheduler.agent_runner import AgentPayload, register_agent_runner
 
 
 def run_scheduled_agent_digest(payload: AgentPayload) -> str:

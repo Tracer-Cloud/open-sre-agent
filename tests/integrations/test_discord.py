@@ -81,13 +81,13 @@ def test_classify_validation_error_returns_none_and_reports() -> None:
     ValidationError string, so forwarding the raw error would leak secrets.
     Discord's classify() passes the exception straight through to
     ``report_classify_failure`` (integrations._validation_helpers), which
-    delegates to ``report_exception`` (platform.observability.errors.boundary)
+    delegates to ``report_exception`` (infrastructure.observability.errors.boundary)
     for the swap — assert on what actually reaches ``capture_exception``, one
     layer past the mocked-out call in older tests.
     """
     secret_value = "leaked-non-hex-secret"
 
-    with patch("platform.observability.errors.boundary.capture_exception") as mock_report:
+    with patch("infrastructure.observability.errors.boundary.capture_exception") as mock_report:
         result = classify(
             {"bot_token": "some-token", "public_key": secret_value},
             record_id="rec-discord",

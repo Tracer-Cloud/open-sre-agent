@@ -21,7 +21,7 @@ from core.domain.types.evidence import EvidenceSource
 from core.domain.types.retrieval import RetrievalControls
 from core.domain.types.tools import ToolSurface
 from core.tool.registry import BaseToolRegistryMetadata, normalize_surfaces
-from platform.observability.errors.boundary import report_exception
+from infrastructure.observability.errors.boundary import report_exception
 
 
 def _strip_optional(annotation: Any) -> tuple[Any, bool]:

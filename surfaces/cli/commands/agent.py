@@ -8,7 +8,7 @@ import click
 from rich.console import Console
 from rich.markup import escape
 
-from platform.terminal.theme import BOLD_BRAND, DIM, HIGHLIGHT
+from infrastructure.terminal.theme import BOLD_BRAND, DIM, HIGHLIGHT
 from surfaces.shared.terminal.components.rendering import repl_table
 from tools.system.fleet_monitoring.discovery import (
     classify_command_provider,

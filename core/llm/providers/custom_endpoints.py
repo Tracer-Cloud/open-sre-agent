@@ -105,7 +105,7 @@ def log_endpoint_resolution(
     project debug channel so ``opensre --debug`` / ``TRACER_VERBOSE=1`` shows it
     (OpenSRE does not configure stdlib ``logging`` levels from the CLI).
     """
-    from platform.observability import debug_print
+    from infrastructure.observability import debug_print
 
     debug_print(
         f"custom LLM endpoint resolved: provider={provider} "

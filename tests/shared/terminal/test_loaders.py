@@ -65,7 +65,7 @@ class TestLLMLoader:
         with llm_loader(console, label="consulting the model"):
             pass
 
-        from platform.terminal.theme import SECONDARY
+        from infrastructure.terminal.theme import SECONDARY
 
         assert SECONDARY in captured["text"]
         assert "consulting the model" in captured["text"]

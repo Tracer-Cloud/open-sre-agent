@@ -4,26 +4,26 @@ from __future__ import annotations
 
 import pytest
 
-from platform.scheduling.scheduler.loops import default_loop_channels, normalize_loop_channels
-from platform.scheduling.scheduler.types import Provider
+from infrastructure.scheduling.scheduler.loops import default_loop_channels, normalize_loop_channels
+from infrastructure.scheduling.scheduler.types import Provider
 
 
 class TestDefaultLoopChannels:
     def test_includes_slack_when_webhook_configured(self, monkeypatch: pytest.MonkeyPatch) -> None:
         monkeypatch.setattr(
-            "platform.scheduling.scheduler.loops.resolve_slack_credentials",
+            "infrastructure.scheduling.scheduler.loops.resolve_slack_credentials",
             lambda _params: {"webhook_url": "https://hooks.slack.com/x"},
         )
         monkeypatch.setattr(
-            "platform.scheduling.scheduler.loops.resolve_slack_default_chat_id",
+            "infrastructure.scheduling.scheduler.loops.resolve_slack_default_chat_id",
             lambda _params: "",
         )
         monkeypatch.setattr(
-            "platform.scheduling.scheduler.loops.resolve_telegram_credentials",
+            "infrastructure.scheduling.scheduler.loops.resolve_telegram_credentials",
             lambda _params: {},
         )
         monkeypatch.setattr(
-            "platform.scheduling.scheduler.loops.resolve_telegram_default_chat_id",
+            "infrastructure.scheduling.scheduler.loops.resolve_telegram_default_chat_id",
             lambda _params: "",
         )
 
@@ -36,19 +36,19 @@ class TestDefaultLoopChannels:
         self, monkeypatch: pytest.MonkeyPatch
     ) -> None:
         monkeypatch.setattr(
-            "platform.scheduling.scheduler.loops.resolve_slack_credentials",
+            "infrastructure.scheduling.scheduler.loops.resolve_slack_credentials",
             lambda _params: {"access_token": "xoxb-test"},
         )
         monkeypatch.setattr(
-            "platform.scheduling.scheduler.loops.resolve_slack_default_chat_id",
+            "infrastructure.scheduling.scheduler.loops.resolve_slack_default_chat_id",
             lambda _params: "C0123ABCD",
         )
         monkeypatch.setattr(
-            "platform.scheduling.scheduler.loops.resolve_telegram_credentials",
+            "infrastructure.scheduling.scheduler.loops.resolve_telegram_credentials",
             lambda _params: {},
         )
         monkeypatch.setattr(
-            "platform.scheduling.scheduler.loops.resolve_telegram_default_chat_id",
+            "infrastructure.scheduling.scheduler.loops.resolve_telegram_default_chat_id",
             lambda _params: "",
         )
 
@@ -60,19 +60,19 @@ class TestDefaultLoopChannels:
         self, monkeypatch: pytest.MonkeyPatch
     ) -> None:
         monkeypatch.setattr(
-            "platform.scheduling.scheduler.loops.resolve_slack_credentials",
+            "infrastructure.scheduling.scheduler.loops.resolve_slack_credentials",
             lambda _params: {"access_token": "xoxb-test"},
         )
         monkeypatch.setattr(
-            "platform.scheduling.scheduler.loops.resolve_slack_default_chat_id",
+            "infrastructure.scheduling.scheduler.loops.resolve_slack_default_chat_id",
             lambda _params: "",
         )
         monkeypatch.setattr(
-            "platform.scheduling.scheduler.loops.resolve_telegram_credentials",
+            "infrastructure.scheduling.scheduler.loops.resolve_telegram_credentials",
             lambda _params: {},
         )
         monkeypatch.setattr(
-            "platform.scheduling.scheduler.loops.resolve_telegram_default_chat_id",
+            "infrastructure.scheduling.scheduler.loops.resolve_telegram_default_chat_id",
             lambda _params: "",
         )
 
@@ -84,19 +84,19 @@ class TestDefaultLoopChannels:
 class TestNormalizeLoopChannels:
     def test_slack_ready_with_default_channel_only(self, monkeypatch: pytest.MonkeyPatch) -> None:
         monkeypatch.setattr(
-            "platform.scheduling.scheduler.loops.resolve_slack_credentials",
+            "infrastructure.scheduling.scheduler.loops.resolve_slack_credentials",
             lambda _params: {"access_token": "xoxb-test"},
         )
         monkeypatch.setattr(
-            "platform.scheduling.scheduler.loops.resolve_slack_default_chat_id",
+            "infrastructure.scheduling.scheduler.loops.resolve_slack_default_chat_id",
             lambda _params: "C0123ABCD",
         )
         monkeypatch.setattr(
-            "platform.scheduling.scheduler.loops.resolve_telegram_credentials",
+            "infrastructure.scheduling.scheduler.loops.resolve_telegram_credentials",
             lambda _params: {},
         )
         monkeypatch.setattr(
-            "platform.scheduling.scheduler.loops.resolve_telegram_default_chat_id",
+            "infrastructure.scheduling.scheduler.loops.resolve_telegram_default_chat_id",
             lambda _params: "",
         )
 
@@ -108,11 +108,11 @@ class TestNormalizeLoopChannels:
         self, monkeypatch: pytest.MonkeyPatch
     ) -> None:
         monkeypatch.setattr(
-            "platform.scheduling.scheduler.loops.resolve_slack_credentials",
+            "infrastructure.scheduling.scheduler.loops.resolve_slack_credentials",
             lambda _params: {"access_token": "xoxb-test"},
         )
         monkeypatch.setattr(
-            "platform.scheduling.scheduler.loops.resolve_slack_default_chat_id",
+            "infrastructure.scheduling.scheduler.loops.resolve_slack_default_chat_id",
             lambda _params: "",
         )
 

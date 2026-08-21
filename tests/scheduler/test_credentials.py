@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import pytest
 
-from platform.scheduling.scheduler.credentials import (
+from infrastructure.scheduling.scheduler.credentials import (
     requires_explicit_chat_id,
     resolve_discord_credentials,
     resolve_rocketchat_credentials,
@@ -12,7 +12,7 @@ from platform.scheduling.scheduler.credentials import (
     resolve_slack_default_chat_id,
     resolve_telegram_credentials,
 )
-from platform.scheduling.scheduler.loop_constants import LOOP_SLACK_CHAT_ID_PARAM
+from infrastructure.scheduling.scheduler.loop_constants import LOOP_SLACK_CHAT_ID_PARAM
 
 _ROCKETCHAT_ENV_VARS = (
     "ROCKETCHAT_SERVER_URL",
@@ -29,7 +29,7 @@ def _stub_slack_store(monkeypatch: pytest.MonkeyPatch, mapping: dict[str, str]) 
         return mapping.get(key, "")
 
     monkeypatch.setattr(
-        "platform.scheduling.scheduler.credentials._get_integration_credential", _get
+        "infrastructure.scheduling.scheduler.credentials._get_integration_credential", _get
     )
     monkeypatch.delenv("SLACK_WEBHOOK_URL", raising=False)
 
@@ -42,7 +42,7 @@ class TestTelegramCredentials:
     def test_from_env(self, monkeypatch: pytest.MonkeyPatch) -> None:
         monkeypatch.setenv("TELEGRAM_BOT_TOKEN", "from_env")
         monkeypatch.setattr(
-            "platform.scheduling.scheduler.credentials._get_integration_credential",
+            "infrastructure.scheduling.scheduler.credentials._get_integration_credential",
             lambda *_: "",
         )
         creds = resolve_telegram_credentials({})
@@ -51,11 +51,11 @@ class TestTelegramCredentials:
     def test_empty_when_nothing_configured(self, monkeypatch: pytest.MonkeyPatch) -> None:
         monkeypatch.delenv("TELEGRAM_BOT_TOKEN", raising=False)
         monkeypatch.setattr(
-            "platform.scheduling.scheduler.credentials._get_integration_credential",
+            "infrastructure.scheduling.scheduler.credentials._get_integration_credential",
             lambda *_: "",
         )
         monkeypatch.setattr(
-            "platform.scheduling.scheduler.credentials.resolve_env_credential",
+            "infrastructure.scheduling.scheduler.credentials.resolve_env_credential",
             lambda *_args, **_kwargs: "",
         )
         creds = resolve_telegram_credentials({})
@@ -65,11 +65,11 @@ class TestTelegramCredentials:
         monkeypatch.delenv("OPENSRE_DISABLE_KEYRING", raising=False)
         monkeypatch.delenv("TELEGRAM_BOT_TOKEN", raising=False)
         monkeypatch.setattr(
-            "platform.scheduling.scheduler.credentials._get_integration_credential",
+            "infrastructure.scheduling.scheduler.credentials._get_integration_credential",
             lambda *_: "",
         )
         monkeypatch.setattr(
-            "platform.scheduling.scheduler.credentials.resolve_env_credential",
+            "infrastructure.scheduling.scheduler.credentials.resolve_env_credential",
             lambda *_args, **_kwargs: "from_keyring",
         )
         creds = resolve_telegram_credentials({})
@@ -88,7 +88,7 @@ class TestSlackCredentials:
     def test_from_env(self, monkeypatch: pytest.MonkeyPatch) -> None:
         monkeypatch.setenv("SLACK_WEBHOOK_URL", "https://hooks.slack.com/from-env")
         monkeypatch.setattr(
-            "platform.scheduling.scheduler.credentials._get_integration_credential",
+            "infrastructure.scheduling.scheduler.credentials._get_integration_credential",
             lambda *_: "",
         )
         creds = resolve_slack_credentials({})
@@ -99,12 +99,12 @@ class TestSlackCredentials:
         monkeypatch.delenv("SLACK_BOT_TOKEN", raising=False)
         monkeypatch.setenv("SLACK_ACCESS_TOKEN", "xoxp-from-access-env")
         monkeypatch.setattr(
-            "platform.scheduling.scheduler.credentials._get_integration_credential",
+            "infrastructure.scheduling.scheduler.credentials._get_integration_credential",
             lambda *_: "",
         )
         # Isolate from a local wizard keyring that may hold SLACK_BOT_TOKEN.
         monkeypatch.setattr(
-            "platform.scheduling.scheduler.credentials.resolve_env_credential",
+            "infrastructure.scheduling.scheduler.credentials.resolve_env_credential",
             lambda name, **_kwargs: "xoxp-from-access-env" if name == "SLACK_ACCESS_TOKEN" else "",
         )
         creds = resolve_slack_credentials({})
@@ -114,11 +114,11 @@ class TestSlackCredentials:
         monkeypatch.setenv("SLACK_WEBHOOK_URL", "https://hooks.slack.com/primary")
         monkeypatch.setenv("SLACK_BOT_TOKEN", "xoxb-secondary")
         monkeypatch.setattr(
-            "platform.scheduling.scheduler.credentials._get_integration_credential",
+            "infrastructure.scheduling.scheduler.credentials._get_integration_credential",
             lambda *_: "",
         )
         monkeypatch.setattr(
-            "platform.scheduling.scheduler.credentials.resolve_env_credential",
+            "infrastructure.scheduling.scheduler.credentials.resolve_env_credential",
             lambda name, **_kwargs: "xoxb-secondary" if name == "SLACK_BOT_TOKEN" else "",
         )
         creds = resolve_slack_credentials({})
@@ -129,12 +129,12 @@ class TestSlackCredentials:
         monkeypatch.delenv("SLACK_BOT_TOKEN", raising=False)
         monkeypatch.delenv("SLACK_ACCESS_TOKEN", raising=False)
         monkeypatch.setattr(
-            "platform.scheduling.scheduler.credentials._get_integration_credential",
+            "infrastructure.scheduling.scheduler.credentials._get_integration_credential",
             lambda *_: "",
         )
         # Even if keyring somehow held a webhook URL, scheduler must ignore it.
         monkeypatch.setattr(
-            "platform.scheduling.scheduler.credentials.resolve_env_credential",
+            "infrastructure.scheduling.scheduler.credentials.resolve_env_credential",
             lambda name, **_kwargs: (
                 "https://hooks.slack.com/from-keyring" if name == "SLACK_WEBHOOK_URL" else ""
             ),
@@ -147,11 +147,11 @@ class TestSlackCredentials:
         monkeypatch.delenv("SLACK_BOT_TOKEN", raising=False)
         monkeypatch.delenv("SLACK_ACCESS_TOKEN", raising=False)
         monkeypatch.setattr(
-            "platform.scheduling.scheduler.credentials._get_integration_credential",
+            "infrastructure.scheduling.scheduler.credentials._get_integration_credential",
             lambda *_: "",
         )
         monkeypatch.setattr(
-            "platform.scheduling.scheduler.credentials.resolve_env_credential",
+            "infrastructure.scheduling.scheduler.credentials.resolve_env_credential",
             lambda *_args, **_kwargs: "",
         )
         creds = resolve_slack_credentials({})
@@ -162,11 +162,11 @@ class TestSlackCredentials:
         monkeypatch.delenv("SLACK_BOT_TOKEN", raising=False)
         monkeypatch.delenv("SLACK_ACCESS_TOKEN", raising=False)
         monkeypatch.setattr(
-            "platform.scheduling.scheduler.credentials._get_integration_credential",
+            "infrastructure.scheduling.scheduler.credentials._get_integration_credential",
             lambda *_: "",
         )
         monkeypatch.setattr(
-            "platform.scheduling.scheduler.credentials.resolve_env_credential",
+            "infrastructure.scheduling.scheduler.credentials.resolve_env_credential",
             lambda name, **_kwargs: "xoxb-from-keyring" if name == "SLACK_BOT_TOKEN" else "",
         )
         creds = resolve_slack_credentials({})
@@ -176,12 +176,12 @@ class TestSlackCredentials:
         monkeypatch.delenv("SLACK_WEBHOOK_URL", raising=False)
         monkeypatch.setenv("SLACK_BOT_TOKEN", "xoxb-from-env")
         monkeypatch.setattr(
-            "platform.scheduling.scheduler.credentials._get_integration_credential",
+            "infrastructure.scheduling.scheduler.credentials._get_integration_credential",
             lambda *_: "",
         )
         # resolve_env_credential prefers env; stub must still honor that contract.
         monkeypatch.setattr(
-            "platform.scheduling.scheduler.credentials.resolve_env_credential",
+            "infrastructure.scheduling.scheduler.credentials.resolve_env_credential",
             lambda name, **_kwargs: "xoxb-from-env" if name == "SLACK_BOT_TOKEN" else "",
         )
         creds = resolve_slack_credentials({})
@@ -191,7 +191,7 @@ class TestSlackCredentials:
         _stub_slack_store(monkeypatch, {"bot_token": "xoxb-from-store"})
         monkeypatch.delenv("SLACK_WEBHOOK_URL", raising=False)
         monkeypatch.setattr(
-            "platform.scheduling.scheduler.credentials.resolve_env_credential",
+            "infrastructure.scheduling.scheduler.credentials.resolve_env_credential",
             lambda *_args, **_kwargs: "",
         )
         creds = resolve_slack_credentials({})
@@ -210,7 +210,7 @@ class TestSlackDefaultChatId:
         monkeypatch.delenv("SLACK_DEFAULT_CHAT_ID", raising=False)
         monkeypatch.delenv("SLACK_BOT_TOKEN", raising=False)
         monkeypatch.setattr(
-            "platform.scheduling.scheduler.credentials.resolve_env_credential",
+            "infrastructure.scheduling.scheduler.credentials.resolve_env_credential",
             lambda *_args, **_kwargs: "",
         )
         assert resolve_slack_default_chat_id({}) == "C333"
@@ -219,7 +219,7 @@ class TestSlackDefaultChatId:
         _stub_slack_store(monkeypatch, {})
         monkeypatch.setenv("SLACK_DEFAULT_CHAT_ID", "C444")
         monkeypatch.setattr(
-            "platform.scheduling.scheduler.credentials.resolve_env_credential",
+            "infrastructure.scheduling.scheduler.credentials.resolve_env_credential",
             lambda name, **_kwargs: "xoxb-env" if name == "SLACK_BOT_TOKEN" else "",
         )
         assert resolve_slack_default_chat_id({}) == "C444"
@@ -228,7 +228,7 @@ class TestSlackDefaultChatId:
         _stub_slack_store(monkeypatch, {})
         monkeypatch.delenv("SLACK_DEFAULT_CHAT_ID", raising=False)
         monkeypatch.setattr(
-            "platform.scheduling.scheduler.credentials.resolve_env_credential",
+            "infrastructure.scheduling.scheduler.credentials.resolve_env_credential",
             lambda *_args, **_kwargs: "",
         )
         assert resolve_slack_default_chat_id({}) == ""
@@ -237,7 +237,7 @@ class TestSlackDefaultChatId:
         _stub_slack_store(monkeypatch, {"default_chat_id": "C-store"})
         monkeypatch.delenv("SLACK_DEFAULT_CHAT_ID", raising=False)
         monkeypatch.setattr(
-            "platform.scheduling.scheduler.credentials.resolve_env_credential",
+            "infrastructure.scheduling.scheduler.credentials.resolve_env_credential",
             lambda name, **_kwargs: "xoxb-env" if name == "SLACK_BOT_TOKEN" else "",
         )
         assert resolve_slack_default_chat_id({}) == ""
@@ -253,7 +253,7 @@ class TestSlackDefaultChatId:
         _stub_slack_store(monkeypatch, {"bot_token": "xoxb-store"})
         monkeypatch.setenv("SLACK_DEFAULT_CHAT_ID", "C-env")
         monkeypatch.setattr(
-            "platform.scheduling.scheduler.credentials.resolve_env_credential",
+            "infrastructure.scheduling.scheduler.credentials.resolve_env_credential",
             lambda name, **_kwargs: "xoxb-env" if name == "SLACK_BOT_TOKEN" else "",
         )
         assert resolve_slack_default_chat_id({}) == ""
@@ -272,11 +272,11 @@ class TestRequiresExplicitChatId:
         self, monkeypatch: pytest.MonkeyPatch
     ) -> None:
         monkeypatch.setattr(
-            "platform.scheduling.scheduler.credentials.resolve_slack_credentials",
+            "infrastructure.scheduling.scheduler.credentials.resolve_slack_credentials",
             lambda _params: {"access_token": "xoxb-test"},
         )
         monkeypatch.setattr(
-            "platform.scheduling.scheduler.credentials.resolve_slack_default_chat_id",
+            "infrastructure.scheduling.scheduler.credentials.resolve_slack_default_chat_id",
             lambda _params: "C0123ABCD",
         )
         assert requires_explicit_chat_id("slack") is False
@@ -285,11 +285,11 @@ class TestRequiresExplicitChatId:
         self, monkeypatch: pytest.MonkeyPatch
     ) -> None:
         monkeypatch.setattr(
-            "platform.scheduling.scheduler.credentials.resolve_slack_credentials",
+            "infrastructure.scheduling.scheduler.credentials.resolve_slack_credentials",
             lambda _params: {"access_token": "xoxb-test"},
         )
         monkeypatch.setattr(
-            "platform.scheduling.scheduler.credentials.resolve_slack_default_chat_id",
+            "infrastructure.scheduling.scheduler.credentials.resolve_slack_default_chat_id",
             lambda _params: "",
         )
         assert requires_explicit_chat_id("slack") is True
@@ -303,7 +303,7 @@ class TestDiscordCredentials:
     def test_from_env(self, monkeypatch: pytest.MonkeyPatch) -> None:
         monkeypatch.setenv("DISCORD_BOT_TOKEN", "discord_from_env")
         monkeypatch.setattr(
-            "platform.scheduling.scheduler.credentials._get_integration_credential",
+            "infrastructure.scheduling.scheduler.credentials._get_integration_credential",
             lambda *_: "",
         )
         creds = resolve_discord_credentials({})
@@ -312,11 +312,11 @@ class TestDiscordCredentials:
     def test_empty_when_nothing_configured(self, monkeypatch: pytest.MonkeyPatch) -> None:
         monkeypatch.delenv("DISCORD_BOT_TOKEN", raising=False)
         monkeypatch.setattr(
-            "platform.scheduling.scheduler.credentials._get_integration_credential",
+            "infrastructure.scheduling.scheduler.credentials._get_integration_credential",
             lambda *_: "",
         )
         monkeypatch.setattr(
-            "platform.scheduling.scheduler.credentials.resolve_env_credential",
+            "infrastructure.scheduling.scheduler.credentials.resolve_env_credential",
             lambda *_args, **_kwargs: "",
         )
         creds = resolve_discord_credentials({})
@@ -325,11 +325,11 @@ class TestDiscordCredentials:
     def test_from_keyring(self, monkeypatch: pytest.MonkeyPatch) -> None:
         monkeypatch.delenv("DISCORD_BOT_TOKEN", raising=False)
         monkeypatch.setattr(
-            "platform.scheduling.scheduler.credentials._get_integration_credential",
+            "infrastructure.scheduling.scheduler.credentials._get_integration_credential",
             lambda *_: "",
         )
         monkeypatch.setattr(
-            "platform.scheduling.scheduler.credentials.resolve_env_credential",
+            "infrastructure.scheduling.scheduler.credentials.resolve_env_credential",
             lambda *_args, **_kwargs: "discord_from_keyring",
         )
         creds = resolve_discord_credentials({})
@@ -344,11 +344,11 @@ class TestRocketChatCredentials:
         for env_var in _ROCKETCHAT_ENV_VARS:
             monkeypatch.delenv(env_var, raising=False)
         monkeypatch.setattr(
-            "platform.scheduling.scheduler.credentials._get_integration_credential",
+            "infrastructure.scheduling.scheduler.credentials._get_integration_credential",
             lambda *_: "",
         )
         monkeypatch.setattr(
-            "platform.scheduling.scheduler.credentials.resolve_env_credential",
+            "infrastructure.scheduling.scheduler.credentials.resolve_env_credential",
             lambda *_args, **_kwargs: "",
         )
         creds = resolve_rocketchat_credentials(
@@ -371,11 +371,11 @@ class TestRocketChatCredentials:
         monkeypatch.setenv("ROCKETCHAT_AUTH_TOKEN", "tok_from_env")
         monkeypatch.setenv("ROCKETCHAT_USER_ID", "u_env")
         monkeypatch.setattr(
-            "platform.scheduling.scheduler.credentials._get_integration_credential",
+            "infrastructure.scheduling.scheduler.credentials._get_integration_credential",
             lambda *_: "",
         )
         monkeypatch.setattr(
-            "platform.scheduling.scheduler.credentials.resolve_env_credential",
+            "infrastructure.scheduling.scheduler.credentials.resolve_env_credential",
             lambda name, **_kwargs: "tok_from_env" if name == "ROCKETCHAT_AUTH_TOKEN" else "",
         )
         creds = resolve_rocketchat_credentials({})
@@ -391,11 +391,11 @@ class TestRocketChatCredentials:
         monkeypatch.setenv("ROCKETCHAT_SERVER_URL", "https://chat.example.com")
         monkeypatch.setenv("ROCKETCHAT_USER_ID", "u_env")
         monkeypatch.setattr(
-            "platform.scheduling.scheduler.credentials._get_integration_credential",
+            "infrastructure.scheduling.scheduler.credentials._get_integration_credential",
             lambda *_: "",
         )
         monkeypatch.setattr(
-            "platform.scheduling.scheduler.credentials.resolve_env_credential",
+            "infrastructure.scheduling.scheduler.credentials.resolve_env_credential",
             lambda name, **_kwargs: "tok_from_keyring" if name == "ROCKETCHAT_AUTH_TOKEN" else "",
         )
         creds = resolve_rocketchat_credentials({})
@@ -406,11 +406,11 @@ class TestRocketChatCredentials:
             monkeypatch.delenv(env_var, raising=False)
         monkeypatch.setenv("ROCKETCHAT_WEBHOOK_URL", "https://chat.example.com/hooks/a/b")
         monkeypatch.setattr(
-            "platform.scheduling.scheduler.credentials._get_integration_credential",
+            "infrastructure.scheduling.scheduler.credentials._get_integration_credential",
             lambda *_: "",
         )
         monkeypatch.setattr(
-            "platform.scheduling.scheduler.credentials.resolve_env_credential",
+            "infrastructure.scheduling.scheduler.credentials.resolve_env_credential",
             lambda *_args, **_kwargs: "",
         )
         creds = resolve_rocketchat_credentials({})
@@ -420,11 +420,11 @@ class TestRocketChatCredentials:
         for env_var in _ROCKETCHAT_ENV_VARS:
             monkeypatch.delenv(env_var, raising=False)
         monkeypatch.setattr(
-            "platform.scheduling.scheduler.credentials._get_integration_credential",
+            "infrastructure.scheduling.scheduler.credentials._get_integration_credential",
             lambda *_: "",
         )
         monkeypatch.setattr(
-            "platform.scheduling.scheduler.credentials.resolve_env_credential",
+            "infrastructure.scheduling.scheduler.credentials.resolve_env_credential",
             lambda name, **_kwargs: (
                 "https://chat.example.com/hooks/from-keyring"
                 if name == "ROCKETCHAT_WEBHOOK_URL"
@@ -439,11 +439,11 @@ class TestRocketChatCredentials:
             monkeypatch.delenv(env_var, raising=False)
         monkeypatch.setenv("ROCKETCHAT_AUTH_TOKEN", "tok_from_env")
         monkeypatch.setattr(
-            "platform.scheduling.scheduler.credentials._get_integration_credential",
+            "infrastructure.scheduling.scheduler.credentials._get_integration_credential",
             lambda *_: "",
         )
         monkeypatch.setattr(
-            "platform.scheduling.scheduler.credentials.resolve_env_credential",
+            "infrastructure.scheduling.scheduler.credentials.resolve_env_credential",
             lambda name, **_kwargs: "tok_from_env" if name == "ROCKETCHAT_AUTH_TOKEN" else "",
         )
         creds = resolve_rocketchat_credentials({"auth_token": "tok_from_params"})
@@ -453,11 +453,11 @@ class TestRocketChatCredentials:
         for env_var in _ROCKETCHAT_ENV_VARS:
             monkeypatch.delenv(env_var, raising=False)
         monkeypatch.setattr(
-            "platform.scheduling.scheduler.credentials._get_integration_credential",
+            "infrastructure.scheduling.scheduler.credentials._get_integration_credential",
             lambda *_: "",
         )
         monkeypatch.setattr(
-            "platform.scheduling.scheduler.credentials.resolve_env_credential",
+            "infrastructure.scheduling.scheduler.credentials.resolve_env_credential",
             lambda *_args, **_kwargs: "",
         )
         creds = resolve_rocketchat_credentials({})

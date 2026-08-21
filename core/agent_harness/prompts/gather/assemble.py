@@ -15,7 +15,7 @@ from core.agent_harness.prompts.memory.prior_investigation import (
     is_within_recall_window,
     prior_investigation_headline,
 )
-from platform.harness_ports import gather_prompt_vendor_fragments
+from infrastructure.harness_ports import gather_prompt_vendor_fragments
 
 if TYPE_CHECKING:
     from core.agent_harness.ports import SessionState
@@ -100,7 +100,7 @@ def build_gather_system_prompt_envelope(session: SessionState) -> PromptEnvelope
                 kind=PromptBlockKind.RULE,
                 tier=PromptTier.STABLE,
                 content=f"{vendor_fragments}\n",
-                provenance="platform.harness_ports.gather_prompt_vendor_fragments",
+                provenance="infrastructure.harness_ports.gather_prompt_vendor_fragments",
             )
         )
     configured = (
@@ -147,7 +147,7 @@ def build_gather_system_prompt(session: SessionState) -> str:
     returns. The prompt names the configured integrations so the model scopes its
     tool calls to what is actually connected. Vendor-specific tool-usage recipes
     (which tool to call for a given integration's questions) are supplied by
-    registered fragments (see :func:`platform.harness_ports.gather_prompt_vendor_fragments`)
+    registered fragments (see :func:`infrastructure.harness_ports.gather_prompt_vendor_fragments`)
     rather than hardcoded here.
     """
     return build_gather_system_prompt_envelope(session).render()

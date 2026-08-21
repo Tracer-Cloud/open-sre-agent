@@ -14,6 +14,18 @@ from typing import Any
 
 from rich.markup import escape
 
+from infrastructure.terminal.theme import (
+    DIM,
+    ERROR,
+    GLYPH_BULLET,
+    GLYPH_ERROR,
+    GLYPH_SUCCESS,
+    GLYPH_WARNING,
+    HIGHLIGHT,
+    SECONDARY,
+    TEXT,
+    WARNING,
+)
 from integrations._table_render import new_table, render_table, wrap_clauses
 from integrations._verifiers_loader import register_all_verifiers
 from integrations.catalog import (
@@ -28,18 +40,6 @@ from integrations.registry import (
 from integrations.slack.verifier import RUNTIME_SEND_TEST_KEY as _SLACK_RUNTIME_SEND_TEST_KEY
 from integrations.store import get_integration
 from integrations.verification import VerifierFn, get_verifier, result
-from platform.terminal.theme import (
-    DIM,
-    ERROR,
-    GLYPH_BULLET,
-    GLYPH_ERROR,
-    GLYPH_SUCCESS,
-    GLYPH_WARNING,
-    HIGHLIGHT,
-    SECONDARY,
-    TEXT,
-    WARNING,
-)
 
 register_all_verifiers()
 

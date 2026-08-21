@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import logging
 
-from platform.logging.quiet_third_party import quiet_noisy_third_party_loggers
+from infrastructure.logging.quiet_third_party import quiet_noisy_third_party_loggers
 
 # Routine authorized inbound audits are still emitted at INFO for other surfaces
 # (Hermes, ops tooling) but are hidden in the dedicated gateway process.

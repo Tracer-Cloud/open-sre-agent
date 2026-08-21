@@ -11,7 +11,7 @@ from config.runtime_metadata import (
 )
 from core.domain.types.tools import ToolSurface
 from core.tool import BaseTool, SideEffectLevel
-from platform.observability.trace.spans import component_span
+from infrastructure.observability.trace.spans import component_span
 from tools.system.python_execution_tool.credentials import execution_env, github_extract_params
 from tools.system.python_execution_tool.runner import run_python_execution
 

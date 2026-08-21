@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import re
 
-from platform.text.markdown import tighten_markdown_emphasis
+from infrastructure.text.markdown import tighten_markdown_emphasis
 
 # Align copy across docs-aware and conversational CLI assistants so wording
 # does not drift between modules.

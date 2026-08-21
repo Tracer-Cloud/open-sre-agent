@@ -8,7 +8,7 @@ import click
 from rich.console import Console
 from rich.text import Text
 
-from platform.terminal.theme import BRAND, DIM, TEXT
+from infrastructure.terminal.theme import BRAND, DIM, TEXT
 from surfaces.shared.terminal.banner import build_ready_panel
 
 #: First-run actions only. Everything else is discoverable via ``opensre --help``;

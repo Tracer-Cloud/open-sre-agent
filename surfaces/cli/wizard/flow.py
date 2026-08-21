@@ -28,9 +28,7 @@ from config.llm_auth.auth_method import (
 from config.llm_auth.records import save_provider_auth_record
 from config.setup_store import get_store_path, save_local_config
 from core.llm.providers.azure_openai import is_azure_openai_provider
-from integrations.llm_cli.binary_resolver import diagnose_binary_path
-from integrations.llm_cli.codex_oauth import CodexOAuthError, run_codex_oauth_login
-from platform.terminal.theme import (
+from infrastructure.terminal.theme import (
     ERROR,
     GLYPH_ERROR,
     GLYPH_WARNING,
@@ -38,6 +36,8 @@ from platform.terminal.theme import (
     TEXT,
     WARNING,
 )
+from integrations.llm_cli.binary_resolver import diagnose_binary_path
+from integrations.llm_cli.codex_oauth import CodexOAuthError, run_codex_oauth_login
 from surfaces.cli.wizard._ui import (
     Choice,
     WizardBack,
@@ -128,7 +128,7 @@ def build_demo_action_response() -> dict:
 
 def _seed_onboarding_loops() -> int:
     """Seed starter scheduled loops after onboarding completes."""
-    from platform.scheduling.scheduler.loops import seed_starter_loops
+    from infrastructure.scheduling.scheduler.loops import seed_starter_loops
 
     try:
         return len(seed_starter_loops())

@@ -21,7 +21,7 @@ from gateway.transports.slack.client import SlackWebApiClient
 from gateway.transports.slack.delivery.channel_intro import ChannelIntroGreeter
 from gateway.transports.slack.processing.dispatcher import SlackTurnDispatcher
 from gateway.transports.slack.settings import SlackGatewaySettings
-from platform.turn_host.turn_callback import TurnCallback
+from infrastructure.turn_host.turn_callback import TurnCallback
 
 _PLATFORM_SLACK = "slack"
 

@@ -22,7 +22,15 @@ from tests.shared.product_sources import product_python_files
 _REPO_ROOT = Path(__file__).resolve().parents[2]
 
 #: Roots listed in ``[tool.setuptools.packages.find]``.
-_SHIPPED_ROOTS = ("bootstrap", "config", "core", "gateway", "integrations", "platform", "tools")
+_SHIPPED_ROOTS = (
+    "bootstrap",
+    "config",
+    "core",
+    "gateway",
+    "integrations",
+    "infrastructure",
+    "tools",
+)
 
 #: Directories that hold data files rather than importable modules.
 _NOT_PACKAGES = frozenset({"__pycache__", "skills", "sample_alerts"})

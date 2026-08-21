@@ -17,11 +17,11 @@ from typing import TYPE_CHECKING, Any, NoReturn, cast
 
 import questionary
 
-from platform.terminal.prompt_support import (
+from infrastructure.terminal.prompt_support import (
     QUESTIONARY_QMARK,
     questionary_prompt_style,
 )
-from platform.terminal.theme import (
+from infrastructure.terminal.theme import (
     ANSI_BOLD,
     ANSI_DIM,
     ANSI_RESET,
@@ -900,7 +900,7 @@ def cmd_setup(service: str | None) -> str:
 
 
 def cmd_list() -> None:
-    from platform.process.runtime_flags import is_json_output
+    from infrastructure.process.runtime_flags import is_json_output
 
     items = list_integrations()
 
@@ -917,8 +917,8 @@ def cmd_list() -> None:
 
     from rich.markup import escape
 
+    from infrastructure.terminal.theme import HIGHLIGHT, SECONDARY, TEXT
     from integrations._table_render import new_table, render_table
-    from platform.terminal.theme import HIGHLIGHT, SECONDARY, TEXT
 
     table = new_table()
     table.add_column("SERVICE", style=TEXT, no_wrap=True)
@@ -949,7 +949,7 @@ def cmd_show(service: str | None) -> None:
 
 
 def cmd_remove(service: str | None) -> None:
-    from platform.process.runtime_flags import is_yes
+    from infrastructure.process.runtime_flags import is_yes
 
     if not service:
         _die("Usage: remove <service>")
@@ -971,7 +971,7 @@ def cmd_remove(service: str | None) -> None:
 
 
 def cmd_verify(service: str | None, *, send_slack_test: bool = False) -> int:
-    from platform.process.runtime_flags import is_json_output
+    from infrastructure.process.runtime_flags import is_json_output
 
     if service:
         service = resolve_management_service(service)

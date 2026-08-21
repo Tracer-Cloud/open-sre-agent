@@ -12,8 +12,8 @@ from typing import Any
 from core.tool import EvidenceType, SideEffectLevel
 from core.tool_framework.tool_decorator import tool
 from core.tool_framework.utils import tool_unavailable
+from infrastructure.evidence.evidence_compaction import compact_logs, summarize_counts
 from integrations.datadog._client import make_async_client
-from platform.evidence.evidence_compaction import compact_logs, summarize_counts
 
 
 def _run_in_thread(coro: Any) -> Any:

@@ -14,13 +14,12 @@ MODE = os.environ.get("OPENSRE_PYINSTALLER_MODE", "onedir")
 if MODE not in {"onedir", "onefile"}:
     raise ValueError(f"Unsupported OPENSRE_PYINSTALLER_MODE: {MODE!r}")
 
-manifest = runpy.run_path(str(ROOT / "platform/deployment/packaging/release_manifest.py"))
+manifest = runpy.run_path(str(ROOT / "infrastructure/deployment/packaging/release_manifest.py"))
 runtime_hidden_imports = manifest["runtime_hidden_imports"]
 skill_data_entries = manifest["skill_data_entries"]
 
 datas = [
-    (str(ROOT / "platform"), "platform"),
-    (str(ROOT / ".stdlib_vendor"), "_opensre_stdlib_platform"),
+    (str(ROOT / "infrastructure"), "infrastructure"),
 ]
 datas += collect_data_files("surfaces.cli")
 datas += collect_data_files("surfaces.shared")
