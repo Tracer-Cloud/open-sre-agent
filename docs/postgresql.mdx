@@ -142,28 +142,14 @@ postgresql │ local env │ ✓ passed │ Connected to PostgreSQL 16.15
            │           │          │ target database: app_db.
 ```
 
-Register the local instance in the store. `opensre integrations setup postgresql` is interactive; for a scriptable demo, write directly into an isolated store file instead of `~/.opensre/integrations.json` -- `OPENSRE_INTEGRATIONS_STORE_PATH` is a genuine, first-class override (`config/constants/tenancy.py`), so this never touches your real config:
+`opensre investigate` only treats an integration as active once the store resolution has *something* to fall through to env vars with -- an untouched `~/.opensre/integrations.json` with an unrelated integration in it blocks env-var fallback entirely. Point `OPENSRE_INTEGRATIONS_STORE_PATH` at an empty, valid store instead, so your real config is never read or written and the `POSTGRESQL_*` vars above are the only source of connection info:
 
 ```bash
 export OPENSRE_INTEGRATIONS_STORE_PATH=$(mktemp /tmp/opensre-postgresql-demo.XXXXXX)
-python3 <<'INNERPY'
-import json, os, pathlib
-
-path = pathlib.Path(os.environ["OPENSRE_INTEGRATIONS_STORE_PATH"])
-store = json.loads(path.read_text()) if path.stat().st_size else {"version": 2, "integrations": []}
-store["integrations"].append({
-    "id": "postgresql-local-demo",
-    "service": "postgresql",
-    "status": "active",
-    "instances": [{"name": "default", "tags": {}, "credentials": {
-        "host": "127.0.0.1", "port": 5433, "database": "app_db",
-        "username": "postgres", "password": "verifypass", "ssl_mode": "disable",
-    }}],
-})
-path.parent.mkdir(parents=True, exist_ok=True)
-path.write_text(json.dumps(store, indent=2))
-INNERPY
+echo '{"version": 2, "integrations": []}' > "$OPENSRE_INTEGRATIONS_STORE_PATH"
 ```
+
+A literal zero-byte file does not work here -- the store loader expects valid JSON and raises on an empty read, so this writes an explicitly empty (but valid) store rather than just creating the file with `mktemp` alone.
 
 Trigger a real investigation against the slow query — this is the actual supported entrypoint, not an internal import:
 
@@ -177,10 +163,10 @@ opensre investigate --input-json '{
 }'
 ```
 
-Real output from a run against this exact local instance (edited for length):
+Real output from a run against this exact local instance (edited for length). An empty store makes `opensre investigate` fall through to env-var resolution for *every* integration, not just PostgreSQL -- if your shell or machine already resolves another integration from its own env vars, it rides along too (harmless, and unrelated to the PostgreSQL tool calls below):
 
 ```
-Loading integrations: postgresql
+Loading integrations: telegram, postgresql
 ↳ PostgreSQL · get postgresql slow queries
 ↳ PostgreSQL · get postgresql server status
 ↳ PostgreSQL · get postgresql current queries
@@ -200,17 +186,12 @@ transactions, no bloat, healthy cache/connection counts.
 
 All 6 registered tools were exercised in this single turn.
 
-Remove the demo store file when done (no edit to your real store needed):
-
-```bash
-rm -f "$OPENSRE_INTEGRATIONS_STORE_PATH"
-unset OPENSRE_INTEGRATIONS_STORE_PATH
-```
-
 Teardown:
 
 ```bash
 docker rm -f postgres-dev
+rm -f "$OPENSRE_INTEGRATIONS_STORE_PATH"
+unset OPENSRE_INTEGRATIONS_STORE_PATH
 unset POSTGRESQL_HOST POSTGRESQL_PORT POSTGRESQL_DATABASE
 unset POSTGRESQL_USERNAME POSTGRESQL_PASSWORD POSTGRESQL_SSL_MODE
 ```
