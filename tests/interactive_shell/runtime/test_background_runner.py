@@ -10,8 +10,8 @@ import pytest
 from rich.console import Console
 
 from infrastructure.scheduling.background_investigations.store import (
-    BackgroundInvestigationStore,
-    BackgroundInvestigationStoreLockTimeout,
+    RecordStore,
+    StoreLockTimeout,
 )
 from surfaces.interactive_shell.command_registry import dispatch_slash
 from surfaces.interactive_shell.runtime.background.runner import (
@@ -20,9 +20,7 @@ from surfaces.interactive_shell.runtime.background.runner import (
 )
 from surfaces.interactive_shell.session import Session
 
-_STORE_FACTORY = (
-    "infrastructure.scheduling.background_investigations.store.background_investigation_store"
-)
+_STORE_FACTORY = "infrastructure.scheduling.background_investigations.store.open_record_store"
 
 
 def _noop_tracker(**_kwargs: Any) -> Any:
@@ -129,7 +127,7 @@ class _RaisingStore:
     def save(self, record: Any) -> None:
         _ = record
         self.attempts += 1
-        raise BackgroundInvestigationStoreLockTimeout("locked")
+        raise StoreLockTimeout("locked")
 
 
 def test_a_completed_investigation_is_readable_from_another_store_instance(
@@ -138,12 +136,12 @@ def test_a_completed_investigation_is_readable_from_another_store_instance(
     """ "Readable across processes" is only true once the record reaches the file.
     A second instance over the same path is the closest in-process proxy."""
     path = tmp_path / "background" / "investigations.json"
-    monkeypatch.setattr(_STORE_FACTORY, lambda: BackgroundInvestigationStore(path))
+    monkeypatch.setattr(_STORE_FACTORY, lambda: RecordStore(path))
     session = Session()
 
     task_id = _run_to_completion(session, monkeypatch)
 
-    stored = BackgroundInvestigationStore(path).get(task_id)
+    stored = RecordStore(path).get(task_id)
     assert stored is not None
     assert stored.status == "completed"
     assert stored.root_cause == "pool saturation"
@@ -193,7 +191,7 @@ def test_a_raising_notification_channel_does_not_fail_the_investigation(
     )
 
     path = tmp_path / "background" / "investigations.json"
-    monkeypatch.setattr(_STORE_FACTORY, lambda: BackgroundInvestigationStore(path))
+    monkeypatch.setattr(_STORE_FACTORY, lambda: RecordStore(path))
     monkeypatch.setattr("bootstrap.adapters.install_notification_adapters", lambda: ("telegram",))
     clear_outbound_adapters()
     register_outbound_adapter(_ExplodingAdapter())
@@ -203,7 +201,7 @@ def test_a_raising_notification_channel_does_not_fail_the_investigation(
     task_id = _run_to_completion(session, monkeypatch)
     clear_outbound_adapters()
 
-    stored = BackgroundInvestigationStore(path).get(task_id)
+    stored = RecordStore(path).get(task_id)
     assert stored is not None
     assert stored.status == "completed"
     assert stored.root_cause == "pool saturation"
@@ -216,14 +214,14 @@ def test_new_resets_the_session_without_deleting_durable_records(
     """#4426's scoping asks that /new reset the interactive session but leave the
     durable records and the notification preferences alone."""
     path = tmp_path / "background" / "investigations.json"
-    monkeypatch.setattr(_STORE_FACTORY, lambda: BackgroundInvestigationStore(path))
+    monkeypatch.setattr(_STORE_FACTORY, lambda: RecordStore(path))
     session = Session()
     task_id = _run_to_completion(session, monkeypatch)
     session.terminal.background_notification_preferences.set_channels(["telegram"])
 
     dispatch_slash("/new", session, Console(file=io.StringIO(), force_terminal=False))
 
-    assert BackgroundInvestigationStore(path).get(task_id) is not None
+    assert RecordStore(path).get(task_id) is not None
     assert session.terminal.background_investigations == {}
     assert session.terminal.background_notification_preferences.channels == ("telegram",)
 

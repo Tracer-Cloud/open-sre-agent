@@ -11,11 +11,11 @@ Email keeps the full report. The chat channels carry the bounded summary from
 
 from __future__ import annotations
 
+from core.domain.background_investigations import BackgroundInvestigationRecord
 from infrastructure.delivery.notifications.outbound_registry import (
     BACKGROUND_RCA,
     register_outbound_adapter,
 )
-from infrastructure.scheduling.background_investigations.types import BackgroundInvestigationRecord
 
 
 def deliver_email_notification(record: BackgroundInvestigationRecord) -> str:

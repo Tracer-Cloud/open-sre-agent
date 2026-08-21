@@ -12,15 +12,15 @@ from typing import Any
 
 import pytest
 
+from core.domain.background_investigations import BackgroundInvestigationRecord
 from infrastructure.scheduling.background_investigations.store import (
-    BackgroundInvestigationStore,
-    UnreadableBackgroundInvestigationsError,
+    RecordStore,
+    UnreadableStoreError,
 )
-from infrastructure.scheduling.background_investigations.types import BackgroundInvestigationRecord
 
 
-def _store(tmp_path: Path, **kwargs: Any) -> BackgroundInvestigationStore:
-    return BackgroundInvestigationStore(tmp_path / "background" / "investigations.json", **kwargs)
+def _store(tmp_path: Path, **kwargs: Any) -> RecordStore:
+    return RecordStore(tmp_path / "background" / "investigations.json", **kwargs)
 
 
 def _record(task_id: str = "bg-1", status: str = "completed") -> BackgroundInvestigationRecord:
@@ -38,8 +38,8 @@ def _record(task_id: str = "bg-1", status: str = "completed") -> BackgroundInves
 
 _WRITER = (
     "from infrastructure.scheduling.background_investigations.store import "
-    "background_investigation_store as s;"
-    "from infrastructure.scheduling.background_investigations.types import "
+    "open_record_store as s;"
+    "from core.domain.background_investigations import "
     "BackgroundInvestigationRecord as R;"
     "s().save(R(task_id='bg-xproc', status='completed', command='/investigate generic',"
     "root_cause='pool saturation'));"
@@ -47,7 +47,7 @@ _WRITER = (
 )
 _READER = (
     "from infrastructure.scheduling.background_investigations.store import "
-    "background_investigation_store as s;"
+    "open_record_store as s;"
     "r = s().get('bg-xproc');"
     "assert r is not None, 'record not visible from a second process';"
     "assert r.status == 'completed', r.status;"
@@ -204,7 +204,7 @@ def test_unreadable_document_raises_rather_than_reading_as_empty(tmp_path: Path)
     path.write_text("{not json", encoding="utf-8")
     store = _store(tmp_path)
 
-    with pytest.raises(UnreadableBackgroundInvestigationsError):
+    with pytest.raises(UnreadableStoreError):
         store.list_recent()
 
 
@@ -213,7 +213,7 @@ def test_document_with_an_unexpected_shape_raises(tmp_path: Path) -> None:
     path.parent.mkdir(parents=True)
     path.write_text(json.dumps({"version": 1, "records": "nope"}), encoding="utf-8")
 
-    with pytest.raises(UnreadableBackgroundInvestigationsError):
+    with pytest.raises(UnreadableStoreError):
         _store(tmp_path).list_recent()
 
 
@@ -284,7 +284,7 @@ def test_the_home_directory_is_not_resolved_at_construction(monkeypatch) -> None
         "infrastructure.scheduling.background_investigations.store._default_path", _explode
     )
 
-    store = BackgroundInvestigationStore()
+    store = RecordStore()
 
     assert calls == []
     with pytest.raises(RuntimeError):
@@ -429,12 +429,12 @@ def test_the_shell_and_a_chat_turn_share_one_document(
     monkeypatch.setenv(ORGANIZATION_ID_ENV, "org_acme")
 
     # The shell writes with nothing bound.
-    BackgroundInvestigationStore().save(_record(task_id="bg-shell"))
+    RecordStore().save(_record(task_id="bg-shell"))
 
     # A Telegram turn reads with the organization bound.
     scope = StorageScope(principal=Principal.org("org_acme"), actor=Actor(id="U_ALICE"))
     with bound_storage_scope(scope):
-        found = BackgroundInvestigationStore().get("bg-shell")
+        found = RecordStore().get("bg-shell")
 
     assert found is not None
     assert found.root_cause == "pool saturation"
@@ -452,7 +452,7 @@ def test_a_machine_with_no_organization_keeps_the_plain_layout(
     monkeypatch.delenv(paths.CONTEXT_ROOT_ENV, raising=False)
     monkeypatch.delenv(ORGANIZATION_ID_ENV, raising=False)
 
-    BackgroundInvestigationStore().save(_record(task_id="bg-laptop"))
+    RecordStore().save(_record(task_id="bg-laptop"))
 
     assert (tmp_path / "background" / "investigations.json").is_file()
     assert not (tmp_path / "orgs").exists()

@@ -265,11 +265,11 @@ _BOX_DRAWING = set("─│┃━╭╮╰╯┏┓┗┛┿┼┤├┬┴┌┐
 
 
 def _seed_record(**overrides: Any) -> str:
-    from infrastructure.scheduling.background_investigations.store import (
-        background_investigation_store,
-    )
-    from infrastructure.scheduling.background_investigations.types import (
+    from core.domain.background_investigations import (
         BackgroundInvestigationRecord,
+    )
+    from infrastructure.scheduling.background_investigations.store import (
+        open_record_store,
     )
 
     fields: dict[str, Any] = {
@@ -282,7 +282,7 @@ def _seed_record(**overrides: Any) -> str:
     }
     fields.update(overrides)
     record = BackgroundInvestigationRecord(**fields)
-    background_investigation_store().save(record)
+    open_record_store().save(record)
     return record.task_id
 
 
