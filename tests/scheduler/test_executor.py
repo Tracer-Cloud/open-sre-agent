@@ -17,7 +17,6 @@ import pytest
 import infrastructure.scheduling.scheduler.delivery_bundle as delivery_bundle
 from config.constants import OPENSRE_OPERATIONS_LOG_PATH_ENV
 from infrastructure.observability.operations_log import read_operations
-from infrastructure.scheduling.scheduler.delivery_bundle import ScheduledDeliveryAdapters
 from infrastructure.scheduling.scheduler.executor import execute_task
 from infrastructure.scheduling.scheduler.local_delivery import get_loop_messages
 from infrastructure.scheduling.scheduler.loop_constants import LOOP_CHANNELS_PARAM
@@ -47,7 +46,7 @@ class _FakeAdapter:
 def _install_fake_bundle() -> dict[Provider, _FakeAdapter]:
     """Install a fake adapter for every provider; return them to configure/inspect."""
     adapters = {provider: _FakeAdapter() for provider in _DELIVERY_PROVIDERS}
-    ScheduledDeliveryAdapters(adapters).install()
+    delivery_bundle.ScheduledDeliveryAdapters(adapters).install()
     return adapters
 
 

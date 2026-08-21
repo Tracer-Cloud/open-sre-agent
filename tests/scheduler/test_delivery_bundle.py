@@ -11,10 +11,6 @@ from __future__ import annotations
 import pytest
 
 import infrastructure.scheduling.scheduler.delivery_bundle as delivery_bundle
-from infrastructure.scheduling.scheduler.delivery_bundle import (
-    ScheduledDeliveryAdapters,
-    resolve_delivery_adapter,
-)
 from infrastructure.scheduling.scheduler.types import Provider, ScheduledTask
 
 
@@ -30,30 +26,32 @@ def _reset_installed_bundle() -> None:
 
 
 def test_resolve_returns_none_before_any_bundle_is_installed() -> None:
-    assert resolve_delivery_adapter(Provider.TELEGRAM) is None
+    assert delivery_bundle.resolve_delivery_adapter(Provider.TELEGRAM) is None
 
 
 def test_installed_bundle_resolves_only_its_providers() -> None:
     adapter = _Adapter()
 
-    ScheduledDeliveryAdapters({Provider.TELEGRAM: adapter}).install()
+    delivery_bundle.ScheduledDeliveryAdapters({Provider.TELEGRAM: adapter}).install()
 
-    assert resolve_delivery_adapter(Provider.TELEGRAM) is adapter
-    assert resolve_delivery_adapter(Provider.SLACK) is None
+    assert delivery_bundle.resolve_delivery_adapter(Provider.TELEGRAM) is adapter
+    assert delivery_bundle.resolve_delivery_adapter(Provider.SLACK) is None
 
 
 def test_install_atomically_replaces_the_previous_bundle() -> None:
     first, second = _Adapter(), _Adapter()
 
-    ScheduledDeliveryAdapters({Provider.TELEGRAM: first}).install()
-    ScheduledDeliveryAdapters({Provider.SLACK: second}).install()
+    delivery_bundle.ScheduledDeliveryAdapters({Provider.TELEGRAM: first}).install()
+    delivery_bundle.ScheduledDeliveryAdapters({Provider.SLACK: second}).install()
 
     # The whole mapping is replaced, not merged — no residue of the first bundle.
-    assert resolve_delivery_adapter(Provider.TELEGRAM) is None
-    assert resolve_delivery_adapter(Provider.SLACK) is second
+    assert delivery_bundle.resolve_delivery_adapter(Provider.TELEGRAM) is None
+    assert delivery_bundle.resolve_delivery_adapter(Provider.SLACK) is second
 
 
 def test_providers_reports_the_bundled_set() -> None:
-    bundle = ScheduledDeliveryAdapters({Provider.TELEGRAM: _Adapter(), Provider.SLACK: _Adapter()})
+    bundle = delivery_bundle.ScheduledDeliveryAdapters(
+        {Provider.TELEGRAM: _Adapter(), Provider.SLACK: _Adapter()}
+    )
 
     assert bundle.providers() == frozenset({Provider.TELEGRAM, Provider.SLACK})
