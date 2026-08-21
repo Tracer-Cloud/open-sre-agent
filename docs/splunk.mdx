@@ -99,11 +99,19 @@ OpenSRE uses **bearer tokens** — not basic auth and not HEC tokens.
 curl -sk -u admin:<PASSWORD> \
   https://splunk.corp.com:8089/services/authorization/tokens \
   -X POST \
-  --data-urlencode "name=opensre" \
+  --data-urlencode "name=admin" \
+  --data-urlencode "audience=OpenSRE" \
   --data-urlencode "expires_on=+90d" \
   --data-urlencode "output_mode=json" \
   | python3 -c "import sys,json; d=json.load(sys.stdin); print(d['entry'][0]['content']['token'])"
 ```
+
+<Warning>
+`name` is the **existing Splunk user** the token authenticates as, not an arbitrary
+label -- Splunk rejects an unrecognized name with `User "..." does not exist.` `audience`
+is also required (a short free-text description of the token's purpose); omitting it
+fails with `The following required arguments are missing: audience.`
+</Warning>
 
 The token needs the `search` capability. The `admin` role includes this by
 default. For a dedicated service account, ensure the role includes:
@@ -111,6 +119,125 @@ default. For a dedicated service account, ensure the role includes:
 - `search`
 - `read_splunkd_private_settings` (needed for the verify call against
   `/services/server/info`)
+
+### Quick local test with Docker
+
+```bash
+docker run -d --name splunk-dev --platform linux/amd64 \
+  -p 127.0.0.1:8000:8000 \
+  -p 127.0.0.1:8089:8089 \
+  -e SPLUNK_START_ARGS=--accept-license \
+  -e SPLUNK_GENERAL_TERMS=--accept-sgt-current-at-splunk-com \
+  -e SPLUNK_PASSWORD=VerifyPass123! \
+  splunk/splunk:latest
+
+i=0
+until docker logs splunk-dev 2>&1 | grep -q "Ansible playbook complete"; do
+  i=$((i + 1))
+  [ "$i" -ge 60 ] && { echo "ERROR: Splunk never became ready" >&2; exit 1; }
+  sleep 5
+done
+```
+
+<Warning>
+`splunk/splunk` publishes **amd64 only** -- on Apple Silicon, add `--platform
+linux/amd64` (runs under emulation; startup takes several minutes longer than on
+native amd64). Without `SPLUNK_GENERAL_TERMS=--accept-sgt-current-at-splunk-com`
+alongside `SPLUNK_START_ARGS=--accept-license`, the container exits immediately
+with `License not accepted` -- newer images require both, not just the license flag
+documented in older Splunk Docker guides.
+</Warning>
+
+Seed a test event and create a token:
+
+```bash
+curl -sk -u admin:VerifyPass123! \
+  "https://localhost:8089/services/receivers/simple?index=main&sourcetype=opensre_verify" \
+  --data-binary "$(date -u '+%Y-%m-%d %H:%M:%S') ERROR payment-service: connection refused to billing-api during checkout"
+
+SPLUNK_TOKEN=$(curl -sk -u admin:VerifyPass123! \
+  https://localhost:8089/services/authorization/tokens \
+  -X POST \
+  --data-urlencode "name=admin" \
+  --data-urlencode "audience=OpenSRE verification" \
+  --data-urlencode "expires_on=+90d" \
+  --data-urlencode "output_mode=json" \
+  | python3 -c "import sys,json; print(json.load(sys.stdin)['entry'][0]['content']['token'])")
+
+export SPLUNK_URL="https://localhost:8089"
+export SPLUNK_TOKEN
+export SPLUNK_VERIFY_SSL=false
+```
+
+Verify:
+
+```bash
+opensre integrations verify splunk
+```
+
+```
+SERVICE │ SOURCE    │ STATUS   │ DETAIL
+splunk  │ local env │ ✓ passed │ Connected to Splunk 10.4.2
+```
+
+`opensre investigate` only treats an integration as active once the store resolution has
+*something* to fall through to env vars with -- an untouched `~/.opensre/integrations.json`
+with an unrelated integration in it blocks env-var fallback entirely. Point
+`OPENSRE_INTEGRATIONS_STORE_PATH` at an empty, valid store instead, so your real config is
+never read or written and the `SPLUNK_*` vars above are the only source of connection info:
+
+```bash
+export OPENSRE_INTEGRATIONS_STORE_PATH=$(mktemp /tmp/opensre-splunk-demo.XXXXXX)
+echo '{"version": 2, "integrations": []}' > "$OPENSRE_INTEGRATIONS_STORE_PATH"
+```
+
+Trigger a real investigation against the seeded event -- this is the actual supported
+entrypoint, not an internal import:
+
+```bash
+opensre investigate --input-json '{
+  "alert_source": "splunk",
+  "alert_name": "PaymentServiceErrors",
+  "severity": "critical",
+  "commonAnnotations": {
+    "summary": "payment-service errors detected",
+    "splunk_query": "index=main sourcetype=opensre_verify | head 50"
+  }
+}'
+```
+
+Real output from a run against this exact local instance (edited for length). An empty
+store makes `opensre investigate` fall through to env-var resolution for *every*
+integration, not just Splunk -- if your shell or machine already resolves another
+integration from its own env vars, it rides along too (harmless, and unrelated to the
+Splunk tool calls below):
+
+```
+Loading integrations: telegram, splunk
+↳ Splunk · query splunk logs
+
+Triage complete: payment-service checkout failed with connection refused
+to billing-api at 21:40:00 UTC; no billing-api logs are present in Splunk
+during a 4-hour window across all indexes.
+
+root_cause: payment-service is receiving TCP connection refused when
+calling billing-api during checkout, and billing-api has emitted zero log
+lines across all Splunk indexes for the last 4 hours. The most likely
+explanation is that billing-api pods are not running or not listening,
+though without cluster/deploy visibility the exact narrow cause cannot be
+confirmed.
+```
+
+The single registered tool was exercised, correctly scoping the blast radius to a
+missing dependency rather than treating the absence of billing-api logs as inconclusive.
+
+Teardown:
+
+```bash
+docker rm -f splunk-dev
+rm -f "$OPENSRE_INTEGRATIONS_STORE_PATH"
+unset OPENSRE_INTEGRATIONS_STORE_PATH SPLUNK_URL SPLUNK_TOKEN SPLUNK_VERIFY_SSL
+```
 
 ## Investigation tools
 
