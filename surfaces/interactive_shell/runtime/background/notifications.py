@@ -7,7 +7,7 @@ above it. Imports stay function-local so the REPL boot path pays for none of it.
 
 from __future__ import annotations
 
-from infrastructure.scheduling.background_investigations.types import BackgroundInvestigationRecord
+from core.domain.background_investigations import BackgroundInvestigationRecord
 
 
 def deliver_background_notifications(

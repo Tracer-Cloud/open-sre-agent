@@ -13,11 +13,11 @@ from typing import Any, Protocol
 from core.agent_harness.ports import (
     ErrorReporter,
     PromptContextProvider,
+    SessionState,
     SubprocessPresenterFactory,
     ToolEventObserver,
     ToolProvider,
 )
-from core.agent_harness.session.session_core import SessionCore as SessionState
 from core.agent_harness.turns.gather_phase import GatherPhase
 
 

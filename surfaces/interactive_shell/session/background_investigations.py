@@ -11,7 +11,7 @@ from __future__ import annotations
 import logging
 from dataclasses import dataclass
 
-from infrastructure.scheduling.background_investigations.types import BackgroundInvestigationRecord
+from core.domain.background_investigations import BackgroundInvestigationRecord
 
 logger = logging.getLogger(__name__)
 
@@ -43,11 +43,11 @@ class BackgroundNotificationPreferences:
         empty default they had before preferences were durable.
         """
         from infrastructure.scheduling.background_investigations.store import (
-            background_investigation_store,
+            open_record_store,
         )
 
         try:
-            return cls(channels=background_investigation_store().notify_channels())
+            return cls(channels=open_record_store().notify_channels())
         except Exception:  # noqa: BLE001
             logger.debug("[background] could not load notify channels", exc_info=True)
             return cls()

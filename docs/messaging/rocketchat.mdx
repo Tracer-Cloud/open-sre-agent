@@ -100,6 +100,107 @@ Make sure the token's account is a member of the channel (or has permission to p
 2. Enable the integration, set a name (e.g. `opensre`), pick the destination **channel**, and choose the user the messages post as.
 3. Select **Save**. Rocket.Chat shows the **Webhook URL** (`https://<server>/hooks/<id>/<token>`). Copy it — treat the whole URL like a password.
 
+### Quick local test with Docker (token mode)
+
+Requires `--platform linux/amd64` on Apple Silicon (no arm64 image) and **MongoDB 7.0**, not 8.0 — 8.0 refuses to start under Docker Desktop's Linux VM ("kernel versions 6.19 and newer has a known incompatibility").
+
+```bash
+docker network create rc-net
+
+docker run -d --name rc-mongo --network rc-net --platform linux/amd64 \
+  mongo:7.0 --replSet rs0 --bind_ip_all
+i=0
+until docker exec rc-mongo mongosh --quiet --eval "db.runCommand('ping')" > /dev/null 2>&1; do
+  i=$((i + 1))
+  [ "$i" -ge 30 ] && { echo "ERROR: MongoDB never became ready" >&2; exit 1; }
+  sleep 2
+done
+docker exec rc-mongo mongosh --eval "rs.initiate()"
+
+docker run -d --name rc-dev --network rc-net --platform linux/amd64 -p 127.0.0.1:3201:3000 \
+  -e 'MONGO_URL=mongodb://rc-mongo:27017/rocketchat?replicaSet=rs0' \
+  -e 'MONGO_OPLOG_URL=mongodb://rc-mongo:27017/local?replicaSet=rs0' \
+  -e 'ROOT_URL=http://localhost:3201' \
+  -e 'ADMIN_USERNAME=verifyadmin' \
+  -e 'ADMIN_PASS=verify-admin-pass' \
+  -e 'ADMIN_EMAIL=verifyadmin@example.com' \
+  -e 'OVERWRITE_SETTING_Show_Setup_Wizard=completed' \
+  -e 'OVERWRITE_SETTING_Accounts_TwoFactorAuthentication_Enabled=false' \
+  rocket.chat:8.5.1
+```
+
+The `OVERWRITE_SETTING_Show_Setup_Wizard=completed` and `ADMIN_*` variables skip the manual setup wizard. The 2FA override lets this disposable instance generate a PAT without a database change or restart.
+
+```bash
+i=0
+until curl -sf -o /dev/null http://localhost:3201/api/info; do
+  i=$((i + 1))
+  [ "$i" -ge 40 ] && { echo "ERROR: Rocket.Chat never became ready" >&2; exit 1; }
+  sleep 10
+done
+```
+
+Log in and generate a PAT via the API. The password stays out of curl's own argv (piped via stdin, not `-d "password=..."`), and the token is captured into a variable rather than printed:
+
+```bash
+RC_LOGIN=$(printf 'user=verifyadmin&password=verify-admin-pass' | curl -s -X POST http://localhost:3201/api/v1/login --data-binary @-)
+RC_AUTH_TOKEN=$(echo "$RC_LOGIN" | python3 -c "import json,sys;print(json.load(sys.stdin)['data']['authToken'])")
+RC_USER_ID=$(echo "$RC_LOGIN" | python3 -c "import json,sys;print(json.load(sys.stdin)['data']['userId'])")
+unset RC_LOGIN
+
+RC_PAT=$(printf 'tokenName=opensre-verify' | curl -s -X POST http://localhost:3201/api/v1/users.generatePersonalAccessToken \
+  -H "X-Auth-Token: $RC_AUTH_TOKEN" -H "X-User-Id: $RC_USER_ID" --data-binary @- \
+  | python3 -c "import json,sys;print(json.load(sys.stdin)['token'])")
+```
+
+```bash
+export ROCKETCHAT_SERVER_URL="http://localhost:3201"
+export ROCKETCHAT_AUTH_TOKEN="$RC_PAT"
+export ROCKETCHAT_USER_ID="$RC_USER_ID"
+export ROCKETCHAT_DEFAULT_CHANNEL="#general"
+unset RC_PAT RC_AUTH_TOKEN RC_USER_ID
+```
+
+Verify:
+
+```bash
+opensre integrations verify rocketchat
+```
+
+```
+SERVICE    │ SOURCE    │ STATUS   │ DETAIL
+rocketchat │ local env │ ✓ passed │ Connected to Rocket.Chat as @verifyadmin.
+```
+
+Send a real message through the supported watchdog delivery path (see [Watchdog alarms](#watchdog-alarms) below) rather than calling the tool class directly — this exercises the same threshold-detection, cooldown, and provider-routing code a production alarm uses:
+
+`watchdog`, not `investigate`, is deliberate here: Rocket.Chat has one registered tool, `rocketchat_send_message`, and it's a delivery action (`side_effect_level: EXTERNAL`), not a read/investigation tool like the other integrations' — there's nothing for `investigate` to read from Rocket.Chat itself. Calling it mid-investigation would also need interactive approval, which doesn't complete in one non-interactive demo run; `watchdog` triggers a real delivery autonomously by design.
+
+```bash
+sleep 30 &
+opensre watchdog --pid $! --max-runtime 2s --once --provider rocketchat --chat-id "#general"
+```
+
+Check the channel — a real alarm message lands within a few seconds:
+
+```
+🚨 OpenSRE Watchdog Alarm
+host       dev-machine.local
+pid        44352  (sleep)
+cmd        sleep 30
+threshold  max_runtime  limit=2s  observed=2s
+runtime    2s
+started    2026-08-21T09:54:35.439729Z
+```
+
+Teardown:
+
+```bash
+docker rm -f rc-dev rc-mongo && docker network rm rc-net
+unset ROCKETCHAT_SERVER_URL ROCKETCHAT_AUTH_TOKEN
+unset ROCKETCHAT_USER_ID ROCKETCHAT_DEFAULT_CHANNEL
+```
+
 ## Investigation tools
 
 | Tool | What it does |

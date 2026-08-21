@@ -11,7 +11,6 @@ import json
 import logging
 import os
 import tempfile
-import threading
 import time
 from collections.abc import Callable, Iterator
 from contextlib import contextmanager, suppress
@@ -20,7 +19,7 @@ from typing import Any
 
 from filelock import FileLock, Timeout
 
-from infrastructure.scheduling.background_investigations.types import (
+from core.domain.background_investigations import (
     BackgroundInvestigationRecord,
     coerce_timestamp,
 )
@@ -41,11 +40,11 @@ _CHANNELS_KEY = "notify_channels"
 _STORE_DIRNAME = "background"
 
 
-class BackgroundInvestigationStoreLockTimeout(TimeoutError):
+class StoreLockTimeout(TimeoutError):
     """Raised when the investigations file cannot be locked in time."""
 
 
-class UnreadableBackgroundInvestigationsError(RuntimeError):
+class UnreadableStoreError(RuntimeError):
     """Raised when the investigations file exists but cannot be parsed."""
 
 
@@ -56,7 +55,7 @@ def _default_path() -> Path:
     return deployment_home() / _STORE_DIRNAME / _STORE_FILENAME
 
 
-class BackgroundInvestigationStore:
+class RecordStore:
     """Background investigation records in one JSON document per principal."""
 
     def __init__(
@@ -152,11 +151,11 @@ class BackgroundInvestigationStore:
         try:
             data = json.loads(path.read_text(encoding="utf-8"))
         except (OSError, json.JSONDecodeError) as exc:
-            raise UnreadableBackgroundInvestigationsError(
+            raise UnreadableStoreError(
                 f"background investigations file is unreadable: {path}"
             ) from exc
         if not isinstance(data, dict) or not isinstance(data.get("records"), list):
-            raise UnreadableBackgroundInvestigationsError(
+            raise UnreadableStoreError(
                 f"background investigations file has an unexpected shape: {path}"
             )
         return data
@@ -208,27 +207,22 @@ class BackgroundInvestigationStore:
             with lock:
                 yield
         except Timeout as exc:
-            raise BackgroundInvestigationStoreLockTimeout(
-                f"background investigations file is locked: {path}"
-            ) from exc
+            raise StoreLockTimeout(f"background investigations file is locked: {path}") from exc
 
 
-_default_store: BackgroundInvestigationStore | None = None
-_default_store_lock = threading.Lock()
+def open_record_store() -> RecordStore:
+    """Open the background-investigations store.
 
-
-def background_investigation_store() -> BackgroundInvestigationStore:
-    """Return the process-wide store, resolving its scope on each operation."""
-    global _default_store
-    with _default_store_lock:
-        if _default_store is None:
-            _default_store = BackgroundInvestigationStore()
-        return _default_store
+    Returns a fresh handle each call: the store resolves its file path per
+    operation and holds no in-memory state, so there is nothing to cache and no
+    process-wide singleton to keep.
+    """
+    return RecordStore()
 
 
 __all__ = [
-    "BackgroundInvestigationStore",
-    "BackgroundInvestigationStoreLockTimeout",
-    "UnreadableBackgroundInvestigationsError",
-    "background_investigation_store",
+    "RecordStore",
+    "StoreLockTimeout",
+    "UnreadableStoreError",
+    "open_record_store",
 ]
