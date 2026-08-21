@@ -13,6 +13,7 @@ Supports two auth paths:
 
 from __future__ import annotations
 
+import ast
 import logging
 from typing import Any
 
@@ -30,6 +31,23 @@ logger = logging.getLogger(__name__)
 
 _DEFAULT_TAIL_LINES = 100
 _DEFAULT_LIMIT = 50
+
+
+def _unwrap_bytes_repr(logs: str) -> str:
+    """Undo a kubernetes-client quirk where ``read_namespaced_pod_log`` returns the
+    Python ``repr()`` of a bytes object (literally ``"b'...'"``) instead of the
+    decoded text -- confirmed against kubernetes-client 36.0.3 while the raw log
+    content itself (via ``kubectl logs``) is plain text with no such wrapping.
+    """
+    if len(logs) >= 3 and logs[0] == "b" and logs[1] in "'\"" and logs[-1] == logs[1]:
+        try:
+            unwrapped = ast.literal_eval(logs)
+        except (ValueError, SyntaxError):
+            return logs
+        if isinstance(unwrapped, bytes):
+            return unwrapped.decode("utf-8", errors="replace")
+    return logs
+
 
 # Resource types that carry env vars and require value redaction before returning to the LLM.
 _WORKLOAD_TYPES: frozenset[str] = frozenset(
@@ -279,6 +297,7 @@ class KubernetesClient:
             if container:
                 kwargs["container"] = container
             logs = core_v1.read_namespaced_pod_log(name=pod_name, namespace=namespace, **kwargs)
+            logs = _unwrap_bytes_repr(logs)
             lines = logs.splitlines() if logs else []
             return {
                 "success": True,
@@ -409,6 +428,8 @@ class KubernetesClient:
                 return {
                     "name": c.name,
                     "image": c.image,
+                    "command": list(c.command) if c.command else [],
+                    "args": list(c.args) if c.args else [],
                     "ports": [
                         {"container_port": p.container_port, "protocol": p.protocol}
                         for p in (c.ports or [])

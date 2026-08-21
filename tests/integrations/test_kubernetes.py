@@ -228,3 +228,103 @@ def test_env_loader_skips_when_no_kubeconfig_set(monkeypatch: pytest.MonkeyPatch
     records = load_env_integrations()
     k8s_records = [r for r in records if r.get("service") == "kubernetes"]
     assert len(k8s_records) == 0
+
+
+# ---------------------------------------------------------------------------
+# KubernetesClient.get_pod_logs() -- bytes-repr unwrap
+# ---------------------------------------------------------------------------
+
+
+def test_get_pod_logs_unwraps_bytes_repr_artifact() -> None:
+    """kubernetes-client 36.0.3's read_namespaced_pod_log can return the Python
+    repr() of a bytes object (literally "b'...'") instead of decoded text --
+    confirmed live against a real cluster while kubectl logs shows plain text
+    for the same pod. The tool must surface the real log text, not the repr."""
+    from integrations.kubernetes.client import KubernetesClient
+
+    cfg = KubernetesIntegrationConfig.model_validate({"kubeconfig": _MINIMAL_KUBECONFIG})
+    client = KubernetesClient(cfg)
+
+    mock_core = MagicMock()
+    mock_core.read_namespaced_pod_log.return_value = (
+        "b'payment-service: connection refused to billing-api\\n'"
+    )
+
+    with patch.object(client, "_get_clients", return_value=(mock_core, MagicMock(), MagicMock())):
+        result = client.get_pod_logs(namespace="demo", pod_name="demo-crashloop")
+
+    assert result["success"] is True
+    assert result["lines"] == ["payment-service: connection refused to billing-api"]
+
+
+def test_get_pod_logs_leaves_normal_text_unchanged() -> None:
+    from integrations.kubernetes.client import KubernetesClient
+
+    cfg = KubernetesIntegrationConfig.model_validate({"kubeconfig": _MINIMAL_KUBECONFIG})
+    client = KubernetesClient(cfg)
+
+    mock_core = MagicMock()
+    mock_core.read_namespaced_pod_log.return_value = "line one\nline two"
+
+    with patch.object(client, "_get_clients", return_value=(mock_core, MagicMock(), MagicMock())):
+        result = client.get_pod_logs(namespace="demo", pod_name="demo-web")
+
+    assert result["lines"] == ["line one", "line two"]
+
+
+# ---------------------------------------------------------------------------
+# KubernetesClient.describe_pod() -- container command/args
+# ---------------------------------------------------------------------------
+
+
+def test_describe_pod_includes_container_command_and_args() -> None:
+    """describe_pod previously omitted a container's command/args entirely,
+    which is often the actual root cause for a crash-looping bare pod (e.g. a
+    busybox image with no entrypoint) -- confirmed live, where its absence led
+    an investigation to the wrong conclusion about why a pod was crashing."""
+    from datetime import UTC, datetime
+
+    from integrations.kubernetes.client import KubernetesClient
+
+    cfg = KubernetesIntegrationConfig.model_validate({"kubeconfig": _MINIMAL_KUBECONFIG})
+    client = KubernetesClient(cfg)
+
+    container = MagicMock()
+    container.name = "crasher"
+    container.image = "busybox"
+    container.command = ["sh", "-c", "exit 1"]
+    container.args = []
+    container.ports = []
+    container.resources = None
+    container.env = []
+
+    pod = MagicMock()
+    pod.metadata.name = "demo-crashloop"
+    pod.metadata.namespace = "demo"
+    pod.metadata.labels = {}
+    pod.metadata.annotations = {}
+    pod.metadata.creation_timestamp = datetime.now(UTC)
+    pod.metadata.owner_references = []
+    pod.spec.node_name = "node-1"
+    pod.spec.service_account_name = "default"
+    pod.spec.node_selector = {}
+    pod.spec.containers = [container]
+    pod.spec.init_containers = []
+    pod.spec.volumes = []
+    pod.status.phase = "Running"
+    pod.status.host_ip = "10.0.0.1"
+    pod.status.pod_ip = "10.0.0.2"
+    pod.status.conditions = []
+    pod.status.container_statuses = []
+    pod.status.init_container_statuses = []
+
+    mock_core = MagicMock()
+    mock_core.read_namespaced_pod.return_value = pod
+
+    with patch.object(client, "_get_clients", return_value=(mock_core, MagicMock(), MagicMock())):
+        result = client.describe_pod(namespace="demo", pod_name="demo-crashloop")
+
+    assert result["success"] is True
+    described = result["spec"]["containers"][0]
+    assert described["command"] == ["sh", "-c", "exit 1"]
+    assert described["args"] == []
