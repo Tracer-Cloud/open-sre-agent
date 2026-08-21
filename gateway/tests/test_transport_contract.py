@@ -39,7 +39,7 @@ def _discover_transport_packages() -> tuple[str, ...]:
 _TRANSPORTS = _discover_transport_packages()
 
 #: Concern → the source marker that proves the transport implements it.
-_REQUIRED_CONCERNS: dict[str, str] = {
+_REQUIRED_CONCERNS: dict[str, str | tuple[str, ...]] = {
     # Identity: who owns this turn's data, bound before any storage access.
     "principal scope resolver": "def resolve_",
     "storage scope bound around the turn": "bound_storage_scope",
@@ -52,8 +52,9 @@ _REQUIRED_CONCERNS: dict[str, str] = {
     # Turns are metered.
     "credit metering": "consume_credits",
     # Turn output cooperates with host-side cancellation instead of relying
-    # on the harness patching the attribute on.
-    "turn output declares turn_cancel": "self.turn_cancel",
+    # on the harness patching the attribute on — declared directly, or inherited
+    # from the shared ``SingleMessageTurnOutput`` base.
+    "turn output declares turn_cancel": ("self.turn_cancel", "SingleMessageTurnOutput"),
 }
 
 #: Concerns each existing transport is known to lack. Ledger, not allowlist:
@@ -91,7 +92,9 @@ def test_transport_implements_the_shared_concerns(transport: str) -> None:
     source = _package_source(transport)
 
     missing = frozenset(
-        concern for concern, marker in _REQUIRED_CONCERNS.items() if marker not in source
+        concern
+        for concern, marker in _REQUIRED_CONCERNS.items()
+        if not any(m in source for m in ((marker,) if isinstance(marker, str) else marker))
     )
 
     expected_missing = _KNOWN_GAPS.get(transport, frozenset())
