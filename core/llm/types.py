@@ -11,6 +11,7 @@ from pydantic import BaseModel
 
 ResolvedIntegrations: TypeAlias = dict[str, Any]  # noqa: UP040
 
+
 @runtime_checkable
 class SchemaDescribedTool(Protocol):
     """The three attributes a provider reads to build a tool-schema payload.
