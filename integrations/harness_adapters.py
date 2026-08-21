@@ -224,8 +224,8 @@ def _register_preferred_evidence_sources() -> None:
 def _register_cli_llm_adapters() -> None:
     from typing import Any
 
-    from infrastructure.harness_ports import set_cli_llm_adapters
     from core.llm.types import CliLLMClient, ModelType
+    from infrastructure.harness_ports import set_cli_llm_adapters
     from integrations.llm_cli.registry import get_cli_provider_registration
     from integrations.llm_cli.runner import CLIBackedLLMClient
     from integrations.llm_cli.text import flatten_messages_to_prompt
