@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+from http import HTTPStatus
 from pathlib import Path
 from unittest.mock import patch
 
@@ -440,7 +441,9 @@ class TestExecutor:
 
         def _capture_post(url: str, payload: dict, **_kw: object) -> DeliveryResponse:
             payloads.append(payload)
-            return DeliveryResponse(ok=True, status_code=200, data={"ok": True, "ts": "1.0"})
+            return DeliveryResponse(
+                ok=True, status_code=HTTPStatus.OK, data={"ok": True, "ts": "1.0"}
+            )
 
         with (
             patch(
