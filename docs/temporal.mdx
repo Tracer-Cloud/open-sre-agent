@@ -91,7 +91,12 @@ docker run -d --rm \
     --ip 0.0.0.0 \
     --http-port 7243
 
-i=0; until curl -sf -o /dev/null http://localhost:7243/api/v1/namespaces/default || [ $i -ge 30 ]; do sleep 2; i=$((i+1)); done
+i=0
+until curl -sf -o /dev/null http://localhost:7243/api/v1/namespaces/default; do
+  i=$((i + 1))
+  [ "$i" -ge 30 ] && { echo "ERROR: Temporal never became ready" >&2; exit 1; }
+  sleep 2
+done
 [ $i -lt 30 ] || { echo "ERROR: Temporal never became ready" >&2; exit 1; }
 ```
 
@@ -169,15 +174,15 @@ EOF
 python worker.py
 ```
 
-Register the local instance in the persistent store — `opensre investigate` only treats an integration as active once it is in the store, unlike `verify` which also accepts plain env vars:
+Register the local instance in the store. `opensre integrations setup temporal` is interactive; for a scriptable demo, write directly into an isolated store file instead of `~/.opensre/integrations.json` — `OPENSRE_INTEGRATIONS_STORE_PATH` is a genuine, first-class override (`config/constants/tenancy.py`), so this never touches your real config:
 
 ```bash
+export OPENSRE_INTEGRATIONS_STORE_PATH=$(mktemp /tmp/opensre-temporal-demo.XXXXXX)
 python3 <<'PYEOF'
-import json, pathlib
+import json, os, pathlib
 
-path = pathlib.Path.home() / ".opensre" / "integrations.json"
-store = json.loads(path.read_text()) if path.exists() else {"version": 2, "integrations": []}
-store["integrations"] = [i for i in store["integrations"] if i["id"] != "temporal-local-demo"]
+path = pathlib.Path(os.environ["OPENSRE_INTEGRATIONS_STORE_PATH"])
+store = json.loads(path.read_text()) if path.stat().st_size else {"version": 2, "integrations": []}
 store["integrations"].append({
     "id": "temporal-local-demo",
     "service": "temporal",
@@ -205,7 +210,7 @@ opensre investigate --input-json '{
 Real output from a run against this exact local workflow (edited for length):
 
 ```
-Loading integrations: telegram, temporal
+Loading integrations: temporal
 ↳ Temporal · temporal namespace info
 ↳ Temporal · temporal workflows
 ↳ Temporal · temporal workflow history
@@ -220,17 +225,10 @@ worker and task queue are healthy; the fault is a downstream connectivity
 failure to billing-api."
 ```
 
-All 4 registered tools were exercised in this single turn. Remove the demo entry when done:
+All 4 registered tools were exercised in this single turn. Remove the demo store file when done (no edit to your real store needed):
 
 ```bash
-python3 <<'PYEOF'
-import json, pathlib
-
-path = pathlib.Path.home() / ".opensre" / "integrations.json"
-store = json.loads(path.read_text())
-store["integrations"] = [i for i in store["integrations"] if i["id"] != "temporal-local-demo"]
-path.write_text(json.dumps(store, indent=2))
-PYEOF
+rm -f "$OPENSRE_INTEGRATIONS_STORE_PATH"
 ```
 
 Teardown:
