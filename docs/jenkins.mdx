@@ -115,10 +115,6 @@ done
 export JENKINS_URL="http://localhost:8090"
 export JENKINS_USER="admin"
 export JENKINS_API_TOKEN="admin"  # local demo only — real deployments must use a token, not a password
-
-# Isolate the demo integration from your real config -- every command below
-# reads and writes only this file, never ~/.opensre/integrations.json
-export OPENSRE_INTEGRATIONS_STORE_PATH=$(mktemp /tmp/opensre-jenkins-demo.XXXXXX)
 ```
 
 `admin`/`admin` is only valid because this is a disposable local instance with anonymous read disabled — Jenkins accepts a real password over Basic auth the same way it accepts a token when no token is configured. Never do this against a real server.
@@ -135,27 +131,10 @@ jenkins │ local env │ ✓ passed │ Jenkins connectivity successful at
         │           │          │ http://localhost:8090 (node: built-in)
 ```
 
-Register the local instance in the store. `opensre integrations setup jenkins` is interactive; for a scriptable demo, write directly into the isolated store path set above — this is a genuine, first-class override (see `config/constants/tenancy.py`, `INTEGRATIONS_STORE_PATH_ENV`), so it never touches your real config or credentials:
+Register the local instance through the supported setup flow:
 
 ```bash
-python3 <<'PYEOF'
-import json, os, pathlib
-
-path = pathlib.Path(os.environ["OPENSRE_INTEGRATIONS_STORE_PATH"])
-store = json.loads(path.read_text()) if path.stat().st_size else {"version": 2, "integrations": []}
-store["integrations"].append({
-    "id": "jenkins-local-demo",
-    "service": "jenkins",
-    "status": "active",
-    "instances": [{
-        "name": "default",
-        "tags": {},
-        "credentials": {"base_url": "http://localhost:8090", "username": "admin", "api_token": "admin"},
-    }],
-})
-path.parent.mkdir(parents=True, exist_ok=True)
-path.write_text(json.dumps(store, indent=2))
-PYEOF
+opensre integrations setup jenkins
 ```
 
 Trigger a real investigation against the failing build — this exercises `list_jenkins_jobs`, `list_jenkins_running_builds`, `get_jenkins_pipeline_stages`, and `get_jenkins_build_log` in a single supported turn (not a raw internal import):
@@ -193,11 +172,7 @@ Cited Evidence: list jenkins jobs, list jenkins running builds,
 
 `list_jenkins_builds` is the one registered tool not called here -- `list_jenkins_jobs` already returned this job's last-build number and status, so the agent went straight to `get_jenkins_pipeline_stages`/`get_jenkins_build_log` for that specific build instead of a redundant builds listing.
 
-Teardown — since the demo config lived entirely in its own file, deleting it is enough (no edit to your real store needed):
-
-```bash
-rm -f "$OPENSRE_INTEGRATIONS_STORE_PATH"
-```
+Teardown:
 
 ```bash
 docker rm -f jenkins-dev

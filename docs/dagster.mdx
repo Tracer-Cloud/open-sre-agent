@@ -121,24 +121,10 @@ SERVICE │ SOURCE    │ STATUS   │ DETAIL
 dagster │ local env │ ✓ passed │ Connected to Dagster version 1.13.18.
 ```
 
-Register the local instance in the store. `opensre investigate` only treats an integration as active once it is in the store, unlike `verify` which also accepts plain env vars. `opensre integrations setup dagster` is interactive; for a scriptable demo, write directly into an isolated store file instead of `~/.opensre/integrations.json` — `OPENSRE_INTEGRATIONS_STORE_PATH` is a genuine, first-class override (`config/constants/tenancy.py`), so this never touches your real config:
+Register the local instance through the supported setup flow:
 
 ```bash
-export OPENSRE_INTEGRATIONS_STORE_PATH=$(mktemp /tmp/opensre-dagster-demo.XXXXXX)
-python3 <<'PYEOF'
-import json, os, pathlib
-
-path = pathlib.Path(os.environ["OPENSRE_INTEGRATIONS_STORE_PATH"])
-store = json.loads(path.read_text()) if path.stat().st_size else {"version": 2, "integrations": []}
-store["integrations"].append({
-    "id": "dagster-local-demo",
-    "service": "dagster",
-    "status": "active",
-    "instances": [{"name": "default", "tags": {}, "credentials": {"endpoint": "http://localhost:3001"}}],
-})
-path.parent.mkdir(parents=True, exist_ok=True)
-path.write_text(json.dumps(store, indent=2))
-PYEOF
+opensre integrations setup dagster
 ```
 
 Trigger a real investigation against the failed run — this is the actual supported entrypoint, not an internal function:
@@ -170,11 +156,7 @@ billing-api dependency being refused at the TCP layer."
 Cited Evidence: list dagster runs, get dagster run logs
 ```
 
-Teardown: `Ctrl-C` the `dagster dev` process (it uses a temporary `DAGSTER_HOME` that is removed on exit), and remove the demo store file -- since it lived entirely in its own file, deleting it is enough (no edit to your real store needed):
-
-```bash
-rm -f "$OPENSRE_INTEGRATIONS_STORE_PATH"
-```
+Teardown by pressing `Ctrl-C` in the terminal running `dagster dev`. Its temporary `DAGSTER_HOME` is removed on exit.
 
 ## Investigation tools
 
