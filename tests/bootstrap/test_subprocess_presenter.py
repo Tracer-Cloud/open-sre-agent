@@ -17,21 +17,21 @@ from collections.abc import Iterator
 
 import pytest
 
-import infrastructure.harness_ports as harness_ports
+import infrastructure.harness_providers as harness_providers
 
 
 @pytest.fixture(autouse=True)
 def _restore_port() -> Iterator[None]:
     """Keep this module's writes out of every other test in the process."""
-    previous = harness_ports.get_subprocess_presenter_factory()
+    previous = harness_providers.get_subprocess_presenter_factory()
     yield
-    harness_ports.set_subprocess_presenter_factory(previous)
+    harness_providers.set_subprocess_presenter_factory(previous)
 
 
 def test_process_boot_installs_a_subprocess_presenter_for_the_default_agent() -> None:
     """Boot leaves a presenter registered so the default port stack can execute."""
     # Arrange.
-    harness_ports.set_subprocess_presenter_factory(None)
+    harness_providers.set_subprocess_presenter_factory(None)
 
     # Act.
     from bootstrap.adapters import install_harness_adapters
@@ -39,13 +39,13 @@ def test_process_boot_installs_a_subprocess_presenter_for_the_default_agent() ->
     install_harness_adapters()
 
     # Assert.
-    assert harness_ports.get_subprocess_presenter_factory() is not None
+    assert harness_providers.get_subprocess_presenter_factory() is not None
 
 
-def test_resetting_the_harness_ports_clears_the_presenter() -> None:
+def test_resetting_the_harness_providers_clears_the_presenter() -> None:
     """A booted presenter must not leak into tests that reset the ports.
 
-    ``reset_harness_ports`` is the suite's "back to noop defaults" call; a port
+    ``reset_harness_providers`` is the suite's "back to noop defaults" call; a port
     it forgets stays registered for the rest of the process.
     """
 
@@ -53,13 +53,13 @@ def test_resetting_the_harness_ports_clears_the_presenter() -> None:
     def _presenter(*_args: object, **_kwargs: object) -> object:
         return object()
 
-    harness_ports.set_subprocess_presenter_factory(_presenter)
+    harness_providers.set_subprocess_presenter_factory(_presenter)
 
     # Act.
-    harness_ports.reset_harness_ports()
+    harness_providers.reset_harness_providers()
 
     # Assert.
-    assert harness_ports.get_subprocess_presenter_factory() is None
+    assert harness_providers.get_subprocess_presenter_factory() is None
 
 
 def test_default_headless_build_injects_the_registered_presenter() -> None:
@@ -84,7 +84,7 @@ def test_default_headless_build_injects_the_registered_presenter() -> None:
     def _explicit(*_args: object, **_kwargs: object) -> object:
         return object()
 
-    harness_ports.set_subprocess_presenter_factory(_registered)
+    harness_providers.set_subprocess_presenter_factory(_registered)
     with_explicit = DefaultToolProvider(object(), object(), subprocess_presenter_factory=_explicit)
     without = DefaultToolProvider(object(), object())
     default_tools = DefaultHeadlessBuild(

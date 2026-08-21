@@ -61,13 +61,13 @@ def test_embedded_session_boots_adapters_so_integrations_resolve() -> None:
     ``start_embedded_session`` is the documented headless entry that does.
     """
     from bootstrap.process import reset_process_runtime_for_tests
-    from infrastructure.harness_ports import (
+    from infrastructure.harness_providers import (
         get_investigation_tools,
-        reset_harness_ports,
+        reset_harness_providers,
         resolve_integrations,
     )
 
-    reset_harness_ports()
+    reset_harness_providers()
     reset_process_runtime_for_tests()
     assert resolve_integrations() == {}
 

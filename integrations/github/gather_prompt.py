@@ -1,6 +1,6 @@
 """GitHub tool-usage recipe for the evidence-gather prompt.
 
-Registered with :func:`infrastructure.harness_ports.register_gather_prompt_fragment`
+Registered with :func:`infrastructure.harness_providers.register_gather_prompt_fragment`
 from ``integrations/harness_adapters.py``.
 """
 

@@ -53,18 +53,18 @@ def _isolate_gateway_runtime_files(monkeypatch: pytest.MonkeyPatch, tmp_path: Pa
 
 
 @pytest.fixture(autouse=True)
-def _harness_ports_per_test() -> Iterator[None]:
+def _harness_providers_per_test() -> Iterator[None]:
     """Register harness ports before each test; reset after to avoid session leakage.
 
     Registers the tools and integrations adapters directly (the same pair
-    ``install_harness_ports`` registers) so the gateway package stays below
+    ``install_harness_providers`` registers) so the gateway package stays below
     ``surfaces`` in the import layering.
     """
-    from infrastructure.harness_ports import reset_harness_ports
+    from infrastructure.harness_providers import reset_harness_providers
     from integrations.harness_adapters import register_harness_adapters as register_integrations
     from tools.harness_adapters import register_harness_adapters as register_tools
 
     register_integrations()
     register_tools()
     yield
-    reset_harness_ports()
+    reset_harness_providers()

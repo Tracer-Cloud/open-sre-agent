@@ -58,7 +58,7 @@
   **The codebase is not yet compliant, and no tool will tell you.** An AST scan
   of product code counts 89 docstring-only Protocol methods against **108
   `raise NotImplementedError` stubs in 23 files** (`core/agent_harness/ports.py`,
-  `infrastructure/harness_ports.py`, `gateway/core/storage/session/binding_store.py` and
+  `infrastructure/harness_providers/`, `gateway/core/storage/session/binding_store.py` and
   others). Those are pre-existing and out of scope for a drive-by — do not
   mass-convert them, and do not cite a file as precedent without checking it.
 
@@ -206,7 +206,7 @@ Main packages one level deeper:
 - `config/constants/` — Shared prompt and other static constants.
 - `infrastructure/deployment/ec2/` — EC2 AWS SDK primitives (`client`, `config`, EC2/IAM, SSM) and Telegram gateway AMI/systemd lifecycle (`telegram_gateway/`). Makefile: `make build-gateway-image`, `make deploy-gateway`.
 - `infrastructure/safety/guardrails/` — Guardrail rules, evaluation engine, audit helpers, and CLI bindings.
-- `infrastructure/harness_ports.py` — Harness port layer (integration resolution, tool registry, investigation tools, GitHub repo scope). Real implementations are wired at startup via `integrations/harness_adapters.py` and `tools/harness_adapters.py` through `install_harness_ports()` in `surfaces/shared/terminal/output/boundary.py`. See `core/agent_harness/AGENTS.md` for the import boundary.
+- `infrastructure/harness_providers/` — Harness provider layer (integration resolution, tool registry, investigation tools, GitHub repo scope). Real implementations are wired at startup via `integrations/harness_adapters.py` and `tools/harness_adapters.py` through `install_harness_providers()` in `surfaces/shared/terminal/output/boundary.py`. See `core/agent_harness/AGENTS.md` for the import boundary.
 - `integrations/hermes/` — Hermes log tailing, incident classification, correlator, sinks, and investigation bridge.
 - `integrations/llm_cli/` — Subprocess-backed LLM CLIs (e.g. Codex). Extension guide: `integrations/llm_cli/AGENTS.md`.
 - `infrastructure/safety/masking/` — Masking utilities for redacting or normalizing sensitive content.

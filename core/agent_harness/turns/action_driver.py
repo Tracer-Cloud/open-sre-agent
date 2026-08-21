@@ -635,7 +635,7 @@ def _literal_slash_tool_call(message: str, agent_tools: list[Any]) -> ToolCall |
     Returns ``None`` (so the normal LLM path runs) when the input is not literal
     slash text or when ``slash_invoke`` is not an available tool this turn.
     """
-    from infrastructure.harness_ports import strip_message_context_prefix
+    from infrastructure.harness_providers import strip_message_context_prefix
 
     _, remainder = strip_message_context_prefix(message)
     stripped = remainder.strip()

@@ -37,7 +37,7 @@ def install_harness_adapters() -> None:
     nothing until both registries have been installed. Also installs the
     investigation payload runner used by :meth:`AgentSession.investigate`.
     """
-    import infrastructure.harness_ports as harness_ports
+    import infrastructure.harness_providers as harness_providers
     from integrations.harness_adapters import (
         register_harness_adapters as register_integrations,
     )
@@ -48,9 +48,9 @@ def install_harness_adapters() -> None:
 
     register_integrations()
     register_tools()
-    harness_ports.set_subprocess_presenter_factory(headless_subprocess_presenter_factory)
+    harness_providers.set_subprocess_presenter_factory(headless_subprocess_presenter_factory)
     # Shell / REPL / gateway slash surface: CTA must name a runnable command.
-    harness_ports.set_integration_setup_command(
+    harness_providers.set_integration_setup_command(
         lambda service_id: f"/integrations setup {service_id}"
     )
     install_investigation_api()

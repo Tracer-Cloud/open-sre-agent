@@ -6,7 +6,7 @@ import logging
 
 from core.agent_harness import AgentSession
 from core.agent_harness.runtime import GatherPhase
-from infrastructure.harness_ports import configured_integration_services
+from infrastructure.harness_providers import configured_integration_services
 from infrastructure.scheduling.scheduler.agent_runner import AgentPayload
 
 logger = logging.getLogger(__name__)

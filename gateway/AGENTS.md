@@ -242,7 +242,9 @@ Construct **one** `HeadlessAgent` per logical chat session
    cancel / approvals. Do **not** pass `output=` here unless replacing the
    `OutputSink` object itself (then `OutputBindable` ports, e.g. reasoning,
    must follow).
-3. `AgentSession.chat` → `dispatch`.
+3. `agent.handle(text, TurnBinding(...))` — SessionGoal outer loop +
+   `dispatch` per inner turn. Do **not** wrap this as `AgentSession.chat`
+   on the gateway path; the pool owns the agent and calls `handle` directly.
 
 Do **not** build a fresh headless agent on every message. Same-session turns
 serialize on the pool’s per-session lock; different sessions stay concurrent
@@ -251,9 +253,9 @@ the loop; true one-shot digests may use `AgentSession.run_headless_turn`.
 
 ## Host parity (chat surfaces)
 
-Same turn engine for Slack / Telegram / Discord: ingress → `TurnHandler`
-→ `SessionAgentPool` → `AgentSession.chat`. Web `POST /investigate` is a
-separate verb (`AgentSession.investigate`); see Capacity. Values: **yes** /
+Same turn engine for Slack / Telegram / Discord / interactive shell: ingress →
+`TurnHandler` → `SessionAgentPool` → `agent.handle`. Web `POST /investigate` is
+a separate verb (`AgentSession.investigate`); see Capacity. Values: **yes** /
 **partial** / **no** / **n/a**.
 
 | Concern | Slack | Telegram | Discord | Web |

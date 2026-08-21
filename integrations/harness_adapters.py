@@ -1,11 +1,11 @@
-"""Wire integrations-layer helpers into :mod:`infrastructure.harness_ports`."""
+"""Wire integrations-layer helpers into :mod:`infrastructure.harness_providers`."""
 
 from __future__ import annotations
 
 
 def register_harness_adapters() -> None:
     import integrations.webapp_vault as webapp_vault
-    from infrastructure.harness_ports import set_integration_resolution_adapters
+    from infrastructure.harness_providers import set_integration_resolution_adapters
     from integrations.catalog import (
         classify_integrations,
         configured_integration_services,
@@ -26,7 +26,7 @@ def register_harness_adapters() -> None:
         fetch_webapp_vault=lambda: webapp_vault.fetch_webapp_org_integrations(),
     )
 
-    from infrastructure.harness_ports import set_setupable_integration_services
+    from infrastructure.harness_providers import set_setupable_integration_services
     from integrations.cli import setup_services
 
     set_setupable_integration_services(lambda: tuple(setup_services()))
@@ -46,7 +46,7 @@ def register_harness_adapters() -> None:
 
 
 def _register_vcs_repo_scope_providers() -> None:
-    from infrastructure.harness_ports import (
+    from infrastructure.harness_providers import (
         clear_vcs_repo_scope_providers,
         register_vcs_repo_scope_provider,
     )
@@ -98,7 +98,7 @@ def _register_incident_anchor_parsers() -> None:
 
 
 def _register_prompt_fragments() -> None:
-    from infrastructure.harness_ports import (
+    from infrastructure.harness_providers import (
         clear_action_prompt_fragments,
         clear_assistant_prompt_fragments,
         clear_gather_prompt_fragments,
@@ -150,7 +150,7 @@ def _register_taxonomy_profiles() -> None:
 
 
 def _register_message_context_strippers() -> None:
-    from infrastructure.harness_ports import (
+    from infrastructure.harness_providers import (
         clear_message_context_prefix_strippers,
         register_message_context_prefix_stripper,
     )
@@ -187,7 +187,7 @@ def _register_secondary_tool_sources() -> None:
 
 
 def _register_gateway_persona() -> None:
-    from infrastructure.harness_ports import (
+    from infrastructure.harness_providers import (
         clear_gateway_persona_fragments,
         register_gateway_persona_fragment,
     )
@@ -204,7 +204,7 @@ def _register_preferred_evidence_sources() -> None:
     vendor's ``register_*`` call to stop treating it as preferred (no L0 CTA /
     no dialect draft for that id).
     """
-    from infrastructure.harness_ports import (
+    from infrastructure.harness_providers import (
         clear_metric_query_drafts,
         clear_preferred_evidence_sources,
     )
@@ -225,7 +225,7 @@ def _register_cli_llm_adapters() -> None:
     from typing import Any
 
     from core.llm.types import CliLLMClient, ModelType
-    from infrastructure.harness_ports import set_cli_llm_adapters
+    from infrastructure.harness_providers import set_cli_llm_adapters
     from integrations.llm_cli.registry import get_cli_provider_registration
     from integrations.llm_cli.runner import CLIBackedLLMClient
     from integrations.llm_cli.text import flatten_messages_to_prompt

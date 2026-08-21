@@ -11,7 +11,7 @@ from core.agent_harness.spi.integrations import (
     merge_resolved_integrations,
     resolve_and_cache_integrations,
 )
-from infrastructure.harness_ports import configured_integration_services
+from infrastructure.harness_providers import configured_integration_services
 from infrastructure.scheduling.scheduler.agent_runner import AgentPayload
 from integrations.sentry.project_scope import (
     apply_sentry_project_scope,
