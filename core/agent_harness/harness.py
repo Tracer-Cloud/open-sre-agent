@@ -40,6 +40,7 @@ if TYPE_CHECKING:
     from core.agent_harness.session_goal.run_until import SessionGoalRunResult
     from core.agent_harness.turns.gather_phase import GatherPhase
     from core.agent_harness.turns.turn_results import TurnResult
+    from core.tool.execution import ToolExecutionHooks
 
 
 class ChatDispatcher(Protocol):
@@ -125,6 +126,7 @@ class AgentSession:
         logger: logging.Logger | None = None,
         surface: str | None = None,
         is_tty: bool | None = None,
+        tool_hooks: ToolExecutionHooks | None = None,
     ) -> AgentSession:
         """Return a session that is ready to :meth:`chat`.
 
@@ -147,8 +149,9 @@ class AgentSession:
         and before the agent is built. ``console``, ``logger`` and ``surface``
         are the :class:`~core.agent_harness.turns.headless_build.DefaultHeadlessBuild`
         fields; ``tools`` and ``gather`` the ports its ``agent()`` takes;
-        ``is_tty`` is bound on the first turn. A host that needs more (its own
-        sink, prompts, error reporter, an action ``llm_factory``) builds through
+        ``is_tty`` and ``tool_hooks`` (the turn's approval hooks) are bound on
+        the first turn. A host that needs more (its own sink, prompts, error
+        reporter, an action ``llm_factory``) builds through
         :class:`DefaultHeadlessBuild` itself and calls :meth:`attach_agent`.
         """
         from core.agent_harness.turns.headless_adapters import BufferOutputSink
@@ -168,6 +171,7 @@ class AgentSession:
             logger=logger,
             surface=surface,
             is_tty=is_tty,
+            tool_hooks=tool_hooks,
         )
         return agent_session
 
@@ -219,6 +223,11 @@ class AgentSession:
     def attach_agent(self, agent: ChatDispatcher) -> None:
         """Bind a chat dispatcher for :meth:`chat` reuse."""
         self._agent = agent
+
+    @property
+    def bound_session(self) -> SessionCore | None:
+        """The session created by :meth:`start`, for host-side lifecycle (e.g. close)."""
+        return self._bound_session
 
     @property
     def agent(self) -> ChatDispatcher | None:
@@ -319,6 +328,7 @@ class AgentSession:
         logger: logging.Logger | None = None,
         surface: str | None = None,
         is_tty: bool | None = None,
+        tool_hooks: ToolExecutionHooks | None = None,
     ) -> None:
         """Attach the agent built on the default port family (one construction recipe).
 
@@ -332,7 +342,7 @@ class AgentSession:
         agent = DefaultHeadlessBuild(
             session=session, output=output, console=console, logger=logger, surface=surface
         ).agent(tools=tools, prompts=prompts, gather=gather)
-        agent.bind_turn(TurnBinding(is_tty=is_tty))
+        agent.bind_turn(TurnBinding(is_tty=is_tty, tool_hooks=tool_hooks))
         self.attach_agent(agent)
 
     def _resolve_env_variables(self) -> None:

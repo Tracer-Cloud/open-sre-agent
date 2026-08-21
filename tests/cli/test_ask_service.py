@@ -67,29 +67,19 @@ class _FakeSession:
 class _FakeAgentSession:
     session = _FakeSession()
 
-    def __init__(self, _config: object) -> None:
-        self.attached: object | None = None
+    @classmethod
+    def start(cls, _config: object, **kwargs: object) -> _FakeAgentSession:
+        prepare = kwargs.get("prepare_session")
+        if callable(prepare):
+            prepare(cls.session)
+        return cls()
 
-    def startup(self) -> object:
-        return type(
-            "Startup",
-            (),
-            {"session": self.session, "prompts": object()},
-        )()
-
-    def attach_agent(self, agent: object) -> None:
-        self.attached = agent
+    @property
+    def bound_session(self) -> _FakeSession:
+        return type(self).session
 
     def chat(self, _prompt: str) -> TurnResult:
         raise RuntimeError("turn failed")
-
-
-class _FakeHeadlessBuild:
-    def __init__(self, **_kwargs: object) -> None:
-        pass
-
-    def agent(self, **_kwargs: object) -> object:
-        return object()
 
 
 def test_run_ask_returns_success(monkeypatch) -> None:
@@ -103,21 +93,63 @@ def test_run_ask_returns_success(monkeypatch) -> None:
 
 
 def test_agent_turn_closes_ephemeral_session_after_failure(monkeypatch) -> None:
+    # Arrange: the built session fails its turn; the ephemeral session must
+    # still be closed (extract_memory=False) via the finally block.
     manager = _FakeSessionManager()
     _FakeAgentSession.session = _FakeSession()
     monkeypatch.setattr(service, "SessionManager", lambda: manager)
     monkeypatch.setattr(service, "AgentSession", _FakeAgentSession)
-    monkeypatch.setattr(service, "DefaultHeadlessBuild", _FakeHeadlessBuild)
-    monkeypatch.setattr(
-        service,
-        "DefaultToolProvider",
-        lambda *_args, **_kwargs: object(),
-    )
 
+    # Act / Assert
     with pytest.raises(RuntimeError, match="turn failed"):
         service._run_agent_turn("prompt", ToolExecutionHooks())
 
     assert manager.closed == [(_FakeAgentSession.session, False)]
+
+
+def test_agent_turn_binds_hooks_and_restricts_capabilities_via_start(monkeypatch) -> None:
+    """The collapse onto AgentSession.start must still bind the approval hooks
+    and strip the one-shot ask agent's forbidden capabilities."""
+    # Arrange: record what ask hands AgentSession.start, and let its
+    # prepare_session run against a session carrying a forbidden capability.
+    manager = _FakeSessionManager()
+    session = _FakeSession()
+    session.available_capabilities = {"investigation": ("live",), "shell": ("keep",)}
+    recorded: dict[str, object] = {}
+    hooks = ToolExecutionHooks()
+
+    class _RecordingAgentSession:
+        @classmethod
+        def start(cls, _config: object, **kwargs: object) -> _RecordingAgentSession:
+            recorded.update(kwargs)
+            prepare = kwargs["prepare_session"]
+            assert callable(prepare)
+            prepare(session)
+            return cls()
+
+        @property
+        def bound_session(self) -> _FakeSession:
+            return session
+
+        def chat(self, prompt: str) -> TurnResult:
+            recorded["prompt"] = prompt
+            return _turn()
+
+    monkeypatch.setattr(service, "SessionManager", lambda: manager)
+    monkeypatch.setattr(service, "AgentSession", _RecordingAgentSession)
+
+    # Act
+    result = service._run_agent_turn("hello", hooks)
+
+    # Assert: hooks bound, forbidden capability zeroed (unrelated kept), one-shot
+    # dispatched, ephemeral session closed without memory extraction.
+    assert recorded["tool_hooks"] is hooks
+    assert recorded["is_tty"] is False
+    assert session.available_capabilities["investigation"] == ()
+    assert session.available_capabilities["shell"] == ("keep",)
+    assert recorded["prompt"] == "hello"
+    assert result.primary_response_text == "answer"
+    assert manager.closed == [(session, False)]
 
 
 def test_run_ask_reports_denial_before_agent_failure(monkeypatch) -> None:

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 from io import StringIO
 from types import SimpleNamespace
 
@@ -179,3 +180,59 @@ def test_a_stage_override_replaces_only_that_stage() -> None:
     assert isinstance(result, TurnResult)
     assert agent._answer_override is None  # noqa: SLF001
     assert agent._gather_override is None  # noqa: SLF001
+
+
+def test_resolve_agent_ports_uses_hooks_when_present() -> None:
+    """Each provided build hook is called with the session/console and returned."""
+    # Arrange
+    from core.agent_harness.agent_build_config import AgentBuildConfig
+    from core.agent_harness.turns.gather_phase import GatherPhase
+    from core.agent_harness.turns.headless_build import resolve_agent_ports
+
+    tools_obj, prompts_obj, gather_obj = object(), object(), GatherPhase()
+    console = object()
+    seen: dict[str, object] = {}
+
+    def build_tools(session, console_, _logger, observer):  # noqa: ANN001, ANN202
+        seen["tools_args"] = (session, console_, observer)
+        return tools_obj
+
+    config = AgentBuildConfig(
+        build_tools=build_tools,
+        build_prompts=lambda _session: prompts_obj,
+        build_gather=lambda _session, _console: gather_obj,
+    )
+
+    # Act
+    tools, prompts, gather = resolve_agent_ports(
+        config, session="S", console=console, logger=logging.getLogger("t")
+    )
+
+    # Assert
+    assert (tools, prompts, gather) == (tools_obj, prompts_obj, gather_obj)
+    assert seen["tools_args"] == ("S", console, None)
+
+
+def test_resolve_agent_ports_falls_back_when_hooks_omitted() -> None:
+    """An empty config yields the caller's default tools/gather and no prompts."""
+    # Arrange
+    from core.agent_harness.agent_build_config import AgentBuildConfig
+    from core.agent_harness.turns.gather_phase import GatherPhase
+    from core.agent_harness.turns.headless_build import resolve_agent_ports
+
+    default_tools_obj, default_gather = object(), GatherPhase()
+
+    # Act
+    tools, prompts, gather = resolve_agent_ports(
+        AgentBuildConfig(),
+        session="S",
+        console=object(),
+        logger=logging.getLogger("t"),
+        default_tools=lambda: default_tools_obj,
+        default_gather=default_gather,
+    )
+
+    # Assert
+    assert tools is default_tools_obj
+    assert prompts is None
+    assert gather is default_gather

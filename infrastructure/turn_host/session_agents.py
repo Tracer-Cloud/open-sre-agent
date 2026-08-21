@@ -24,6 +24,7 @@ from core.agent_harness.runtime import (
     DescribeTool,
     GatherPhase,
     HeadlessAgent,
+    resolve_agent_ports,
 )
 from infrastructure.turn_host.bindable_output import BindableOutput
 from infrastructure.turn_host.capability_policy import ensure_gateway_capability_policy
@@ -158,10 +159,9 @@ class SessionAgentPool:
 
         build = self._build
         observer = _ToolStatusObserver(session_output, build.describe_tool)
-        if build.build_tools is not None:
-            tools = build.build_tools(session, self._console, logger, observer)
-        else:
-            tools = DefaultToolProvider(
+
+        def default_tools() -> DefaultToolProvider:
+            return DefaultToolProvider(
                 session,
                 self._console,
                 tool_action_logger=logger,
@@ -169,11 +169,15 @@ class SessionAgentPool:
                 subprocess_presenter_factory=build.subprocess_presenter_factory,
                 slash_ports_factory=self._slash_ports_factory,
             )
-        prompts = build.build_prompts(session) if build.build_prompts is not None else None
-        gather = (
-            build.build_gather(session, self._console)
-            if build.build_gather is not None
-            else GatherPhase()
+
+        tools, prompts, gather = resolve_agent_ports(
+            build,
+            session=session,
+            console=self._console,
+            logger=logger,
+            observer=observer,
+            default_tools=default_tools,
+            default_gather=GatherPhase(),
         )
         agent = DefaultHeadlessBuild(
             session=session,
@@ -182,11 +186,7 @@ class SessionAgentPool:
             logger=logger,
             surface="gateway",
             error_reporter=build.error_reporter,
-        ).agent(
-            tools=tools,
-            prompts=prompts,
-            gather=gather,
-        )
+        ).agent(tools=tools, prompts=prompts, gather=gather)
         if session_id:
             self._agents[session_id] = agent
         return agent
