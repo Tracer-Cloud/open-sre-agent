@@ -109,7 +109,8 @@ docker network create rc-net
 
 docker run -d --name rc-mongo --network rc-net --platform linux/amd64 \
   mongo:7.0 --replSet rs0 --bind_ip_all
-until docker exec rc-mongo mongosh --quiet --eval "db.runCommand('ping')" > /dev/null 2>&1; do sleep 2; done
+i=0; until docker exec rc-mongo mongosh --quiet --eval "db.runCommand('ping')" > /dev/null 2>&1 || [ $i -ge 30 ]; do sleep 2; i=$((i+1)); done
+[ $i -lt 30 ] || { echo "ERROR: MongoDB never became ready" >&2; exit 1; }
 docker exec rc-mongo mongosh --eval "rs.initiate()"
 
 docker run -d --name rc-dev --network rc-net --platform linux/amd64 -p 127.0.0.1:3201:3000 \
@@ -123,7 +124,14 @@ docker run -d --name rc-dev --network rc-net --platform linux/amd64 -p 127.0.0.1
   rocket.chat:8.5.1
 ```
 
-The `OVERWRITE_SETTING_Show_Setup_Wizard=completed` + `ADMIN_*` vars skip the manual setup wizard entirely. Wait for `curl http://localhost:3201/api/info` to return `200`, then log in and generate a PAT via the API:
+The `OVERWRITE_SETTING_Show_Setup_Wizard=completed` + `ADMIN_*` vars skip the manual setup wizard entirely.
+
+```bash
+i=0; until curl -sf -o /dev/null http://localhost:3201/api/info || [ $i -ge 40 ]; do sleep 10; i=$((i+1)); done
+[ $i -lt 40 ] || { echo "ERROR: Rocket.Chat never became ready" >&2; exit 1; }
+```
+
+Then log in and generate a PAT via the API:
 
 ```bash
 curl -s -X POST http://localhost:3201/api/v1/login -d "user=verifyadmin&password=verify-admin-pass"
