@@ -165,6 +165,99 @@ opensre investigate -i alert.json
 - **Manifest size:** Very large charts can produce multi-megabyte manifests. The client truncates manifest text by default; override with `HELM_MANIFEST_MAX_CHARS` (see Option 2).
 - **Local kind demo:** From a repo checkout with Docker, kind, kubectl, and Helm installed, run `./tests/e2e/kubernetes/helm/scripts/demo-helm-kind.sh` to create a sample cluster and release (see script comments for teardown).
 
+### Local verification recipe
+
+Verified live: the demo script above produces a real cluster and release, then all 5
+registered tools were confirmed against it.
+
+```bash
+./tests/e2e/kubernetes/helm/scripts/demo-helm-kind.sh
+```
+
+This creates a `kind` cluster named `opensre-helm-demo`, installs `bitnami/nginx` as
+release `demo` in namespace `demo`, and prints a Helm/kubectl snapshot.
+
+```bash
+export OSRE_HELM_INTEGRATION=1
+export HELM_KUBE_CONTEXT="kind-opensre-helm-demo"
+export HELM_NAMESPACE="demo"
+```
+
+Verify:
+
+```bash
+opensre integrations verify helm
+```
+
+```
+SERVICE │ SOURCE    │ STATUS   │ DETAIL
+helm    │ local env │ ✓ passed │ Helm CLI is available and can reach the
+        │           │          │ Kubernetes cluster.
+```
+
+`opensre investigate` only treats an integration as active once the store resolution has
+*something* to fall through to env vars with -- an untouched `~/.opensre/integrations.json`
+with an unrelated integration in it blocks env-var fallback entirely. Point
+`OPENSRE_INTEGRATIONS_STORE_PATH` at an empty, valid store instead, so your real config is
+never read or written and the `HELM_*` vars above are the only source of connection info:
+
+```bash
+export OPENSRE_INTEGRATIONS_STORE_PATH=$(mktemp /tmp/opensre-helm-demo.XXXXXX)
+echo '{"version": 2, "integrations": []}' > "$OPENSRE_INTEGRATIONS_STORE_PATH"
+```
+
+Trigger a real investigation against the deployed release -- this is the actual supported
+entrypoint, not an internal import:
+
+```bash
+opensre investigate --input-json '{
+  "alert_name": "HelmReleaseErrors",
+  "severity": "warning",
+  "labels": {
+    "meta.helm.sh/release-name": "demo",
+    "meta.helm.sh/release-namespace": "demo"
+  },
+  "annotations": {
+    "summary": "Errors observed after helm upgrade of demo release"
+  }
+}'
+```
+
+Real output from a run against this exact local cluster (edited for length). An empty
+store makes `opensre investigate` fall through to env-var resolution for *every*
+integration, not just Helm -- if your shell or machine already resolves another
+integration from its own env vars, it rides along too (harmless, and unrelated to the
+Helm tool calls below):
+
+```
+Loading integrations: helm, telegram
+↳ Helm · helm list releases
+
+Triage complete: One Helm release found in the demo namespace -- demo
+(chart nginx-25.1.1, revision 1) with status deployed. No failed/pending/
+superseded releases detected across the cluster.
+
+root_cause: The HelmReleaseErrors alert fired during the incident window,
+but the sole Helm release in the demo namespace is currently deployed at
+revision 1, updated inside the incident window. No failed, pending, or
+unknown Helm releases exist cluster-wide, consistent with a transient
+reconciliation error that has since self-resolved.
+```
+
+All 5 registered tools return real data against this cluster -- confirmed by direct
+calls to each: release listing, release status, release history, release values (empty
+`{}` here since the demo installs with default values only -- Helm's `get values`
+returns only user-supplied overrides, not the chart's own defaults), and the rendered
+manifest.
+
+Teardown:
+
+```bash
+kind delete cluster --name opensre-helm-demo
+rm -f "$OPENSRE_INTEGRATIONS_STORE_PATH"
+unset OPENSRE_INTEGRATIONS_STORE_PATH OSRE_HELM_INTEGRATION HELM_KUBE_CONTEXT HELM_NAMESPACE
+```
+
 ## Verify
 
 ```bash
