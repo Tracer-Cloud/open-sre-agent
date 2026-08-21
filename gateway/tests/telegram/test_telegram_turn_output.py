@@ -259,3 +259,24 @@ def test_a_second_goal_turn_posts_a_new_message_instead_of_overwriting() -> None
     assert client.send_message.called, "second goal turn overwrote the first answer"
     posted = client.send_message.call_args.args[1]
     assert "turn two answer" in posted
+
+
+def test_finalize_html_payload_stays_within_limit_for_long_markdown() -> None:
+    """Regression: the answer was truncated to 4096 *before* HTML conversion,
+    which only lengthens text (tags + &<> escaping) — Telegram rejected the
+    oversized HTML and every long answer fell back to unformatted plain text."""
+    client = MagicMock(spec=TelegramBotClient)
+    client.send_message.return_value = (True, "", "1")
+    client.edit_message_text.return_value = (True, "")
+    sink = TelegramTurnOutput(client=client, chat_id="123", edit_interval_seconds=0.0)
+
+    answer = "\n".join(
+        f"- **service-{i}** restarted `pod-{i}` at <t={i}> & recovered" for i in range(80)
+    )
+    sink.finalize(answer)
+
+    html_sent = client.edit_message_text.call_args[0][2]
+    assert len(html_sent) <= MAX_MESSAGE_SIZE
+    # The formatted HTML went out, not the plain-text fallback.
+    assert "<b>service-0</b>" in html_sent
+    assert client.edit_message_text.call_args.kwargs.get("parse_mode") == "HTML"

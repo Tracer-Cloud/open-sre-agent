@@ -8,6 +8,7 @@ import time
 from collections.abc import Iterable
 
 from gateway.transports.telegram.poller.client import TelegramBotClient
+from integrations.telegram.delivery import truncate_for_telegram_html
 from integrations.telegram.formatting import markdown_to_telegram_html
 from platform.delivery.notifications.limits import MAX_MESSAGE_SIZE
 from platform.text.truncation import truncate
@@ -121,7 +122,13 @@ class TelegramTurnOutput:
 
     def _finalize(self, answer: str) -> None:
         final = truncate(answer, MAX_MESSAGE_SIZE, suffix="…")
-        html_final = markdown_to_telegram_html(final)
+        # Convert first, then truncate tag-safely: HTML conversion only ever
+        # lengthens the text, so truncating the Markdown to 4096 first left
+        # html_final over the limit and every long answer fell back to the
+        # unformatted plain text. Same order as the scheduler's Telegram path.
+        html_final = truncate_for_telegram_html(
+            markdown_to_telegram_html(answer), MAX_MESSAGE_SIZE, suffix="…"
+        )
         if self._message_id and self._edit_final(html_final, final):
             logger.info("outbound chat=%s text=%r", self._chat_id, _log_preview(final))
             # Release the id so the next outer turn cannot overwrite this answer.
