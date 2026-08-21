@@ -54,7 +54,7 @@ from core.agent_harness.turns.headless_adapters import (
     StaticReasoningClientProvider,
 )
 from core.agent_harness.turns.headless_agent import HeadlessAgent
-from infrastructure.harness_providers import get_subprocess_presenter_factory
+from infrastructure.harness_providers import resolve_subprocess_presenter
 
 if TYPE_CHECKING:
     from core.agent_harness.session.session_core import SessionCore
@@ -160,7 +160,7 @@ class DefaultHeadlessBuild:
             self.session,
             self._console,
             tool_action_logger=self._logger,
-            subprocess_presenter_factory=get_subprocess_presenter_factory(),
+            subprocess_presenter_factory=resolve_subprocess_presenter(),
         )
 
     def prompts(self) -> PromptContextProvider:

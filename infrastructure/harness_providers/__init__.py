@@ -96,8 +96,8 @@ from infrastructure.harness_providers.repo_scope import (
 )
 from infrastructure.harness_providers.repo_scope import reset as _reset_repo_scope
 from infrastructure.harness_providers.subprocess_presenter import (
-    get_subprocess_presenter_factory,
-    set_subprocess_presenter_factory,
+    SubprocessPresenterProvider,
+    resolve_subprocess_presenter,
 )
 from infrastructure.harness_providers.subprocess_presenter import (
     reset as _reset_subprocess_presenter,
@@ -172,6 +172,7 @@ __all__ = [
     "PromptFragmentFn",
     "RemoteIntegrationsFetcher",
     "SetupableIntegrationServicesFn",
+    "SubprocessPresenterProvider",
     "VcsRepoScopeProvider",
     "WebappVaultFetcherFn",
     "action_prompt_vendor_fragments",
@@ -193,7 +194,6 @@ __all__ = [
     "gateway_persona_fragments",
     "gather_prompt_vendor_fragments",
     "get_investigation_tools",
-    "get_subprocess_presenter_factory",
     "get_surface_tool_map",
     "get_surface_tools",
     "integration_setup_command",
@@ -217,13 +217,13 @@ __all__ = [
     "reset_harness_providers",
     "resolve_integrations",
     "resolve_integrations_with_metadata",
+    "resolve_subprocess_presenter",
     "set_cli_llm_adapters",
     "set_integration_resolution_adapters",
     "set_integration_setup_command",
     "set_investigation_tools_adapter",
     "set_remote_integrations_fetcher",
     "set_setupable_integration_services",
-    "set_subprocess_presenter_factory",
     "set_tool_registry",
     "setupable_integration_services",
     "strip_message_context_prefix",
