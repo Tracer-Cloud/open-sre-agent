@@ -18,7 +18,6 @@ import infrastructure.harness_providers as harness_providers
 from core.domain.alerts import extraction as alert_extraction
 from core.domain.diagnosis import taxonomy_registry
 from core.domain.types import incident_anchors
-from infrastructure.harness_providers import repo_scope
 from surfaces.shared.terminal.output import boundary as output_boundary
 
 
@@ -115,7 +114,7 @@ def test_message_context_stripper_handles_slack_prefix() -> None:
 
 def test_vcs_repo_scope_providers_registered_for_both_hosts() -> None:
     # Assert: GitHub and GitLab both register a scope provider.
-    assert len(repo_scope._vcs_repo_scope_providers) == 2
+    assert len(harness_providers.repo_scope._vcs_repo_scope_providers) == 2
 
 
 def test_incident_anchor_parsers_are_registered() -> None:
@@ -164,4 +163,4 @@ def test_reset_clears_every_vendor_registry() -> None:
     assert harness_providers.assistant_prompt_vendor_fragments() == ""
     assert harness_providers.gateway_persona_fragments() == ""
     assert harness_providers.preferred_evidence_sources_for("metric_read") == ()
-    assert repo_scope._vcs_repo_scope_providers == []
+    assert harness_providers.repo_scope._vcs_repo_scope_providers == []

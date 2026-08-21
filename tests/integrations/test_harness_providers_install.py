@@ -7,7 +7,6 @@ from collections.abc import Iterator
 import pytest
 
 import infrastructure.harness_providers as harness_providers
-from infrastructure.harness_providers import cli_llm, integration_resolution
 from infrastructure.observability import NoopProgressTracker
 from infrastructure.observability.render import debug as obs_debug
 from infrastructure.observability.render import display as obs_display
@@ -49,7 +48,7 @@ def test_port_defaults_to_empty_before_boundary_install() -> None:
 def test_install_product_adapters_wires_tracer_fetcher() -> None:
     output_boundary.install_product_adapters()
 
-    assert integration_resolution._fetch_remote is fetch_tracer_remote_integrations
+    assert harness_providers.integration_resolution._fetch_remote is fetch_tracer_remote_integrations
 
 
 def test_registered_fetcher_is_invoked() -> None:
@@ -73,15 +72,15 @@ def test_reset_restores_webapp_vault_fetcher_default() -> None:
         return [{"service": "leaked-vault-marker"}]
 
     harness_providers.set_integration_resolution_adapters(fetch_webapp_vault=_sentinel_vault)
-    assert integration_resolution._fetch_webapp_vault is _sentinel_vault
+    assert harness_providers.integration_resolution._fetch_webapp_vault is _sentinel_vault
 
     # Act
     harness_providers.reset_harness_providers()
 
     # Assert: the noop default is restored, not the leaked sentinel.
     assert (
-        integration_resolution._fetch_webapp_vault
-        is integration_resolution._default_fetch_webapp_vault
+        harness_providers.integration_resolution._fetch_webapp_vault
+        is harness_providers.integration_resolution._default_fetch_webapp_vault
     )
 
 
@@ -89,8 +88,8 @@ def test_install_harness_providers_wires_catalog_and_registry() -> None:
     output_boundary.install_harness_providers()
 
     assert (
-        integration_resolution._load_integrations
-        is not integration_resolution._default_load_integrations
+        harness_providers.integration_resolution._load_integrations
+        is not harness_providers.integration_resolution._default_load_integrations
     )
     assert isinstance(harness_providers.get_surface_tools("action"), list)
 
@@ -103,9 +102,9 @@ def test_install_harness_providers_wires_cli_llm_adapters() -> None:
 
     output_boundary.install_harness_providers()
 
-    assert cli_llm._cli_provider_registration_fn is not cli_llm._default_cli_provider_registration
-    assert cli_llm._build_cli_client_fn is not cli_llm._cli_llm_backend_unavailable
-    assert cli_llm._flatten_cli_messages_fn is not cli_llm._cli_llm_backend_unavailable
+    assert harness_providers.cli_llm._cli_provider_registration_fn is not harness_providers.cli_llm._default_cli_provider_registration
+    assert harness_providers.cli_llm._build_cli_client_fn is not harness_providers.cli_llm._cli_llm_backend_unavailable
+    assert harness_providers.cli_llm._flatten_cli_messages_fn is not harness_providers.cli_llm._cli_llm_backend_unavailable
 
 
 def test_install_harness_providers_wires_soc_registries() -> None:
