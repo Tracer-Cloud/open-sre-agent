@@ -295,6 +295,28 @@ class TestTheIndexIsTheAllowlist:
         assert result["success"] is False
         assert "not a documented read" in result["error"]
 
+    def test_a_case_variant_resource_manager_gets_no_folder_id(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """Regression: accepts_folder_scope compares the raw id, so a
+        case-variant "Resource-Manager" got a stray folderId injected —
+        the request shape Yandex answers with a bare 404."""
+        captured: dict[str, Any] = {}
+
+        def _request(method: str, url: str, **kwargs: Any) -> httpx.Response:
+            captured.update(kwargs["params"])
+            return httpx.Response(HTTPStatus.OK, json={"clouds": []})
+
+        monkeypatch.setattr("integrations.yandex_cloud.rest_client.send_request", _request)
+        result = execute_yc_operation(
+            service="Resource-Manager",
+            path="/resource-manager/v1/clouds",
+            **_CREDENTIALS,
+        )
+
+        assert result["success"] is True
+        assert "folderId" not in captured
+
     def test_a_concrete_resource_path_is_sent(self, monkeypatch: pytest.MonkeyPatch) -> None:
         seen: list[str] = []
 
