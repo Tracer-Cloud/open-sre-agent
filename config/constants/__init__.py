@@ -86,6 +86,9 @@ from config.constants.filestorage import (
     REMOTE_SYNC_PROFILE_ENV,
     REMOTE_SYNC_PROVIDER_ENV,
     REMOTE_SYNC_REGION_ENV,
+    REMOTE_SYNC_ENCRYPT_ENV,
+    REMOTE_SYNC_PASSPHRASE_ENV,
+    REMOTE_SYNC_KEY_CACHE_ENV,
 )
 from config.constants.gateway import (
     ATTACHMENT_MAX_FILE_CHARS,
@@ -712,4 +715,7 @@ __all__ = [
     "YC_SA_KEY_FILE_ENV",
     "YC_TOKEN_ENV",
     "YC_USE_METADATA_ENV",
+    "REMOTE_SYNC_ENCRYPT_ENV",
+    "REMOTE_SYNC_PASSPHRASE_ENV",
+    "REMOTE_SYNC_KEY_CACHE_ENV"
 ]
