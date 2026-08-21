@@ -2,9 +2,10 @@
 
 from __future__ import annotations
 
+import platform
+
 from rich.console import Console
 
-import platform
 from infrastructure.terminal.prompt_support import print_session_resume_hint
 from surfaces.interactive_shell.command_registry.types import SlashCommand
 from surfaces.interactive_shell.runtime import Session

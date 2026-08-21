@@ -7,6 +7,7 @@ import contextlib
 import hashlib
 import json
 import os
+import platform
 import queue
 import re
 import tempfile
@@ -21,7 +22,6 @@ from typing import Final
 
 import httpx
 
-import platform
 from config.constants import get_store_path
 from config.constants.posthog import POSTHOG_CAPTURE_API_KEY, POSTHOG_HOST
 from config.version import get_opensre_version

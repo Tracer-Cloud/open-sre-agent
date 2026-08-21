@@ -1,7 +1,7 @@
 """What a surface may depend on: not its peer, and not the gateway's insides.
 
 ``surfaces/cli`` and ``surfaces/interactive_shell`` are peers: what both need
-lives below them (``surfaces/shared``, ``config``, ``core``, ``platform``).
+lives below them (``surfaces/shared``, ``config``, ``core``, ``infrastructure``).
 Surfaces may also drive the gateway *process* — start it, stop it, read its
 status — but not reach into its transports, storage or middleware.
 

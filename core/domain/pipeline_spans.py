@@ -13,7 +13,7 @@ Both ``integrations.grafana.tools`` (live Grafana / Tempo queries) and
 ``integrations.opensre.seed_evidence`` (offline OpenRCA / HuggingFace
 fixtures) need this projection. Lives in ``core.domain`` so neither
 side has to import the other, and so the OpenSRE-specific span-name
-vocabulary stays out of the infrastructure layer (``platform``).
+vocabulary stays out of the ``infrastructure`` layer.
 """
 
 from __future__ import annotations

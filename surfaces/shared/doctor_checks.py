@@ -3,11 +3,11 @@
 from __future__ import annotations
 
 import os
+import platform
 import sys
 from collections.abc import Callable
 from pathlib import Path
 
-import platform
 from config.version import get_opensre_version
 
 

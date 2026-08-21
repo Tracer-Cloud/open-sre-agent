@@ -8,7 +8,7 @@ MCP readers, availability envelopes), and the ``core.tool_framework`` root, whic
 exports nothing yet. Everything reaching past a door is listed below, and these
 allowlists are the measurement of the seam.
 
-``gateway``, ``surfaces`` and ``platform`` are at zero: they use the contract and
+``gateway``, ``surfaces`` and ``infrastructure`` are at zero: they use the contract and
 nothing behind it.
 
 Each allowlist is compared exactly in both directions: a new internal import

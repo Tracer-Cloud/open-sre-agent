@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import platform
+
 from config.version import get_opensre_version
 from surfaces.cli.app import main
 

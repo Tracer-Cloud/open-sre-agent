@@ -172,7 +172,6 @@ def print_fast_version(argv: list[str]) -> None:
         return
 
     import json
-
     import platform
 
     json_output = argv[0] in {"--json", "-j"}

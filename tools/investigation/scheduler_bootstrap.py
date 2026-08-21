@@ -2,7 +2,7 @@
 
 The scheduled-delivery subsystem in :mod:`infrastructure.scheduling.scheduler` invokes an
 :class:`infrastructure.scheduling.scheduler.investigation_runner.InvestigationRunner` to build
-reports. ``platform`` sits below ``tools`` in the layering contract, so the
+reports. ``infrastructure`` sits below ``tools`` in the layering contract, so the
 runner is registered from this side of the boundary (T-4 layering audit, issue
 #3352). Call :func:`install` from any higher-layer entrypoint that expects the
 scheduler to run investigations (e.g. ``opensre cron start`` / ``opensre cron

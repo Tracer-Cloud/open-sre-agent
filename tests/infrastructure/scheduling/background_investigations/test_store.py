@@ -59,8 +59,7 @@ _READER = (
 def _run(script: str, home: Path) -> subprocess.CompletedProcess[str]:
     """Run ``script`` in a fresh interpreter rooted at ``home``.
 
-    ``cwd`` is the repo so the local ``platform`` package wins over the stdlib
-    module of the same name.
+    ``cwd`` is the repo so the first-party packages are importable.
     """
     return subprocess.run(
         [sys.executable, "-c", script],

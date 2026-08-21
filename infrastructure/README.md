@@ -1,9 +1,9 @@
-# Platform
+# Infrastructure
 
-`platform/` contains shared runtime services that sit outside the user-facing
+`infrastructure/` contains shared runtime services that sit outside the user-facing
 application package and outside the core agent harness loop.
 
-Platform code may own side effects such as telemetry emission, audit logging,
+Infrastructure code may own side effects such as telemetry emission, audit logging,
 runtime display, tracing, auth verification, masking, sandbox execution, and
 minimal guardrails. Configuration-only behavior belongs in `config/`; agent
 orchestration, state, tool planning, and tool execution contracts belong in
@@ -11,10 +11,6 @@ orchestration, state, tool planning, and tool execution contracts belong in
 
 Name packages by **what they do**. Do not add a `common/` / `shared/` / `util/`
 junk drawer. Prefer leaf imports over re-export shims.
-
-This package intentionally shadows the stdlib `platform` name and re-exposes
-its API in `__init__.py`. Do not add a submodule named `release` — that would
-overwrite stdlib `platform.release()`.
 
 ## Process & install
 

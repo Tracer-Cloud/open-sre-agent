@@ -3,12 +3,12 @@
 from __future__ import annotations
 
 import json
+import platform
 import sys
 import time
 
 import click
 
-import platform
 from config.constants.investigation import ALERT_TEMPLATE_CHOICES
 from config.version import get_opensre_version
 from infrastructure.analytics.cli import (

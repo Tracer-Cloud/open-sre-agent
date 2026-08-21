@@ -26,6 +26,7 @@ from __future__ import annotations
 
 import hashlib
 import os
+import platform
 import subprocess
 import sys
 from collections.abc import Iterable
@@ -33,7 +34,6 @@ from importlib import metadata as importlib_metadata
 from pathlib import Path
 from typing import Any
 
-import platform
 from tests.benchmarks._framework.adapters import BenchmarkAdapter
 from tests.benchmarks._framework.config import BenchmarkConfig
 from tests.benchmarks._framework.cost import lookup_pricing
