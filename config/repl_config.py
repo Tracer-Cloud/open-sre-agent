@@ -33,7 +33,10 @@ def _resolve_theme(raw: str, *, source: str | None) -> Theme:
     except ValueError:
         if source is not None:
             log.warning(
-                "%s=%r is not a valid theme; defaulting to %r.", source, raw, DEFAULT_THEME_NAME
+                "%s=%r is not a valid theme; defaulting to %r.",
+                source,
+                raw,
+                DEFAULT_THEME_NAME.value,
             )
         return DEFAULT_THEME_NAME
 
