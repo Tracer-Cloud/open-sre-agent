@@ -20,11 +20,17 @@ _SANDBOX_TMP_ROOT = os.path.realpath(os.fspath(OPENSRE_TMP_DIR))
 # An allowlist, not a passthrough: anything absent here is dropped. The second
 # group is the Windows spelling of entries in the first, plus the keys the OS
 # itself requires — without SYSTEMROOT, Winsock cannot initialise and every
-# socket call fails with WinError 10106. SYSTEMDRIVE travels with it: shell
-# folder lookups expand "%SystemDrive%" from the environment, so forwarding
-# SYSTEMROOT without it leaves the reference literal and Windows creates a
-# "%SystemDrive%" directory under the child's cwd — a write outside the sandbox
-# root, made by the OS rather than through the guarded open() below.
+# socket call fails with WinError 10106. SYSTEMDRIVE travels with it because
+# Windows resolves the shell folders from a REG_EXPAND_SZ holding the literal
+# "%SystemDrive%\\ProgramData", expanded against this environment. Drop the key
+# and the token stays literal, leaving a path with no drive letter and no
+# leading separator — i.e. a *relative* path, resolved against the child's cwd.
+# Two things follow, and which one you see depends on the interpreter:
+# python.org CPython fails the lookup silently and hands back an empty string,
+# so generated code proceeds on a wrong path; MSIX/Store CPython additionally
+# writes its packaging-layer cache to the relative path, creating an actual
+# "%SystemDrive%" tree under the child's cwd — a write outside the sandbox root,
+# made by the OS at process start rather than through the guarded open() below.
 # Deliberately excluded: COMSPEC (the preamble blocks subprocess spawning) and
 # APPDATA/LOCALAPPDATA (config homes, matching the omission of XDG_CONFIG_HOME).
 _BASE_ENV_KEYS = (

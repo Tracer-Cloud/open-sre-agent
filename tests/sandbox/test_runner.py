@@ -175,12 +175,36 @@ class TestSandboxEnvironment:
         for key in _WINDOWS_ENV_KEYS:
             assert env[key] == f"value-for-{key}"
 
-    def test_systemdrive_travels_with_systemroot(self) -> None:
-        # Forwarding SYSTEMROOT alone leaves "%SystemDrive%" unexpanded in shell
-        # folder lookups, and Windows then creates a directory by that literal
-        # name under the child's cwd. Keeping the pair together is what stops a
-        # write escaping the sandbox root.
-        assert ("SYSTEMROOT" in _BASE_ENV_KEYS) == ("SYSTEMDRIVE" in _BASE_ENV_KEYS)
+    @pytest.mark.skipif(os.name != "nt", reason="%SystemDrive% expansion is Windows-only")
+    def test_child_can_expand_systemdrive(self) -> None:
+        # The invariant SYSTEMDRIVE actually buys. An unexpanded "%SystemDrive%"
+        # is a path with no drive letter and no leading separator — a *relative*
+        # path — which is what lets a shell-folder write land under the child's
+        # cwd instead of on the system drive. Asserting the expansion rather than
+        # the escape keeps this failing without the key on every Windows
+        # interpreter; the escape itself only manifests on some (see
+        # test_sandbox_run_leaves_no_directory_behind).
+        result = run_python_sandbox(r"import os; print(os.path.expandvars(r'%SystemDrive%'))")
+
+        assert result.success, result.stderr
+        assert result.stdout.strip() != "%SystemDrive%"
+
+    @pytest.mark.skipif(os.name != "nt", reason="shell folder lookup is Windows-only")
+    def test_child_shell_folder_lookup_does_not_fail_silently(self) -> None:
+        # Without SYSTEMDRIVE, SHGetFolderPathW cannot resolve CSIDL_COMMON_APPDATA
+        # and returns 0x80070003 with an empty buffer rather than raising. Generated
+        # code then acts on "" as if it were a directory, which is the quieter half
+        # of the bug: a wrong path, not a crash.
+        code = (
+            "import ctypes;"
+            "b = ctypes.create_unicode_buffer(260);"
+            "ctypes.windll.shell32.SHGetFolderPathW(None, 0x0023, None, 0, b);"
+            "print(b.value)"
+        )
+        result = run_python_sandbox(code)
+
+        assert result.success, result.stderr
+        assert result.stdout.strip() != ""
 
     def test_unlisted_variables_are_still_not_forwarded(
         self, monkeypatch: pytest.MonkeyPatch
@@ -210,6 +234,13 @@ class TestSandboxEnvironment:
         # The %SystemDrive% escape appeared in the *cwd* of the child, so this
         # runs from an empty directory and asserts it stays empty. monkeypatch
         # restores the cwd even if the assertion below raises.
+        #
+        # Coverage is interpreter-dependent, deliberately: only MSIX/Store CPython
+        # writes its packaging cache at process start, so only there does this fail
+        # when SYSTEMDRIVE is dropped. On python.org CPython it passes either way
+        # and guards nothing — test_child_can_expand_systemdrive is what holds the
+        # line on those. Kept because it is the only test that observes the actual
+        # out-of-sandbox write rather than the condition that enables it.
         monkeypatch.chdir(tmp_path)
         result = run_python_sandbox("import socket; socket.socket().close()", allow_network=True)
 
