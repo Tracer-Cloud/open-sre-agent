@@ -87,7 +87,7 @@ from dagster import job, op
 
 @op
 def deploy_payment_service():
-    return "deployed"
+    raise RuntimeError("payment-service deploy failed: connection refused to billing-api")
 
 
 @job
@@ -121,33 +121,62 @@ SERVICE │ SOURCE    │ STATUS   │ DETAIL
 dagster │ local env │ ✓ passed │ Connected to Dagster version 1.13.18.
 ```
 
-Call `list_dagster_runs` directly for the run you just launched:
+Register the local instance in the persistent store — `opensre investigate` only treats an integration as active once it is in the store, unlike `verify` which also accepts plain env vars. This appends without touching anything already there:
 
 ```python
-from integrations.dagster.tools import list_dagster_runs
-list_dagster_runs(endpoint="http://localhost:3001", limit=5)
+import json, pathlib
+
+path = pathlib.Path.home() / ".opensre" / "integrations.json"
+store = json.loads(path.read_text()) if path.exists() else {"version": 2, "integrations": []}
+store["integrations"] = [i for i in store["integrations"] if i["id"] != "dagster-local-demo"]
+store["integrations"].append({
+    "id": "dagster-local-demo",
+    "service": "dagster",
+    "status": "active",
+    "instances": [{"name": "default", "tags": {}, "credentials": {"endpoint": "http://localhost:3001"}}],
+})
+path.parent.mkdir(parents=True, exist_ok=True)
+path.write_text(json.dumps(store, indent=2))
 ```
 
-```json
-{
-  "data": {
-    "runsOrError": {
-      "__typename": "Runs",
-      "results": [
-        {
-          "runId": "f025623a-f32c-4928-a5dd-b63f217594d4",
-          "status": "SUCCESS",
-          "jobName": "payment_service_deploy",
-          "startTime": 1787241647.173495,
-          "endTime": 1787241648.632109,
-          "creationTime": 1787241643.5124,
-          "duration_seconds": 1.4586138725280762
-        }
-      ],
-      "count": 1
-    }
+Trigger a real investigation against the failed run — this is the actual supported entrypoint, not an internal function:
+
+```bash
+opensre investigate --input-json '{
+  "alert_name": "DagsterJobFailed",
+  "severity": "critical",
+  "commonAnnotations": {
+    "summary": "Dagster job payment_service_deploy failed",
+    "job_name": "payment_service_deploy"
   }
-}
+}'
+```
+
+Real output from a run against this exact local job (edited for length):
+
+```
+Loading integrations: telegram, dagster
+↳ Dagster · list dagster runs (status=FAILURE)
+↳ Dagster · get dagster run logs
+
+root_cause: "The deploy_payment_service op in job payment_service_deploy
+raised RuntimeError('payment-service deploy failed: connection refused
+to billing-api') at jobs.py:6. The Dagster orchestration itself executed
+correctly; the failure originated in a downstream HTTP call to the
+billing-api dependency being refused at the TCP layer."
+
+Cited Evidence: list dagster runs, get dagster run logs
+```
+
+Remove the demo entry when done:
+
+```python
+import json, pathlib
+
+path = pathlib.Path.home() / ".opensre" / "integrations.json"
+store = json.loads(path.read_text())
+store["integrations"] = [i for i in store["integrations"] if i["id"] != "dagster-local-demo"]
+path.write_text(json.dumps(store, indent=2))
 ```
 
 Teardown: `Ctrl-C` the `dagster dev` process — it uses a temporary `DAGSTER_HOME` that is removed on exit.
