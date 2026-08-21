@@ -11,11 +11,12 @@ from __future__ import annotations
 
 import logging
 from collections.abc import Callable
-from typing import Any
+from typing import Any, cast
 
 from rich.console import Console
 
 from core.agent_harness import OutputSink
+from core.agent_harness.ports import SessionState, ToolEventObserver
 from core.agent_harness.runtime import (
     AgentBuildConfig,
     DefaultHeadlessBuild,
@@ -80,12 +81,15 @@ def shell_agent_build_config(
     """REPL wiring: shell tools, CLI grounding, console gather; no withholds."""
 
     def build_tools(
-        session: Session,
+        session: SessionState,
         console: Console,
         _logger: logging.Logger,
-        _observer: Any,
+        _observer: ToolEventObserver | None,
     ) -> DefaultToolProvider:
-        return shell_tool_provider(session, console, request_exit=request_exit)
+        # BuildTools' Protocol declares the base SessionState (contravariance
+        # requires accepting at least as wide a type); this closure is only
+        # ever wired up below with a real interactive-shell Session.
+        return shell_tool_provider(cast(Session, session), console, request_exit=request_exit)
 
     return AgentBuildConfig(
         build_tools=build_tools,
