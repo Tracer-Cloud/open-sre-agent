@@ -109,10 +109,10 @@ docker network create rc-net
 
 docker run -d --name rc-mongo --network rc-net --platform linux/amd64 \
   mongo:7.0 --replSet rs0 --bind_ip_all
-sleep 8
+until docker exec rc-mongo mongosh --quiet --eval "db.runCommand('ping')" > /dev/null 2>&1; do sleep 2; done
 docker exec rc-mongo mongosh --eval "rs.initiate()"
 
-docker run -d --name rc-dev --network rc-net --platform linux/amd64 -p 3201:3000 \
+docker run -d --name rc-dev --network rc-net --platform linux/amd64 -p 127.0.0.1:3201:3000 \
   -e 'MONGO_URL=mongodb://rc-mongo:27017/rocketchat?replicaSet=rs0' \
   -e 'MONGO_OPLOG_URL=mongodb://rc-mongo:27017/local?replicaSet=rs0' \
   -e 'ROOT_URL=http://localhost:3201' \
@@ -165,27 +165,23 @@ SERVICE    │ SOURCE    │ STATUS   │ DETAIL
 rocketchat │ local env │ ✓ passed │ Connected to Rocket.Chat as @verifyadmin.
 ```
 
-`RocketChatSendMessageTool` is the internal class the agent calls during an investigation — invoke it directly here only to see the real shape of its result (internal, not a public API, and may move):
+Send a real message through the supported watchdog delivery path (see [Watchdog alarms](#watchdog-alarms) below) rather than calling the tool class directly — this exercises the same threshold-detection, cooldown, and provider-routing code a production alarm uses:
 
-```python
-from integrations.rocketchat.tools.rocketchat_send_message_tool.tool import RocketChatSendMessageTool
-RocketChatSendMessageTool().run(
-    message="DB CPU is back below 70%; keeping the incident open for 10 minutes.",
-    channel="#general",
-)
+```bash
+sleep 30 &
+opensre watchdog --pid $! --max-runtime 2s --once --provider rocketchat --chat-id "#general"
 ```
 
-```json
-{
-  "source": "rocketchat",
-  "available": true,
-  "status": "sent",
-  "sent": true,
-  "error": "",
-  "error_type": "",
-  "channel": "#general",
-  "message_length": 67
-}
+Check the channel — a real alarm message lands within a few seconds:
+
+```
+🚨 OpenSRE Watchdog Alarm
+host       Arnavs-MacBook-Air.local
+pid        44352  (sleep)
+cmd        sleep 30
+threshold  max_runtime  limit=2s  observed=2s
+runtime    2s
+started    2026-08-21T09:54:35.439729Z
 ```
 
 Teardown:
