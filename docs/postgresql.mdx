@@ -210,6 +210,8 @@ Teardown:
 
 ```bash
 docker rm -f postgres-dev
+unset POSTGRESQL_HOST POSTGRESQL_PORT POSTGRESQL_DATABASE
+unset POSTGRESQL_USERNAME POSTGRESQL_PASSWORD POSTGRESQL_SSL_MODE
 ```
 
 ## Investigation tools
