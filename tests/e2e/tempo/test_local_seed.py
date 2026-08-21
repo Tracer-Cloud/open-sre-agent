@@ -16,3 +16,9 @@ def test_trace_payload_contains_searchable_error_span() -> None:
     assert span["name"] == "POST /checkout"
     assert int(span["endTimeUnixNano"]) - int(span["startTimeUnixNano"]) == 2_000_000_000
     assert span["status"]["code"] == 2
+    http_status = next(
+        attribute["value"]["intValue"]
+        for attribute in span["attributes"]
+        if attribute["key"] == "http.response.status_code"
+    )
+    assert http_status == "500"
