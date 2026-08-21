@@ -13,7 +13,7 @@ last column says whether peers may import each other.
 
 | Tier | Packages | May import | Must never import | Peer rule |
 | --- | --- | --- | --- | --- |
-| 1 (top) | `surfaces`, `gateway` | `bootstrap`, `tools`, `integrations`, `core`, `infrastructure`, `config` | — | Independent: must not import each other. |
+| 1 (top) | `surfaces`, `gateway` | `bootstrap`, `tools`, `integrations`, `core`, `infrastructure`, `config` | — | Independent peers; must not import each other, except three tracked CLI/REPL gateway-command edges listed in `.importlinter.strict`. |
 | 2 | `bootstrap` | `tools`, `integrations`, `core`, `infrastructure`, `config` | `surfaces`, `gateway` | Composition root. The only package that may import `tools` **and** `integrations` together, because wiring needs both. |
 | 3 | `tools` | `core`, `infrastructure`, `config` | `surfaces`, `gateway`, `bootstrap` | Peer of `integrations`: must not import it. Existing edges are listed as debt in `.importlinter.strict`. |
 | 3 | `integrations` | `core`, `infrastructure`, `config` | `tools`, `surfaces`, `gateway`, `bootstrap` | Peer of `tools`: must not import it. |
@@ -39,7 +39,7 @@ flowchart TD
     end
     subgraph T4["Tier 4 — runtime + infrastructure"]
         CORE[core]
-        PLATFORM[infrastructure]
+        INFRA[infrastructure]
     end
     subgraph T5["Tier 5 — config"]
         CONFIG[config]
@@ -55,14 +55,14 @@ flowchart TD
     BOOT --> INTEGRATIONS
 
     TOOLS --> CORE
-    TOOLS --> PLATFORM
+    TOOLS --> INFRA
     INTEGRATIONS --> CORE
-    INTEGRATIONS --> PLATFORM
+    INTEGRATIONS --> INFRA
 
-    CORE <--> PLATFORM
+    CORE <--> INFRA
 
     CORE --> CONFIG
-    PLATFORM --> CONFIG
+    INFRA --> CONFIG
 ```
 
 The arrows show edges between **adjacent** tiers to keep the diagram readable.
@@ -94,9 +94,11 @@ layers below it.
   transport lives in `gateway/transports/slack`, outbound delivery in
   `integrations/slack`.
 - **`gateway/`** — the standalone messaging gateway for inbound chat platforms
-  (`gateway/transports/telegram`, `gateway/transports/slack`,
-  `gateway/core/session`, `gateway/core/storage`). A peer of
-  `surfaces`, not a child: the two never import each other.
+  (`gateway/transports/{telegram,slack,discord,buzz}`), plus the FastAPI
+  `gateway/web/` surface (health, alert intake, async investigations) and the
+  shared per-turn machinery in `gateway/core/{session,storage,middleware}`
+  (`middleware/` holds the inbound-decision, identity, and approval steps every
+  transport composes). A peer of `surfaces`, not a child.
 
 ### Tier 2 — `bootstrap`
 
@@ -159,7 +161,10 @@ The shared runtime and cross-cutting services the capability layer is built on.
   session handling (`core/agent_harness`), and pure domain rules (`core/domain`).
 - **`infrastructure/`** — cross-cutting services with no investigation logic of their
   own: guardrails, masking, sandbox, analytics, auth, notifications,
-  observability, scheduler, and deployment. Deploy-time assets live under
+  observability, scheduler, deployment, and the shared **turn host**
+  (`turn_host`) — the single `TurnHandler` the interactive shell and every
+  gateway transport run turns through, so the two entry paths cannot drift.
+  Deploy-time assets live under
   `infrastructure/deployment/` (EC2/packaging Python tooling plus the
   `cloudflare_install_proxy` edge worker); these are not imported by the app.
 
