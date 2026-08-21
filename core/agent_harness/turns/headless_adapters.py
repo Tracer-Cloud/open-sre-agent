@@ -10,6 +10,7 @@ from collections.abc import Iterable, Mapping
 from dataclasses import dataclass, field
 from typing import Any
 
+from core.agent_harness.accounting.token_accounting import LlmRunInfo, build_llm_run_info
 from core.agent_harness.ports import (
     ConfirmFn,
     ToolEventObserver,
@@ -201,27 +202,23 @@ class NoopErrorReporter:
         _ = (exc, context, expected)
 
 
-@dataclass
-class SimpleRunRecord:
-    """Opaque conversational-LLM run record for headless runs."""
-
-    response_text: str
-    prompt: str = ""
-    started: float = 0.0
-
-
 class SimpleRunRecordFactory:
-    """Builds :class:`SimpleRunRecord` values."""
+    """Builds :class:`LlmRunInfo` values for headless runs."""
 
     def bind_session(self, session: Any) -> None:
         """Records are ephemeral — no session handle to update."""
         _ = session
 
     def build(
-        self, *, client: Any, prompt: str, response_text: str, started: float
-    ) -> SimpleRunRecord:
-        _ = client
-        return SimpleRunRecord(response_text=response_text, prompt=prompt, started=started)
+        self, *, client: StreamingReasoningClient, prompt: str, response_text: str, started: float
+    ) -> LlmRunInfo:
+        return build_llm_run_info(
+            session=None,
+            prompt=prompt,
+            response_text=response_text,
+            started=started,
+            client=client,
+        )
 
 
 @dataclass

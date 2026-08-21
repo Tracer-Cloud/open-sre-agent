@@ -2,9 +2,13 @@
 
 from __future__ import annotations
 
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from core.agent_harness.accounting.token_accounting import build_llm_run_info
+
+if TYPE_CHECKING:
+    from core.agent_harness.accounting.token_accounting import LlmRunInfo
+    from core.llm.types import StreamingReasoningClient
 
 
 class DefaultRunRecordFactory:
@@ -17,7 +21,9 @@ class DefaultRunRecordFactory:
         """Point run records at a freshly resolved session (gateway reuse)."""
         self._session = session
 
-    def build(self, *, client: Any, prompt: str, response_text: str, started: float) -> Any:
+    def build(
+        self, *, client: StreamingReasoningClient, prompt: str, response_text: str, started: float
+    ) -> LlmRunInfo:
         return build_llm_run_info(
             session=self._session,
             prompt=prompt,

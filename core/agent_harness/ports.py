@@ -15,6 +15,7 @@ from dataclasses import dataclass
 from typing import Any, Protocol, runtime_checkable
 
 from config.llm_reasoning_effort import ReasoningEffortChoice
+from core.agent_harness.accounting.token_accounting import LlmRunInfo
 from core.agent_harness.turns.gather_observation import GatheredEvidence
 from core.agent_harness.turns.turn_results import ToolCallingTurnResult, TurnResult
 from core.llm.types import AgentLLMClient, StreamingReasoningClient
@@ -229,7 +230,9 @@ class ReasoningClientProvider(Protocol):
 class RunRecordFactory(Protocol):
     """Builds the opaque per-answer LLM-run record (telemetry) from raw inputs."""
 
-    def build(self, *, client: Any, prompt: str, response_text: str, started: float) -> Any:
+    def build(
+        self, *, client: StreamingReasoningClient, prompt: str, response_text: str, started: float
+    ) -> LlmRunInfo:
         raise NotImplementedError
 
 
@@ -257,7 +260,7 @@ class AnswerRequest:
 class StreamAnswerFn(Protocol):
     """Bound direct-answer callable (no tools) handed to ``run_turn``."""
 
-    def __call__(self, text: str, request: AnswerRequest) -> Any:
+    def __call__(self, text: str, request: AnswerRequest) -> LlmRunInfo | None:
         """Stream one grounded answer; return the LLM-run record or None."""
 
 
