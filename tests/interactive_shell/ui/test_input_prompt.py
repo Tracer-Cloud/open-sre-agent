@@ -10,7 +10,7 @@ import pytest
 from prompt_toolkit.completion import Completion
 from rich.console import Console
 
-from platform.scheduling.task_types import TaskKind
+from infrastructure.scheduling.task_types import TaskKind
 from surfaces.interactive_shell.runtime.core import state as loop_state
 from surfaces.interactive_shell.session import Session
 from surfaces.interactive_shell.ui.input_prompt import completion as prompt_completion

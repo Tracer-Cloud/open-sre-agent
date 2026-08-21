@@ -144,7 +144,7 @@ def test_parse_args_evaluate_flag() -> None:
 
 def test_run_investigation_cli_fails_fast_for_missing_llm_auth(monkeypatch, tmp_path) -> None:
     from config.llm_auth.credentials import CredentialStatus
-    from platform.errors import OpenSREError
+    from infrastructure.errors import OpenSREError
 
     monkeypatch.setenv("LLM_PROVIDER", "openai")
     monkeypatch.delenv("OPENAI_API_KEY", raising=False)

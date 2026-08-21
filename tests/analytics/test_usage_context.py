@@ -7,10 +7,10 @@ from pathlib import Path
 import pytest
 
 from config.constants.billing import ORGANIZATION_ID_ENV
-from platform.analytics import provider
-from platform.analytics.events import Event
-from platform.analytics.repl_context import bound_repl_turn_context
-from platform.analytics.usage_context import (
+from infrastructure.analytics import provider
+from infrastructure.analytics.events import Event
+from infrastructure.analytics.repl_context import bound_repl_turn_context
+from infrastructure.analytics.usage_context import (
     ORGANIZATION_GROUP_TYPE,
     UsageSurface,
     bound_usage_context,
@@ -35,7 +35,7 @@ def _reset_analytics(monkeypatch: pytest.MonkeyPatch, tmp_path: Path):
     monkeypatch.setattr(provider.atexit, "register", lambda _func: None)
     import sys
 
-    usage_ctx = sys.modules["platform.analytics.usage_context"]
+    usage_ctx = sys.modules["infrastructure.analytics.usage_context"]
     usage_ctx._PROCESS_SESSION_ID = None
     yield
     provider.shutdown_analytics(flush=False)
@@ -159,8 +159,8 @@ def test_process_session_id_stamps_cli_investigate_without_repl(
     posted = _stub_httpx_client(monkeypatch)
     monkeypatch.setenv(ORGANIZATION_ID_ENV, "org_cli")
 
-    from platform.analytics import cli as analytics_cli
-    from platform.analytics.usage_context import ensure_process_session_id
+    from infrastructure.analytics import cli as analytics_cli
+    from infrastructure.analytics.usage_context import ensure_process_session_id
 
     analytics = provider.Analytics()
     monkeypatch.setattr(provider, "_instance", analytics)
@@ -192,7 +192,7 @@ def test_track_investigation_binds_session_from_session_object(
     posted = _stub_httpx_client(monkeypatch)
     monkeypatch.setenv(ORGANIZATION_ID_ENV, "org_repl")
 
-    from platform.analytics import cli as analytics_cli
+    from infrastructure.analytics import cli as analytics_cli
 
     analytics = provider.Analytics()
     monkeypatch.setattr(provider, "_instance", analytics)

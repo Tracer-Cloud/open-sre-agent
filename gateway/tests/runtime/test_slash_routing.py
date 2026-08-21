@@ -12,7 +12,7 @@ from rich.console import Console
 from core.agent_harness.session import SessionCore
 from core.agent_harness.session.persistence.memory import InMemorySessionStore
 from core.agent_harness.tools.action_tools import get_action_tool
-from platform.turn_host.turn_handler import TurnHandler
+from infrastructure.turn_host.turn_handler import TurnHandler
 from tests.core.agent.orchestration.cross_surface_parity_harness import (
     RecordingTurnOutput,
     headless_slash_ports,
@@ -221,7 +221,7 @@ def test_gateway_manager_registers_harness_adapters(monkeypatch: pytest.MonkeyPa
     monkeypatch.setattr("bootstrap.process.install_harness_adapters", _record("adapters"))
     monkeypatch.setattr("bootstrap.process.install_scheduler_runners", _record("runners"))
     monkeypatch.setattr(
-        "platform.observability.errors.sentry.init_sentry",
+        "infrastructure.observability.errors.sentry.init_sentry",
         lambda **_kwargs: None,
     )
     monkeypatch.setattr(
@@ -229,7 +229,7 @@ def test_gateway_manager_registers_harness_adapters(monkeypatch: pytest.MonkeyPa
         lambda: None,
     )
     monkeypatch.setattr(
-        "platform.safety.sandbox.capabilities.boot_capability_warnings",
+        "infrastructure.safety.sandbox.capabilities.boot_capability_warnings",
         lambda: [],
     )
     from gateway.startup import StartedGateway
@@ -265,8 +265,12 @@ _BOX_DRAWING = set("─│┃━╭╮╰╯┏┓┗┛┿┼┤├┬┴┌┐
 
 
 def _seed_record(**overrides: Any) -> str:
-    from platform.scheduling.background_investigations.store import background_investigation_store
-    from platform.scheduling.background_investigations.types import BackgroundInvestigationRecord
+    from infrastructure.scheduling.background_investigations.store import (
+        background_investigation_store,
+    )
+    from infrastructure.scheduling.background_investigations.types import (
+        BackgroundInvestigationRecord,
+    )
 
     fields: dict[str, Any] = {
         "task_id": "bg-chat-1",

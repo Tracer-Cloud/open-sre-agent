@@ -4,8 +4,8 @@ from __future__ import annotations
 
 import pytest
 
-from platform.errors import OpenSREError
-from platform.process.exit_codes import ERROR, SUCCESS
+from infrastructure.errors import OpenSREError
+from infrastructure.process.exit_codes import ERROR, SUCCESS
 from tools.system.watch_dog.config import WatchdogConfig
 from tools.system.watch_dog.process_monitor import ProcessSample
 from tools.system.watch_dog.runner import run_watchdog

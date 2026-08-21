@@ -14,7 +14,7 @@ from collections.abc import Iterator
 
 import pytest
 
-import platform.harness_ports as harness_ports
+import infrastructure.harness_ports as harness_ports
 from core.domain.alerts import extraction as alert_extraction
 from core.domain.diagnosis import taxonomy_registry
 from core.domain.types import incident_anchors

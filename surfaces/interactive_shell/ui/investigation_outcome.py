@@ -8,7 +8,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Literal
 
-from platform.errors import OpenSREError
+from infrastructure.errors import OpenSREError
 from tools.interactive_shell.shared.investigation_launch import ForegroundInvestigationStatus
 
 FailureCategory = Literal[

@@ -16,8 +16,8 @@ from gateway.transports.slack.client import (
     Blocks,
     SlackMessagingClient,
 )
-from platform.text.markdown import tighten_markdown_emphasis
-from platform.text.truncation import truncate
+from infrastructure.text.markdown import tighten_markdown_emphasis
+from infrastructure.text.truncation import truncate
 
 logger = logging.getLogger("gateway")
 

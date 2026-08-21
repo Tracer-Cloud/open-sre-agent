@@ -2,23 +2,23 @@
 
 from __future__ import annotations
 
-from platform.delivery.notifications.outbound_registry import (
+from infrastructure.delivery.notifications.outbound_registry import (
     BACKGROUND_RCA,
     register_outbound_adapter,
 )
-from platform.delivery.notifications.rca_summary import summary_sections
-from platform.errors import OpenSREError
-from platform.scheduling.background_investigations.types import BackgroundInvestigationRecord
+from infrastructure.delivery.notifications.rca_summary import summary_sections
+from infrastructure.errors import OpenSREError
+from infrastructure.scheduling.background_investigations.types import BackgroundInvestigationRecord
 
 
 def deliver_telegram_notification(record: BackgroundInvestigationRecord) -> str:
     """Send the background-RCA completion summary to Telegram; return a result string."""
     # Imported lazily: telegram delivery only fires on background-RCA completion, so
     # the telegram client must not load into the base REPL boot import path.
+    from infrastructure.delivery.notifications.redaction import redact_token
     from integrations.smtp.delivery import format_background_rca_email
     from integrations.telegram.credentials import load_credentials_from_env
     from integrations.telegram.delivery import send_telegram_report
-    from platform.delivery.notifications.redaction import redact_token
 
     try:
         creds = load_credentials_from_env()

@@ -15,7 +15,7 @@ def test_core_orchestration_import_path_removed() -> None:
         Path("core"),
         Path("integrations"),
         Path("interactive_shell"),
-        Path("platform"),
+        Path("infrastructure"),
         Path("tests"),
         Path("tools"),
     )

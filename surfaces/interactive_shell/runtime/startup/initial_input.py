@@ -4,8 +4,8 @@ from __future__ import annotations
 
 from rich.console import Console
 
-from platform.analytics.repl_context import bound_repl_turn_context
-from platform.analytics.usage_context import UsageSurface, bound_usage_context
+from infrastructure.analytics.repl_context import bound_repl_turn_context
+from infrastructure.analytics.usage_context import UsageSurface, bound_usage_context
 from surfaces.interactive_shell.session import Session
 from surfaces.interactive_shell.ui.input_prompt.rendering import render_submitted_prompt
 from surfaces.interactive_shell.ui.terminal_ui import render_terminal_ui

@@ -21,7 +21,7 @@ from rich.console import Console, JustifyMethod
 from rich.markup import escape
 from rich.table import Table
 
-from platform.terminal.theme import BOLD_BRAND
+from infrastructure.terminal.theme import BOLD_BRAND
 from surfaces.shared.terminal.components.rendering import print_repl_table, repl_table
 from tools.system.fleet_monitoring.registry import AgentRecord
 from tools.system.fleet_monitoring.sampler import get_snapshot, get_tokens_per_min, get_usd_per_hour

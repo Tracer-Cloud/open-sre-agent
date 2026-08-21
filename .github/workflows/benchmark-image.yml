@@ -47,7 +47,7 @@ on:
       - "config/**"
       - "core/**"
       - "integrations/**"
-      - "platform/**"
+      - "infrastructure/**"
       - "tools/**"
       - "tests/benchmarks/**"
       - ".github/workflows/benchmark-image.yml"

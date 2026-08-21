@@ -9,7 +9,7 @@ from concurrent.futures import ThreadPoolExecutor
 from gateway.core.storage.session.binding_store import BindingStore, open_binding_store
 from gateway.transports.discord.settings import DiscordGatewaySettings
 from gateway.transports.discord.worker import run_discord_gateway_thread
-from platform.turn_host.turn_callback import TurnCallback
+from infrastructure.turn_host.turn_callback import TurnCallback
 
 
 class DiscordGatewayBackground:

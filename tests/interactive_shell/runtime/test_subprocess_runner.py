@@ -12,9 +12,9 @@ from unittest.mock import MagicMock
 import pytest
 from rich.console import Console
 
+from infrastructure.scheduling.task_types import TaskKind, TaskStatus
+from infrastructure.terminal.theme import GLYPH_ERROR, GLYPH_SUCCESS
 from integrations.llm_cli.base import CLIInvocation, CLIProbe
-from platform.scheduling.task_types import TaskKind, TaskStatus
-from platform.terminal.theme import GLYPH_ERROR, GLYPH_SUCCESS
 from surfaces.interactive_shell.runtime.subprocess_runner import (
     _MIN_SUBPROCESS_TERMINAL_WIDTH,
     _TASK_OUTPUT_PREFIX_WIDTH,

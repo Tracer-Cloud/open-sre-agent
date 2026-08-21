@@ -5,18 +5,18 @@ import io
 import pytest
 from rich.console import Console
 
-from integrations.github import login as github_login_mod
-from integrations.github.login import GitHubLoginResult
-from integrations.github.mcp import DEFAULT_GITHUB_MCP_TOOLSETS, DEFAULT_GITHUB_MCP_URL
-from integrations.github.mcp_oauth import GitHubDeviceCode
-from platform.analytics import source as analytics_source
-from platform.analytics.cli import (
+from infrastructure.analytics import source as analytics_source
+from infrastructure.analytics.cli import (
     GITHUB_FAIL_VERIFY,
     GITHUB_SKIP_SOURCE_DECLINE_RETRY,
     GITHUB_SKIP_SOURCE_ESCAPE,
     GITHUB_SKIP_SOURCE_MENU,
 )
-from platform.terminal import theme as ui_theme
+from infrastructure.terminal import theme as ui_theme
+from integrations.github import login as github_login_mod
+from integrations.github.login import GitHubLoginResult
+from integrations.github.mcp import DEFAULT_GITHUB_MCP_TOOLSETS, DEFAULT_GITHUB_MCP_URL
+from integrations.github.mcp_oauth import GitHubDeviceCode
 from surfaces.interactive_shell.runtime.startup import first_launch_github as flg
 
 

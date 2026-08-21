@@ -15,7 +15,7 @@ from core.agent_harness.tools import (
 from core.domain.types.tools import ToolSurface
 from core.tool import RegisteredTool, SideEffectLevel
 from core.tool_framework.utils import object_schema
-from platform.scheduling.task_types import TaskKind, TaskStatus
+from infrastructure.scheduling.task_types import TaskKind, TaskStatus
 from tools.interactive_shell.shared import plan_foreground_tool
 
 

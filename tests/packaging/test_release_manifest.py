@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from platform.deployment.packaging.release_manifest import (
+from infrastructure.deployment.packaging.release_manifest import (
     required_skill_files,
     runtime_hidden_imports,
 )

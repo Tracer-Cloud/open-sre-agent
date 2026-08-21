@@ -12,12 +12,12 @@ import logging
 
 from core.agent_harness import AgentSession, TurnResult
 from core.agent_harness.runtime import MAX_REPORT_GATHER_ITERATIONS, GatherPhase
+from infrastructure.scheduling.scheduler.agent_runner import AgentPayload
 from integrations.posthog.report_prerequisites import (
     DEFAULT_POSTHOG_PERIOD,
     posthog_not_configured_hint,
     posthog_report_available,
 )
-from platform.scheduling.scheduler.agent_runner import AgentPayload
 
 logger = logging.getLogger(__name__)
 

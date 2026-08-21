@@ -13,7 +13,7 @@ from rich.panel import Panel
 from rich.table import Table
 from rich.text import Text
 
-from platform.terminal.theme import (
+from infrastructure.terminal.theme import (
     BOLD_BRAND,
     BRAND,
     ERROR,
@@ -83,7 +83,7 @@ def render_health_report(
     console.print()
     console.print(Panel.fit(f"[{BOLD_BRAND}]OpenSRE Health[/]", border_style=BRAND))
 
-    from platform.safety.guardrails.rules import get_default_rules_path, load_rules
+    from infrastructure.safety.guardrails.rules import get_default_rules_path, load_rules
 
     rules_path = get_default_rules_path()
     if rules_path.exists():

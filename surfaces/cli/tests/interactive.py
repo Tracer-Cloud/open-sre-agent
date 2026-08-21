@@ -8,7 +8,7 @@ from typing import Any
 
 from rich.console import Console
 
-from platform.terminal.theme import BRAND, DIM, HIGHLIGHT, WARNING
+from infrastructure.terminal.theme import BRAND, DIM, HIGHLIGHT, WARNING
 from surfaces.cli.tests.catalog import TestCatalog, TestCatalogItem
 from surfaces.cli.tests.runner import (
     format_command,

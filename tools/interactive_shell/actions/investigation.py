@@ -15,7 +15,7 @@ from core.agent_harness.tools import (
 from core.domain.types.tools import ToolSurface
 from core.tool import RegisteredTool, SideEffectLevel
 from core.tool_framework.utils import object_schema, string_property
-from platform.scheduling.task_types import TaskRecord
+from infrastructure.scheduling.task_types import TaskRecord
 from tools.interactive_shell.shared.investigation_launch import (
     InvestigationLaunchPorts,
     InvestigationSession,
@@ -42,8 +42,8 @@ def run_text_investigation(
     action_already_listed: bool = False,
 ) -> None:
     def _run(task: TaskRecord) -> dict[str, object]:
-        from platform.analytics.cli import track_investigation
-        from platform.analytics.source import EntrypointSource, TriggerMode
+        from infrastructure.analytics.cli import track_investigation
+        from infrastructure.analytics.source import EntrypointSource, TriggerMode
 
         with (
             track_investigation(

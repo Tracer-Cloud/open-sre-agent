@@ -21,7 +21,7 @@ Before this module each surface reimplemented step 4, and they disagreed: the
 wizard wrote all three tiers while ``integrations setup`` wrote only the store.
 Runtime resolution hides that (it checks the store first), but anything reading
 the environment — notably the deploy preflight in
-``platform/deployment/ecr_deploy/prep.py`` — sees a half-configured integration.
+``infrastructure/deployment/ecr_deploy/prep.py`` — sees a half-configured integration.
 
 Callers now describe *what* the integration needs with an
 :class:`IntegrationSetupSpec` and hand collected values to :func:`apply_setup`;

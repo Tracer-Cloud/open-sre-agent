@@ -5,7 +5,7 @@ from __future__ import annotations
 from rich.console import Console
 
 from core.domain.alerts.inbox import get_current_inbox
-from platform.terminal.theme import BOLD_BRAND, DIM, HIGHLIGHT, WARNING
+from infrastructure.terminal.theme import BOLD_BRAND, DIM, HIGHLIGHT, WARNING
 from surfaces.interactive_shell.command_registry.types import SlashCommand
 from surfaces.interactive_shell.runtime import Session
 from surfaces.interactive_shell.ui import print_repl_table, repl_table

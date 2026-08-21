@@ -8,7 +8,7 @@ from typing import Any
 from rich.console import Console
 from rich.text import Text
 
-from platform.terminal.theme import BRAND, DIM, SECONDARY
+from infrastructure.terminal.theme import BRAND, DIM, SECONDARY
 from surfaces.shared.terminal.components.time_format import _elapsed_hms
 from surfaces.shared.terminal.output.events import ProgressEvent
 from surfaces.shared.terminal.output.labels import (
@@ -160,7 +160,7 @@ class _ReplEventLogDisplay:
             return
         from rich.markdown import Markdown
 
-        from platform.terminal.theme import MARKDOWN_THEME
+        from infrastructure.terminal.theme import MARKDOWN_THEME
 
         with self._console.use_theme(MARKDOWN_THEME):
             self._emit(Markdown(text, code_theme="ansi_dark"))

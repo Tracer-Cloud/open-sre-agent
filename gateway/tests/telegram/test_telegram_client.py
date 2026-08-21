@@ -4,7 +4,7 @@ from types import MappingProxyType
 from unittest.mock import MagicMock, patch
 
 from gateway.transports.telegram.poller.client import TelegramBotClient
-from platform.delivery.notifications.delivery_transport import DeliveryResponse
+from infrastructure.delivery.notifications.delivery_transport import DeliveryResponse
 
 
 @patch("gateway.transports.telegram.poller.client.post_json")

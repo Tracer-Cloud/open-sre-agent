@@ -282,9 +282,8 @@ def item_exists(env_var: str) -> bool | None:
     different backend, no ``security`` binary), which means the caller must fall
     through to a real read.
     """
-    # ``sys.platform`` rather than ``platform.system()``: this repo has its own
-    # top-level ``platform`` package, so importing the stdlib one here creates a
-    # config -> platform edge that import-linter has to allowlist.
+    # ``sys.platform`` avoids importing the stdlib ``platform`` module for a
+    # single OS lookup.
     if sys.platform != "darwin" or not _is_macos_backend():
         return None
     security_bin = shutil.which("security")

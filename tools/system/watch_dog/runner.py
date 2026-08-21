@@ -13,6 +13,8 @@ from typing import Protocol
 
 import click
 
+from infrastructure.process.exit_codes import ERROR, SUCCESS
+from infrastructure.scheduling.scheduler.types import Provider
 from integrations.buzz.alarms import BuzzAlarmDispatcher
 from integrations.buzz.credentials import (
     load_credentials_from_env as load_buzz_credentials_from_env,
@@ -23,8 +25,6 @@ from integrations.rocketchat.credentials import (
 )
 from integrations.telegram.alarms import AlarmDispatcher
 from integrations.telegram.credentials import load_credentials_from_env
-from platform.process.exit_codes import ERROR, SUCCESS
-from platform.scheduling.scheduler.types import Provider
 from tools.system.watch_dog.config import WatchdogConfig, WatchdogThreshold
 from tools.system.watch_dog.process_monitor import ProcessMonitor, ProcessSample, Sampler
 

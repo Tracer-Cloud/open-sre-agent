@@ -29,8 +29,8 @@ from pydantic import Field, field_validator
 
 from config.strict_config import StrictConfigModel
 from core.tool_framework.utils import tool_unavailable
+from infrastructure.text.coercion import safe_int
 from integrations._validation_helpers import report_classify_failure, report_validation_failure
-from platform.text.coercion import safe_int
 
 logger = logging.getLogger(__name__)
 

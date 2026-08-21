@@ -20,7 +20,7 @@ STRUCTURAL_LABEL_OVERRIDES: dict[str, str] = {
     "tools.investigation": "Investigation pipeline errors",
     "surfaces.cli": "CLI surface errors",
     "surfaces.interactive_shell": "Interactive shell errors",
-    "platform.harness_ports": "Harness / integration wiring errors",
+    "infrastructure.harness_ports": "Harness / integration wiring errors",
     "uncategorised": "Uncategorised errors",
 }
 
@@ -39,7 +39,7 @@ _MODULE_CLUSTER_RULES: tuple[_ModuleClusterRule, ...] = (
     _ModuleClusterRule("tools.", shallow_depth=2, deep_depth=3, min_dots_for_deep=2),
     _ModuleClusterRule("core.", shallow_depth=2, deep_depth=2, min_dots_for_deep=999),
     _ModuleClusterRule("surfaces.", shallow_depth=2, deep_depth=2, min_dots_for_deep=999),
-    _ModuleClusterRule("platform.", shallow_depth=2, deep_depth=2, min_dots_for_deep=999),
+    _ModuleClusterRule("infrastructure.", shallow_depth=2, deep_depth=2, min_dots_for_deep=999),
     _ModuleClusterRule("gateway.", shallow_depth=2, deep_depth=2, min_dots_for_deep=999),
 )
 
@@ -49,7 +49,7 @@ _PACKAGE_LABEL_RULES: tuple[tuple[str, str], ...] = (
     ("tools.", "{name} tool errors"),
     ("core.", "{name} runtime errors"),
     ("surfaces.", "{name} surface errors"),
-    ("platform.", "{name} platform errors"),
+    ("infrastructure.", "{name} infrastructure errors"),
 )
 
 # Fixed-prefix keys → label builder (remainder is the part after the prefix).

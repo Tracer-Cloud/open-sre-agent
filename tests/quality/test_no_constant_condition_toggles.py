@@ -22,7 +22,7 @@ _PRODUCT_ROOTS = (
     "core",
     "gateway",
     "integrations",
-    "platform",
+    "infrastructure",
     "surfaces",
     "tools",
 )

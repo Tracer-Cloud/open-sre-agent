@@ -15,30 +15,30 @@ import click
 if TYPE_CHECKING:
     from collections.abc import Mapping
 
-    from platform.analytics.provider import Properties
-    from platform.errors import OpenSREError
+    from infrastructure.analytics.provider import Properties
+    from infrastructure.errors import OpenSREError
 
 
 def capture_first_run_if_needed() -> None:
-    from platform.analytics.provider import capture_first_run_if_needed as _capture
+    from infrastructure.analytics.provider import capture_first_run_if_needed as _capture
 
     _capture()
 
 
 def capture_cli_invoked(properties: Properties | None = None) -> None:
-    from platform.analytics.cli import capture_cli_invoked as _capture
+    from infrastructure.analytics.cli import capture_cli_invoked as _capture
 
     _capture(properties)
 
 
 def analytics_needs_flush() -> bool:
-    from platform.analytics.provider import analytics_needs_flush as _needs_flush
+    from infrastructure.analytics.provider import analytics_needs_flush as _needs_flush
 
     return _needs_flush()
 
 
 def shutdown_analytics(*, flush: bool = False, timeout: float | None = None) -> None:
-    from platform.analytics.provider import shutdown_analytics as _shutdown
+    from infrastructure.analytics.provider import shutdown_analytics as _shutdown
 
     if timeout is None:
         _shutdown(flush=flush)
@@ -56,7 +56,7 @@ def build_cli_invoked_properties(
     yes: bool,
     interactive: bool,
 ) -> Properties:
-    from platform.analytics.cli import build_cli_invoked_properties as _build
+    from infrastructure.analytics.cli import build_cli_invoked_properties as _build
 
     return _build(
         entrypoint=entrypoint,
@@ -92,7 +92,7 @@ def should_report_exception(exc: click.ClickException, *, expected: bool = False
 
 
 def init_sentry(*, entrypoint: str | None = None) -> None:
-    from platform.observability.errors.sentry import init_sentry as _init_sentry
+    from infrastructure.observability.errors.sentry import init_sentry as _init_sentry
 
     _init_sentry(entrypoint=entrypoint)
 
@@ -104,7 +104,7 @@ def capture_exception(
     extra: Mapping[str, Any] | None = None,
     tags: Mapping[str, str] | None = None,
 ) -> str | None:
-    from platform.observability.errors.sentry import capture_exception as _capture_exception
+    from infrastructure.observability.errors.sentry import capture_exception as _capture_exception
 
     return _capture_exception(exc, context=context, extra=extra, tags=tags)
 
@@ -116,7 +116,7 @@ def render_landing(group: click.Group) -> None:
 
 
 def load_structured_error_type() -> type[OpenSREError]:
-    from platform.errors import OpenSREError
+    from infrastructure.errors import OpenSREError
 
     return OpenSREError
 
@@ -129,7 +129,7 @@ def render_structured_error(exc: OpenSREError) -> int:
     """
     from rich.console import Console
 
-    from platform.terminal.errors import render_error
+    from infrastructure.terminal.errors import render_error
 
     hint: str | None = None
     if exc.suggestion:

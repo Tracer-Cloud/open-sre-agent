@@ -14,8 +14,8 @@ from rich.spinner import Spinner
 from rich.text import Text
 
 from core.domain.stream import StreamEvent
-from platform.analytics.cli import capture_investigation_lifecycle_event
-from platform.analytics.events import Event
+from infrastructure.analytics.cli import capture_investigation_lifecycle_event
+from infrastructure.analytics.events import Event
 from surfaces.shared.terminal.output import (
     ProgressTracker,
     _repl_progress_active,

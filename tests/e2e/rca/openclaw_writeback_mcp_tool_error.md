@@ -128,10 +128,10 @@ def _failing_tool(config, tool_name, arguments):
         return {"is_error": True, "text": "OpenClaw tool call failed."}
     return {"is_error": False, "text": "ok"}
 
-with patch("platform.delivery.notifications.openclaw_delivery.call_openclaw_tool", side_effect=_failing_tool):
-    from platform.delivery.notifications.openclaw_delivery import send_openclaw_report
+with patch("infrastructure.delivery.notifications.openclaw_delivery.call_openclaw_tool", side_effect=_failing_tool):
+    from infrastructure.delivery.notifications.openclaw_delivery import send_openclaw_report
     from unittest.mock import patch as _p
-    with _p("platform.delivery.notifications.openclaw_delivery.openclaw_runtime_unavailable_reason", return_value=None):
+    with _p("infrastructure.delivery.notifications.openclaw_delivery.openclaw_runtime_unavailable_reason", return_value=None):
         state = {
             "alert_name": "Checkout API Error Rate Spike",
             "root_cause": "Database connection pool exhausted under high traffic",

@@ -7,10 +7,7 @@ from pathlib import Path
 
 import pytest
 
-from config.platform_bootstrap import ensure_project_platform_package
 from gateway.core.process import component_status, supervision
-
-ensure_project_platform_package()
 
 
 @pytest.fixture(autouse=True)
@@ -63,8 +60,8 @@ def _harness_ports_per_test() -> Iterator[None]:
     ``install_harness_ports`` registers) so the gateway package stays below
     ``surfaces`` in the import layering.
     """
+    from infrastructure.harness_ports import reset_harness_ports
     from integrations.harness_adapters import register_harness_adapters as register_integrations
-    from platform.harness_ports import reset_harness_ports
     from tools.harness_adapters import register_harness_adapters as register_tools
 
     register_integrations()

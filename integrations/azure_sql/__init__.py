@@ -35,8 +35,8 @@ from config.constants.azure_sql import (
 from config.llm_credentials import resolve_env_credential
 from config.strict_config import StrictConfigModel
 from core.tool_framework.utils import tool_unavailable
+from infrastructure.text.truncation import truncate
 from integrations._validation_helpers import report_classify_failure, report_validation_failure
-from platform.text.truncation import truncate
 
 logger = logging.getLogger(__name__)
 

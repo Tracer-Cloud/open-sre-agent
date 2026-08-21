@@ -6,7 +6,7 @@ from contextlib import suppress
 
 from prompt_toolkit.styles import Style
 
-from platform.terminal import theme as ui_theme
+from infrastructure.terminal import theme as ui_theme
 from surfaces.interactive_shell.runtime import Session
 
 

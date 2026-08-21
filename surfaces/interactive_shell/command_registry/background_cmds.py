@@ -15,7 +15,7 @@ from core.agent_harness.spi.session_state import (
     background_notification_channels,
     session_terminal,
 )
-from platform.scheduling.background_investigations.types import BackgroundInvestigationRecord
+from infrastructure.scheduling.background_investigations.types import BackgroundInvestigationRecord
 from surfaces.interactive_shell.command_registry.types import SlashCommand
 from surfaces.interactive_shell.runtime import Session
 from surfaces.interactive_shell.ui import (
@@ -48,7 +48,7 @@ def _allowed_notify_channels() -> tuple[str, ...]:
     modules at command time and nothing on the boot path.
     """
     from bootstrap.adapters import install_notification_adapters
-    from platform.delivery.notifications.outbound_registry import (
+    from infrastructure.delivery.notifications.outbound_registry import (
         BACKGROUND_RCA,
         outbound_adapter_names_for,
     )
@@ -83,7 +83,7 @@ def _tracked_records(
     """
     records: dict[str, BackgroundInvestigationRecord] = dict(background_investigations(session))
     try:
-        from platform.scheduling.background_investigations.store import (
+        from infrastructure.scheduling.background_investigations.store import (
             background_investigation_store,
         )
 
@@ -110,7 +110,7 @@ def _notify_channels(session: Session) -> tuple[str, ...]:
     if channels or session_terminal(session) is not None:
         return channels
     try:
-        from platform.scheduling.background_investigations.store import (
+        from infrastructure.scheduling.background_investigations.store import (
             background_investigation_store,
         )
 
@@ -127,7 +127,7 @@ def _persist_notify_channels(console: Console, channels: tuple[str, ...]) -> Non
     turn to a traceback.
     """
     try:
-        from platform.scheduling.background_investigations.store import (
+        from infrastructure.scheduling.background_investigations.store import (
             background_investigation_store,
         )
 
@@ -162,7 +162,7 @@ def _plain_list(records: dict[str, BackgroundInvestigationRecord]) -> str:
     from the end until the body fits, and the drop is reported, rather than
     letting the transport cut the message mid-word.
     """
-    from platform.text.truncation import truncate
+    from infrastructure.text.truncation import truncate
 
     rows: list[str] = []
     for task_id, record in list(records.items())[:_CHAT_LIST_LIMIT]:
@@ -206,8 +206,8 @@ def _plain_show(task_id: str, record: BackgroundInvestigationRecord) -> str:
     so the worst case clears the message cap, and an unbounded trailer appended
     after it would spend that headroom back.
     """
-    from platform.delivery.notifications.rca_summary import summary_sections
-    from platform.text.truncation import truncate
+    from infrastructure.delivery.notifications.rca_summary import summary_sections
+    from infrastructure.text.truncation import truncate
 
     command, root_cause, top_analysis, next_steps = summary_sections(record)
     lines = [

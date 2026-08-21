@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import re
 
-from platform.text.markdown import tighten_markdown_emphasis
+from infrastructure.text.markdown import tighten_markdown_emphasis
 
 _CODE_BLOCK_RE = re.compile(r"```.*?```", re.DOTALL)
 _INLINE_CODE_RE = re.compile(r"`[^`\n]+`")

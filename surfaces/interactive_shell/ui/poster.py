@@ -9,7 +9,7 @@ from rich.console import Console
 from rich.markup import escape
 from rich.text import Text
 
-import platform.terminal.theme as ui_theme
+import infrastructure.terminal.theme as ui_theme
 from surfaces.shared.terminal.components.rendering import (
     _console_is_capturing,
     _console_print_prepared,

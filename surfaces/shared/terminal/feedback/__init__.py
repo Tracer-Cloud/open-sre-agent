@@ -122,8 +122,8 @@ def _store(record: dict[str, Any]) -> None:
 
 
 def _emit_analytics(record: dict[str, Any]) -> None:
-    from platform.analytics.events import Event
-    from platform.analytics.provider import get_analytics
+    from infrastructure.analytics.events import Event
+    from infrastructure.analytics.provider import get_analytics
 
     with contextlib.suppress(Exception):
         props: dict[str, Any] = {
@@ -145,8 +145,8 @@ def _emit_analytics(record: dict[str, Any]) -> None:
 
 def _emit_miss_classified(miss_record: dict[str, Any]) -> None:
     """Emit a follow-up event so PostHog dashboards can chart category trends."""
-    from platform.analytics.events import Event
-    from platform.analytics.provider import get_analytics
+    from infrastructure.analytics.events import Event
+    from infrastructure.analytics.provider import get_analytics
 
     with contextlib.suppress(Exception):
         props: dict[str, Any] = {
@@ -204,7 +204,7 @@ def _print_context(final_state: dict[str, Any], *, console: Console | None) -> N
 
     from rich.markup import escape
 
-    from platform.terminal.theme import BRAND, DIM, SECONDARY
+    from infrastructure.terminal.theme import BRAND, DIM, SECONDARY
 
     if console is not None:
         console.print()
@@ -285,7 +285,7 @@ def _run_select(choices: list[tuple[str, str]]) -> str | None:
 
 
 def _read_note(*, console: Console | None) -> str:
-    from platform.terminal.theme import DIM, SECONDARY
+    from infrastructure.terminal.theme import DIM, SECONDARY
 
     restore_stdin_terminal()
     if console is not None:
@@ -348,7 +348,7 @@ def _collect(final_state: dict[str, Any], *, console: Console | None) -> None:
 
     _print_context(final_state, console=console)
 
-    from platform.terminal.theme import BRAND, DIM, GLYPH_SUCCESS
+    from infrastructure.terminal.theme import BRAND, DIM, GLYPH_SUCCESS
 
     if console is not None:
         console.print(
@@ -429,7 +429,7 @@ def _classify_miss(
     taxonomy picker (the rating + note are still kept in feedback.jsonl).
     """
     from core.domain.feedback import MissTaxonomy, record_miss
-    from platform.terminal.theme import BRAND, DIM
+    from infrastructure.terminal.theme import BRAND, DIM
 
     if console is not None:
         console.print(

@@ -7,8 +7,8 @@ from typing import Any
 
 import click
 
-from platform.errors import OpenSREError
-from platform.observability.errors.sentry import capture_exception
+from infrastructure.errors import OpenSREError
+from infrastructure.observability.errors.sentry import capture_exception
 
 
 def should_report_exception(exc: BaseException, *, expected: bool = False) -> bool:

@@ -12,8 +12,8 @@ from config.constants import OPENSRE_OPERATIONS_LOG_PATH_ENV
 from core.agent import Agent
 from core.agent_harness.session.persistence.jsonl_store import JsonlSessionStore
 from core.llm.types import AgentLLMResponse, ToolCall
-from platform.observability.operations_log import read_operations
-from platform.observability.trace.spans import (
+from infrastructure.observability.operations_log import read_operations
+from infrastructure.observability.trace.spans import (
     NoopSessionTraceStore,
     bind_session_trace,
     set_session_trace_store,

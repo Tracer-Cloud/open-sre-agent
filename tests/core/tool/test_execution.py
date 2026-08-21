@@ -594,7 +594,7 @@ def test_execute_tool_calls_emits_tool_span_without_tool_author_hooks(
     from pathlib import Path
 
     from core.agent_harness.session.persistence.jsonl_store import JsonlSessionStore
-    from platform.observability.trace.spans import (
+    from infrastructure.observability.trace.spans import (
         NoopSessionTraceStore,
         bind_session_trace,
         set_session_trace_store,
@@ -640,7 +640,7 @@ def test_execute_tool_calls_span_marks_error_on_unknown_tool(
     from pathlib import Path
 
     from core.agent_harness.session.persistence.jsonl_store import JsonlSessionStore
-    from platform.observability.trace.spans import (
+    from infrastructure.observability.trace.spans import (
         NoopSessionTraceStore,
         bind_session_trace,
         set_session_trace_store,
@@ -679,7 +679,10 @@ def test_execute_tool_calls_span_marks_error_on_unknown_tool(
 
 def test_execute_tool_calls_noop_sink_does_not_require_session_binding() -> None:
     """Prod default: tool execution must not depend on a registered trace sink."""
-    from platform.observability.trace.spans import NoopSessionTraceStore, set_session_trace_store
+    from infrastructure.observability.trace.spans import (
+        NoopSessionTraceStore,
+        set_session_trace_store,
+    )
 
     set_session_trace_store(NoopSessionTraceStore())
     result = execute_tool_calls([_call()], [_tool()], {})[0]
@@ -692,7 +695,7 @@ def _activate_tool_trace(tmp_path, monkeypatch: pytest.MonkeyPatch, session_id: 
     from pathlib import Path
 
     from core.agent_harness.session.persistence.jsonl_store import JsonlSessionStore
-    from platform.observability.trace.spans import set_session_trace_store
+    from infrastructure.observability.trace.spans import set_session_trace_store
     from surfaces.interactive_shell.session.trace_store import JsonlSessionTraceStore
 
     monkeypatch.setattr(
@@ -722,7 +725,7 @@ def _tool_spans_from(path: Any) -> list[dict[str, Any]]:
 def test_execute_tool_calls_span_marks_validation_error(
     tmp_path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    from platform.observability.trace.spans import (
+    from infrastructure.observability.trace.spans import (
         NoopSessionTraceStore,
         bind_session_trace,
         set_session_trace_store,
@@ -747,7 +750,7 @@ def test_execute_tool_calls_span_marks_validation_error(
 
 
 def test_execute_tool_calls_span_marks_blocked(tmp_path, monkeypatch: pytest.MonkeyPatch) -> None:
-    from platform.observability.trace.spans import (
+    from infrastructure.observability.trace.spans import (
         NoopSessionTraceStore,
         bind_session_trace,
         set_session_trace_store,
@@ -780,7 +783,7 @@ def test_execute_tool_calls_span_marks_blocked(tmp_path, monkeypatch: pytest.Mon
 def test_execute_tool_calls_span_marks_tool_error_and_exception(
     tmp_path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    from platform.observability.trace.spans import (
+    from infrastructure.observability.trace.spans import (
         NoopSessionTraceStore,
         bind_session_trace,
         set_session_trace_store,

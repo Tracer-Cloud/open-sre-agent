@@ -12,7 +12,7 @@ from rich.text import Text
 
 import surfaces.interactive_shell.runtime.slash_adapter as slash_adapter
 from core.agent_harness.turns.turn_results import ToolCallingTurnResult
-from platform.terminal.theme import BOLD_SKILL, HIGHLIGHT
+from infrastructure.terminal.theme import BOLD_SKILL, HIGHLIGHT
 from surfaces.interactive_shell.runtime.action_turn import run_action_tool_turn
 from surfaces.interactive_shell.session import Session
 from surfaces.interactive_shell.ui.action_rendering import ActionRenderObserver

@@ -9,8 +9,8 @@ from io import BytesIO
 from typing import Any
 from zipfile import ZipFile
 
+from infrastructure.observability.errors.boundary import report_exception
 from integrations.aws.env import make_boto3_client, require_aws_credentials
-from platform.observability.errors.boundary import report_exception
 
 logger = logging.getLogger(__name__)
 

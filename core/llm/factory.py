@@ -89,7 +89,7 @@ def _resolve_settings_or_raise() -> Any:
 
 def _cli_provider_registration(provider: str) -> Any:
     """CLI registry entry for *provider*, or None."""
-    from platform.harness_ports import cli_provider_registration
+    from infrastructure.harness_ports import cli_provider_registration
 
     return cli_provider_registration(provider)
 

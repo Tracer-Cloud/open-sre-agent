@@ -30,7 +30,7 @@ from dataclasses import dataclass, replace
 from typing import TYPE_CHECKING, Any
 
 from core.agent_harness.turns.handoff_tag_parse import find_tag_suffix, handoff_has_tag
-from platform.evidence.evidence_compaction import truncate_message
+from infrastructure.evidence.evidence_compaction import truncate_message
 
 if TYPE_CHECKING:
     from core.agent_harness.turns.assistant_handoff import AssistantHandoff

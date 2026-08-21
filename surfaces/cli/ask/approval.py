@@ -13,7 +13,7 @@ from core.tool import (
     ToolExecutionHooks,
     ToolExecutionRequest,
 )
-from platform.harness_ports import get_surface_tool_map
+from infrastructure.harness_ports import get_surface_tool_map
 
 _GATED_SIDE_EFFECTS = frozenset({SideEffectLevel.MUTATING, SideEffectLevel.EXTERNAL})
 

@@ -18,7 +18,7 @@ from core.agent_harness.session_goal.goal import (
     session_goal_elapsed_seconds,
     session_goal_token_delta,
 )
-from platform.evidence.evidence_compaction import truncate_message
+from infrastructure.evidence.evidence_compaction import truncate_message
 
 # Leading mark for user-visible ``/goal`` progress lines (REPL + gateway).
 SESSION_GOAL_PAINT_MARK = "◎"

@@ -13,23 +13,23 @@ from pathlib import Path
 
 import pytest
 
-from platform.filestorage.config import RemoteSyncConfig
-from platform.filestorage.engine import content_tag, run_sync
-from platform.filestorage.enums import SyncRootName
-from platform.filestorage.errors import RemoteSyncConfigError
-from platform.filestorage.ports import RemoteObject
-from platform.filestorage.providers.registry import (
+from infrastructure.filestorage.config import RemoteSyncConfig
+from infrastructure.filestorage.engine import content_tag, run_sync
+from infrastructure.filestorage.enums import SyncRootName
+from infrastructure.filestorage.errors import RemoteSyncConfigError
+from infrastructure.filestorage.ports import RemoteObject
+from infrastructure.filestorage.providers.registry import (
     build_object_store,
     register_object_store,
     registered_providers,
 )
-from platform.filestorage.syncable import SyncRoot
+from infrastructure.filestorage.syncable import SyncRoot
 
 
 @pytest.fixture(autouse=True)
 def _restore_provider_registry() -> Iterator[None]:
     """Community-style registrations in these tests must not leak into others."""
-    from platform.filestorage.providers import registry as reg
+    from infrastructure.filestorage.providers import registry as reg
 
     with reg._REGISTRY_LOCK:
         snapshot = dict(reg._REGISTRY)
@@ -99,7 +99,7 @@ def test_unknown_provider_fails_closed_listing_known_ones(
         REMOTE_SYNC_ENV,
         REMOTE_SYNC_PROVIDER_ENV,
     )
-    from platform.filestorage import load_remote_sync_config
+    from infrastructure.filestorage import load_remote_sync_config
 
     monkeypatch.setenv(REMOTE_SYNC_ENV, "1")
     monkeypatch.setenv(REMOTE_SYNC_BUCKET_ENV, "b")
@@ -129,7 +129,7 @@ def test_community_style_gcs_registration_drives_the_engine(
         REMOTE_SYNC_ENV,
         REMOTE_SYNC_PROVIDER_ENV,
     )
-    from platform.filestorage import load_remote_sync_config
+    from infrastructure.filestorage import load_remote_sync_config
 
     store = _MemoryStore(label="gs")
     register_object_store("gcs", lambda _cfg: store)
@@ -155,7 +155,7 @@ def test_community_style_azure_registration_drives_the_engine(
         REMOTE_SYNC_ENV,
         REMOTE_SYNC_PROVIDER_ENV,
     )
-    from platform.filestorage import load_remote_sync_config
+    from infrastructure.filestorage import load_remote_sync_config
 
     store = _MemoryStore(label="azure")
     register_object_store("azure", lambda _cfg: store)

@@ -7,7 +7,7 @@ import sys
 
 import click
 
-from platform.process.runtime_flags import is_json_output
+from infrastructure.process.runtime_flags import is_json_output
 from surfaces.cli.ask.approval import unknown_allowed_tools
 from surfaces.cli.ask.service import (
     AskOutcome,

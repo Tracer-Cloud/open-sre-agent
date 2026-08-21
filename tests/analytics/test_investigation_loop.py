@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from config.constants.investigation import MAX_INVESTIGATION_LOOPS
-from platform.analytics.investigation_loop import (
+from infrastructure.analytics.investigation_loop import (
     begin_investigation_loop_metrics_scope,
     bind_investigation_loop_metrics_from_state,
     bound_loop_metrics,

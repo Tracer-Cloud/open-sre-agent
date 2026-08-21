@@ -15,6 +15,7 @@ from config.constants.azure import (
     AZURE_MAX_RESULTS_HARD_LIMIT,
 )
 from config.strict_config import StrictConfigModel
+from infrastructure.text.url_validation import validate_https_or_loopback_http_url
 from integrations._validators import (
     normalize_bearer,
     normalize_bool_str,
@@ -22,7 +23,6 @@ from integrations._validators import (
     normalize_url,
     normalize_with_default,
 )
-from platform.text.url_validation import validate_https_or_loopback_http_url
 
 _LOCAL_GRAFANA_HOSTS = {"localhost", "127.0.0.1", "0.0.0.0"}
 DEFAULT_DATADOG_SITE = "datadoghq.com"

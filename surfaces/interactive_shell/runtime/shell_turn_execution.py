@@ -21,8 +21,8 @@ from core.agent_harness.spi.session_goal import (
     format_session_goal_progress,
 )
 from core.tool import ToolExecutionHooks
-from platform.turn_host.turn_handler import TurnHandler
-from platform.turn_host.turn_output import TurnOutput
+from infrastructure.turn_host.turn_handler import TurnHandler
+from infrastructure.turn_host.turn_output import TurnOutput
 from surfaces.interactive_shell.runtime.agent_harness_adapters import ShellOutputSink
 from surfaces.interactive_shell.runtime.core.turn_accounting import ShellTurnAccounting
 from surfaces.interactive_shell.runtime.shell_agent import shell_agent_build_config

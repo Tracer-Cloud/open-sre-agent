@@ -272,7 +272,7 @@ class LLMClient:
         self._ensure_client()
         system, messages = _normalize_messages(prompt_or_messages)
 
-        from platform.safety.guardrails.apply import apply_guardrails_to_messages
+        from infrastructure.safety.guardrails.apply import apply_guardrails_to_messages
 
         messages, system = apply_guardrails_to_messages(messages, system)
 
@@ -306,7 +306,7 @@ class LLMClient:
         # What this request carries, decided before any concurrent turn can
         # clear the shared flag.
         marked = strip_cache_markers(kwargs) != kwargs
-        from platform.safety.guardrails.engine import GuardrailBlockedError
+        from infrastructure.safety.guardrails.engine import GuardrailBlockedError
 
         backoff_seconds = _RETRY_INITIAL_BACKOFF_SEC
         max_attempts = _RETRY_MAX_ATTEMPTS
@@ -360,7 +360,7 @@ class LLMClient:
         so any post-emission failure propagates immediately. Auth and
         guardrail errors never retry.
         """
-        from platform.safety.guardrails.engine import GuardrailBlockedError
+        from infrastructure.safety.guardrails.engine import GuardrailBlockedError
 
         kwargs = self._build_request_kwargs(prompt_or_messages)
         # What this request carries, decided before any concurrent turn can
@@ -455,8 +455,8 @@ class BedrockLLMClient:
         assert self._anthropic_client is not None
         system, messages = _normalize_messages(prompt_or_messages)
 
-        from platform.safety.guardrails.apply import apply_guardrails_to_messages
-        from platform.safety.guardrails.engine import GuardrailBlockedError
+        from infrastructure.safety.guardrails.apply import apply_guardrails_to_messages
+        from infrastructure.safety.guardrails.engine import GuardrailBlockedError
 
         messages, system = apply_guardrails_to_messages(messages, system)
 
@@ -557,8 +557,8 @@ class BedrockLLMClient:
         assert self._boto3_client is not None
         system, messages = _normalize_messages(prompt_or_messages)
 
-        from platform.safety.guardrails.apply import apply_guardrails_to_messages
-        from platform.safety.guardrails.engine import GuardrailBlockedError
+        from infrastructure.safety.guardrails.apply import apply_guardrails_to_messages
+        from infrastructure.safety.guardrails.engine import GuardrailBlockedError
 
         messages, system = apply_guardrails_to_messages(messages, system)
 
@@ -815,7 +815,7 @@ class OpenAILLMClient:
         self._ensure_client()
         messages = normalize_messages_openai(prompt_or_messages)
 
-        from platform.safety.guardrails.apply import apply_guardrails_to_messages
+        from infrastructure.safety.guardrails.apply import apply_guardrails_to_messages
 
         messages, _ = apply_guardrails_to_messages(messages)
 
@@ -838,7 +838,7 @@ class OpenAILLMClient:
         return kwargs
 
     def invoke(self, prompt_or_messages: Any) -> LLMResponse:
-        from platform.safety.guardrails.engine import GuardrailBlockedError
+        from infrastructure.safety.guardrails.engine import GuardrailBlockedError
 
         # Build kwargs first (also calls _ensure_client internally) so the
         # captured client below reflects the latest key — guards against a
@@ -938,7 +938,7 @@ class OpenAILLMClient:
         retrying would duplicate visible output, so post-emission failures
         propagate. Auth and guardrail errors never retry.
         """
-        from platform.safety.guardrails.engine import GuardrailBlockedError
+        from infrastructure.safety.guardrails.engine import GuardrailBlockedError
 
         # Build kwargs first (also calls _ensure_client internally) so the
         # captured client below reflects the latest key — same rotation

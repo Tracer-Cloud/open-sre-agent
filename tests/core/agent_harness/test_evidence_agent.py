@@ -5,7 +5,7 @@ from __future__ import annotations
 from typing import Any
 
 import core.agent_harness.turns.evidence_driver as evidence_agent
-import platform.harness_ports as harness_ports
+import infrastructure.harness_ports as harness_ports
 from surfaces.interactive_shell.session import Session
 
 

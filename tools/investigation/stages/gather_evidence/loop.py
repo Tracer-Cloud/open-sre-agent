@@ -23,7 +23,7 @@ from core.tool import (
     ToolExecutionRequest,
     ToolExecutionResult,
 )
-from platform.text.truncation import truncate
+from infrastructure.text.truncation import truncate
 
 _MAX_CACHED_RESULT_CHARS = 8_000
 

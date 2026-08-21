@@ -6,8 +6,8 @@ import time
 
 from rich.console import Console
 
-from platform.terminal import theme as ui_theme
-from platform.terminal.theme import (
+from infrastructure.terminal import theme as ui_theme
+from infrastructure.terminal.theme import (
     get_active_theme_name,
     list_theme_names,
     set_active_theme,

@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import pytest
 
-from platform.process.release_version import (
+from infrastructure.process.release_version import (
     development_install_doctor_version_detail,
     extract_main_build_sha,
     extract_main_build_version,
@@ -294,7 +294,7 @@ def testextract_main_build_sha() -> None:
 def test_development_install_doctor_detail_none_for_release_like_install(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    monkeypatch.setattr("platform.process.release_version.is_editable_install", lambda: False)
+    monkeypatch.setattr("infrastructure.process.release_version.is_editable_install", lambda: False)
     monkeypatch.delenv("UV_RUN_RECURSION_DEPTH", raising=False)
     assert development_install_doctor_version_detail("2026.4.5") is None
 
@@ -302,7 +302,7 @@ def test_development_install_doctor_detail_none_for_release_like_install(
 def test_development_install_doctor_detail_editable(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    monkeypatch.setattr("platform.process.release_version.is_editable_install", lambda: True)
+    monkeypatch.setattr("infrastructure.process.release_version.is_editable_install", lambda: True)
     monkeypatch.delenv("UV_RUN_RECURSION_DEPTH", raising=False)
     detail = development_install_doctor_version_detail("2026.4.5")
     assert detail == "2026.4.5 (editable install; skipped comparing to latest main build)"
@@ -311,7 +311,7 @@ def test_development_install_doctor_detail_editable(
 def test_development_install_doctor_detail_uv_run(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    monkeypatch.setattr("platform.process.release_version.is_editable_install", lambda: False)
+    monkeypatch.setattr("infrastructure.process.release_version.is_editable_install", lambda: False)
     monkeypatch.setenv("UV_RUN_RECURSION_DEPTH", "1")
     detail = development_install_doctor_version_detail("2026.4.5")
     assert detail == "2026.4.5 (uv run; skipped comparing to latest main build)"
@@ -320,7 +320,7 @@ def test_development_install_doctor_detail_uv_run(
 def test_development_install_doctor_detail_editable_and_uv_run(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    monkeypatch.setattr("platform.process.release_version.is_editable_install", lambda: True)
+    monkeypatch.setattr("infrastructure.process.release_version.is_editable_install", lambda: True)
     monkeypatch.setenv("UV_RUN_RECURSION_DEPTH", "1")
     detail = development_install_doctor_version_detail("2026.4.5")
     assert detail == (

@@ -7,7 +7,7 @@ import questionary
 from prompt_toolkit.input.defaults import create_pipe_input  # type: ignore[import-not-found]
 from prompt_toolkit.output import DummyOutput  # type: ignore[import-not-found]
 
-from platform.terminal.prompt_support import (
+from infrastructure.terminal.prompt_support import (
     _last_ctrl_c,
     handle_ctrl_c_press,
     install_questionary_ctrl_c_double_exit,
@@ -23,7 +23,7 @@ def test_print_session_resume_hint_includes_repl_and_cli_commands(
 
     from rich.console import Console
 
-    monkeypatch.setattr("platform.terminal.prompt_support.sys.argv", ["o"])
+    monkeypatch.setattr("infrastructure.terminal.prompt_support.sys.argv", ["o"])
     console = Console(file=StringIO(), force_terminal=False, color_system=None)
     print_session_resume_hint(console, "8988e743-87ae-4c4c-a37b-0351e62a4855")
     output = console.file.getvalue()

@@ -16,13 +16,13 @@ from config.local_settings import (
     save_local_settings,
     set_nested_key,
 )
-from platform.terminal.theme import GLYPH_SUCCESS
+from infrastructure.terminal.theme import GLYPH_SUCCESS
 
 _SUPPORTED_LAYOUTS = {"classic", "pinned"}
 
 
 def _supported_themes() -> set[str]:
-    from platform.terminal.theme import list_theme_names
+    from infrastructure.terminal.theme import list_theme_names
 
     return set(list_theme_names())
 
@@ -40,7 +40,7 @@ def _emit_llm_config() -> None:
         get_llm_provider_api_key_env,
     )
     from config.llm_auth.credentials import status as credential_status
-    from platform.process.runtime_flags import is_json_output
+    from infrastructure.process.runtime_flags import is_json_output
 
     provider = get_configured_llm_provider()
     auth_status = credential_status(provider)
@@ -159,7 +159,7 @@ def config_command(ctx: click.Context) -> None:
 @config_command.command(name="show")
 def config_show() -> None:
     """Show local ~/.opensre/config.yml values."""
-    from platform.process.runtime_flags import is_json_output
+    from infrastructure.process.runtime_flags import is_json_output
 
     payload = _load_config()
 

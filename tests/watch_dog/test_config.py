@@ -5,7 +5,7 @@ from __future__ import annotations
 import pytest
 from pydantic import ValidationError
 
-from platform.scheduling.scheduler.types import Provider
+from infrastructure.scheduling.scheduler.types import Provider
 from tools.system.watch_dog.config import (
     WATCHDOG_SUPPORTED_PROVIDERS,
     WatchdogConfig,

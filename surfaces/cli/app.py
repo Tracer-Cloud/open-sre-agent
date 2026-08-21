@@ -14,25 +14,21 @@ import sys
 from contextlib import suppress
 from typing import TYPE_CHECKING
 
-from config.platform_bootstrap import ensure_project_platform_package
+import click
 
-ensure_project_platform_package()
-
-import click  # noqa: E402
-
-from config.constants.product import RELEASE_STAGE_BANNER  # noqa: E402
-from config.version import get_opensre_version  # noqa: E402
-from surfaces.cli import startup  # noqa: E402
-from surfaces.cli.group import LazyRichGroup, ThemeParamType  # noqa: E402
-from surfaces.cli.host import CLI_HOST_CONTEXT_KEY, CliHost, ShellLauncher, cli_host  # noqa: E402
-from surfaces.cli.invocation import (  # noqa: E402
+from config.constants.product import RELEASE_STAGE_BANNER
+from config.version import get_opensre_version
+from surfaces.cli import startup
+from surfaces.cli.group import LazyRichGroup, ThemeParamType
+from surfaces.cli.host import CLI_HOST_CONTEXT_KEY, CliHost, ShellLauncher, cli_host
+from surfaces.cli.invocation import (
     ensure_utf8_stdio,
     is_fast_version_invocation,
     print_fast_version,
     resolve_command_parts,
     try_fast_investigate_print_template,
 )
-from surfaces.cli.telemetry import (  # noqa: E402
+from surfaces.cli.telemetry import (
     analytics_needs_flush,
     build_cli_invoked_properties,
     capture_cli_invoked,
@@ -47,7 +43,7 @@ from surfaces.cli.telemetry import (  # noqa: E402
 )
 
 if TYPE_CHECKING:
-    from platform.analytics.provider import Properties
+    from infrastructure.analytics.provider import Properties
 
 # One-shot CLI exit: a queued or in-flight event (e.g. ``investigation_completed``)
 # dies with the process because the sender runs on a daemon thread, so wait briefly
