@@ -224,6 +224,7 @@ def _register_preferred_evidence_sources() -> None:
 def _register_cli_llm_adapters() -> None:
     from typing import Any
 
+    from core.llm.types import CliLLMClient, ModelType
     from infrastructure.harness_ports import set_cli_llm_adapters
     from integrations.llm_cli.registry import get_cli_provider_registration
     from integrations.llm_cli.runner import CLIBackedLLMClient
@@ -234,8 +235,8 @@ def _register_cli_llm_adapters() -> None:
         *,
         model: str | None = None,
         max_tokens: int | None = None,
-        model_type: Any = None,
-    ) -> Any:
+        model_type: ModelType | None = None,
+    ) -> CliLLMClient:
         kwargs: dict[str, Any] = {"model": model}
         if max_tokens is not None:
             kwargs["max_tokens"] = max_tokens

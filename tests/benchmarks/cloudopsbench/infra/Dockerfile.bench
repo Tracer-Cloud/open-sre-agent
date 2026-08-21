@@ -60,7 +60,7 @@ COPY surfaces/ ./surfaces/
 COPY config/ ./config/
 COPY core/ ./core/
 COPY integrations/ ./integrations/
-COPY platform/ ./platform/
+COPY infrastructure/ ./infrastructure/
 COPY tools/ ./tools/
 COPY tests/__init__.py ./tests/__init__.py
 COPY tests/benchmarks/ ./tests/benchmarks/

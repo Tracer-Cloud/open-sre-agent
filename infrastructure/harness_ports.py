@@ -21,6 +21,7 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from config.strict_config import StrictConfigModel
 from core.domain.types.tools import ToolSurface
+from core.llm.types import CliLLMClient, ModelType
 from core.tool import RegisteredTool
 
 if TYPE_CHECKING:
@@ -414,7 +415,22 @@ def set_investigation_tools_adapter(
 # ---------------------------------------------------------------------------
 
 CliProviderRegistrationFn = Callable[[str], Any]
-BuildCliClientFn = Callable[..., Any]
+
+
+class BuildCliClientFn(Protocol):
+    """Construct the CLI-backed client for a registered CLI adapter."""
+
+    def __call__(
+        self,
+        adapter: Any,
+        *,
+        model: str | None = None,
+        max_tokens: int | None = None,
+        model_type: ModelType | None = None,
+    ) -> CliLLMClient:
+        """Build the CLI-backed client for *adapter*."""
+
+
 FlattenCliMessagesFn = Callable[[list[dict[str, Any]]], str]
 
 
@@ -442,8 +458,8 @@ def build_cli_client(
     *,
     model: str | None = None,
     max_tokens: int | None = None,
-    model_type: Any = None,
-) -> Any:
+    model_type: ModelType | None = None,
+) -> CliLLMClient:
     return _build_cli_client_fn(adapter, model=model, max_tokens=max_tokens, model_type=model_type)
 
 

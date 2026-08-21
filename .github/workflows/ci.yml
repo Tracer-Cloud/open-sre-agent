@@ -4,6 +4,7 @@ on:
   push:
     branches: [main]
     paths:
+      - "bootstrap/**"
       - "surfaces/**"
       - "config/**"
       - "core/**"
@@ -56,6 +57,7 @@ jobs:
         with:
           filters: |
             source:
+              - "bootstrap/**"
               - "surfaces/**"
               - "config/**"
               - "core/**"

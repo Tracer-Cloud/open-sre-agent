@@ -14,7 +14,11 @@ from __future__ import annotations
 
 from core.agent_harness.agent_build_config import AgentBuildConfig, DescribeTool
 from core.agent_harness.agent_builder import AgentConfig, build_agent
-from core.agent_harness.llm_resolution import default_llm_factory, default_reasoning_llm_factory
+from core.agent_harness.llm_resolution import (
+    agent_llm_is_cli_backed,
+    default_llm_factory,
+    default_reasoning_llm_factory,
+)
 from core.agent_harness.ports import TurnBinding
 from core.agent_harness.tools.tool_provider import DefaultToolProvider
 from core.agent_harness.turns.action_driver import ActionTurnRunner
@@ -37,6 +41,7 @@ __all__ = [
     "InMemoryHeadlessBuild",
     "TurnBinding",
     "TurnPlan",
+    "agent_llm_is_cli_backed",
     "build_agent",
     "default_llm_factory",
     "default_reasoning_llm_factory",
