@@ -13,7 +13,6 @@ from typing import Any, Protocol
 from core.agent_harness.ports import (
     ErrorReporter,
     PromptContextProvider,
-    SessionState,
     SubprocessPresenterFactory,
     ToolEventObserver,
     ToolProvider,
