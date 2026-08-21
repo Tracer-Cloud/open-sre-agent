@@ -54,6 +54,10 @@ class MessageChannel(Protocol):
     #: finalize to send a fresh message.
     reopen_placeholder_on_status: bool
 
+    #: How this destination is named in server logs, e.g. ``"chat=123"`` — kept
+    #: so concurrent-turn errors stay attributable to the failed destination.
+    destination: str
+
     def on_status(self) -> None:
         """Signal turn activity before a status edit (e.g. a typing indicator)."""
 
@@ -102,7 +106,7 @@ class SingleMessageTurnOutput:
 
     def render_error(self, message: str) -> None:
         # Raw detail to the server log only; the user sees safe generic copy.
-        logger.warning("gateway turn error: %s", message)
+        logger.warning("gateway turn error %s: %s", self._channel.destination, message)
         self._finalize(user_facing_error_message(message))
 
     def set_tool_status(self, status: str) -> None:

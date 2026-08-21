@@ -8,6 +8,8 @@ answer — independently of any transport's vendor I/O.
 
 from __future__ import annotations
 
+import logging
+
 from gateway.core.single_message_output import SingleMessageTurnOutput
 
 
@@ -16,6 +18,7 @@ class _FakeChannel:
 
     def __init__(self, *, reopen_placeholder_on_status: bool) -> None:
         self.reopen_placeholder_on_status = reopen_placeholder_on_status
+        self.destination = "chat=42"
         self.calls: list[tuple[str, ...]] = []
         self._ids = iter(["m1", "m2", "m3"])
 
@@ -107,3 +110,19 @@ def test_deferred_stream_returns_text_without_finalizing() -> None:
     # Assert
     assert text == "hi"
     assert not any(call[0] == "final" for call in channel.calls)
+
+
+def test_render_error_logs_the_failed_destination(caplog) -> None:
+    # Arrange
+    output, channel = _output(reopen=True)
+
+    # Act
+    with caplog.at_level(logging.WARNING, logger="gateway"):
+        output.render_error("boom: secret detail")
+
+    # Assert: the server-side warning names the destination so concurrent-turn
+    # errors stay attributable; the user-facing answer is generic, never the raw
+    # detail.
+    assert "chat=42" in caplog.text
+    final_calls = [call for call in channel.calls if call[0] == "final"]
+    assert final_calls and "secret detail" not in final_calls[-1][2]

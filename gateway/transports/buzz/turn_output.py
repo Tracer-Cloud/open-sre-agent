@@ -31,6 +31,7 @@ class _BuzzChannel:
     def __init__(self, *, client: BuzzClient, channel_id: str) -> None:
         self._client = client
         self._channel_id = channel_id
+        self.destination = f"channel={channel_id}"
 
     def on_status(self) -> None:
         # Buzz has no typing indicator.
@@ -51,10 +52,10 @@ class _BuzzChannel:
     def deliver_final(self, message_id: str, answer: str) -> str:
         final = truncate(answer, MAX_MESSAGE_SIZE, suffix="…")
         if message_id and self._edit_final(message_id, final):
-            logger.info("outbound channel=%s text=%r", self._channel_id, log_preview(final))
+            logger.info("outbound %s text=%r", self.destination, log_preview(final))
             return ""
         if self._send_final(final):
-            logger.info("outbound channel=%s text=%r", self._channel_id, log_preview(final))
+            logger.info("outbound %s text=%r", self.destination, log_preview(final))
             return ""
         return message_id
 

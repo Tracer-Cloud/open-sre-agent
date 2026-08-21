@@ -24,6 +24,7 @@ class _TelegramChannel:
     def __init__(self, *, client: TelegramBotClient, chat_id: str) -> None:
         self._client = client
         self._chat_id = chat_id
+        self.destination = f"chat={chat_id}"
 
     def on_status(self) -> None:
         self._client.send_chat_action(self._chat_id, "typing")
@@ -46,10 +47,10 @@ class _TelegramChannel:
         # answer if the API rejects the markup so a message is never lost.
         html_final = markdown_to_telegram_html(final)
         if message_id and self._edit_final(message_id, html_final, final):
-            logger.info("outbound chat=%s text=%r", self._chat_id, log_preview(final))
+            logger.info("outbound %s text=%r", self.destination, log_preview(final))
             return ""
         if self._send_final(html_final, final):
-            logger.info("outbound chat=%s text=%r", self._chat_id, log_preview(final))
+            logger.info("outbound %s text=%r", self.destination, log_preview(final))
             return ""
         return message_id
 
