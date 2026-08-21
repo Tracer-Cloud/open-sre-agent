@@ -339,3 +339,77 @@ class TestGetStorageBuckets:
         assert result["total_buckets"] == 10
         assert result["returned_buckets"] == 2
         assert result["truncated"] is True
+
+
+# ---------------------------------------------------------------------------
+# Verifier — reduced effective config resolves credentials internally
+# ---------------------------------------------------------------------------
+
+
+class TestVerifySupabase:
+    """The effective resolution publishes only ``project_url`` (the service
+    key never appears in resolved configs), so the verifier must re-resolve
+    credentials the way the tools do instead of requiring them in the config."""
+
+    def test_reduced_effective_config_resolves_and_passes(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        from integrations.supabase import SupabaseValidationResult
+        from integrations.supabase import verifier as verifier_module
+
+        monkeypatch.setenv("SUPABASE_URL", "https://proj.supabase.co")
+        monkeypatch.setenv("SUPABASE_SERVICE_KEY", "svc")
+        seen: list[SupabaseConfig] = []
+
+        def _validate(config: SupabaseConfig) -> SupabaseValidationResult:
+            seen.append(config)
+            return SupabaseValidationResult(ok=True, detail="ok")
+
+        monkeypatch.setattr(verifier_module, "validate_supabase_config", _validate)
+
+        result = verifier_module.verify_supabase(
+            "local store", {"project_url": "https://proj.supabase.co", "integration_id": "sb-1"}
+        )
+
+        assert result["status"] == "passed"
+        assert seen[0].url == "https://proj.supabase.co"
+        assert seen[0].service_key == "svc"
+
+    def test_full_credential_config_still_builds_directly(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        from integrations.supabase import SupabaseValidationResult
+        from integrations.supabase import verifier as verifier_module
+
+        monkeypatch.delenv("SUPABASE_URL", raising=False)
+        monkeypatch.delenv("SUPABASE_SERVICE_KEY", raising=False)
+        seen: list[SupabaseConfig] = []
+
+        def _validate(config: SupabaseConfig) -> SupabaseValidationResult:
+            seen.append(config)
+            return SupabaseValidationResult(ok=True, detail="ok")
+
+        monkeypatch.setattr(verifier_module, "validate_supabase_config", _validate)
+
+        result = verifier_module.verify_supabase(
+            "env", {"url": "https://proj.supabase.co", "service_key": "direct"}
+        )
+
+        assert result["status"] == "passed"
+        assert seen[0].service_key == "direct"
+
+    def test_unresolvable_reduced_config_reports_missing(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        from integrations.supabase import verifier as verifier_module
+
+        monkeypatch.delenv("SUPABASE_URL", raising=False)
+        monkeypatch.delenv("SUPABASE_SERVICE_KEY", raising=False)
+
+        with patch("integrations.store.load_integrations", return_value=[]):
+            result = verifier_module.verify_supabase(
+                "local store", {"project_url": "https://proj.supabase.co"}
+            )
+
+        assert result["status"] == "missing"
+        assert "not configured" in result["detail"]
