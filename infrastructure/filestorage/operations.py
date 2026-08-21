@@ -24,9 +24,9 @@ from pathlib import Path
 
 from config.scope_context import current_scope
 from infrastructure.filestorage.config import RemoteSyncConfig, load_remote_sync_config
-from platform.filestorage.encryption.manifest import manifest_in_listing
-from platform.filestorage.encryption.resolver import resolve_cipher
-from platform.filestorage.encryption.rotation import (
+from infrastructure.filestorage.encryption.manifest import manifest_in_listing
+from infrastructure.filestorage.encryption.resolver import resolve_cipher
+from infrastructure.filestorage.encryption.rotation import (
     ReencryptReport,
     reencrypt,
     rotate_passphrase,

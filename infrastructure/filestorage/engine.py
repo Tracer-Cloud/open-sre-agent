@@ -19,7 +19,7 @@ see :func:`push` for why the two halves cannot be interleaved.
 
 An optional ``cipher`` seals payloads on the way out and opens them on the way
 in, so a store can hold no readable history. The engine knows only the
-:class:`~platform.filestorage.encryption.ports.Cipher` contract — never a key, and
+:class:`~infrastructure.filestorage.encryption.ports.Cipher` contract — never a key, and
 never ``cryptography`` — and behaves exactly as it did before when it is
 ``None``. Two consequences are load-bearing rather than incidental:
 
@@ -45,7 +45,7 @@ from enum import StrEnum
 from pathlib import Path
 
 from config.constants.filestorage import DEFAULT_MAX_PARALLEL_UPLOADS
-from platform.filestorage.encryption.ports import Cipher
+from infrastructure.filestorage.encryption.ports import Cipher
 from infrastructure.filestorage.enums import SyncDirection
 from infrastructure.filestorage.errors import RemoteSyncConfigError, UnsyncablePathError
 from infrastructure.filestorage.exclusions import NO_EXCLUSIONS, ExclusionRules

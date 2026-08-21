@@ -27,7 +27,7 @@ from cryptography.exceptions import InvalidTag
 from cryptography.hazmat.primitives import hashes, hmac
 from cryptography.hazmat.primitives.ciphers.aead import AESGCM
 
-from platform.filestorage.errors import UndecryptableObjectError
+from infrastructure.filestorage.errors import UndecryptableObjectError
 
 MAGIC = b"OSRE"
 VERSION = 1
@@ -114,7 +114,7 @@ def unseal(*, content_key: bytes, object_key: str, payload: bytes) -> bytes:
     """Plaintext inside ``payload``, or raise :class:`UndecryptableObjectError`.
 
     ``content_key`` must be the one named by the payload's ``key_id``; picking
-    it is the caller's job (see :mod:`platform.filestorage.encryption.cipher`).
+    it is the caller's job (see :mod:`infrastructure.filestorage.encryption.cipher`).
     """
     header = parse_header(payload)
     try:

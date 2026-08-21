@@ -10,23 +10,23 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from platform.filestorage.encryption import envelope
-from platform.filestorage.encryption.keys import resolve_passphrase
-from platform.filestorage.encryption.manifest import (
+from infrastructure.filestorage.encryption import envelope
+from infrastructure.filestorage.encryption.keys import resolve_passphrase
+from infrastructure.filestorage.encryption.manifest import (
     load_manifest,
     manifest_in_listing,
     new_manifest,
     open_manifest,
     save_manifest,
 )
-from platform.filestorage.encryption.ports import Cipher
-from platform.filestorage.enums import SyncRootName
-from platform.filestorage.errors import (
+from infrastructure.filestorage.encryption.ports import Cipher
+from infrastructure.filestorage.enums import SyncRootName
+from infrastructure.filestorage.errors import (
     EncryptedStoreError,
     ManifestMissingError,
     PlaintextStoreError,
 )
-from platform.filestorage.ports import ObjectStore, RemoteObject
+from infrastructure.filestorage.ports import ObjectStore, RemoteObject
 
 _ROOT_HEADS = frozenset(root.value for root in SyncRootName)
 

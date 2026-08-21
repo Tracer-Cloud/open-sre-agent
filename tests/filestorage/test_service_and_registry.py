@@ -85,7 +85,12 @@ def _restore_registry() -> Iterator[None]:
         reg._MAX_PARALLEL_UPLOADS.update(caps)
 
 
-def test_formatters_return_immutable_tuples() -> None:
+def test_formatters_return_immutable_tuples(monkeypatch: pytest.MonkeyPatch) -> None:
+    # The disabled branch is only reachable with the switch cleared: a developer
+    # machine that actually has sync configured would otherwise report it on,
+    # and get_sync_status() would reach the real store.
+    monkeypatch.delenv(REMOTE_SYNC_ENV, raising=False)
+    monkeypatch.delenv(REMOTE_SYNC_BUCKET_ENV, raising=False)
     off = format_status_lines(get_sync_status())
     assert isinstance(off, tuple)
     assert DISABLED_HELP in off

@@ -51,7 +51,7 @@ class RemoteSyncConfig:
     ``encrypted`` seals object contents under a passphrase-derived key before
     upload. It has to agree with what the store already holds; a mismatch in
     either direction fails the run rather than mixing readable and sealed
-    objects (see :mod:`platform.filestorage.encryption.resolver`).
+    objects (see :mod:`infrastructure.filestorage.encryption.resolver`).
     """
 
     bucket: str

@@ -23,7 +23,7 @@ class Cipher(Protocol):
     def unseal(self, object_key: str, payload: bytes) -> bytes:
         """Plaintext inside ``payload``, which must have been sealed at ``object_key``.
 
-        Raises :class:`~platform.filestorage.errors.UndecryptableObjectError`
+        Raises :class:`~infrastructure.filestorage.errors.UndecryptableObjectError`
         when the payload is malformed, was sealed under a key this cipher does
         not hold, or fails authentication.
         """

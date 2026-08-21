@@ -15,15 +15,15 @@ from pathlib import Path
 import pytest
 
 from config.constants.filestorage import REMOTE_SYNC_KEY_CACHE_ENV, REMOTE_SYNC_PASSPHRASE_ENV
-from platform.filestorage.encryption import envelope
-from platform.filestorage.encryption.cipher import ManifestCipher
-from platform.filestorage.encryption.keys import derive_root_key, generate_root_secret
-from platform.filestorage.encryption.manifest import MANIFEST_KEY, load_manifest
-from platform.filestorage.encryption.resolver import resolve_cipher
-from platform.filestorage.encryption.rotation import reencrypt, rotate_passphrase
-from platform.filestorage.engine import SyncDirection, SyncReport, content_tag, run_sync
-from platform.filestorage.enums import SyncRootName
-from platform.filestorage.errors import (
+from infrastructure.filestorage.encryption import envelope
+from infrastructure.filestorage.encryption.cipher import ManifestCipher
+from infrastructure.filestorage.encryption.keys import derive_root_key, generate_root_secret
+from infrastructure.filestorage.encryption.manifest import MANIFEST_KEY, load_manifest
+from infrastructure.filestorage.encryption.resolver import resolve_cipher
+from infrastructure.filestorage.encryption.rotation import reencrypt, rotate_passphrase
+from infrastructure.filestorage.engine import SyncDirection, SyncReport, content_tag, run_sync
+from infrastructure.filestorage.enums import SyncRootName
+from infrastructure.filestorage.errors import (
     EncryptedStoreError,
     ManifestMissingError,
     MissingPassphraseError,
@@ -31,8 +31,8 @@ from platform.filestorage.errors import (
     UndecryptableObjectError,
     WrongPassphraseError,
 )
-from platform.filestorage.ports import RemoteObject
-from platform.filestorage.syncable import SyncRoot
+from infrastructure.filestorage.ports import RemoteObject
+from infrastructure.filestorage.syncable import SyncRoot
 
 PASSPHRASE = "correct horse battery staple"
 # Planted in a session. If any transformation ever fails open, this shows up in

@@ -6,7 +6,7 @@ the passphrase; the salt comes from here.
 
 ``wrapped_keys`` is a map, not a single value, so an interrupted re-encrypt
 leaves every generation openable. The manifest key has no root prefix, so
-:func:`platform.filestorage.engine.pull` already declines to map it onto a local
+:func:`infrastructure.filestorage.engine.pull` already declines to map it onto a local
 path.
 """
 
@@ -16,8 +16,8 @@ import base64
 import json
 from dataclasses import dataclass, field
 
-from platform.filestorage.encryption.cipher import ManifestCipher
-from platform.filestorage.encryption.keys import (
+from infrastructure.filestorage.encryption.cipher import ManifestCipher
+from infrastructure.filestorage.encryption.keys import (
     RootKey,
     ScryptParams,
     derive_kek,
@@ -27,8 +27,8 @@ from platform.filestorage.encryption.keys import (
     unwrap_root_secret,
     wrap_root_secret,
 )
-from platform.filestorage.errors import RemoteSyncEncryptionError
-from platform.filestorage.ports import ObjectStore, RemoteObject
+from infrastructure.filestorage.errors import RemoteSyncEncryptionError
+from infrastructure.filestorage.ports import ObjectStore, RemoteObject
 
 #: Object key the manifest lives under, relative to the configured prefix.
 MANIFEST_KEY = ".opensre-sync-manifest.json"
@@ -140,7 +140,7 @@ def new_manifest(passphrase: str) -> tuple[EncryptionManifest, ManifestCipher]:
 def open_manifest(manifest: EncryptionManifest, passphrase: str) -> ManifestCipher:
     """Unwrap every key the manifest carries and build a cipher from them.
 
-    Raises :class:`~platform.filestorage.errors.WrongPassphraseError` when the
+    Raises :class:`~infrastructure.filestorage.errors.WrongPassphraseError` when the
     passphrase does not open the active key. A retired key that fails to unwrap
     is skipped rather than fatal: it can only make older objects unreadable, and
     failing the whole run would strand a store whose current generation is fine.

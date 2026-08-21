@@ -17,7 +17,7 @@ from infrastructure.filestorage import (
     RemoteSyncConfigError,
     RemoteSyncError,
 )
-from platform.filestorage.encryption.keys import resolve_passphrase, save_passphrase
+from infrastructure.filestorage.encryption.keys import resolve_passphrase, save_passphrase
 from infrastructure.filestorage.enums import RemoteSyncField, RemoteSyncSubcommand
 from infrastructure.filestorage.messages import (
     DISABLED_HELP,

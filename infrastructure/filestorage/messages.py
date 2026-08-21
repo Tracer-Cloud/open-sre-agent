@@ -18,7 +18,7 @@ from config.constants.filestorage import (
     REMOTE_SYNC_REGION_ENV,
 )
 from infrastructure.filestorage.config import RemoteSyncConfig
-from platform.filestorage.encryption.rotation import ReencryptReport
+from infrastructure.filestorage.encryption.rotation import ReencryptReport
 from infrastructure.filestorage.engine import SyncReport
 from infrastructure.filestorage.enums import BucketExposure, SyncDirection
 from infrastructure.filestorage.exclusions import ExclusionRules

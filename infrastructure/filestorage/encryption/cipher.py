@@ -1,4 +1,4 @@
-"""A :class:`~platform.filestorage.encryption.ports.Cipher` over a set of root keys.
+"""A :class:`~infrastructure.filestorage.encryption.ports.Cipher` over a set of root keys.
 
 Seals under one active key and opens under any key the store's manifest still
 carries. Holding several is what makes a re-encrypt interruptible: objects
@@ -10,9 +10,9 @@ from __future__ import annotations
 
 from collections.abc import Iterable
 
-from platform.filestorage.encryption import envelope
-from platform.filestorage.encryption.keys import RootKey
-from platform.filestorage.errors import UndecryptableObjectError
+from infrastructure.filestorage.encryption import envelope
+from infrastructure.filestorage.encryption.keys import RootKey
+from infrastructure.filestorage.errors import UndecryptableObjectError
 
 
 class ManifestCipher:

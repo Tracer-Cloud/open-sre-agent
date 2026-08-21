@@ -14,10 +14,10 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from platform.filestorage.encryption import envelope
-from platform.filestorage.encryption.cipher import ManifestCipher
-from platform.filestorage.encryption.keys import forget_cached_kek
-from platform.filestorage.encryption.manifest import (
+from infrastructure.filestorage.encryption import envelope
+from infrastructure.filestorage.encryption.cipher import ManifestCipher
+from infrastructure.filestorage.encryption.keys import forget_cached_kek
+from infrastructure.filestorage.encryption.manifest import (
     MANIFEST_KEY,
     load_manifest,
     manifest_in_listing,
@@ -27,9 +27,9 @@ from platform.filestorage.encryption.manifest import (
     save_manifest,
     with_new_generation,
 )
-from platform.filestorage.encryption.resolver import holds_mirrored_objects
-from platform.filestorage.errors import RemoteSyncEncryptionError
-from platform.filestorage.ports import ObjectStore
+from infrastructure.filestorage.encryption.resolver import holds_mirrored_objects
+from infrastructure.filestorage.errors import RemoteSyncEncryptionError
+from infrastructure.filestorage.ports import ObjectStore
 
 
 @dataclass(frozen=True)

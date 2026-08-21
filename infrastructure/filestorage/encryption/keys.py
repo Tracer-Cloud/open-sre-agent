@@ -32,8 +32,8 @@ from config.constants.filestorage import (
 )
 from config.secrets.backend import KeyringUnavailableError
 from config.secrets.store import resolve_secret, save_secret
-from platform.filestorage.encryption.envelope import KEY_ID_LEN
-from platform.filestorage.errors import (
+from infrastructure.filestorage.encryption.envelope import KEY_ID_LEN
+from infrastructure.filestorage.errors import (
     MissingPassphraseError,
     WrongPassphraseError,
 )
