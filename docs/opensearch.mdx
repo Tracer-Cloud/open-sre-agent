@@ -130,36 +130,61 @@ opensearch │ local env │ ✓ passed │ Configured for OpenSearch at
            │           │          │ http://localhost:9201.
 ```
 
-Both are the internal functions the agent calls during an investigation — invoke them directly here only to see the real shape of their results (internal, not a public API, and may move):
+Register the local instance in the persistent store — `opensre investigate` only treats an integration as active once it is in the store, unlike `verify` which also accepts plain env vars:
 
 ```python
-from integrations.opensearch.tools.opensearch_analytics_tool import query_opensearch_analytics
-from integrations.elasticsearch.tools import query_elasticsearch_logs
+import json, pathlib
 
-query_opensearch_analytics(url="http://localhost:9201", index_pattern="logs-app", query="*", limit=5)
-query_elasticsearch_logs.run(url="http://localhost:9201", query="timeout", index_pattern="logs-app")
+path = pathlib.Path.home() / ".opensre" / "integrations.json"
+store = json.loads(path.read_text()) if path.exists() else {"version": 2, "integrations": []}
+store["integrations"] = [i for i in store["integrations"] if i["id"] != "opensearch-local-demo"]
+store["integrations"].append({
+    "id": "opensearch-local-demo",
+    "service": "opensearch",
+    "status": "active",
+    "instances": [{"name": "default", "tags": {}, "credentials": {"url": "http://localhost:9201", "index_pattern": "logs-app"}}],
+})
+path.parent.mkdir(parents=True, exist_ok=True)
+path.write_text(json.dumps(store, indent=2))
 ```
 
-```json
-{
-  "source": "opensearch", "available": true, "total_returned": 2,
-  "logs": [
-    {"timestamp": "2026-08-20T16:07:21Z", "level": "ERROR",
-     "message": "payment-service: connection timeout while calling billing-api"},
-    {"timestamp": "2026-08-20T16:07:21Z", "level": "INFO",
-     "message": "payment-service: request completed"}
-  ]
-}
+Trigger a real investigation against the seeded index — this is the actual supported entrypoint, not an internal import:
+
+```bash
+opensre investigate --input-json '{
+  "alert_name": "PaymentServiceErrors",
+  "severity": "critical",
+  "commonAnnotations": {
+    "summary": "payment-service throwing connection timeout errors calling billing-api"
+  }
+}'
 ```
 
-```json
-{
-  "source": "elasticsearch_logs", "available": true, "total": 1,
-  "logs": [{"timestamp": "2026-08-20T16:07:21Z", "level": "ERROR",
-            "message": "payment-service: connection timeout while calling billing-api"}],
-  "error_logs": [{"timestamp": "2026-08-20T16:07:21Z", "level": "ERROR",
-                  "message": "payment-service: connection timeout while calling billing-api"}]
-}
+Real output from a run against this exact seeded index (edited for length):
+
+```
+Loading integrations: telegram, opensearch
+↳ Elasticsearch · query elasticsearch logs (service:payment-service AND (timeout OR "connection" OR error)) → total: 1
+↳ Elasticsearch · query elasticsearch logs (service:billing-api AND (error OR exception OR timeout ...)) → total: 0
+
+root_cause: "billing-api appears to be non-functional or absent -- it has
+produced zero logs across the entire 6-hour observation window while its
+dependent caller (payment-service) has begun reporting connection
+timeouts against it. The most likely explanation is that billing-api
+pods are not running, not ready, or otherwise not serving traffic..."
+```
+
+The agent found the seeded error via `query_elasticsearch_logs` and didn't need `query_opensearch_analytics` for this alert — both tools share the same credentials and index, so either is reachable from the same setup.
+
+Remove the demo entry when done:
+
+```python
+import json, pathlib
+
+path = pathlib.Path.home() / ".opensre" / "integrations.json"
+store = json.loads(path.read_text())
+store["integrations"] = [i for i in store["integrations"] if i["id"] != "opensearch-local-demo"]
+path.write_text(json.dumps(store, indent=2))
 ```
 
 Teardown:
