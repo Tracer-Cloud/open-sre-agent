@@ -50,7 +50,25 @@ pointing to [signoz.io/docs/install/docker](https://signoz.io/docs/install/docke
 
 ```bash
 curl -fsSL https://signoz.io/foundry.sh | bash
+```
 
+Piping a remote script into `bash` runs whatever that URL currently serves, with your
+shell's privileges. If that's a concern for your environment, download and verify a
+pinned release instead (`SigNoz/foundry` on GitHub publishes a checksums file with every
+release):
+
+```bash
+VERSION=v0.2.17
+curl -fsSLO "https://github.com/SigNoz/foundry/releases/download/${VERSION}/foundry_darwin_arm64.tar.gz"
+curl -fsSLO "https://github.com/SigNoz/foundry/releases/download/${VERSION}/foundry_${VERSION#v}_checksums.txt"
+shasum -a 256 -c <(grep darwin_arm64 "foundry_${VERSION#v}_checksums.txt")
+tar -xzf foundry_darwin_arm64.tar.gz && sudo mv foundryctl /usr/local/bin/
+```
+
+Swap `darwin_arm64` for your platform (`linux_amd64`, `linux_arm64`, etc.) and use
+`sha256sum` in place of `shasum -a 256` on Linux.
+
+```bash
 cat > casting.yaml << 'EOF'
 apiVersion: v1alpha1
 kind: Installation

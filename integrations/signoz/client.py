@@ -20,6 +20,10 @@ from integrations.signoz import SigNozConfig
 logger = logging.getLogger(__name__)
 
 DEFAULT_TIME_RANGE_MINUTES = 60
+# Best-effort metadata lookup: cheap enough that it should never wait as long as the
+# actual query -- capped well below the configured query timeout so a slow/unreachable
+# metadata endpoint can't add its full timeout on top of every metrics call.
+_METADATA_LOOKUP_TIMEOUT_SECONDS = 2.0
 _NOT_CONFIGURED_ERROR = (
     "SigNoz not configured. Set SIGNOZ_URL and SIGNOZ_API_KEY (service account key)."
 )
@@ -164,7 +168,7 @@ class SigNozClient:
                 f"{self._query_api_base_url()}/api/v2/metrics/metadata",
                 params={"metricName": metric_name},
                 headers={"SigNoz-Api-Key": self.config.api_key, "Accept": "application/json"},
-                timeout=self.config.timeout_seconds,
+                timeout=min(_METADATA_LOOKUP_TIMEOUT_SECONDS, self.config.timeout_seconds),
             )
             response.raise_for_status()
             return str(response.json().get("data", {}).get("temporality") or "unspecified")
