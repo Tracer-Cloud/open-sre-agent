@@ -9,7 +9,7 @@ import pytest
 from rich.console import Console
 
 from core.agent_harness.runtime import AgentBuildConfig
-from platform.turn_host.capability_policy import ensure_gateway_capability_policy
+from infrastructure.turn_host.capability_policy import ensure_gateway_capability_policy
 from surfaces.interactive_shell.runtime.shell_agent import (
     build_shell_agent,
     shell_agent_build_config,

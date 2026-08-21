@@ -21,11 +21,11 @@ from typing import TYPE_CHECKING, Any
 from rich.console import Console
 
 if TYPE_CHECKING:
-    from platform.turn_host.turn_handler import TurnHandler
+    from infrastructure.turn_host.turn_handler import TurnHandler
 
-from platform.analytics.repl_context import bound_repl_turn_context
-from platform.analytics.usage_context import UsageSurface, bound_usage_context
-from platform.observability.trace.spans import (
+from infrastructure.analytics.repl_context import bound_repl_turn_context
+from infrastructure.analytics.usage_context import UsageSurface, bound_usage_context
+from infrastructure.observability.trace.spans import (
     bind_session_trace,
     emit_thread_boundary,
 )

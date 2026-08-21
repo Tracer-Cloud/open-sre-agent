@@ -14,7 +14,7 @@ layering contract forbids ``gateway`` → ``surfaces`` imports), outbound
 delivery in :mod:`integrations.slack`.
 
 Layering rule: surfaces may import from ``core/``, ``tools/``,
-``integrations/``, ``platform/``. Nothing first-party may import from
+``integrations/``, ``infrastructure/``. Nothing first-party may import from
 ``surfaces/`` (it sits at the top of the dependency stack).
 
 See ``docs/ARCHITECTURE.md`` for the full layering contract and

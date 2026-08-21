@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import importlib
-import sys
 from http import HTTPStatus
 from unittest.mock import MagicMock
 
@@ -20,7 +19,7 @@ def test_webapp_module_calls_init_sentry_on_import(monkeypatch: pytest.MonkeyPat
     from bootstrap.process import reset_process_runtime_for_tests
 
     init_mock = MagicMock()
-    monkeypatch.setattr("platform.observability.errors.sentry.init_sentry", init_mock)
+    monkeypatch.setattr("infrastructure.observability.errors.sentry.init_sentry", init_mock)
     reset_process_runtime_for_tests()
 
     # Act
@@ -29,49 +28,6 @@ def test_webapp_module_calls_init_sentry_on_import(monkeypatch: pytest.MonkeyPat
     # Assert: the web entrypoint still reports crashes, now via WEB_PROFILE
     # rather than a direct call.
     init_mock.assert_called_once()
-
-
-def test_webapp_imports_after_stdlib_platform_cached() -> None:
-    """Docker/uvicorn can cache stdlib ``platform`` before loading the ASGI app.
-
-    Runs in a fresh interpreter: in-process eviction of ``platform.*`` orphans
-    imports already bound by other tests in this pytest worker.
-    """
-    import subprocess
-    import textwrap
-    from pathlib import Path
-
-    code = textwrap.dedent(
-        """
-        import importlib.util
-        import sys
-        import sysconfig
-        from pathlib import Path
-
-        stdlib_path = Path(sysconfig.get_path("stdlib")) / "platform.py"
-        spec = importlib.util.spec_from_file_location("_opensre_test_stdlib_platform", stdlib_path)
-        assert spec is not None and spec.loader is not None
-        stdlib_platform = importlib.util.module_from_spec(spec)
-        spec.loader.exec_module(stdlib_platform)
-        assert not hasattr(stdlib_platform, "__path__")
-        sys.modules["platform"] = stdlib_platform
-        [sys.modules.pop(n) for n in list(sys.modules) if n.startswith("platform.")]
-
-        from gateway.web import webapp
-        assert hasattr(webapp, "app")
-        assert hasattr(sys.modules["platform"], "__path__")
-        print("OK")
-        """
-    )
-    result = subprocess.run(
-        [sys.executable, "-c", code],
-        capture_output=True,
-        text=True,
-        timeout=60,
-        cwd=str(Path(__file__).resolve().parents[3]),
-    )
-    assert result.returncode == 0, result.stderr
-    assert "OK" in result.stdout
 
 
 def test_health_response_returns_known_fields() -> None:

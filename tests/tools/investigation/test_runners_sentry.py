@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import pytest
 
-from platform.observability.errors import boundary
+from infrastructure.observability.errors import boundary
 from tools.investigation import capability as runners
 
 
@@ -44,7 +44,9 @@ def test_traced_node_exception_is_captured_once_with_node_tag(
     def capture_stub(exc: BaseException, **kwargs: object) -> None:
         captured.append((exc, kwargs))
 
-    monkeypatch.setattr("platform.observability.errors.sentry.capture_exception", capture_stub)
+    monkeypatch.setattr(
+        "infrastructure.observability.errors.sentry.capture_exception", capture_stub
+    )
 
     with pytest.raises(RuntimeError, match="node failed") as raised:
         runners._traced_node("extract_alert", failing_node)

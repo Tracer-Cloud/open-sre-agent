@@ -38,7 +38,7 @@ from rich.text import Text
 
 from config.repl_config import WHATS_NEW
 from config.version import get_opensre_version
-from platform.terminal.theme import (
+from infrastructure.terminal.theme import (
     BRAND,
     DIM,
     HIGHLIGHT,

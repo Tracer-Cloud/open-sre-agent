@@ -45,7 +45,7 @@ _ALLOWED: dict[str, frozenset[str]] = {
     ),
     "gateway": frozenset(),
     "surfaces": frozenset(),
-    "platform": frozenset(),
+    "infrastructure": frozenset(),
 }
 
 

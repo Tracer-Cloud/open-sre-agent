@@ -19,7 +19,7 @@ import os
 from dataclasses import dataclass, field
 
 from config.constants.telegram import TELEGRAM_BOT_TOKEN_ENV, TELEGRAM_DEFAULT_CHAT_ID_ENV
-from platform.errors import OpenSREError
+from infrastructure.errors import OpenSREError
 
 logger = logging.getLogger(__name__)
 

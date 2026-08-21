@@ -35,7 +35,7 @@ from gateway.transports.slack.transport.socket_mode.worker import (
     start_slack_gateway_background,
 )
 from gateway.transports.slack.turn_stack import build_slack_turn_stack
-from platform.turn_host.turn_callback import TurnCallback
+from infrastructure.turn_host.turn_callback import TurnCallback
 
 SlackWorker = SlackGatewayBackground | SlackHttpServerHandle
 

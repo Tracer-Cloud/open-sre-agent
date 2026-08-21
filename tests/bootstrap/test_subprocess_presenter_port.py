@@ -17,7 +17,7 @@ from collections.abc import Iterator
 
 import pytest
 
-import platform.harness_ports as harness_ports
+import infrastructure.harness_ports as harness_ports
 
 
 @pytest.fixture(autouse=True)

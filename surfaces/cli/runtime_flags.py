@@ -1,10 +1,10 @@
-"""Bridge Click global flags into :mod:`platform.process.runtime_flags`."""
+"""Bridge Click global flags into :mod:`infrastructure.process.runtime_flags`."""
 
 from __future__ import annotations
 
 import click
 
-from platform.process.runtime_flags import configure_runtime_flags
+from infrastructure.process.runtime_flags import configure_runtime_flags
 
 
 def sync_runtime_flags_from_click(ctx: click.Context | None = None) -> None:

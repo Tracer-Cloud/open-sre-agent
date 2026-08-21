@@ -72,9 +72,9 @@ def run_incident_investigation(
     :class:`TelegramSink` maps it to an operator-visible "attempted (failed)"
     marker.
     """
-    from platform.analytics.cli import track_investigation
-    from platform.analytics.source import EntrypointSource, TriggerMode
-    from platform.analytics.usage_context import (
+    from infrastructure.analytics.cli import track_investigation
+    from infrastructure.analytics.source import EntrypointSource, TriggerMode
+    from infrastructure.analytics.usage_context import (
         UsageSurface,
         bound_usage_context,
         ensure_process_session_id,

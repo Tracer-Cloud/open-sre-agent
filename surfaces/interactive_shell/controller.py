@@ -83,8 +83,8 @@ def _alert_listener(
         yield None
         return
 
-    from platform.alert_intake import build_alert_intake_app
-    from platform.asgi_server import AsgiServerHandle, serve_asgi_in_thread
+    from infrastructure.alert_intake import build_alert_intake_app
+    from infrastructure.asgi_server import AsgiServerHandle, serve_asgi_in_thread
 
     inbox: _alert_inbox.AlertInbox | None = None
     handle: AsgiServerHandle | None = None
@@ -191,7 +191,7 @@ class InteractiveShellController:
         )
         # Lazy: TurnHandler pulls the agent/action stack — must not load at
         # ``import surfaces.interactive_shell.main``.
-        from platform.turn_host.turn_handler import TurnHandler
+        from infrastructure.turn_host.turn_handler import TurnHandler
         from surfaces.interactive_shell.runtime.shell_agent import shell_agent_build_config
 
         self.turn_runtime = AgentTurnResources(

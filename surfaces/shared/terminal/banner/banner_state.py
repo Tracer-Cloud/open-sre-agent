@@ -9,7 +9,7 @@ from __future__ import annotations
 
 from rich.text import Text
 
-from platform.terminal.theme import BRAND, DIM, HIGHLIGHT, SECONDARY, WARNING
+from infrastructure.terminal.theme import BRAND, DIM, HIGHLIGHT, SECONDARY, WARNING
 
 # Display-name overrides for known integration service slugs.
 _SERVICE_DISPLAY_NAMES: dict[str, str] = {
@@ -88,7 +88,7 @@ def _count_loaded_skills() -> int:
 def _count_scheduled_tasks() -> int:
     """Return the number of persisted scheduled tasks. Never raises."""
     try:
-        from platform.scheduling.scheduler.store import list_tasks
+        from infrastructure.scheduling.scheduler.store import list_tasks
 
         return len(list_tasks())
     except Exception:

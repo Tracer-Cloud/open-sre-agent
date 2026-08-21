@@ -14,7 +14,7 @@ from __future__ import annotations
 from rich.console import Console
 from rich.markup import escape
 
-from platform.terminal import theme as ui_theme
+from infrastructure.terminal import theme as ui_theme
 from surfaces.interactive_shell.command_registry.types import SlashCommand
 from surfaces.interactive_shell.runtime import Session
 from surfaces.shared.terminal.components.choice_menu import (

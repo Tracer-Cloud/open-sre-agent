@@ -1,6 +1,6 @@
 """Background-investigation session state for the REPL.
 
-``BackgroundInvestigationRecord`` itself lives under ``platform.scheduling`` so the
+``BackgroundInvestigationRecord`` itself lives under ``infrastructure.scheduling`` so the
 vendor notification adapters can share the contract without importing this
 package. It is re-exported here because this is the import path the REPL
 runtime and its tests already use.
@@ -10,7 +10,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from platform.scheduling.background_investigations.types import BackgroundInvestigationRecord
+from infrastructure.scheduling.background_investigations.types import BackgroundInvestigationRecord
 
 
 @dataclass

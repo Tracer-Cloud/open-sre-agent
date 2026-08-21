@@ -15,7 +15,7 @@ from gateway.transports.discord.client import (
     split_discord_content,
 )
 from gateway.transports.discord.feedback import feedback_components
-from platform.turn_host.status_messages import (
+from infrastructure.turn_host.status_messages import (
     EMPTY_RESPONSE_MESSAGE,
     initial_status_message,
     normalize_gateway_status,

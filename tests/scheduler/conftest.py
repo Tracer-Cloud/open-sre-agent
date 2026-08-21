@@ -1,4 +1,4 @@
-"""Shared fixtures for :mod:`platform.scheduling.scheduler` tests.
+"""Shared fixtures for :mod:`infrastructure.scheduling.scheduler` tests.
 
 Automatically registers the investigation-runner bootstrap so scheduler tests
 can execute tasks without every test having to bind a runner explicitly. The
@@ -17,12 +17,14 @@ import pytest
 def install_scheduler_investigation_runner() -> Iterator[None]:
     """Bind + tear down the scheduler's investigation runner for every test.
 
-    The layered contract forbids ``platform.scheduling.scheduler`` from importing from
+    The layered contract forbids ``infrastructure.scheduling.scheduler`` from importing from
     ``tools`` directly (T-4 layering audit, issue #3352). The runner is
     supplied by :mod:`tools.investigation.scheduler_bootstrap`; installing it
     per test keeps the module-level registry isolated across the suite.
     """
-    from platform.scheduling.scheduler.investigation_runner import register_investigation_runner
+    from infrastructure.scheduling.scheduler.investigation_runner import (
+        register_investigation_runner,
+    )
     from tools.investigation.scheduler_bootstrap import install
 
     install()
@@ -35,8 +37,8 @@ def install_scheduler_investigation_runner() -> Iterator[None]:
 @pytest.fixture(autouse=True)
 def install_scheduler_agent_runner() -> Iterator[None]:
     """Bind + tear down the scheduler's agent runner for every test."""
+    from infrastructure.scheduling.scheduler.agent_runner import register_agent_runner
     from integrations.sentry.scheduler_bootstrap import install
-    from platform.scheduling.scheduler.agent_runner import register_agent_runner
 
     install()
     try:

@@ -4,8 +4,8 @@ from __future__ import annotations
 
 from typing import Any
 
-from platform.analytics import cli as analytics_cli
-from platform.analytics.repl_context import bind_cli_session_id, reset_cli_session_id
+from infrastructure.analytics import cli as analytics_cli
+from infrastructure.analytics.repl_context import bind_cli_session_id, reset_cli_session_id
 
 
 def test_integration_lifecycle_events_include_cli_session_id(monkeypatch: Any) -> None:

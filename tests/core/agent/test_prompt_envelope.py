@@ -61,7 +61,7 @@ def test_action_system_prompt_envelope_matches_legacy_rendering() -> None:
 
     # ACTION_VENDOR_FRAGMENTS carries integration-owned prompt recipes
     # (e.g. Slack/GitHub action routing) registered via
-    # platform.harness_ports.register_action_prompt_fragment — see
+    # infrastructure.harness_ports.register_action_prompt_fragment — see
     # integrations/harness_adapters.py. It renders empty (and is absent from
     # this id list) when no fragments are registered.
     assert [block.id for block in envelope.blocks] == [

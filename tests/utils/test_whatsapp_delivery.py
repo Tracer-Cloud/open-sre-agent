@@ -6,11 +6,11 @@ from typing import Any
 
 import pytest
 
+from infrastructure.delivery.notifications.delivery_transport import DeliveryResponse
 from integrations.whatsapp.delivery import (
     post_whatsapp_message_twilio,
     send_whatsapp_report,
 )
-from platform.delivery.notifications.delivery_transport import DeliveryResponse
 
 
 def _success_response(**kwargs: Any) -> DeliveryResponse:

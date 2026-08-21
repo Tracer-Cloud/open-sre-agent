@@ -1,29 +1,23 @@
 """Interactive-shell runtime package.
 
-Re-exports session / scheduling names used by the shell. Bootstraps the project
-``platform`` package before importing ``platform.scheduling`` so embedding hosts
-that already cached stdlib ``platform`` still load cleanly.
+Re-exports session / scheduling names used by the shell.
 """
 
 from __future__ import annotations
 
-from config.platform_bootstrap import ensure_project_platform_package
-
-ensure_project_platform_package()
-
-from platform.scheduling.task_registry import TaskRegistry  # noqa: E402
-from platform.scheduling.task_types import TaskKind, TaskRecord, TaskStatus  # noqa: E402
-from surfaces.interactive_shell.runtime.context import (  # noqa: E402
+from infrastructure.scheduling.task_registry import TaskRegistry
+from infrastructure.scheduling.task_types import TaskKind, TaskRecord, TaskStatus
+from surfaces.interactive_shell.runtime.context import (
     ReplRuntimeContext,
     SessionBootstrapSpec,
     create_repl_runtime_context,
     prepare_repl_session,
 )
-from surfaces.interactive_shell.session.background_investigations import (  # noqa: E402
+from surfaces.interactive_shell.session.background_investigations import (
     BackgroundInvestigationRecord,
     BackgroundNotificationPreferences,
 )
-from surfaces.interactive_shell.session.session import Session  # noqa: E402
+from surfaces.interactive_shell.session.session import Session
 
 __all__ = [
     "BackgroundInvestigationRecord",

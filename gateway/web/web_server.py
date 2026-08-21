@@ -1,13 +1,13 @@
 """Serve the gateway web app in a background thread.
 
-The threaded-server mechanism lives in :mod:`platform.asgi_server`; this module
+The threaded-server mechanism lives in :mod:`infrastructure.asgi_server`; this module
 binds it to the gateway's own app (:mod:`gateway.web.webapp`). The daemon serves
 it on ``PORT``; ``port=0`` binds an ephemeral free port.
 """
 
 from __future__ import annotations
 
-from platform.asgi_server import AsgiServerHandle, serve_asgi_in_thread
+from infrastructure.asgi_server import AsgiServerHandle, serve_asgi_in_thread
 
 #: The gateway web app's handle type — an alias so existing callers keep their name.
 WebAppServerHandle = AsgiServerHandle

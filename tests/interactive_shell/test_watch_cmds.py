@@ -10,9 +10,9 @@ from unittest.mock import MagicMock
 import pytest
 from rich.console import Console
 
+from infrastructure.scheduling.task_types import TaskKind, TaskStatus
 from integrations.rocketchat.credentials import RocketChatCredentials
 from integrations.telegram.credentials import TelegramCredentials
-from platform.scheduling.task_types import TaskKind, TaskStatus
 from surfaces.interactive_shell.command_registry import SLASH_COMMANDS, dispatch_slash
 from surfaces.interactive_shell.command_registry.watch_cmds import (
     WatchdogStartSpec,
@@ -163,7 +163,7 @@ def test_dispatch_watch_creates_rocketchat_watchdog_task(
 def test_dispatch_watch_reports_rocketchat_configuration_error(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    from platform.errors import OpenSREError
+    from infrastructure.errors import OpenSREError
 
     def _raise_missing(**_kw: object) -> RocketChatCredentials:
         raise OpenSREError("Rocket.Chat is not configured.")
@@ -250,7 +250,7 @@ def test_unwatch_rejects_non_watchdog_task() -> None:
 def test_run_watchdog_respects_cancel(monkeypatch: pytest.MonkeyPatch) -> None:
     from datetime import UTC, datetime, timedelta
 
-    from platform.scheduling.task_registry import TaskRegistry
+    from infrastructure.scheduling.task_registry import TaskRegistry
     from tools.system.fleet_monitoring.probe import ProcessSnapshot
     from tools.system.watch_dog.monitor import run_watchdog
 
@@ -299,7 +299,7 @@ def test_run_watchdog_once_without_thresholds_exits(monkeypatch: pytest.MonkeyPa
     """``--once`` with no threshold flags must finish after one sample (Greptile #1969)."""
     from datetime import UTC, datetime, timedelta
 
-    from platform.scheduling.task_registry import TaskRegistry
+    from infrastructure.scheduling.task_registry import TaskRegistry
     from tools.system.fleet_monitoring.probe import ProcessSnapshot
     from tools.system.watch_dog.monitor import run_watchdog
 
@@ -342,7 +342,7 @@ def test_run_watchdog_first_probe_inaccessible_marks_failed(
 ) -> None:
     """A live PID this user cannot introspect must fail loudly, not report
     'target process exited' (a permission failure is not an exit)."""
-    from platform.scheduling.task_registry import TaskRegistry
+    from infrastructure.scheduling.task_registry import TaskRegistry
     from tools.system.watch_dog.monitor import run_watchdog
 
     reg = TaskRegistry()
@@ -373,7 +373,7 @@ def test_run_watchdog_first_probe_inaccessible_marks_failed(
 def test_run_watchdog_gone_pid_completes_as_exited(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    from platform.scheduling.task_registry import TaskRegistry
+    from infrastructure.scheduling.task_registry import TaskRegistry
     from tools.system.watch_dog.monitor import run_watchdog
 
     reg = TaskRegistry()
@@ -407,7 +407,7 @@ def test_run_watchdog_transient_inaccessible_retries(
     retry, then still report the real exit when the PID is truly gone."""
     from datetime import UTC, datetime, timedelta
 
-    from platform.scheduling.task_registry import TaskRegistry
+    from infrastructure.scheduling.task_registry import TaskRegistry
     from tools.system.fleet_monitoring.probe import ProcessSnapshot
     from tools.system.watch_dog.monitor import run_watchdog
 

@@ -9,7 +9,7 @@ from typing import Any
 from rich.console import Console
 from rich.markup import escape as _rich_escape
 
-from platform.terminal.theme import ERROR
+from infrastructure.terminal.theme import ERROR
 from surfaces.interactive_shell.runtime import Session
 
 

@@ -13,10 +13,7 @@ from config.constants import (
     OPENSRE_MEMORY_DIR_ENV,
 )
 from config.grafana_cloud import load_env
-from config.platform_bootstrap import ensure_project_platform_package
 from config.secrets.os_keyring import reset_keyring_state
-
-ensure_project_platform_package()
 
 _ENV_PATH = paths.PROJECT_ROOT / ".env"
 
@@ -51,7 +48,7 @@ _mark_tests_for_analytics()
 @pytest.fixture(autouse=True)
 def _harness_ports_per_test() -> Iterator[None]:
     """Wire harness ports before each test; reset after to avoid session leakage."""
-    from platform.harness_ports import reset_harness_ports
+    from infrastructure.harness_ports import reset_harness_ports
     from surfaces.shared.terminal.output.boundary import install_harness_ports
 
     install_harness_ports()
@@ -149,7 +146,7 @@ def _reset_setup_state_cache() -> None:
     stores, so a test whose stores happen to match an earlier one would read
     the earlier block and pass or fail for the wrong reason.
     """
-    from platform.setup_state import clear_setup_state_cache
+    from infrastructure.setup_state import clear_setup_state_cache
 
     clear_setup_state_cache()
 

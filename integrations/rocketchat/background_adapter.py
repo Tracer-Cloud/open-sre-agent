@@ -2,12 +2,12 @@
 
 from __future__ import annotations
 
-from platform.delivery.notifications.outbound_registry import (
+from infrastructure.delivery.notifications.outbound_registry import (
     BACKGROUND_RCA,
     register_outbound_adapter,
 )
-from platform.delivery.notifications.rca_summary import summary_sections
-from platform.scheduling.background_investigations.types import BackgroundInvestigationRecord
+from infrastructure.delivery.notifications.rca_summary import summary_sections
+from infrastructure.scheduling.background_investigations.types import BackgroundInvestigationRecord
 
 
 def deliver_rocketchat_notification(record: BackgroundInvestigationRecord) -> str:
@@ -20,13 +20,13 @@ def deliver_rocketchat_notification(record: BackgroundInvestigationRecord) -> st
     """
     # Imported lazily: rocketchat delivery only fires on background-RCA completion,
     # so the rocketchat client must not load into the base REPL boot import path.
+    from infrastructure.delivery.notifications.redaction import redact_token
     from integrations.catalog import resolve_effective_integrations
     from integrations.rocketchat.delivery import (
         post_rocketchat_message,
         post_rocketchat_webhook,
     )
     from integrations.smtp.delivery import format_background_rca_email
-    from platform.delivery.notifications.redaction import redact_token
 
     entry = resolve_effective_integrations().get("rocketchat") or {}
     config = entry.get("config") if isinstance(entry, dict) else None

@@ -16,7 +16,7 @@ from gateway.transports.slack.client import (
     Blocks,
     SlackMessagingClient,
 )
-from platform.text.truncation import truncate
+from infrastructure.text.truncation import truncate
 
 logger = logging.getLogger("gateway")
 

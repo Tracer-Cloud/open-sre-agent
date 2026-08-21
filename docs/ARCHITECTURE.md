@@ -157,7 +157,7 @@ The shared runtime and cross-cutting services the capability layer is built on.
   helpers (`core/tool_framework`),
   shared LLM clients (`core/llm`), agent-harness
   session handling (`core/agent_harness`), and pure domain rules (`core/domain`).
-- **`platform/`** — cross-cutting services with no investigation logic of their
+- **`infrastructure/`** — cross-cutting services with no investigation logic of their
   own: guardrails, masking, sandbox, analytics, auth, notifications,
   observability, scheduler, and deployment. It deliberately shadows the stdlib
   `platform` name and re-exposes it, so `import platform` still works.

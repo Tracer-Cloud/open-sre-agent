@@ -14,7 +14,7 @@ from rich.markup import escape
 from rich.panel import Panel
 
 from core.domain.alerts.inbox import IncomingAlert
-from platform.terminal.theme import (
+from infrastructure.terminal.theme import (
     DIM,
     INCOMING_ALERT_ACCENT,
     TEXT,

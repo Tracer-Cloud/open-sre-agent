@@ -18,26 +18,22 @@ from fastapi import FastAPI, Request, Response
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, ValidationError
 
+from bootstrap.process import WEB_PROFILE, configure_process
 from config.config import LLMSettings, get_environment
-from config.platform_bootstrap import ensure_project_platform_package
 from config.version import get_opensre_version
-
-ensure_project_platform_package()
-
-from bootstrap.process import WEB_PROFILE, configure_process  # noqa: E402
-from core.agent_harness import AgentSession  # noqa: E402
-from gateway.core.process.readiness import is_gateway_ready  # noqa: E402
-from gateway.core.storage import open_database  # noqa: E402
-from gateway.core.storage.investigations.repository import investigation_repository  # noqa: E402
-from gateway.web.investigations import router as investigations_router  # noqa: E402
-from platform.alert_intake import (  # noqa: E402
+from core.agent_harness import AgentSession
+from gateway.core.process.readiness import is_gateway_ready
+from gateway.core.storage import open_database
+from gateway.core.storage.investigations.repository import investigation_repository
+from gateway.web.investigations import router as investigations_router
+from infrastructure.alert_intake import (
     MAX_ALERT_BODY_BYTES,
     require_local_or_token,
 )
-from platform.alert_intake import router as alert_router  # noqa: E402
-from platform.observability.errors.sentry import capture_exception  # noqa: E402
-from platform.process.turn_capacity import turn_slot  # noqa: E402
-from tools.investigation.capability import resolve_investigation_context  # noqa: E402
+from infrastructure.alert_intake import router as alert_router
+from infrastructure.observability.errors.sentry import capture_exception
+from infrastructure.process.turn_capacity import turn_slot
+from tools.investigation.capability import resolve_investigation_context
 
 # Standalone uvicorn and in-process gateway both need adapters for /investigate.
 configure_process(WEB_PROFILE)  # env → sentry → adapters
@@ -122,7 +118,7 @@ def investigate(req: InvestigateRequest, request: Request) -> InvestigateRespons
     if (auth_error := require_local_or_token(request)) is not None:
         return auth_error
 
-    from platform.turn_host.concurrency import AT_CAPACITY_MESSAGE, process_turn_gate
+    from infrastructure.turn_host.concurrency import AT_CAPACITY_MESSAGE, process_turn_gate
 
     # Drop rather than queue: the caller is holding an HTTP connection open, so
     # it gets an answer now. Same gate chat and the scheduler take, same sentence

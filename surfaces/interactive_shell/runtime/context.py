@@ -97,7 +97,7 @@ class ReplRuntimeContext(BaseModel):
 
 
 def _current_theme_name() -> str:
-    from platform.terminal.theme import get_active_theme_name
+    from infrastructure.terminal.theme import get_active_theme_name
 
     return get_active_theme_name()
 
@@ -140,7 +140,7 @@ def create_repl_runtime_context(
         hydrate_integrations=hydrate_integrations,
         persistent_tasks=persistent_tasks,
     )
-    from platform.observability.trace.spans import set_session_trace_store
+    from infrastructure.observability.trace.spans import set_session_trace_store
 
     set_session_trace_store(jsonl_trace_store_for_session(prepared_session))
     mutable_state = create_repl_mutable_state(state=state, spinner=spinner)

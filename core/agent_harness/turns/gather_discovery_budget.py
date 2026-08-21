@@ -14,7 +14,7 @@ This hook:
   not a vendor allow-list.
 * Treats structured ``tool_name`` targets as discovery unless they are a
   registered metric query tool (vendors opt in via
-  :func:`~platform.harness_ports.register_metric_query_tools`).
+  :func:`~infrastructure.harness_ports.register_metric_query_tools`).
 * Dedupes exact discovery fingerprints for the gather turn (command text /
   tool target; ``context`` prose is ignored).
 * Caps how many discovery-style calls may run (including failed ones);
@@ -35,7 +35,7 @@ from core.tool.execution import (
     ToolExecutionRequest,
     ToolExecutionResult,
 )
-from platform.harness_ports import (
+from infrastructure.harness_ports import (
     registered_discovery_targets,
     registered_metric_query_tools,
 )
@@ -127,7 +127,7 @@ def is_mcp_metric_target(target: str) -> bool:
     """True for MCP tools registered as live metric / query fetches.
 
     Vendors declare names via
-    :func:`~platform.harness_ports.register_metric_query_tools`. Core must not
+    :func:`~infrastructure.harness_ports.register_metric_query_tools`. Core must not
     hard-code PostHog ``execute-sql`` / ``query-*`` conventions here.
     """
     name = target.strip().lower()

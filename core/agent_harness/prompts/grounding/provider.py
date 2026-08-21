@@ -12,7 +12,7 @@ from core.agent_harness.grounding.investigation_flow_reference import (
 from core.agent_harness.prompts.assistant.environment import build_environment_block
 from core.agent_harness.prompts.kernel.surfaces import profile_for
 from core.llm.provider_models import resolve_provider_models
-from platform.observability.trace.spans import component_span
+from infrastructure.observability.trace.spans import component_span
 
 # Minimum retrieval score for a docs page to ground an assistant answer. A
 # genuine setup/config question scores ~30 on its page (slug + exact-slug +
@@ -142,11 +142,11 @@ class DefaultPromptContextProvider:
     def setup_state(self) -> str:
         """The install's integrations and schedules, recomputed when they change.
 
-        Shares the memoized block in :mod:`platform.setup_state`, so connecting
+        Shares the memoized block in :mod:`infrastructure.setup_state`, so connecting
         an integration or adding a schedule mid-session shows up on the next
         turn instead of serving the first turn's facts all session.
         """
-        from platform.setup_state import cached_setup_state
+        from infrastructure.setup_state import cached_setup_state
 
         profile = profile_for(self._surface)
         if not profile.setup_state:

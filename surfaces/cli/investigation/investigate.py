@@ -10,7 +10,7 @@ from collections.abc import Generator
 from typing import TYPE_CHECKING, Any, NoReturn
 
 from core.domain.stream import StreamEvent
-from platform.observability.trace.hook import traceable
+from infrastructure.observability.trace.hook import traceable
 from surfaces.cli.error_mapping import reraise_cli_runtime_error
 from tools.investigation.session_runner import InvestigationPumpCancelled, check_llm_settings
 
@@ -19,7 +19,7 @@ _logger = logging.getLogger(__name__)
 _SESSION_EVENT_POLL_SECONDS = 0.25
 
 if TYPE_CHECKING:
-    from platform.analytics.cli import InvestigationTracker
+    from infrastructure.analytics.cli import InvestigationTracker
 
 
 def _reraise_cli_investigation_failure(exc: BaseException) -> NoReturn:
@@ -133,7 +133,7 @@ def stream_investigation_cli(
             except queue.Empty:
                 continue
             if isinstance(item, BaseException):
-                from platform.analytics.investigation_loop import (
+                from infrastructure.analytics.investigation_loop import (
                     publish_loop_metrics_from_stream_failure,
                 )
 

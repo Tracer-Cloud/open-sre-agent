@@ -13,7 +13,7 @@ from rich.console import Console
 from rich.markup import escape
 from rich.text import Text
 
-from platform.terminal.theme import (
+from infrastructure.terminal.theme import (
     BOLD_BRAND,
     DIM,
     ERROR,

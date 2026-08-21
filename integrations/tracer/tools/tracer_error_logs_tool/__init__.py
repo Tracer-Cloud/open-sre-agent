@@ -6,8 +6,8 @@ from typing import Any
 
 from core.domain.types.tools import ToolSurface
 from core.tool_framework.tool_decorator import tool
+from infrastructure.evidence.log_compaction import build_error_taxonomy, deduplicate_logs
 from integrations.tracer import get_tracer_web_client
-from platform.evidence.log_compaction import build_error_taxonomy, deduplicate_logs
 
 
 def _error_logs_available(sources: dict[str, dict]) -> bool:

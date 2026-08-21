@@ -11,7 +11,7 @@ from rich.console import Console
 from rich.markup import escape
 from rich.table import Table
 
-from platform.terminal import theme as ui_theme
+from infrastructure.terminal import theme as ui_theme
 from surfaces.interactive_shell.command_registry.types import SlashCommand
 from surfaces.shared.terminal.components.choice_menu import (
     erase_menu_lines,

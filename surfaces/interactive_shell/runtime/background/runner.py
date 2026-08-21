@@ -13,9 +13,9 @@ from prompt_toolkit.patch_stdout import patch_stdout
 from rich.console import Console
 from rich.markup import escape
 
-from platform.analytics.cli import track_investigation
-from platform.analytics.source import EntrypointSource, TriggerMode
-from platform.errors import OpenSREError
+from infrastructure.analytics.cli import track_investigation
+from infrastructure.analytics.source import EntrypointSource, TriggerMode
+from infrastructure.errors import OpenSREError
 from surfaces.interactive_shell.runtime import (
     BackgroundInvestigationRecord,
     Session,
@@ -41,7 +41,7 @@ def _persist_record(session: Session, record: BackgroundInvestigationRecord) -> 
     Failures report through both channels the arms above use, because the CLI
     configures no logging and a lost record is otherwise invisible.
     """
-    from platform.scheduling.background_investigations.store import (
+    from infrastructure.scheduling.background_investigations.store import (
         UnreadableBackgroundInvestigationsError,
         background_investigation_store,
     )
@@ -152,7 +152,7 @@ def _start_background_investigation(
     session.terminal.background_investigations[task.task_id] = record
 
     def _worker() -> None:
-        from platform.analytics.usage_context import UsageSurface, bound_usage_context
+        from infrastructure.analytics.usage_context import UsageSurface, bound_usage_context
 
         with bound_usage_context(
             surface=UsageSurface.CLI,

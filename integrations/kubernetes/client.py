@@ -22,9 +22,9 @@ from kubernetes import config as k8s_config
 from kubernetes.client.exceptions import ApiException
 from kubernetes.config.config_exception import ConfigException
 
+from infrastructure.observability.errors.service import capture_service_error
 from integrations.config_models import KubernetesIntegrationConfig
 from integrations.probes import ProbeResult
-from platform.observability.errors.service import capture_service_error
 
 logger = logging.getLogger(__name__)
 

@@ -13,7 +13,7 @@ from core.domain.types.upstream import (
     TopologyHint,
     UpstreamEvidenceBundle,
 )
-from platform.analytics.cli import (
+from infrastructure.analytics.cli import (
     capture_test_run_completed,
     capture_test_run_failed,
     capture_test_run_started,
@@ -23,7 +23,7 @@ from platform.analytics.cli import (
     capture_tests_listed,
     capture_tests_picker_opened,
 )
-from platform.process.runtime_flags import is_json_output, is_yes
+from infrastructure.process.runtime_flags import is_json_output, is_yes
 from surfaces.shared.error_handling.errors import OpenSREError
 from tools.investigation.reporting.upstream_correlation.runtime import (
     build_runtime_correlation,

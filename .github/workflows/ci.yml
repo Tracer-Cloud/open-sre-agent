@@ -8,7 +8,7 @@ on:
       - "config/**"
       - "core/**"
       - "integrations/**"
-      - "platform/**"
+      - "infrastructure/**"
       - "tools/**"
       - "gateway/**"
       - "tests/**"
@@ -60,7 +60,7 @@ jobs:
               - "config/**"
               - "core/**"
               - "integrations/**"
-              - "platform/**"
+              - "infrastructure/**"
               - "tools/**"
               - "gateway/**"
               - "tests/**"
@@ -147,7 +147,7 @@ jobs:
             pytest_paths: >-
               tests/tools
               tests/core
-              tests/platform
+              tests/infrastructure
               tests/utils
               tests/masking
               tests/watch_dog

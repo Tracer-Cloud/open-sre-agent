@@ -13,9 +13,9 @@ from pydantic import BaseModel
 
 from core.llm.types import ToolCall
 from core.tool.contracts import AgentTool, AgentToolContext, RuntimeTool
-from platform.observability.errors.boundary import report_exception
-from platform.observability.trace.redaction import redact_sensitive
-from platform.observability.trace.spans import mark_span_outcome, tool_span
+from infrastructure.observability.errors.boundary import report_exception
+from infrastructure.observability.trace.redaction import redact_sensitive
+from infrastructure.observability.trace.spans import mark_span_outcome, tool_span
 
 logger = logging.getLogger(__name__)
 _TOOL_LOGGER = logging.getLogger("tools")

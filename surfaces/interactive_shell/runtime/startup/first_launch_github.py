@@ -10,7 +10,7 @@ An offline A/B test splits installs into:
 * ``forced`` — skip is removed; abandoning the gate aborts REPL startup
 
 Variant assignment is sticky per install anonymous id (see
-``platform.analytics.cli.resolve_github_gate_variant``). Override with
+``infrastructure.analytics.cli.resolve_github_gate_variant``). Override with
 ``OPENSRE_GITHUB_GATE_VARIANT=control|forced`` for local testing.
 
 Escape hatch: ``OPENSRE_SKIP_GITHUB_LOGIN=1`` bypasses the gate so a GitHub
@@ -32,7 +32,7 @@ from rich.console import Console
 from rich.markup import escape
 
 from config.repl_config import read_github_login_deferred, write_github_login_deferred
-from platform.analytics.cli import (
+from infrastructure.analytics.cli import (
     GITHUB_FAIL_DEVICE_FLOW,
     GITHUB_FAIL_TRANSPORT,
     GITHUB_FAIL_VERIFY,
@@ -48,8 +48,8 @@ from platform.analytics.cli import (
     resolve_github_gate_variant,
     stamp_github_gate_variant,
 )
-from platform.analytics.source import is_test_run
-from platform.terminal.theme import DEVICE_CODE
+from infrastructure.analytics.source import is_test_run
+from infrastructure.terminal.theme import DEVICE_CODE
 from surfaces.interactive_shell.ui import repl_tty_interactive
 
 _SKIP_ENV_VAR = "OPENSRE_SKIP_GITHUB_LOGIN"

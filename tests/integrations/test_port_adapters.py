@@ -6,21 +6,21 @@ from collections.abc import Iterator
 
 import pytest
 
-import platform.harness_ports as harness_ports
-from integrations.tracer.integrations_adapter import fetch_tracer_remote_integrations
-from platform.observability import NoopProgressTracker
-from platform.observability.render import debug as obs_debug
-from platform.observability.render import display as obs_display
-from platform.observability.render import progress as obs_progress
-from platform.observability.render.debug import set_debug_printer
-from platform.observability.render.display import (
+import infrastructure.harness_ports as harness_ports
+from infrastructure.observability import NoopProgressTracker
+from infrastructure.observability.render import debug as obs_debug
+from infrastructure.observability.render import display as obs_display
+from infrastructure.observability.render import progress as obs_progress
+from infrastructure.observability.render.debug import set_debug_printer
+from infrastructure.observability.render.display import (
     set_investigation_footer_renderer,
     set_investigation_header_renderer,
 )
-from platform.observability.render.progress import (
+from infrastructure.observability.render.progress import (
     set_progress_tracker,
     set_progress_tracker_factory,
 )
+from integrations.tracer.integrations_adapter import fetch_tracer_remote_integrations
 from surfaces.shared.terminal.output import boundary as output_boundary
 
 

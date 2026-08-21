@@ -133,7 +133,7 @@ def _run_env(_profile: ProcessProfile, _log: logging.Logger) -> None:
 
 
 def _run_sentry(profile: ProcessProfile, _log: logging.Logger) -> None:
-    from platform.observability.errors.sentry import init_sentry
+    from infrastructure.observability.errors.sentry import init_sentry
 
     init_sentry(entrypoint=profile.sentry_entrypoint)
 
@@ -147,7 +147,7 @@ def _run_scheduler_runners(_profile: ProcessProfile, _log: logging.Logger) -> No
 
 
 def _run_capability_warnings(profile: ProcessProfile, log: logging.Logger) -> None:
-    from platform.safety.sandbox.capabilities import boot_capability_warnings
+    from infrastructure.safety.sandbox.capabilities import boot_capability_warnings
 
     for warning in boot_capability_warnings():
         log.warning("[%s] capability: %s", profile.name, warning)
@@ -182,15 +182,10 @@ def configure_process(
 ) -> None:
     """Run the steps ``profile`` opted into, in the shared order. Idempotent.
 
-    Always establishes the first-party ``platform`` package (and its import
-    guard) before any profile step that may ``from platform…``. Logging
-    configuration is the caller's responsibility.
+    Logging configuration is the caller's responsibility.
     """
     if profile.name in _configured_profiles:
         return
-    from config.platform_bootstrap import ensure_project_platform_package
-
-    ensure_project_platform_package()
     log = logger or _LOG
     for step, run in _STEP_ORDER:
         if step in profile.steps:

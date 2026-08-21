@@ -20,13 +20,13 @@ import logging
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
-from platform.analytics.cli import (
+from infrastructure.analytics.cli import (
     capture_loop_suggestion_prompted,
     capture_loop_suggestion_selected,
     capture_loop_suggestion_skipped,
 )
-from platform.analytics.source import is_test_run
-from platform.terminal.theme import DIM
+from infrastructure.analytics.source import is_test_run
+from infrastructure.terminal.theme import DIM
 from surfaces.shared.terminal.components.choice_menu import (
     repl_choose_one,
     repl_tty_interactive,
@@ -95,7 +95,7 @@ _SUGGESTIONS_BY_OPTION = {suggestion.option: suggestion for suggestion in LOOP_S
 
 
 def _no_loops_configured() -> bool:
-    from platform.scheduling.scheduler.store import list_tasks
+    from infrastructure.scheduling.scheduler.store import list_tasks
 
     return not list_tasks()
 

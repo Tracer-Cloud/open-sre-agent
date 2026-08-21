@@ -29,9 +29,9 @@ from core.provider import ProviderHooks, ProviderRequest
 from core.state import InvestigationState
 from core.state.evidence import EvidenceEntry
 from core.tool import RegisteredTool, RuntimeTool
-from platform.observability import debug_print
-from platform.observability import get_progress_tracker as get_tracker
-from platform.observability.trace.redaction import (
+from infrastructure.observability import debug_print
+from infrastructure.observability import get_progress_tracker as get_tracker
+from infrastructure.observability.trace.redaction import (
     RedactedToolView,
     redact_sensitive,
     redact_tool_view,

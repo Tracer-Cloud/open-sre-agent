@@ -69,7 +69,7 @@ def test_constants_module_stays_a_leaf(module: str) -> None:
     source = _Path(f"config/constants/{module}.py").read_text(encoding="utf-8")
 
     # Assert: no upward import of a sibling top-level package.
-    for package in ("integrations", "gateway", "core", "platform", "tools", "surfaces"):
+    for package in ("integrations", "gateway", "core", "infrastructure", "tools", "surfaces"):
         assert f"import {package}" not in source
         assert f"from {package}" not in source
 

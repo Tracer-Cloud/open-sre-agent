@@ -23,8 +23,7 @@ from config.llm_auth.provider_catalog import API_KEY_PROVIDER_ENVS
 from config.llm_credentials import get_keyring_setup_instructions, save_keyring_secret
 from config.setup_store import get_store_path, load_local_config
 from config.version import get_opensre_version
-from integrations.store import get_integration
-from platform.terminal.theme import (
+from infrastructure.terminal.theme import (
     BG,
     BRAND,
     DIM,
@@ -37,6 +36,7 @@ from platform.terminal.theme import (
     TEXT,
     WARNING,
 )
+from integrations.store import get_integration
 from surfaces.cli.wizard.integration_health import IntegrationHealthResult
 from surfaces.cli.wizard.probes import ProbeResult
 from surfaces.cli.wizard.prompts import select as select_prompt
