@@ -93,25 +93,26 @@ docker run -d --name opensearch-dev -p 127.0.0.1:9201:9200 \
   -e "OPENSEARCH_JAVA_OPTS=-Xms256m -Xmx256m" \
   opensearchproject/opensearch:2
 
-until curl -sf -o /dev/null http://localhost:9201; do sleep 2; done
+i=0; until curl -sf -o /dev/null http://localhost:9201 || [ $i -ge 30 ]; do sleep 2; i=$((i+1)); done
+[ $i -lt 30 ] || { echo "ERROR: OpenSearch never became ready" >&2; exit 1; }
 ```
 
 Seed the index with an error **and** a non-error log line — both are needed to match the two-record output shown below. The tools sort on `@timestamp`, so use that field name, not `timestamp`:
 
 ```bash
-curl -s -X POST "http://localhost:9201/logs-app/_doc" -H "Content-Type: application/json" -d '{
+curl -sf -X POST "http://localhost:9201/logs-app/_doc" -H "Content-Type: application/json" -d '{
   "@timestamp": "'"$(date -u +%Y-%m-%dT%H:%M:%S)"'Z",
   "level": "ERROR",
   "message": "payment-service: connection timeout while calling billing-api",
   "service": "payment-service"
-}'
-curl -s -X POST "http://localhost:9201/logs-app/_doc" -H "Content-Type: application/json" -d '{
+}' > /dev/null
+curl -sf -X POST "http://localhost:9201/logs-app/_doc" -H "Content-Type: application/json" -d '{
   "@timestamp": "'"$(date -u +%Y-%m-%dT%H:%M:%S)"'Z",
   "level": "INFO",
   "message": "payment-service: request completed",
   "service": "payment-service"
-}'
-curl -s -X POST "http://localhost:9201/logs-app/_refresh"
+}' > /dev/null
+curl -sf -X POST "http://localhost:9201/logs-app/_refresh" > /dev/null
 ```
 
 ```bash
@@ -132,7 +133,8 @@ opensearch │ local env │ ✓ passed │ Configured for OpenSearch at
 
 Register the local instance in the persistent store — `opensre investigate` only treats an integration as active once it is in the store, unlike `verify` which also accepts plain env vars:
 
-```python
+```bash
+python3 <<'PYEOF'
 import json, pathlib
 
 path = pathlib.Path.home() / ".opensre" / "integrations.json"
@@ -146,6 +148,7 @@ store["integrations"].append({
 })
 path.parent.mkdir(parents=True, exist_ok=True)
 path.write_text(json.dumps(store, indent=2))
+PYEOF
 ```
 
 Trigger a real investigation against the seeded index — this is the actual supported entrypoint, not an internal import:
@@ -178,13 +181,15 @@ The agent found the seeded error via `query_elasticsearch_logs` and didn't need 
 
 Remove the demo entry when done:
 
-```python
+```bash
+python3 <<'PYEOF'
 import json, pathlib
 
 path = pathlib.Path.home() / ".opensre" / "integrations.json"
 store = json.loads(path.read_text())
 store["integrations"] = [i for i in store["integrations"] if i["id"] != "opensearch-local-demo"]
 path.write_text(json.dumps(store, indent=2))
+PYEOF
 ```
 
 Teardown:
