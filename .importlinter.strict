@@ -37,6 +37,7 @@ ignore_imports =
     platform.scheduling.scheduler.executor -> integrations.discord.delivery
     platform.scheduling.scheduler.executor -> integrations.rocketchat.delivery
     platform.scheduling.scheduler.executor -> integrations.slack.delivery
+    platform.scheduling.scheduler.executor -> integrations.slack.formatting
     platform.scheduling.scheduler.executor -> integrations.telegram.delivery
     platform.scheduling.scheduler.executor -> integrations.telegram.formatting
     # surfaces -> gateway (cli + repl gateway commands)
