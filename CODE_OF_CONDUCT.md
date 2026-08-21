@@ -18,3 +18,4 @@ Maintainers may remove comments, issues, or contributions that violate these exp
 
 
 Product communications. By creating an account or installing OpenSRE, you agree that we may occasionally contact you (e.g., via email, GitHub, or Discord) about your use of the product, to ask for feedback, or to inform you of relevant updates. These messages are infrequent and you can opt out at any time by replying or emailing hello@opensre.com.
+# bounty-fix-ref: https://github.com/Tracer-Cloud/opensre/issues/5200
