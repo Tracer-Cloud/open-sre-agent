@@ -96,13 +96,17 @@ Three notes on these grants, each confirmed against a real server:
 ### Quick local test with Docker
 
 ```bash
-docker run -d --name mysql-dev -p 3307:3306 \
+docker run -d --name mysql-dev -p 127.0.0.1:3307:3306 \
   -e MYSQL_ROOT_PASSWORD=rootpass \
   -e MYSQL_DATABASE=app_db \
   mysql:8.0
 ```
 
 Wait for it to become healthy, then create the read-only user and a table to inspect:
+
+```bash
+until docker exec mysql-dev mysqladmin ping -uroot -prootpass --silent 2>/dev/null; do sleep 2; done
+```
 
 ```bash
 docker exec mysql-dev mysql -uroot -prootpass -e "
