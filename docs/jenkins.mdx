@@ -75,7 +75,7 @@ instance.setAuthorizationStrategy(strategy)
 instance.save()
 EOF
 
-docker run -d --name jenkins-dev -p 8090:8080 \
+docker run -d --name jenkins-dev -p 127.0.0.1:8090:8080 \
   -e JAVA_OPTS="-Djenkins.install.runSetupWizard=false" \
   -v /tmp/jenkins-init/basic-security.groovy:/usr/share/jenkins/ref/init.groovy.d/basic-security.groovy \
   jenkins/jenkins:lts-jdk17
@@ -121,32 +121,70 @@ jenkins │ local env │ ✓ passed │ Jenkins connectivity successful at
         │           │          │ http://localhost:8090 (node: built-in)
 ```
 
-`list_jenkins_builds` is what the agent calls internally during an investigation — call it directly here only to see the real shape of its result (it is an internal function, not a public API, and may move):
+Register the local instance in the persistent store. Plain env vars are read by `opensre integrations verify`, but `opensre investigate` only treats an integration as active once it is in the store — this appends to `~/.opensre/integrations.json` without touching anything already there:
 
 ```python
-from integrations.jenkins.tools import list_jenkins_builds
-list_jenkins_builds(job_name="payment-service-deploy")
+import json, pathlib
+
+path = pathlib.Path.home() / ".opensre" / "integrations.json"
+store = json.loads(path.read_text()) if path.exists() else {"version": 2, "integrations": []}
+store["integrations"] = [i for i in store["integrations"] if i["id"] != "jenkins-local-demo"]
+store["integrations"].append({
+    "id": "jenkins-local-demo",
+    "service": "jenkins",
+    "status": "active",
+    "instances": [{
+        "name": "default",
+        "tags": {},
+        "credentials": {"base_url": "http://localhost:8090", "username": "admin", "api_token": "admin"},
+    }],
+})
+path.parent.mkdir(parents=True, exist_ok=True)
+path.write_text(json.dumps(store, indent=2))
 ```
 
-```json
-{
-  "source": "jenkins",
-  "available": true,
-  "job": "payment-service-deploy",
-  "builds": [
-    {
-      "job": "payment-service-deploy",
-      "number": 1,
-      "status": "SUCCESS",
-      "building": false,
-      "timestamp": "2026-08-20T15:57:21.969000+00:00",
-      "duration_ms": 2103,
-      "url": "http://localhost:8090/job/payment-service-deploy/1/"
-    }
-  ],
-  "failed_builds": [],
-  "total": 1
-}
+Trigger a real investigation against the failing build — this exercises `list_jenkins_jobs`, `list_jenkins_running_builds`, `get_jenkins_pipeline_stages`, and `get_jenkins_build_log` in a single supported turn (not a raw internal import):
+
+```bash
+opensre investigate --input-json '{
+  "alert_name": "JenkinsBuildFailed",
+  "severity": "critical",
+  "commonAnnotations": {
+    "summary": "Jenkins job payment-service-deploy failed on latest build",
+    "job_name": "payment-service-deploy"
+  }
+}'
+```
+
+Real output from a run against this exact local build (edited for length):
+
+```
+Loading integrations: jenkins
+↳ Jenkins · list jenkins jobs
+↳ Jenkins · list jenkins running builds
+↳ Jenkins · get jenkins pipeline stages
+↳ Jenkins · get jenkins build log
+
+root_cause: "The Jenkins freestyle job `payment-service-deploy` is
+misconfigured: its only 'Execute shell' build step is a placeholder
+that runs `echo deploying payment-service` followed by `exit 1`.
+The job has no actual deployment logic, so every build fails
+deterministically."
+
+validity_score: 0.95
+Cited Evidence: list jenkins jobs, list jenkins running builds,
+                get jenkins pipeline stages, get jenkins build log
+```
+
+Remove the demo entry when done:
+
+```python
+import json, pathlib
+
+path = pathlib.Path.home() / ".opensre" / "integrations.json"
+store = json.loads(path.read_text())
+store["integrations"] = [i for i in store["integrations"] if i["id"] != "jenkins-local-demo"]
+path.write_text(json.dumps(store, indent=2))
 ```
 
 Teardown:
