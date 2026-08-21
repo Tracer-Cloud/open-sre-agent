@@ -16,9 +16,9 @@ from core.agent_harness.turns.metric_query_floor import (
     apply_unformed_metric_floor,
     gather_formed_live_metric_query,
 )
+from infrastructure.harness_ports import clear_metric_query_drafts
 from integrations.grafana.metric_drafts import register_grafana_metric_drafts
 from integrations.posthog_mcp.metric_drafts import register_posthog_mcp_metric_drafts
-from platform.harness_ports import clear_metric_query_drafts
 
 
 @pytest.fixture(autouse=True)

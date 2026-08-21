@@ -11,7 +11,7 @@ root_packages =
     core
     gateway
     integrations
-    platform
+    infrastructure
     tools
 
 [importlinter:contract:opensre-layers]
@@ -22,28 +22,27 @@ layers =
     bootstrap
     tools | integrations
     # ``:`` = siblings may cross-import (import-linter multi-item layers).
-    # ``|`` would forbid core <-> platform, but both packages depend on each other.
-    core : platform
+    # ``|`` would forbid core <-> infrastructure, but both packages depend on each other.
+    core : infrastructure
     config
 ignore_imports =
     # config upward imports (T-4 debt — refactor into lower layers)
     config.config -> core.llm.providers.azure_openai
     config.llm_auth.credentials -> integrations.llm_cli.registry
-    config.repl_config -> platform.terminal.theme
-    # platform -> integrations (T-4 debt — scheduler / observability)
-    platform.analytics.cli -> integrations.github.identity
-    platform.observability.errors.sentry -> integrations.llm_cli.errors
-    platform.scheduling.scheduler.credentials -> integrations.catalog
-    platform.scheduling.scheduler.executor -> integrations.discord.delivery
-    platform.scheduling.scheduler.executor -> integrations.rocketchat.delivery
-    platform.scheduling.scheduler.executor -> integrations.slack.delivery
-    platform.scheduling.scheduler.executor -> integrations.telegram.delivery
-    platform.scheduling.scheduler.executor -> integrations.telegram.formatting
+    config.repl_config -> infrastructure.terminal.theme
+    # infrastructure -> integrations (T-4 debt — scheduler / observability)
+    infrastructure.analytics.cli -> integrations.github.identity
+    infrastructure.observability.errors.sentry -> integrations.llm_cli.errors
+    infrastructure.scheduling.scheduler.credentials -> integrations.catalog
+    infrastructure.scheduling.scheduler.executor -> integrations.discord.delivery
+    infrastructure.scheduling.scheduler.executor -> integrations.rocketchat.delivery
+    infrastructure.scheduling.scheduler.executor -> integrations.slack.delivery
+    infrastructure.scheduling.scheduler.executor -> integrations.telegram.delivery
+    infrastructure.scheduling.scheduler.executor -> integrations.telegram.formatting
     # surfaces -> gateway (cli + repl gateway commands)
     surfaces.cli.commands.gateway -> gateway.core.process
     surfaces.gateway_entry -> gateway.core.lifecycle.controller
     surfaces.interactive_shell.command_registry.gateway_cmds -> gateway.core.process
-    surfaces.interactive_shell.controller -> gateway.web.web_server
     # tools -> integrations (T-4 debt — vendor tools / reporting)
     tools.cross_vendor.fix_sentry_issue.context -> integrations.sentry
     tools.cross_vendor.fix_sentry_issue.context -> integrations.sentry.issue_url

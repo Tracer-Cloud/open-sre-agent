@@ -1,7 +1,7 @@
 """Package guard for the OpenSRE messaging gateway.
 
 This module is intentionally **not** a production composition root: slash-command
-ports are wired by the CLI composition root outside this package. Starting here
+ports are injected by the CLI composition root outside this package. Starting here
 would boot chat without ``slash_invoke``.
 
 Production: ``opensre gateway start`` / ``opensre gateway start --foreground``.

@@ -116,7 +116,7 @@ def test_ensure_turn_cancel_reuses_existing_event() -> None:
 
 
 def test_bindable_output_exposes_turn_cancel_property() -> None:
-    from gateway.core.host.bindable_output import BindableOutput
+    from infrastructure.turn_host.bindable_output import BindableOutput
 
     class _Inner:
         def __init__(self) -> None:
@@ -135,8 +135,8 @@ def test_bindable_output_exposes_turn_cancel_property() -> None:
             _ = (label, chunks)
             return ""
 
-        def finalize(self, text: str) -> None:
-            _ = text
+        def finalize(self, answer: str) -> None:
+            _ = answer
 
     inner = _Inner()
     bindable = BindableOutput()

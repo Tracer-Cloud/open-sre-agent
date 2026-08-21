@@ -9,7 +9,7 @@ from dataclasses import dataclass
 from enum import StrEnum
 from pathlib import Path
 
-from platform.scheduling.task_types import TaskKind
+from infrastructure.scheduling.task_types import TaskKind
 from tools.interactive_shell.shared import (
     ExecutionPolicyResult,
     ToolExecutionMode,

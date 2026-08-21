@@ -3,14 +3,14 @@
 from __future__ import annotations
 
 from config.constants.filestorage import DEFAULT_REMOTE_SYNC_PROVIDER
-from platform.filestorage.engine import resolve_direction
-from platform.filestorage.enums import (
+from infrastructure.filestorage.engine import resolve_direction
+from infrastructure.filestorage.enums import (
     BuiltInProvider,
     RemoteSyncSubcommand,
     SyncDirection,
     SyncRootName,
 )
-from platform.filestorage.syncable import syncable_roots
+from infrastructure.filestorage.syncable import syncable_roots
 
 
 def test_builtin_provider_matches_env_default() -> None:

@@ -15,6 +15,7 @@ from core.agent_harness import OutputSink
 from core.agent_harness.spi.defaults import DefaultErrorReporter
 from core.agent_harness.spi.session_goal import strip_session_goal_progress_tags
 from core.llm.shared.llm_retry import CREDIT_EXHAUSTED_MARKER
+from surfaces.interactive_shell.ui import DIM
 from surfaces.interactive_shell.ui.streaming import (
     StreamPaintResult,
     finish_deferred_closer,
@@ -62,6 +63,7 @@ class ShellOutputSink:
         self._console.print(message, markup=False)
 
     def render_response_header(self, label: str) -> None:
+        self._console.print()
         render_response_header(self._console, label)
 
     def render_error(self, message: str) -> None:
@@ -73,6 +75,23 @@ class ShellOutputSink:
                 "[dim]Or run /auth login <provider> to re-authenticate "
                 "or add a different provider.[/]"
             )
+
+    def set_tool_status(self, status: str) -> None:
+        """Show live progress for the running turn.
+
+        A chat placeholder holds one status line and rewrites it. A terminal has
+        no placeholder to rewrite, so each status is its own dim line.
+        """
+        if status:
+            self._console.print(f"[{DIM}]{escape(status)}[/]")
+
+    def finalize(self, answer: str) -> None:
+        """Do nothing: chat fills a placeholder here, and the terminal has none.
+
+        Terminal output lands as it happens, so by the time the host finalizes
+        an unstreamed turn there is nothing left to show.
+        """
+        _ = answer
 
     def stream(
         self,
@@ -101,7 +120,7 @@ class ShellOutputSink:
             suppress_if_starts_with=suppress_if_starts_with,
         )
 
-    def finish_streamed_response(self, text: str) -> None:
+    def finish_streamed_response(self, answer: str) -> None:
         """Flush a deferred / rewritten Want-me-to closer after gather normalize."""
         paint = self._paint
         defer = self._defer_want_me_to_closer
@@ -109,15 +128,15 @@ class ShellOutputSink:
         self._defer_want_me_to_closer = False
         if not defer or paint is None:
             return
-        if not paint.deferred_closer and text == paint.text:
+        if not paint.deferred_closer and answer == paint.text:
             return
         # Non-TTY deferred holds the entire answer until normalize.
         if not self._console.is_terminal and paint.deferred_closer:
-            publish_full_response(self._console, text)
+            publish_full_response(self._console, answer)
             return
         finish_deferred_closer(
             self._console,
-            text,
+            answer,
             footer_elapsed_s=paint.footer_elapsed_s,
             footer_total_bytes=paint.footer_total_bytes,
         )

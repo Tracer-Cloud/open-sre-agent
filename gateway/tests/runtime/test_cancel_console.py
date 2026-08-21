@@ -7,7 +7,7 @@ import threading
 
 from rich.console import Console
 
-from gateway.core.host.cancel_console import CancelConsole
+from infrastructure.turn_host.cancel_console import CancelConsole
 
 
 def _console() -> Console:

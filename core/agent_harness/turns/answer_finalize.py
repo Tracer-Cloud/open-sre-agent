@@ -37,7 +37,7 @@ from core.agent_harness.turns.handoff_policy import (
 )
 from core.agent_harness.turns.metric_query_floor import apply_unformed_metric_floor
 from core.agent_harness.turns.turn_route import RouteIntent
-from platform.harness_ports import integration_setup_command
+from infrastructure.harness_ports import integration_setup_command
 
 
 def should_suppress_want_me_to_for_session_goal(session: SessionState) -> bool:
@@ -65,17 +65,17 @@ class AnswerFinalizeResult:
     finish_stream: bool
 
 
-def finish_streamed_response(output: OutputSink | None, text: str) -> None:
+def finish_streamed_response(output: OutputSink | None, answer: str) -> None:
     """Flush deferred/rewritten gather paint on surfaces that support it."""
     if output is None:
         return
     finish = getattr(output, "finish_streamed_response", None)
     if callable(finish):
-        finish(text)
+        finish(answer)
         return
     finalize = getattr(output, "finalize", None)
     if callable(finalize):
-        finalize(text)
+        finalize(answer)
 
 
 def _offered_upgrade_ctas(session: SessionState) -> set[str]:

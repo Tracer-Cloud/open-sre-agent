@@ -83,15 +83,17 @@ def _alert_listener(
         yield None
         return
 
-    from gateway.web.web_server import WebAppServerHandle, serve_webapp_in_thread
+    from infrastructure.alert_intake import build_alert_intake_app
+    from infrastructure.asgi_server import AsgiServerHandle, serve_asgi_in_thread
 
     inbox: _alert_inbox.AlertInbox | None = None
-    handle: WebAppServerHandle | None = None
+    handle: AsgiServerHandle | None = None
     try:
         inbox = _alert_inbox.AlertInbox()
         _alert_inbox.set_current_inbox(inbox)
         with _alert_listener_token(cfg.alert_listener_token):
-            handle = serve_webapp_in_thread(
+            handle = serve_asgi_in_thread(
+                build_alert_intake_app(),
                 host=cfg.alert_listener_host,
                 port=cfg.alert_listener_port,
             )
@@ -187,7 +189,10 @@ class InteractiveShellController:
             self.spinner,
             self.runtime_context.pt_session,
         )
-        from surfaces.interactive_shell.runtime.shell_agent import build_shell_agent
+        # Lazy: TurnHandler pulls the agent/action stack — must not load at
+        # ``import surfaces.interactive_shell.main``.
+        from infrastructure.turn_host.turn_handler import TurnHandler
+        from surfaces.interactive_shell.runtime.shell_agent import shell_agent_build_config
 
         self.turn_runtime = AgentTurnResources(
             session=self.session,
@@ -196,10 +201,12 @@ class InteractiveShellController:
             invalidate_prompt=lambda: self.prompt.invalidate_prompt(),
             request_exit=self.prompt.request_exit,
             console=self.service_console,
-            agent=build_shell_agent(
-                self.session,
-                self.service_console,
-                request_exit=self.prompt.request_exit,
+            turn_handler=TurnHandler(
+                console=self.service_console,
+                agent_build=shell_agent_build_config(request_exit=self.prompt.request_exit),
+                # One handler for the REPL lifetime; /new and /resume rotate
+                # session_id on the live handle — keep only that id's agent.
+                retain_only_current_session=True,
             ),
         )
         # Prompt echoes belong in the same stream as everything else this turn

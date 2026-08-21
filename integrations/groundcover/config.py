@@ -5,13 +5,13 @@ from __future__ import annotations
 from pydantic import field_validator
 
 from config.strict_config import StrictConfigModel
+from infrastructure.text.url_validation import validate_https_or_loopback_http_url
 from integrations._validators import (
     normalize_bearer,
     normalize_str,
     normalize_url,
     normalize_with_default,
 )
-from platform.text.url_validation import validate_https_or_loopback_http_url
 
 DEFAULT_GROUNDCOVER_MCP_URL = "https://mcp.groundcover.com/api/mcp"
 DEFAULT_GROUNDCOVER_TIMEZONE = "UTC"

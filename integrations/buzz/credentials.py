@@ -1,7 +1,7 @@
 """Buzz credential resolution for alarm dispatch (watchdog, Hermes).
 
 ``private_key``/``relay_url``/``default_channel``/``auth_tag`` reuse the
-scheduler's resolver (:func:`platform.scheduling.scheduler.credentials.resolve_buzz_credentials`)
+scheduler's resolver (:func:`infrastructure.scheduling.scheduler.credentials.resolve_buzz_credentials`)
 so task-params > integration-store > environment precedence stays identical
 across the cron provider and alarm dispatchers.
 
@@ -18,7 +18,7 @@ import os
 from dataclasses import dataclass, field
 
 from config.constants.buzz import BUZZ_DEFAULT_CHANNEL_ENV
-from platform.errors import OpenSREError
+from infrastructure.errors import OpenSREError
 
 logger = logging.getLogger(__name__)
 
@@ -88,7 +88,7 @@ def load_credentials_from_env(
     Raises :class:`OpenSREError` with a setup-friendly suggestion when either
     the private key or a channel is missing.
     """
-    from platform.scheduling.scheduler.credentials import resolve_buzz_credentials
+    from infrastructure.scheduling.scheduler.credentials import resolve_buzz_credentials
 
     creds = resolve_buzz_credentials({})
     private_key = creds.get("private_key", "")

@@ -117,6 +117,39 @@ class TestLoadBalancers:
         assert [t["address"] for t in result["unhealthy_targets"]] == ["10.0.0.2"]
         assert result["unhealthy_targets"][0]["target_group"] == "tg-sick"
 
+    def test_network_target_state_read_sends_no_page_size(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """Yandex answers a target-state read that carries a stray pageSize with a bare 404."""
+        state_queries: list[dict[str, Any]] = []
+
+        def _request(method: str, url: str, **kwargs: Any) -> httpx.Response:
+            params = dict(kwargs.get("params") or {})
+            if ":getTargetStates" in url:
+                state_queries.append(params)
+                return httpx.Response(HTTPStatus.OK, json={"targetStates": []})
+            if "/load-balancer/v1/networkLoadBalancers" in url:
+                return httpx.Response(
+                    HTTPStatus.OK,
+                    json={
+                        "loadBalancers": [
+                            {
+                                "id": "nlb-1",
+                                "name": "edge",
+                                "status": "ACTIVE",
+                                "attachedTargetGroups": [{"targetGroupId": "tg-1"}],
+                            }
+                        ]
+                    },
+                )
+            return httpx.Response(HTTPStatus.OK, json={"loadBalancers": []})
+
+        monkeypatch.setattr("integrations.yandex_cloud.rest_client.send_request", _request)
+
+        get_yc_lb_health(**_CREDENTIALS)
+
+        assert state_queries == [{"targetGroupId": "tg-1"}]
+
     def test_one_balancer_type_can_be_requested(self, monkeypatch: pytest.MonkeyPatch) -> None:
         seen: list[str] = []
 

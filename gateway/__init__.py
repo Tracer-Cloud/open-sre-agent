@@ -10,7 +10,7 @@ Subpackages:
 
 Entry points:
 
-* Production — ``opensre gateway start`` (CLI wires slash ports into ``GatewayController``)
+* Production — ``opensre gateway start`` (CLI injects slash ports into ``GatewayController``)
 * Package main — ``python -m gateway`` fails closed (guard in ``__main__.py``)
 * Composition root — :mod:`gateway.core.lifecycle.controller`
 * Daemon helpers — :mod:`gateway.core.process.supervision`

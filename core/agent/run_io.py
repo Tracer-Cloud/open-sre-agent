@@ -10,10 +10,10 @@ from collections.abc import Sequence
 from dataclasses import dataclass, field
 from typing import Any
 
-from core.execution import ToolExecutionResult
 from core.llm.types import ToolCall
 from core.messages import MessageMapper, RuntimeMessage, RuntimeMessageLike
-from core.types import RuntimeTool
+from core.tool.contracts import RuntimeTool
+from core.tool.execution import ToolExecutionResult
 
 
 @dataclass

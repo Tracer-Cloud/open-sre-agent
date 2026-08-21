@@ -13,7 +13,7 @@ from typing import TYPE_CHECKING, Any, Protocol, runtime_checkable
 from core.agent_harness.prompts.kernel.surfaces import profile_for
 from core.state import MAX_CONVERSATION_MESSAGES
 from core.state.transcript_window import compact_messages_to_window
-from platform.setup_state import cached_setup_state
+from infrastructure.setup_state import cached_setup_state
 
 if TYPE_CHECKING:
     from config.llm_reasoning_effort import ReasoningEffortChoice

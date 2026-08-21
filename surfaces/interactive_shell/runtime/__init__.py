@@ -1,7 +1,12 @@
+"""Interactive-shell runtime package.
+
+Re-exports session / scheduling names used by the shell.
+"""
+
 from __future__ import annotations
 
-from platform.scheduling.task_registry import TaskRegistry
-from platform.scheduling.task_types import TaskKind, TaskRecord, TaskStatus
+from infrastructure.scheduling.task_registry import TaskRegistry
+from infrastructure.scheduling.task_types import TaskKind, TaskRecord, TaskStatus
 from surfaces.interactive_shell.runtime.context import (
     ReplRuntimeContext,
     SessionBootstrapSpec,

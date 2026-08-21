@@ -9,9 +9,9 @@ from typing import Any
 import httpx
 
 from core.domain.types.tools import ToolSurface
-from core.tool_framework.telemetry import report_run_error
+from core.tool import report_run_error
 from core.tool_framework.tool_decorator import tool
-from core.tool_framework.utils.tool_availability import tool_unavailable
+from core.tool_framework.utils import tool_unavailable
 
 _DEFAULT_MAX_RESULTS = 100
 _MAX_HARD_LIMIT = 200
@@ -136,21 +136,35 @@ def query_openobserve_logs(
     effective_limit = _bounded_limit(limit, max_results)
     now = datetime.now(UTC)
     start = now - timedelta(minutes=max(1, time_range_minutes))
-    normalized_query = query.strip() or (
-        "SELECT * FROM \"default\" WHERE level = 'error' ORDER BY _timestamp DESC"
-    )
+    stream_name = stream.strip()
+    normalized_query = query.strip()
+    if not normalized_query:
+        if not stream_name:
+            return tool_unavailable(
+                "openobserve",
+                "No query given and no stream configured to build a default one "
+                "against - set OPENOBSERVE_STREAM or pass an explicit query.",
+                records=[],
+            )
+        normalized_query = (
+            f"SELECT * FROM \"{stream_name}\" WHERE level = 'error' ORDER BY _timestamp DESC"
+        )
 
     endpoint = f"{base}/api/{(org or 'default').strip()}/_search"
     payload: dict[str, Any] = {
         "query": {
             "sql": normalized_query,
-            "start_time": int(start.timestamp() * 1000),
-            "end_time": int(now.timestamp() * 1000),
+            # OpenObserve's _search API takes start_time/end_time in
+            # microseconds since epoch, not milliseconds — a millisecond
+            # value silently matches nothing (no error) rather than raising,
+            # since it resolves to a time range near the Unix epoch.
+            "start_time": int(start.timestamp() * 1_000_000),
+            "end_time": int(now.timestamp() * 1_000_000),
         },
         "size": effective_limit,
     }
-    if stream.strip():
-        payload["stream_name"] = stream.strip()
+    if stream_name:
+        payload["stream_name"] = stream_name
 
     headers = {"Content-Type": "application/json"}
     headers.update(_auth_headers(auth_token, user, secret))

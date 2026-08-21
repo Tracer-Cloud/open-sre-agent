@@ -7,7 +7,6 @@ import logging
 import threading
 
 from config.constants.gateway import NO_ACTIVE_TURN_MESSAGE
-from gateway.core.host.turn_callback import GatewayAgentCallback
 from gateway.core.middleware.active_turns import is_stop_command
 from gateway.core.process.polling_thread import PollingBackground, start_polling_background
 from gateway.transports.telegram.approvals import handle_callback_query
@@ -21,6 +20,7 @@ from gateway.transports.telegram.runtime import (
     TelegramPollingRuntime,
 )
 from gateway.transports.telegram.settings import GatewaySettings
+from infrastructure.turn_host.turn_callback import TurnCallback
 
 
 def start_telegram_gateway_background(
@@ -29,7 +29,7 @@ def start_telegram_gateway_background(
     logger: logging.Logger,
     initialize_runtime: InitializeTelegramPollingRuntime,
     shutdown_runtime: ShutdownTelegramPollingRuntime,
-    handle_callback_to_gateway_agent: GatewayAgentCallback,
+    handle_callback_to_gateway_agent: TurnCallback,
 ) -> PollingBackground:
     """Start Telegram polling in a background thread."""
 
@@ -65,7 +65,7 @@ async def _poll_telegram_until_stopped(
     stop_event: threading.Event,
     logger: logging.Logger,
     resources: TelegramPollingRuntime,
-    handle_callback_to_gateway_agent: GatewayAgentCallback,
+    handle_callback_to_gateway_agent: TurnCallback,
 ) -> None:
     """Poll Telegram updates and dispatch them until shutdown is requested."""
     poller = TelegramPoller(settings.bot_token)

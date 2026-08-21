@@ -25,7 +25,7 @@ Blocks = Sequence[dict[str, Any]]
 
 
 class SlackMessagingClient(Protocol):
-    """The messaging surface the Slack output sink needs."""
+    """The messaging surface the Slack turn output needs."""
 
     def post_message(
         self,
@@ -185,7 +185,7 @@ class SlackWebApiClient:
         # Streaming is documented under Slack's AI-apps surface; whether it
         # works without the Agents feature toggle is workspace/app-dependent,
         # so the first failure with a permanent-looking error disables it for
-        # this process and the sink falls back to placeholder editing.
+        # this process and this class falls back to placeholder editing.
         if self._streaming_unsupported:
             return None
         try:

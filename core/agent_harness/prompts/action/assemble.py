@@ -20,7 +20,7 @@ from core.agent_harness.prompts.memory.conversation import (
 )
 from core.agent_harness.prompts.runtime_facts import render_static_runtime_facts
 from core.agent_harness.prompts.skills.loader import load_skills_index
-from platform.harness_ports import action_prompt_vendor_fragments
+from infrastructure.harness_ports import action_prompt_vendor_fragments
 
 if TYPE_CHECKING:
     from core.agent_harness.turns.turn_snapshot import TurnSnapshot
@@ -98,7 +98,7 @@ def build_action_system_prompt_envelope(turn_snapshot: TurnSnapshot) -> PromptEn
             kind=PromptBlockKind.RULE,
             tier=PromptTier.STABLE,
             content=vendor_fragments,
-            provenance="platform.harness_ports.action_prompt_vendor_fragments",
+            provenance="infrastructure.harness_ports.action_prompt_vendor_fragments",
             suffix="\n\n",
         )
     )
@@ -130,7 +130,7 @@ def build_action_system_prompt_envelope(turn_snapshot: TurnSnapshot) -> PromptEn
                 kind=PromptBlockKind.CONTEXT,
                 tier=PromptTier.CONTEXT,
                 content=turn_snapshot.setup_state,
-                provenance="platform.setup_state",
+                provenance="infrastructure.setup_state",
             )
         )
     blocks.append(

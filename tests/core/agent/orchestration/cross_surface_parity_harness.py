@@ -27,8 +27,8 @@ from core.agent_harness.turns.headless_build import InMemoryHeadlessBuild
 from core.agent_harness.turns.turn_results import TurnResult
 from core.domain.types.tools import ToolSurface
 from core.llm.types import AgentLLMResponse, ToolCall
-from core.tool_framework.registered_tool import RegisteredTool
-from gateway.core.host.turn_handler import GatewayTurnHandler
+from core.tool.contracts import RegisteredTool
+from infrastructure.turn_host.turn_handler import TurnHandler
 from surfaces.interactive_shell.runtime.shell_turn_execution import execute_shell_turn
 from surfaces.interactive_shell.runtime.slash_adapter import headless_slash_ports
 from surfaces.interactive_shell.session import Session
@@ -177,7 +177,7 @@ class FakeReasoningClient:
         yield PARITY_ANSWER
 
 
-class RecordingGatewayOutputSink:
+class RecordingTurnOutput:
     """Minimal gateway sink that records stream/finalize output for assertions."""
 
     def __init__(self) -> None:
@@ -208,11 +208,11 @@ class RecordingGatewayOutputSink:
         self.streamed.append(text)
         return text
 
-    def finish_streamed_response(self, text: str) -> None:
-        self.finalize(text)
+    def finish_streamed_response(self, answer: str) -> None:
+        self.finalize(answer)
 
-    def finalize(self, text: str) -> None:
-        self.finalized = text
+    def finalize(self, answer: str) -> None:
+        self.finalized = answer
 
     @property
     def outbound_text(self) -> str:
@@ -263,7 +263,7 @@ def wire_tool_registry(monkeypatch: Any, tools: list[RegisteredTool]) -> None:
             del surface
             return dict(by_name)
 
-    from platform.harness_ports import set_tool_registry
+    from infrastructure.harness_ports import set_tool_registry
 
     set_tool_registry(_FixedToolRegistry())
 
@@ -383,7 +383,7 @@ def _install_gateway_dispatch_spy(
         return agent
 
     monkeypatch.setattr(
-        "gateway.core.host.session_agents.DefaultHeadlessBuild",
+        "infrastructure.turn_host.session_agents.DefaultHeadlessBuild",
         default_headless_build_stub(_spy_build),
     )
 
@@ -395,11 +395,11 @@ def snapshot_gateway_handler(
     integrations: dict[str, Any] | None = None,
 ) -> TurnSnapshot:
     session = fresh_session(integrations=integrations)
-    sink = RecordingGatewayOutputSink()
+    sink = RecordingTurnOutput()
     captured: list[TurnResult] = []
     _install_gateway_dispatch_spy(monkeypatch, captured)
     before = probe_run_count()
-    handler = GatewayTurnHandler(
+    handler = TurnHandler(
         console=console(),
         slash_ports_factory=headless_slash_ports,
     )
@@ -460,14 +460,14 @@ def run_gateway_turn_with_sink(
     monkeypatch: Any,
     *,
     integrations: dict[str, Any] | None = None,
-) -> tuple[TurnSnapshot, RecordingGatewayOutputSink]:
+) -> tuple[TurnSnapshot, RecordingTurnOutput]:
     """Run one gateway turn and return both routing snapshot and transport sink."""
     session = fresh_session(integrations=integrations)
-    sink = RecordingGatewayOutputSink()
+    sink = RecordingTurnOutput()
     captured: list[TurnResult] = []
     _install_gateway_dispatch_spy(monkeypatch, captured)
     before = probe_run_count()
-    handler = GatewayTurnHandler(
+    handler = TurnHandler(
         console=console(),
         slash_ports_factory=headless_slash_ports,
     )

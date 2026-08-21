@@ -109,7 +109,7 @@ def _build_integration_guard(ctx: TurnSnapshot) -> str:
     service that is not listed. An empty session gets neither roster: hundreds
     of setupable ids would crowd out the user's actual question.
     """
-    from platform.harness_ports import (
+    from infrastructure.harness_ports import (
         preferred_evidence_sources_by_kind,
         setupable_integration_services,
     )

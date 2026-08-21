@@ -8,7 +8,7 @@ from collections.abc import Callable
 from typing import Any
 
 from core.tool_framework.tool_decorator import tool
-from core.tool_framework.utils.tool_availability import tool_unavailable
+from core.tool_framework.utils import tool_unavailable
 from integrations.tempo import TempoConfig, tempo_extract_params
 from integrations.tempo.availability import tempo_available_or_backend
 from integrations.tempo.client import TempoClient

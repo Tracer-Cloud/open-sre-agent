@@ -11,7 +11,7 @@ from core.agent_harness.turns.answer_finalize import append_upgrade_cta
 from core.agent_harness.turns.evidence_need import classify_evidence_need
 from core.agent_harness.turns.orchestrator import run_turn
 from core.agent_harness.turns.turn_results import ToolCallingTurnResult
-from platform.harness_ports import preferred_evidence_sources_for
+from infrastructure.harness_ports import preferred_evidence_sources_for
 from surfaces.interactive_shell.session import Session
 
 

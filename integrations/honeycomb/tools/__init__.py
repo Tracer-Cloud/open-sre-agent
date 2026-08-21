@@ -6,8 +6,8 @@ from __future__ import annotations
 
 from typing import Any
 
-from core.tool_framework.base import BaseTool
-from core.tool_framework.utils.tool_availability import tool_unavailable
+from core.tool import BaseTool
+from core.tool_framework.utils import tool_unavailable
 from integrations.honeycomb.client import HoneycombClient
 from integrations.honeycomb.config import HoneycombIntegrationConfig
 

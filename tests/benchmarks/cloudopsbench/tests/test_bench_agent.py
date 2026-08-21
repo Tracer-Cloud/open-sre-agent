@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import pytest
 
-from core.tool_framework.registered_tool import RegisteredTool
+from core.tool.contracts import RegisteredTool
 from tests.benchmarks.cloudopsbench.bench_agent import (
     _DEFAULT_MIN_TOOL_CALLS,
     _ENV_MIN_TOOL_CALLS,

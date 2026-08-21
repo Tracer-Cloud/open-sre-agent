@@ -3,12 +3,12 @@
 from __future__ import annotations
 
 from config.env_file import sync_env_values
+from infrastructure.terminal.theme import SECONDARY
 from integrations.alertmanager.setup import ALERTMANAGER_SETUP
 from integrations.betterstack.setup import BETTERSTACK_SETUP
 from integrations.incident_io.setup import INCIDENT_IO_SETUP
 from integrations.pagerduty.setup import PAGERDUTY_SETUP
 from integrations.store import upsert_integration
-from platform.terminal.theme import SECONDARY
 from surfaces.cli.wizard._ui import (
     _console,
     _integration_defaults,

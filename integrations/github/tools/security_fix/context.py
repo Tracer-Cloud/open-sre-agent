@@ -14,6 +14,7 @@ from dataclasses import dataclass
 from http import HTTPStatus
 from typing import Any, Literal
 
+from infrastructure.safety.masking import MaskingContext, MaskingPolicy
 from integrations.github.client import GitHubApiError, GitHubRestClient
 from integrations.github.repo_scope import detect_git_remote_repo_scope
 from integrations.github.tools.security_fix.errors import (
@@ -25,7 +26,6 @@ from integrations.github.tools.security_fix.errors import (
     GitHubSecurityFixError,
 )
 from integrations.github.tools.security_fix.local_rules import has_builtin_local_fix
-from platform.safety.masking import MaskingContext, MaskingPolicy
 
 AlertType = Literal[
     "auto",

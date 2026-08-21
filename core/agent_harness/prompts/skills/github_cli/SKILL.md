@@ -38,6 +38,37 @@ HARD RULES:
   codespace / ssh-key / gpg-key / config — those are blocked (token leakage /
   CI code execution / secret mutation).
 - Pass args after the gh binary; optional repo as owner/name → -R.
+- A failure RATE over a window is two counts, not a list of runs. Ask GitHub to
+  count, with `created` scoping the window server-side — never page through runs
+  to compute a rate. A busy repo runs thousands per week; enumeration times out
+  and a partial page gives a biased number.
+
+      gh api "/repos/OWNER/REPO/actions/runs?created=%3E%3D2026-08-13&per_page=1" --jq '.total_count'
+      gh api "/repos/OWNER/REPO/actions/runs?created=%3E%3D2026-08-13&status=failure&per_page=1" --jq '.total_count'
+
+  `per_page=1` because only `total_count` is read. Report the window you passed
+  and which conclusions `status=failure` covers — a strict failure count and a
+  broader error count are different numbers and must not be swapped between
+  turns.
+- To LIST which runs failed (not a rate), call
+  `list_github_actions_workflow_runs`, and pass `window_hours=24` unless the
+  user named a window. The tool defaults to no window because it also answers
+  "which deploy failed before the incident".
+  It reports `window_fully_fetched`: when false the page is full and ended
+  inside the window, so counts are a floor — say so or re-ask with a larger
+  `per_page`, never publish a rate over it. When true, either an older run
+  proved the cutoff was reached or the listing was exhausted (fewer runs than
+  `per_page`). `undated_runs` counts runs whose timestamp could not be read;
+  mention them rather than letting them vanish from a total.
+- With `gh api` on a list endpoint, always project the fields you need with
+  `--jq`. Raw list payloads are hundreds of kilobytes (30 workflow runs is
+  ~382k characters) and get cut to fit the context, leaving you a few records
+  with no sign the rest existed. Example: `gh api
+  "/repos/OWNER/REPO/actions/runs?per_page=30" --jq
+  '[.workflow_runs[] | {conclusion, status}]'`.
+- If a result comes back with `truncated: true`, you did not see all of it.
+  Never report a rate, percentage, total or "latest" from a truncated payload —
+  say what you could not read and re-run with `--jq` or a smaller page.
 - After the tool returns, end with a short chat-like reply from result.summary.
   Simple confirms (create/close/merge + URL/#n): plain prose, no markdown.
   Multi-item reads: light markdown that still reads like chat (short lead-in +

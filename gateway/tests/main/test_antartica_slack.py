@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import json
 import re
+from collections.abc import Sequence
 from typing import Any
 from unittest.mock import MagicMock
 
@@ -23,7 +24,7 @@ from core.agent_harness.session.persistence.memory import InMemorySessionStore
 from core.agent_harness.tools.action_tools import action_tool_names
 from core.agent_harness.tools.tool_provider import DefaultToolProvider
 from core.agent_harness.turns.action_driver import ActionTurnRunner
-from core.llm.types import AgentLLMResponse, ToolCall
+from core.llm.types import AgentLLMResponse, SchemaDescribedTool, ToolCall
 from tools.interactive_shell.subprocess_presenter import (
     headless_subprocess_presenter_factory,
 )
@@ -61,7 +62,7 @@ class _ComputeThenSlackLLM:
         self.review_calls = 0
         self.sent_slack_message: str | None = None
 
-    def tool_schemas(self, _tools: list[Any]) -> list[dict[str, Any]]:
+    def tool_schemas(self, _tools: Sequence[SchemaDescribedTool]) -> list[dict[str, Any]]:
         return []
 
     def invoke(

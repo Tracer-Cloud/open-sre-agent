@@ -18,8 +18,6 @@ from gateway.transports.slack.processing.events import SlackInboundMessage
 from gateway.transports.slack.processing.principal import slack_scope
 from gateway.transports.slack.settings import SlackGatewaySettings
 
-_SECURITY = "gateway.transports.slack.processing.security"
-
 
 @pytest.fixture(autouse=True)
 def _isolate_slack_integration_store():

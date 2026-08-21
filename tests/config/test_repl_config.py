@@ -293,7 +293,7 @@ class TestFromEnvAlias:
 
 class TestThemeRegistry:
     def test_theme_registry_contains_expected_builtin_names(self) -> None:
-        from platform.terminal.theme import list_theme_names
+        from infrastructure.terminal.theme import list_theme_names
 
         assert list_theme_names() == (
             "green",
@@ -315,7 +315,7 @@ class TestThemeRegistry:
         )
 
     def test_theme_registry_entries_include_required_semantic_tokens(self) -> None:
-        from platform.terminal.theme import get_theme, list_theme_names
+        from infrastructure.terminal.theme import get_theme, list_theme_names
 
         required = (
             "HIGHLIGHT",
@@ -337,7 +337,7 @@ class TestThemeRegistry:
                 assert len(value) == 7
 
     def test_lazy_rich_tokens_track_active_theme(self) -> None:
-        from platform.terminal.theme import BOLD_BRAND, HIGHLIGHT, set_active_theme
+        from infrastructure.terminal.theme import BOLD_BRAND, HIGHLIGHT, set_active_theme
 
         set_active_theme("green")
         green_highlight = str(HIGHLIGHT)
@@ -348,7 +348,7 @@ class TestThemeRegistry:
         assert str(HIGHLIGHT).startswith("#")
 
     def test_set_active_theme_falls_back_to_default_for_unknown_name(self) -> None:
-        from platform.terminal.theme import (
+        from infrastructure.terminal.theme import (
             DEFAULT_THEME_NAME,
             get_active_theme,
             set_active_theme,
@@ -361,7 +361,7 @@ class TestThemeRegistry:
     def test_load_without_apply_active_theme_leaves_global_palette(
         self, monkeypatch: pytest.MonkeyPatch
     ) -> None:
-        from platform.terminal.theme import get_active_theme_name, set_active_theme
+        from infrastructure.terminal.theme import get_active_theme_name, set_active_theme
 
         monkeypatch.delenv("OPENSRE_THEME", raising=False)
         set_active_theme("pink")

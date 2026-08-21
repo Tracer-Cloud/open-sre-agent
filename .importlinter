@@ -6,7 +6,7 @@ root_packages =
     core
     gateway
     integrations
-    platform
+    infrastructure
     tools
 
 [importlinter:contract:config-independent]

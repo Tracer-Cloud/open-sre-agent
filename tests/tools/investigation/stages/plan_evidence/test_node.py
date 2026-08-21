@@ -6,7 +6,7 @@ from typing import Any, cast
 from core.domain.types.planning import PlannedInvestigationAction
 from core.domain.types.retrieval import RetrievalControls, RetrievalIntent
 from core.state import AgentState
-from core.tool_framework.registered_tool import RegisteredTool
+from core.tool.contracts import RegisteredTool
 from core.tool_framework.tags import FALLBACK_PLANNING_TAG
 from tools.investigation.stages.plan_evidence.node import _apply_budget, plan_actions
 

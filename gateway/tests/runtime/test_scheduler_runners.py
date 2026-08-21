@@ -16,16 +16,16 @@ from typing import Any
 
 import pytest
 
-from platform.scheduling.scheduler.agent_runner import (
+from infrastructure.scheduling.scheduler.agent_runner import (
     get_agent_runner,
     invoke_agent_runner,
     register_agent_runner,
 )
-from platform.scheduling.scheduler.investigation_runner import (
+from infrastructure.scheduling.scheduler.investigation_runner import (
     get_investigation_runner,
     register_investigation_runner,
 )
-from platform.scheduling.scheduler.runners import SchedulerRunners
+from infrastructure.scheduling.scheduler.runners import SchedulerRunners
 
 
 class _CountingGate:

@@ -14,16 +14,16 @@ from config.constants.investigation import (
     INVESTIGATION_TOOL_CACHE_MAX_ENTRIES,
     MAX_INVESTIGATION_LOOPS,
 )
-from core.execution import (
+from core.llm.types import ToolCall
+from core.llm_invoke_errors import LLMInvokeFailure
+from core.state.evidence import EvidenceEntry
+from core.tool import (
     BeforeToolCallResult,
     ToolExecutionHooks,
     ToolExecutionRequest,
     ToolExecutionResult,
 )
-from core.llm.types import ToolCall
-from core.llm_invoke_errors import LLMInvokeFailure
-from core.state.evidence import EvidenceEntry
-from platform.text.truncation import truncate
+from infrastructure.text.truncation import truncate
 
 _MAX_CACHED_RESULT_CHARS = 8_000
 

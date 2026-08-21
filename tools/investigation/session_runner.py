@@ -13,7 +13,7 @@ from typing import Any, NoReturn
 
 from config.config import resolve_llm_settings
 from core.domain.stream import StreamEvent
-from platform.errors import OpenSREError
+from infrastructure.errors import OpenSREError
 from tools.investigation.alert_templates import build_alert_template
 
 _logger = logging.getLogger(__name__)
@@ -167,7 +167,7 @@ def run_session_alert_payload(
                 except queue.Empty:
                     continue
                 if isinstance(item, BaseException):
-                    from platform.analytics.investigation_loop import (
+                    from infrastructure.analytics.investigation_loop import (
                         publish_loop_metrics_from_stream_failure,
                     )
 

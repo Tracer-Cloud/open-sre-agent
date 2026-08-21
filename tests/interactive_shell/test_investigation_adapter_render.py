@@ -9,7 +9,7 @@ from typing import Any
 from rich.console import Console
 
 from core.domain.stream import StreamEvent
-from platform.observability.render.progress import (
+from infrastructure.observability.render.progress import (
     NoopProgressTracker,
     get_progress_tracker,
     silence_progress_tracker,

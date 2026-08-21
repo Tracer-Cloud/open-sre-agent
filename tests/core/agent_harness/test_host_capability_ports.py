@@ -18,7 +18,7 @@ from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
 
-_SOURCE_TIERS = ("core", "gateway", "surfaces", "tools", "platform", "integrations")
+_SOURCE_TIERS = ("core", "gateway", "surfaces", "tools", "infrastructure", "integrations")
 
 #: The one module allowed to declare the approval gate.
 _GATE_HOME = "tools/interactive_shell/shared/host_ports.py"

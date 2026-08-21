@@ -30,7 +30,7 @@ from dataclasses import dataclass, replace
 from typing import TYPE_CHECKING, Any
 
 from core.agent_harness.turns.handoff_tag_parse import find_tag_suffix, handoff_has_tag
-from platform.evidence.evidence_compaction import truncate_message
+from infrastructure.evidence.evidence_compaction import truncate_message
 
 if TYPE_CHECKING:
     from core.agent_harness.turns.assistant_handoff import AssistantHandoff
@@ -145,6 +145,12 @@ class SessionGoal:
     # turn sees only its own tools and reads their absence as an absence
     # overall — reporting completed work as never done.
     findings: tuple[str, ...] = ()
+    # What the previous turn told the user, recorded whether or not a tool ran.
+    # Weaker than ``findings``: not established, just already said. A turn that
+    # answered from history alone left no finding, so the next turn re-derived
+    # the number by another route and reported a different one with no mention
+    # of the first.
+    last_answer: str = ""
     # Wall-clock start for ``/goal`` duration paint (``time.time()``).
     started_at: float | None = None
     # Session token totals when the goal was attached — delta is goal spend.
@@ -171,6 +177,11 @@ class SessionGoal:
         if not text:
             return self
         return replace(self, findings=(*self.findings, text)[-MAX_GOAL_FINDINGS:])
+
+    def with_last_answer(self, answer: str) -> SessionGoal:
+        """Record what this turn told the user, for the next turn to reconcile."""
+        text = truncate_message(answer.strip(), MAX_GOAL_REASON_CHARS)
+        return self if not text else replace(self, last_answer=text)
 
     def with_reason(self, reason: str) -> SessionGoal:
         text = truncate_message(reason.strip(), MAX_GOAL_REASON_CHARS)

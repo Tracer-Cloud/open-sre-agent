@@ -4,7 +4,7 @@ from collections.abc import Generator
 
 import pytest
 
-from platform.terminal.theme import DEFAULT_THEME_NAME, set_active_theme
+from infrastructure.terminal.theme import DEFAULT_THEME_NAME, set_active_theme
 from tools.investigation.reporting.formatters.base import slack_links_to_plain_text
 from tools.investigation.reporting.renderers.terminal import (
     _rich_line_with_links,

@@ -6,6 +6,7 @@ import time
 from collections.abc import Callable
 from typing import TYPE_CHECKING, Any
 
+from infrastructure.terminal.theme import GLYPH_ERROR
 from surfaces.shared.terminal.components.time_format import _fmt_timing
 from surfaces.shared.terminal.output.environment import (
     _is_silent_output,
@@ -173,13 +174,13 @@ class ProgressTracker(ToolTrackingMixin):
             if self._display:
                 self._display.step_complete(node_name, event)
             else:
-                mark = "✗" if status == "error" else "●"
+                mark = GLYPH_ERROR if status == "error" else "●"
                 line = f"  {mark} {_node_label(node_name)}  {_fmt_timing(elapsed_ms)}"
                 if msg := _humanise_message(message or ""):
                     line += f"  {msg}"
                 self.print_above_renderable(line)
             return
-        mark = "✗" if status == "error" else "●"
+        mark = GLYPH_ERROR if status == "error" else "●"
         line = f"  {mark} {_node_label(node_name)}  {_fmt_timing(elapsed_ms)}"
         if msg := _humanise_message(message or ""):
             line += f"  {msg}"
@@ -206,12 +207,12 @@ def _register_with_observability(tracker: ProgressTracker) -> None:
     """Tell the observability port which tracker core code should see.
 
     The Rich tracker structurally satisfies the
-    :class:`platform.observability.render.progress.ProgressReporter` Protocol;
+    :class:`infrastructure.observability.render.progress.ProgressReporter` Protocol;
     registering it here means any module that imports
     ``get_progress_tracker`` from core gets the same instance the CLI
     is driving.
     """
-    from platform.observability.render.progress import set_progress_tracker
+    from infrastructure.observability.render.progress import set_progress_tracker
 
     set_progress_tracker(tracker)
     from surfaces.shared.terminal.output.console_state import set_tracker_toggle_stop_fn

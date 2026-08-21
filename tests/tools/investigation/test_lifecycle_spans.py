@@ -10,7 +10,7 @@ from unittest.mock import patch
 import pytest
 
 from core.agent_harness.session.persistence.jsonl_store import JsonlSessionStore
-from platform.observability.trace.spans import (
+from infrastructure.observability.trace.spans import (
     NoopSessionTraceStore,
     bind_session_trace,
     set_session_trace_store,
@@ -137,7 +137,7 @@ def test_run_connected_investigation_skips_later_stages_on_noise(
 
 def test_run_connected_investigation_noop_sink_emits_nothing() -> None:
     """Headless / gateway default: pipeline stages must not require a sink."""
-    from platform.observability.trace.spans import get_session_trace_store
+    from infrastructure.observability.trace.spans import get_session_trace_store
     from tools.investigation.lifecycle import run_connected_investigation
     from tools.investigation.state_factory import make_initial_state
 

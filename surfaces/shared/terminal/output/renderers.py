@@ -2,10 +2,13 @@ from __future__ import annotations
 
 from rich.text import Text
 
-from platform.terminal.theme import (
+from infrastructure.terminal.theme import (
     BRAND,
     DIM,
     ERROR,
+    GLYPH_BULLET,
+    GLYPH_ERROR,
+    GLYPH_SUCCESS,
     HIGHLIGHT,
     SECONDARY,
     TEXT,
@@ -77,7 +80,7 @@ def render_event(
     insight: str | None = None,
     muted: bool = False,
     elapsed_s: float = 0.0,
-    glyph: str = "✓",
+    glyph: str = GLYPH_SUCCESS,
     error: bool = False,
 ) -> None:
     """Print one typed event-log row."""
@@ -91,7 +94,7 @@ def render_event(
             t.append(f"{glyph}  ", style=SECONDARY)
             msg_style = SECONDARY
         elif error:
-            t.append("✗  ", style=f"bold {ERROR}")
+            t.append(f"{GLYPH_ERROR}  ", style=f"bold {ERROR}")
             msg_style = TEXT
         else:
             t.append(f"{glyph}  ", style=f"bold {HIGHLIGHT}")
@@ -103,7 +106,7 @@ def render_event(
             t.append(f"  ↳ {insight}", style=BRAND)
         _get_console().print(t)
     else:
-        mark = "✗" if error else ("·" if muted else "✓")
+        mark = GLYPH_ERROR if error else (GLYPH_BULLET if muted else GLYPH_SUCCESS)
         line = f"  {mark}  [{event_type}]  {message}"
         if insight:
             line += f"  ↳ {insight}"

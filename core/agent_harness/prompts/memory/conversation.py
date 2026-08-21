@@ -16,7 +16,7 @@ from core.agent_harness.session.pending_offer import (
 from core.agent_harness.session.want_me_to import offer_from_assistant_content
 from core.state import MAX_CONVERSATION_TURNS
 from core.state.transcript_window import SESSION_SUMMARY_PREFIX
-from platform.harness_ports import strip_message_context_prefix
+from infrastructure.harness_ports import strip_message_context_prefix
 
 NO_HISTORY_PLACEHOLDER = "(no prior messages in this CLI thread)"
 _ACTION_FACT_MARKERS = (

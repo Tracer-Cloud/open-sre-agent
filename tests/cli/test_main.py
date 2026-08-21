@@ -11,8 +11,8 @@ import pytest
 
 from config.constants.product import RELEASE_STAGE
 from config.repl_config import ReplConfig
-from platform.analytics import provider
-from platform.analytics.events import Event
+from infrastructure.analytics import provider
+from infrastructure.analytics.events import Event
 from surfaces.cli.app import cli
 from surfaces.cli.startup import sentry_entrypoint_for
 from surfaces.entrypoint import main
@@ -101,7 +101,9 @@ def test_main_treats_onboard_abort_as_clean_cancel(
     monkeypatch.setattr("surfaces.cli.app.capture_first_run_if_needed", lambda: None)
     monkeypatch.setattr("surfaces.cli.app.shutdown_analytics", lambda **_kw: None)
     monkeypatch.setattr("surfaces.cli.app.capture_cli_invoked", lambda *_args: None)
-    monkeypatch.setattr("platform.observability.errors.sentry.init_sentry", lambda **_kw: None)
+    monkeypatch.setattr(
+        "infrastructure.observability.errors.sentry.init_sentry", lambda **_kw: None
+    )
     monkeypatch.setattr(
         "surfaces.cli.wizard.flow.run_wizard",
         lambda: (_ for _ in ()).throw(click.Abort()),
@@ -120,7 +122,9 @@ def test_main_allows_update_when_sentry_sdk_missing(monkeypatch, capsys) -> None
     def _raise_missing_sentry(**_kwargs: object) -> None:
         raise ModuleNotFoundError("No module named 'sentry_sdk'", name="sentry_sdk")
 
-    monkeypatch.setattr("platform.observability.errors.sentry.init_sentry", _raise_missing_sentry)
+    monkeypatch.setattr(
+        "infrastructure.observability.errors.sentry.init_sentry", _raise_missing_sentry
+    )
     monkeypatch.setattr("surfaces.cli.lifecycle.update.fetch_latest_version", lambda: "9999.0.0")
     monkeypatch.setattr("surfaces.cli.lifecycle.update.is_update_available", lambda _c, _l: False)
 
@@ -136,7 +140,9 @@ def test_main_non_update_still_raises_when_sentry_sdk_missing(monkeypatch) -> No
     def _raise_missing_sentry(**_kwargs: object) -> None:
         raise ModuleNotFoundError("No module named 'sentry_sdk'", name="sentry_sdk")
 
-    monkeypatch.setattr("platform.observability.errors.sentry.init_sentry", _raise_missing_sentry)
+    monkeypatch.setattr(
+        "infrastructure.observability.errors.sentry.init_sentry", _raise_missing_sentry
+    )
 
     with pytest.raises(ModuleNotFoundError):
         main(["health"])
@@ -270,7 +276,7 @@ def test_main_debug_sentry_sends_synthetic_event(monkeypatch, capsys) -> None:
     flush_calls: list[int] = []
 
     monkeypatch.setattr(
-        "platform.observability.errors.sentry.init_sentry",
+        "infrastructure.observability.errors.sentry.init_sentry",
         lambda entrypoint=None: root_init_entrypoints.append(entrypoint),
     )
     monkeypatch.setattr("surfaces.cli.app.capture_first_run_if_needed", lambda: None)
@@ -309,7 +315,9 @@ def test_sentry_entrypoint_uses_debug_for_debug_group_invocations() -> None:
 
 def test_main_debug_sentry_exits_nonzero_when_disabled(monkeypatch, capsys) -> None:
     debug_module = importlib.import_module("surfaces.cli.commands.debug")
-    monkeypatch.setattr("platform.observability.errors.sentry.init_sentry", lambda **_kw: None)
+    monkeypatch.setattr(
+        "infrastructure.observability.errors.sentry.init_sentry", lambda **_kw: None
+    )
     monkeypatch.setattr("surfaces.cli.app.capture_first_run_if_needed", lambda: None)
     monkeypatch.setattr("surfaces.cli.app.capture_cli_invoked", lambda *_args: None)
     monkeypatch.setattr("surfaces.cli.app.shutdown_analytics", lambda **_kw: None)
@@ -324,7 +332,9 @@ def test_main_debug_sentry_exits_nonzero_when_disabled(monkeypatch, capsys) -> N
 
 def test_main_debug_sentry_exits_nonzero_when_flush_fails(monkeypatch, capsys) -> None:
     debug_module = importlib.import_module("surfaces.cli.commands.debug")
-    monkeypatch.setattr("platform.observability.errors.sentry.init_sentry", lambda **_kw: None)
+    monkeypatch.setattr(
+        "infrastructure.observability.errors.sentry.init_sentry", lambda **_kw: None
+    )
     monkeypatch.setattr("surfaces.cli.app.capture_first_run_if_needed", lambda: None)
     monkeypatch.setattr("surfaces.cli.app.capture_cli_invoked", lambda *_args: None)
     monkeypatch.setattr("surfaces.cli.app.shutdown_analytics", lambda **_kw: None)
@@ -356,7 +366,9 @@ def test_main_emits_first_run_install_before_cli_invoked(
     # This test validates analytics event ordering only; avoid real Sentry init
     # side effects (e.g. sdk integration hooks) that are unrelated to the
     # install/cli-invoked event contract.
-    monkeypatch.setattr("platform.observability.errors.sentry.init_sentry", lambda **_kw: None)
+    monkeypatch.setattr(
+        "infrastructure.observability.errors.sentry.init_sentry", lambda **_kw: None
+    )
     provider.shutdown_analytics(flush=False)
     provider._instance = None
     provider._cached_anonymous_id = None
@@ -677,7 +689,9 @@ def test_main_flushes_analytics_when_events_are_pending(
     calls: list[dict[str, object]] = []
     monkeypatch.setattr("surfaces.cli.app.capture_first_run_if_needed", lambda: None)
     monkeypatch.setattr("surfaces.cli.app.capture_cli_invoked", lambda *_args: None)
-    monkeypatch.setattr("platform.observability.errors.sentry.init_sentry", lambda **_kw: None)
+    monkeypatch.setattr(
+        "infrastructure.observability.errors.sentry.init_sentry", lambda **_kw: None
+    )
     monkeypatch.setattr("surfaces.cli.app.analytics_needs_flush", lambda: True)
     monkeypatch.setattr(
         "surfaces.cli.app.shutdown_analytics",
@@ -697,7 +711,9 @@ def test_main_does_not_block_when_no_events_are_pending(
     calls: list[dict[str, object]] = []
     monkeypatch.setattr("surfaces.cli.app.capture_first_run_if_needed", lambda: None)
     monkeypatch.setattr("surfaces.cli.app.capture_cli_invoked", lambda *_args: None)
-    monkeypatch.setattr("platform.observability.errors.sentry.init_sentry", lambda **_kw: None)
+    monkeypatch.setattr(
+        "infrastructure.observability.errors.sentry.init_sentry", lambda **_kw: None
+    )
     monkeypatch.setattr("surfaces.cli.app.analytics_needs_flush", lambda: False)
     monkeypatch.setattr(
         "surfaces.cli.app.shutdown_analytics",

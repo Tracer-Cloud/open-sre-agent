@@ -1,4 +1,4 @@
-"""Guard: importing the webapp ASGI app wires the vendor registries.
+"""Guard: importing the webapp ASGI app registers the vendor registries.
 
 ``MODE=web`` (the Dockerfile default) runs ``uvicorn gateway.web.webapp:app``
 directly — no CLI boot, no gateway manager. ``POST /investigate`` then runs the

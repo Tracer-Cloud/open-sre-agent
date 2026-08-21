@@ -12,8 +12,10 @@ from typing import Any
 
 import pytest
 
+from core.agent_harness.ports import TurnBinding
 from core.agent_harness.turns.gather_phase import GatherPhase
 from core.agent_harness.turns.headless_build import InMemoryHeadlessBuild
+from core.tool.execution import ToolExecutionHooks
 
 
 class _Session:
@@ -84,6 +86,26 @@ class TestAgentForwardsGatherPhase:
         assert seen["on_progress"] is _on_progress
         assert seen["persist"] is _persist
         assert seen["max_iterations"] == 9
+
+    def test_turn_tool_hooks_reach_the_gather_phase(self, monkeypatch) -> None:
+        from core.agent_harness.turns import headless_adapters, headless_agent
+
+        seen: dict[str, Any] = {}
+
+        def _fake_gather(_message: str, _session: Any, **kwargs: Any) -> str | None:
+            seen.update(kwargs)
+            return "evidence"
+
+        monkeypatch.setattr(headless_agent, "gather_tool_evidence", _fake_gather)
+        hooks = ToolExecutionHooks()
+        agent = InMemoryHeadlessBuild(session=headless_adapters.InMemorySessionState()).agent(
+            tools=headless_adapters.NullToolProvider(),
+            gather=GatherPhase(),
+        )
+        agent.bind_turn(TurnBinding(tool_hooks=hooks))
+
+        assert agent._gather("why is it slow?") == "evidence"  # noqa: SLF001
+        assert seen["tool_hooks"] is hooks
 
     def test_disabled_gather_skips_the_phase_entirely(self, monkeypatch) -> None:
         # Arrange

@@ -17,7 +17,7 @@ from core.agent.loop_host import LoopHost
 from core.agent.textual_tool_call import TEXTUAL_TOOL_CALL_NUDGE, looks_like_textual_tool_call
 from core.events import TurnEndEvent
 from core.messages import RuntimeMessage, UserRuntimeMessage
-from core.types import RuntimeTool
+from core.tool.contracts import RuntimeTool
 
 logger = logging.getLogger(__name__)
 

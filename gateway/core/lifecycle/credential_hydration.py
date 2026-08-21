@@ -2,8 +2,8 @@
 
 A silo always reads its **bootstrap secret** from Secrets Manager first. That
 secret may carry a ``credentials_api_token`` for the credentials-API route
-below. It never carries integrations, and it is not a database DSN — remote
-agent-run polling lives in the webapp stack, not in this process.
+below. It never carries integrations, and it is not a database DSN. This
+process does not poll remote agent runs.
 
 Integrations then arrive by exactly one of two routes:
 

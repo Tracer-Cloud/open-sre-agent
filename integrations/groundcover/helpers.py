@@ -21,7 +21,7 @@ from typing import Any, cast
 
 from pydantic import ValidationError
 
-from core.tool_framework.utils.tool_availability import tool_unavailable
+from core.tool_framework.utils import tool_unavailable
 from integrations._validation_helpers import report_validation_failure
 from integrations.groundcover.client import (
     GroundcoverClient,

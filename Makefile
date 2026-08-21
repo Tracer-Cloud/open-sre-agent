@@ -49,12 +49,12 @@ USER_BASE := $(shell $(PYTHON) -m site --user-base)
 USER_BIN := $(if $(filter Windows_NT,$(OS)),$(USER_BASE)/Scripts,$(USER_BASE)/bin)
 export PATH := $(if $(wildcard .venv/bin),$(CURDIR)/.venv/bin:,$(if $(wildcard .venv/Scripts),$(CURDIR)/.venv/Scripts:))$(USER_BIN):$(PATH)
 
-PYTHON_SOURCE_PATHS := bootstrap config core gateway integrations platform surfaces tools
+PYTHON_SOURCE_PATHS := bootstrap config core gateway integrations infrastructure surfaces tools
 
 # Create venv and install dependencies (requires https://docs.astral.sh/uv/)
 install:
 	uv sync --frozen --extra dev
-	uv run python -m platform.analytics.install
+	uv run python -m infrastructure.analytics.install
 
 build:
 	$(PYTHON) -m build
@@ -286,21 +286,21 @@ docs-dev:
 # Gateway deploy (Telegram; AMI + systemd on EC2)
 # Step 1 — bake once per code change (launches temp EC2, installs opensre, snapshots AMI):
 build-gateway-image:
-	$(PYTHON) -m platform.deployment.ec2.telegram_gateway.lifecycle build-server-image
+	$(PYTHON) -m infrastructure.deployment.ec2.telegram_gateway.lifecycle build-server-image
 
 # Step 2 — launch gateway instance from pre-baked AMI (fast):
 deploy-gateway:
-	$(PYTHON) -m platform.deployment.ec2.telegram_gateway.lifecycle deploy
+	$(PYTHON) -m infrastructure.deployment.ec2.telegram_gateway.lifecycle deploy
 
 destroy-gateway:
-	$(PYTHON) -m platform.deployment.ec2.telegram_gateway.lifecycle destroy
+	$(PYTHON) -m infrastructure.deployment.ec2.telegram_gateway.lifecycle destroy
 
 # Gateway install on a new server (no pre-baked AMI — installs inline via SSM)
 install-gateway-on-new-server:
-	$(PYTHON) -m platform.deployment.ec2.telegram_gateway.lifecycle install-on-new-server
+	$(PYTHON) -m infrastructure.deployment.ec2.telegram_gateway.lifecycle install-on-new-server
 
 destroy-gateway-on-new-server:
-	$(PYTHON) -m platform.deployment.ec2.telegram_gateway.lifecycle destroy-installed-server
+	$(PYTHON) -m infrastructure.deployment.ec2.telegram_gateway.lifecycle destroy-installed-server
 
 # Deploy Lambda test case
 deploy-lambda:

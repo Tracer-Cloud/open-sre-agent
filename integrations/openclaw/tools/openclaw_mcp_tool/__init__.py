@@ -15,9 +15,9 @@ Package layout (separation of concerns):
 from __future__ import annotations
 
 from core.domain.types.tools import ToolSurface
-from core.tool_framework.telemetry import report_run_error
+from core.tool import report_run_error
 from core.tool_framework.tool_decorator import tool
-from core.tool_framework.utils.mcp_tool_listing import build_mcp_tool_listing
+from core.tool_framework.utils import build_mcp_tool_listing
 from integrations.openclaw import (
     OpenClawConfig,
     build_openclaw_config,

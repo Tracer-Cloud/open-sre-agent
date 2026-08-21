@@ -6,10 +6,10 @@ transport shipped without principal binding, a turn timeout, ``/stop`` or
 credit metering while the whole border suite stayed green — the concerns were
 copied from the nearest neighbour, minus whatever the copy dropped.
 
-Concerns are detected in package source rather than by module name: the same
-concern legitimately lives in ``security.py`` on one transport and
-``inbound_security.py`` on another, and importing transport modules would drag
-platform SDKs into this test.
+Concerns are detected in package source rather than by module name: Slack
+may keep a concern in ``security.py`` while Telegram uses
+``inbound_security.py``. Importing transport modules would pull platform
+SDKs into this test.
 
 Known gaps are a ledger, asserted *exactly*: fixing one fails the test until
 its entry is removed, so the ledger can only shrink, and a new transport (auto-
@@ -51,9 +51,9 @@ _REQUIRED_CONCERNS: dict[str, str] = {
     "stop command handling": "is_stop_command",
     # Turns are metered.
     "credit metering": "consume_credits",
-    # The sink cooperates with host-side cancellation instead of relying on
-    # the harness patching the attribute on.
-    "sink declares turn_cancel": "self.turn_cancel",
+    # Turn output cooperates with host-side cancellation instead of relying
+    # on the harness patching the attribute on.
+    "turn output declares turn_cancel": "self.turn_cancel",
 }
 
 #: Concerns each existing transport is known to lack. Ledger, not allowlist:
@@ -114,6 +114,6 @@ def test_transport_keeps_no_local_copy_of_hoisted_concerns(transport: str) -> No
     copies = sorted(name for name, marker in _FORBIDDEN_LOCAL_COPIES.items() if marker in source)
 
     assert copies == [], (
-        f"transport {transport!r} reintroduced {copies}; the shared implementation "
-        "lives in gateway.core (identity_policy / config.constants.gateway)."
+        f"transport {transport!r} reintroduced {copies}; use "
+        "gateway.core.identity_policy / config.constants.gateway."
     )

@@ -6,7 +6,7 @@ from typing import Any, Final
 
 from core.domain.types.tools import ToolSurface
 from core.tool_framework.tool_decorator import tool
-from core.tool_framework.utils.tool_availability import tool_unavailable
+from core.tool_framework.utils import tool_unavailable
 from integrations.yandex_cloud.availability import (
     YC_INJECTED_PARAMS,
     client_from_params,
@@ -101,6 +101,7 @@ def _network_target_states(
             _NLB_SERVICE,
             f"{_NLB_PATH}/{balancer_id}:getTargetStates",
             {"targetGroupId": group_id},
+            page_size=None,
         )
         if not states.get("success"):
             errors.append(f"{group_id}: {states.get('error', '')}")

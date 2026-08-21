@@ -392,7 +392,7 @@ _BUILTIN_SPECS: tuple[IntegrationSpec, ...] = (
     IntegrationSpec(service="clickhouse", has_verifier=True, verify_order=23),
     IntegrationSpec(service="alicloud", direct_effective=True),
     IntegrationSpec(service="notion"),
-    IntegrationSpec(service="prefect", has_verifier=True, verify_order=51),
+    IntegrationSpec(service="prefect", has_verifier=True, direct_effective=True, verify_order=51),
     IntegrationSpec(
         service="posthog",
         has_verifier=True,
@@ -710,13 +710,13 @@ def family_key(service_key: str) -> str:
 
 # Wire the concrete resolver into the platform-level seam so callers in
 # ``tools/`` can normalize service keys without importing from
-# ``integrations/`` directly, keeping ``platform/`` free of a reverse
+# ``integrations/`` directly, keeping ``infrastructure/`` free of a reverse
 # dependency on ``integrations/``.
 # Kept at import time so any consumer that has already imported the
 # ``integrations`` package (every CLI entry point does so during startup)
 # sees the real mapping instead of the identity fallback.
 def _install_family_key_resolver() -> None:
-    from platform.service_families.families import register_family_key_resolver
+    from infrastructure.service_families.families import register_family_key_resolver
 
     register_family_key_resolver(family_key)
 

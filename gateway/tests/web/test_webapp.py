@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import importlib
-import sys
 from http import HTTPStatus
 from unittest.mock import MagicMock
 
@@ -20,7 +19,7 @@ def test_webapp_module_calls_init_sentry_on_import(monkeypatch: pytest.MonkeyPat
     from bootstrap.process import reset_process_runtime_for_tests
 
     init_mock = MagicMock()
-    monkeypatch.setattr("platform.observability.errors.sentry.init_sentry", init_mock)
+    monkeypatch.setattr("infrastructure.observability.errors.sentry.init_sentry", init_mock)
     reset_process_runtime_for_tests()
 
     # Act
@@ -29,18 +28,6 @@ def test_webapp_module_calls_init_sentry_on_import(monkeypatch: pytest.MonkeyPat
     # Assert: the web entrypoint still reports crashes, now via WEB_PROFILE
     # rather than a direct call.
     init_mock.assert_called_once()
-
-
-def test_webapp_imports_after_stdlib_platform_cached(monkeypatch: pytest.MonkeyPatch) -> None:
-    """Docker/uvicorn can cache stdlib ``platform`` before loading the ASGI app."""
-    import platform as stdlib_platform
-
-    monkeypatch.setitem(sys.modules, "platform", stdlib_platform)
-
-    reloaded = importlib.reload(webapp)
-
-    assert hasattr(reloaded, "app")
-    assert hasattr(sys.modules["platform"], "__path__")
 
 
 def test_health_response_returns_known_fields() -> None:

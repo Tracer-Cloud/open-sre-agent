@@ -100,7 +100,7 @@ def ensure_endpoint_settings(provider: ProviderOption) -> dict[str, str] | None:
 
 
 def _prompt_endpoint(provider: ProviderOption) -> dict[str, str] | None:
-    from platform.terminal.theme import ERROR
+    from infrastructure.terminal.theme import ERROR
     from surfaces.cli.wizard._ui import WizardBack, _console, _prompt_value, _step
 
     normalize = _base_url_normalizer(provider)

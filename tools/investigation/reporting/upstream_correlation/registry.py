@@ -1,7 +1,7 @@
 """Build an upstream-evidence provider from the current investigation state.
 
 Vendor-neutral: iterates over builders registered in
-:mod:`platform.delivery.reporting.upstream_registry` (the Datadog builder registers
+:mod:`infrastructure.delivery.reporting.upstream_registry` (the Datadog builder registers
 itself via ``integrations.datadog.correlation.registration``). Historically
 this module imported ``integrations.datadog.correlation.build_datadog_provider``
 directly, which is a ``tools -> integrations`` edge (T-4 layering audit,
@@ -13,7 +13,7 @@ from __future__ import annotations
 from typing import Any
 
 from core.domain.types.upstream import UpstreamEvidenceProvider
-from platform.delivery.reporting.upstream_registry import iter_upstream_provider_builders
+from infrastructure.delivery.reporting.upstream_registry import iter_upstream_provider_builders
 
 
 def target_resource_from_state(state: dict[str, Any]) -> str:
@@ -62,7 +62,7 @@ def build_upstream_evidence_provider(state: dict[str, Any]) -> UpstreamEvidenceP
     """Vendor-agnostic factory: pick a correlation provider for ``state``.
 
     Iterates over every registered builder (see
-    :mod:`platform.delivery.reporting.upstream_registry`) and returns the first
+    :mod:`infrastructure.delivery.reporting.upstream_registry`) and returns the first
     non-``None`` provider. The Datadog builder is the current default;
     additional vendors can plug in without touching this module.
     """

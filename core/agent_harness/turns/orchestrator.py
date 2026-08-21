@@ -91,8 +91,8 @@ from core.agent_harness.turns.turn_route import (
 )
 from core.agent_harness.turns.turn_snapshot import TurnSnapshot
 from core.llm_invoke_errors import is_cli_timeout_error, remediate_missing_llm_credentials
-from platform.harness_ports import preferred_evidence_sources_for
-from platform.observability.trace.spans import component_span, emit_route
+from infrastructure.harness_ports import preferred_evidence_sources_for
+from infrastructure.observability.trace.spans import component_span, emit_route
 
 log = logging.getLogger(__name__)
 
@@ -536,6 +536,12 @@ def run_turn(
     )
 
     handoff_contents = action_result.handoff_contents
+    # Routing keys off what the *planner* asked for. The tags appended below are
+    # harness guidance for the assistant (evidence tier, goal continuation), not
+    # a request to answer. Letting them reach the router turned a turn the action
+    # had already answered into a gather turn, which answered it a second time
+    # with a different number under a different label.
+    planner_handoffs = action_result.handoff_contents
     tier_tag = handoff_tag_for(evidence_need)
     if tier_tag is not None and tier_tag not in handoff_contents:
         handoff_contents = (*handoff_contents, tier_tag)
@@ -554,7 +560,7 @@ def run_turn(
     route = _route_turn(
         _routing_input_from_result(action_result, observation),
         user_text=text,
-        handoff_contents=handoff_contents,
+        handoff_contents=planner_handoffs,
     )
     log.debug(
         "turn route=%s planned=%s executed=%s handled=%s observation=%s",

@@ -18,7 +18,7 @@ from typing import Any, cast
 
 from core.domain.types.tools import ToolSurface
 from core.tool_framework.tool_decorator import tool
-from core.tool_framework.utils.tool_availability import tool_unavailable
+from core.tool_framework.utils import tool_unavailable
 from integrations.aws.aws_sdk_client import execute_aws_sdk_call
 from integrations.sqs import (
     DEFAULT_SQS_MAX_QUEUES,
@@ -221,7 +221,7 @@ def get_sqs_queue_attributes(
         queues.append({"name": name, "url": url, **_parse_attributes(raw_attrs)})
 
     # No "error" key on success: the runtime tool loop flags failure on a truthy
-    # "error" (core.execution._normalize_result).
+    # "error" (core.tool.execution._normalize_result).
     return {
         "source": "sqs",
         "available": True,

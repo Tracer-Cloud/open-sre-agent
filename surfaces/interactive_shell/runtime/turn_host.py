@@ -21,17 +21,22 @@ from typing import TYPE_CHECKING, Any
 from rich.console import Console
 
 if TYPE_CHECKING:
-    from core.agent_harness.runtime import HeadlessAgent
+    from infrastructure.turn_host.turn_handler import TurnHandler
 
-from platform.analytics.repl_context import bound_repl_turn_context
-from platform.analytics.usage_context import UsageSurface, bound_usage_context
-from platform.observability.trace.spans import bind_session_trace, emit_thread_boundary
+from infrastructure.analytics.repl_context import bound_repl_turn_context
+from infrastructure.analytics.usage_context import UsageSurface, bound_usage_context
+from infrastructure.observability.trace.spans import (
+    bind_session_trace,
+    emit_thread_boundary,
+)
 from surfaces.interactive_shell.runtime.agent_presentation import (
     AgentEvent,
     AgentEventSink,
     ConsoleAgentEventSink,
 )
-from surfaces.interactive_shell.runtime.background.workers import BackgroundTaskManager
+from surfaces.interactive_shell.runtime.background.workers import (
+    BackgroundTaskManager,
+)
 from surfaces.interactive_shell.runtime.core.confirmation import (
     DispatchCancelled,
     request_confirmation_via_prompt,
@@ -71,8 +76,8 @@ class AgentTurnResources:
     #: terminal; an embedding caller passes its console so agent responses and
     #: tool output land in the same stream as the startup renders.
     console: Console | None = None
-    #: Session-scoped agent; rebound to each turn's streaming console.
-    agent: HeadlessAgent | None = None
+    #: Session-scoped turn host; each turn binds its own streaming console.
+    turn_handler: TurnHandler | None = None
 
 
 def _streaming_console(
@@ -198,7 +203,7 @@ async def _run_agent_turn_loop(
                 confirm_fn=confirm,
                 is_tty=None,
                 request_exit=runtime.request_exit,
-                agent=runtime.agent,
+                handler=runtime.turn_handler,
             )
     except asyncio.CancelledError:
         await emit(AgentEvent(type="turn_interrupted"))

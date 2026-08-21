@@ -7,8 +7,8 @@ from core.agent_harness.prompts.action.multi_step_policy import (
     ACTION_LOCAL_SHELL_MULTI_STEP_RULE,
 )
 
-# Biases when the planner offers scheduling, from the CONTEXT setup_state
-# facts. Procedural steps live in skills (morning_report), not here.
+# When the planner should offer scheduling, given CONTEXT setup_state.
+# Skill bodies (e.g. morning_report) own the procedural steps.
 ACTION_SETUP_CAPACITY_SCHEDULE_RULE = (
     "- Read the setup-state block when present: if Integrations connected are "
     "not none and this turn finished a naturally recurring skill (or the user "
@@ -28,6 +28,12 @@ __all__ = (
 
 _SYSTEM_PROMPT_BASE = (
     """You plan actions for the OpenSRE interactive shell.
+
+You are a senior production engineer mapping intent to tools. Every tool
+call must advance the user's stated goal — no sightseeing, no "just in
+case" probes, no discovery the request does not need. If a call fails
+recoverably, correct it from the error and continue. The turn ends when
+the goal is met or genuinely blocked, never because you ran one tool.
 
 ══════════════════════════════════════════════════════════
 COMPOUND TURN RULE — HIGHEST PRIORITY, NO EXCEPTIONS:
@@ -605,7 +611,14 @@ schema fields over burying tags in content prose:
   explain/docs chat about analytics with no number request. Also set
   session_goal=true on these handoffs so the host continues until the number
   is delivered (the host derives attach from metric_read when the flag is
-  omitted; prefer setting the boolean explicitly).
+  omitted; prefer setting the boolean explicitly). Not for a number the user
+  attributes to a named system — that is service_metric_read.
+- evidence_kind=service_metric_read — a metric or count held by a system the
+  user named (GitHub Actions runs, CI failures, a cloud or monitoring
+  provider). Same "answer with the number" contract as metric_read, but the
+  harness imposes no analytics source, so read the system the user named.
+  "what is the error rate on github?" is service_metric_read; "how many users
+  signed up last week" is metric_read.
 - evidence_kind=incident — bare incident / symptom handoffs.
 - session_goal=true — REQUIRED on every handoff for multi-step or
   "keep going until done" chat checklists / walkthroughs (no local shell
@@ -614,6 +627,12 @@ schema fields over burying tags in content prose:
   the host treats as attach). Prefer session_goal_items=["…", …] for checklist
   criteria. Do NOT set session_goal=true on database_query handoffs — missing
   DB connectivity is explained in one reply, not a multi-turn goal loop.
+  When you attach a goal, the loop answers on the next turn whether or not the
+  user replies — so do NOT close that reply with a question you will not wait
+  for ("should I measure X or Y?"). State the default you are about to use and
+  invite a correction instead: "Measuring <X> over <window>; say so if you meant
+  something else." Ask a real question only when you attach no goal and will
+  genuinely stop for the answer.
 - session_goal_max_turns=<n> — optional session-goal turn cap for that goal.
 - session_goal_items=["…", …] — checklist success criteria (one string per
   item, in order). The host tracks completion via session_goal:done=<index>

@@ -24,6 +24,6 @@ by the CLI.
 
 ## Data Contract Source of Truth
 
-- Event enum: `platform/analytics/events.py`
-- Capture helpers and KPI query specs: `platform/analytics/cli.py`
-- Provider type constraints and coercion: `platform/analytics/provider.py`
+- Event enum: `infrastructure/analytics/events.py`
+- Capture helpers and KPI query specs: `infrastructure/analytics/cli.py`
+- Provider type constraints and coercion: `infrastructure/analytics/provider.py`

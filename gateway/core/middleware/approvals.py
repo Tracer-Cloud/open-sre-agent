@@ -22,7 +22,7 @@ from collections.abc import Mapping
 from dataclasses import dataclass, field
 from typing import Any, Protocol
 
-from core.execution import BeforeToolCallResult, ToolExecutionHooks, ToolExecutionRequest
+from core.tool import BeforeToolCallResult, ToolExecutionHooks, ToolExecutionRequest
 from gateway.core.storage.security_audit import audit_security_action
 
 APPROVE_ACTION_ID = "opensre_approval_approve"
@@ -173,7 +173,7 @@ def arguments_preview(arguments: Mapping[str, Any]) -> str:
     # Key-name redaction first (api_key, token, password, …), then pattern
     # scrub on the serialized form for secrets that ride under neutral keys.
     from gateway.core.attachments.inline import scrub_secrets
-    from platform.observability.trace.redaction import redact_sensitive
+    from infrastructure.observability.trace.redaction import redact_sensitive
 
     safe = redact_sensitive(dict(arguments))
     try:

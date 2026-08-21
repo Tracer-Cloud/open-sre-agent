@@ -17,7 +17,7 @@ Keep tests under domain directories — not loose files at the `tests/` root.
 
 | Path | What it covers |
 |---|---|
-| `tests/<domain>/` | Unit and integration tests for product modules (`cli/`, `tools/`, `integrations/`, `core/`, `platform/`, …). |
+| `tests/<domain>/` | Unit and integration tests for product modules (`cli/`, `tools/`, `integrations/`, `core/`, `infrastructure/`, …). |
 | `tests/synthetic/` | Synthetic RCA simulations with scored fixtures and deterministic scenario assets. |
 | `tests/e2e/` | Real end-to-end scenarios against live services and infrastructure. See [e2e/AGENTS.md](e2e/AGENTS.md) for scenario design principles. |
 | `tests/github_ci/` | Repo hygiene guards (naming, import boundaries, architecture references). |

@@ -401,8 +401,8 @@ GEMINI_CLI_MODELS = (
 # ``build()``. Catalog is forward-compat: once Google ships ``--model`` in
 # headless, the wizard selection plus ``model_env_key="ANTIGRAVITY_CLI_MODEL"``
 # will route through to ``argv`` in a one-line change to ``antigravity_cli.py``.
-# Effort variants (Low/Medium/High/Thinking) shown in ``/models`` belong on
-# opensre's existing ``reasoning_effort`` knob, not here.
+# Effort variants (Low/Medium/High/Thinking) in ``/models`` use the existing
+# ``reasoning_effort`` knob.
 ANTIGRAVITY_CLI_MODELS = (
     ModelOption(
         value="",

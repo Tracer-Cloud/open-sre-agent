@@ -1,0 +1,184 @@
+"""Quiet ``shell_run`` keeps the model closing — it withheld live stdout.
+
+Loud single ``shell_run`` still suppresses closings (output is already on
+screen). Quiet probes never enter display_chunks; the composed closing does.
+"""
+
+from __future__ import annotations
+
+import json
+from typing import Any
+
+from core.agent_harness.turns.action_driver import _compose_response, _TurnCounts
+from core.llm.types import ToolCall
+
+
+class _ToolResult:
+    def __init__(self, payload: dict[str, Any]) -> None:
+        self.content = json.dumps(payload)
+        self.is_error = False
+
+
+class _Result:
+    def __init__(
+        self,
+        *,
+        tool_results: list[tuple[ToolCall, _ToolResult]],
+        final_text: str = "",
+    ) -> None:
+        self.tool_results = tool_results
+        self.executed = list(tool_results)
+        self.final_text = final_text
+        self.planned = [call for call, _ in tool_results]
+
+
+class _Session:
+    def __init__(self) -> None:
+        self.history: list[dict[str, Any]] = []
+
+
+def _shell_call(call_id: str, command: str, *, quiet: bool) -> ToolCall:
+    return ToolCall(id=call_id, name="shell_run", input={"command": command, "quiet": quiet})
+
+
+def _payload(response_text: str) -> dict[str, Any]:
+    return {"ok": True, "response_text": response_text}
+
+
+def _counts(steps: int) -> _TurnCounts:
+    return _TurnCounts(
+        executed_entries=[],
+        executed_count=steps,
+        executed_success_count=steps,
+        generic_success_count=0,
+        planned_count=steps,
+        handled=True,
+        investigation_dispatched=False,
+        handoff_contents=(),
+    )
+
+
+def test_single_quiet_shell_run_keeps_the_model_closing() -> None:
+    # Arrange: quiet withheld live stdout; the closing is the turn display.
+    closing = "Amsterdam is +18C and clear."
+    call = _shell_call("1", "curl wttr.in", quiet=True)
+    result = _Result(
+        tool_results=[(call, _ToolResult(_payload("Amsterdam: +18C")))],
+        final_text=closing,
+    )
+
+    # Act
+    _response_text, display_chunks, _use_final_text = _compose_response(
+        result, _Session(), _counts(1)
+    )
+
+    # Assert: closing shown; raw probe stdout is not reprinted by core.
+    shown = "\n".join(display_chunks)
+    assert closing in shown
+    assert "Amsterdam: +18C" not in shown
+
+
+def test_quiet_string_false_still_suppresses_loud_closing() -> None:
+    # Arrange: models sometimes emit quiet as a string; "false" must not keep closings.
+    call = ToolCall(
+        id="1",
+        name="shell_run",
+        input={"command": "echo hi", "quiet": "false"},
+    )
+    result = _Result(
+        tool_results=[(call, _ToolResult(_payload("hi")))],
+        final_text="done",
+    )
+
+    # Act
+    _response_text, display_chunks, _use_final_text = _compose_response(
+        result, _Session(), _counts(1)
+    )
+
+    # Assert: treated as loud — closing suppressed, no stdout reprint.
+    assert "\n".join(display_chunks) == ""
+
+
+def test_quiet_probes_stay_hidden_when_a_composed_closing_is_shown() -> None:
+    # Arrange: a multi-step chain keeps its closing, so the probes stay hidden.
+    closing = "Amsterdam: sunny. Top story: markets open higher."
+    result = _Result(
+        tool_results=[
+            (
+                _shell_call("1", "curl wttr.in", quiet=True),
+                _ToolResult(_payload("Amsterdam: +18C")),
+            ),
+            (
+                _shell_call("2", "curl news", quiet=True),
+                _ToolResult(_payload("Markets open higher")),
+            ),
+        ],
+        final_text=closing,
+    )
+
+    # Act
+    _response_text, display_chunks, _use_final_text = _compose_response(
+        result, _Session(), _counts(2)
+    )
+
+    # Assert: the composed answer only — no raw curl output under it.
+    shown = "\n".join(display_chunks)
+    assert closing in shown
+    assert "Amsterdam: +18C" not in shown
+    assert "Markets open higher" not in shown
+
+
+def test_loud_shell_run_does_not_reprint_stdout_in_display_chunks() -> None:
+    # Arrange: a non-quiet step, whose stdout the runner already painted.
+    call = _shell_call("1", "echo hi", quiet=False)
+    result = _Result(
+        tool_results=[(call, _ToolResult(_payload("hi")))],
+        final_text="done",
+    )
+
+    # Act
+    _response_text, display_chunks, _use_final_text = _compose_response(
+        result, _Session(), _counts(1)
+    )
+
+    # Assert: nothing to show, so the turn cannot print stdout twice.
+    assert "\n".join(display_chunks) == ""
+
+
+def test_silent_tool_turn_prints_a_blank_line() -> None:
+    from core.agent_harness.turns.action_driver import _end_silent_tool_turn
+
+    printed: list[str] = []
+
+    class _Sink:
+        def print(self, message: str = "") -> None:
+            printed.append(message)
+
+    _end_silent_tool_turn(_Sink())  # type: ignore[arg-type]
+
+    assert printed == [""]
+
+
+def test_a_generic_tool_result_is_not_replaced_by_quiet_stdout() -> None:
+    # Arrange: a registry tool answers the turn while a quiet shell step probes.
+    github = ToolCall(id="1", name="github_cli", input={"command": "run list"})
+    result = _Result(
+        tool_results=[
+            (github, _ToolResult(_payload("3 failed, 59 succeeded"))),
+            (
+                _shell_call("2", "gh api rate_limit", quiet=True),
+                _ToolResult(_payload("rate limit 4998")),
+            ),
+        ],
+        final_text="Here is the run list.",
+    )
+
+    # Act
+    _response_text, display_chunks, _use_final_text = _compose_response(
+        result, _Session(), _counts(2)
+    )
+
+    # Assert: the tool's own answer stands; the probe does not displace it.
+    shown = "\n".join(display_chunks)
+    assert "3 failed, 59 succeeded" in shown
+    assert "rate limit 4998" not in shown

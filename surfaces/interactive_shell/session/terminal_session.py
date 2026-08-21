@@ -117,9 +117,13 @@ class TerminalSession:
     """Completed or in-flight background RCA summaries, keyed by task id."""
 
     background_notification_preferences: BackgroundNotificationPreferences = field(
-        default_factory=BackgroundNotificationPreferences
+        default_factory=BackgroundNotificationPreferences.load
     )
-    """Preferred notification channels for background RCA completion events."""
+    """Preferred notification channels for background RCA completion events.
+
+    Hydrated from the durable store, so channels chosen in an earlier shell still
+    apply. ``load`` never raises and costs one stat when the document is absent.
+    """
 
     background_notices: list[str] = field(default_factory=list)
     """Thread-safe queue of Rich markup messages drained by the REPL main loop."""

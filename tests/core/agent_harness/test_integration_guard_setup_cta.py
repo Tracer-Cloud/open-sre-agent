@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-import platform.harness_ports as harness_ports
+import infrastructure.harness_ports as harness_ports
 from core.agent_harness.prompts.assistant.turn import _build_integration_guard
 from core.agent_harness.turns.turn_snapshot import TurnSnapshot
 

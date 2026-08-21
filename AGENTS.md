@@ -46,8 +46,8 @@
 - Protocol methods you **add or change** use a **docstring-only body** — no
   `...`, no `pass`, no `raise NotImplementedError`, and never a docstring *plus*
   a trailing `...`/`pass`. Precedent (all fully compliant):
-  `platform/filestorage/ports.py`, `core/agent/loop_host.py`,
-  `gateway/core/host/turn_output.py`, `core/llm/types.py`.
+  `infrastructure/filestorage/ports.py`, `core/agent/loop_host.py`,
+  `infrastructure/turn_host/turn_output.py`, `core/llm/types.py`.
 
   ```python
   class ObjectStore(Protocol):
@@ -58,7 +58,7 @@
   **The codebase is not yet compliant, and no tool will tell you.** An AST scan
   of product code counts 89 docstring-only Protocol methods against **108
   `raise NotImplementedError` stubs in 23 files** (`core/agent_harness/ports.py`,
-  `platform/harness_ports.py`, `gateway/core/storage/session/binding_store.py` and
+  `infrastructure/harness_ports.py`, `gateway/core/storage/session/binding_store.py` and
   others). Those are pre-existing and out of scope for a drive-by — do not
   mass-convert them, and do not cite a file as precedent without checking it.
 
@@ -175,11 +175,11 @@ When opening a PR, fill out the [**PR template**](.github/PULL_REQUEST_TEMPLATE.
 | Path                                          | What it does                                                                                                                                                                                                                                                                                                                           |
 | --------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `bootstrap/`                                  | Composition root: shared process boot (`process.py` — env, Sentry, adapters, capability warnings, LLM preload as an ordered `BootStep` table) and the registration steps themselves (`adapters.py`). Every host picks a `ProcessProfile` instead of writing its own boot order. The one package allowed to import `tools` and `integrations` together. |
-| `core/`                                       | Investigation orchestration, context assembly, the shared runtime tool-calling loop, and domain logic (state, types, correlation rules). Includes `core/tool_framework/` — the `BaseTool` base class, `@tool` decorator, registered-tool primitives, error telemetry, skill-guidance helpers, and shared payload utilities (`utils/`). |
+| `core/`                                       | Investigation orchestration, context assembly, the shared runtime tool-calling loop, and domain logic (state, types, correlation rules). `core/tool/` owns tool contracts, schema handling, the registry port, execution, and error reporting; `core/tool_framework/` keeps authoring helpers such as `@tool`, skill guidance, and shared payload utilities (`utils/`). |
 | `surfaces/cli/`                               | Command-line interface, onboarding wizard, local LLM helpers, and CLI tests support. Provider onboarding → `wizard/<provider>.py` (or `wizard/local_llm/`); new subcommands → `commands/<name>.py`. Runtime LLM wiring → [`core/llm/AGENTS.md`](core/llm/AGENTS.md).                                                                                                                                                                                                                                                   |
 | `surfaces/interactive_shell/`                 | Interactive terminal (REPL) loop, slash commands, chat/help surfaces, action-planning harness, and terminal UI.                                                                                                                                                                                                                        |
 | `integrations/`                               | Per-integration config normalization, verification, clients, helpers, store/catalog logic, the Hermes log pipeline, and per-vendor tool packages under `integrations/<vendor>/tools/`.                                                                                                                                                 |
-| `tools/`                                      | Tool registry, per-tool packages for cross-cutting tools that aren't vendor-specific (e.g. `tools/system/fleet_monitoring/`, `tools/system/watch_dog/`, `tools/system/sre_guidance_tool/`), and the interactive-shell action tools. Framework primitives (decorator, base class, utils) live in `core/tool_framework/`.                |
+| `tools/`                                      | Tool registry, per-tool packages for cross-cutting tools that aren't vendor-specific (e.g. `tools/system/fleet_monitoring/`, `tools/system/watch_dog/`, `tools/system/sre_guidance_tool/`), and the interactive-shell action tools. Contracts, schema, and execution live in `core/tool/`; decorator, skill-guidance, and utility helpers live in `core/tool_framework/`.                |
 | `config/`                                     | Shared constants, prompts, and UI theme.                                                                                                                                                                                                                                                                                               |
 | `tests/`                                      | Unit, integration, synthetic, deployment, e2e, chaos engineering, and support tests.                                                                                                                                                                                                                                                   |
 | `docs/`                                       | User-facing documentation, integration guides, and docs-site assets.                                                                                                                                                                                                                                                                   |
@@ -200,19 +200,19 @@ When opening a PR, fill out the [**PR template**](.github/PULL_REQUEST_TEMPLATE.
 
 Main packages one level deeper:
 
-- `platform/analytics/` — Analytics event plumbing and install helpers used by the onboarding flow.
-- `platform/safety/auth/` — JWT and authentication helpers for local and hosted runtime access.
+- `infrastructure/analytics/` — Analytics event plumbing and install helpers used by the onboarding flow.
+- `infrastructure/safety/auth/` — JWT and authentication helpers for local and hosted runtime access.
 - `surfaces/interactive_shell/` — REPL watchdog slash commands (`/watch`, `/watches`, `/unwatch`): PR demo steps live under **Interactive shell: REPL watchdog demo** in [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md#interactive-shell-repl-watchdog-demo).
 - `config/constants/` — Shared prompt and other static constants.
-- `platform/deployment/ec2/` — EC2 AWS SDK primitives (`client`, `config`, EC2/IAM, SSM) and Telegram gateway AMI/systemd lifecycle (`telegram_gateway/`). Makefile: `make build-gateway-image`, `make deploy-gateway`.
-- `platform/safety/guardrails/` — Guardrail rules, evaluation engine, audit helpers, and CLI bindings.
-- `platform/harness_ports.py` — Harness port layer (integration resolution, tool registry, investigation tools, GitHub repo scope). Real implementations are wired at startup via `integrations/harness_adapters.py` and `tools/harness_adapters.py` through `install_harness_ports()` in `surfaces/shared/terminal/output/boundary.py`. See `core/agent_harness/AGENTS.md` for the import boundary.
+- `infrastructure/deployment/ec2/` — EC2 AWS SDK primitives (`client`, `config`, EC2/IAM, SSM) and Telegram gateway AMI/systemd lifecycle (`telegram_gateway/`). Makefile: `make build-gateway-image`, `make deploy-gateway`.
+- `infrastructure/safety/guardrails/` — Guardrail rules, evaluation engine, audit helpers, and CLI bindings.
+- `infrastructure/harness_ports.py` — Harness port layer (integration resolution, tool registry, investigation tools, GitHub repo scope). Real implementations are wired at startup via `integrations/harness_adapters.py` and `tools/harness_adapters.py` through `install_harness_ports()` in `surfaces/shared/terminal/output/boundary.py`. See `core/agent_harness/AGENTS.md` for the import boundary.
 - `integrations/hermes/` — Hermes log tailing, incident classification, correlator, sinks, and investigation bridge.
 - `integrations/llm_cli/` — Subprocess-backed LLM CLIs (e.g. Codex). Extension guide: `integrations/llm_cli/AGENTS.md`.
-- `platform/safety/masking/` — Masking utilities for redacting or normalizing sensitive content.
+- `infrastructure/safety/masking/` — Masking utilities for redacting or normalizing sensitive content.
 - `tools/investigation/` — Composite investigation capability, public entrypoints, semantic stages, and reporting.
 - `core/llm/` — Hosted LLM provider clients, retry/schema helpers, and investigation tool-calling adapters.
-- `platform/safety/sandbox/` — Sandboxed execution helpers for controlled runtime actions.
+- `infrastructure/safety/sandbox/` — Sandboxed execution helpers for controlled runtime actions.
 - `core/state/` — Shared agent runtime envelope (`AgentState`), chat slice, investigation pipeline slice contracts, `EvidenceEntry`, state-update helpers, and pure defaults.
 - `core/domain/types/` — Shared typed contracts for evidence, retrieval, and tool-related payloads.
 - `tools/system/watch_dog/` — Watchdog feature: per-threshold alarm dispatch with cooldown (`--provider telegram|rocketchat`), sitting on top of `integrations/telegram/*` and `integrations/rocketchat/*`.
@@ -226,7 +226,7 @@ The tool registry auto-discovers modules under `tools/`, so the normal path is t
 
 Steps:
 
-1. Pick the simplest shape that fits the tool. Use a `BaseTool` subclass (from `core.tool_framework.base`) for richer behavior; use `@tool(...)` from `core.tool_framework.tool_decorator` for a lightweight function tool.
+1. Pick the simplest shape that fits the tool. Use a `BaseTool` subclass (from `core.tool.contracts`) for richer behavior; use `@tool(...)` from `core.tool_framework.tool_decorator` for a lightweight function tool.
 2. Declare clear metadata: `name`, `description`, `source`, `input_schema`, and any `use_cases`, `requires`, `outputs`, or `retrieval_controls` you need.
 3. Before opening or approving the PR, follow [docs/adding-tools-and-integrations.md](docs/adding-tools-and-integrations.md).
 
@@ -341,5 +341,4 @@ Steps:
   uncached retry and failed the turn. Test it by having the fake dependency
   mutate the shared state *before* raising, which reproduces the race
   deterministically without threads.
-- CI typecheck does **not** cover `tests/`: `make typecheck` runs mypy over `PYTHON_SOURCE_PATHS` (`config core gateway integrations platform surfaces tools`) only. Type errors in test files never fail CI, so do not assume a clean `make typecheck` means the tests you just wrote are type-clean — run mypy on the test path directly when it matters.
-
+- CI typecheck does **not** cover `tests/`: `make typecheck` runs mypy over `PYTHON_SOURCE_PATHS` (`config core gateway integrations infrastructure surfaces tools`) only. Type errors in test files never fail CI, so do not assume a clean `make typecheck` means the tests you just wrote are type-clean — run mypy on the test path directly when it matters.

@@ -16,12 +16,14 @@ from rich.console import Console
 import config.constants.platform as platform_module
 import surfaces.interactive_shell.runtime.action_turn as action_turn
 import surfaces.interactive_shell.runtime.llm_provider_adapter as llm_provider_adapter
-import surfaces.interactive_shell.runtime.shell_turn_execution as shell_turn_execution
 import surfaces.interactive_shell.runtime.slash_adapter as slash_adapter
 import surfaces.interactive_shell.runtime.subprocess_runner as subprocess_runner
+import tests.shared.harness_turn_driver as harness_turn_driver
 import tools.interactive_shell.shell.execution as shell_execution
+from core.agent_harness.accounting.token_accounting import LlmRunInfo
+from core.agent_harness.ports import AnswerRequest, OutputSink
 from core.llm.types import AgentLLMResponse, ToolCall
-from platform.scheduling.task_types import TaskKind, TaskStatus
+from infrastructure.scheduling.task_types import TaskKind, TaskStatus
 from surfaces.interactive_shell.session import Session
 from tests.core.agent._planned_action import (
     PlannedAction,
@@ -35,13 +37,42 @@ from tools.interactive_shell.action_names import (
     ToolKind,
 )
 
-_ACTION_LLM_FACTORY_PATCH = "core.agent_harness.turns.action_driver.default_llm_factory"
-execute_shell_turn = shell_turn_execution.execute_shell_turn
+_ACTION_LLM_FACTORY_PATCHES = (
+    "core.agent_harness.turns.headless_build.default_llm_factory",
+    "surfaces.interactive_shell.runtime.action_turn.default_llm_factory",
+)
+
+
+def _patch_action_llm_factory(monkeypatch: pytest.MonkeyPatch, value: object) -> None:
+    """Patch the default LLM factory wherever the exercised call path resolves it.
+
+    Tests in this file drive the action turn through both entry points --
+    ``run_harness_turn`` (-> HeadlessAgent -> headless_build.default_llm_factory)
+    and ``action_turn.run_action_tool_turn`` directly (its own module-level
+    default_llm_factory binding) -- so both locations are patched; the unused
+    one is simply never read.
+    """
+    for target in _ACTION_LLM_FACTORY_PATCHES:
+        monkeypatch.setattr(target, value)
+
+
+run_harness_turn = harness_turn_driver.run_harness_turn
 
 
 def _capture() -> tuple[Console, io.StringIO]:
     buf = io.StringIO()
     return Console(file=buf, force_terminal=False, highlight=False), buf
+
+
+def _no_answer_agent(
+    message: str,
+    session: Session,
+    console: Console,
+    *,
+    request: AnswerRequest,
+    output: OutputSink | None = None,
+) -> LlmRunInfo | None:
+    return None
 
 
 def _action(
@@ -271,7 +302,7 @@ def _llm_response(
 
 @pytest.fixture(autouse=True)
 def _llm_planner_bridge(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setattr(_ACTION_LLM_FACTORY_PATCH, _MessageMappedActionLLM)
+    _patch_action_llm_factory(monkeypatch, _MessageMappedActionLLM)
 
 
 def test_execute_cli_actions_dispatches_planned_commands(monkeypatch: object) -> None:
@@ -470,8 +501,8 @@ def test_execute_cli_actions_sets_bare_model_for_active_provider(
 ) -> None:
     reasoning_models: list[str] = []
 
-    monkeypatch.setattr(
-        _ACTION_LLM_FACTORY_PATCH,
+    _patch_action_llm_factory(
+        monkeypatch,
         lambda: FakeActionLLM(
             [
                 _llm_response(
@@ -1269,13 +1300,13 @@ def test_execute_cli_actions_counts_planned_and_executed(monkeypatch: object) ->
     captured_executed: list[tuple[int, int, int]] = []
 
     monkeypatch.setattr(
-        "platform.analytics.cli.capture_terminal_actions_planned",
+        "infrastructure.analytics.cli.capture_terminal_actions_planned",
         lambda *, planned_count, has_unhandled_clause: captured_planned.append(
             (planned_count, has_unhandled_clause)
         ),
     )
     monkeypatch.setattr(
-        "platform.analytics.cli.capture_terminal_actions_executed",
+        "infrastructure.analytics.cli.capture_terminal_actions_executed",
         lambda *, planned_count, executed_count, executed_success_count: captured_executed.append(
             (planned_count, executed_count, executed_success_count)
         ),
@@ -1283,15 +1314,15 @@ def test_execute_cli_actions_counts_planned_and_executed(monkeypatch: object) ->
 
     session = Session()
     console, _ = _capture()
-    # Analytics now fire from ShellTurnAccounting inside execute_shell_turn,
+    # Analytics now fire from ShellTurnAccounting inside run_harness_turn,
     # not from run_action_tool_turn directly. Drive the full turn with a no-op
     # answer agent so no real LLM is invoked.
-    result = execute_shell_turn(
+    result = run_harness_turn(
         "run `pwd`",
         session,
         console,
         recorder=None,
-        answer_agent=lambda *_a, **_k: None,
+        answer_agent=_no_answer_agent,
     )
 
     action_result = result.action_result
@@ -1309,7 +1340,7 @@ def test_execute_cli_actions_persists_action_agent_llm_unavailable(
     def _raise() -> object:
         raise RuntimeError("action agent unavailable")
 
-    monkeypatch.setattr(_ACTION_LLM_FACTORY_PATCH, _raise)
+    _patch_action_llm_factory(monkeypatch, _raise)
 
     session = Session()
     console, buf = _capture()
@@ -1327,8 +1358,8 @@ def test_execute_cli_actions_persists_action_agent_llm_unavailable(
 def test_execute_cli_actions_executes_matched_clause_ignoring_unhandled(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    monkeypatch.setattr(
-        _ACTION_LLM_FACTORY_PATCH,
+    _patch_action_llm_factory(
+        monkeypatch,
         lambda: FakeActionLLM([_llm_response([_action("slash", "/health")], has_unhandled=True)]),
     )
 
@@ -1347,13 +1378,13 @@ def test_execute_cli_actions_executes_matched_clause_ignoring_unhandled(
     captured_planned: list[tuple[int, bool]] = []
     captured_executed: list[tuple[int, int, int]] = []
     monkeypatch.setattr(
-        "platform.analytics.cli.capture_terminal_actions_planned",
+        "infrastructure.analytics.cli.capture_terminal_actions_planned",
         lambda *, planned_count, has_unhandled_clause: captured_planned.append(
             (planned_count, has_unhandled_clause)
         ),
     )
     monkeypatch.setattr(
-        "platform.analytics.cli.capture_terminal_actions_executed",
+        "infrastructure.analytics.cli.capture_terminal_actions_executed",
         lambda *, planned_count, executed_count, executed_success_count: captured_executed.append(
             (planned_count, executed_count, executed_success_count)
         ),
@@ -1361,13 +1392,13 @@ def test_execute_cli_actions_executes_matched_clause_ignoring_unhandled(
 
     session = Session()
     console, _ = _capture()
-    # Analytics now fire from ShellTurnAccounting inside execute_shell_turn.
-    result = execute_shell_turn(
+    # Analytics now fire from ShellTurnAccounting inside run_harness_turn.
+    result = run_harness_turn(
         "check health",
         session,
         console,
         recorder=None,
-        answer_agent=lambda *_a, **_k: None,
+        answer_agent=_no_answer_agent,
     )
 
     # The unhandled flag no longer denies the turn: the matched /health runs.
@@ -1391,7 +1422,7 @@ def test_execute_cli_actions_bang_prefix_uses_only_explicit_shell_escape(
         llm_called.append("called")
         raise AssertionError("LLM planner must not be called for !cmd input")
 
-    monkeypatch.setattr(_ACTION_LLM_FACTORY_PATCH, _fail_if_called)
+    _patch_action_llm_factory(monkeypatch, _fail_if_called)
 
     calls: list[tuple[list[str], dict[str, object]]] = []
 
@@ -1431,7 +1462,7 @@ def test_execute_cli_actions_bang_prefix_single_line_dispatches_to_shell(
         llm_called.append("called")
         raise AssertionError("LLM planner must not be called for !cmd input")
 
-    monkeypatch.setattr(_ACTION_LLM_FACTORY_PATCH, _fail_if_called)
+    _patch_action_llm_factory(monkeypatch, _fail_if_called)
 
     calls: list[tuple[list[str], dict[str, object]]] = []
 
@@ -1468,8 +1499,8 @@ def test_execute_cli_actions_handoff_only_plan_falls_through_silently(
     before the real LLM reply ran.  The user saw two assistant headers and internal
     planner reasoning that should have been invisible.
     """
-    monkeypatch.setattr(
-        _ACTION_LLM_FACTORY_PATCH,
+    _patch_action_llm_factory(
+        monkeypatch,
         lambda: FakeActionLLM(
             [
                 _llm_response(

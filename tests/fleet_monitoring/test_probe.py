@@ -14,6 +14,7 @@ from unittest.mock import patch
 import psutil
 import pytest
 
+from tests.shared.product_sources import product_python_files
 from tests.utils.polling import wait_until
 from tools.system.fleet_monitoring.probe import (
     ProcessSnapshot,
@@ -37,7 +38,7 @@ _SOURCE_ROOTS = (
     "core",
     "deployment",
     "integrations",
-    "platform",
+    "infrastructure",
     "services",
     "tools",
 )
@@ -142,7 +143,7 @@ def test_psutil_is_not_imported_outside_sanctioned_modules() -> None:
     leaks: list[str] = []
     py_files: list[pathlib.Path] = []
     for root_name in _SOURCE_ROOTS:
-        py_files.extend(sorted((_REPO_ROOT / root_name).rglob("*.py")))
+        py_files.extend(product_python_files(_REPO_ROOT / root_name))
     for py_file in py_files:
         if py_file in _PSUTIL_SANCTIONED:
             continue

@@ -7,11 +7,13 @@ from typing import Any
 from rich.console import Console, ConsoleOptions, RenderResult
 from rich.text import Text
 
-from platform.observability.trace.redaction import format_json_preview
-from platform.terminal.theme import (
+from infrastructure.observability.trace.redaction import format_json_preview
+from infrastructure.terminal.theme import (
     BRAND,
     DIM,
     ERROR,
+    GLYPH_ERROR,
+    GLYPH_SUCCESS,
     HIGHLIGHT,
     SECONDARY,
     TEXT,
@@ -229,7 +231,7 @@ class _EventLogDisplay:
             err = event.status == "error"
             t = Text()
             t.append(f"{_elapsed_hms(elapsed_total)}  ", style=SECONDARY)
-            t.append("✗  " if err else "✓  ", style=f"bold {ERROR if err else HIGHLIGHT}")
+            t.append(f"{GLYPH_ERROR}  " if err else f"{GLYPH_SUCCESS}  ", style=f"bold {ERROR if err else HIGHLIGHT}")
             t.append(badge_label, style=f"bold {badge_color}")
             t.append("  ·  ", style=DIM)
             t.append(_node_label(node_name), style=f"bold {TEXT}")
@@ -250,7 +252,7 @@ class _EventLogDisplay:
             return
         from rich.markdown import Markdown
 
-        from platform.terminal.theme import MARKDOWN_THEME
+        from infrastructure.terminal.theme import MARKDOWN_THEME
 
         with self._live.console.use_theme(MARKDOWN_THEME):
             self._live.console.print(Markdown(text, code_theme="ansi_dark"))

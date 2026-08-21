@@ -13,7 +13,6 @@ from dataclasses import replace
 import discord
 
 from config.constants.investigation import ALERT_TEMPLATE_CHOICES
-from gateway.core.host.turn_callback import GatewayAgentCallback
 from gateway.core.middleware.approvals import ApprovalBroker
 from gateway.core.storage import SessionResolver
 from gateway.core.storage.session.binding_store import BindingStore
@@ -26,6 +25,7 @@ from gateway.transports.discord.events import (
 )
 from gateway.transports.discord.feedback import record_feedback_interaction
 from gateway.transports.discord.settings import DiscordGatewaySettings
+from infrastructure.turn_host.turn_callback import TurnCallback
 
 _PLATFORM_DISCORD = "discord"
 _THREAD_HISTORY_LIMIT = 40
@@ -98,7 +98,7 @@ def run_discord_gateway_thread(
     *,
     settings: DiscordGatewaySettings,
     logger: logging.Logger,
-    handler: GatewayAgentCallback,
+    handler: TurnCallback,
     bindings: BindingStore,
     executor: ThreadPoolExecutor,
     stop_event: threading.Event,
@@ -124,7 +124,7 @@ async def _discord_gateway_main(
     *,
     settings: DiscordGatewaySettings,
     logger: logging.Logger,
-    handler: GatewayAgentCallback,
+    handler: TurnCallback,
     bindings: BindingStore,
     executor: ThreadPoolExecutor,
     stop_event: threading.Event,

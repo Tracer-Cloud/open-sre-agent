@@ -6,7 +6,7 @@ import os
 import tempfile
 
 from config.constants import OPENSRE_TMP_DIR, ensure_opensre_tmp_dir
-from platform.safety.sandbox.runner import (
+from infrastructure.safety.sandbox.runner import (
     MAX_TIMEOUT,
     SandboxResult,
     run_python_sandbox,

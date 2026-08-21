@@ -10,7 +10,7 @@ import logging
 import os
 import re
 import time
-from collections.abc import Callable
+from collections.abc import Callable, Sequence
 from typing import Any
 
 from core.context_budget import strip_internal_message_markers
@@ -50,7 +50,7 @@ from core.llm.transports.sdk.anthropic_cache import (
 from core.llm.transports.sdk.anthropic_cache import (
     tools_with_cache as _anthropic_tools_with_cache,
 )
-from core.llm.types import AgentLLMResponse, ModelType, ToolCall
+from core.llm.types import AgentLLMResponse, ModelType, SchemaDescribedTool, ToolCall
 
 logger = logging.getLogger(__name__)
 
@@ -121,7 +121,7 @@ class AnthropicAgentClient:
     def model_id(self) -> str | None:
         return self._model
 
-    def tool_schemas(self, tools: list[Any]) -> list[dict[str, Any]]:
+    def tool_schemas(self, tools: Sequence[SchemaDescribedTool]) -> list[dict[str, Any]]:
         return [_anthropic_tool_schema(t) for t in tools]
 
     def describe_image(
@@ -408,7 +408,7 @@ class BedrockConverseAgentClient:
     def model_id(self) -> str | None:
         return self._model
 
-    def tool_schemas(self, tools: list[Any]) -> list[dict[str, Any]]:
+    def tool_schemas(self, tools: Sequence[SchemaDescribedTool]) -> list[dict[str, Any]]:
         from core.llm.transports.sdk.bedrock_converse import build_converse_tool_specs
 
         return build_converse_tool_specs(tools)
@@ -428,8 +428,8 @@ class BedrockConverseAgentClient:
             parse_converse_output,
             to_converse_messages,
         )
-        from platform.safety.guardrails.apply import apply_guardrails_to_converse_payload
-        from platform.safety.guardrails.engine import GuardrailBlockedError
+        from infrastructure.safety.guardrails.apply import apply_guardrails_to_converse_payload
+        from infrastructure.safety.guardrails.engine import GuardrailBlockedError
 
         converse_messages = to_converse_messages(strip_internal_message_markers(messages))
         converse_messages, system = apply_guardrails_to_converse_payload(
@@ -578,7 +578,7 @@ class OpenAIAgentClient:
             return override
         return api_key_env.removesuffix("_API_KEY").replace("_", " ").title()
 
-    def tool_schemas(self, tools: list[Any]) -> list[dict[str, Any]]:
+    def tool_schemas(self, tools: Sequence[SchemaDescribedTool]) -> list[dict[str, Any]]:
         return build_openai_tool_specs(tools)
 
     def describe_image(
@@ -792,7 +792,7 @@ class CLIBackedAgentClient:
     )
 
     def __init__(self, adapter: Any, *, model: str | None = None) -> None:
-        from platform.harness_ports import build_cli_client
+        from infrastructure.harness_ports import build_cli_client
 
         self._adapter = adapter
         self._model = model
@@ -808,10 +808,13 @@ class CLIBackedAgentClient:
     def model_id(self) -> str | None:
         return self._model
 
-    def tool_schemas(self, tools: list[Any]) -> list[dict[str, Any]]:
-        # Return the same dicts — used only to pass back into invoke() below.
+    def tool_schemas(self, tools: Sequence[SchemaDescribedTool]) -> list[dict[str, Any]]:
+        # ``public_input_schema``, not ``input_schema``: injected parameters
+        # (credentials, endpoints) are pruned from what the model is shown. The
+        # other clients already did this; this one did not, so on a CLI-backed
+        # model a tool advertised its own ``github_token`` as fillable.
         return [
-            {"name": t.name, "description": t.description, "input_schema": t.input_schema}
+            {"name": t.name, "description": t.description, "input_schema": t.public_input_schema}
             for t in tools
         ]
 
@@ -822,7 +825,7 @@ class CLIBackedAgentClient:
         system: str | None = None,
         tools: list[dict[str, Any]] | None = None,
     ) -> AgentLLMResponse:
-        from platform.harness_ports import flatten_cli_messages_to_prompt
+        from infrastructure.harness_ports import flatten_cli_messages_to_prompt
 
         tool_block = ""
         if tools:

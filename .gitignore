@@ -193,4 +193,4 @@ crash.log
 factory-ai-extract/
 
 # Local checkout of opensre-infra-aws — separate repo, never track here
-platform/deployment_multi_tenant/
+infrastructure/deployment_multi_tenant/

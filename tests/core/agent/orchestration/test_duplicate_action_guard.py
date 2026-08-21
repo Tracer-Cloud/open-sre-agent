@@ -12,8 +12,8 @@ from __future__ import annotations
 from typing import Any
 
 from core.agent_harness.turns.action_driver import with_duplicate_action_call_guard
-from core.execution import ToolExecutionResult
 from core.llm.types import ToolCall
+from core.tool.execution import ToolExecutionResult
 
 # One emitted tool call: name, arguments, and whether the tool would succeed.
 _Call = tuple[str, dict[str, Any], bool]

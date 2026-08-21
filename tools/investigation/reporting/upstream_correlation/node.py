@@ -7,8 +7,8 @@ from core.domain.types.upstream import (
     UpstreamEvidenceBundle,
 )
 from core.state import InvestigationState
-from platform.observability import get_progress_tracker as get_tracker
-from platform.observability.trace.hook import traceable
+from infrastructure.observability import get_progress_tracker as get_tracker
+from infrastructure.observability.trace.hook import traceable
 from tools.investigation.reporting.upstream_correlation.providers import (
     NoopUpstreamEvidenceProvider,
 )

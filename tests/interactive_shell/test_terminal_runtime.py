@@ -22,8 +22,8 @@ from prompt_toolkit.input.defaults import create_pipe_input
 from prompt_toolkit.keys import Keys
 from prompt_toolkit.output import DummyOutput
 
-from platform.terminal import theme as ui_theme
-from platform.terminal.theme import (
+from infrastructure.terminal import theme as ui_theme
+from infrastructure.terminal.theme import (
     ANSI_RESET,
     get_active_theme_name,
     set_active_theme,
@@ -379,7 +379,7 @@ def test_build_prompt_style_tracks_active_theme() -> None:
 
 
 def test_completion_menu_current_item_uses_highlight_style() -> None:
-    from platform.terminal.theme import BG, HIGHLIGHT
+    from infrastructure.terminal.theme import BG, HIGHLIGHT
 
     set_active_theme("green")
     style = _build_prompt_style()
@@ -398,7 +398,7 @@ def test_completion_menu_current_item_uses_highlight_style() -> None:
 
 
 def test_lazy_rich_style_split_tracks_active_theme() -> None:
-    from platform.terminal import theme as ui_theme
+    from infrastructure.terminal import theme as ui_theme
 
     set_active_theme("green")
     assert bool(ui_theme.DIM) is True
@@ -414,7 +414,7 @@ def test_lazy_rich_style_split_tracks_active_theme() -> None:
 def test_lazy_rich_style_parses_as_real_rich_style() -> None:
     from rich.style import Style
 
-    from platform.terminal import theme as ui_theme
+    from infrastructure.terminal import theme as ui_theme
 
     # Rich resolves a _LazyRichStyle via its underlying ``str`` value, so the
     # contract at call sites is to pass ``str(...)``. Verify that contract
@@ -524,55 +524,6 @@ def test_run_initial_input_dispatches_as_non_tty(monkeypatch: pytest.MonkeyPatch
     assert startup_initial_input.run_initial_input("/remote", Session()) == 0
     assert len(calls) == 1
     assert calls[0]["is_tty"] is False
-
-
-class TestLooksLikeCorrection:
-    """Unit tests for the ``_looks_like_correction`` heuristic.
-
-    Pins the v1 catches, false-positive guards, and limitations so future
-    iteration on ``_INTERVENTION_CORRECTION_RE`` has a regression baseline.
-    """
-
-    @pytest.mark.parametrize(
-        "text",
-        [
-            "no, do that instead",
-            "nope",
-            "nvm",
-            "never mind",
-            "actually, let's check Datadog first",
-            "scratch that, run the synthetic test",
-            "wait, wrong dashboard",
-            "let's do an EKS health check instead",
-            "try a token refresh instead",
-            "wrong dashboard, fix it",
-            "instead, log a warning",
-            "Wait!",  # case-insensitive
-            "NO.",
-        ],
-    )
-    def test_correction_cues_match(self, text: str) -> None:
-        assert loop_turn_detection.looks_like_correction(text) is True
-
-    @pytest.mark.parametrize(
-        "text",
-        [
-            # Punctuation-lookahead guards reject content uses of cue words.
-            "stop the server before redeploying",
-            "instead of returning null, log a warning",
-            "no problem, I'll handle it",
-            "wait for the result",
-            # v1 limitation: cue must be at start of message.
-            "hmm, scratch that",
-            "doesn't work, try X instead",
-            # Edge cases.
-            "",
-            "   ",
-            "```\nstop the server\n```",
-        ],
-    )
-    def test_non_correction_text_does_not_match(self, text: str) -> None:
-        assert loop_turn_detection.looks_like_correction(text) is False
 
 
 class TestLooksLikeConfirmationAnswer:
@@ -730,7 +681,7 @@ class TestSpinnerState:
         assert spinner.inline_spinner_ansi() == ""
 
     def test_inline_spinner_uses_active_theme_highlight(self) -> None:
-        from platform.terminal.theme import set_active_theme
+        from infrastructure.terminal.theme import set_active_theme
 
         set_active_theme("blue")
         spinner = loop_state.SpinnerState()
@@ -1809,7 +1760,7 @@ class TestThemeCommand:
         assert refreshed[0]["theme_notice"] == "blue"
 
     def test_theme_picker_lists_all_registered_themes(self, monkeypatch) -> None:
-        from platform.terminal.theme import list_theme_names
+        from infrastructure.terminal.theme import list_theme_names
         from surfaces.interactive_shell.command_registry import theme as theme_cmd
 
         monkeypatch.setattr(theme_cmd, "repl_tty_interactive", lambda: True)

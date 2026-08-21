@@ -11,20 +11,20 @@ from contextlib import AbstractContextManager, nullcontext
 
 from config.constants.gateway import TURN_ERROR_MESSAGE, TURN_TIMEOUT_MESSAGE, USER_STOP_MESSAGE
 from config.scope_context import bound_storage_scope
-from gateway.core.host.turn_callback import GatewayAgentCallback
 from gateway.core.middleware.active_turns import ActiveTurnRegistry
 from gateway.core.middleware.approvals import ApprovalBroker, approval_tool_hooks
 from gateway.core.middleware.terminal_outcome import TerminalOutcomeArbiter
 from gateway.core.storage import SessionResolver
 from gateway.transports.buzz.approvals import BuzzApprovalPrompter
 from gateway.transports.buzz.inbound_security import enforce_inbound_buzz_message_security
-from gateway.transports.buzz.output_sink import BuzzOutputSink
 from gateway.transports.buzz.pending_approvals import PendingApprovals
 from gateway.transports.buzz.principal import PrincipalResolutionError, resolve_buzz_scope
 from gateway.transports.buzz.session_rotation import conversation_key, resolve_or_rotate_session
 from gateway.transports.buzz.settings import BuzzInboundMessage, GatewaySettings
+from gateway.transports.buzz.turn_output import BuzzTurnOutput
+from infrastructure.analytics.usage_context import UsageSurface, bound_usage_context
+from infrastructure.turn_host.turn_callback import TurnCallback
 from integrations.buzz.client import BuzzClient
-from platform.analytics.usage_context import UsageSurface, bound_usage_context
 
 logger = logging.getLogger(__name__)
 
@@ -43,7 +43,7 @@ async def handle_polled_inbound_buzz_message(
     active_cancels: ActiveTurnRegistry,
     turn_cancel: threading.Event | None = None,
     loop: asyncio.AbstractEventLoop | None = None,
-    handle_callback_to_gateway_agent: GatewayAgentCallback,
+    handle_callback_to_gateway_agent: TurnCallback,
     on_handled: Callable[[], None] | None = None,
 ) -> None:
     """Process one long-polled inbound Buzz mention/reply.
@@ -104,7 +104,7 @@ async def handle_polled_inbound_buzz_message(
             preview,
         )
 
-        sink = BuzzOutputSink(
+        output = BuzzTurnOutput(
             client=client,
             channel_id=event.channel_id,
             edit_interval_seconds=settings.stream_edit_interval_seconds,
@@ -121,7 +121,7 @@ async def handle_polled_inbound_buzz_message(
 
         event_loop = loop or asyncio.get_running_loop()
         terminal = TerminalOutcomeArbiter(cancel_event=turn_cancel)
-        sink.turn_cancel = terminal.cancel_event
+        output.turn_cancel = terminal.cancel_event
 
         def _on_turn_timeout() -> None:
             logger.warning(
@@ -131,7 +131,7 @@ async def handle_polled_inbound_buzz_message(
                 session.session_id[:8],
             )
             try:
-                sink.finalize(TURN_TIMEOUT_MESSAGE)
+                output.finalize(TURN_TIMEOUT_MESSAGE)
             except Exception:
                 logger.debug("[buzz-gateway] timeout finalize failed", exc_info=True)
 
@@ -139,7 +139,7 @@ async def handle_polled_inbound_buzz_message(
             if not terminal.claim():
                 return
             try:
-                sink.finalize(USER_STOP_MESSAGE)
+                output.finalize(USER_STOP_MESSAGE)
             except Exception:
                 logger.debug("[buzz-gateway] user-stop finalize failed", exc_info=True)
 
@@ -156,7 +156,7 @@ async def handle_polled_inbound_buzz_message(
                     handle_callback_to_gateway_agent(
                         event.content,
                         session,
-                        sink,
+                        output,
                         logger,
                     )
             finally:
@@ -176,7 +176,7 @@ async def handle_polled_inbound_buzz_message(
         if terminal.cancel_event.is_set():
             if terminal.claim():
                 try:
-                    sink.finalize(USER_STOP_MESSAGE)
+                    output.finalize(USER_STOP_MESSAGE)
                 except Exception:
                     logger.debug("[buzz-gateway] user-stop finalize failed", exc_info=True)
             if on_handled is not None:
@@ -195,7 +195,7 @@ async def handle_polled_inbound_buzz_message(
                 )
                 if terminal.claim():
                     try:
-                        sink.render_error(TURN_ERROR_MESSAGE)
+                        output.render_error(TURN_ERROR_MESSAGE)
                     except Exception:
                         logger.debug("[buzz-gateway] error finalize failed", exc_info=True)
                 raise

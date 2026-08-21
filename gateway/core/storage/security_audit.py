@@ -4,17 +4,15 @@ One JSON object per line under ``~/.opensre/gateway/security-audit.jsonl``,
 covering approval create/resolve/expire and investigation create/cancel, so
 the record outlives the process that wrote it.
 
-Scope, which is narrower than "audit log" usually implies:
-
-- **One host, one file.** The path is host-global, not per-org-silo.
-- **The lock serializes writers in one process only.** Concurrent gateway
-  workers append to the same file without coordination, so ordering across
-  processes is whatever the filesystem gives. This is not a shared audit
-  store for a multi-worker or multi-host deployment.
-- **Writes are best-effort.** A failed append is logged and swallowed; it
-  must never fail the caller's action.
-- **``detail`` is caller-supplied and unvalidated.** Keeping bodies and
-  secrets out of it is a contract with callers, not something enforced here.
+Scope is narrower than a typical audit log. The path is host-global, not
+per-org. The lock serializes writers in one process only: concurrent
+gateway workers append to the same file without coordination, so
+cross-process order is whatever the filesystem gives. This is not a
+shared store for a multi-worker or multi-host deployment. Writes are
+best-effort: a failed append is logged and swallowed so it never fails
+the caller's action. ``detail`` is caller-supplied and unvalidated;
+keeping bodies and secrets out of it is a contract with callers, not
+enforced here.
 """
 
 from __future__ import annotations

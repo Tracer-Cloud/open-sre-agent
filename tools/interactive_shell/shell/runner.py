@@ -8,6 +8,7 @@ from pathlib import Path
 from typing import Any
 
 import config.constants.platform as _platform
+from infrastructure.terminal.theme import ERROR, GLYPH_ERROR, GLYPH_SUCCESS, HIGHLIGHT
 from tools.interactive_shell.shell import execution as shell_execution
 from tools.interactive_shell.shell.display import format_shell_command_for_display
 from tools.interactive_shell.shell.parsing import (
@@ -20,9 +21,6 @@ from tools.interactive_shell.subprocess import (
     SHELL_COMMAND_TIMEOUT_SECONDS,
     SubprocessPresenter,
 )
-
-_ERROR_STYLE = "error"
-_HIGHLIGHT_STYLE = "highlight"
 
 
 def _shell_payload(
@@ -122,13 +120,13 @@ def run_shell_command(
 
     if not quiet:
         presenter.print_command_output(result.stdout)
-        presenter.print_command_output(result.stderr, style=_ERROR_STYLE)
+        presenter.print_command_output(result.stderr, style=ERROR)
     if result.timed_out:
         response_text = f"command timed out after {SHELL_COMMAND_TIMEOUT_SECONDS} seconds"
 
         if not quiet:
             presenter.print(
-                f"[error]command timed out after {SHELL_COMMAND_TIMEOUT_SECONDS} seconds[/]"
+                f"[{ERROR}]command timed out after {SHELL_COMMAND_TIMEOUT_SECONDS} seconds[/]"
             )
         session.record("shell", command, ok=False, response_text=response_text)
         return _shell_payload(
@@ -151,12 +149,12 @@ def run_shell_command(
         elif had_stderr:
             response_text = (result.stderr or "").strip()
         elif not quiet:
-            presenter.print(f"[{_HIGHLIGHT_STYLE}]✓[/]")
+            presenter.print(f"[{HIGHLIGHT}]{GLYPH_SUCCESS}[/]")
     else:
         code = result.exit_code if result.exit_code is not None else "?"
-        exit_text = f"✗ exit {code}"
+        exit_text = f"{GLYPH_ERROR} exit {code}"
         if not quiet:
-            presenter.print_error(f"✗ exit {code}")
+            presenter.print_error(exit_text)
 
         response_parts = []
         if had_stdout:

@@ -6,9 +6,9 @@ from __future__ import annotations
 
 from typing import Any
 
-from core.tool_framework.metadata import EvidenceType, SideEffectLevel
+from core.tool import EvidenceType, SideEffectLevel
 from core.tool_framework.tool_decorator import tool
-from core.tool_framework.utils.tool_availability import tool_unavailable
+from core.tool_framework.utils import tool_unavailable
 
 _GRAFANA_RUNTIME_PARAMS = (
     "grafana_endpoint",
@@ -281,14 +281,14 @@ def query_grafana_annotations(
 
 
 from core.tool_framework.tool_decorator import tool
+from infrastructure.evidence.evidence_compaction import summarize_counts
+from infrastructure.evidence.log_compaction import build_error_taxonomy, deduplicate_logs
 from integrations.grafana.client import get_grafana_client_from_credentials
 from integrations.opensre.grafana_backend_queries import (
     query_logs_from_backend,
     query_metrics_from_backend,
     query_traces_from_backend,
 )
-from platform.evidence.evidence_compaction import summarize_counts
-from platform.evidence.log_compaction import build_error_taxonomy, deduplicate_logs
 
 
 def _resolve_grafana_client(
@@ -715,7 +715,7 @@ def query_grafana_service_names(
 
 from core.domain.pipeline_spans import extract_pipeline_spans as _extract_pipeline_spans
 from core.tool_framework.tool_decorator import tool
-from platform.evidence.evidence_compaction import DEFAULT_TRACE_LIMIT, compact_traces
+from infrastructure.evidence.evidence_compaction import DEFAULT_TRACE_LIMIT, compact_traces
 
 
 def _query_grafana_traces_extract_params(sources: dict[str, dict]) -> dict[str, Any]:

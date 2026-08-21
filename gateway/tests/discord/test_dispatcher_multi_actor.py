@@ -113,13 +113,13 @@ def test_alice_and_bob_parallel_turns_get_distinct_sessions(
         ),
         patch("gateway.transports.discord.dispatcher.add_reaction", return_value=True),
         patch("gateway.transports.discord.dispatcher.remove_reaction", return_value=True),
-        patch("gateway.transports.discord.output_sink.send_message", return_value="msg-status"),
-        patch("gateway.transports.discord.output_sink.edit_message", return_value=True),
+        patch("gateway.transports.discord.turn_output.send_message", return_value="msg-status"),
+        patch("gateway.transports.discord.turn_output.edit_message", return_value=True),
         patch(
-            "gateway.transports.discord.output_sink.edit_message_with_components", return_value=True
+            "gateway.transports.discord.turn_output.edit_message_with_components", return_value=True
         ),
         patch(
-            "gateway.transports.discord.output_sink.send_message_with_components",
+            "gateway.transports.discord.turn_output.send_message_with_components",
             return_value="msg-final",
         ),
     ):

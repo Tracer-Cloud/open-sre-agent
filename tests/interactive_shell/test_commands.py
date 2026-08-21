@@ -14,7 +14,7 @@ from rich.console import Console
 
 from core.agent_harness.session import SessionCore
 from core.agent_harness.session.persistence.memory import InMemorySessionStore
-from platform.scheduling.task_types import TaskKind, TaskStatus
+from infrastructure.scheduling.task_types import TaskKind, TaskStatus
 from surfaces.interactive_shell.command_registry import SLASH_COMMANDS, dispatch_slash
 from surfaces.interactive_shell.command_registry import repl_data as repl_data_module
 from surfaces.interactive_shell.command_registry.investigation import (
@@ -427,12 +427,65 @@ class TestDispatchSlash:
         assert session.terminal.background_notification_preferences.channels == ("telegram",)
         assert "invalid channel" not in buf.getvalue().lower()
 
+    def test_background_list_reports_an_unreadable_store_without_leaking_the_path(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """dispatch_slash puts no try around the handler, so an escaping store error
+        reaches the transport's generic error path and logs a traceback. The message
+        also carries the absolute document path, and unlike the REPL terminal a chat
+        transport is an external sink, so the path must not reach the reply."""
+        document = tmp_path / "background" / "investigations.json"
+        document.parent.mkdir(parents=True)
+        document.write_text("{not json", encoding="utf-8")
+        monkeypatch.setattr(
+            "config.constants.paths.deployment_home", lambda: tmp_path, raising=False
+        )
+        session = SessionCore(store=InMemorySessionStore())
+        console, buf = _capture()
+
+        assert dispatch_slash("/background list", session, console) is True
+
+        output = buf.getvalue()
+        assert "background records" in output.lower()
+        assert str(tmp_path) not in output
+        assert "investigations.json" not in output
+
+    def test_background_notify_set_survives_into_the_next_session(self) -> None:
+        """Without hydration the document is write-only: the channels persist and
+        the next shell still reads none, so the setting silently never applies."""
+        session = Session()
+        console, _ = _capture()
+        assert dispatch_slash("/background notify set telegram,email", session, console) is True
+
+        fresh = Session()
+
+        assert fresh.terminal.background_notification_preferences.channels == (
+            "telegram",
+            "email",
+        )
+        listed, buf = _capture()
+        assert dispatch_slash("/background notify list", fresh, listed) is True
+        assert "telegram" in buf.getvalue()
+
+    def test_background_notify_list_reads_the_store_on_a_headless_session(self) -> None:
+        """A chat session has no terminal facet to hold preferences, so it would
+        answer "none" however the shell was configured."""
+        shell = Session()
+        console, _ = _capture()
+        assert dispatch_slash("/background notify set rocketchat", shell, console) is True
+
+        headless = SessionCore(store=InMemorySessionStore())
+        chat_console, buf = _capture()
+        assert dispatch_slash("/background notify list", headless, chat_console) is True
+
+        assert "rocketchat" in buf.getvalue()
+
     def test_background_notify_set_validates_against_the_adapter_registry(self) -> None:
         """AC-4 asks that adapters declare background support rather than a curated
         list deciding it. Registering one makes its channel acceptable without any
         edit here, which a hardcoded tuple cannot do."""
         from bootstrap.adapters import install_notification_adapters
-        from platform.delivery.notifications.outbound_registry import (
+        from infrastructure.delivery.notifications.outbound_registry import (
             BACKGROUND_RCA,
             clear_outbound_adapters,
             get_outbound_adapter,
@@ -960,8 +1013,8 @@ class TestIntegrationsCommand:
         assert captured == [["integrations", "setup"]]
 
     def test_remove_uses_native_store_removal(self, monkeypatch: object) -> None:
+        import infrastructure.analytics.cli as analytics_cli
         import integrations.store as store
-        import platform.analytics.cli as analytics_cli
         from surfaces.interactive_shell.command_registry import integrations as m
 
         removed: list[str] = []
@@ -1020,8 +1073,8 @@ class TestMcpCommand:
         assert captured == [["integrations", "setup"]]
 
     def test_disconnect_uses_native_store_removal(self, monkeypatch: object) -> None:
+        import infrastructure.analytics.cli as analytics_cli
         import integrations.store as store
-        import platform.analytics.cli as analytics_cli
         from surfaces.interactive_shell.command_registry import integrations as m
 
         removed: list[str] = []
@@ -1690,7 +1743,7 @@ class TestInvestigateFileCommand:
             track_calls.append((entrypoint.value, trigger_mode.value, input_path))
             return _TrackContext()
 
-        monkeypatch.setattr("platform.analytics.cli.track_investigation", _fake_track)
+        monkeypatch.setattr("infrastructure.analytics.cli.track_investigation", _fake_track)
         monkeypatch.setattr(
             "surfaces.interactive_shell.runtime.investigation_adapter.run_sample_alert_for_session",
             lambda **_kwargs: {"root_cause": "sample cause"},
@@ -1845,7 +1898,7 @@ class TestInvestigateFileCommand:
             track_calls.append((entrypoint.value, trigger_mode.value))
             return _TrackContext()
 
-        monkeypatch.setattr("platform.analytics.cli.track_investigation", _fake_track)
+        monkeypatch.setattr("infrastructure.analytics.cli.track_investigation", _fake_track)
         monkeypatch.setattr(
             "surfaces.interactive_shell.runtime.investigation_adapter.run_investigation_for_session",
             lambda **_kwargs: {"root_cause": "test cause"},
@@ -2218,7 +2271,7 @@ class TestResumeCommand:
             raise RuntimeError("codex: quota or rate limit exceeded (exit 1)")
 
         with patch(
-            "core.agent_harness.turns.action_driver.default_llm_factory",
+            "surfaces.interactive_shell.runtime.action_turn.default_llm_factory",
             side_effect=_raise,
         ):
             result = run_action_tool_turn("check cpu usage", session, console)
@@ -2705,7 +2758,7 @@ class TestRunCliCommand:
 
         console, buf = _capture()
         assert m.run_cli_command(console, ["update"], subprocess_timeout=30.0) is True
-        from platform.terminal.theme import ERROR
+        from infrastructure.terminal.theme import ERROR
 
         assert replayed == [("partial stdout\n", None), ("partial stderr\n", ERROR)]
         assert "timed out" in buf.getvalue()

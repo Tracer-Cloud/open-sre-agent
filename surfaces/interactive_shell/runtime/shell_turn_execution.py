@@ -7,30 +7,25 @@ A test that injects a whole stage (``execute_actions`` / ``gather_evidence`` /
 
 from __future__ import annotations
 
+import logging
 from collections.abc import Callable
 
 from rich.console import Console
 
 from core.agent_harness import (
-    OutputSink,
+    ToolCallingTurnResult,
     TurnResult,
 )
-from core.agent_harness.runtime import HeadlessAgent, TurnBinding
-from core.agent_harness.spi.cancel import host_cancel_requested
 from core.agent_harness.spi.session_goal import (
     SessionGoal,
     format_session_goal_progress,
 )
-from core.execution import ToolExecutionHooks
-from surfaces.interactive_shell.runtime.agent_harness_adapters import resolve_output_sink
+from core.tool import ToolExecutionHooks
+from infrastructure.turn_host.turn_handler import TurnHandler
+from infrastructure.turn_host.turn_output import TurnOutput
+from surfaces.interactive_shell.runtime.agent_harness_adapters import ShellOutputSink
 from surfaces.interactive_shell.runtime.core.turn_accounting import ShellTurnAccounting
-from surfaces.interactive_shell.runtime.shell_agent import build_shell_agent
-from surfaces.interactive_shell.runtime.turn_seams import (
-    AnswerShellQuestion,
-    GatherEvidence,
-    RunActionToolTurn,
-    bind_injected_stages,
-)
+from surfaces.interactive_shell.runtime.shell_agent import shell_agent_build_config
 from surfaces.interactive_shell.session import Session
 from surfaces.interactive_shell.utils.telemetry import PromptRecorder
 
@@ -44,45 +39,27 @@ def execute_shell_turn(
     confirm_fn: Callable[[str], str] | None = None,
     is_tty: bool | None = None,
     request_exit: Callable[[], None] | None = None,
-    agent: HeadlessAgent | None = None,
-    execute_actions: RunActionToolTurn | None = None,
-    gather_evidence: GatherEvidence | None = None,
-    answer_agent: AnswerShellQuestion | None = None,
-    output: OutputSink | None = None,
+    handler: TurnHandler | None = None,
+    output: TurnOutput | None = None,
     tool_hooks: ToolExecutionHooks | None = None,
 ) -> TurnResult:
-    """Execute one submitted interactive-shell turn via :meth:`HeadlessAgent.handle`.
+    """Run one submitted shell turn through the shared turn host.
 
-    Pass a long-lived ``agent`` (the REPL builds one at startup and rebinds it
-    per turn) so the tool stack is not rebuilt every turn; without one, an agent
-    is built for this call. ``execute_actions`` / ``gather_evidence`` /
-    ``answer_agent`` replace a whole stage — the test injection seams typed in
-    ``turn_seams``.
+    The same :class:`TurnHandler` the chat transports use, built with the
+    shell's own :func:`shell_agent_build_config` so the REPL keeps its tools,
+    prompts and gather phase. Pass a long-lived ``handler`` (the REPL builds one
+    at startup) so the tool stack is not rebuilt every turn.
     """
-    resolved_output = resolve_output_sink(console, output)
-    if agent is None:
-        agent = build_shell_agent(
-            session, console, output=resolved_output, request_exit=request_exit
+    resolved_output: TurnOutput = output if output is not None else ShellOutputSink(console)
+    # The host reads per-turn tool hooks off the output, the same way a chat
+    # transport supplies them.
+    resolved_output.tool_hooks = tool_hooks  # type: ignore[attr-defined]
+    if handler is None:
+        handler = TurnHandler(
+            console=console,
+            agent_build=shell_agent_build_config(request_exit=request_exit),
+            retain_only_current_session=True,
         )
-    binding = TurnBinding(
-        session=session,
-        output=resolved_output,
-        tool_hooks=tool_hooks,
-        console=console,
-        confirm_fn=confirm_fn,
-        is_tty=is_tty,
-    )
-    bind_injected_stages(
-        agent,
-        session,
-        console,
-        resolved_output,
-        execute_actions=execute_actions,
-        answer_agent=answer_agent,
-        gather_evidence=gather_evidence,
-        request_exit=request_exit,
-        tool_hooks=tool_hooks,
-    )
 
     def _on_progress(goal: SessionGoal) -> None:
         rendered = format_session_goal_progress(goal, session=session)
@@ -93,13 +70,31 @@ def execute_shell_turn(
     def _accounting(message: str) -> ShellTurnAccounting:
         return ShellTurnAccounting(session=session, text=message, recorder=recorder)
 
-    return agent.handle(
+    result = handler.run(
         text,
-        binding,
+        session,
+        resolved_output,
+        logging.getLogger("opensre.interactive_shell"),
+        console=console,
+        confirm_fn=confirm_fn,
+        is_tty=is_tty,
         accounting_factory=_accounting,
-        cancel_requested=lambda: host_cancel_requested(resolved_output),
         on_progress=_on_progress,
     )
+    if result is None:
+        # The process gate refused the turn; the host already said so on the
+        # output. Report a turn that ran nothing rather than inventing an answer.
+        return TurnResult(
+            final_intent="cli_agent_at_capacity",
+            action_result=ToolCallingTurnResult(
+                planned_count=0,
+                executed_count=0,
+                executed_success_count=0,
+                has_unhandled_clause=False,
+                handled=False,
+            ),
+        )
+    return result
 
 
 __all__ = ["execute_shell_turn"]

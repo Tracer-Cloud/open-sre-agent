@@ -198,7 +198,7 @@ def test_architecture_save_observations_tool_reads_session_from_context(
         ACTION_TOOL_CONTEXT_RESOURCE_KEY,
         ActionToolContext,
     )
-    from core.types import AgentToolContext
+    from core.tool.contracts import AgentToolContext
 
     monkeypatch.setattr(
         "integrations.github.tools.architecture_issue_tool.tool.save_architecture_observations",

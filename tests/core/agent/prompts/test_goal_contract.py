@@ -55,6 +55,21 @@ def test_shell_goal_contract_lives_in_cli_preamble_not_gateway() -> None:
     assert "setup-state block" not in GATEWAY_PREAMBLE.lower()
 
 
+def test_preambles_carry_senior_on_call_working_style() -> None:
+    _mentions(
+        CLI_PREAMBLE,
+        "senior production engineer",
+        "senior on-call engineer",
+        "finish line",
+    )
+    _mentions(
+        GATEWAY_PREAMBLE,
+        "senior on-call engineer",
+        "finish line",
+        "do not flatter",
+    )
+
+
 def test_action_capacity_rule_ties_facts_to_propose_not_skip() -> None:
     # Arrange / Act
     rule = ACTION_SETUP_CAPACITY_SCHEDULE_RULE
@@ -74,6 +89,15 @@ def test_action_capacity_rule_ties_facts_to_propose_not_skip() -> None:
     # Must not tell the planner to skip offers merely because schedules exist.
     assert re.search(r"do not skip the offer only because schedule_count", rule, re.I)
     assert len(rule) < 600
+
+
+def test_action_system_prompt_requires_goal_oriented_tool_calls() -> None:
+    _mentions(
+        _SYSTEM_PROMPT_BASE,
+        "advance the user's stated goal",
+        "no sightseeing",
+        "genuinely blocked",
+    )
 
 
 def test_action_capacity_rule_is_wired_into_stable_system_prompt() -> None:
@@ -109,7 +133,7 @@ def test_action_capacity_rule_is_wired_into_stable_system_prompt() -> None:
 
 def test_goal_contract_does_not_belong_in_setup_state_facts() -> None:
     # Arrange: render_setup_state must stay guidance-free (plan invariant).
-    from platform.setup_state import SetupSnapshot, render_setup_state
+    from infrastructure.setup_state import SetupSnapshot, render_setup_state
 
     # Act
     facts = render_setup_state(

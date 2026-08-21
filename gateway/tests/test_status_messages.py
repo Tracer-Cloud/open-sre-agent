@@ -3,8 +3,8 @@
 from __future__ import annotations
 
 from core.llm.shared.llm_retry import CREDIT_EXHAUSTED_MARKER
-from core.tool_framework.registered_tool import RegisteredTool
-from gateway.core.host.status_messages import (
+from core.tool.contracts import RegisteredTool
+from infrastructure.turn_host.status_messages import (
     INITIAL_STATUSES,
     _tool_label,
     initial_status_message,
@@ -13,6 +13,7 @@ from gateway.core.host.status_messages import (
     status_from_tool_start,
     user_facing_error_message,
 )
+from tools.registry import describe_registered_tool
 
 
 def test_user_facing_error_hides_raw_exception_detail() -> None:
@@ -90,7 +91,7 @@ def test_tool_status_uses_registry_description(monkeypatch) -> None:
     _register(monkeypatch, [tool])
 
     assert (
-        status_from_tool_start("query_datadog_monitors")
+        status_from_tool_start("query_datadog_monitors", describe=describe_registered_tool)
         == "⏳ Query Datadog monitors for alert configuration and state…"
     )
 
@@ -108,6 +109,7 @@ def test_tool_status_includes_first_input_hint(monkeypatch) -> None:
     status = status_from_tool_start(
         "slash_invoke",
         {"command": "/integrations", "args": ["verify", "telegram"]},
+        describe=describe_registered_tool,
     )
     assert status.startswith("⏳ Run a registered interactive-shell slash command…")
     assert "/integrations" in status

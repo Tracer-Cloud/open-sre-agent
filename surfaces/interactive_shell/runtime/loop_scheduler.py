@@ -7,10 +7,10 @@ import threading
 from typing import Any
 
 from bootstrap.process import SCHEDULED_COMMAND_PROFILE, configure_process
-from platform.scheduling.scheduler.loop_constants import LOOP_PROMPT_PARAM
-from platform.scheduling.scheduler.operation_log import record_scheduler_service_operation
-from platform.scheduling.scheduler.runner import start_background_scheduler
-from platform.scheduling.scheduler.types import ScheduledTask
+from infrastructure.scheduling.scheduler.loop_constants import LOOP_PROMPT_PARAM
+from infrastructure.scheduling.scheduler.operation_log import record_scheduler_service_operation
+from infrastructure.scheduling.scheduler.runner import start_background_scheduler
+from infrastructure.scheduling.scheduler.types import ScheduledTask
 
 log = logging.getLogger(__name__)
 
@@ -38,7 +38,7 @@ def reload_loop_scheduler() -> int:
     Also signals any long-lived gateway scheduler so jobs stay registered after
     this shell exits.
     """
-    from platform.scheduling.scheduler.reload_signal import request_scheduler_reload
+    from infrastructure.scheduling.scheduler.reload_signal import request_scheduler_reload
 
     request_scheduler_reload()
     record_scheduler_service_operation(

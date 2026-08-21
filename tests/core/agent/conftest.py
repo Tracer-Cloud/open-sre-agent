@@ -18,12 +18,9 @@ from config.config import (
 from config.grafana_cloud import load_env
 from config.llm_auth.credentials import status as credential_status
 from config.llm_auth.provider_catalog import provider_spec
-from config.platform_bootstrap import ensure_project_platform_package
 from tests.core.agent._ci_gates import (
     running_in_github_actions,
 )
-
-ensure_project_platform_package()
 
 
 def _repo_root() -> Path:

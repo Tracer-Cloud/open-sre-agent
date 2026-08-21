@@ -1,18 +1,15 @@
 """Gateway process entrypoint and lifecycle owner.
 
-``GatewayController`` is the **process composition root** for the OpenSRE
-background agent (not a scheduler package, not the daemon):
-logging + credential hydrate, then
-:func:`bootstrap.process.configure_process` (``GATEWAY_PROFILE``), then
-assemble the turn handler and start components —
+``GatewayController`` boots the background agent: logging, credentials,
+:func:`bootstrap.process.configure_process` (``GATEWAY_PROFILE``), then one
+turn handler and the components that use it.
 
-* :meth:`start_surfaces` — web + chat transports via :mod:`gateway.startup`
-* :meth:`start_scheduler` — host ``platform.scheduling.scheduler`` in this process (cron / loops)
+* :meth:`start_surfaces` starts web and chat transports together
+* :meth:`start_scheduler` hosts the process-wide cron/loop runner
 
-Owns signals and ``stop``/``wait``. Component states go through
-:func:`gateway.core.process.component_status.write_component_status`. Channel start/stop
-lives in :mod:`gateway.startup`; turn dispatch lives in
-:mod:`gateway.core.host.turn_handler` — not here.
+Owns signals and ``stop``/``wait``. Component state is written through
+:func:`gateway.core.process.component_status.write_component_status`.
+This class does not start individual workers or execute turns.
 """
 
 from __future__ import annotations
@@ -28,14 +25,8 @@ from rich.console import Console
 
 from core.agent_harness.ports import SlashPortsFactory
 from gateway import startup as gateway_startup
+from gateway.core.chat_agent_build import chat_agent_build_config
 from gateway.core.config.logging_config import configure_logging
-from gateway.core.host.concurrency import (
-    TurnConcurrencyGate,
-    process_turn_gate,
-    set_process_turn_gate,
-)
-from gateway.core.host.turn_callback import GatewayAgentCallback
-from gateway.core.host.turn_handler import GatewayTurnHandler
 from gateway.core.lifecycle.credential_hydration import (
     GatewayBootstrap,
     GatewayCredentialHydrator,
@@ -44,6 +35,13 @@ from gateway.core.lifecycle.errors import GatewayConfigurationError
 from gateway.core.process.component_status import clear_component_status, write_component_status
 from gateway.core.process.readiness import set_ready
 from gateway.core.process.supervision import GATEWAY_PID_FILE
+from infrastructure.turn_host.concurrency import (
+    TurnConcurrencyGate,
+    process_turn_gate,
+    set_process_turn_gate,
+)
+from infrastructure.turn_host.turn_callback import TurnCallback
+from infrastructure.turn_host.turn_handler import TurnHandler
 
 # The reload watcher only polls a flag, so it should never need the full
 # shutdown budget; cap it so chat workers keep the rest.
@@ -75,7 +73,7 @@ class GatewayController:
             set_process_turn_gate(turn_gate)
             self.turn_gate = turn_gate
         else:
-            # Same instance Path-2 investigate / InvestigationWorker use.
+            # Same gate POST /investigate and InvestigationWorker use.
             self.turn_gate = process_turn_gate()
         self._stopped = threading.Event()
 
@@ -92,9 +90,10 @@ class GatewayController:
         # same object — do not wrap it in a second "turn handler". Action tools
         # resolve per turn from each chat's live session inside the handler.
         console = Console(force_terminal=False)
-        handler = GatewayTurnHandler(
+        handler = TurnHandler(
             console=console,
             slash_ports_factory=self._slash_ports_factory,
+            agent_build=chat_agent_build_config(),
             gate=self.turn_gate,
         )
 
@@ -117,22 +116,24 @@ class GatewayController:
         self,
         *,
         logger: logging.Logger,
-        handler: GatewayAgentCallback,
+        handler: TurnCallback,
     ) -> None:
         """Start web + every chat transport together (via :mod:`gateway.startup`)."""
         self.surfaces = gateway_startup.start_gateway(logger=logger, handler=handler)
         self.components.update(self.surfaces.statuses)
 
     def start_scheduler(self, *, logger: logging.Logger) -> None:
-        """Host ``platform.scheduling.scheduler`` here — runners and APScheduler stay there.
+        """Host ``infrastructure.scheduling.scheduler`` here — runners and APScheduler stay there.
 
         Not a gateway surface. CLI/shell mutate the task store and call
         :func:`request_scheduler_reload`; this process only installs gated
         runners and starts :func:`start_background_scheduler`.
         """
         from bootstrap.adapters import scheduler_runners
-        from platform.scheduling.scheduler.reload_signal import consume_scheduler_reload_request
-        from platform.scheduling.scheduler.runner import start_background_scheduler
+        from infrastructure.scheduling.scheduler.reload_signal import (
+            consume_scheduler_reload_request,
+        )
+        from infrastructure.scheduling.scheduler.runner import start_background_scheduler
 
         # Investigation + multiplexed scheduled-agent runners (Sentry digest, etc.).
         # A scheduled run costs a turn, so both take the same capacity gate chat
@@ -194,7 +195,7 @@ class GatewayController:
             return
 
         def _watch() -> None:
-            from platform.scheduling.scheduler.reload_signal import (
+            from infrastructure.scheduling.scheduler.reload_signal import (
                 RELOAD_POLL_SECONDS,
                 consume_scheduler_reload_request,
             )
@@ -219,7 +220,7 @@ class GatewayController:
 
     def _reload_scheduler(self, logger: logging.Logger) -> None:
         """Resync the live scheduler (or start one) from the current task store."""
-        from platform.scheduling.scheduler.runner import refresh_background_scheduler
+        from infrastructure.scheduling.scheduler.runner import refresh_background_scheduler
 
         scheduler, task_count = refresh_background_scheduler(self.scheduler)
         self.scheduler = scheduler
@@ -260,7 +261,7 @@ def start_gateway(
     Production boot goes through the CLI composition root
     (``opensre gateway start``), which injects headless slash ports. The
     gateway package must not import the surfaces layer, so bare
-    ``GatewayController()`` here cannot wire them.
+    ``GatewayController()`` here cannot inject them.
     """
     if slash_ports_factory is None:
         raise SystemExit(_BARE_MANAGER_EXIT)

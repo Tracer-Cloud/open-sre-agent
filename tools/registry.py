@@ -17,7 +17,7 @@ from types import ModuleType
 from typing import TYPE_CHECKING
 
 import tools as tools_package
-from core.tool_framework.registered_tool import RegisteredTool, ToolSurface
+from core.tool import RegisteredTool, ToolSurface
 from tools.registry_discovery import (
     INTEGRATION_TOOL_PACKAGES,
     collect_registered_tools_from_module,
@@ -186,6 +186,19 @@ def get_registered_tool(tool_name: str) -> RegisteredTool | None:
     return _load_registry_tool_map().get(tool_name)
 
 
+def describe_registered_tool(tool_name: str) -> tuple[str, ...]:
+    """A tool's own wording — display name then description — for status copy.
+
+    The turn host renders live tool status but sits below this tier, so it is
+    handed this function rather than reaching into the registry itself.
+    Returns an empty tuple for an unknown tool.
+    """
+    tool = get_registered_tool(tool_name)
+    if tool is None:
+        return ()
+    return (tool.display_name or "", tool.description)
+
+
 def get_registered_tool_map(surface: ToolSurface | None = None) -> dict[str, RegisteredTool]:
     if surface is None:
         return dict(_load_registry_tool_map())
@@ -224,7 +237,7 @@ def load_tool(descriptor: ToolDescriptor) -> RegisteredTool | None:
 
 
 class RegisteredToolRegistry:
-    """:class:`~core.agent_harness.ports.ToolRegistry` backed by discovered tool packages."""
+    """:class:`~core.tool.registry.ToolRegistry` backed by discovered tool packages."""
 
     def tools_for_surface(self, surface: ToolSurface) -> list[RegisteredTool]:
         return get_registered_tools(surface)

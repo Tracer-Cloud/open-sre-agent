@@ -13,9 +13,9 @@ from core.agent_harness.tools import (
     execute_with_action_context,
 )
 from core.domain.types.tools import ToolSurface
-from core.tool_framework.registered_tool import RegisteredTool
-from core.tool_framework.utils.schema import object_schema, string_property
-from platform.scheduling.task_types import TaskRecord
+from core.tool import RegisteredTool, SideEffectLevel
+from core.tool_framework.utils import object_schema, string_property
+from infrastructure.scheduling.task_types import TaskRecord
 from tools.interactive_shell.shared.investigation_launch import (
     InvestigationLaunchPorts,
     InvestigationSession,
@@ -42,8 +42,8 @@ def run_text_investigation(
     action_already_listed: bool = False,
 ) -> None:
     def _run(task: TaskRecord) -> dict[str, object]:
-        from platform.analytics.cli import track_investigation
-        from platform.analytics.source import EntrypointSource, TriggerMode
+        from infrastructure.analytics.cli import track_investigation
+        from infrastructure.analytics.source import EntrypointSource, TriggerMode
 
         with (
             track_investigation(
@@ -141,6 +141,7 @@ investigation_start_tool = RegisteredTool(
     ),
     source="interactive_shell",
     surfaces=(ToolSurface.ACTION,),
+    side_effect_level=SideEffectLevel.EXTERNAL,
     parallel_safe=False,
     accepts_runtime_context=True,
     run=run_investigation,

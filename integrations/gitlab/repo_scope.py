@@ -186,7 +186,7 @@ def apply_gitlab_repo_scope(
 
 
 class _GitlabVcsRepoScopeProvider:
-    """Adapts GitLab's project/ref/file scope to :class:`platform.harness_ports.VcsRepoScopeProvider`."""
+    """Adapts GitLab's project/ref/file scope to :class:`infrastructure.harness_ports.VcsRepoScopeProvider`."""
 
     vendor = "gitlab"
 

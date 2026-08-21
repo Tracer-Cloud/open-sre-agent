@@ -10,7 +10,7 @@ from prompt_toolkit.input import DummyInput
 from prompt_toolkit.output import DummyOutput
 from pydantic import ValidationError
 
-from platform.scheduling.task_registry import TaskRegistry
+from infrastructure.scheduling.task_registry import TaskRegistry
 from surfaces.interactive_shell.controller import InteractiveShellController
 from surfaces.interactive_shell.runtime.context import (
     ReplRuntimeContext,
@@ -89,7 +89,7 @@ def test_create_context_registers_jsonl_session_trace_store(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """REPL boot wires the JSONL session-trace sink for ATM / span metrics."""
-    from platform.observability.trace.spans import (
+    from infrastructure.observability.trace.spans import (
         NoopSessionTraceStore,
         get_session_trace_store,
         is_session_trace_active,
@@ -123,7 +123,7 @@ def test_create_context_uses_noop_trace_store_for_in_memory_session(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     from core.agent_harness.session import InMemorySessionStore
-    from platform.observability.trace.spans import (
+    from infrastructure.observability.trace.spans import (
         NoopSessionTraceStore,
         get_session_trace_store,
         is_session_trace_active,

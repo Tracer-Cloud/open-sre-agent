@@ -9,7 +9,7 @@ from config.constants import (
     OPENSRE_MEMORY_DISABLED_ENV,
     OPENSRE_MEMORY_GATEWAY_ENABLED_ENV,
 )
-from platform.analytics.usage_context import UsageSurface, get_surface
+from infrastructure.analytics.usage_context import UsageSurface, get_surface
 
 _TRUTHY = frozenset({"1", "true", "yes"})
 _GATEWAY_ANALYTICS_SURFACES = frozenset({UsageSurface.SLACK, UsageSurface.TELEGRAM})

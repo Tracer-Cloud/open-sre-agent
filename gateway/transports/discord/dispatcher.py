@@ -19,7 +19,6 @@ from config.principal import StorageScope
 from config.scope_context import bound_storage_scope
 from core.agent_harness import SessionCore
 from gateway.core.billing.credits_client import CreditsOutcome, consume_credits
-from gateway.core.host.turn_callback import GatewayAgentCallback
 from gateway.core.middleware.active_turns import ActiveTurnRegistry, is_stop_command
 from gateway.core.middleware.approvals import ApprovalBroker, approval_tool_hooks
 from gateway.core.middleware.attention import GateDecision, ThreadAttentionGate
@@ -30,7 +29,6 @@ from gateway.core.storage import SessionResolver
 from gateway.transports.discord.approvals import DiscordApprovalPrompter
 from gateway.transports.discord.client import add_reaction, remove_reaction, send_message
 from gateway.transports.discord.events import DiscordInboundMessage
-from gateway.transports.discord.output_sink import DiscordOutputSink
 from gateway.transports.discord.principal import PrincipalResolutionError, resolve_discord_scope
 from gateway.transports.discord.security import (
     DiscordInboundDecision,
@@ -41,8 +39,10 @@ from gateway.transports.discord.thread_history import (
     seed_session_from_discord_thread,
     session_needs_thread_seed,
 )
+from gateway.transports.discord.turn_output import DiscordTurnOutput
+from infrastructure.analytics.usage_context import UsageSurface, bound_usage_context
+from infrastructure.turn_host.turn_callback import TurnCallback
 from integrations.messaging_security import MessagingPlatform
-from platform.analytics.usage_context import UsageSurface, bound_usage_context
 
 # Discord's reaction API takes the literal Unicode emoji (URL-encoded), not a name.
 _WORKING_EMOJI = "\N{EYES}"
@@ -59,7 +59,7 @@ class DiscordTurnDispatcher:
         settings: DiscordGatewaySettings,
         bot_token: str,
         session_resolver: SessionResolver,
-        handler: GatewayAgentCallback,
+        handler: TurnCallback,
         logger: logging.Logger,
         bot_user_id: str = "",
         approvals: ApprovalBroker | None = None,
@@ -218,7 +218,7 @@ class DiscordTurnDispatcher:
                 emoji=_WORKING_EMOJI,
                 bot_token=self._bot_token,
             )
-            sink = DiscordOutputSink(
+            output = DiscordTurnOutput(
                 bot_token=self._bot_token,
                 channel_id=inbound.channel_id,
                 edit_interval_seconds=self._settings.status_update_interval_seconds,
@@ -231,11 +231,11 @@ class DiscordTurnDispatcher:
                 ),
             )
             terminal = TerminalOutcomeArbiter()
-            sink.turn_cancel = terminal.cancel_event
+            output.turn_cancel = terminal.cancel_event
 
             def _on_turn_timeout() -> None:
                 try:
-                    sink.finalize(TURN_TIMEOUT_MESSAGE)
+                    output.finalize(TURN_TIMEOUT_MESSAGE)
                 except Exception:
                     self._logger.debug("[discord-gateway] timeout finalize failed", exc_info=True)
                 remove_reaction(
@@ -255,7 +255,7 @@ class DiscordTurnDispatcher:
                 if not terminal.claim():
                     return
                 try:
-                    sink.finalize(USER_STOP_MESSAGE)
+                    output.finalize(USER_STOP_MESSAGE)
                 except Exception:
                     self._logger.debug("[discord-gateway] user-stop finalize failed", exc_info=True)
                 remove_reaction(
@@ -303,11 +303,11 @@ class DiscordTurnDispatcher:
                             user_id=inbound.user_id or None,
                         ),
                     ):
-                        self._handler(agent_text, session, sink, self._logger)
+                        self._handler(agent_text, session, output, self._logger)
                 except Exception:
                     if terminal.claim():
                         with suppress(Exception):
-                            sink.render_error(TURN_ERROR_MESSAGE)
+                            output.render_error(TURN_ERROR_MESSAGE)
                         remove_reaction(
                             channel_id=inbound.channel_id,
                             message_id=inbound.message_id,

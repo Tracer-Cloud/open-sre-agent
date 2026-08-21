@@ -12,9 +12,9 @@ from rich.console import Console
 from core.agent_harness.session import SessionCore
 from core.agent_harness.session.persistence.memory import InMemorySessionStore
 from core.agent_harness.turns.turn_results import ToolCallingTurnResult, TurnResult
-from gateway.core.host.bindable_output import BindableOutput
-from gateway.core.host.session_agents import SessionAgentPool
-from gateway.core.host.turn_handler import GatewayTurnHandler
+from infrastructure.turn_host.bindable_output import BindableOutput
+from infrastructure.turn_host.session_agents import SessionAgentPool
+from infrastructure.turn_host.turn_handler import TurnHandler
 from tests.shared.default_headless_build_stub import default_headless_build_stub
 from tests.shared.fake_agent import fake_agent
 
@@ -22,13 +22,13 @@ from tests.shared.fake_agent import fake_agent
 @pytest.fixture(autouse=True)
 def _stub_gateway_turn_analytics(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(
-        "gateway.core.host.turn_handler.capture_gateway_turn_started", lambda **_: None
+        "infrastructure.turn_host.turn_handler.capture_gateway_turn_started", lambda **_: None
     )
     monkeypatch.setattr(
-        "gateway.core.host.turn_handler.capture_gateway_turn_completed", lambda **_: None
+        "infrastructure.turn_host.turn_handler.capture_gateway_turn_completed", lambda **_: None
     )
     monkeypatch.setattr(
-        "gateway.core.host.turn_handler.capture_gateway_turn_failed", lambda **_: None
+        "infrastructure.turn_host.turn_handler.capture_gateway_turn_failed", lambda **_: None
     )
 
 
@@ -80,7 +80,7 @@ def test_pool_reuses_agent_for_same_session(monkeypatch: pytest.MonkeyPatch) -> 
         return agent
 
     monkeypatch.setattr(
-        "gateway.core.host.session_agents.DefaultHeadlessBuild",
+        "infrastructure.turn_host.session_agents.DefaultHeadlessBuild",
         default_headless_build_stub(_fake_build),
     )
     pool = SessionAgentPool(console=Console(force_terminal=False))
@@ -100,7 +100,7 @@ def test_pool_builds_separate_agents_per_session(monkeypatch: pytest.MonkeyPatch
             self.bind_session = MagicMock()
 
     monkeypatch.setattr(
-        "gateway.core.host.session_agents.DefaultHeadlessBuild",
+        "infrastructure.turn_host.session_agents.DefaultHeadlessBuild",
         default_headless_build_stub(lambda **kwargs: _FakeAgent(**kwargs)),
     )
     pool = SessionAgentPool(console=Console(force_terminal=False))
@@ -127,7 +127,7 @@ def test_pool_rebinds_current_session_on_cache_hit(monkeypatch: pytest.MonkeyPat
             self.session = session
 
     monkeypatch.setattr(
-        "gateway.core.host.session_agents.DefaultHeadlessBuild",
+        "infrastructure.turn_host.session_agents.DefaultHeadlessBuild",
         default_headless_build_stub(lambda **kwargs: _FakeAgent(**kwargs)),
     )
     pool = SessionAgentPool(console=Console(force_terminal=False))
@@ -146,12 +146,12 @@ def test_turn_handler_reuses_headless_agent_across_turns(monkeypatch: pytest.Mon
     agent = fake_agent(dispatch_result=_empty_result())
     factory = MagicMock(return_value=agent)
     monkeypatch.setattr(
-        "gateway.core.host.session_agents.DefaultHeadlessBuild",
+        "infrastructure.turn_host.session_agents.DefaultHeadlessBuild",
         default_headless_build_stub(factory),
     )
 
     session = SessionCore(store=InMemorySessionStore())
-    handler = GatewayTurnHandler(console=Console(force_terminal=False))
+    handler = TurnHandler(console=Console(force_terminal=False))
     logger = logging.getLogger("test.reuse")
     handler("one", session, MagicMock(), logger)
     handler("two", session, MagicMock(), logger)
@@ -170,7 +170,7 @@ def _fake_agent_pool(monkeypatch: pytest.MonkeyPatch) -> SessionAgentPool:
             self.bind_session = MagicMock()
 
     monkeypatch.setattr(
-        "gateway.core.host.session_agents.DefaultHeadlessBuild",
+        "infrastructure.turn_host.session_agents.DefaultHeadlessBuild",
         default_headless_build_stub(lambda **kwargs: _FakeAgent(**kwargs)),
     )
     return SessionAgentPool(console=Console(force_terminal=False))
@@ -249,3 +249,63 @@ def test_different_sessions_still_run_concurrently(monkeypatch: pytest.MonkeyPat
 
     # Assert
     assert len(reached) == 2, reached
+
+
+def test_drop_session_removes_cached_agent_and_output(monkeypatch: pytest.MonkeyPatch) -> None:
+    pool = _fake_agent_pool(monkeypatch)
+    session = SessionCore(store=InMemorySessionStore())
+    logger = logging.getLogger("test.pool.drop")
+    first = pool.agent_for(session=session, output=MagicMock(), logger=logger)
+    assert pool.cached_session_ids == frozenset({session.session_id})
+
+    pool.drop_session(session.session_id)
+
+    assert pool.cached_session_ids == frozenset()
+    second = pool.agent_for(session=session, output=MagicMock(), logger=logger)
+    assert second is not first
+
+
+def test_retain_only_current_session_drops_stale_ids_after_rotation(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Shell /new and /resume rotate session_id; the REPL keeps one TurnHandler."""
+    constructed: list[str] = []
+
+    class _FakeAgent:
+        def __init__(self, **kwargs: Any) -> None:
+            constructed.append(str(kwargs["session"].session_id))
+            self.bind_turn = MagicMock()
+            self.bind_session = MagicMock()
+
+    monkeypatch.setattr(
+        "infrastructure.turn_host.session_agents.DefaultHeadlessBuild",
+        default_headless_build_stub(lambda **kwargs: _FakeAgent(**kwargs)),
+    )
+    pool = SessionAgentPool(
+        console=Console(force_terminal=False),
+        retain_only_current_session=True,
+    )
+    logger = logging.getLogger("test.pool.retain")
+    first = SessionCore(store=InMemorySessionStore())
+    second = SessionCore(store=InMemorySessionStore())
+
+    pool.agent_for(session=first, output=MagicMock(), logger=logger)
+    assert pool.cached_session_ids == frozenset({first.session_id})
+
+    pool.agent_for(session=second, output=MagicMock(), logger=logger)
+    assert pool.cached_session_ids == frozenset({second.session_id})
+    assert constructed == [first.session_id, second.session_id]
+
+
+def test_gateway_default_retains_multiple_session_agents(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Chat hosts many conversations on one TurnHandler — do not cull peers."""
+    pool = _fake_agent_pool(monkeypatch)
+    assert pool._retain_only_current_session is False
+    logger = logging.getLogger("test.pool.gateway")
+    a = SessionCore(store=InMemorySessionStore())
+    b = SessionCore(store=InMemorySessionStore())
+    pool.agent_for(session=a, output=MagicMock(), logger=logger)
+    pool.agent_for(session=b, output=MagicMock(), logger=logger)
+    assert pool.cached_session_ids == frozenset({a.session_id, b.session_id})

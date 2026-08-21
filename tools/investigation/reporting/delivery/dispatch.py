@@ -1,7 +1,7 @@
 """Dispatch rendered reports to every registered delivery adapter.
 
 Each vendor supplies a
-:class:`platform.delivery.reporting.delivery_registry.ReportDeliveryAdapter` from its
+:class:`infrastructure.delivery.reporting.delivery_registry.ReportDeliveryAdapter` from its
 own ``integrations/<vendor>/reporting_adapter.py`` module. The bootstrap
 helper in :mod:`tools.investigation.reporting.delivery.bootstrap` triggers
 their side-effect registrations before the loop runs, so this dispatch node
@@ -21,7 +21,7 @@ from __future__ import annotations
 import logging
 
 from core.state import InvestigationState
-from platform.delivery.reporting.delivery_registry import (
+from infrastructure.delivery.reporting.delivery_registry import (
     ReportDeliveryAdapter,
     get_delivery_adapter,
     iter_delivery_adapters,
@@ -104,7 +104,7 @@ def _run_adapter(
 def _messages_payload(messages: ReportMessages) -> dict[str, object]:
     """Return a plain ``dict`` view of the rendered per-channel messages.
 
-    Adapters accept a :class:`platform.delivery.reporting.delivery_registry.DeliveryContext`
+    Adapters accept a :class:`infrastructure.delivery.reporting.delivery_registry.DeliveryContext`
     (a ``Mapping``) so they never touch the concrete
     :class:`~tools.investigation.reporting.formatters.messages.ReportMessages`
     dataclass — that keeps the platform boundary free of ``tools`` types.

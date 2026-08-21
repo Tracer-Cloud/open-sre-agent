@@ -8,7 +8,7 @@ from typing import Any
 
 import httpx
 
-from core.tool_framework.utils.tool_availability import tool_unavailable
+from core.tool_framework.utils import tool_unavailable
 from integrations._validation_helpers import report_validation_failure
 from integrations.bitbucket.config import BitbucketConfig
 

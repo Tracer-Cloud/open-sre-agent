@@ -15,9 +15,8 @@ from typing import Any
 
 from core.agent_harness.tools import ActionToolContext, execute_with_action_context
 from core.domain.types.tools import ToolSurface
-from core.tool_framework.metadata import SideEffectLevel
-from core.tool_framework.registered_tool import RegisteredTool
-from core.tool_framework.utils.schema import object_schema, string_property
+from core.tool import RegisteredTool, SideEffectLevel
+from core.tool_framework.utils import object_schema, string_property
 from tools.cross_vendor.fix_sentry_issue import fix_sentry_issue
 from tools.cross_vendor.fix_sentry_issue.runner import is_issue_fix_enabled
 
