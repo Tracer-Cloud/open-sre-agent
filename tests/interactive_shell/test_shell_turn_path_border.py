@@ -1,6 +1,6 @@
 """The shell's shipped turn path runs through the turn host, not its own agent.
 
-The REPL uses :class:`platform.turn_host.turn_handler.TurnHandler` — the same
+The REPL uses :class:`infrastructure.turn_host.turn_handler.TurnHandler` — the same
 handler Slack, Telegram and Discord use. ``build_shell_agent`` still exists so
 tests can get an agent without standing up a host, but nothing shipped may
 call it: that would rebuild the agent beside the host and let the surfaces
@@ -26,14 +26,14 @@ _PRODUCT_PACKAGES = (
     "core",
     "gateway",
     "integrations",
-    "platform",
+    "infrastructure",
     "surfaces",
     "tools",
 )
 
 _SHELL_AGENT_BUILDER = "build_shell_agent"
 _TURN_HANDLER = "TurnHandler"
-_TURN_HANDLER_MODULE = "platform.turn_host.turn_handler"
+_TURN_HANDLER_MODULE = "infrastructure.turn_host.turn_handler"
 _TURN_PATH = Path("surfaces/interactive_shell/runtime/shell_turn_execution.py")
 
 #: The module that defines the builder, plus its own ``__all__``. Nothing else.
@@ -365,7 +365,7 @@ def test_builder_guard_ignores_unrelated_names() -> None:
 
 def test_turn_host_guard_rejects_an_unrelated_run_call() -> None:
     tree = ast.parse(
-        "from platform.turn_host.turn_handler import TurnHandler\n"
+        "from infrastructure.turn_host.turn_handler import TurnHandler\n"
         "def execute_shell_turn():\n"
         "    agent = object()\n"
         "    return agent.run()\n"
@@ -375,7 +375,7 @@ def test_turn_host_guard_rejects_an_unrelated_run_call() -> None:
 
 def test_turn_host_guard_accepts_handler_run_on_a_typed_parameter() -> None:
     tree = ast.parse(
-        "from platform.turn_host.turn_handler import TurnHandler\n"
+        "from infrastructure.turn_host.turn_handler import TurnHandler\n"
         "def execute_shell_turn(handler: TurnHandler | None = None):\n"
         "    return handler.run('hi', None, None, None)\n"
     )
@@ -384,7 +384,7 @@ def test_turn_host_guard_accepts_handler_run_on_a_typed_parameter() -> None:
 
 def test_turn_host_guard_does_not_leak_bindings_across_functions() -> None:
     tree = ast.parse(
-        "from platform.turn_host.turn_handler import TurnHandler\n"
+        "from infrastructure.turn_host.turn_handler import TurnHandler\n"
         "def _other():\n"
         "    handler = TurnHandler()\n"
         "def execute_shell_turn():\n"
@@ -396,7 +396,7 @@ def test_turn_host_guard_does_not_leak_bindings_across_functions() -> None:
 
 def test_turn_host_guard_rejects_run_after_reassignment() -> None:
     tree = ast.parse(
-        "from platform.turn_host.turn_handler import TurnHandler\n"
+        "from infrastructure.turn_host.turn_handler import TurnHandler\n"
         "def execute_shell_turn(handler: TurnHandler | None = None):\n"
         "    handler = object()\n"
         "    return handler.run()\n"
@@ -406,7 +406,7 @@ def test_turn_host_guard_rejects_run_after_reassignment() -> None:
 
 def test_turn_host_guard_accepts_run_after_optional_construction() -> None:
     tree = ast.parse(
-        "from platform.turn_host.turn_handler import TurnHandler\n"
+        "from infrastructure.turn_host.turn_handler import TurnHandler\n"
         "def execute_shell_turn(handler: TurnHandler | None = None):\n"
         "    if handler is None:\n"
         "        handler = TurnHandler()\n"
@@ -417,7 +417,7 @@ def test_turn_host_guard_accepts_run_after_optional_construction() -> None:
 
 def test_turn_host_guard_accepts_run_on_handler_built_inside_if() -> None:
     tree = ast.parse(
-        "from platform.turn_host.turn_handler import TurnHandler\n"
+        "from infrastructure.turn_host.turn_handler import TurnHandler\n"
         "def execute_shell_turn():\n"
         "    if True:\n"
         "        handler = TurnHandler()\n"

@@ -10,7 +10,7 @@ Pinned rules (see ``gateway/AGENTS.md``):
 * ``gateway.startup`` may import peer ``*.startup`` (and ``gateway.web``); peers
   must not import channels.
 * ``gateway.core`` names no chat vendor; a transport names only its own.
-* ``platform.scheduling.scheduler`` never imports ``TurnHandler`` (producer, not a
+* ``infrastructure.scheduling.scheduler`` never imports ``TurnHandler`` (producer, not a
   chat channel — see ``gateway/AGENTS.md`` Channel vs producer).
 """
 
@@ -242,14 +242,14 @@ def _executable_surface_references(path: Path) -> list[str]:
 def test_scheduler_never_imports_the_gateway_turn_handler() -> None:
     """A producer has no user and no turn output — it must not call the chat handler.
 
-    The gateway process may host ``platform.scheduling.scheduler`` (same capacity gate).
+    The gateway process may host ``infrastructure.scheduling.scheduler`` (same capacity gate).
     Runners still enter through ``AgentSession.run_headless_turn``, not
     ``TurnHandler``. Importing the handler here is how someone "fixes"
     the scheduler into a fifth chat channel.
     """
-    banned = ("platform.turn_host.turn_handler",)
-    offenders = _offenders("platform.scheduling.scheduler", banned)
-    for path in _python_files("platform.scheduling.scheduler"):
+    banned = ("infrastructure.turn_host.turn_handler",)
+    offenders = _offenders("infrastructure.scheduling.scheduler", banned)
+    for path in _python_files("infrastructure.scheduling.scheduler"):
         if "tests" in path.parts:
             continue
         tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))

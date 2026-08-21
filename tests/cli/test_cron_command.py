@@ -7,7 +7,7 @@ from pathlib import Path
 import pytest
 from click.testing import CliRunner
 
-from platform.scheduling.scheduler.types import Provider, TaskKind
+from infrastructure.scheduling.scheduler.types import Provider, TaskKind
 from surfaces.cli.commands.cron import _KIND_CHOICES, _PROVIDER_CHOICES, cron_command
 
 
@@ -61,7 +61,7 @@ def test_cron_add_allows_slack_without_chat_id(
     The webhook is the destination, so it must actually be configured — without
     one a bot-token install would store a task that delivers nowhere.
     """
-    from platform.scheduling.scheduler import store as scheduler_store
+    from infrastructure.scheduling.scheduler import store as scheduler_store
 
     store = tmp_path / "scheduler_tasks.json"
     monkeypatch.setattr(scheduler_store, "_default_store_path", lambda: store)
@@ -87,8 +87,8 @@ def test_cron_add_allows_slack_without_chat_id(
 
 
 def test_cron_add_persists_loop_name(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
-    from platform.scheduling.scheduler import store as scheduler_store
-    from platform.scheduling.scheduler.store import list_tasks
+    from infrastructure.scheduling.scheduler import store as scheduler_store
+    from infrastructure.scheduling.scheduler.store import list_tasks
 
     store = tmp_path / "scheduler_tasks.json"
     monkeypatch.setattr(scheduler_store, "_default_store_path", lambda: store)
@@ -118,8 +118,8 @@ def test_cron_add_persists_loop_name(tmp_path: Path, monkeypatch: pytest.MonkeyP
 def test_cron_add_allows_interactive_shell_without_chat_id(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    from platform.scheduling.scheduler import store as scheduler_store
-    from platform.scheduling.scheduler.store import list_tasks
+    from infrastructure.scheduling.scheduler import store as scheduler_store
+    from infrastructure.scheduling.scheduler.store import list_tasks
 
     store = tmp_path / "scheduler_tasks.json"
     monkeypatch.setattr(scheduler_store, "_default_store_path", lambda: store)

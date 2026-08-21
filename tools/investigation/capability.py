@@ -14,9 +14,9 @@ from typing import TYPE_CHECKING, Any, cast
 from config.constants.investigation import MAX_INVESTIGATION_LOOPS
 from core.domain.stream import StreamEvent
 from core.state import AgentState
-from platform.observability.errors.boundary import report_and_reraise
-from platform.observability.errors.sentry import init_sentry
-from platform.observability.trace.spans import stage_span
+from infrastructure.observability.errors.boundary import report_and_reraise
+from infrastructure.observability.errors.sentry import init_sentry
+from infrastructure.observability.trace.spans import stage_span
 from tools.investigation.state_factory import make_initial_state
 from tools.investigation.streaming import (
     InvestigationPipelineStreamError,
@@ -51,7 +51,7 @@ def _capture_exception_once(
 ) -> None:
     if _exception_was_captured(exc):
         return
-    from platform.observability.errors.sentry import capture_exception
+    from infrastructure.observability.errors.sentry import capture_exception
 
     capture_exception(exc, context=context, tags=tags)
     _mark_exception_captured(exc)
@@ -60,7 +60,7 @@ def _capture_exception_once(
 def _loop_metrics_for_error(state: Mapping[str, Any] | None) -> tuple[int, int]:
     """Return ``(loop_count, iteration_cap)`` for error delivery; never raises."""
     try:
-        from platform.analytics.investigation_loop import loop_metrics_from_state
+        from infrastructure.analytics.investigation_loop import loop_metrics_from_state
 
         return loop_metrics_from_state(state)
     except Exception:
@@ -122,7 +122,9 @@ def run_investigation(
         message="run_investigation failed",
         tags={"surface": "pipeline", "component": "tools.investigation.capability"},
     ):
-        from platform.analytics.investigation_loop import bind_investigation_loop_metrics_from_state
+        from infrastructure.analytics.investigation_loop import (
+            bind_investigation_loop_metrics_from_state,
+        )
 
         state = _run(initial, agent_class=agent_class)
         bind_investigation_loop_metrics_from_state(state)
@@ -246,7 +248,7 @@ async def astream_investigation(
     # Silence the global ProgressTracker before starting the background thread
     # so pipeline internals (extract_alert, resolve_integrations, etc.) don't
     # open their own Rich Live display — the StreamRenderer drives it instead.
-    from platform.observability import silence_progress_tracker
+    from infrastructure.observability import silence_progress_tracker
 
     silence_progress_tracker()
 

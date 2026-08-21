@@ -2,8 +2,8 @@
 
 from __future__ import annotations
 
-from platform.scheduling.scheduler.tasks import build_message
-from platform.scheduling.scheduler.types import Provider, ScheduledTask, TaskKind
+from infrastructure.scheduling.scheduler.tasks import build_message
+from infrastructure.scheduling.scheduler.types import Provider, ScheduledTask, TaskKind
 
 
 def test_github_pr_sweep_kind_invokes_agent_runner(monkeypatch) -> None:
@@ -14,7 +14,7 @@ def test_github_pr_sweep_kind_invokes_agent_runner(monkeypatch) -> None:
         return "PR sweep ok"
 
     monkeypatch.setattr(
-        "platform.scheduling.scheduler.tasks.invoke_agent_runner",
+        "infrastructure.scheduling.scheduler.tasks.invoke_agent_runner",
         fake_runner,
     )
     task = ScheduledTask(

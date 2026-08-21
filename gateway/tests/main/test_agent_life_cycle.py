@@ -75,12 +75,12 @@ def _patch_process_boot(monkeypatch) -> None:
     monkeypatch.setattr("bootstrap.process.install_harness_adapters", lambda: None)
     monkeypatch.setattr("bootstrap.process.install_scheduler_runners", lambda: None)
     monkeypatch.setattr(
-        "platform.observability.errors.sentry.init_sentry",
+        "infrastructure.observability.errors.sentry.init_sentry",
         lambda **_kwargs: None,
     )
     monkeypatch.setattr("core.llm.internal.preload.preload_llm_clients", lambda: None)
     monkeypatch.setattr(
-        "platform.safety.sandbox.capabilities.boot_capability_warnings",
+        "infrastructure.safety.sandbox.capabilities.boot_capability_warnings",
         lambda: [],
     )
 
@@ -106,7 +106,7 @@ def test_gateway_start_returns_running_gateway_handle(monkeypatch) -> None:
     )
     # Patch the agent factory the gateway uses so the turn callback is spyable.
     monkeypatch.setattr(
-        "platform.turn_host.session_agents.DefaultHeadlessBuild",
+        "infrastructure.turn_host.session_agents.DefaultHeadlessBuild",
         default_headless_build_stub(agent_cls),
     )
 
@@ -157,7 +157,7 @@ def test_gateway_start_returns_running_gateway_handle(monkeypatch) -> None:
     assert ctor.kwargs["session"] is session
     # Session-scoped agent holds a live sink proxy; the transport sink is bound
     # each turn (not passed as the constructor ``output`` identity).
-    from platform.turn_host.bindable_output import BindableOutput
+    from infrastructure.turn_host.bindable_output import BindableOutput
 
     assert isinstance(ctor.kwargs["output"], BindableOutput)
     assert ctor.kwargs["surface"] == "gateway"

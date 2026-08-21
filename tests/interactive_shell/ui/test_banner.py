@@ -32,7 +32,7 @@ def test_banner_shows_ollama_model(monkeypatch: object) -> None:
 
 
 def test_ready_box_uses_active_theme_palette() -> None:
-    from platform.terminal.theme import set_active_theme
+    from infrastructure.terminal.theme import set_active_theme
 
     set_active_theme("pink")
     pink_rgb = "255;179;217"
@@ -184,7 +184,7 @@ def test_count_scheduled_tasks_survives_store_failure(monkeypatch: object) -> No
     real_import = builtins.__import__
 
     def _fail_scheduler_store(name: str, *args: object, **kwargs: object) -> object:
-        if name == "platform.scheduling.scheduler.store":
+        if name == "infrastructure.scheduling.scheduler.store":
             raise ImportError("simulated scheduler store failure")
         return real_import(name, *args, **kwargs)
 

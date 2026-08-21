@@ -11,7 +11,7 @@ from __future__ import annotations
 
 
 def install_harness_ports() -> None:
-    """Register integrations/tools adapters into :mod:`platform.harness_ports`.
+    """Register integrations/tools adapters into :mod:`infrastructure.harness_ports`.
 
     Harness composition root for the interactive shell and tests. Lives in
     ``surfaces`` (not ``tools``) because ``tools`` and ``integrations`` are
@@ -39,13 +39,13 @@ def install_product_adapters() -> None:
     from integrations.tracer.integrations_adapter import (
         fetch_tracer_remote_integrations,
     )
-    from platform.harness_ports import set_remote_integrations_fetcher
-    from platform.observability.render.debug import set_debug_printer
-    from platform.observability.render.display import (
+    from infrastructure.harness_ports import set_remote_integrations_fetcher
+    from infrastructure.observability.render.debug import set_debug_printer
+    from infrastructure.observability.render.display import (
         set_investigation_footer_renderer,
         set_investigation_header_renderer,
     )
-    from platform.observability.render.progress import set_progress_tracker_factory
+    from infrastructure.observability.render.progress import set_progress_tracker_factory
     from surfaces.shared.terminal.output.environment import debug_print
     from surfaces.shared.terminal.output.renderers import (
         render_completed_investigation_footer,

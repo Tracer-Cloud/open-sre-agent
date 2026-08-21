@@ -5,9 +5,9 @@ from typing import Any
 import pytest
 
 from core.agent.run_io import AgentRunResult
-from platform.analytics import cli
-from platform.analytics.events import Event
-from platform.analytics.react_turn import run_react_agent_with_telemetry
+from infrastructure.analytics import cli
+from infrastructure.analytics.events import Event
+from infrastructure.analytics.react_turn import run_react_agent_with_telemetry
 
 
 class _StubAnalytics:

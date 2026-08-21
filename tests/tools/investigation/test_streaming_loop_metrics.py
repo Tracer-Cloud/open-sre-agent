@@ -5,7 +5,7 @@ from typing import Any
 import pytest
 
 from config.constants.investigation import MAX_INVESTIGATION_LOOPS
-from platform.analytics.investigation_loop import (
+from infrastructure.analytics.investigation_loop import (
     begin_investigation_loop_metrics_scope,
     bound_loop_metrics,
     publish_loop_metrics_from_stream_failure,
@@ -82,7 +82,7 @@ def test_loop_metrics_for_error_falls_back_when_metrics_import_fails(
 ) -> None:
     from tools.investigation.capability import _loop_metrics_for_error
 
-    monkeypatch.delattr("platform.analytics.investigation_loop.loop_metrics_from_state")
+    monkeypatch.delattr("infrastructure.analytics.investigation_loop.loop_metrics_from_state")
 
     assert _loop_metrics_for_error(None) == (0, MAX_INVESTIGATION_LOOPS)
 

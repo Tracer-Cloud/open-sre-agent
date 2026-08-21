@@ -19,8 +19,8 @@ from bootstrap import adapters
 _REGISTRARS = {
     "integrations.harness_adapters.register_harness_adapters": "integrations",
     "tools.harness_adapters.register_harness_adapters": "tools",
-    "platform.scheduling.scheduler.runners.register_investigation_runner": "investigation",
-    "platform.scheduling.scheduler.runners.register_agent_runner": "scheduled",
+    "infrastructure.scheduling.scheduler.runners.register_investigation_runner": "investigation",
+    "infrastructure.scheduling.scheduler.runners.register_agent_runner": "scheduled",
 }
 _STEPS = ("install_harness_adapters", "install_scheduler_runners")
 
@@ -86,7 +86,15 @@ def test_only_the_composition_root_defines_the_steps() -> None:
     # cannot import each other, so pressure to re-add one is permanent — and a
     # comment asking people to "keep them in sync" is not enforcement.
     repo = pathlib.Path(__file__).resolve().parents[2]
-    packages = ("bootstrap", "surfaces", "gateway", "tools", "integrations", "platform", "core")
+    packages = (
+        "bootstrap",
+        "surfaces",
+        "gateway",
+        "tools",
+        "integrations",
+        "infrastructure",
+        "core",
+    )
 
     # Act
     definers = sorted(

@@ -22,7 +22,7 @@ transport-specific code.
 | **Telegram transport** | `gateway/transports/telegram/startup.py` → `start_telegram_worker` | Via the startup registry |
 | **Slack transport** | `gateway/transports/slack/startup.py` → `start_slack_worker` | Via the startup registry |
 | **Discord transport** | `gateway/transports/discord/startup.py` → `start_discord_worker` | Via the startup registry (includes readiness wait) |
-| **Per-message turn** | `platform/turn_host/turn_handler.py` → `TurnHandler` | Injected into chat transports as the agent callback |
+| **Per-message turn** | `infrastructure/turn_host/turn_handler.py` → `TurnHandler` | Injected into chat transports as the agent callback |
 
 ```text
 opensre gateway start
@@ -41,7 +41,7 @@ gateway.core.lifecycle.controller.GatewayController.start_gateway
         │     ├── web/web_server  →  web/webapp:app
         │     └── transports/startup.start_transports
         │           (telegram / slack / discord startup)
-        └── start_scheduler()   # hosts platform.scheduling.scheduler; not a gateway surface
+        └── start_scheduler()   # hosts infrastructure.scheduling.scheduler; not a gateway surface
 ```
 
 Layout: `core/` (runtime, storage, …), `startup.py` (surface composer),
@@ -95,7 +95,7 @@ uv run opensre messaging allow -p telegram -u 123456789
 # Allow your Slack member id (profile → Copy member ID; see below)
 uv run opensre messaging allow -p slack -u U0123ABCD
 
-# Start the gateway daemon (web + chat). The process also hosts platform.scheduling.scheduler.
+# Start the gateway daemon (web + chat). The process also hosts infrastructure.scheduling.scheduler.
 uv run opensre gateway start
 ```
 
@@ -151,7 +151,7 @@ with the same five pieces `gateway/transports/telegram/` and `gateway/transports
 3. **Inbound security**: authorize each message and audit-log it
    (`integrations/messaging_security`).
 4. **Turn output** (implement `TurnOutput` from
-   `platform/turn_host/turn_output.py`): streams status and delivers the answer.
+   `infrastructure/turn_host/turn_output.py`): streams status and delivers the answer.
 5. **Session binding** via `gateway/core/storage/session/resolver.py` with a new
    `platform` value: map the platform conversation key to a `Session`.
 

@@ -40,9 +40,9 @@ from gateway.transports.discord.thread_history import (
     session_needs_thread_seed,
 )
 from gateway.transports.discord.turn_output import DiscordTurnOutput
+from infrastructure.analytics.usage_context import UsageSurface, bound_usage_context
+from infrastructure.turn_host.turn_callback import TurnCallback
 from integrations.messaging_security import MessagingPlatform
-from platform.analytics.usage_context import UsageSurface, bound_usage_context
-from platform.turn_host.turn_callback import TurnCallback
 
 # Discord's reaction API takes the literal Unicode emoji (URL-encoded), not a name.
 _WORKING_EMOJI = "\N{EYES}"

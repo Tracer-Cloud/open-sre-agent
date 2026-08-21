@@ -20,7 +20,7 @@ from gateway.transports.buzz.settings import (
     GatewaySettings,
     load_gateway_settings,
 )
-from platform.turn_host.turn_callback import TurnCallback
+from infrastructure.turn_host.turn_callback import TurnCallback
 
 
 def start_buzz_worker(

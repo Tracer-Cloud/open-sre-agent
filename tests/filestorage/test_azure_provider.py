@@ -3,9 +3,9 @@ from __future__ import annotations
 import httpx
 import pytest
 
-from platform.filestorage.config import RemoteSyncConfig
-from platform.filestorage.errors import RemoteSyncUnavailableError
-from platform.filestorage.providers.azure import AzureBlobObjectStore
+from infrastructure.filestorage.config import RemoteSyncConfig
+from infrastructure.filestorage.errors import RemoteSyncUnavailableError
+from infrastructure.filestorage.providers.azure import AzureBlobObjectStore
 
 
 def _config(**overrides: object) -> RemoteSyncConfig:

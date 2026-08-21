@@ -10,6 +10,8 @@ from rich.console import Console
 
 from config.repl_config import ReplConfig
 from core.agent_harness import SessionManager
+from infrastructure.analytics.cli import identify_saved_github_username
+from infrastructure.logging import install_shell_log_handler, quiet_noisy_third_party_loggers
 from surfaces.interactive_shell.controller import InteractiveShellController
 from surfaces.interactive_shell.runtime.context import create_repl_runtime_context
 from surfaces.interactive_shell.runtime.startup.first_launch_github import (
@@ -40,9 +42,6 @@ async def run_repl_async(
     ``cli_command_group`` is the ``opensre`` Click group the shell documents to
     the model; the process entrypoint passes it, embedders may leave it out.
     """
-    from platform.analytics.cli import identify_saved_github_username
-    from platform.logging import install_shell_log_handler, quiet_noisy_third_party_loggers
-
     # Keep MCP schema-cache warnings / httpx chatter off the transcript —
     # progress is soft status lines, not library WARNINGs.
     quiet_noisy_third_party_loggers()

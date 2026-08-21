@@ -143,7 +143,7 @@ class CLIBackedLLMClient:
         # (e.g. codex exec) do not expose a scriptable token limit.
         _ = self._max_tokens
 
-        from platform.safety.guardrails.apply import apply_guardrails_to_text
+        from infrastructure.safety.guardrails.apply import apply_guardrails_to_text
 
         flat = flatten_messages_to_prompt(prompt_or_messages)
         flat = apply_guardrails_to_text(flat)

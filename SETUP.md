@@ -32,7 +32,7 @@ Without Make (equivalent to `make install`):
 
 ```bash
 uv sync --frozen --extra dev
-uv run python -m platform.analytics.install
+uv run python -m infrastructure.analytics.install
 ```
 
 4. Verify:
@@ -92,15 +92,15 @@ Run equivalents from the repo root (same shell where `uv` is on `PATH`). Prefer 
 
 ```bash
 uv sync --frozen --extra dev
-uv run python -m platform.analytics.install
+uv run python -m infrastructure.analytics.install
 
-uv run ruff check config core gateway integrations platform surfaces tools tests/
-uv run ruff format --check config core gateway integrations platform surfaces tools tests/
-uv run mypy config core gateway integrations platform surfaces tools
+uv run ruff check config core gateway integrations infrastructure surfaces tools tests/
+uv run ruff format --check config core gateway integrations infrastructure surfaces tools tests/
+uv run mypy config core gateway integrations infrastructure surfaces tools
 
 uv run pytest -n auto -v \
   --cov=config --cov=core --cov=gateway --cov=integrations \
-  --cov=platform --cov=surfaces --cov=tools --cov-report=term-missing \
+  --cov=infrastructure --cov=surfaces --cov=tools --cov-report=term-missing \
   --ignore=tests/e2e/kubernetes_local_alert_simulation \
   --ignore=tests/synthetic \
   -m "not synthetic"

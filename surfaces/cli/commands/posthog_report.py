@@ -12,8 +12,8 @@ from rich.console import Console
 from rich.table import Table
 
 from bootstrap.process import SCHEDULED_COMMAND_PROFILE, configure_process
-from platform.scheduling.scheduler.delivery import SUPPORTED_DELIVERY_PROVIDERS
-from platform.terminal.theme import GLYPH_ERROR, GLYPH_SUCCESS
+from infrastructure.scheduling.scheduler.delivery import SUPPORTED_DELIVERY_PROVIDERS
+from infrastructure.terminal.theme import GLYPH_ERROR, GLYPH_SUCCESS
 from surfaces.cli.commands.scheduling import add_task_and_echo, validate_cron_and_timezone
 
 _console = Console()
@@ -48,11 +48,11 @@ def posthog_report_command() -> None:
 )
 def posthog_report_run(stats_period: str, metrics: str) -> None:
     """Run the metric report once and print it to stdout."""
+    from infrastructure.scheduling.scheduler.agent_runner import invoke_agent_runner
     from integrations.posthog.report_prerequisites import (
         DEFAULT_POSTHOG_PERIOD,
         require_posthog_integration,
     )
-    from platform.scheduling.scheduler.agent_runner import invoke_agent_runner
 
     require_posthog_integration()
     configure_process(SCHEDULED_COMMAND_PROFILE)
@@ -129,12 +129,12 @@ def posthog_report_schedule_add(
     metrics: str,
 ) -> None:
     """Schedule recurring PostHog metric report delivery."""
+    from infrastructure.scheduling.scheduler.types import Provider, ScheduledTask, TaskKind
     from integrations.posthog.report_prerequisites import (
         DEFAULT_POSTHOG_PERIOD,
         require_posthog_integration,
         require_report_delivery_provider,
     )
-    from platform.scheduling.scheduler.types import Provider, ScheduledTask, TaskKind
 
     require_posthog_integration()
     require_report_delivery_provider(provider)
@@ -166,8 +166,8 @@ def posthog_report_schedule_add(
 @posthog_report_schedule_command.command(name="list")
 def posthog_report_schedule_list() -> None:
     """List scheduled PostHog metric report tasks."""
-    from platform.scheduling.scheduler.store import list_tasks
-    from platform.scheduling.scheduler.types import TaskKind
+    from infrastructure.scheduling.scheduler.store import list_tasks
+    from infrastructure.scheduling.scheduler.types import TaskKind
 
     tasks = [task for task in list_tasks() if task.kind == TaskKind.POSTHOG_METRIC_REPORT]
     if not tasks:
@@ -204,8 +204,8 @@ def posthog_report_schedule_list() -> None:
 @click.argument("task_id")
 def posthog_report_schedule_remove(task_id: str) -> None:
     """Remove a scheduled PostHog metric report task."""
-    from platform.scheduling.scheduler.store import get_task, remove_task
-    from platform.scheduling.scheduler.types import TaskKind
+    from infrastructure.scheduling.scheduler.store import get_task, remove_task
+    from infrastructure.scheduling.scheduler.types import TaskKind
 
     task = get_task(task_id)
     if task is None or task.kind != TaskKind.POSTHOG_METRIC_REPORT:
@@ -223,13 +223,13 @@ def posthog_report_schedule_remove(task_id: str) -> None:
 @click.argument("task_id")
 def posthog_report_schedule_run(task_id: str) -> None:
     """Run a scheduled PostHog metric report task immediately."""
+    from infrastructure.scheduling.scheduler.runner import run_task_now
+    from infrastructure.scheduling.scheduler.store import get_task
+    from infrastructure.scheduling.scheduler.types import TaskKind
     from integrations.posthog.report_prerequisites import (
         require_posthog_integration,
         require_report_delivery_provider,
     )
-    from platform.scheduling.scheduler.runner import run_task_now
-    from platform.scheduling.scheduler.store import get_task
-    from platform.scheduling.scheduler.types import TaskKind
 
     configure_process(SCHEDULED_COMMAND_PROFILE)
     task = get_task(task_id)

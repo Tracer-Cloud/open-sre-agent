@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from config.env_file import sync_env_values
+from infrastructure.terminal.theme import ERROR, HIGHLIGHT, SECONDARY
 from integrations.coralogix.setup import CORALOGIX_SETUP
 from integrations.datadog.setup import DATADOG_SETUP
 from integrations.grafana.setup import GRAFANA_SETUP
@@ -11,7 +12,6 @@ from integrations.new_relic.setup import NEW_RELIC_SETUP
 from integrations.opensearch.setup import OPENSEARCH_SETUP
 from integrations.store import remove_integration, upsert_integration
 from integrations.tempo.setup import TEMPO_SETUP
-from platform.terminal.theme import ERROR, HIGHLIGHT, SECONDARY
 from surfaces.cli.wizard._ui import (
     _confirm,
     _console,

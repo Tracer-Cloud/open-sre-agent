@@ -15,7 +15,8 @@ from gateway.transports.discord.client import (
     split_discord_content,
 )
 from gateway.transports.discord.feedback import feedback_components
-from platform.turn_host.status_messages import (
+from infrastructure.text.markdown import tighten_markdown_emphasis
+from infrastructure.turn_host.status_messages import (
     EMPTY_RESPONSE_MESSAGE,
     initial_status_message,
     normalize_gateway_status,
@@ -88,7 +89,7 @@ class DiscordTurnOutput:
         self.finalize(answer)
 
     def finalize(self, answer: str) -> None:
-        body = (answer or EMPTY_RESPONSE_MESSAGE).strip()
+        body = tighten_markdown_emphasis((answer or EMPTY_RESPONSE_MESSAGE).strip())
         chunks = split_discord_content(body)
         if not chunks:
             return

@@ -12,7 +12,7 @@ from contextlib import contextmanager
 
 from rich.console import Console
 
-from platform.terminal.theme import SECONDARY
+from infrastructure.terminal.theme import SECONDARY
 
 # Quiet, secondary-colour spinner — less visual noise than a bright accent.
 _LOADER_COLOR = SECONDARY

@@ -17,8 +17,8 @@ from __future__ import annotations
 
 from collections.abc import Callable
 
+from infrastructure.terminal.theme import SECONDARY
 from integrations.setup_flow import IntegrationSetupSpec, apply_setup
-from platform.terminal.theme import SECONDARY
 from surfaces.cli.wizard._ui import (
     Choice,
     _choose,

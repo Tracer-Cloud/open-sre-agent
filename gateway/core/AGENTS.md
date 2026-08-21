@@ -15,14 +15,14 @@ those surfaces (via `gateway.startup`). Pinned by
 | `attachments/` | Attachment helpers |
 | `session/` | Gateway chat-context helpers |
 | `config/` | Logging / gateway config helpers |
-| `platform.turn_host` | Turn handler, session-agent pool, bindable output, cancel console, capacity |
+| `infrastructure.turn_host` | Turn handler, session-agent pool, bindable output, cancel console, capacity |
 
 Transports and `web/` may import the packages above. Chat transport code does
 not belong in `gateway/core/`.
 
 ## Who may drive the agent
 
-Only `platform.turn_host` builds ports, binds a turn, runs or flushes a
+Only `infrastructure.turn_host` builds ports, binds a turn, runs or flushes a
 session, and formats goal progress. Other `gateway/` code may import harness
 **types** (`SessionCore`, `OutputSink`, `SlashPortsFactory`, `SessionGoal`)
 for signatures. A transport that executes a turn itself is a second handler.
@@ -37,7 +37,7 @@ approvals hooks, cancel console, capability policy).
 Every turn in this process — chat, `POST /investigate`, the investigation
 worker, a scheduled run — takes one permit from the same
 `process_turn_gate()`. Pick a policy from
-`platform.process.turn_capacity`; do not pair `acquire`/`release` by hand:
+`infrastructure.process.turn_capacity`; do not pair `acquire`/`release` by hand:
 
 - `turn_slot(gate)` — **drop** when full. For a caller holding a connection or
   a conversation: it yields `False` and the caller answers (chat finalizes
@@ -57,8 +57,8 @@ LLM preload) is :func:`bootstrap.process.configure_process` with
 `TurnHandler(gate=…)`, then `start_surfaces()` and `start_scheduler()`.
 Do not wrap the turn handler. Do not duplicate process boot in the controller.
 Hosting is a thin call: `scheduler_runners().gated(turn_gate).install()` then
-:func:`platform.scheduling.scheduler.runner.start_background_scheduler`. Reload is
-:func:`platform.scheduling.scheduler.reload_signal.request_scheduler_reload` (shell/CLI
+:func:`infrastructure.scheduling.scheduler.runner.start_background_scheduler`. Reload is
+:func:`infrastructure.scheduling.scheduler.reload_signal.request_scheduler_reload` (shell/CLI
 writers); the controller only polls and resyncs.
 
 Process boot has one entrypoint: :func:`bootstrap.process.configure_process`

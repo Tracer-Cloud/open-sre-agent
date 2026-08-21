@@ -12,15 +12,15 @@ import pytest
 from botocore.exceptions import ClientError
 
 from config.constants.filestorage import REMOTE_SYNC_ENDPOINT_URL_ENV
-from platform.filestorage.config import RemoteSyncConfig
-from platform.filestorage.enums import BucketExposure, BuiltInProvider, RemoteSyncField
-from platform.filestorage.errors import RemoteSyncUnavailableError
-from platform.filestorage.providers.registry import (
+from infrastructure.filestorage.config import RemoteSyncConfig
+from infrastructure.filestorage.enums import BucketExposure, BuiltInProvider, RemoteSyncField
+from infrastructure.filestorage.errors import RemoteSyncUnavailableError
+from infrastructure.filestorage.providers.registry import (
     credential_hint_for_provider,
     provider_extra_fields,
     registered_providers,
 )
-from platform.filestorage.providers.s3compat import (
+from infrastructure.filestorage.providers.s3compat import (
     S3CompatObjectStore,
     check_public_access,
 )

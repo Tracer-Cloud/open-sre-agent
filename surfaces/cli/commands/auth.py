@@ -13,11 +13,11 @@ from rich.console import Console
 from rich.table import Table
 from rich.text import Text
 
-from platform.terminal.prompt_support import (
+from infrastructure.terminal.prompt_support import (
     QUESTIONARY_QMARK,
     questionary_prompt_style,
 )
-from platform.terminal.theme import BOLD_BRAND, ERROR, HIGHLIGHT, SECONDARY, WARNING
+from infrastructure.terminal.theme import BOLD_BRAND, ERROR, HIGHLIGHT, SECONDARY, WARNING
 from surfaces.shared.llm_setup.auth_profiles import (
     ProviderAuthProfile,
     iter_auth_profiles,

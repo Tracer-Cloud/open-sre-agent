@@ -9,10 +9,10 @@ from __future__ import annotations
 
 import dataclasses
 
+from infrastructure.terminal.theme import DEVICE_CODE, SECONDARY
 from integrations.github.mcp import DEFAULT_GITHUB_MCP_MODE, DEFAULT_GITHUB_MCP_URL
 from integrations.github.setup import GITHUB_SETUP
 from integrations.setup_flow import apply_setup
-from platform.terminal.theme import DEVICE_CODE, SECONDARY
 from surfaces.cli.wizard._ui import (
     Choice,
     _choose,

@@ -10,11 +10,7 @@ standalone via ``uvicorn gateway.web.webapp:app``.
 
 from __future__ import annotations
 
-import hmac
-import json
 import logging
-import os
-from datetime import UTC, datetime
 from http import HTTPStatus
 from typing import Any
 
@@ -22,38 +18,30 @@ from fastapi import FastAPI, Request, Response
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, ValidationError
 
+from bootstrap.process import WEB_PROFILE, configure_process
 from config.config import LLMSettings, get_environment
-from config.platform_bootstrap import ensure_project_platform_package
 from config.version import get_opensre_version
-from core.domain.alerts.inbox import (
-    AlertInbox,
-    IncomingAlert,
-    get_current_inbox,
-    set_current_inbox,
+from core.agent_harness import AgentSession
+from gateway.core.process.readiness import is_gateway_ready
+from gateway.core.storage import open_database
+from gateway.core.storage.investigations.repository import investigation_repository
+from gateway.web.investigations import router as investigations_router
+from infrastructure.alert_intake import (
+    MAX_ALERT_BODY_BYTES,
+    require_local_or_token,
 )
-
-ensure_project_platform_package()
-
-from bootstrap.process import WEB_PROFILE, configure_process  # noqa: E402
-from core.agent_harness import AgentSession  # noqa: E402
-from gateway.core.process.readiness import is_gateway_ready  # noqa: E402
-from gateway.core.storage import open_database  # noqa: E402
-from gateway.core.storage.investigations.repository import investigation_repository  # noqa: E402
-from gateway.web.investigations import router as investigations_router  # noqa: E402
-from platform.observability.errors.sentry import capture_exception  # noqa: E402
-from platform.process.turn_capacity import turn_slot  # noqa: E402
-from tools.investigation.capability import resolve_investigation_context  # noqa: E402
+from infrastructure.alert_intake import router as alert_router
+from infrastructure.observability.errors.sentry import capture_exception
+from infrastructure.process.turn_capacity import turn_slot
+from tools.investigation.capability import resolve_investigation_context
 
 # Standalone uvicorn and in-process gateway both need adapters for /investigate.
 configure_process(WEB_PROFILE)  # env → sentry → adapters
 
 logger = logging.getLogger(__name__)
 
-# Cap on POST body size accepted from any caller (authed or not). Realistic
-# alert payloads top out around 50 KB, so 1 MiB is ~20× headroom.
-MAX_ALERT_BODY_BYTES = 1 * 1024 * 1024
-
-_LOOPBACK_HOSTS = frozenset({"127.0.0.1", "::1", "localhost"})
+# Re-exported so callers and tests keep one name for the shared alert-body cap.
+__all__ = ["MAX_ALERT_BODY_BYTES", "app"]
 
 
 class HealthResponse(BaseModel):
@@ -66,6 +54,9 @@ class HealthResponse(BaseModel):
 app = FastAPI()
 app.state.investigations = investigation_repository(open_database())
 app.include_router(investigations_router)
+# Health liveness (/healthz) and alert intake (/alerts) live in the shared
+# router so the interactive shell can serve them without importing the gateway.
+app.include_router(alert_router)
 
 
 def get_health_response() -> HealthResponse:
@@ -92,99 +83,12 @@ def health(response: Response) -> HealthResponse:
     return health_response
 
 
-@app.get("/healthz")
-def healthz() -> dict[str, str]:
-    return {"status": "ok"}
-
-
 @app.get("/readyz")
 def readyz() -> JSONResponse:
     """Report mandatory startup readiness separately from process liveness."""
     if is_gateway_ready():
         return JSONResponse({"status": "ready"}, status_code=HTTPStatus.OK)
     return JSONResponse({"status": "not_ready"}, status_code=HTTPStatus.SERVICE_UNAVAILABLE)
-
-
-def _alert_inbox() -> AlertInbox:
-    """The process-wide inbox; hosts may install their own via set_current_inbox."""
-    inbox = get_current_inbox()
-    if inbox is None:
-        inbox = AlertInbox()
-        set_current_inbox(inbox)
-    return inbox
-
-
-def _gateway_auth_error(request: Request) -> JSONResponse | None:
-    """Bearer-token auth when configured; otherwise loopback callers only.
-
-    Shared by every mutating gateway route (``/alerts``, ``/investigate``) since
-    they sit behind the same trust boundary: local callers or a configured token.
-    """
-    token = os.environ.get("OPENSRE_ALERT_LISTENER_TOKEN")
-    if token:
-        supplied = request.headers.get("authorization", "")
-        if hmac.compare_digest(supplied, f"Bearer {token}"):
-            return None
-        return JSONResponse({"error": "unauthorized"}, status_code=HTTPStatus.UNAUTHORIZED)
-    client_host = request.client.host if request.client else ""
-    if client_host in _LOOPBACK_HOSTS:
-        return None
-    return JSONResponse(
-        {"error": "set OPENSRE_ALERT_LISTENER_TOKEN to accept non-loopback callers"},
-        status_code=HTTPStatus.FORBIDDEN,
-    )
-
-
-@app.post("/alerts")
-async def receive_alert(request: Request) -> JSONResponse:
-    if (auth_error := _gateway_auth_error(request)) is not None:
-        return auth_error
-
-    try:
-        declared_length = int(request.headers.get("content-length", 0))
-    except ValueError:
-        return JSONResponse({"error": "invalid Content-Length"}, status_code=HTTPStatus.BAD_REQUEST)
-    if declared_length < 0:
-        return JSONResponse({"error": "invalid Content-Length"}, status_code=HTTPStatus.BAD_REQUEST)
-    if declared_length > MAX_ALERT_BODY_BYTES:
-        return JSONResponse(
-            {"error": "payload too large"}, status_code=HTTPStatus.REQUEST_ENTITY_TOO_LARGE
-        )
-
-    body = await request.body()
-    if len(body) > MAX_ALERT_BODY_BYTES:
-        return JSONResponse(
-            {"error": "payload too large"}, status_code=HTTPStatus.REQUEST_ENTITY_TOO_LARGE
-        )
-
-    try:
-        data = json.loads(body)
-    except ValueError:
-        return JSONResponse({"error": "invalid json"}, status_code=HTTPStatus.BAD_REQUEST)
-
-    try:
-        if not isinstance(data, dict):
-            raise TypeError("alert payload must be a JSON object")
-        if data.get("received_at") is None:
-            data["received_at"] = datetime.now(UTC)
-        alert = IncomingAlert.model_validate(data)
-    except (TypeError, ValidationError, ValueError) as exc:
-        # Expected client error: log the full detail, return only the exception
-        # type (payload field names and model internals stay out of the
-        # response), and skip Sentry capture for routine 400s.
-        logger.warning("Alert payload rejected (%s): %s", type(exc).__name__, exc)
-        return JSONResponse(
-            {"error": f"invalid alert payload: {type(exc).__name__}"},
-            status_code=HTTPStatus.BAD_REQUEST,
-        )
-
-    inbox = _alert_inbox()
-    accepted = inbox.put(alert)
-    payload: dict[str, Any] = {"queued": True, "queue_depth": inbox.qsize}
-    if not accepted:
-        payload["dropped"] = inbox.dropped
-        payload["warning"] = "inbox full, oldest alert dropped"
-    return JSONResponse(payload, status_code=HTTPStatus.ACCEPTED)
 
 
 class InvestigateRequest(BaseModel):
@@ -211,10 +115,10 @@ def investigate(req: InvestigateRequest, request: Request) -> InvestigateRespons
     interactive shell use, over HTTP. FastAPI runs this sync handler in a
     threadpool, so a long investigation does not block ``/health`` or ``/alerts``.
     """
-    if (auth_error := _gateway_auth_error(request)) is not None:
+    if (auth_error := require_local_or_token(request)) is not None:
         return auth_error
 
-    from platform.turn_host.concurrency import AT_CAPACITY_MESSAGE, process_turn_gate
+    from infrastructure.turn_host.concurrency import AT_CAPACITY_MESSAGE, process_turn_gate
 
     # Drop rather than queue: the caller is holding an HTTP connection open, so
     # it gets an answer now. Same gate chat and the scheduler take, same sentence

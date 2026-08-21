@@ -9,7 +9,7 @@ from pathlib import Path
 import pytest
 
 from config.constants import OPENSRE_TMP_DIR, ensure_opensre_tmp_dir
-from platform.safety.sandbox.runner import (
+from infrastructure.safety.sandbox.runner import (
     _BASE_ENV_KEYS,
     MAX_TIMEOUT,
     SandboxResult,

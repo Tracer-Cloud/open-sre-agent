@@ -136,7 +136,7 @@ def test_http_error_returns_none(monkeypatch: pytest.MonkeyPatch) -> None:
 
 def test_resolve_integrations_merges_webapp_vault(monkeypatch: pytest.MonkeyPatch) -> None:
     """Gateway warm path: vault github appears in resolved integrations."""
-    import platform.harness_ports as ports
+    import infrastructure.harness_ports as ports
     from integrations.harness_adapters import register_harness_adapters
 
     register_harness_adapters()

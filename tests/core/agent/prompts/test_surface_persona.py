@@ -52,6 +52,21 @@ def test_gateway_preamble_is_slack_teammate_not_terminal() -> None:
     assert "full-shell semantics" not in prompt
 
 
+def test_gateway_prompt_omits_terminal_markdown_rule() -> None:
+    prompt = build_assistant_system_prompt("ref", "hist", surface="gateway")
+    assert "user's terminal" not in prompt
+    assert "Write **bold** tight" in prompt
+
+
+def test_cli_and_gateway_prompts_use_senior_on_call_working_style() -> None:
+    shell = build_assistant_system_prompt("ref", "hist", surface="interactive_shell")
+    gateway = build_assistant_system_prompt("ref", "hist", surface="gateway")
+    assert "senior on-call engineer" in shell
+    assert "senior on-call engineer" in gateway
+    assert "The user's goal is the finish line" in shell
+    assert "guides people through" in gateway
+
+
 def test_no_surface_leaves_blank_line_runs_from_empty_rule_slots() -> None:
     """CLI-only rule slots are empty on gateway turns; their separators must go too.
 

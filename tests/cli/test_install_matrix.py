@@ -10,6 +10,7 @@ from __future__ import annotations
 import hashlib
 import json
 import os
+import platform as py_platform
 import shutil
 import stat
 import subprocess
@@ -20,7 +21,6 @@ from pathlib import Path
 
 import pytest
 
-import platform as py_platform
 from config.constants.paths import REPO_ROOT
 
 pytestmark = pytest.mark.skipif(

@@ -134,7 +134,7 @@ class ReplConfig:
             layout = "classic"
 
         # --- theme ---
-        from platform.terminal.theme import (
+        from infrastructure.terminal.theme import (
             DEFAULT_THEME_NAME,
             get_theme,
             list_theme_names,

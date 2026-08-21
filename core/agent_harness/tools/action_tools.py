@@ -8,8 +8,8 @@ from typing import Any, Protocol
 from core.domain.types.tools import ToolSurface
 from core.tool.contracts import RegisteredTool
 from core.tool.execution import availability_view
-from platform.harness_ports import get_surface_tool_map, get_surface_tools
-from platform.observability.trace.redaction import redact_sensitive
+from infrastructure.harness_ports import get_surface_tool_map, get_surface_tools
+from infrastructure.observability.trace.redaction import redact_sensitive
 
 _ACTION_SESSION_SOURCE = "_action_session"
 

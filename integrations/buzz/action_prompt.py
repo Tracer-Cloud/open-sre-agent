@@ -1,6 +1,6 @@
 """Buzz action-agent prompt fragment — routes Buzz delivery requests to tools.
 
-Registered with :func:`platform.harness_ports.register_action_prompt_fragment`
+Registered with :func:`infrastructure.harness_ports.register_action_prompt_fragment`
 from ``integrations/harness_adapters.py``.
 """
 

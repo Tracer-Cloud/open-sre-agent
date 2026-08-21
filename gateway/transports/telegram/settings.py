@@ -12,9 +12,9 @@ from pydantic_settings import BaseSettings, NoDecode, SettingsConfigDict
 
 from config.strict_config import StrictConfigModel
 from gateway.core.lifecycle.errors import GatewayConfigurationError
+from infrastructure.turn_host.concurrency import turn_limit_for_profile
 from integrations.messaging_security import MessagingIdentityPolicy, MessagingPlatform
 from integrations.store import get_integration
-from platform.turn_host.concurrency import turn_limit_for_profile
 
 logger = logging.getLogger(__name__)
 

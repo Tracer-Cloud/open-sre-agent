@@ -101,6 +101,7 @@ def _network_target_states(
             _NLB_SERVICE,
             f"{_NLB_PATH}/{balancer_id}:getTargetStates",
             {"targetGroupId": group_id},
+            page_size=None,
         )
         if not states.get("success"):
             errors.append(f"{group_id}: {states.get('error', '')}")

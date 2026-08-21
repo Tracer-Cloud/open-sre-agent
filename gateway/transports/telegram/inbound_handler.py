@@ -24,8 +24,8 @@ from gateway.transports.telegram.principal import (
 from gateway.transports.telegram.session_rotation import resolve_or_rotate_session
 from gateway.transports.telegram.settings import GatewaySettings, TelegramInboundMessage
 from gateway.transports.telegram.turn_output import TelegramTurnOutput
-from platform.analytics.usage_context import UsageSurface, bound_usage_context
-from platform.turn_host.turn_callback import TurnCallback
+from infrastructure.analytics.usage_context import UsageSurface, bound_usage_context
+from infrastructure.turn_host.turn_callback import TurnCallback
 
 logger = logging.getLogger(__name__)
 

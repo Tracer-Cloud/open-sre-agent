@@ -98,6 +98,35 @@ def host_home() -> Path:
     return OPENSRE_HOME_DIR
 
 
+def _org_root(org_id: str) -> Path:
+    """Root owned by one organization: the mount when this deployment owns it.
+
+    The single implementation of the owner check, shared by :func:`opensre_home`
+    and :func:`deployment_home`. A second copy beside it would be a second
+    tenancy policy to keep in step.
+    """
+    mounted_root = os.getenv(CONTEXT_ROOT_ENV, "").strip()
+    if mounted_root:
+        # The mount is chrooted to exactly one org. If this deployment declares
+        # its owner, refuse a turn for any other org — otherwise a
+        # multi-workspace gateway could write org B's data into org A's volume.
+        # Fail closed.
+        silo_owner = organization_id()
+        if not silo_owner:
+            raise ContextRootOwnerMismatchError(
+                f"{CONTEXT_ROOT_ENV} is set but no organization is configured for this "
+                "deployment; refusing to write a customer's data to an unidentified volume"
+            )
+        if org_id != silo_owner:
+            raise ContextRootOwnerMismatchError(
+                f"context root belongs to {silo_owner!r} but this turn is owned by "
+                f"{org_id!r}; refusing to cross organizations on a shared mount"
+            )
+        return Path(mounted_root).expanduser()
+    _warn_unmounted_org_once(org_id)
+    return OPENSRE_HOME_DIR / ORGS_DIR_NAME / _safe_segment(org_id, label="principal id")
+
+
 def opensre_home() -> Path:
     """The organization's context root, or the host home when unbound.
 
@@ -114,27 +143,26 @@ def opensre_home() -> Path:
     scope = current_scope()
     if scope is None or scope.principal.kind != "org":
         return OPENSRE_HOME_DIR
-    mounted_root = os.getenv(CONTEXT_ROOT_ENV, "").strip()
-    if mounted_root:
-        # The mount is chrooted to exactly one org. If this deployment declares
-        # its owner, refuse a turn for any other org — otherwise a
-        # multi-workspace gateway could write org B's data into org A's volume.
-        # Fail closed.
-        silo_owner = organization_id()
-        if not silo_owner:
-            raise ContextRootOwnerMismatchError(
-                f"{CONTEXT_ROOT_ENV} is set but no organization is configured for this "
-                "deployment; refusing to write a customer's data to an unidentified volume"
-            )
-        if scope.principal.id != silo_owner:
-            raise ContextRootOwnerMismatchError(
-                f"context root belongs to {silo_owner!r} but this turn is owned by "
-                f"{scope.principal.id!r}; refusing to cross organizations on a shared mount"
-            )
-        return Path(mounted_root).expanduser()
-    _warn_unmounted_org_once(scope.principal.id)
-    org_id = _safe_segment(scope.principal.id, label="principal id")
-    return OPENSRE_HOME_DIR / ORGS_DIR_NAME / org_id
+    return _org_root(scope.principal.id)
+
+
+def deployment_home() -> Path:
+    """The organization this deployment serves, whether or not a scope is bound.
+
+    For an artifact two surfaces must share. A background investigation is
+    started in the shell, which binds no scope, and retrieved from a chat
+    transport, which binds the organization, so :func:`opensre_home` would put
+    them on different files. An unbound caller therefore resolves to the
+    configured organization; a machine naming none stays on the host root.
+
+    :func:`_org_root`'s owner check still applies, so this is not a way around
+    the mount's tenancy guarantee.
+    """
+    scope = current_scope()
+    if scope is not None and scope.principal.kind == "org":
+        return _org_root(scope.principal.id)
+    configured = organization_id()
+    return _org_root(configured) if configured else OPENSRE_HOME_DIR
 
 
 def session_home() -> Path:
@@ -206,6 +234,7 @@ __all__ = [
     "SYNTHETIC_SCENARIOS_DIR",
     "ContextRootOwnerMismatchError",
     "UnsafePathSegmentError",
+    "deployment_home",
     "ensure_opensre_tmp_dir",
     "get_memory_dir",
     "get_store_path",

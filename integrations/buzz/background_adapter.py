@@ -2,22 +2,22 @@
 
 from __future__ import annotations
 
-from platform.delivery.notifications.outbound_registry import (
+from infrastructure.delivery.notifications.outbound_registry import (
     BACKGROUND_RCA,
     register_outbound_adapter,
 )
-from platform.delivery.notifications.rca_summary import summary_sections
-from platform.scheduling.background_investigations.types import BackgroundInvestigationRecord
+from infrastructure.delivery.notifications.rca_summary import summary_sections
+from infrastructure.scheduling.background_investigations.types import BackgroundInvestigationRecord
 
 
 def deliver_buzz_notification(record: BackgroundInvestigationRecord) -> str:
     """Send the background-RCA completion summary to Buzz; return a result string."""
     # Imported lazily: buzz delivery only fires on background-RCA completion,
     # so the buzz client must not load into the base REPL boot import path.
+    from infrastructure.delivery.notifications.redaction import redact_token
     from integrations.buzz.delivery import post_buzz_message
     from integrations.catalog import resolve_effective_integrations
     from integrations.smtp.delivery import format_background_rca_email
-    from platform.delivery.notifications.redaction import redact_token
 
     entry = resolve_effective_integrations().get("buzz") or {}
     config = entry.get("config") if isinstance(entry, dict) else None

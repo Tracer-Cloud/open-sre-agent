@@ -82,7 +82,7 @@ def test_start_registers_harness_adapters_so_integrations_resolve() -> None:
         configure_process,
         reset_process_runtime_for_tests,
     )
-    from platform.harness_ports import (
+    from infrastructure.harness_ports import (
         configured_integration_services,
         get_investigation_tools,
         reset_harness_ports,

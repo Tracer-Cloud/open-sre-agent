@@ -28,7 +28,7 @@ from core.agent_harness.turns.turn_results import TurnResult
 from core.domain.types.tools import ToolSurface
 from core.llm.types import AgentLLMResponse, ToolCall
 from core.tool.contracts import RegisteredTool
-from platform.turn_host.turn_handler import TurnHandler
+from infrastructure.turn_host.turn_handler import TurnHandler
 from surfaces.interactive_shell.runtime.shell_turn_execution import execute_shell_turn
 from surfaces.interactive_shell.runtime.slash_adapter import headless_slash_ports
 from surfaces.interactive_shell.session import Session
@@ -263,7 +263,7 @@ def wire_tool_registry(monkeypatch: Any, tools: list[RegisteredTool]) -> None:
             del surface
             return dict(by_name)
 
-    from platform.harness_ports import set_tool_registry
+    from infrastructure.harness_ports import set_tool_registry
 
     set_tool_registry(_FixedToolRegistry())
 
@@ -383,7 +383,7 @@ def _install_gateway_dispatch_spy(
         return agent
 
     monkeypatch.setattr(
-        "platform.turn_host.session_agents.DefaultHeadlessBuild",
+        "infrastructure.turn_host.session_agents.DefaultHeadlessBuild",
         default_headless_build_stub(_spy_build),
     )
 

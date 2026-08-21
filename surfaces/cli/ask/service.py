@@ -24,7 +24,7 @@ from core.agent_harness.runtime import (
 )
 from core.agent_harness.spi.cancel import ensure_turn_cancel
 from core.tool import ToolExecutionHooks
-from platform.errors import OpenSREError
+from infrastructure.errors import OpenSREError
 from surfaces.cli.ask.approval import ApprovalTracker, build_approval_hooks
 
 

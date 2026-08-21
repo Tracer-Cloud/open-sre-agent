@@ -22,7 +22,7 @@ from gateway.transports.startup import (
 )
 from gateway.web.startup import start_web_server
 from gateway.web.web_server import WebAppServerHandle
-from platform.turn_host.turn_callback import TurnCallback
+from infrastructure.turn_host.turn_callback import TurnCallback
 
 # The web app is a thread join, not a network drain, so it gets a smaller slice
 # of the shutdown budget and leaves the rest for in-flight chat turns.

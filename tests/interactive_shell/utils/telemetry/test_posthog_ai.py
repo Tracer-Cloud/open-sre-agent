@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from platform.analytics.events import Event
+from infrastructure.analytics.events import Event
 from surfaces.interactive_shell.utils.telemetry.sinks import posthog_ai
 
 
