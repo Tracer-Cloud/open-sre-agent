@@ -95,9 +95,9 @@ def parse_manifest(data: bytes) -> EncryptionManifest:
         )
     except RemoteSyncEncryptionError:
         raise
-    except (ValueError, KeyError, TypeError) as exc:
+    except (ValueError, KeyError, TypeError, OverflowError) as exc:
         raise RemoteSyncEncryptionError(
-            "this store's encryption manifest is damaged and cannot be read"
+            "this store's encryption manifest is damaged and cannot be parsed successfully"
         ) from exc
 
 

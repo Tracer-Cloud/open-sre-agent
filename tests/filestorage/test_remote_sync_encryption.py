@@ -513,6 +513,7 @@ def _manifest_bytes(*, n: int = 131072, r: int = 8, p: int = 1, salt: bytes = b"
         ("n is not a power of two", {"n": 100_000}),
         ("n would allocate a terabyte", {"n": 2**30}),
         ("n below the supported floor", {"n": 1024}),
+        ("n is not even a finite number", {"n": 1e400}),
         ("r past the supported ceiling", {"r": 1 << 20}),
         ("p past the supported ceiling", {"p": 1 << 20}),
         ("salt too short to be one", {"salt": b"x"}),
