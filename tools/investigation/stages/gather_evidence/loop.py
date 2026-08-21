@@ -28,13 +28,29 @@ from infrastructure.text.truncation import truncate
 _MAX_CACHED_RESULT_CHARS = 8_000
 
 
-def tool_call_signature(tool_call: ToolCall) -> str:
+def _canonicalize_args(value: Any) -> Any:
+    """Recursively convert a value into a hashable fingerprint."""
+    if isinstance(value, dict):
+        return ("dict", tuple(sorted((str(k), _canonicalize_args(v)) for k, v in value.items())))
+    if isinstance(value, (list, tuple)):
+        return ("list", tuple(_canonicalize_args(v) for v in value))
+    if isinstance(value, bool):
+        return ("bool", value)
+    if isinstance(value, int):
+        return ("int", value)
+    if isinstance(value, float):
+        return ("float", value)
+    if isinstance(value, str):
+        return ("str", value)
+    if value is None:
+        return ("none", None)
+    return ("str", str(value))
+
+
+def tool_call_signature(tool_call: ToolCall) -> tuple[Any, ...]:
     """Stable identity for a tool call: ``name`` + canonicalised arguments."""
-    try:
-        args = json.dumps(tool_call.input, sort_keys=True, default=str)
-    except (TypeError, ValueError):
-        args = repr(tool_call.input)
-    return f"{tool_call.name}::{args}"
+    args_fingerprint = _canonicalize_args(tool_call.input)
+    return (tool_call.name, args_fingerprint)
 
 
 @dataclass(frozen=True)
@@ -78,11 +94,11 @@ class InvestigationToolCallCache:
             raise ValueError("max_total_chars must be >= 1")
         self._max_entries = max_entries
         self._max_total_chars = max_total_chars
-        self._entries: OrderedDict[str, CachedToolResult] = OrderedDict()
-        self._entry_chars: dict[str, int] = {}
+        self._entries: OrderedDict[tuple[Any, ...], CachedToolResult] = OrderedDict()
+        self._entry_chars: dict[tuple[Any, ...], int] = {}
         self._total_chars = 0
 
-    def store(self, signature: str, result: Any, *, loop_iteration: int) -> None:
+    def store(self, signature: tuple[Any, ...], result: Any, *, loop_iteration: int) -> None:
         if signature in self._entries:
             return
         stored = result
@@ -112,7 +128,7 @@ class InvestigationToolCallCache:
         self._entry_chars[signature] = size
         self._total_chars += size
 
-    def lookup(self, signature: str) -> CachedToolResult | None:
+    def lookup(self, signature: tuple[Any, ...]) -> CachedToolResult | None:
         cached = self._entries.get(signature)
         if cached is not None:
             self._entries.move_to_end(signature)
