@@ -51,12 +51,156 @@ Add an active `mariadb` record to `~/.opensre/integrations.json` with host, port
 ```sql
 CREATE USER 'opensre_readonly'@'%' IDENTIFIED BY 'secure-password';
 GRANT PROCESS ON *.* TO 'opensre_readonly'@'%';
+GRANT SLAVE MONITOR ON *.* TO 'opensre_readonly'@'%';
 GRANT SELECT ON performance_schema.* TO 'opensre_readonly'@'%';
-GRANT SELECT ON information_schema.* TO 'opensre_readonly'@'%';
+GRANT SELECT ON your_database.* TO 'opensre_readonly'@'%';
 FLUSH PRIVILEGES;
 ```
 
-Slow queries need `performance_schema`. Replication status uses `SHOW ALL SLAVES STATUS`.
+Four notes on these grants, each confirmed against a real server:
+
+- `information_schema` needs no explicit grant -- MariaDB exposes it automatically based on
+  a user's other privileges. `GRANT SELECT ON information_schema.*` is rejected outright
+  (`ERROR 1044`) and aborts the script before later grants run.
+- The grant on the **target database** (`MARIADB_DATABASE`) is required -- the connector
+  selects it as the default schema on connect, and without it every tool call fails with
+  `Access denied ... to database`.
+- `SLAVE MONITOR` is required for `get_mariadb_replication_status` (`SHOW ALL SLAVES STATUS`)
+  -- MySQL's `REPLICATION CLIENT` name doesn't carry the same privilege on MariaDB (`SHOW
+  GRANTS` reports it back as `BINLOG MONITOR`, a related but different privilege that does
+  not cover replica status). Without `SLAVE MONITOR`, that one tool fails with
+  `Access denied; you need (at least one of) the SLAVE MONITOR privilege(s)` even though
+  `integrations verify mariadb` and the other four tools pass.
+- Slow queries need `performance_schema`, which is enabled by default on the official
+  `mariadb` Docker image but often disabled in production `my.cnf` -- check `SELECT
+  @@performance_schema` if `get_mariadb_slow_queries` returns an empty note.
+
+### Quick local test with Docker
+
+```bash
+docker run -d --name mariadb-dev -p 127.0.0.1:3307:3306 \
+  -e MARIADB_ROOT_PASSWORD=rootpass \
+  -e MARIADB_DATABASE=app_db \
+  mariadb:11 --performance-schema=ON
+
+i=0
+until docker logs mariadb-dev 2>&1 | grep -q "port: 3306"; do
+  i=$((i + 1))
+  [ "$i" -ge 30 ] && { echo "ERROR: MariaDB never became ready" >&2; exit 1; }
+  sleep 2
+done
+```
+
+<Warning>
+Like MySQL, the official MariaDB image starts a **temporary** init-only server before the
+real one -- its own log line reports `port: 0`. A readiness check against the socket (e.g.
+`mariadb-admin ping`) can succeed against that temporary server and return moments before it
+shuts down and the real server restarts, causing the very next command to fail with `Access
+denied` or a socket error. Waiting for the final server's own log line (`port: 3306`) avoids
+the race; verified by grepping the full container log for both `port: 0` (temporary server)
+and `port: 3306` (real server) after startup.
+</Warning>
+
+```bash
+docker exec mariadb-dev mariadb -uroot -prootpass -e "
+CREATE USER 'opensre_readonly'@'%' IDENTIFIED BY 'verifypass';
+GRANT PROCESS ON *.* TO 'opensre_readonly'@'%';
+GRANT SLAVE MONITOR ON *.* TO 'opensre_readonly'@'%';
+GRANT SELECT ON performance_schema.* TO 'opensre_readonly'@'%';
+GRANT SELECT ON app_db.* TO 'opensre_readonly'@'%';
+FLUSH PRIVILEGES;
+"
+docker exec mariadb-dev mariadb -uroot -prootpass -D app_db -e "
+CREATE TABLE orders (id INT PRIMARY KEY, amount DECIMAL(10,2));
+INSERT INTO orders VALUES (1, 42.50), (2, 17.00);
+SELECT SLEEP(2);
+" > /dev/null
+```
+
+```bash
+export MARIADB_HOST=127.0.0.1
+export MARIADB_PORT=3307
+export MARIADB_DATABASE=app_db
+export MARIADB_USERNAME=opensre_readonly
+export MARIADB_PASSWORD=verifypass
+export MARIADB_SSL=false
+```
+
+Verify:
+
+```bash
+opensre integrations verify mariadb
+```
+
+```
+SERVICE  │ SOURCE    │ STATUS   │ DETAIL
+mariadb  │ local env │ ✓ passed │ Connected to MariaDB 11.8.8-MariaDB-ubu2404
+         │           │          │ target database: app_db.
+```
+
+`opensre investigate` only treats an integration as active once the store resolution has
+*something* to fall through to env vars with -- an untouched `~/.opensre/integrations.json`
+with an unrelated integration in it blocks env-var fallback entirely. Point
+`OPENSRE_INTEGRATIONS_STORE_PATH` at an empty, valid store instead, so your real config is
+never read or written and the `MARIADB_*` vars above are the only source of connection info:
+
+```bash
+export OPENSRE_INTEGRATIONS_STORE_PATH=$(mktemp /tmp/opensre-mariadb-demo.XXXXXX)
+echo '{"version": 2, "integrations": []}' > "$OPENSRE_INTEGRATIONS_STORE_PATH"
+```
+
+A literal zero-byte file does not work here -- the store loader expects valid JSON and raises
+on an empty read, so this writes an explicitly empty (but valid) store rather than just
+creating the file with `mktemp` alone.
+
+Trigger a real investigation against the seeded slow query -- this is the actual supported
+entrypoint, not an internal import:
+
+```bash
+opensre investigate --input-json '{
+  "alert_name": "MariaDBSlowQuery",
+  "severity": "warning",
+  "commonAnnotations": {
+    "summary": "app_db MariaDB instance has a slow query"
+  }
+}'
+```
+
+Real output from a run against this exact local instance (edited for length). An empty store
+makes `opensre investigate` fall through to env-var resolution for *every* integration, not
+just MariaDB -- if your shell or machine already resolves another integration from its own
+env vars, it rides along too (harmless, and unrelated to the MariaDB tool calls below):
+
+```
+Loading integrations: telegram, mariadb
+↳ MariaDB · get mariadb global status
+↳ MariaDB · get mariadb process list
+↳ MariaDB · get mariadb replication status
+↳ MariaDB · get mariadb slow queries
+↳ MariaDB · get mariadb innodb status
+
+Triage complete: Single MariaDB instance (not a replica), ~155s uptime, low
+activity (max 5 connections, 0 deadlocks, 0 row lock waits), but
+performance_schema shows one outlier statement SELECT SLEEP(?) at ~2001 ms --
+the sole "slow" query driving the alert.
+
+root_cause: The MariaDBSlowQuery alert fired because a single SELECT SLEEP(?)
+statement executed for ~2001ms, exceeding the slow-query threshold. SLEEP()
+is an intentional wait with 0 rows examined/sent, not real database work. All
+other engine, buffer pool, lock, replication, and connection metrics are
+within normal bounds on a freshly-started (155s uptime) instance.
+```
+
+All 5 registered tools were exercised in this single turn.
+
+Teardown:
+
+```bash
+docker rm -f mariadb-dev
+rm -f "$OPENSRE_INTEGRATIONS_STORE_PATH"
+unset OPENSRE_INTEGRATIONS_STORE_PATH
+unset MARIADB_HOST MARIADB_PORT MARIADB_DATABASE MARIADB_USERNAME MARIADB_PASSWORD MARIADB_SSL
+```
 
 ## Investigation tools
 
