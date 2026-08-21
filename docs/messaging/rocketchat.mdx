@@ -109,8 +109,12 @@ docker network create rc-net
 
 docker run -d --name rc-mongo --network rc-net --platform linux/amd64 \
   mongo:7.0 --replSet rs0 --bind_ip_all
-i=0; until docker exec rc-mongo mongosh --quiet --eval "db.runCommand('ping')" > /dev/null 2>&1 || [ $i -ge 30 ]; do sleep 2; i=$((i+1)); done
-[ $i -lt 30 ] || { echo "ERROR: MongoDB never became ready" >&2; exit 1; }
+i=0
+until docker exec rc-mongo mongosh --quiet --eval "db.runCommand('ping')" > /dev/null 2>&1; do
+  i=$((i + 1))
+  [ "$i" -ge 30 ] && { echo "ERROR: MongoDB never became ready" >&2; exit 1; }
+  sleep 2
+done
 docker exec rc-mongo mongosh --eval "rs.initiate()"
 
 docker run -d --name rc-dev --network rc-net --platform linux/amd64 -p 127.0.0.1:3201:3000 \
@@ -127,22 +131,25 @@ docker run -d --name rc-dev --network rc-net --platform linux/amd64 -p 127.0.0.1
 The `OVERWRITE_SETTING_Show_Setup_Wizard=completed` + `ADMIN_*` vars skip the manual setup wizard entirely.
 
 ```bash
-i=0; until curl -sf -o /dev/null http://localhost:3201/api/info || [ $i -ge 40 ]; do sleep 10; i=$((i+1)); done
-[ $i -lt 40 ] || { echo "ERROR: Rocket.Chat never became ready" >&2; exit 1; }
+i=0
+until curl -sf -o /dev/null http://localhost:3201/api/info; do
+  i=$((i + 1))
+  [ "$i" -ge 40 ] && { echo "ERROR: Rocket.Chat never became ready" >&2; exit 1; }
+  sleep 10
+done
 ```
 
-Then log in and generate a PAT via the API:
+Log in and generate a PAT via the API. The password stays out of curl's own argv (piped via stdin, not `-d "password=..."`), and the token is captured into a variable rather than printed:
 
 ```bash
-curl -s -X POST http://localhost:3201/api/v1/login -d "user=verifyadmin&password=verify-admin-pass"
-# copy data.authToken and data.userId from the response, then:
-curl -s -X POST http://localhost:3201/api/v1/users.generatePersonalAccessToken \
-  -H "X-Auth-Token: <authToken>" -H "X-User-Id: <userId>" \
-  -d "tokenName=opensre-verify"
+RC_LOGIN=$(printf 'user=verifyadmin&password=verify-admin-pass' | curl -s -X POST http://localhost:3201/api/v1/login --data-binary @-)
+RC_AUTH_TOKEN=$(echo "$RC_LOGIN" | python3 -c "import json,sys;print(json.load(sys.stdin)['data']['authToken'])")
+RC_USER_ID=$(echo "$RC_LOGIN" | python3 -c "import json,sys;print(json.load(sys.stdin)['data']['userId'])")
+unset RC_LOGIN
 ```
 
 <Warning>
-This will fail with `{"error":"TOTP Required [totp-required]"}` — the image ships with global two-factor auth (`Accounts_TwoFactorAuthentication_Enabled`) on by default, and email-based 2FA auto-opts in every user. Reproduced live. Fix for a disposable local instance:
+Generating the PAT here fails with `{"error":"TOTP Required [totp-required]"}` — the image ships with global two-factor auth (`Accounts_TwoFactorAuthentication_Enabled`) on by default, and email-based 2FA auto-opts in every user. Reproduced live, including trying to disable it through Rocket.Chat's own settings REST API first — that call also requires TOTP (the block applies uniformly to sensitive admin actions, not just PAT creation), so there is no way to lift it through the API alone. The only working fix for a disposable local instance is a direct database update:
 
 ```bash
 docker exec rc-mongo mongosh rocketchat --quiet --eval '
@@ -152,14 +159,28 @@ db.rocketchat_settings.updateOne(
 docker restart rc-dev   # settings are cached in-process; a restart forces a fresh read
 ```
 
-Then log in again (the old auth token is invalidated by the restart) and retry `generatePersonalAccessToken` — it succeeds. Never disable 2FA this way on a real workspace.
+Never disable 2FA this way on a real workspace — on a real workspace, disable it (if truly needed) through the admin UI instead, which does not enforce this same API-level TOTP check for the setting change itself.
 </Warning>
+
+Log in again (the restart invalidated the earlier token) and generate the PAT, still without printing it:
+
+```bash
+RC_LOGIN=$(printf 'user=verifyadmin&password=verify-admin-pass' | curl -s -X POST http://localhost:3201/api/v1/login --data-binary @-)
+RC_AUTH_TOKEN=$(echo "$RC_LOGIN" | python3 -c "import json,sys;print(json.load(sys.stdin)['data']['authToken'])")
+RC_USER_ID=$(echo "$RC_LOGIN" | python3 -c "import json,sys;print(json.load(sys.stdin)['data']['userId'])")
+unset RC_LOGIN
+
+RC_PAT=$(printf 'tokenName=opensre-verify' | curl -s -X POST http://localhost:3201/api/v1/users.generatePersonalAccessToken \
+  -H "X-Auth-Token: $RC_AUTH_TOKEN" -H "X-User-Id: $RC_USER_ID" --data-binary @- \
+  | python3 -c "import json,sys;print(json.load(sys.stdin)['token'])")
+```
 
 ```bash
 export ROCKETCHAT_SERVER_URL="http://localhost:3201"
-export ROCKETCHAT_AUTH_TOKEN="<token from generatePersonalAccessToken>"
-export ROCKETCHAT_USER_ID="<userId from login>"
+export ROCKETCHAT_AUTH_TOKEN="$RC_PAT"
+export ROCKETCHAT_USER_ID="$RC_USER_ID"
 export ROCKETCHAT_DEFAULT_CHANNEL="#general"
+unset RC_PAT RC_AUTH_TOKEN RC_USER_ID
 ```
 
 Verify:
