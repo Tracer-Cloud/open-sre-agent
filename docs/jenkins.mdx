@@ -90,7 +90,7 @@ COOKIE_JAR=/tmp/jenkins-init/cookies.txt
 CRUMB=$(curl -s -c "$COOKIE_JAR" -u admin:admin http://localhost:8090/crumbIssuer/api/json | python3 -c "import json,sys;print(json.load(sys.stdin)['crumb'])")
 
 curl -s -b "$COOKIE_JAR" -u admin:admin -H "Jenkins-Crumb: $CRUMB" -H "Content-Type: application/xml" \
-  --data-binary '<project><builders><hudson.tasks.Shell><command>echo deploying</command></hudson.tasks.Shell></builders></project>' \
+  --data-binary '<project><builders><hudson.tasks.Shell><command>echo deploying payment-service; exit 1</command></hudson.tasks.Shell></builders></project>' \
   "http://localhost:8090/createItem?name=payment-service-deploy"
 
 curl -s -b "$COOKIE_JAR" -u admin:admin -H "Jenkins-Crumb: $CRUMB" -X POST \
