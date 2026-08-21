@@ -196,6 +196,8 @@ rocketchat │ local env │ ✓ passed │ Connected to Rocket.Chat as @verifya
 
 Send a real message through the supported watchdog delivery path (see [Watchdog alarms](#watchdog-alarms) below) rather than calling the tool class directly — this exercises the same threshold-detection, cooldown, and provider-routing code a production alarm uses:
 
+`watchdog`, not `investigate`, is deliberate here: Rocket.Chat has one registered tool, `rocketchat_send_message`, and it's a delivery action (`side_effect_level: EXTERNAL`), not a read/investigation tool like the other integrations' — there's nothing for `investigate` to read from Rocket.Chat itself. Calling it mid-investigation would also need interactive approval, which doesn't complete in one non-interactive demo run; `watchdog` triggers a real delivery autonomously by design.
+
 ```bash
 sleep 30 &
 opensre watchdog --pid $! --max-runtime 2s --once --provider rocketchat --chat-id "#general"
