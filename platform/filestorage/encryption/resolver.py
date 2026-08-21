@@ -10,6 +10,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
+from platform.filestorage.encryption import envelope
 from platform.filestorage.encryption.keys import resolve_passphrase
 from platform.filestorage.encryption.manifest import (
     load_manifest,
@@ -20,7 +21,11 @@ from platform.filestorage.encryption.manifest import (
 )
 from platform.filestorage.encryption.ports import Cipher
 from platform.filestorage.enums import SyncRootName
-from platform.filestorage.errors import EncryptedStoreError, PlaintextStoreError
+from platform.filestorage.errors import (
+    EncryptedStoreError,
+    ManifestMissingError,
+    PlaintextStoreError,
+)
 from platform.filestorage.ports import ObjectStore, RemoteObject
 
 _ROOT_HEADS = frozenset(root.value for root in SyncRootName)
@@ -48,6 +53,34 @@ def holds_mirrored_objects(listing: list[RemoteObject]) -> bool:
     return any(obj.key.partition("/")[0] in _ROOT_HEADS for obj in listing)
 
 
+_MANIFEST_GONE = (
+    "This store holds encrypted objects but no manifest to open them.\n"
+    "The manifest carried the only copy of the keys, so those objects cannot be\n"
+    "recovered — and syncing either way now would make things worse.\n"
+    "\n"
+    "  If the manifest was deleted by mistake, restore it from a bucket version.\n"
+    "  Otherwise start the remote over: empty the prefix, then sync again."
+)
+
+
+def _holds_sealed_objects(store: ObjectStore, listing: list[RemoteObject]) -> bool:
+    """Whether the mirrored objects are actually sealed.
+
+    Costs one ``get_object`` — the smallest mirrored object, so the read stays
+    cheap — and only runs when there is no manifest to trust. Without it a
+    deleted manifest makes an encrypted store indistinguishable from a plaintext
+    one, and the engine writes ciphertext straight over local history.
+
+    One object answers for the store: a mixed prefix can only come from an
+    interrupted migration, and either answer routes to the same refusal.
+    """
+    mirrored = [obj for obj in listing if obj.key.partition("/")[0] in _ROOT_HEADS]
+    if not mirrored:
+        return False
+    smallest = min(mirrored, key=lambda obj: obj.size)
+    return envelope.is_sealed(store.get_object(smallest.key))
+
+
 def resolve_cipher(store: ObjectStore, *, encrypted: bool, dry_run: bool = False) -> ResolvedCipher:
     """Check the store against this machine's setting and build the cipher.
 
@@ -65,8 +98,10 @@ def resolve_cipher(store: ObjectStore, *, encrypted: bool, dry_run: bool = False
                 "Syncing now would upload readable history into an encrypted store.\n"
                 "\n"
                 "  Turn encryption back on:  `opensre remote-sync setup`\n"
-                "  Or, to go back to plaintext, delete the manifest in the remote store first."
+                "  Or, to go back to plaintext, empty the prefix and sync again."
             )
+        if _holds_sealed_objects(store, listing):
+            raise ManifestMissingError(_MANIFEST_GONE)
         return ResolvedCipher(cipher=None, listing=listing)
 
     passphrase = resolve_passphrase()
@@ -77,6 +112,8 @@ def resolve_cipher(store: ObjectStore, *, encrypted: bool, dry_run: bool = False
         )
 
     if holds_mirrored_objects(listing):
+        if _holds_sealed_objects(store, listing):
+            raise ManifestMissingError(_MANIFEST_GONE)
         raise PlaintextStoreError(
             "This store already holds unencrypted sessions or memory.\n"
             "Encrypting only new writes would leave those readable.\n"

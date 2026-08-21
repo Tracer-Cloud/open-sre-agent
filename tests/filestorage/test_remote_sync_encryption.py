@@ -25,6 +25,7 @@ from platform.filestorage.engine import SyncDirection, SyncReport, content_tag, 
 from platform.filestorage.enums import SyncRootName
 from platform.filestorage.errors import (
     EncryptedStoreError,
+    ManifestMissingError,
     MissingPassphraseError,
     PlaintextStoreError,
     UndecryptableObjectError,
@@ -329,6 +330,40 @@ def test_wrong_passphrase_stops_the_run(
     # Act / Assert
     with pytest.raises(WrongPassphraseError):
         resolve_cipher(store, encrypted=True)
+
+
+def test_a_deleted_manifest_never_looks_like_a_plaintext_store(
+    roots: tuple[SyncRoot, ...],
+) -> None:
+    """Both paths must refuse, not guess, when the keys are gone.
+
+    With encryption off the engine would write sealed bytes over local sessions;
+    with it on the store reads as plaintext and invites a re-encrypt that has
+    nothing to decrypt with.
+    """
+    # Arrange: a sealed store whose manifest has been removed.
+    store = FakeObjectStore()
+    _encrypted_push(store, roots)
+    del store.objects[MANIFEST_KEY]
+
+    # Act / Assert
+    with pytest.raises(ManifestMissingError):
+        resolve_cipher(store, encrypted=False)
+    with pytest.raises(ManifestMissingError):
+        resolve_cipher(store, encrypted=True)
+
+
+def test_a_genuinely_plaintext_store_still_syncs_unencrypted() -> None:
+    """The sealed-payload probe must not refuse an ordinary unencrypted store."""
+    # Arrange
+    store = FakeObjectStore()
+    store.put_object("sessions/a.jsonl", b'{"turn": 1}')
+
+    # Act
+    gate = resolve_cipher(store, encrypted=False)
+
+    # Assert
+    assert gate.cipher is None
 
 
 def test_unrelated_objects_do_not_count_as_plaintext_history() -> None:

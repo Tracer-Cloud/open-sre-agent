@@ -69,6 +69,17 @@ class PlaintextStoreError(RemoteSyncEncryptionError):
     """
 
 
+class ManifestMissingError(RemoteSyncEncryptionError):
+    """The store holds sealed objects but no manifest to open them.
+
+    Almost always a deleted manifest, and the keys it carried are gone with it.
+    Refused rather than guessed at from either side: with encryption off the
+    engine would write sealed bytes over local sessions, and with it on the
+    store looks like plaintext and invites a re-encrypt that cannot decrypt
+    anything.
+    """
+
+
 class EncryptedStoreError(RemoteSyncEncryptionError):
     """The store is encrypted but this machine has encryption switched off.
 
@@ -79,6 +90,7 @@ class EncryptedStoreError(RemoteSyncEncryptionError):
 
 __all__ = [
     "EncryptedStoreError",
+    "ManifestMissingError",
     "MissingPassphraseError",
     "OrgScopeNotSupportedError",
     "PlaintextStoreError",
