@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import click
 
-from platform.analytics.cli import (
+from infrastructure.analytics.cli import (
     capture_integration_removed,
     capture_integration_setup_completed,
     capture_integration_setup_started,

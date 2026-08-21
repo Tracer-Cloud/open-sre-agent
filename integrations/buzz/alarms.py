@@ -13,11 +13,11 @@ from __future__ import annotations
 import logging
 import time
 
+from infrastructure.delivery.notifications.cooldown import CooldownGate
+from infrastructure.delivery.notifications.limits import MAX_MESSAGE_SIZE
+from infrastructure.text.truncation import truncate
 from integrations.buzz.credentials import BuzzCredentials
 from integrations.buzz.delivery import post_buzz_message
-from platform.delivery.notifications.cooldown import CooldownGate
-from platform.delivery.notifications.limits import MAX_MESSAGE_SIZE
-from platform.text.truncation import truncate
 
 logger = logging.getLogger(__name__)
 

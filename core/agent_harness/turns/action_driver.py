@@ -61,9 +61,9 @@ from core.tool.execution import (
     public_tool_input,
 )
 from core.tool_framework.tags import SUMMARIZE_OBSERVATION_TAG
-from platform.analytics.react_turn import run_react_agent_with_telemetry
-from platform.observability.trace.prompts import persist_turn_system_prompt
-from platform.observability.trace.spans import component_span
+from infrastructure.analytics.react_turn import run_react_agent_with_telemetry
+from infrastructure.observability.trace.prompts import persist_turn_system_prompt
+from infrastructure.observability.trace.spans import component_span
 
 log = logging.getLogger(__name__)
 
@@ -635,7 +635,7 @@ def _literal_slash_tool_call(message: str, agent_tools: list[Any]) -> ToolCall |
     Returns ``None`` (so the normal LLM path runs) when the input is not literal
     slash text or when ``slash_invoke`` is not an available tool this turn.
     """
-    from platform.harness_ports import strip_message_context_prefix
+    from infrastructure.harness_ports import strip_message_context_prefix
 
     _, remainder = strip_message_context_prefix(message)
     stripped = remainder.strip()

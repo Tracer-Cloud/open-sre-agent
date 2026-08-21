@@ -91,8 +91,8 @@ from core.agent_harness.turns.turn_route import (
 )
 from core.agent_harness.turns.turn_snapshot import TurnSnapshot
 from core.llm_invoke_errors import is_cli_timeout_error, remediate_missing_llm_credentials
-from platform.harness_ports import preferred_evidence_sources_for
-from platform.observability.trace.spans import component_span, emit_route
+from infrastructure.harness_ports import preferred_evidence_sources_for
+from infrastructure.observability.trace.spans import component_span, emit_route
 
 log = logging.getLogger(__name__)
 

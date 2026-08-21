@@ -19,12 +19,12 @@ from config.constants.filestorage import (
     REMOTE_SYNC_REGION_ENV,
 )
 from config.local_settings import LocalSettingsError
-from platform.filestorage import setup as setup_mod
-from platform.filestorage.config import RemoteSyncConfig, load_remote_sync_config
-from platform.filestorage.errors import RemoteSyncConfigError
-from platform.filestorage.messages import format_setup_lines
-from platform.filestorage.providers import credential_hint_for_provider
-from platform.filestorage.setup import (
+from infrastructure.filestorage import setup as setup_mod
+from infrastructure.filestorage.config import RemoteSyncConfig, load_remote_sync_config
+from infrastructure.filestorage.errors import RemoteSyncConfigError
+from infrastructure.filestorage.messages import format_setup_lines
+from infrastructure.filestorage.providers import credential_hint_for_provider
+from infrastructure.filestorage.setup import (
     RemoteSyncSetupRequest,
     disable_remote_sync,
     save_remote_sync_settings,

@@ -6,12 +6,12 @@ from typing import Any
 
 import pytest
 
+from infrastructure.errors import OpenSREError
 from integrations.telegram.alarms import AlarmDispatcher
 from integrations.telegram.credentials import (
     TelegramCredentials,
     load_credentials_from_env,
 )
-from platform.errors import OpenSREError
 
 
 def _stub_telegram(

@@ -3,23 +3,23 @@
 from __future__ import annotations
 
 import json
+import platform
 import sys
 import time
 
 import click
 
-import platform
 from config.constants.investigation import ALERT_TEMPLATE_CHOICES
 from config.version import get_opensre_version
-from platform.analytics.cli import (
+from infrastructure.analytics.cli import (
     capture_update_completed,
     capture_update_failed,
     capture_update_started,
     track_investigation,
 )
-from platform.analytics.source import EntrypointSource, TriggerMode
-from platform.process.exit_codes import ERROR, SUCCESS
-from platform.process.runtime_flags import is_json_output, is_yes
+from infrastructure.analytics.source import EntrypointSource, TriggerMode
+from infrastructure.process.exit_codes import ERROR, SUCCESS
+from infrastructure.process.runtime_flags import is_json_output, is_yes
 
 
 @click.command(name="uninstall")

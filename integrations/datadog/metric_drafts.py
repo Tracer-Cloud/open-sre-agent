@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from platform.harness_ports import register_metric_query_tools
+from infrastructure.harness_ports import register_metric_query_tools
 
 _METRIC_QUERY_TOOLS = ("query_datadog_metrics",)
 

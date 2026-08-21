@@ -150,3 +150,11 @@ def test_a_second_goal_turn_posts_instead_of_overwriting(
     )
     assert "turn two answer" in _patch_discord_client["posts"][-1]
     assert "turn one answer" in _patch_discord_client["edits"][0]
+
+
+def test_finalize_tightens_padded_bold(
+    _patch_discord_client: dict[str, Any],
+) -> None:
+    sink = DiscordTurnOutput(bot_token="t", channel_id="c", edit_interval_seconds=0.0)
+    sink.finalize("** I found: ** the disk is full")
+    assert _patch_discord_client["edits"][-1] == "**I found:** the disk is full"

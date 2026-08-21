@@ -10,7 +10,7 @@ from __future__ import annotations
 import logging
 from typing import Any
 
-from platform.delivery.reporting.delivery_registry import (
+from infrastructure.delivery.reporting.delivery_registry import (
     DeliveryContext,
     register_delivery_adapter,
 )

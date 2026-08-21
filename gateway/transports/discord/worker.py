@@ -25,7 +25,7 @@ from gateway.transports.discord.events import (
 )
 from gateway.transports.discord.feedback import record_feedback_interaction
 from gateway.transports.discord.settings import DiscordGatewaySettings
-from platform.turn_host.turn_callback import TurnCallback
+from infrastructure.turn_host.turn_callback import TurnCallback
 
 _PLATFORM_DISCORD = "discord"
 _THREAD_HISTORY_LIMIT = 40

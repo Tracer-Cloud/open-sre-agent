@@ -13,7 +13,7 @@ from rich.console import Console
 from rich.markup import escape
 from rich.text import Text
 
-from platform.scheduling.task_types import TaskKind
+from infrastructure.scheduling.task_types import TaskKind
 from surfaces.interactive_shell.session import Session
 from surfaces.interactive_shell.ui import DIM, ERROR, HIGHLIGHT, WARNING, print_command_output
 from surfaces.interactive_shell.ui.execution_confirm import execution_allowed

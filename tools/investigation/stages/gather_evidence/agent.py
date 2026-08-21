@@ -29,9 +29,9 @@ from core.provider import ProviderHooks, ProviderRequest
 from core.state import InvestigationState
 from core.state.evidence import EvidenceEntry
 from core.tool import RegisteredTool, RuntimeTool
-from platform.observability import debug_print
-from platform.observability import get_progress_tracker as get_tracker
-from platform.observability.trace.redaction import (
+from infrastructure.observability import debug_print
+from infrastructure.observability import get_progress_tracker as get_tracker
+from infrastructure.observability.trace.redaction import (
     RedactedToolView,
     redact_sensitive,
     redact_tool_view,
@@ -557,11 +557,19 @@ class ConnectedInvestigationAgent:
 InvestigationAgent = ConnectedInvestigationAgent
 
 
-def get_investigation_agent_class() -> type[ConnectedInvestigationAgent]:
-    """Return the investigation policy appropriate for the active agent LLM."""
-    from core.llm.transports.sdk.agent_clients import CLIBackedAgentClient
+def get_investigation_agent_class(
+    *, cli_backed: bool | None = None
+) -> type[ConnectedInvestigationAgent]:
+    """Return the investigation policy for a CLI-backed vs hosted agent LLM.
 
-    if isinstance(default_llm_factory(), CLIBackedAgentClient):
+    When ``cli_backed`` is omitted, routing is read from configuration. Callers
+    that already know the transport pass the flag so they do not re-resolve it.
+    """
+    if cli_backed is None:
+        from core.agent_harness.runtime import agent_llm_is_cli_backed
+
+        cli_backed = agent_llm_is_cli_backed()
+    if cli_backed:
         return CLIBackedInvestigationAgent
     return ConnectedInvestigationAgent
 

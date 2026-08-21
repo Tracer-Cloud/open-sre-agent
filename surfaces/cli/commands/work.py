@@ -20,8 +20,8 @@ from core.domain.work_items import (
     prioritize_work_items,
     work_items_path,
 )
-from platform.scheduling.scheduler.store import add_task as add_scheduled_task
-from platform.scheduling.scheduler.types import Provider, ScheduledTask, TaskKind
+from infrastructure.scheduling.scheduler.store import add_task as add_scheduled_task
+from infrastructure.scheduling.scheduler.types import Provider, ScheduledTask, TaskKind
 
 _console = Console(highlight=False)
 

@@ -10,7 +10,7 @@ from rich.markup import escape
 
 from config.llm_reasoning_effort import apply_reasoning_effort
 from core.agent_harness.spi.session_state import background_mode_enabled, session_terminal
-from platform.scheduling.task_types import TaskRecord
+from infrastructure.scheduling.task_types import TaskRecord
 from surfaces.interactive_shell.command_registry.types import SlashCommand
 from surfaces.interactive_shell.runtime import Session
 from surfaces.interactive_shell.runtime.background.runner import (
@@ -222,8 +222,8 @@ def _record_investigation_turn(
 
 def _cmd_investigate_file(session: Session, console: Console, args: list[str]) -> bool:
     from config.constants.investigation import ALERT_TEMPLATE_CHOICES
-    from platform.analytics.cli import track_investigation
-    from platform.analytics.source import EntrypointSource, TriggerMode
+    from infrastructure.analytics.cli import track_investigation
+    from infrastructure.analytics.source import EntrypointSource, TriggerMode
     from surfaces.interactive_shell.runtime.investigation_adapter import (
         run_investigation_for_session,
         run_sample_alert_for_session,

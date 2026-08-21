@@ -3,7 +3,7 @@ from __future__ import annotations
 import subprocess
 import sys
 
-from platform.errors import OpenSREError
+from infrastructure.errors import OpenSREError
 from surfaces.interactive_shell.runtime.background.notifications import (
     deliver_background_notifications,
 )

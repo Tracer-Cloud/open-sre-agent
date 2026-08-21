@@ -2,12 +2,12 @@
 
 from __future__ import annotations
 
+from infrastructure.terminal.theme import SECONDARY
 from integrations.buzz.setup import BUZZ_SETUP
 from integrations.discord.setup import DISCORD_SETUP
 from integrations.rocketchat.setup import ROCKETCHAT_SETUP
 from integrations.slack.setup import SLACK_SETUP
 from integrations.telegram.setup import TELEGRAM_SETUP
-from platform.terminal.theme import SECONDARY
 from surfaces.cli.wizard.configurators.spec_configurator import configure_from_spec
 
 

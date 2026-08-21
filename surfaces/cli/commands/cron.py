@@ -11,9 +11,9 @@ import click
 from rich.console import Console
 from rich.table import Table
 
-from platform.scheduling.scheduler.credentials import requires_explicit_chat_id
-from platform.scheduling.scheduler.types import Provider, TaskKind
-from platform.terminal.theme import GLYPH_ERROR, GLYPH_SUCCESS
+from infrastructure.scheduling.scheduler.credentials import requires_explicit_chat_id
+from infrastructure.scheduling.scheduler.types import Provider, TaskKind
+from infrastructure.terminal.theme import GLYPH_ERROR, GLYPH_SUCCESS
 from surfaces.cli.commands.scheduling import validate_cron_and_timezone
 
 _console = Console()
@@ -101,7 +101,7 @@ def cron_add(
     window_hours: int,
 ) -> None:
     """Add a new scheduled delivery task."""
-    from platform.scheduling.scheduler.types import ScheduledTask
+    from infrastructure.scheduling.scheduler.types import ScheduledTask
 
     # Validate cron expression by constructing the APScheduler trigger
     validate_cron_and_timezone(cron_expr, timezone)
@@ -117,8 +117,8 @@ def cron_add(
         window_hours=window_hours,
     )
 
-    from platform.scheduling.scheduler.operation_log import record_scheduler_task_operation
-    from platform.scheduling.scheduler.store import add_task
+    from infrastructure.scheduling.scheduler.operation_log import record_scheduler_task_operation
+    from infrastructure.scheduling.scheduler.store import add_task
 
     added = add_task(task)
     record_scheduler_task_operation(
@@ -140,7 +140,7 @@ def cron_add(
 @cron_command.command(name="list")
 def cron_list() -> None:
     """List all scheduled delivery tasks."""
-    from platform.scheduling.scheduler.loops import list_loop_summaries
+    from infrastructure.scheduling.scheduler.loops import list_loop_summaries
 
     loops = list_loop_summaries()
     if not loops:
@@ -180,8 +180,8 @@ def cron_list() -> None:
 @click.argument("task_id")
 def cron_remove(task_id: str) -> None:
     """Remove a scheduled delivery task by ID."""
-    from platform.scheduling.scheduler.operation_log import record_scheduler_task_operation
-    from platform.scheduling.scheduler.store import get_task, remove_task
+    from infrastructure.scheduling.scheduler.operation_log import record_scheduler_task_operation
+    from infrastructure.scheduling.scheduler.store import get_task, remove_task
 
     task = get_task(task_id)
     if remove_task(task_id):
@@ -202,9 +202,9 @@ def cron_remove(task_id: str) -> None:
 def cron_run(task_id: str) -> None:
     """Run a scheduled task immediately (ad-hoc one-shot for debugging)."""
     from bootstrap.process import SCHEDULED_COMMAND_PROFILE, configure_process
-    from platform.scheduling.scheduler.operation_log import record_scheduler_task_operation
-    from platform.scheduling.scheduler.runner import run_task_now
-    from platform.scheduling.scheduler.store import get_task
+    from infrastructure.scheduling.scheduler.operation_log import record_scheduler_task_operation
+    from infrastructure.scheduling.scheduler.runner import run_task_now
+    from infrastructure.scheduling.scheduler.store import get_task
 
     configure_process(SCHEDULED_COMMAND_PROFILE)
 
@@ -238,8 +238,8 @@ def cron_run(task_id: str) -> None:
 )
 def cron_logs(task_id: str, limit: int) -> None:
     """Show execution history for a scheduled task."""
-    from platform.scheduling.scheduler.claim_store import get_runs
-    from platform.scheduling.scheduler.store import get_task
+    from infrastructure.scheduling.scheduler.claim_store import get_runs
+    from infrastructure.scheduling.scheduler.store import get_task
 
     task = get_task(task_id)
     if task is None:
@@ -281,7 +281,7 @@ def cron_logs(task_id: str, limit: int) -> None:
 def cron_start() -> None:
     """Start the scheduler daemon (blocks until interrupted)."""
     from bootstrap.process import SCHEDULER_WORKER_PROFILE, configure_process
-    from platform.scheduling.scheduler.runner import start_scheduler
+    from infrastructure.scheduling.scheduler.runner import start_scheduler
 
     # Dedicated scheduler process — not SCHEDULED_COMMAND (one-shot CLI helpers).
     configure_process(SCHEDULER_WORKER_PROFILE)
@@ -296,7 +296,7 @@ def _validate_chat_id_for_provider(provider: str, chat_id: str) -> None:
 
     Which providers can resolve a destination on their own is the scheduler's
     knowledge, not the CLI's — see
-    :func:`platform.scheduling.scheduler.credentials.requires_explicit_chat_id`.
+    :func:`infrastructure.scheduling.scheduler.credentials.requires_explicit_chat_id`.
     """
     if chat_id.strip() or not requires_explicit_chat_id(provider):
         return

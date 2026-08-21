@@ -29,10 +29,10 @@ from surfaces.cli.app import cli
 # Env is bound via bootstrap.process; Sentry/adapters are imported
 # inside CLI ``run()`` so those patches target the defining module.
 _ENV = "bootstrap.process.bootstrap_opensre_env_once"
-_SENTRY = "platform.observability.errors.sentry.init_sentry"
+_SENTRY = "infrastructure.observability.errors.sentry.init_sentry"
 _ADAPTERS = "surfaces.shared.terminal.output.boundary.install_product_adapters"
-_ESCAPE = "platform.terminal.prompt_support.install_questionary_escape_cancel"
-_CTRL_C = "platform.terminal.prompt_support.install_questionary_ctrl_c_double_exit"
+_ESCAPE = "infrastructure.terminal.prompt_support.install_questionary_escape_cancel"
+_CTRL_C = "infrastructure.terminal.prompt_support.install_questionary_ctrl_c_double_exit"
 _SIGINT = "surfaces.cli.signals.install_sigint_handler"
 
 

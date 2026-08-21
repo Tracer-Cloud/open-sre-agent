@@ -6,6 +6,7 @@ from types import SimpleNamespace
 
 import pytest
 
+from core.agent_harness.llm_resolution import agent_llm_is_cli_backed
 from core.llm.factory import (
     _MODEL_TYPE_BY_ROLE,
     LLMRole,
@@ -98,6 +99,26 @@ def test_get_llm_caches_per_role_and_invalidates_on_config_change(monkeypatch: p
 
     cache_key["value"] = ("sdk", "openai")  # provider changed -> whole cache invalidates
     assert get_llm(LLMRole.AGENT) is not first_agent
+
+
+@pytest.mark.parametrize(("registration", "cli_backed"), [(None, False), ("codex-reg", True)])
+def test_agent_llm_is_cli_backed_reads_the_route_and_builds_no_client(
+    registration: str | None,
+    cli_backed: bool,
+    monkeypatch: pytest.MonkeyPatch,
+):
+    """Transport-based policy selection must not pay for a client it may not use."""
+
+    def _fail_get_llm(*_a: object, **_k: object) -> None:
+        raise AssertionError("selecting on transport must not construct an LLM client")
+
+    monkeypatch.setattr("core.llm.factory.get_llm", _fail_get_llm)
+    monkeypatch.setattr(
+        "core.llm.factory.resolve_llm_route",
+        lambda: LLMRoute(SimpleNamespace(), "anthropic", registration, False),
+    )
+
+    assert agent_llm_is_cli_backed() is cli_backed
 
 
 def test_reset_llm_clients_forces_rebuild(monkeypatch: pytest.MonkeyPatch):

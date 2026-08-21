@@ -9,11 +9,11 @@ from pathlib import Path
 import pytest
 from rich.console import Console
 
-from platform.filestorage.config import RemoteSyncConfig
-from platform.filestorage.engine import SyncProgress, SyncReport
-from platform.filestorage.enums import SyncDirection, SyncRootName
-from platform.filestorage.errors import RemoteSyncConfigError
-from platform.filestorage.operations import SyncRootStatus, SyncStatus
+from infrastructure.filestorage.config import RemoteSyncConfig
+from infrastructure.filestorage.engine import SyncProgress, SyncReport
+from infrastructure.filestorage.enums import SyncDirection, SyncRootName
+from infrastructure.filestorage.errors import RemoteSyncConfigError
+from infrastructure.filestorage.operations import SyncRootStatus, SyncStatus
 from surfaces.interactive_shell.command_registry import SLASH_COMMANDS, dispatch_slash
 from surfaces.interactive_shell.runtime import Session
 from surfaces.interactive_shell.runtime.slash_adapter import headless_slash_ports

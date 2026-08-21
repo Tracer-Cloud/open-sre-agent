@@ -47,9 +47,9 @@ from gateway.transports.slack.processing.thread_history import (
     session_needs_thread_seed,
 )
 from gateway.transports.slack.settings import SlackGatewaySettings
+from infrastructure.analytics.usage_context import UsageSurface, bound_usage_context
+from infrastructure.turn_host.turn_callback import TurnCallback
 from integrations.messaging_security import MessagingPlatform
-from platform.analytics.usage_context import UsageSurface, bound_usage_context
-from platform.turn_host.turn_callback import TurnCallback
 
 
 # Only an explicit 402 from the credit ledger posts this; UNCONFIGURED /

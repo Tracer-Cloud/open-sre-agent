@@ -431,7 +431,7 @@ def test_one_host_drives_the_agent_and_the_shell_goes_through_it() -> None:
     """
     import inspect
 
-    import platform.turn_host.turn_handler as turn_host
+    import infrastructure.turn_host.turn_handler as turn_host
     from surfaces.interactive_shell.runtime import shell_turn_execution as shell_turn
 
     host_source = inspect.getsource(turn_host)

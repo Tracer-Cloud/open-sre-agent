@@ -14,7 +14,7 @@ from rich.console import Console
 
 from core.agent_harness.session import SessionCore
 from core.agent_harness.session.persistence.memory import InMemorySessionStore
-from platform.scheduling.task_types import TaskKind, TaskStatus
+from infrastructure.scheduling.task_types import TaskKind, TaskStatus
 from surfaces.interactive_shell.command_registry import SLASH_COMMANDS, dispatch_slash
 from surfaces.interactive_shell.command_registry import repl_data as repl_data_module
 from surfaces.interactive_shell.command_registry.investigation import (
@@ -485,7 +485,7 @@ class TestDispatchSlash:
         list deciding it. Registering one makes its channel acceptable without any
         edit here, which a hardcoded tuple cannot do."""
         from bootstrap.adapters import install_notification_adapters
-        from platform.delivery.notifications.outbound_registry import (
+        from infrastructure.delivery.notifications.outbound_registry import (
             BACKGROUND_RCA,
             clear_outbound_adapters,
             get_outbound_adapter,
@@ -1013,8 +1013,8 @@ class TestIntegrationsCommand:
         assert captured == [["integrations", "setup"]]
 
     def test_remove_uses_native_store_removal(self, monkeypatch: object) -> None:
+        import infrastructure.analytics.cli as analytics_cli
         import integrations.store as store
-        import platform.analytics.cli as analytics_cli
         from surfaces.interactive_shell.command_registry import integrations as m
 
         removed: list[str] = []
@@ -1073,8 +1073,8 @@ class TestMcpCommand:
         assert captured == [["integrations", "setup"]]
 
     def test_disconnect_uses_native_store_removal(self, monkeypatch: object) -> None:
+        import infrastructure.analytics.cli as analytics_cli
         import integrations.store as store
-        import platform.analytics.cli as analytics_cli
         from surfaces.interactive_shell.command_registry import integrations as m
 
         removed: list[str] = []
@@ -1743,7 +1743,7 @@ class TestInvestigateFileCommand:
             track_calls.append((entrypoint.value, trigger_mode.value, input_path))
             return _TrackContext()
 
-        monkeypatch.setattr("platform.analytics.cli.track_investigation", _fake_track)
+        monkeypatch.setattr("infrastructure.analytics.cli.track_investigation", _fake_track)
         monkeypatch.setattr(
             "surfaces.interactive_shell.runtime.investigation_adapter.run_sample_alert_for_session",
             lambda **_kwargs: {"root_cause": "sample cause"},
@@ -1898,7 +1898,7 @@ class TestInvestigateFileCommand:
             track_calls.append((entrypoint.value, trigger_mode.value))
             return _TrackContext()
 
-        monkeypatch.setattr("platform.analytics.cli.track_investigation", _fake_track)
+        monkeypatch.setattr("infrastructure.analytics.cli.track_investigation", _fake_track)
         monkeypatch.setattr(
             "surfaces.interactive_shell.runtime.investigation_adapter.run_investigation_for_session",
             lambda **_kwargs: {"root_cause": "test cause"},
@@ -2758,7 +2758,7 @@ class TestRunCliCommand:
 
         console, buf = _capture()
         assert m.run_cli_command(console, ["update"], subprocess_timeout=30.0) is True
-        from platform.terminal.theme import ERROR
+        from infrastructure.terminal.theme import ERROR
 
         assert replayed == [("partial stdout\n", None), ("partial stderr\n", ERROR)]
         assert "timed out" in buf.getvalue()

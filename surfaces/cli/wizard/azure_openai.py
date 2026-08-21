@@ -11,7 +11,7 @@ from core.llm.providers.azure_openai import (
     normalize_azure_openai_base_url,
     resolve_azure_openai_api_version,
 )
-from platform.terminal.theme import ERROR, WARNING
+from infrastructure.terminal.theme import ERROR, WARNING
 from surfaces.cli.wizard._ui import (
     _CUSTOM_MODEL_SENTINEL,
     Choice,

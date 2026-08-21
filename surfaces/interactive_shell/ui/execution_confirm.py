@@ -22,9 +22,9 @@ from rich.console import Console
 from rich.markup import escape
 
 from core.agent_harness.spi.session_state import trust_mode_enabled
-from platform.analytics.cli import capture_repl_execution_policy_decision
-from platform.analytics.provider import Properties
-from platform.terminal.theme import DIM, WARNING
+from infrastructure.analytics.cli import capture_repl_execution_policy_decision
+from infrastructure.analytics.provider import Properties
+from infrastructure.terminal.theme import DIM, WARNING
 from tools.interactive_shell.shared import (
     ConfirmationOutcome,
     ExecutionPolicyResult,

@@ -7,7 +7,7 @@ does the same job directly: build an agent, bind the turn, replace whichever
 stages the test names, and hand back the :class:`TurnResult`.
 
 Production code must not import this. The shell reaches the agent through
-:class:`platform.turn_host.turn_handler.TurnHandler`; nothing else does.
+:class:`infrastructure.turn_host.turn_handler.TurnHandler`; nothing else does.
 """
 
 from __future__ import annotations

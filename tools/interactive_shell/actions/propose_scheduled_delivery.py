@@ -12,8 +12,8 @@ from core.agent_harness.tools import ActionToolContext, execute_with_action_cont
 from core.domain.types.tools import ToolSurface
 from core.tool import RegisteredTool, SideEffectLevel
 from core.tool_framework.utils import object_schema, string_property
-from platform.scheduling.scheduler.credentials import requires_explicit_chat_id
-from platform.scheduling.scheduler.types import Provider, TaskKind
+from infrastructure.scheduling.scheduler.credentials import requires_explicit_chat_id
+from infrastructure.scheduling.scheduler.types import Provider, TaskKind
 
 # Match surfaces.cli.commands.cron: Sentry kinds use `opensre sentry`, not cron add.
 _KIND_VALUES = frozenset(

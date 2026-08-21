@@ -5,7 +5,7 @@ from __future__ import annotations
 from pathlib import Path
 from zipfile import ZipFile
 
-from platform.deployment.packaging.validate_wheel import missing_skill_files
+from infrastructure.deployment.packaging.validate_wheel import missing_skill_files
 
 
 def test_missing_skill_files_reports_absent_runtime_data(tmp_path: Path) -> None:
@@ -13,7 +13,7 @@ def test_missing_skill_files_reports_absent_runtime_data(tmp_path: Path) -> None
     skill_path = repo_root / "core/agent_harness/prompts/skills/example/SKILL.md"
     skill_path.parent.mkdir(parents=True)
     skill_path.write_text("example", encoding="utf-8")
-    manifest_path = repo_root / "platform/deployment/packaging/release_manifest.py"
+    manifest_path = repo_root / "infrastructure/deployment/packaging/release_manifest.py"
     manifest_path.parent.mkdir(parents=True)
     manifest_path.write_text(
         "def required_skill_files(repo_root):\n"
@@ -36,7 +36,7 @@ def test_missing_skill_files_accepts_complete_wheel(tmp_path: Path) -> None:
     skill_path = repo_root / relative_skill_path
     skill_path.parent.mkdir(parents=True)
     skill_path.write_text("example", encoding="utf-8")
-    manifest_path = repo_root / "platform/deployment/packaging/release_manifest.py"
+    manifest_path = repo_root / "infrastructure/deployment/packaging/release_manifest.py"
     manifest_path.parent.mkdir(parents=True)
     manifest_path.write_text(
         "def required_skill_files(repo_root):\n"

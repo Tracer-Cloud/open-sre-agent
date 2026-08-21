@@ -17,8 +17,8 @@ import ast
 import inspect
 import textwrap
 
-from platform.scheduling.scheduler import delivery, executor
-from platform.scheduling.scheduler.types import Provider
+from infrastructure.scheduling.scheduler import delivery, executor
+from infrastructure.scheduling.scheduler.types import Provider
 from tools.system.watch_dog import runner
 from tools.system.watch_dog.config import WATCHDOG_SUPPORTED_PROVIDERS
 

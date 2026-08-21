@@ -13,16 +13,16 @@ last column says whether peers may import each other.
 
 | Tier | Packages | May import | Must never import | Peer rule |
 | --- | --- | --- | --- | --- |
-| 1 (top) | `surfaces`, `gateway` | `bootstrap`, `tools`, `integrations`, `core`, `platform`, `config` | — | Independent: must not import each other. |
-| 2 | `bootstrap` | `tools`, `integrations`, `core`, `platform`, `config` | `surfaces`, `gateway` | Composition root. The only package that may import `tools` **and** `integrations` together, because wiring needs both. |
-| 3 | `tools` | `core`, `platform`, `config` | `surfaces`, `gateway`, `bootstrap` | Peer of `integrations`: must not import it. Existing edges are listed as debt in `.importlinter.strict`. |
-| 3 | `integrations` | `core`, `platform`, `config` | `tools`, `surfaces`, `gateway`, `bootstrap` | Peer of `tools`: must not import it. |
-| 4 | `core`, `platform` | `config` | `surfaces`, `gateway`, `bootstrap`, `tools`, `integrations` | Siblings: **may** cross-import each other. |
+| 1 (top) | `surfaces`, `gateway` | `bootstrap`, `tools`, `integrations`, `core`, `infrastructure`, `config` | — | Independent peers; must not import each other, except three tracked CLI/REPL gateway-command edges listed in `.importlinter.strict`. |
+| 2 | `bootstrap` | `tools`, `integrations`, `core`, `infrastructure`, `config` | `surfaces`, `gateway` | Composition root. The only package that may import `tools` **and** `integrations` together, because wiring needs both. |
+| 3 | `tools` | `core`, `infrastructure`, `config` | `surfaces`, `gateway`, `bootstrap` | Peer of `integrations`: must not import it. Existing edges are listed as debt in `.importlinter.strict`. |
+| 3 | `integrations` | `core`, `infrastructure`, `config` | `tools`, `surfaces`, `gateway`, `bootstrap` | Peer of `tools`: must not import it. |
+| 4 | `core`, `infrastructure` | `config` | `surfaces`, `gateway`, `bootstrap`, `tools`, `integrations` | Siblings: **may** cross-import each other. |
 | 5 (bottom) | `config` | — (nothing first-party) | everything above | Independent — imports no other first-party package. |
 
 The shortcut: **dependencies point downward only.** A surface can reach all the
 way down; `config` can reach nothing. The single deliberate exception is
-`core ⟷ platform`, a mutually-dependent pair by design (see below).
+`core ⟷ infrastructure`, a mutually-dependent pair by design (see below).
 
 ```mermaid
 flowchart TD
@@ -37,9 +37,9 @@ flowchart TD
         TOOLS[tools]
         INTEGRATIONS[integrations]
     end
-    subgraph T4["Tier 4 — runtime + platform"]
+    subgraph T4["Tier 4 — runtime + infrastructure"]
         CORE[core]
-        PLATFORM[platform]
+        INFRA[infrastructure]
     end
     subgraph T5["Tier 5 — config"]
         CONFIG[config]
@@ -55,20 +55,20 @@ flowchart TD
     BOOT --> INTEGRATIONS
 
     TOOLS --> CORE
-    TOOLS --> PLATFORM
+    TOOLS --> INFRA
     INTEGRATIONS --> CORE
-    INTEGRATIONS --> PLATFORM
+    INTEGRATIONS --> INFRA
 
-    CORE <--> PLATFORM
+    CORE <--> INFRA
 
     CORE --> CONFIG
-    PLATFORM --> CONFIG
+    INFRA --> CONFIG
 ```
 
 The arrows show edges between **adjacent** tiers to keep the diagram readable.
 The actual rule is broader: a tier may import **any** tier below it, not only
 the one directly beneath — so a surface may import `config` directly, and a
-tool may import `platform`. Refer to the "May import" column above for the
+tool may import `infrastructure`. Refer to the "May import" column above for the
 complete set of allowed edges.
 
 ## The layers in detail
@@ -94,9 +94,11 @@ layers below it.
   transport lives in `gateway/transports/slack`, outbound delivery in
   `integrations/slack`.
 - **`gateway/`** — the standalone messaging gateway for inbound chat platforms
-  (`gateway/transports/telegram`, `gateway/transports/slack`,
-  `gateway/core/session`, `gateway/core/storage`). A peer of
-  `surfaces`, not a child: the two never import each other.
+  (`gateway/transports/{telegram,slack,discord,buzz}`), plus the FastAPI
+  `gateway/web/` surface (health, alert intake, async investigations) and the
+  shared per-turn machinery in `gateway/core/{session,storage,middleware}`
+  (`middleware/` holds the inbound-decision, identity, and approval steps every
+  transport composes). A peer of `surfaces`, not a child.
 
 ### Tier 2 — `bootstrap`
 
@@ -146,7 +148,7 @@ effectively sits one step below `tools` in the dependency graph. Do **not**
 reintroduce top-level `vendors/` or `services/` packages — external-system code
 belongs in `integrations/`, agent-callable code in `tools/`.
 
-### Tier 4 — `core` and `platform`
+### Tier 4 — `core` and `infrastructure`
 
 The shared runtime and cross-cutting services the capability layer is built on.
 
@@ -157,14 +159,18 @@ The shared runtime and cross-cutting services the capability layer is built on.
   helpers (`core/tool_framework`),
   shared LLM clients (`core/llm`), agent-harness
   session handling (`core/agent_harness`), and pure domain rules (`core/domain`).
-- **`platform/`** — cross-cutting services with no investigation logic of their
+- **`infrastructure/`** — cross-cutting services with no investigation logic of their
   own: guardrails, masking, sandbox, analytics, auth, notifications,
-  observability, scheduler, and deployment. It deliberately shadows the stdlib
-  `platform` name and re-exposes it, so `import platform` still works.
+  observability, scheduler, deployment, and the shared **turn host**
+  (`turn_host`) — the single `TurnHandler` the interactive shell and every
+  gateway transport run turns through, so the two entry paths cannot drift.
+  Deploy-time assets live under
+  `infrastructure/deployment/` (EC2/packaging Python tooling plus the
+  `cloudflare_install_proxy` edge worker); these are not imported by the app.
 
-These two are the one bidirectional pair by design: `core` reaches `platform`
+These two are the one bidirectional pair by design: `core` reaches `infrastructure`
 for guardrails, masking, observability, and evidence/log compaction, while
-`platform` reaches back into `core` for the shared state and session types
+`infrastructure` reaches back into `core` for the shared state and session types
 (`core.state`, `core.agent_harness.session`). Splitting them into
 separate tiers would forbid that edge, so they share a tier as siblings.
 
@@ -187,7 +193,7 @@ flowchart LR
     A["surfaces/cli\n opensre investigate"] --> B["tools/investigation\n capability + lifecycle"]
     B --> C["core\n Agent runtime, context budget, LLM"]
     B --> D["integrations\n vendor clients + credentials"]
-    C --> E["platform\n guardrails, masking, sandbox, observability"]
+    C --> E["infrastructure\n guardrails, masking, sandbox, observability"]
     B --> F["config\n prompts + constants"]
 ```
 
@@ -198,7 +204,7 @@ flowchart LR
    [`investigation-pipeline-architecture.md`](investigation-pipeline-architecture.md)),
    asking `core` to run the ReAct loop and select/execute tools.
 3. Evidence-gathering tools reach `integrations` for vendor clients and resolved
-   credentials; `core` and `platform` supply the runtime, guardrails, and
+   credentials; `core` and `infrastructure` supply the runtime, guardrails, and
    masking around every call.
 4. The structured diagnosis flows back up to the surface, which owns how it is
    presented or delivered.
@@ -209,7 +215,7 @@ flowchart LR
 flowchart LR
     A["gateway/transports\n inbound chat message"] --> B["gateway/core session + storage\n resolve conversation state"]
     B --> C["tools + core\n run the requested capability"]
-    C --> D["platform\n notifications, observability"]
+    C --> D["infrastructure\n notifications, observability"]
 ```
 
 `gateway` receives a message, resolves session state from its own storage, then

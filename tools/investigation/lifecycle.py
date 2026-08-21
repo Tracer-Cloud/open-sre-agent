@@ -7,7 +7,7 @@ from typing import TYPE_CHECKING, Any
 
 from core.state import AgentState
 from core.state.updates import apply_state_updates
-from platform.analytics.investigation_loop import bind_investigation_loop_metrics_from_state
+from infrastructure.analytics.investigation_loop import bind_investigation_loop_metrics_from_state
 
 if TYPE_CHECKING:
     # Type-only import — avoids paying the agent module's heavy import cost
@@ -18,7 +18,7 @@ if TYPE_CHECKING:
 
 def _run_stage(name: str, stage: Callable[[AgentState], Any], state: AgentState) -> None:
     """Merge one pipeline stage's updates into ``state`` under a stage trace span."""
-    from platform.observability.trace.spans import stage_span
+    from infrastructure.observability.trace.spans import stage_span
 
     with stage_span(name):
         apply_state_updates(state, stage(state))
@@ -35,11 +35,12 @@ def run_connected_investigation(
     which are merged in. Pure function: inputs in, state out.
 
     ``agent_class``: optional override for the investigation agent class.
-    Defaults to :class:`ConnectedInvestigationAgent`. Callers that need a
+    When omitted, the pipeline selects CLI-backed vs hosted policy from
+    configured LLM routing without constructing a client. Callers that need a
     custom termination policy, structured-stage progression, or other
     agent-level extensions can pass a subclass instead.
     """
-    from platform.observability.errors.sentry import capture_exception
+    from infrastructure.observability.errors.sentry import capture_exception
     from tools.investigation.reporting import deliver
     from tools.investigation.stages.diagnose import diagnose
     from tools.investigation.stages.gather_evidence import get_investigation_agent_class

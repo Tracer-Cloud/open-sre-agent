@@ -12,8 +12,8 @@ tests tree.
 | Process composition root | `core/lifecycle/controller.py` (`GatewayController`; inject `slash_ports_factory`) |
 | Surface startup (web + chat composer) | `startup.py` (`start_gateway` / `StartedGateway`) |
 | Daemon (pidfile + spawn) | `core/process/supervision.py` — caller passes argv; never names CLI or `surfaces.gateway_entry` |
-| Turn callback | `platform/turn_host/turn_handler.py` |
-| Turn contract (output, callback) | `platform/turn_host/turn_output.py`, `platform/turn_host/turn_callback.py` |
+| Turn callback | `infrastructure/turn_host/turn_handler.py` |
+| Turn contract (output, callback) | `infrastructure/turn_host/turn_output.py`, `infrastructure/turn_host/turn_callback.py` |
 | Transport registry (name, registration, worker) | `transports/names.py`, `transports/registration.py`, `transports/startup.py` |
 | Turn middleware (decision, policy, approvals, stop, locks) | `core/middleware/` |
 | Config / transport errors | `core/lifecycle/errors.py` (`GatewayConfigurationError`, `GatewayTransportFailedError`) |
@@ -35,7 +35,7 @@ start_gateway()
   → configure_process(GATEWAY_PROFILE)
   → compose turn handler
   → start_surfaces()   # delegates to gateway/startup.py (web + chat)
-  → start_scheduler()  # hosts platform.scheduling.scheduler — not a gateway surface
+  → start_scheduler()  # hosts infrastructure.scheduling.scheduler — not a gateway surface
   → ready
 ```
 
@@ -43,7 +43,7 @@ start_gateway()
 retains `StartedGateway`. Missing chat credentials are `not configured`;
 readiness or runtime failures are `failed`; the rest still start.
 
-The scheduler is a platform component (`platform.scheduling.scheduler`).
+The scheduler is a platform component (`infrastructure.scheduling.scheduler`).
 This process may host it (`start_scheduler()` →
 `scheduler_runners().gated(…).install()` plus `start_background_scheduler()`).
 It is not a consumer surface or a transport, and there is no
@@ -74,7 +74,7 @@ Packages are split like `core/agent_harness/prompts/`: **core infra** vs
   settings, inbound worker, security, turn output, and `startup.py`. Peers
   never import each other or `gateway.startup`/`web`; anything two need belongs in
   `core/` (per-turn steps in `gateway.core.middleware`) or
-  `platform.turn_host` (turn handler, turn output, session agents).
+  `infrastructure.turn_host` (turn handler, turn output, session agents).
 - `web/` — web surface (FastAPI app, investigations API, worker/artifacts).
   May import `core/`; must not import chat transports or `gateway.startup`.
 - `core/storage/session/resolver.py` — per-conversation session binding
@@ -108,7 +108,7 @@ and shell own loop CRUD and call `request_scheduler_reload()` after writes.
 
 The turn service is `TurnHandler`, the middleware steps, and the
 session-agent pool. A surface never imports that. A surface that runs
-turns is a channel: it implements the `platform.turn_host` turn contract
+turns is a channel: it implements the `infrastructure.turn_host` turn contract
 and is registered in `gateway.transports`, then handed to the turn
 service the same way the four chat transports are.
 
@@ -120,12 +120,12 @@ Two ways work reaches the agent. Mixing them is how a second turn engine appears
 |--|------------------------|--------|
 | **Channel** (Slack, Telegram, Discord, Buzz) | Yes | `TurnHandler` — `(text, session, output, logger)` |
 | **Interactive shell** | Yes | *today:* `HeadlessAgent.handle` with `AgentBuildConfig`. *Target:* the **chat** verb, like any other channel — it has a user and turn output, so the rule already covers it. The build config is shared; the turn entry is not yet. |
-| **Producer** (`platform.scheduling.scheduler`, scheduled digest/PR runners) | No | Embed: `AgentSession.run_headless_turn` (and investigation payload runners) |
+| **Producer** (`infrastructure.scheduling.scheduler`, scheduled digest/PR runners) | No | Embed: `AgentSession.run_headless_turn` (and investigation payload runners) |
 
 Agent construction hooks live in `core.agent_harness.agent_build_config.AgentBuildConfig` (not the transport registry, not a host re-export). Chat omits the config and the session-agent pool injects gateway capability withholds. The shell sets the build hooks it needs and leaves `apply_capability_policy` unset.
 
 The gateway **process** may host the scheduler (same `process_turn_gate`). That
-does not make the scheduler a channel: `platform.scheduling.scheduler` must not import
+does not make the scheduler a channel: `infrastructure.scheduling.scheduler` must not import
 `TurnHandler`. Pinned by
 `tests/test_package_borders.py::test_scheduler_never_imports_the_gateway_turn_handler`.
 
@@ -222,7 +222,7 @@ InvestigationWorker ──► blocking acquire (already claimed) ──► same 
 
 Production chat capacity is on `TurnHandler(gate=controller.turn_gate)`.
 `GatewayController` and HTTP investigate share
-:func:`~platform.turn_host.concurrency.process_turn_gate`.
+:func:`~infrastructure.turn_host.concurrency.process_turn_gate`.
 `ConcurrencyLimitedTurnHandler` is tests-only; production uses `gate=` on
 `TurnHandler` only.
 
@@ -268,7 +268,7 @@ separate verb (`AgentSession.investigate`); see Capacity. Values: **yes** /
 **Documented exceptions (do not “fix” by forking a second loop):**
 
 - Gateway chat disables `task_cancel` / investigation / llm_provider
-  (`platform.turn_host.capability_policy.ensure_gateway_capability_policy`).
+  (`infrastructure.turn_host.capability_policy.ensure_gateway_capability_policy`).
 - Web investigate shares the process gate but has no chat approval prompter.
 - Soft turn timeout **and** user `/stop` / `stop` / `/cancel` set
   `output.turn_cancel` so the ReAct loop / remaining tools stop cooperatively

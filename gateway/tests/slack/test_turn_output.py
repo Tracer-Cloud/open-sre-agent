@@ -165,6 +165,17 @@ def test_finalize_sends_markdown_block_with_mrkdwn_fallback_text() -> None:
     assert "disk" in final["text"]
 
 
+def test_finalize_tightens_padded_bold_in_markdown_block() -> None:
+    client = _FakeMessagingClient()
+    sink = _sink(client)
+
+    sink.finalize("** I found: ** the disk is full")
+
+    final = client.updates[-1]
+    assert final["blocks"][0]["text"] == "**I found:** the disk is full"
+    assert final["text"] == "*I found:* the disk is full"
+
+
 def test_finalize_appends_provenance_footer() -> None:
     client = _FakeMessagingClient()
     sink = _sink(client)
@@ -300,6 +311,18 @@ def test_streaming_turn_renders_tasks_then_markdown_then_stops_with_footer() -> 
     # The answer was fully streamed: no legacy edit/post delivery on top.
     assert all("answer" not in update["text"] for update in client.updates)
     assert len(client.posts) == 1  # just the placeholder
+
+
+def test_streamed_markdown_tightens_padded_bold() -> None:
+    client = _FakeMessagingClient(stream_ok=True)
+    sink = _sink(client)
+
+    sink.stream(label="assistant", chunks=["** I found: ** the disk is full"])
+
+    markdown = "".join(
+        c["text"] for c in client.all_streamed_chunks() if c["type"] == "markdown_text"
+    )
+    assert markdown == "**I found:** the disk is full"
 
 
 def test_stream_start_failure_is_probed_once_then_placeholder_edits() -> None:

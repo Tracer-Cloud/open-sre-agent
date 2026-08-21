@@ -3,11 +3,11 @@
 from __future__ import annotations
 
 import os
+import platform
 import sys
 from collections.abc import Callable
 from pathlib import Path
 
-import platform
 from config.version import get_opensre_version
 
 
@@ -86,7 +86,7 @@ def _check_buzz_cli() -> tuple[bool, str]:
 
 def _check_version_freshness() -> tuple[bool, str]:
     current = get_opensre_version()
-    from platform.process.release_version import (
+    from infrastructure.process.release_version import (
         development_install_doctor_version_detail,
         fetch_latest_version,
         is_update_available,
@@ -107,7 +107,7 @@ def _check_version_freshness() -> tuple[bool, str]:
 
 def _check_agent_capabilities() -> tuple[bool, str]:
     """Warn when the environment withholds something the agent is told it can do."""
-    from platform.safety.sandbox.capabilities import (
+    from infrastructure.safety.sandbox.capabilities import (
         probe_capabilities,
         unavailable_capability_warnings,
     )

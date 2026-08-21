@@ -2,12 +2,12 @@
 
 Core (``core/domain/``, ``tools/investigation/``) reports progress, prints debug
 output, and renders investigation headers/footers through the ports defined in
-:mod:`platform.observability`. Reaching into ``cli.*`` directly couples the
+:mod:`infrastructure.observability`. Reaching into ``cli.*`` directly couples the
 domain/orchestration layer to the REPL's specific renderer and breaks headless /
 non-TTY callers.
 
 See issue #35 and the introduction of ``build_*_provider`` /
-``set_*`` injection helpers in ``platform/observability/``.
+``set_*`` injection helpers in ``infrastructure/observability/``.
 """
 
 from __future__ import annotations
@@ -20,7 +20,7 @@ import pytest
 _CORE_PACKAGES: tuple[Path, ...] = (
     Path("core/domain"),
     Path("tools/investigation"),
-    Path("platform/observability"),
+    Path("infrastructure/observability"),
 )
 _CORE_ONLY_PACKAGES: tuple[Path, ...] = (Path("core/domain"),)
 _CORE_RUNTIME_MODULES: tuple[Path, ...] = (
@@ -53,7 +53,7 @@ _CORE_RUNTIME_MODULES: tuple[Path, ...] = (
 #   needs CLI internals; if you think you do, file a new
 #   observability port instead.
 # - ``integrations.tracer`` — closed by #36
-#   (``platform.harness_ports`` ``fetch_remote_integrations``).
+#   (``infrastructure.harness_ports`` ``fetch_remote_integrations``).
 #   Hosted LLM provider code lives in ``core.llm`` and remains core runtime
 #   capability access rather than integration-coupled transport.
 _FORBIDDEN_PREFIXES: tuple[str, ...] = (
@@ -100,8 +100,8 @@ def _imported_modules(source: str) -> set[str]:
 def test_core_module_does_not_import_forbidden_layers(module_path: Path) -> None:
     """Core modules must avoid forbidden boundary packages.
 
-    Use ports instead — ``platform.observability`` for progress/debug/display,
-    ``platform.harness_ports`` for remote integrations — and register
+    Use ports instead — ``infrastructure.observability`` for progress/debug/display,
+    ``infrastructure.harness_ports`` for remote integrations — and register
     concrete adapters via ``install_product_adapters``.
     """
     source = module_path.read_text(encoding="utf-8")
@@ -113,7 +113,7 @@ def test_core_module_does_not_import_forbidden_layers(module_path: Path) -> None
     }
     assert not leaks, (
         f"{module_path} imports forbidden module(s) {sorted(leaks)} — route through a "
-        "port (``platform.observability.*`` or ``platform.harness_ports.*``) and register "
+        "port (``infrastructure.observability.*`` or ``infrastructure.harness_ports.*``) and register "
         "adapters via ``install_product_adapters``."
     )
 

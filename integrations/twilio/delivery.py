@@ -9,10 +9,10 @@ from __future__ import annotations
 import logging
 from typing import Any
 
-from platform.delivery.notifications.delivery_errors import extract_http_error
-from platform.delivery.notifications.delivery_transport import post_form
-from platform.delivery.notifications.redaction import redact_token
-from platform.text.truncation import truncate
+from infrastructure.delivery.notifications.delivery_errors import extract_http_error
+from infrastructure.delivery.notifications.delivery_transport import post_form
+from infrastructure.delivery.notifications.redaction import redact_token
+from infrastructure.text.truncation import truncate
 
 logger = logging.getLogger(__name__)
 

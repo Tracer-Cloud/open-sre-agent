@@ -1,8 +1,8 @@
 """Register the investigation pipeline as the scheduler's runner.
 
-The scheduled-delivery subsystem in :mod:`platform.scheduling.scheduler` invokes an
-:class:`platform.scheduling.scheduler.investigation_runner.InvestigationRunner` to build
-reports. ``platform`` sits below ``tools`` in the layering contract, so the
+The scheduled-delivery subsystem in :mod:`infrastructure.scheduling.scheduler` invokes an
+:class:`infrastructure.scheduling.scheduler.investigation_runner.InvestigationRunner` to build
+reports. ``infrastructure`` sits below ``tools`` in the layering contract, so the
 runner is registered from this side of the boundary (T-4 layering audit, issue
 #3352). Call :func:`install` from any higher-layer entrypoint that expects the
 scheduler to run investigations (e.g. ``opensre cron start`` / ``opensre cron
@@ -18,7 +18,7 @@ from __future__ import annotations
 
 from typing import cast
 
-from platform.scheduling.scheduler.investigation_runner import (
+from infrastructure.scheduling.scheduler.investigation_runner import (
     AlertPayload,
     InvestigationResult,
     register_investigation_runner,
@@ -44,7 +44,7 @@ def install() -> None:
 
     Idempotent — re-registering the same shim is a no-op from the scheduler's
     perspective. Tests that need to swap the runner should call
-    :func:`platform.scheduling.scheduler.investigation_runner.register_investigation_runner`
+    :func:`infrastructure.scheduling.scheduler.investigation_runner.register_investigation_runner`
     directly (or clear it with ``None``).
     """
     register_investigation_runner(run_scheduled_investigation)

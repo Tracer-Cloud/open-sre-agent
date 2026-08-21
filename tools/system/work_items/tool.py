@@ -27,9 +27,9 @@ from core.domain.work_items import (
 )
 from core.tool import AgentToolContext, SideEffectLevel
 from core.tool_framework.tool_decorator import tool
-from platform.scheduling.scheduler.store import add_task as add_scheduled_task
-from platform.scheduling.scheduler.store import list_tasks, update_task
-from platform.scheduling.scheduler.types import Provider, ScheduledTask, TaskKind
+from infrastructure.scheduling.scheduler.store import add_task as add_scheduled_task
+from infrastructure.scheduling.scheduler.store import list_tasks, update_task
+from infrastructure.scheduling.scheduler.types import Provider, ScheduledTask, TaskKind
 from tools.system.work_items.results import (
     added_result,
     complete_result,

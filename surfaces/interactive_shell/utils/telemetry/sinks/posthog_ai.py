@@ -2,8 +2,8 @@
 
 from __future__ import annotations
 
-from platform.analytics.events import Event
-from platform.analytics.provider import JsonValue, get_analytics
+from infrastructure.analytics.events import Event
+from infrastructure.analytics.provider import JsonValue, get_analytics
 
 
 def capture_ai_generation(properties: dict[str, JsonValue]) -> None:

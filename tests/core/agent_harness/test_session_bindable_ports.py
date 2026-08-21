@@ -116,7 +116,7 @@ def test_ensure_turn_cancel_reuses_existing_event() -> None:
 
 
 def test_bindable_output_exposes_turn_cancel_property() -> None:
-    from platform.turn_host.bindable_output import BindableOutput
+    from infrastructure.turn_host.bindable_output import BindableOutput
 
     class _Inner:
         def __init__(self) -> None:

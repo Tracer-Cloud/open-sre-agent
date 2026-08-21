@@ -10,11 +10,11 @@ from unittest.mock import MagicMock, patch
 import pytest
 from rich.console import Console
 
-from platform.filestorage.config import RemoteSyncConfig
-from platform.filestorage.engine import SyncProgress, SyncReport
-from platform.filestorage.enums import SyncRootName
-from platform.filestorage.errors import RemoteSyncConfigError
-from platform.filestorage.operations import SyncRootStatus, SyncStatus
+from infrastructure.filestorage.config import RemoteSyncConfig
+from infrastructure.filestorage.engine import SyncProgress, SyncReport
+from infrastructure.filestorage.enums import SyncRootName
+from infrastructure.filestorage.errors import RemoteSyncConfigError
+from infrastructure.filestorage.operations import SyncRootStatus, SyncStatus
 from surfaces.gateway_entry import gateway_slash_ports_factory, start_gateway
 from surfaces.interactive_shell.runtime import Session
 

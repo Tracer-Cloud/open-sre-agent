@@ -6,7 +6,7 @@ on:
     paths-ignore:
       - "docs/**"
       - "tests/benchmarks/cloudopsbench/infra/**"
-      - "infra/cloudflare_install_proxy/**"
+      - "infrastructure/deployment/cloudflare_install_proxy/**"
       - "tests/e2e/kubernetes/helm/scripts/**"
       - "tests/**"
       - "**/*.md"
@@ -113,8 +113,9 @@ jobs:
       - uses: actions/checkout@v5
 
       - name: Install uv
-        uses: astral-sh/setup-uv@v8.1.0
+        uses: astral-sh/setup-uv@v10.0.1
         with:
+          version: "latest-known"  # avoid live ndjson "latest" fetch flakes
           enable-cache: true
           cache-dependency-glob: |
             pyproject.toml
@@ -148,8 +149,9 @@ jobs:
       - uses: actions/checkout@v5
 
       - name: Install uv
-        uses: astral-sh/setup-uv@v8.1.0
+        uses: astral-sh/setup-uv@v10.0.1
         with:
+          version: "latest-known"  # avoid live ndjson "latest" fetch flakes
           enable-cache: true
           cache-dependency-glob: |
             pyproject.toml
@@ -162,7 +164,7 @@ jobs:
 
       - name: Sync release version
         shell: bash
-        run: python platform/deployment/packaging/sync_release_version.py --tag "$TAG_NAME"
+        run: python infrastructure/deployment/packaging/sync_release_version.py --tag "$TAG_NAME"
 
       - name: Build Python distributions
         run: |
@@ -177,7 +179,7 @@ jobs:
           VERSION="${TAG_NAME#v}"
           test -f "dist/opensre-${VERSION}.tar.gz"
           test -f "dist/opensre-${VERSION}-py3-none-any.whl"
-          uv run python platform/deployment/packaging/validate_wheel.py \
+          uv run python infrastructure/deployment/packaging/validate_wheel.py \
             "dist/opensre-${VERSION}-py3-none-any.whl"
 
       - name: Upload Python distributions
@@ -233,8 +235,9 @@ jobs:
       - uses: actions/checkout@v5
 
       - name: Install uv
-        uses: astral-sh/setup-uv@v8.1.0
+        uses: astral-sh/setup-uv@v10.0.1
         with:
+          version: "latest-known"  # avoid live ndjson "latest" fetch flakes
           enable-cache: true
           cache-dependency-glob: |
             pyproject.toml
@@ -297,23 +300,11 @@ jobs:
 
       - name: Sync binary version
         shell: bash
-        run: python platform/deployment/packaging/sync_release_version.py --version "$VERSION_NAME"
+        run: python infrastructure/deployment/packaging/sync_release_version.py --version "$VERSION_NAME"
 
       - name: Install binary build dependencies
         shell: bash
         run: uv sync --frozen --extra release-binary
-
-      - name: Stage stdlib platform module for bundling
-        shell: bash
-        run: |
-          set -euo pipefail
-          # The first-party ``platform`` package shadows the stdlib ``platform``
-          # module. PyInstaller does not lay out the stdlib as loose ``.py`` files,
-          # so bundle a copy of the genuine module that platform/__init__.py can
-          # load from ``sys._MEIPASS`` at runtime (see _FROZEN_STDLIB_DIR).
-          rm -rf .stdlib_vendor
-          mkdir -p .stdlib_vendor
-          uv run python -c "import os, shutil, sysconfig; src = os.path.join(sysconfig.get_path('stdlib'), 'platform.py'); shutil.copy(src, os.path.join('.stdlib_vendor', 'platform.py')); print('Staged stdlib platform from ' + src)"
 
       - name: Build binary
         env:

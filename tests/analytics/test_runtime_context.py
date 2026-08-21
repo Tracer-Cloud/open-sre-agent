@@ -4,7 +4,7 @@ from pathlib import Path
 
 import pytest
 
-from platform.analytics.runtime_context import (
+from infrastructure.analytics.runtime_context import (
     detect_container_runtime,
     detect_runtime_context,
     is_ci_environment,

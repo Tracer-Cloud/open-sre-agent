@@ -148,7 +148,7 @@ def build_reasoning_client(route: LLMRoute, model_type: ModelType) -> Any:
 def _cli_llm_client(registration: Any, model_type: ModelType) -> Any:
     """Build the subprocess CLI-backed reasoning client for a CLI provider registration."""
     from config.config import DEFAULT_MAX_TOKENS
-    from platform.harness_ports import build_cli_client
+    from infrastructure.harness_ports import build_cli_client
 
     model_name = os.getenv(registration.model_env_key, "").strip() or None
     return build_cli_client(

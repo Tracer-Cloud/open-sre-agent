@@ -40,8 +40,8 @@ from core.agent_harness.session.persistence.ports import SessionRepo, SessionSto
 # Import from submodules (not the package __init__) so the session package can
 # re-export SessionManager without a circular import.
 from core.agent_harness.session.session_core import SessionCore
-from platform.observability.trace.spans import component_span
-from platform.scheduling.task_registry import TaskRegistry
+from infrastructure.observability.trace.spans import component_span
+from infrastructure.scheduling.task_registry import TaskRegistry
 
 logger = logging.getLogger(__name__)
 
@@ -309,7 +309,7 @@ class SessionManager:
         # Snapshot messages before release/clear; the background extractor must
         # not retain a reference to the live session object.
         messages = list(getattr(session, "cli_agent_messages", []) or [])
-        from platform.observability.trace.spans import emit_thread_boundary
+        from infrastructure.observability.trace.spans import emit_thread_boundary
 
         emit_thread_boundary(session.session_id, name="session_end", phase="session_end")
         session.release_resources()

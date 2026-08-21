@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from platform.terminal.theme import BG, HIGHLIGHT, set_active_theme
+from infrastructure.terminal.theme import BG, HIGHLIGHT, set_active_theme
 from surfaces.cli.wizard import _ui as wizard_ui
 
 

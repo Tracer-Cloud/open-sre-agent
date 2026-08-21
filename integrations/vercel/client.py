@@ -18,10 +18,10 @@ from urllib.parse import quote
 import httpx
 
 from config.constants.vercel import VERCEL_API_BASE_URL, VERCEL_RUNTIME_LOGS_READ_TIMEOUT_ENV
+from infrastructure.observability.errors.service import capture_service_error
+from infrastructure.observability.streaming import StreamingParseStats
 from integrations.config_models import VercelIntegrationConfig
 from integrations.probes import ProbeResult
-from platform.observability.errors.service import capture_service_error
-from platform.observability.streaming import StreamingParseStats
 
 logger = logging.getLogger(__name__)
 

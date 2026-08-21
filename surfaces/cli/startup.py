@@ -48,7 +48,7 @@ def _init_error_reporting(group: Any, argv: list[str], command: str) -> None:
     briefly absent mid-upgrade. Anywhere else its absence is a broken install and
     must surface.
     """
-    from platform.observability.errors.sentry import init_sentry
+    from infrastructure.observability.errors.sentry import init_sentry
 
     try:
         init_sentry(entrypoint=sentry_entrypoint_for(group, argv))
@@ -60,7 +60,7 @@ def _init_error_reporting(group: Any, argv: list[str], command: str) -> None:
 def run(group: Any, argv: list[str]) -> None:
     """Prepare this process for ``argv``. Safe to call once, before the group."""
     from bootstrap.process import CLI_PROFILE, configure_process
-    from platform.terminal.prompt_support import (
+    from infrastructure.terminal.prompt_support import (
         install_questionary_ctrl_c_double_exit,
         install_questionary_escape_cancel,
     )

@@ -25,15 +25,16 @@ from gateway.transports.slack.client import (
 )
 from gateway.transports.slack.delivery.feedback import feedback_block
 from gateway.transports.slack.delivery.turn_stream import TurnStream
-from integrations.slack.formatting import markdown_to_slack_mrkdwn
-from platform.text.truncation import truncate
-from platform.turn_host.status_messages import (
+from infrastructure.text.markdown import tighten_markdown_emphasis
+from infrastructure.text.truncation import truncate
+from infrastructure.turn_host.status_messages import (
     EMPTY_RESPONSE_MESSAGE,
     initial_status_message,
     normalize_gateway_status,
     status_from_response_label,
     user_facing_error_message,
 )
+from integrations.slack.formatting import markdown_to_slack_mrkdwn
 
 logger = logging.getLogger("gateway")
 
@@ -238,7 +239,7 @@ class SlackTurnOutput:
         text-only; the mrkdwn text is always sent alongside as the
         notification/fallback rendering.
         """
-        body = answer.strip()
+        body = tighten_markdown_emphasis(answer.strip())
         if not body or len(body) > SLACK_MAX_MARKDOWN_BLOCK_CHARS:
             return None
         return [{"type": "markdown", "text": body}, *self._closing_blocks()]

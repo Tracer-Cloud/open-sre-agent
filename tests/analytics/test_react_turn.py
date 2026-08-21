@@ -3,9 +3,9 @@ from __future__ import annotations
 import pytest
 
 from core.agent.run_io import AgentRunResult
-from platform.analytics import cli
-from platform.analytics.events import Event
-from platform.analytics.react_turn import emit_react_turn_completed, resolve_react_stop_reason
+from infrastructure.analytics import cli
+from infrastructure.analytics.events import Event
+from infrastructure.analytics.react_turn import emit_react_turn_completed, resolve_react_stop_reason
 
 
 class _StubLLM:
@@ -86,7 +86,7 @@ def test_emit_react_turn_completed_sets_hit_iteration_cap_from_stop_reason(
 ) -> None:
     captured: list[dict[str, object]] = []
     monkeypatch.setattr(
-        "platform.analytics.react_turn.capture_react_turn_completed",
+        "infrastructure.analytics.react_turn.capture_react_turn_completed",
         lambda **kwargs: captured.append(kwargs),
     )
 

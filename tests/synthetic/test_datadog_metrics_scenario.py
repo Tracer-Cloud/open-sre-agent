@@ -5,7 +5,7 @@ from datetime import datetime
 from typing import Any
 from unittest.mock import MagicMock, patch
 
-import platform.harness_ports as harness_ports
+import infrastructure.harness_ports as harness_ports
 from core.agent_harness.turns.gather_discovery_budget import is_live_metric_query_call
 from core.llm.types import ToolCall
 from core.state import InvestigationState

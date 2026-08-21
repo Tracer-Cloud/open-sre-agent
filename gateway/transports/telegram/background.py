@@ -20,7 +20,7 @@ from gateway.transports.telegram.runtime import (
     TelegramPollingRuntime,
 )
 from gateway.transports.telegram.settings import GatewaySettings
-from platform.turn_host.turn_callback import TurnCallback
+from infrastructure.turn_host.turn_callback import TurnCallback
 
 
 def start_telegram_gateway_background(

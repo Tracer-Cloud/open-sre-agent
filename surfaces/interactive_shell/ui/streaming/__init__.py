@@ -37,7 +37,7 @@ from dataclasses import dataclass
 from rich.console import Console
 from rich.markdown import Markdown
 
-import platform.terminal.theme as ui_theme
+import infrastructure.terminal.theme as ui_theme
 from core.agent_harness.spi.prompt_chrome import (
     WANT_ME_TO_MARKER,
     closer_tail_from,
