@@ -316,3 +316,13 @@ def test_codex_end_to_end_renders_real_tokens_and_cost(
     # Real cost figure from the gpt-5-codex price table.
     assert "$0.0" in out or "$0.1" in out
     assert "codex-9999" in out
+
+
+def test_format_tokens_per_min_rolls_to_millions() -> None:
+    """Regression: the k tier repeated the round-before-branch bug the <1000
+    comment already guards against — 999_950 rendered "1000.0k" (see #5179)."""
+    from surfaces.shared.terminal.agents.agents_view import _format_tokens_per_min
+
+    assert _format_tokens_per_min(999_949.0) == "999.9k"
+    assert _format_tokens_per_min(999_950.0) == "1.0M"
+    assert _format_tokens_per_min(2_500_000.0) == "2.5M"

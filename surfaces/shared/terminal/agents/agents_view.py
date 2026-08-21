@@ -67,11 +67,13 @@ def _format_tokens_per_min(value: float | None) -> str:
     if value is None:
         return _UNFILLED
     # Round-then-compare so ``999.6`` doesn't render as 4-digit ``"1000"``
-    # next to its 3-digit neighbors.
+    # next to its 3-digit neighbors; same guard one tier up (see #5179).
     rounded = int(round(value))
     if rounded < 1000:
         return f"{rounded}"
-    return f"{value / 1000:.1f}k"
+    if round(value / 1000, 1) < 1000:
+        return f"{value / 1000:.1f}k"
+    return f"{value / 1_000_000:.1f}M"
 
 
 def _format_usd_per_hour(value: float | None) -> str:

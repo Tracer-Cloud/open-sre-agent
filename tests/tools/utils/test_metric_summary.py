@@ -62,3 +62,15 @@ def test_empty_series_does_not_crash() -> None:
     # Optional enriched fields should not be present without datapoints.
     assert "mean" not in summary
     assert "p95" not in summary
+
+
+def test_format_bytes_rolls_up_at_rendered_boundaries() -> None:
+    """Regression: the unit advanced on the raw amount but rendered rounded,
+    so 1023.5 showed "1024 B" and 1048570.9 showed "1024.00 KiB" (see #5179
+    for the same round-before-branch class)."""
+    from platform.evidence.metric_summary import _format_bytes
+
+    assert _format_bytes(1023.4) == "1023 B"
+    assert _format_bytes(1023.5) == "1.00 KiB"
+    assert _format_bytes(1048570.9) == "1.00 MiB"
+    assert _format_bytes(-1023.5) == "-1.00 KiB"
