@@ -221,6 +221,15 @@ class TestStreamRendererUpdatesMode:
         assert "92%" in msg
 
     @patch.dict(os.environ, {"TRACER_OUTPUT_FORMAT": "text"})
+    def test_node_message_for_diagnose_rounds_validity(self) -> None:
+        # 0.29 * 100 is 28.999... in IEEE-754; int() truncated it to "28%".
+        renderer = StreamRenderer()
+        renderer._final_state = {"validity_score": 0.29}
+        msg = renderer._build_node_message("diagnose_root_cause")
+        assert msg is not None
+        assert "29%" in msg
+
+    @patch.dict(os.environ, {"TRACER_OUTPUT_FORMAT": "text"})
     def test_node_message_for_diagnose_skips_non_numeric_validity(self) -> None:
         renderer = StreamRenderer()
         renderer._final_state = {"validity_score": "0.9"}
