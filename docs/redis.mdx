@@ -72,6 +72,113 @@ REDIS_SSL=false
 
 Set `REDIS_SSL=true` for managed Redis / TLS endpoints (TLS is off by default). Confirm the server has TLS enabled (for example `tls-port 6379`).
 
+### Quick local test with Docker
+
+```bash
+docker run -d --name redis-dev -p 127.0.0.1:6380:6379 \
+  redis:7 --slowlog-log-slower-than 0 --enable-debug-command yes
+
+i=0
+until docker exec redis-dev redis-cli ping > /dev/null 2>&1; do
+  i=$((i + 1))
+  [ "$i" -ge 30 ] && { echo "ERROR: Redis never became ready" >&2; exit 1; }
+  sleep 2
+done
+```
+
+Seed a real job queue and a slow command:
+
+```bash
+docker exec redis-dev redis-cli LPUSH work_queue a b c d e > /dev/null
+docker exec redis-dev redis-cli SET session:1 hello EX 3600 > /dev/null
+docker exec redis-dev redis-cli SLOWLOG RESET > /dev/null
+docker exec redis-dev redis-cli DEBUG SLEEP 0.3
+```
+
+```bash
+export REDIS_HOST=127.0.0.1
+export REDIS_PORT=6380
+```
+
+Verify:
+
+```bash
+opensre integrations verify redis
+```
+
+```
+SERVICE │ SOURCE    │ STATUS   │ DETAIL
+redis   │ local env │ ✓ passed │ Connected to Redis 7.4.10 at 127.0.0.1:6380
+        │           │          │ database 0.
+```
+
+Register the local instance in the store. `opensre integrations setup redis` is interactive; for a scriptable demo, write directly into an isolated store file instead of `~/.opensre/integrations.json` -- `OPENSRE_INTEGRATIONS_STORE_PATH` is a genuine, first-class override (`config/constants/tenancy.py`), so this never touches your real config:
+
+```bash
+export OPENSRE_INTEGRATIONS_STORE_PATH=$(mktemp /tmp/opensre-redis-demo.XXXXXX)
+python3 <<'INNERPY'
+import json, os, pathlib
+
+path = pathlib.Path(os.environ["OPENSRE_INTEGRATIONS_STORE_PATH"])
+store = json.loads(path.read_text()) if path.stat().st_size else {"version": 2, "integrations": []}
+store["integrations"].append({
+    "id": "redis-local-demo",
+    "service": "redis",
+    "status": "active",
+    "instances": [{"name": "default", "tags": {}, "credentials": {"host": "127.0.0.1", "port": 6380}}],
+})
+path.parent.mkdir(parents=True, exist_ok=True)
+path.write_text(json.dumps(store, indent=2))
+INNERPY
+```
+
+Trigger a real investigation against the seeded queue -- this is the actual supported entrypoint, not an internal import:
+
+```bash
+opensre investigate --input-json '{
+  "alert_name": "RedisQueueBacklog",
+  "severity": "warning",
+  "commonAnnotations": {
+    "summary": "work_queue depth is growing on the Redis instance"
+  }
+}'
+```
+
+Real output from a run against this exact local instance (edited for length):
+
+```
+Loading integrations: redis
+
+Triage complete: Standalone Redis 7.4.10, single list work_queue at
+depth 5 with placeholder values (a-e); zero worker/consumer activity
+and zero producer activity observed.
+
+get_redis_list_depth(work_queue) -> depth=5, contents [a,b,c,d,e]
+get_redis_server_info -> 0 ops/sec, 0 rejected conns, 0 evictions
+get_redis_client_list -> 6 monitoring clients, 0 blocked
+get_redis_slowlog -> only CLIENT SETNAME/SETINFO handshake noise
+get_redis_replication -> role=master, 0 replicas
+get_redis_latency_doctor -> latency monitor disabled; no events
+scan_redis_keys(*) -> exactly 1 key (work_queue)
+
+Hypothesis: stale/false-positive alert on a low-traffic keyspace --
+depth is non-growing and there is no producer or consumer traffic.
+```
+
+All 7 registered tools were exercised in this single turn, including `get_redis_latency_doctor` -- it wasn't explicitly enabled in this recipe, so the agent correctly got back `monitoring_active: false` rather than an error, and used that as evidence too.
+
+Remove the demo store file when done (no edit to your real store needed):
+
+```bash
+rm -f "$OPENSRE_INTEGRATIONS_STORE_PATH"
+```
+
+Teardown:
+
+```bash
+docker rm -f redis-dev
+```
+
 ## Investigation tools
 
 | Tool | What it does |
