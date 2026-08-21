@@ -78,8 +78,15 @@ class _FakeAgentSession:
     def bound_session(self) -> _FakeSession:
         return type(self).session
 
-    def chat(self, _prompt: str) -> TurnResult:
+    def chat_until_goal(self, _prompt: str) -> object:
         raise RuntimeError("turn failed")
+
+
+class _GoalRun:
+    """Stand-in for SessionGoalRunResult: only ``last_result`` is read."""
+
+    def __init__(self, last_result: TurnResult) -> None:
+        self.last_result = last_result
 
 
 def test_run_ask_returns_success(monkeypatch) -> None:
@@ -131,9 +138,11 @@ def test_agent_turn_binds_hooks_and_restricts_capabilities_via_start(monkeypatch
         def bound_session(self) -> _FakeSession:
             return session
 
-        def chat(self, prompt: str) -> TurnResult:
+        def chat_until_goal(self, prompt: str) -> _GoalRun:
+            # chat_until_goal, not chat: ask must run the session-goal loop so a
+            # multi-step turn completes instead of stopping after the first.
             recorded["prompt"] = prompt
-            return _turn()
+            return _GoalRun(_turn())
 
     monkeypatch.setattr(service, "SessionManager", lambda: manager)
     monkeypatch.setattr(service, "AgentSession", _RecordingAgentSession)
