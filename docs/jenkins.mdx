@@ -131,11 +131,7 @@ jenkins │ local env │ ✓ passed │ Jenkins connectivity successful at
         │           │          │ http://localhost:8090 (node: built-in)
 ```
 
-Register the local instance through the supported setup flow:
-
-```bash
-opensre integrations setup jenkins
-```
+The exported variables also make Jenkins available to investigations; no separate setup step is required.
 
 Trigger a real investigation against the failing build — this exercises `list_jenkins_jobs`, `list_jenkins_running_builds`, `get_jenkins_pipeline_stages`, and `get_jenkins_build_log` in a single supported turn (not a raw internal import):
 
@@ -176,6 +172,8 @@ Teardown:
 
 ```bash
 docker rm -f jenkins-dev
+rm -rf /tmp/jenkins-init
+unset JENKINS_URL JENKINS_USER JENKINS_API_TOKEN
 ```
 
 ## Investigation tools

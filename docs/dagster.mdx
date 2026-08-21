@@ -121,11 +121,7 @@ SERVICE │ SOURCE    │ STATUS   │ DETAIL
 dagster │ local env │ ✓ passed │ Connected to Dagster version 1.13.18.
 ```
 
-Register the local instance through the supported setup flow:
-
-```bash
-opensre integrations setup dagster
-```
+The exported endpoint also makes Dagster available to investigations; no separate setup step is required.
 
 Trigger a real investigation against the failed run — this is the actual supported entrypoint, not an internal function:
 
@@ -156,7 +152,13 @@ billing-api dependency being refused at the TCP layer."
 Cited Evidence: list dagster runs, get dagster run logs
 ```
 
-Teardown by pressing `Ctrl-C` in the terminal running `dagster dev`. Its temporary `DAGSTER_HOME` is removed on exit.
+Teardown by pressing `Ctrl-C` in the terminal running `dagster dev`, then unset the demo endpoint in the second terminal:
+
+```bash
+unset DAGSTER_ENDPOINT
+```
+
+The temporary `DAGSTER_HOME` is removed when `dagster dev` exits.
 
 ## Investigation tools
 
