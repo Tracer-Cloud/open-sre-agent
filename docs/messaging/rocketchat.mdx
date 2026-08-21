@@ -129,7 +129,7 @@ docker run -d --name rc-dev --network rc-net --platform linux/amd64 -p 127.0.0.1
   rocket.chat:8.5.1
 ```
 
-The `OVERWRITE_SETTING_Show_Setup_Wizard=completed` + `ADMIN_*` vars skip the manual setup wizard entirely. `OVERWRITE_SETTING_Accounts_TwoFactorAuthentication_Enabled=false` disables 2FA from boot through Rocket.Chat's own supported settings-override mechanism — no database write needed. (Earlier versions of this recipe used a direct MongoDB update after hitting a TOTP-required error on PAT generation; setting this at container creation avoids the problem entirely. Verified live: with this env var set, login + PAT generation succeeds on the first attempt.)
+The `OVERWRITE_SETTING_Show_Setup_Wizard=completed` and `ADMIN_*` variables skip the manual setup wizard. The 2FA override lets this disposable instance generate a PAT without a database change or restart.
 
 ```bash
 i=0
@@ -185,7 +185,7 @@ Check the channel — a real alarm message lands within a few seconds:
 
 ```
 🚨 OpenSRE Watchdog Alarm
-host       Arnavs-MacBook-Air.local
+host       dev-machine.local
 pid        44352  (sleep)
 cmd        sleep 30
 threshold  max_runtime  limit=2s  observed=2s
@@ -197,6 +197,8 @@ Teardown:
 
 ```bash
 docker rm -f rc-dev rc-mongo && docker network rm rc-net
+unset ROCKETCHAT_SERVER_URL ROCKETCHAT_AUTH_TOKEN
+unset ROCKETCHAT_USER_ID ROCKETCHAT_DEFAULT_CHANNEL
 ```
 
 ## Investigation tools
