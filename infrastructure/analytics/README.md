@@ -9,6 +9,6 @@ Responsibilities:
 - CLI and agent-harness event emission helpers.
 - Source attribution for entrypoints, trigger modes, and sessions.
 
-Current implementation candidates live under `platform/analytics/` and should move
+Current implementation candidates live under `infrastructure/analytics/` and should move
 here as part of an import migration.
 

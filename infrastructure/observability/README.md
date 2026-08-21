@@ -10,6 +10,6 @@ Responsibilities:
 - Structured logging helpers.
 - Tracing and span helpers.
 
-Current implementation candidates live under `platform/observability/` and should
+Current implementation candidates live under `infrastructure/observability/` and should
 move here as part of an import migration.
 

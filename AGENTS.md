@@ -341,4 +341,4 @@ Steps:
   uncached retry and failed the turn. Test it by having the fake dependency
   mutate the shared state *before* raising, which reproduces the race
   deterministically without threads.
-- CI typecheck does **not** cover `tests/`: `make typecheck` runs mypy over `PYTHON_SOURCE_PATHS` (`config core gateway integrations platform surfaces tools`) only. Type errors in test files never fail CI, so do not assume a clean `make typecheck` means the tests you just wrote are type-clean — run mypy on the test path directly when it matters.
+- CI typecheck does **not** cover `tests/`: `make typecheck` runs mypy over `PYTHON_SOURCE_PATHS` (`config core gateway integrations infrastructure surfaces tools`) only. Type errors in test files never fail CI, so do not assume a clean `make typecheck` means the tests you just wrote are type-clean — run mypy on the test path directly when it matters.

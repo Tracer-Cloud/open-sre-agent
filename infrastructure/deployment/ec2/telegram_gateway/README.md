@@ -1,4 +1,4 @@
-# `platform/deployment/ec2/telegram_gateway/`
+# `infrastructure/deployment/ec2/telegram_gateway/`
 
 AMI + systemd deployment path for the OpenSRE **Telegram** gateway (long
 polling). Slack is deployed and operated separately, not from this repo.
@@ -33,11 +33,11 @@ Run from the **repo root** (`make install` first).
 Equivalent Python entrypoints:
 
 ```bash
-uv run python -m platform.deployment.ec2.telegram_gateway.lifecycle build-server-image
-uv run python -m platform.deployment.ec2.telegram_gateway.lifecycle deploy
-uv run python -m platform.deployment.ec2.telegram_gateway.lifecycle destroy
-uv run python -m platform.deployment.ec2.telegram_gateway.lifecycle install-on-new-server
-uv run python -m platform.deployment.ec2.telegram_gateway.lifecycle destroy-installed-server
+uv run python -m infrastructure.deployment.ec2.telegram_gateway.lifecycle build-server-image
+uv run python -m infrastructure.deployment.ec2.telegram_gateway.lifecycle deploy
+uv run python -m infrastructure.deployment.ec2.telegram_gateway.lifecycle destroy
+uv run python -m infrastructure.deployment.ec2.telegram_gateway.lifecycle install-on-new-server
+uv run python -m infrastructure.deployment.ec2.telegram_gateway.lifecycle destroy-installed-server
 ```
 
 ### Prerequisites

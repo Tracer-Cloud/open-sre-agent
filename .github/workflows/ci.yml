@@ -35,7 +35,7 @@ permissions:
 
 env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
-  PYTHON_SOURCE_PATHS: "config core gateway integrations platform surfaces tools"
+  PYTHON_SOURCE_PATHS: "bootstrap config core gateway integrations infrastructure surfaces tools"
 
 concurrency:
   group: ci-${{ github.ref }}
@@ -277,9 +277,9 @@ jobs:
           ${{ matrix.pytest_paths }}
           --cov=config
           --cov=core
-          --cov=platform.deployment.ec2
+          --cov=infrastructure.deployment.ec2
           --cov=integrations
-          --cov=platform
+          --cov=infrastructure
           --cov=surfaces
           --cov=tools
           --cov=gateway
