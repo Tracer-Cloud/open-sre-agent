@@ -64,4 +64,4 @@ def _validity_score_percent(score: Any) -> str | None:
     if not math.isfinite(v):
         return None
     v = max(0.0, min(1.0, v))
-    return f"{int(v * 100)}%"
+    return f"{round(v * 100)}%"

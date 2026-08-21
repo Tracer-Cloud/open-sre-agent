@@ -221,6 +221,14 @@ class TestStreamRendererUpdatesMode:
         assert "92%" in msg
 
     @patch.dict(os.environ, {"TRACER_OUTPUT_FORMAT": "text"})
+    def test_node_message_for_diagnose_rounds_float_percent(self) -> None:
+        """0.29 * 100 is 28.999… in IEEE-754; display must round, not truncate."""
+        renderer = StreamRenderer()
+        renderer._final_state = {"validity_score": 0.29}
+        msg = renderer._build_node_message("diagnose_root_cause")
+        assert msg == "validity:29%"
+
+    @patch.dict(os.environ, {"TRACER_OUTPUT_FORMAT": "text"})
     def test_node_message_for_diagnose_skips_non_numeric_validity(self) -> None:
         renderer = StreamRenderer()
         renderer._final_state = {"validity_score": "0.9"}
