@@ -1,4 +1,4 @@
-"""Integration tests for CLI → harness port wiring."""
+"""Integration tests for CLI → harness-provider install."""
 
 from __future__ import annotations
 
@@ -97,7 +97,7 @@ def test_install_harness_providers_wires_catalog_and_registry() -> None:
 
 
 def test_install_harness_providers_wires_cli_llm_adapters() -> None:
-    # Before wiring, the CLI-LLM backend fails loudly instead of silently no-op'ing.
+    # Before install, the CLI-LLM backend fails loudly instead of silently no-op'ing.
     harness_providers.reset_harness_providers()
     with pytest.raises(RuntimeError, match="not registered"):
         harness_providers.build_cli_client(object(), model="x")
@@ -124,7 +124,7 @@ def test_install_harness_providers_wires_soc_registries() -> None:
     Alert routing, Hermes taxonomy, VCS scope, prompt fragments, Slack prefix
     stripping, secondary sources, and alert-detail fields all moved out of
     core into registered adapters. Empty registries look like "healthy but
-    dumb" product behavior — this test fails loud if wiring regresses.
+    dumb" product behavior — this test fails loud if install regresses.
     """
     from core.agent_harness.prompts import build_action_system_prompt
     from core.agent_harness.turns.turn_snapshot import TurnSnapshot
