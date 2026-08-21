@@ -32,7 +32,7 @@ from gateway.transports.slack.client import (
     mark_turn_working,
 )
 from gateway.transports.slack.delivery.approvals import ThreadApprovalPrompter
-from gateway.transports.slack.delivery.output_sink import SlackOutputSink
+from gateway.transports.slack.delivery.turn_output import SlackTurnOutput
 from gateway.transports.slack.processing.events import SlackInboundFile, SlackInboundMessage
 from gateway.transports.slack.processing.principal import (
     PrincipalResolutionError,
@@ -263,7 +263,7 @@ class SlackTurnDispatcher:
                 channel_id=inbound.channel_id,
                 thread_ts=inbound.thread_ts,
             )
-            sink = SlackOutputSink(
+            output = SlackTurnOutput(
                 client=self._messaging,
                 channel_id=inbound.channel_id,
                 thread_ts=inbound.thread_ts,
@@ -271,7 +271,7 @@ class SlackTurnDispatcher:
                 tool_hooks=approval_tool_hooks(prompter),
             )
             terminal = TerminalOutcomeArbiter()
-            sink.turn_cancel = terminal.cancel_event
+            output.turn_cancel = terminal.cancel_event
 
             def _on_turn_timeout() -> None:
                 self._logger.warning(
@@ -281,7 +281,7 @@ class SlackTurnDispatcher:
                     session.session_id[:8],
                 )
                 try:
-                    sink.finalize(TURN_TIMEOUT_MESSAGE)
+                    output.finalize(TURN_TIMEOUT_MESSAGE)
                 except Exception:
                     self._logger.debug("[slack-gateway] timeout finalize failed", exc_info=True)
                 mark_turn_failed(
@@ -294,7 +294,7 @@ class SlackTurnDispatcher:
                 if not terminal.claim():
                     return
                 try:
-                    sink.finalize(USER_STOP_MESSAGE)
+                    output.finalize(USER_STOP_MESSAGE)
                 except Exception:
                     self._logger.debug("[slack-gateway] user-stop finalize failed", exc_info=True)
                 mark_turn_failed(
@@ -337,7 +337,7 @@ class SlackTurnDispatcher:
                             user_id=inbound.user_id or None,
                         ),
                     ):
-                        self._handler(agent_text, session, sink, self._logger)
+                        self._handler(agent_text, session, output, self._logger)
                 except Exception:
                     self._logger.exception(
                         "[slack-gateway] turn ERRORED after %.1fs channel=%s session=%s",
@@ -351,7 +351,7 @@ class SlackTurnDispatcher:
                     # already owns the outcome.
                     if terminal.claim():
                         try:
-                            sink.render_error(TURN_ERROR_MESSAGE)
+                            output.render_error(TURN_ERROR_MESSAGE)
                         except Exception:
                             self._logger.debug(
                                 "[slack-gateway] error finalize failed", exc_info=True
@@ -397,7 +397,7 @@ def _agent_text_with_slack_context(inbound: SlackInboundMessage) -> str:
 
     Short metadata line only; do not list tools. Omit thread ts so channel
     reads stay channel-wide (including it would collapse history to one
-    thread). The reply sink and session seeding already target the triggering
+    thread). Reply posting and session seeding already target the triggering
     thread. The speaker is included as a
     Slack mention token so multi-user threads stay attributable ("what is my
     name?" must resolve to the asker, not whoever spoke earlier); echoed back

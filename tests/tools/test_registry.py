@@ -10,8 +10,7 @@ import pytest
 
 from core.domain.types.retrieval import RetrievalControls
 from core.domain.types.tools import ToolSurface
-from core.tool_framework.base import BaseTool
-from core.tool_framework.registered_tool import REGISTERED_TOOL_ATTR, RegisteredTool
+from core.tool.contracts import REGISTERED_TOOL_ATTR, BaseTool, RegisteredTool
 from core.tool_framework.tool_decorator import tool
 from tools import registry as registry_module
 from tools import registry_discovery

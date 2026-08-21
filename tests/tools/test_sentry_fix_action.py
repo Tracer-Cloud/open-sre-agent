@@ -18,7 +18,7 @@ from core.agent_harness.tools.tool_context import (
     ACTION_TOOL_CONTEXT_RESOURCE_KEY,
     ActionToolContext,
 )
-from core.types import AgentToolContext
+from core.tool.contracts import AgentToolContext
 
 _TOOL_RUN = "tools.interactive_shell.actions.sentry_fix.fix_sentry_issue.run"
 _URL = "https://acme.sentry.io/issues/12345/"

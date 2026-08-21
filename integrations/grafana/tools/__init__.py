@@ -6,9 +6,9 @@ from __future__ import annotations
 
 from typing import Any
 
-from core.tool_framework.metadata import EvidenceType, SideEffectLevel
+from core.tool import EvidenceType, SideEffectLevel
 from core.tool_framework.tool_decorator import tool
-from core.tool_framework.utils.tool_availability import tool_unavailable
+from core.tool_framework.utils import tool_unavailable
 
 _GRAFANA_RUNTIME_PARAMS = (
     "grafana_endpoint",

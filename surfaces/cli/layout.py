@@ -16,7 +16,7 @@ from surfaces.shared.terminal.banner import build_ready_panel
 #: than "start here".
 _LANDING_EXAMPLES: tuple[tuple[str, str], ...] = (
     ("opensre onboard", "Configure your LLM provider and integrations (start here)"),
-    ('opensre "why is checkout-api slow?"', "Ask the agent a question directly"),
+    ('opensre ask "why is checkout-api slow?"', "Ask the agent a question directly"),
     ("opensre investigate -i alert.json", "Run a root-cause investigation on an alert"),
     ("opensre doctor", "Check this machine is set up correctly"),
     ("opensre --help", "See every command"),
@@ -25,7 +25,7 @@ _LANDING_EXAMPLES: tuple[tuple[str, str], ...] = (
 
 #: Commands a new user needs, in the order they need them. Anything not listed
 #: falls through to "More commands", so a newly added command is never hidden.
-_GETTING_STARTED: tuple[str, ...] = ("onboard", "doctor", "health", "investigate")
+_GETTING_STARTED: tuple[str, ...] = ("onboard", "ask", "doctor", "health", "investigate")
 
 #: Day-to-day operation once configured.
 _EVERYDAY: tuple[str, ...] = (

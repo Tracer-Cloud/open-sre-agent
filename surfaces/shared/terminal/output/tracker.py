@@ -6,6 +6,7 @@ import time
 from collections.abc import Callable
 from typing import TYPE_CHECKING, Any
 
+from platform.terminal.theme import GLYPH_ERROR
 from surfaces.shared.terminal.components.time_format import _fmt_timing
 from surfaces.shared.terminal.output.environment import (
     _is_silent_output,
@@ -173,13 +174,13 @@ class ProgressTracker(ToolTrackingMixin):
             if self._display:
                 self._display.step_complete(node_name, event)
             else:
-                mark = "✗" if status == "error" else "●"
+                mark = GLYPH_ERROR if status == "error" else "●"
                 line = f"  {mark} {_node_label(node_name)}  {_fmt_timing(elapsed_ms)}"
                 if msg := _humanise_message(message or ""):
                     line += f"  {msg}"
                 self.print_above_renderable(line)
             return
-        mark = "✗" if status == "error" else "●"
+        mark = GLYPH_ERROR if status == "error" else "●"
         line = f"  {mark} {_node_label(node_name)}  {_fmt_timing(elapsed_ms)}"
         if msg := _humanise_message(message or ""):
             line += f"  {msg}"

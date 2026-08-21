@@ -21,8 +21,8 @@ from collections.abc import Iterator
 import pytest
 from rich.console import Console
 
-import surfaces.interactive_shell.runtime.shell_turn_execution as shell_turn_execution
 import surfaces.interactive_shell.runtime.slash_adapter as slash_adapter
+import tests.shared.harness_turn_driver as harness_turn_driver
 from core.agent_harness.prompts.grounding import DefaultPromptContextProvider
 from core.agent_harness.prompts.grounding import provider as default_prompt_context
 from surfaces.interactive_shell.command_registry import dispatch_slash
@@ -32,7 +32,7 @@ from tests.core.agent.orchestration.action_execution_test_harness import (
     tool_response,
 )
 
-_ACTION_LLM_FACTORY_PATCH = "core.agent_harness.turns.action_driver.default_llm_factory"
+_ACTION_LLM_FACTORY_PATCH = "core.agent_harness.turns.headless_build.default_llm_factory"
 _PROMPT = "which model is being used now?"
 
 
@@ -96,7 +96,7 @@ def test_model_question_routed_to_slash_is_never_answered(
 
     session = Session()
     console, buf = _capture()
-    result = shell_turn_execution.execute_shell_turn(
+    result = harness_turn_driver.run_harness_turn(
         _PROMPT,
         session,
         console,
@@ -145,7 +145,7 @@ def test_model_question_answered_when_handed_off(
 
     session = Session()
     console, _ = _capture()
-    result = shell_turn_execution.execute_shell_turn(
+    result = harness_turn_driver.run_harness_turn(
         _PROMPT,
         session,
         console,
@@ -207,7 +207,7 @@ def test_model_question_handoff_answers_from_active_llm_context(
         ),
     ]
     console, buf = _capture()
-    result = shell_turn_execution.execute_shell_turn(
+    result = harness_turn_driver.run_harness_turn(
         _PROMPT,
         session,
         console,

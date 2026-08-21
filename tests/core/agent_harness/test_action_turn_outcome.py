@@ -177,7 +177,7 @@ def test_a_terse_closing_line_keeps_the_tool_derived_text(monkeypatch) -> None:
     """
     # Arrange
     from core.agent_harness.turns.action_driver import ActionTurnRunner
-    from core.tool_framework.registered_tool import RegisteredTool
+    from core.tool.contracts import RegisteredTool
     from tests.core.agent.orchestration.test_agent_actions_harness import (
         _GenericActionToolProvider,
         _OutputSink,

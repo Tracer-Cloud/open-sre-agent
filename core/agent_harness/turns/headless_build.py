@@ -24,6 +24,7 @@ from rich.console import Console
 
 from core.agent_harness.accounting.run_record import DefaultRunRecordFactory
 from core.agent_harness.error_reporting import DefaultErrorReporter
+from core.agent_harness.llm_resolution import default_llm_factory
 from core.agent_harness.ports import (
     ErrorReporter,
     LlmFactory,
@@ -50,6 +51,7 @@ from core.agent_harness.turns.headless_adapters import (
     StaticReasoningClientProvider,
 )
 from core.agent_harness.turns.headless_agent import HeadlessAgent
+from platform.harness_ports import get_subprocess_presenter_factory
 
 if TYPE_CHECKING:
     from core.agent_harness.session.session_core import SessionCore
@@ -102,7 +104,7 @@ class InMemoryHeadlessBuild:
             run_factory=SimpleRunRecordFactory(),
             error_reporter=NoopErrorReporter(),
             gather=gather if gather is not None else GATHER_DISABLED,
-            llm_factory=llm_factory,
+            llm_factory=llm_factory if llm_factory is not None else default_llm_factory,
         )
 
 
@@ -145,8 +147,18 @@ class DefaultHeadlessBuild:
         )
 
     def tools(self) -> ToolProvider:
-        """A bare :class:`DefaultToolProvider`; hosts pass their own configured one to :meth:`agent`."""
-        return DefaultToolProvider(self.session, self._console, tool_action_logger=self._logger)
+        """A bare :class:`DefaultToolProvider`; hosts pass their own configured one to :meth:`agent`.
+
+        The presenter factory is the one registered at process boot so
+        ``shell_run`` can execute. A host that wants a different presenter
+        passes its own :class:`DefaultToolProvider`.
+        """
+        return DefaultToolProvider(
+            self.session,
+            self._console,
+            tool_action_logger=self._logger,
+            subprocess_presenter_factory=get_subprocess_presenter_factory(),
+        )
 
     def prompts(self) -> PromptContextProvider:
         if self.surface is not None:
@@ -184,7 +196,7 @@ class DefaultHeadlessBuild:
             run_factory=self.run_factory(),
             error_reporter=self._error_reporter,
             gather=gather if gather is not None else GATHER_DISABLED,
-            llm_factory=llm_factory,
+            llm_factory=llm_factory if llm_factory is not None else default_llm_factory,
         )
 
 

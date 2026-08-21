@@ -11,8 +11,8 @@ from core.agent_harness.tools import (
     execute_with_action_context,
 )
 from core.domain.types.tools import ToolSurface
-from core.tool_framework.registered_tool import RegisteredTool
-from core.tool_framework.utils.schema import object_schema, string_array_property, string_property
+from core.tool import RegisteredTool, SideEffectLevel
+from core.tool_framework.utils import object_schema, string_array_property, string_property
 
 
 def execute_assistant_handoff_tool(args: dict[str, Any], ctx: ActionToolContext) -> bool:
@@ -79,10 +79,13 @@ assistant_handoff_tool = RegisteredTool(
             HandoffField.EVIDENCE_KIND: string_property(
                 description=(
                     "Closed evidence category for harness policy. Use metric_read for "
-                    "product-analytics metrics/counts over a time window; incident for "
-                    "bare symptom/incident handoffs; setup for connect/configure asks; "
-                    "other only when none of those apply. Enum is derived from "
-                    "EvidenceKind — do not hard-code a parallel list."
+                    "product-analytics metrics/counts over a time window (the product's "
+                    "own users, events, retention). Use service_metric_read when the user "
+                    "names the system that holds the number (GitHub, a CI system, a cloud "
+                    "or monitoring provider) so the named system is read instead of the "
+                    "analytics vendor. incident for bare symptom/incident handoffs; setup "
+                    "for connect/configure asks; other only when none of those apply. Enum "
+                    "is derived from EvidenceKind — do not hard-code a parallel list."
                 ),
                 enum=EVIDENCE_KIND_VALUES,
             ),
@@ -124,6 +127,7 @@ assistant_handoff_tool = RegisteredTool(
     ),
     source="interactive_shell",
     surfaces=(ToolSurface.ACTION,),
+    side_effect_level=SideEffectLevel.NONE,
     parallel_safe=False,
     accepts_runtime_context=True,
     run=run_assistant_handoff,

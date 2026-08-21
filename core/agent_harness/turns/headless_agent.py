@@ -54,7 +54,7 @@ from core.agent_harness.turns.host_cancel import host_cancel_requested
 from core.agent_harness.turns.orchestrator import stream_answer
 from core.agent_harness.turns.turn_plan import TurnPlan
 from core.agent_harness.turns.turn_results import ToolCallingTurnResult, TurnResult
-from core.execution import ToolExecutionHooks
+from core.tool.execution import ToolExecutionHooks
 
 
 class AgentBusyError(RuntimeError):
@@ -94,7 +94,7 @@ class HeadlessAgent:
         run_factory: RunRecordFactory,
         error_reporter: ErrorReporter,
         gather: GatherPhase,
-        llm_factory: LlmFactory | None = None,
+        llm_factory: LlmFactory,
     ) -> None:
         self._tools = tools
         self._llm_factory = llm_factory
@@ -305,6 +305,7 @@ class HeadlessAgent:
             on_progress=self._gather_phase.on_progress,
             persist=self._gather_phase.persist,
             is_cancelled=lambda: host_cancel_requested(self._output),
+            tool_hooks=self._tool_hooks,
         )
 
     def _ports(self) -> tuple[object, ...]:

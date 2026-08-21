@@ -17,7 +17,7 @@ from platform.observability.errors.service import capture_service_error
 
 logger = logging.getLogger(__name__)
 
-_DEFAULT_TIMEOUT = 30
+_DEFAULT_TIMEOUT_SECONDS = 30
 PagerDutyConfig = PagerDutyIntegrationConfig
 
 
@@ -33,7 +33,7 @@ class PagerDutyClient:
             self._client = httpx.Client(
                 base_url=self.config.base_url,
                 headers=self.config.headers,
-                timeout=_DEFAULT_TIMEOUT,
+                timeout=_DEFAULT_TIMEOUT_SECONDS,
             )
         return self._client
 

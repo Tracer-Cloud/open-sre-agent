@@ -1,6 +1,6 @@
 """Per-gather circuit breaker over tools/sources that fail to connect.
 
-Installed as :class:`~core.execution.ToolExecutionHooks` on a bounded tool
+Installed as :class:`~core.tool.execution.ToolExecutionHooks` on a bounded tool
 loop: the first transport-level failure (connect timeout, connection refused)
 marks **that tool** unreachable for the rest of the gather run. When the host
 has never answered successfully this run, the **source** is marked too — sibling
@@ -22,7 +22,7 @@ from __future__ import annotations
 
 import threading
 
-from core.execution import (
+from core.tool.execution import (
     BeforeToolCallResult,
     ToolExecutionHooks,
     ToolExecutionRequest,

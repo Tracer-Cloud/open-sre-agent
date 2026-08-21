@@ -16,8 +16,8 @@ from typing import Any, Protocol, runtime_checkable
 
 from core.agent_harness.turns.gather_observation import GatheredEvidence
 from core.agent_harness.turns.turn_results import ToolCallingTurnResult, TurnResult
-from core.domain.types.tools import ToolSurface
-from core.execution import ToolExecutionHooks
+from core.llm.types import AgentLLMClient, StreamingReasoningClient
+from core.tool.execution import ToolExecutionHooks
 
 # A tool-loop event callback: ``(kind, data)`` where kind is e.g. "tool_start".
 ToolEventObserver = Callable[[str, dict[str, Any]], None]
@@ -26,8 +26,9 @@ ToolEventObserver = Callable[[str, dict[str, Any]], None]
 ConfirmFn = Callable[[str], str]
 
 # Builds the LLM client the action runner drives; hosts and tests inject one
-# to replace the configured provider.
-LlmFactory = Callable[[], Any]
+# to replace the configured provider. The loop calls ``invoke`` and
+# ``tool_schemas`` and nothing else, which is what ``AgentLLMClient`` states.
+LlmFactory = Callable[[], AgentLLMClient]
 
 
 @runtime_checkable
@@ -162,17 +163,6 @@ class ToolProvider(Protocol):
 
 
 @runtime_checkable
-class ToolRegistry(Protocol):
-    """Resolves the registered tools available to a named surface."""
-
-    def tools_for_surface(self, surface: ToolSurface) -> list[Any]:
-        """Return the registered tools for ``surface`` (e.g. ``"action"``)."""
-
-    def tool_map_for_surface(self, surface: ToolSurface) -> dict[str, Any]:
-        """Return the registered tools for ``surface`` keyed by tool name."""
-
-
-@runtime_checkable
 class ErrorReporter(Protocol):
     """Reports caught exceptions (telemetry / logging)."""
 
@@ -230,8 +220,8 @@ class PromptContextProvider(Protocol):
 class ReasoningClientProvider(Protocol):
     """Provides the streaming reasoning LLM client for the assistant answer."""
 
-    def get(self) -> Any | None:
-        raise NotImplementedError
+    def get(self) -> StreamingReasoningClient | None:
+        """Return the reasoning client, or ``None`` when one cannot be built."""
 
 
 @runtime_checkable
@@ -352,7 +342,6 @@ __all__ = [
     "TaskCancelPortsFactory",
     "ToolEventObserver",
     "ToolProvider",
-    "ToolRegistry",
     "TurnAccounting",
     "TurnBinding",
 ]
@@ -370,10 +359,14 @@ SubprocessPresenterFactory = Callable[
 # Host capabilities an action tool calls back into: named commands, LLM-provider
 # switching, task cancellation and investigation launch. Their contracts live in
 # ``tools`` beside the tools that call them (see
-# ``tools.interactive_shell.shared.host_ports.ExecutionGate``), so the seams stay
-# untyped here — ``core`` only carries a capability from the host to the tool,
-# and typing them here would mean ``core`` importing ``tools``.
-InvestigationPortsFactory = Callable[[], Any]
-LlmProviderPortsFactory = Callable[[], Any]
-TaskCancelPortsFactory = Callable[[], Any]
-SlashPortsFactory = Callable[[], Any]
+# ``tools.interactive_shell.shared.host_ports.ExecutionGate``), and naming those
+# Protocols here would mean ``core`` importing ``tools``.
+#
+# The return is ``object``, not ``Any``: ``core`` calls the factory and hands the
+# result to ``ActionToolContext`` without reading a single attribute, and
+# ``object`` is the type that says so. ``Any`` would silence a typo here as
+# readily as it silences the import ``core`` is avoiding.
+InvestigationPortsFactory = Callable[[], object]
+LlmProviderPortsFactory = Callable[[], object]
+TaskCancelPortsFactory = Callable[[], object]
+SlashPortsFactory = Callable[[], object]

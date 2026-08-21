@@ -8,10 +8,9 @@ from typing import Any, cast
 from botocore.exceptions import ClientError
 from pydantic import BaseModel, Field
 
-from core.tool_framework.metadata import EvidenceType, SideEffectLevel
-from core.tool_framework.telemetry import report_run_error
+from core.tool import EvidenceType, SideEffectLevel, report_run_error
 from core.tool_framework.tool_decorator import tool
-from core.tool_framework.utils.tool_availability import tool_unavailable
+from core.tool_framework.utils import tool_unavailable
 from integrations.eks.availability import eks_available_or_backend
 from integrations.eks.eks_client import EKSClient
 from integrations.eks.eks_k8s_client import build_k8s_clients

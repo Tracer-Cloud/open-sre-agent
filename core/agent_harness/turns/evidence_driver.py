@@ -47,6 +47,7 @@ from core.agent_harness.turns.source_circuit_breaker import SourceCircuitBreaker
 from core.domain.alerts.alert_source import secondary_tool_sources
 from core.events import runtime_event_callback_from_observer
 from core.state import MAX_CONVERSATION_MESSAGES
+from core.tool.execution import ToolExecutionHooks, compose_tool_execution_hooks
 from platform.analytics.react_turn import run_react_agent_with_telemetry
 from platform.harness_ports import enrich_resolved_with_repo_scopes
 from platform.observability.trace.prompts import persist_turn_system_prompt
@@ -289,6 +290,7 @@ def gather_tool_evidence(
     resolved_integrations: dict[str, Any] | None = None,
     max_iterations: int | None = None,
     is_cancelled: Callable[[], bool] | None = None,
+    tool_hooks: ToolExecutionHooks | None = None,
 ) -> GatheredEvidence | None:
     """Run a bounded tool-calling loop and return collected evidence, or None.
 
@@ -331,7 +333,9 @@ def gather_tool_evidence(
         tool_resources = cancel_tool_resources(is_cancelled)
         seed_tools, seed_sources = load_gather_unreachable(session)
         breaker = SourceCircuitBreaker(seed_tools=seed_tools, seed_sources=seed_sources)
-        gather_hooks = with_gather_discovery_budget(breaker.hooks())
+        gather_hooks = with_gather_discovery_budget(
+            compose_tool_execution_hooks(tool_hooks, breaker.hooks())
+        )
         if agent_factory is None:
             agent = _build_evidence_agent(
                 llm=llm,

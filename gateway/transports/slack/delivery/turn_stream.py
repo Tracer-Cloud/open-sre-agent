@@ -1,8 +1,8 @@
 """One turn's streamed Slack message — the ``chat.startStream`` state machine.
 
-Separate from the sink: the sink chooses a delivery path and renders blocks,
-this owns stream lifecycle (start / append / stop), chunk throttling, and the
-open-task bookkeeping the timeline surface needs.
+Separate from turn output: that class chooses a delivery path and renders
+blocks; this owns stream lifecycle (start / append / stop), chunk throttling,
+and the open-task bookkeeping the timeline surface needs.
 """
 
 from __future__ import annotations
@@ -142,7 +142,7 @@ class TurnStream:
             # Content is fully appended; a failed stop only leaves the
             # streaming indicator until Slack expires it. Don't re-post.
             logger.warning(
-                "[slack-sink] chat.stopStream failed channel=%s ts=%s",
+                "[slack-turn-output] chat.stopStream failed channel=%s ts=%s",
                 self._channel_id,
                 self._ts,
             )

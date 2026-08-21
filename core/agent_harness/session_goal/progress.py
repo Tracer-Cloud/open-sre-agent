@@ -47,7 +47,11 @@ def format_token_count_compact(count: int) -> str:
     value = max(0, int(count))
     if value < 1000:
         return str(value)
-    if value < 1_000_000:
+    # Branch on the rounded-to-one-decimal magnitude, not the raw value: a
+    # count like 999_950 rounds to "1000.0" at .1f precision, and comparing
+    # the raw value against 1_000_000 let that render as the broken "1000k"
+    # instead of rolling into the M branch below.
+    if round(value / 1000.0, 1) < 1000:
         scaled = value / 1000.0
         text = f"{scaled:.1f}".rstrip("0").rstrip(".")
         return f"{text}k"

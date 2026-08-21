@@ -3,11 +3,13 @@
 from __future__ import annotations
 
 import json
+from dataclasses import dataclass
+from datetime import UTC, datetime, timedelta
 from typing import Any, cast
 
 from core.domain.types.tools import ToolSurface
 from core.tool_framework.tool_decorator import tool
-from core.tool_framework.utils.code_host_unavailable import code_host_unavailable_payload
+from core.tool_framework.utils import code_host_unavailable_payload
 from integrations.github.helpers import (
     GITHUB_INJECTED_PARAMS,
     github_creds,
@@ -158,6 +160,83 @@ def _normalize_run(run: dict[str, Any]) -> dict[str, Any]:
     }
 
 
+#: The window a rate question should ask for. Not the tool default: this listing
+#: also answers "which deploy failed right before the incident", where a run days
+#: old is the whole point, so defaulting to a window would hide it from every
+#: caller that never asked for one. Rate callers pass this explicitly.
+RATE_WINDOW_HOURS = 24
+
+#: No window: return the page as fetched, whatever the age of its runs.
+NO_RUN_WINDOW = 0
+
+
+def _run_started_at(run: dict[str, Any]) -> datetime | None:
+    """Parse a run's ``created_at``; ``None`` when absent or unparsable."""
+    raw = str(run.get("created_at") or "").strip()
+    if not raw:
+        return None
+    try:
+        parsed = datetime.fromisoformat(raw.replace("Z", "+00:00"))
+    except ValueError:
+        return None
+    return parsed if parsed.tzinfo is not None else parsed.replace(tzinfo=UTC)
+
+
+@dataclass(frozen=True, slots=True)
+class WindowedRuns:
+    """One page of runs narrowed to a time window.
+
+    ``window_fully_fetched`` is True when the page proves every in-window run
+    that exists (under the same filters) is in ``runs``:
+
+    * a dated run older than the window came back (newest-first listing
+      scrolled past the cutoff), or
+    * the fetched page is shorter than the requested page size (the listing
+      is exhausted — no further runs exist to miss).
+
+    Otherwise the page ended inside the window while still full, so older
+    in-window runs may exist unfetched and counts over ``runs`` are a floor.
+    ``undated`` counts runs whose ``created_at`` could not be read; they are
+    in neither ``runs`` nor the older-run evidence for coverage.
+    """
+
+    runs: list[dict[str, Any]]
+    window_fully_fetched: bool
+    undated: int
+
+
+def window_runs(
+    runs: list[dict[str, Any]],
+    *,
+    window_hours: int,
+    now: datetime,
+    page_limit: int,
+) -> WindowedRuns:
+    """Narrow ``runs`` to those started within ``window_hours`` before ``now``.
+
+    ``page_limit`` is the ``per_page`` asked of the API. A shorter result means
+    the listing is exhausted, so an all-in-window page is still complete.
+    """
+    cutoff = now - timedelta(hours=window_hours)
+    inside: list[dict[str, Any]] = []
+    older = 0
+    undated = 0
+    for run in runs:
+        started = _run_started_at(run)
+        if started is None:
+            undated += 1
+        elif started >= cutoff:
+            inside.append(run)
+        else:
+            older += 1
+    page_exhausted = page_limit > 0 and len(runs) < page_limit
+    return WindowedRuns(
+        runs=inside,
+        window_fully_fetched=older > 0 or page_exhausted,
+        undated=undated,
+    )
+
+
 UNGROUPED_SECTION_NAME = "ungrouped"
 
 
@@ -289,7 +368,7 @@ def _github_actions_run_params(sources: dict[str, dict]) -> dict[str, Any]:
         "Finding a run that matches an outage window or rollback event",
     ],
     requires=["owner", "repo"],
-    surfaces=(ToolSurface.INVESTIGATION, ToolSurface.CHAT),
+    surfaces=(ToolSurface.INVESTIGATION, ToolSurface.CHAT, ToolSurface.ACTION),
     input_schema={
         "type": "object",
         "properties": {
@@ -299,6 +378,19 @@ def _github_actions_run_params(sources: dict[str, dict]) -> dict[str, Any]:
             "status": {"type": "string", "default": ""},
             "event": {"type": "string", "default": ""},
             "per_page": {"type": "integer", "default": 30},
+            "window_hours": {
+                "type": "integer",
+                "default": NO_RUN_WINDOW,
+                "description": (
+                    f"Only return runs started within this many hours; {NO_RUN_WINDOW} "
+                    f"(the default) returns the page as fetched. Pass {RATE_WINDOW_HOURS} "
+                    "for a rate or count over the last day. The result reports "
+                    "window_fully_fetched — when false the page is full and ended "
+                    "inside the window, so counts over it are partial; when true "
+                    "either an older run proved the cutoff was reached or the "
+                    "listing was exhausted (fewer runs than per_page)."
+                ),
+            },
             "github_url": {"type": "string"},
             "github_mode": {"type": "string"},
             "github_token": {"type": "string"},
@@ -316,6 +408,7 @@ def list_github_actions_workflow_runs(
     status: str = "",
     event: str = "",
     per_page: int = 30,
+    window_hours: int = NO_RUN_WINDOW,
     github_url: str | None = None,
     github_mode: str | None = None,
     github_token: str | None = None,
@@ -360,12 +453,23 @@ def list_github_actions_workflow_runs(
     if payload.get("available"):
         workflow_runs_raw = _extract_list(result, "workflow_runs")
         workflow_runs = [_normalize_run(item) for item in workflow_runs_raw]
+        if window_hours > NO_RUN_WINDOW:
+            windowed = window_runs(
+                workflow_runs,
+                window_hours=window_hours,
+                now=datetime.now(UTC),
+                page_limit=per_page,
+            )
+            workflow_runs = windowed.runs
+            payload["window_fully_fetched"] = windowed.window_fully_fetched
+            payload["undated_runs"] = windowed.undated
         payload["workflow_runs"] = workflow_runs
         payload["total"] = len(workflow_runs)
     else:
         payload["workflow_runs"] = []
         payload["total"] = 0
 
+    payload["window_hours"] = window_hours
     payload["branch"] = branch
     payload["status"] = status
     payload["event"] = event

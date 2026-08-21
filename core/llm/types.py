@@ -2,14 +2,37 @@
 
 from __future__ import annotations
 
-from collections.abc import Iterator
+from collections.abc import Iterator, Sequence
 from dataclasses import dataclass, field
 from enum import StrEnum
 from typing import Any, Protocol, TypeAlias, runtime_checkable
 
-from core.types import RuntimeTool
-
 ResolvedIntegrations: TypeAlias = dict[str, Any]  # noqa: UP040
+
+
+@runtime_checkable
+class SchemaDescribedTool(Protocol):
+    """The three attributes a provider reads to build a tool-schema payload.
+
+    Stated here rather than imported from the tool tier. Naming the tool union
+    put ``core.llm`` on a path back into ``core.tool``, which closed a package
+    cycle the moment ``core/tool/__init__`` grew imports — and it bought nothing:
+    every provider client widened the parameter to ``list[Any]`` anyway. This is
+    what ``_anthropic_tool_schema`` and ``build_converse_tool_specs`` actually
+    read.
+    """
+
+    @property
+    def name(self) -> str:
+        """Identifier the provider and the model see."""
+
+    @property
+    def description(self) -> str:
+        """One-line description sent to the model."""
+
+    @property
+    def public_input_schema(self) -> dict[str, Any]:
+        """JSON Schema for the arguments, with internal parameters removed."""
 
 
 class ModelType(StrEnum):
@@ -93,9 +116,7 @@ class AgentLLMClient(Protocol):
     def model_id(self) -> str | None:
         """The provider model identifier, used for context-budget sizing (may be None)."""
 
-    def tool_schemas[RuntimeToolT: RuntimeTool](
-        self, tools: list[RuntimeToolT]
-    ) -> list[dict[str, Any]]:
+    def tool_schemas(self, tools: Sequence[SchemaDescribedTool]) -> list[dict[str, Any]]:
         """Translate runtime tools into the provider's tool-schema payloads."""
 
     def invoke(

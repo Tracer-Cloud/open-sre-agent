@@ -12,6 +12,13 @@ from integrations.github.tools.github_cli.credentials import resolve_github_toke
 DEFAULT_TIMEOUT_SECONDS = 60
 MAX_TIMEOUT_SECONDS = 120
 
+# ``gh api`` list endpoints answer with the whole object graph: 30 workflow runs
+# is ~382k characters against a busy repo. Uncapped, that lands in the message
+# and the context budget silently trims the tail, so the agent reads a handful
+# of records and cannot tell the rest existed. Cap here instead and say so on
+# the payload, matching what ``shell_run`` already does.
+MAX_GH_OUTPUT_CHARS = 24_000
+
 # Top-level ``gh`` commands that must never run under OpenSRE-injected credentials.
 # - auth: ``gh auth token`` prints GH_TOKEN to stdout (self-exfiltration)
 # - extension: install/run can download and execute arbitrary code
@@ -102,6 +109,13 @@ def _redact_secret(text: str, secret: str) -> str:
     if not secret or not text:
         return text
     return text.replace(secret, "***")
+
+
+def _cap_output(text: str) -> tuple[str, bool]:
+    """Return ``text`` within the output cap, and whether anything was dropped."""
+    if len(text) <= MAX_GH_OUTPUT_CHARS:
+        return text, False
+    return text[:MAX_GH_OUTPUT_CHARS], True
 
 
 def run_gh(
@@ -208,8 +222,8 @@ def run_gh(
             "stderr": "",
         }
 
-    stdout = _redact_secret(completed.stdout or "", token)
-    stderr = _redact_secret(completed.stderr or "", token)
+    stdout, stdout_truncated = _cap_output(_redact_secret(completed.stdout or "", token))
+    stderr, stderr_truncated = _cap_output(_redact_secret(completed.stderr or "", token))
     ok = completed.returncode == 0
     payload: dict[str, Any] = {
         "ok": ok,
@@ -218,6 +232,8 @@ def run_gh(
         "stdout": stdout,
         "stderr": stderr,
     }
+    if stdout_truncated or stderr_truncated:
+        payload["truncated"] = True
     if not ok:
         error_text = stderr.strip() or stdout.strip() or f"gh exited with {completed.returncode}"
         payload["error"] = _redact_secret(error_text, token)

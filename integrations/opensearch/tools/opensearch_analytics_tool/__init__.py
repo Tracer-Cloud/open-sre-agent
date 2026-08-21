@@ -6,7 +6,7 @@ from typing import Any
 
 from core.domain.types.tools import ToolSurface
 from core.tool_framework.tool_decorator import tool
-from core.tool_framework.utils.tool_availability import tool_unavailable
+from core.tool_framework.utils import tool_unavailable
 from integrations.elasticsearch.client import ElasticsearchClient, ElasticsearchConfig
 
 _DEFAULT_MAX_RESULTS = 100

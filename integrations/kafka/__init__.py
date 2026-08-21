@@ -15,7 +15,7 @@ from typing import Any
 from pydantic import Field, field_validator
 
 from config.strict_config import StrictConfigModel
-from core.tool_framework.utils.tool_availability import tool_unavailable
+from core.tool_framework.utils import tool_unavailable
 from integrations._validation_helpers import report_validation_failure
 
 logger = logging.getLogger(__name__)
@@ -251,9 +251,19 @@ def get_consumer_group_lag(
 
     try:
         from confluent_kafka import TopicPartition
-        from confluent_kafka.admin import (  # type: ignore[attr-defined]
-            ConsumerGroupTopicPartitions,
-        )
+
+        try:
+            # confluent-kafka >=2.15.0 moved this class out of the public
+            # confluent_kafka.admin namespace (now private there as
+            # _ConsumerGroupTopicPartitions); the library's own
+            # list_consumer_group_offsets docstring points at this location.
+            from confluent_kafka._model import (
+                ConsumerGroupTopicPartitions,  # type: ignore[attr-defined]
+            )
+        except ImportError:
+            from confluent_kafka.admin import (  # type: ignore[attr-defined,no-redef]
+                ConsumerGroupTopicPartitions,
+            )
 
         admin = _get_admin_client(config)
         consumer = _get_consumer(config)

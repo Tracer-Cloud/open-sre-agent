@@ -333,3 +333,25 @@ def test_resolve_effective_integrations_carries_instances_through_pydantic() -> 
     assert [i["name"] for i in all_inst] == ["prod", "staging"]
     assert "config" in all_inst[0]  # shape preserved through Pydantic
     assert "integration_id" in all_inst[0]
+
+
+def test_resolve_effective_integrations_publishes_store_configured_prefect() -> None:
+    """Regression: prefect's IntegrationSpec was missing direct_effective=True,
+    so classify_integrations() resolved a store-saved prefect config correctly
+    but resolve_effective_integrations() silently dropped it — it only
+    publishes services listed in DIRECT_CLASSIFIED_EFFECTIVE_SERVICES. This
+    broke `opensre integrations verify prefect` ("missing" even with valid
+    store credentials) and the prefect tools' is_available() check, which
+    reads from this same resolution."""
+    from integrations.catalog import resolve_effective_integrations
+
+    store_record = {
+        "id": "prefect-1",
+        "service": "prefect",
+        "status": "active",
+        "credentials": {"api_url": "http://localhost:4200/api", "api_key": ""},
+    }
+    resolved = resolve_effective_integrations(store_integrations=[store_record])
+    assert "prefect" in resolved
+    assert resolved["prefect"]["source"] == "local store"
+    assert resolved["prefect"]["config"]["api_url"] == "http://localhost:4200/api"

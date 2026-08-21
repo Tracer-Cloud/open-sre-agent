@@ -153,8 +153,15 @@ def _finish_outer_turn(
     # and taking the session copy would discard the finding. A continuation is
     # a fresh chat call and history carries prose only, so this is the only way
     # a later turn learns what earlier ones established.
+    reply_text = session_goal_reply_text(last)
     if turn_has_session_goal_evidence(last):
-        active = active.with_finding(session_goal_reply_text(last))
+        active = active.with_finding(reply_text)
+        attach_session_goal(session, active)
+    # Recorded even without tool evidence. Evidence gates *closing* the goal and
+    # what counts as established; it must not gate whether the next turn knows
+    # what this one said.
+    if reply_text:
+        active = active.with_last_answer(reply_text)
         attach_session_goal(session, active)
     # Evaluate return is authoritative — optional reviewers may keep ACTIVE after
     # structured evaluate briefly attached ACHIEVED on the session.

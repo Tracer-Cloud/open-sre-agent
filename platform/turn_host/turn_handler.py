@@ -76,16 +76,22 @@ class TurnHandler:
         agent_build: AgentBuildConfig | None = None,
         gate: TurnConcurrencyGate | None = None,
         busy_message: str = AT_CAPACITY_MESSAGE,
+        retain_only_current_session: bool = False,
     ) -> None:
         self._console = console
         self._pool = SessionAgentPool(
             console=console,
             slash_ports_factory=slash_ports_factory,
             agent_build=agent_build,
+            retain_only_current_session=retain_only_current_session,
         )
         # Gateway already bootstrapped env at process start; turns must not reload.
         self._gate = gate
         self._busy_message = busy_message
+
+    def drop_session(self, session_id: str) -> None:
+        """Drop a pooled agent for ``session_id`` (after /new, /resume, or chat rotate)."""
+        self._pool.drop_session(session_id)
 
     def __call__(
         self,
@@ -106,16 +112,18 @@ class TurnHandler:
         *,
         console: Console | None = None,
         confirm_fn: ConfirmFn | None = None,
-        is_tty: bool = False,
+        is_tty: bool | None = False,
         accounting_factory: Callable[[str], TurnAccounting] | None = None,
+        on_progress: Callable[[SessionGoal], None] | None = None,
     ) -> TurnResult | None:
         """Run one turn and return its result, or ``None`` when at capacity.
 
         Same turn as :meth:`__call__` — one capacity gate, one agent pool, one
         ``handle`` call. The keywords carry a caller's terminal context; every
         default is what a chat transport gets, so omitting them all is the
-        transport path exactly. ``None`` means the gate refused the turn and
-        the at-capacity sentence is already on the output.
+        transport path exactly — including ``on_progress``, which falls back
+        to the compact status line a chat placeholder can hold. ``None`` means the
+        gate refused the turn and the at-capacity sentence is already on the output.
         """
         with turn_slot(self._gate) as running:
             if not running:
@@ -130,6 +138,7 @@ class TurnHandler:
                 confirm_fn=confirm_fn,
                 is_tty=is_tty,
                 accounting_factory=accounting_factory,
+                on_progress=on_progress,
             )
 
     def _run_turn(
@@ -141,8 +150,9 @@ class TurnHandler:
         *,
         console: Console | None,
         confirm_fn: ConfirmFn | None,
-        is_tty: bool,
+        is_tty: bool | None,
         accounting_factory: Callable[[str], TurnAccounting] | None,
+        on_progress: Callable[[SessionGoal], None] | None,
     ) -> TurnResult:
         session_id = getattr(session, "session_id", None)
         surface = get_surface()
@@ -170,10 +180,10 @@ class TurnHandler:
                 def _cancel_requested() -> bool:
                     return isinstance(cancel, threading.Event) and cancel.is_set()
 
-                def _on_progress(goal: SessionGoal) -> None:
-                    # Same progress contract as the interactive shell: paint mid-loop
-                    # and scrub happens inside the agent's goal loop. Gateway
-                    # output gets a compact status line; full text goes to debug logs.
+                def _status_line_progress(goal: SessionGoal) -> None:
+                    # A channel with no terminal gets one compact status line and
+                    # the full text in debug logs. A caller that can render more
+                    # passes its own ``on_progress`` instead of using this.
                     full = format_session_goal_progress(goal, session=session)
                     compact = format_session_goal_status_line(goal, session=session)
                     if full:
@@ -194,7 +204,7 @@ class TurnHandler:
                     ),
                     accounting_factory=accounting_factory,
                     cancel_requested=_cancel_requested,
-                    on_progress=_on_progress,
+                    on_progress=on_progress or _status_line_progress,
                 )
                 outbound_text = turn_result.primary_response_text
                 logger.debug(

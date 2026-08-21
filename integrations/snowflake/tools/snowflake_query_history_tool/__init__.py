@@ -7,9 +7,9 @@ from typing import Any
 import httpx
 
 from core.domain.types.tools import ToolSurface
-from core.tool_framework.telemetry import report_run_error
+from core.tool import report_run_error
 from core.tool_framework.tool_decorator import tool
-from core.tool_framework.utils.tool_availability import tool_unavailable
+from core.tool_framework.utils import tool_unavailable
 
 _DEFAULT_MAX_RESULTS = 50
 _MAX_HARD_LIMIT = 200

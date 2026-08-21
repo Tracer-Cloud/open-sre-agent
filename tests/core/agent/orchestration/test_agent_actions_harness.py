@@ -25,7 +25,7 @@ from core.agent_harness.turns.action_driver import (
 from core.agent_harness.turns.orchestrator import run_turn
 from core.agent_harness.turns.turn_results import ToolCallingTurnResult
 from core.llm.types import AgentLLMResponse, ToolCall
-from core.tool_framework.registered_tool import RegisteredTool
+from core.tool.contracts import RegisteredTool
 from surfaces.interactive_shell.runtime.action_turn import run_action_tool_turn
 from surfaces.interactive_shell.session import Session
 from tests.core.agent.orchestration.action_execution_test_harness import (

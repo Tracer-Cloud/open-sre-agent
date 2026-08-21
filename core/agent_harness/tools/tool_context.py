@@ -6,7 +6,7 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from typing import Any
 
-from core.types import AgentToolContext
+from core.tool.contracts import AgentToolContext
 
 ToolExecutionPayload = bool | dict[str, Any]
 ToolExecutor = Callable[[dict[str, Any], "ActionToolContext"], ToolExecutionPayload]

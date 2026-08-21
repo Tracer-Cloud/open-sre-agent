@@ -70,3 +70,57 @@ def test_finish_streamed_response_paints_canonical_not_dual_menu() -> None:
     final = _strip_ansi(buf.getvalue())
     assert "run a full investigation" in final
     assert "/integrations" not in final
+
+
+def test_finalize_does_not_reprint_an_answer_the_console_already_showed() -> None:
+    """The REPL renders as it goes, so ``finalize`` must print nothing.
+
+    The turn host calls ``finalize`` whenever a turn was not ``answered``, and
+    ``answered`` means "the conversational LLM produced a run" — not "the user
+    has seen the answer". A turn answered from the action phase (a skill, a tool
+    chain) leaves it False while the console has already painted the reply.
+
+    A chat transport needs the call: it holds one placeholder message and this
+    is how that message gets its final text. A terminal has no placeholder, so
+    printing here rendered every action-phase answer a second time, unformatted
+    — the raw markdown showed up under the rendered one.
+    """
+    # Arrange
+    buffer = io.StringIO()
+    sink = ShellOutputSink(Console(file=buffer, force_terminal=False, width=100))
+
+    # Act
+    sink.finalize("**GitHub Actions** for `Tracer-Cloud/opensre`: 3% hard failure rate")
+
+    # Assert
+    assert buffer.getvalue() == ""
+
+
+def test_finalize_satisfies_the_host_contract_while_staying_silent() -> None:
+    """Silent, but still a ``TurnOutput`` — the host must be able to call it."""
+    # Arrange
+    from platform.turn_host.turn_output import TurnOutput
+
+    sink = ShellOutputSink(Console(file=io.StringIO(), force_terminal=False))
+
+    # Assert
+    assert isinstance(sink, TurnOutput)
+
+
+def test_response_header_opens_with_a_blank_line() -> None:
+    """The sink owns this spacing: the turn engine no longer emits it.
+
+    ``_show_response`` used to print a blank line before the header. That was
+    terminal layout living in the shared turn engine — chat sinks route
+    ``print`` to a placeholder status and never wanted it. Moving it here kept
+    the REPL looking the same; without a test, deleting it stays green.
+    """
+    # Arrange
+    console = _RecordingConsole()
+
+    # Act
+    ShellOutputSink(console).render_response_header("assistant")  # type: ignore[arg-type]
+
+    # Assert: blank line first, then the ● marker.
+    assert console.lines[0] == ""
+    assert "●" in console.lines[1]

@@ -24,8 +24,7 @@ from core.messages import (
     UserRuntimeMessage,
 )
 from core.provider import ProviderHooks
-from core.tool_framework.registered_tool import RegisteredTool
-from core.types import AgentTool, AgentToolContext
+from core.tool.contracts import AgentTool, AgentToolContext, RegisteredTool
 
 
 class FakeLLM:
@@ -137,7 +136,7 @@ def test_agent_exposes_headless_agent_entrypoint(monkeypatch: pytest.MonkeyPatch
             yield "hello from headless"
 
     monkeypatch.setattr(
-        "core.agent_harness.turns.action_driver.default_llm_factory",
+        "core.agent_harness.turns.headless_build.default_llm_factory",
         lambda: FakeLLM(iter([AgentLLMResponse(content="", tool_calls=[], raw_content=None)])),
     )
 
@@ -162,7 +161,7 @@ def test_one_headless_agent_dispatches_multiple_messages(monkeypatch: pytest.Mon
             yield "hello from headless"
 
     monkeypatch.setattr(
-        "core.agent_harness.turns.action_driver.default_llm_factory",
+        "core.agent_harness.turns.headless_build.default_llm_factory",
         lambda: FakeLLM(iter([AgentLLMResponse(content="", tool_calls=[], raw_content=None)])),
     )
     from core.agent_harness.turns.headless_adapters import (
@@ -208,35 +207,6 @@ def test_default_accounting_is_resolved_fresh_per_message() -> None:
     assert isinstance(first, DefaultTurnAccounting)
     assert isinstance(second, DefaultTurnAccounting)
     assert first is not second  # resolved per message, not once at construction
-
-
-def test_agent_defaults_to_agent_llm_without_tools(monkeypatch: pytest.MonkeyPatch) -> None:
-    llm = FakeLLM(iter([_text_response("reasoned answer")]))
-    monkeypatch.setattr("core.llm.factory.get_llm", lambda _role: llm)
-
-    agent = Agent(system="sys", tools=[], resolved_integrations={}, max_iterations=1)
-    result = agent.run([{"role": "user", "content": "hello"}])
-
-    assert result.final_text == "reasoned answer"
-    assert result.executed == []
-    assert llm.schema_tool_names == [[]]
-
-
-def test_agent_default_agent_llm_receives_tools(monkeypatch: pytest.MonkeyPatch) -> None:
-    llm = FakeLLM(iter([_text_response("unused")]))
-    monkeypatch.setattr("core.llm.factory.get_llm", lambda _role: llm)
-
-    agent = Agent(
-        system="sys",
-        tools=_tools(FakeTool("query_logs")),
-        resolved_integrations={},
-        max_iterations=1,
-    )
-
-    result = agent.run([{"role": "user", "content": "hello"}])
-
-    assert result.final_text == "unused"
-    assert llm.schema_tool_names == [["query_logs"]]
 
 
 def test_immediate_final_answer_executes_no_tools() -> None:

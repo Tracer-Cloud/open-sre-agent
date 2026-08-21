@@ -6,7 +6,7 @@ from typing import Any
 
 from core.domain.types.tools import ToolSurface
 from core.tool_framework.tool_decorator import tool
-from core.tool_framework.utils.code_host_unavailable import code_host_unavailable_payload
+from core.tool_framework.utils import code_host_unavailable_payload
 from integrations.github.helpers import (
     GITHUB_INJECTED_PARAMS,
     github_creds,
@@ -15,6 +15,18 @@ from integrations.github.helpers import (
     resolve_github_mcp_config,
 )
 from integrations.github.mcp import call_github_mcp_tool
+
+
+def _file_from_resource_text(content: list[dict[str, Any]]) -> dict[str, Any] | None:
+    """Return ``{uri, content}`` from the first ``resource_text`` content item.
+
+    Returns ``None`` when no such item is present (e.g. a binary file arrives
+    as ``resource_blob`` instead).
+    """
+    for item in content:
+        if item.get("type") == "resource_text":
+            return {"uri": item.get("uri", ""), "content": item.get("text", "")}
+    return None
 
 
 def _get_github_file_contents_extract_params(sources: dict[str, dict]) -> dict[str, Any]:
@@ -97,5 +109,8 @@ def get_github_file_contents(
         arguments["sha"] = sha
     result = call_github_mcp_tool(config, "get_file_contents", arguments)
     payload = normalize_github_tool_result(result)
-    payload["file"] = payload.pop("structured_content", None)
+    structured = payload.pop("structured_content", None)
+    if structured is None:
+        structured = _file_from_resource_text(payload.get("content", []))
+    payload["file"] = structured
     return payload

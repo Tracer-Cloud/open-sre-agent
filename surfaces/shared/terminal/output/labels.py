@@ -8,6 +8,8 @@ from platform.terminal.theme import (
     BRAND,
     DIM,
     ERROR,
+    GLYPH_ERROR,
+    GLYPH_SUCCESS,
     HIGHLIGHT,
     SECONDARY,
     TEXT,
@@ -117,7 +119,7 @@ def build_progress_step_text(
     if status == "active":
         t.append("·  ", style=SECONDARY)
     else:
-        t.append("✗  " if err else "✓  ", style=f"bold {ERROR if err else HIGHLIGHT}")
+        t.append(f"{GLYPH_ERROR}  " if err else f"{GLYPH_SUCCESS}  ", style=f"bold {ERROR if err else HIGHLIGHT}")
     t.append(badge_label, style=f"bold {badge_color}")
     t.append("  ·  ", style=DIM)
     t.append(label, style=f"bold {TEXT}")

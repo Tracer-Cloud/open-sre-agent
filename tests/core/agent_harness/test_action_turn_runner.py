@@ -14,14 +14,40 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from core.agent_harness.runtime import ActionTurnRunner, TurnBinding
+from core.agent_harness.runtime import ActionTurnRunner, TurnBinding, default_llm_factory
 from core.agent_harness.turns.headless_adapters import BufferOutputSink, NullToolProvider
 from core.agent_harness.turns.headless_agent import HeadlessAgent
 from core.agent_harness.turns.headless_build import InMemoryHeadlessBuild
 from core.agent_harness.turns.turn_results import ToolCallingTurnResult
-from core.execution import ToolExecutionHooks
+from core.llm_invoke_errors import ProviderFailureKind, classify_llm_provider_failure
+from core.tool.execution import ToolExecutionHooks
 from surfaces.interactive_shell.runtime.turn_seams import bind_injected_stages
 from surfaces.interactive_shell.session import Session
+
+
+def test_action_turn_runner_requires_llm_factory_at_construction() -> None:
+    """Issue #5235: a missing llm_factory must fail loudly at construction
+    (the "composition seam"), not silently mid-turn via a hidden fallback.
+    The error message must classify as NOT_CONFIGURED so existing provider-
+    failure rendering/remediation picks it up correctly."""
+    with pytest.raises(ValueError) as exc_info:
+        ActionTurnRunner(
+            output=BufferOutputSink(),
+            tools=NullToolProvider(),
+            llm_factory=None,  # type: ignore[arg-type]
+        )
+
+    assert classify_llm_provider_failure(str(exc_info.value)) is ProviderFailureKind.NOT_CONFIGURED
+
+
+def test_action_turn_runner_accepts_a_real_default_llm_factory() -> None:
+    """The composition-root default (core.agent_harness.llm_resolution.default_llm_factory)
+    must satisfy the required field without raising at construction."""
+    ActionTurnRunner(
+        output=BufferOutputSink(),
+        tools=NullToolProvider(),
+        llm_factory=default_llm_factory,
+    )
 
 
 def test_action_turn_runner_is_exported_from_runtime_not_the_root() -> None:
@@ -52,9 +78,13 @@ def test_action_turn_runner_run_accepts_confirm_fn(monkeypatch: Any) -> None:
     def _confirm(_prompt: str) -> str:
         return "y"
 
+    def _unused_llm_factory() -> Any:
+        raise AssertionError("llm_factory should not be called; _run_action_turn is mocked")
+
     result = ActionTurnRunner(
         output=BufferOutputSink(),
         tools=NullToolProvider(),
+        llm_factory=_unused_llm_factory,
     ).run("hi", Session(), confirm_fn=_confirm, is_tty=False)
 
     assert result.handled is False
@@ -104,21 +134,21 @@ def test_bind_turn_keeps_runner_when_only_accounting_changes() -> None:
     assert agent._action_runner is before  # noqa: SLF001
 
 
-def test_execute_shell_turn_adds_no_stage_of_its_own() -> None:
-    """The shell drives the agent's own answer/gather/action stages by default.
+def test_harness_turn_driver_adds_no_stage_of_its_own() -> None:
+    """The driver runs the agent's own answer/gather/action stages by default.
 
-    Answering and gathering are configured by the shell's ports (prompts, sink,
-    reporter, gather progress/persist), not replaced. Only an injected test
-    seam gets an adapter bound over it.
+    Answering and gathering are configured by the shell's build config (prompts,
+    output, reporter, gather progress/persist), not replaced. Only a stage the
+    test names gets an adapter bound over it.
     """
     import io
 
     from rich.console import Console
 
-    from surfaces.interactive_shell.runtime import shell_turn_execution as ste
     from surfaces.interactive_shell.runtime.shell_agent import build_shell_agent
+    from tests.shared import harness_turn_driver
 
-    source = inspect.getsource(ste.execute_shell_turn)
+    source = inspect.getsource(harness_turn_driver.run_harness_turn)
     assert "build_shell_agent" in source
     assert "_ShellTurnBindings" not in source
     assert "ShellActionRunner" not in source
@@ -235,7 +265,7 @@ def test_long_lived_shell_agent_receives_each_turns_confirm_fn_and_tty() -> None
     from rich.console import Console
 
     from surfaces.interactive_shell.runtime.shell_agent import build_shell_agent
-    from surfaces.interactive_shell.runtime.shell_turn_execution import execute_shell_turn
+    from tests.shared.harness_turn_driver import run_harness_turn
 
     # Arrange — agent built like the controller does: no confirm_fn, no is_tty.
     seen: list[tuple[Any, Any]] = []
@@ -251,7 +281,7 @@ def test_long_lived_shell_agent_receives_each_turns_confirm_fn_and_tty() -> None
     agent = build_shell_agent(Session(), console)
 
     # Act — one turn on the long-lived agent, with this turn's confirm_fn / tty.
-    execute_shell_turn(
+    run_harness_turn(
         "run something",
         Session(),
         console,
@@ -308,7 +338,7 @@ def test_a_stage_injected_on_one_turn_does_not_carry_into_the_next() -> None:
     from rich.console import Console
 
     from surfaces.interactive_shell.runtime.shell_agent import build_shell_agent
-    from surfaces.interactive_shell.runtime.shell_turn_execution import execute_shell_turn
+    from tests.shared.harness_turn_driver import run_harness_turn
 
     # Arrange — a long-lived agent; turn 1 injects a fake action stage.
     console = Console(file=io.StringIO(), force_terminal=False)
@@ -317,7 +347,7 @@ def test_a_stage_injected_on_one_turn_does_not_carry_into_the_next() -> None:
     def _fake_execute(text: str, session: Any, console: Any, **_kw: Any) -> ToolCallingTurnResult:
         return ToolCallingTurnResult(0, 0, 0, False, True, response_text="fake")
 
-    execute_shell_turn(
+    run_harness_turn(
         "turn one",
         Session(),
         console,
@@ -392,18 +422,28 @@ def test_handle_is_the_one_host_loop_binding_each_outer_turn() -> None:
     assert replace(binding, accounting=None) == binding
 
 
-def test_both_hosts_reach_the_agent_through_handle_only() -> None:
-    """The host loop lives once, on the agent: neither host calls run_until_session_goal itself."""
+def test_one_host_drives_the_agent_and_the_shell_goes_through_it() -> None:
+    """There is one host loop, and the shell reaches it rather than repeating it.
+
+    The turn host calls ``agent.handle``; the interactive shell calls the host.
+    A shell that grew its own ``agent.handle`` would be a second turn engine —
+    exactly what routing it through :class:`TurnHandler` removed.
+    """
     import inspect
 
-    import platform.turn_host.turn_handler as gateway_turn
+    import platform.turn_host.turn_handler as turn_host
     from surfaces.interactive_shell.runtime import shell_turn_execution as shell_turn
 
-    for module in (gateway_turn, shell_turn):
-        source = inspect.getsource(module)
-        assert "agent.handle(" in source, module.__name__
-        assert "run_until_session_goal(" not in source, module.__name__
-        assert "AgentSession(" not in source, module.__name__
+    host_source = inspect.getsource(turn_host)
+    assert "agent.handle(" in host_source
+    assert "run_until_session_goal(" not in host_source
+    assert "AgentSession(" not in host_source
+
+    shell_source = inspect.getsource(shell_turn)
+    assert "handler.run(" in shell_source
+    assert "agent.handle(" not in shell_source
+    assert "run_until_session_goal(" not in shell_source
+    assert "AgentSession(" not in shell_source
 
 
 def test_handle_runs_the_goal_loop_on_the_session_the_binding_states(monkeypatch: Any) -> None:

@@ -32,17 +32,17 @@ def initial_status_message() -> str:
     return random.choice(INITIAL_STATUSES)
 
 
-def normalize_gateway_status(text: str) -> str:
-    """Swap empty or legacy ``Working…`` copy for real status text."""
-    stripped = text.strip()
+def normalize_gateway_status(status: str) -> str:
+    """Swap empty or legacy ``Working…`` copy for a real status line."""
+    stripped = status.strip()
     if not stripped or _WORKING_PLACEHOLDER.fullmatch(stripped):
         return initial_status_message()
-    return text
+    return status
 
 
 _GENERIC_ERROR = "Something went wrong handling that request. Please try again."
 
-# Shown when a turn streams no text at all, so the placeholder is not left blank.
+# Shown when a turn streams no status at all, so the placeholder is not left blank.
 EMPTY_RESPONSE_MESSAGE = "I didn't have anything to add for that."
 
 

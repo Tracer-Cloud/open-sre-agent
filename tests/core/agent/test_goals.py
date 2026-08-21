@@ -8,7 +8,7 @@ from typing import Any, cast
 from core.agent.agent import Agent
 from core.agent.goals import Goal, GoalObservation, goal_met, should_accept_with_goal
 from core.llm.types import AgentLLMResponse, ToolCall
-from core.tool_framework.registered_tool import RegisteredTool
+from core.tool.contracts import RegisteredTool
 
 
 class _FakeLLM:

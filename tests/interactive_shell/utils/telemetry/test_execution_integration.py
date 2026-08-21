@@ -7,9 +7,9 @@ from rich.console import Console
 from surfaces.interactive_shell.runtime.core.turn_accounting import (
     ToolCallingTurnResult,
 )
-from surfaces.interactive_shell.runtime.shell_turn_execution import execute_shell_turn
 from surfaces.interactive_shell.session import Session
 from surfaces.interactive_shell.utils.telemetry import LlmRunInfo
+from tests.shared.harness_turn_driver import run_harness_turn
 
 
 class _FakeRecorder:
@@ -28,7 +28,7 @@ def _console() -> Console:
     return Console(file=io.StringIO(), force_terminal=False, highlight=False)
 
 
-def test_execute_shell_turn_cli_agent_empty_response_is_recorded_empty() -> None:
+def test_run_harness_turn_cli_agent_empty_response_is_recorded_empty() -> None:
     recorder = _FakeRecorder()
 
     def fake_execute(*_args: object, **_kwargs: object) -> ToolCallingTurnResult:
@@ -45,7 +45,7 @@ def test_execute_shell_turn_cli_agent_empty_response_is_recorded_empty() -> None
 
     session = Session()
     output = io.StringIO()
-    execute_shell_turn(
+    run_harness_turn(
         "show datadog integration details",
         session,
         Console(file=output, force_terminal=False, highlight=False),

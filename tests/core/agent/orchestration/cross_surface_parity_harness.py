@@ -27,7 +27,7 @@ from core.agent_harness.turns.headless_build import InMemoryHeadlessBuild
 from core.agent_harness.turns.turn_results import TurnResult
 from core.domain.types.tools import ToolSurface
 from core.llm.types import AgentLLMResponse, ToolCall
-from core.tool_framework.registered_tool import RegisteredTool
+from core.tool.contracts import RegisteredTool
 from platform.turn_host.turn_handler import TurnHandler
 from surfaces.interactive_shell.runtime.shell_turn_execution import execute_shell_turn
 from surfaces.interactive_shell.runtime.slash_adapter import headless_slash_ports
@@ -208,11 +208,11 @@ class RecordingTurnOutput:
         self.streamed.append(text)
         return text
 
-    def finish_streamed_response(self, text: str) -> None:
-        self.finalize(text)
+    def finish_streamed_response(self, answer: str) -> None:
+        self.finalize(answer)
 
-    def finalize(self, text: str) -> None:
-        self.finalized = text
+    def finalize(self, answer: str) -> None:
+        self.finalized = answer
 
     @property
     def outbound_text(self) -> str:

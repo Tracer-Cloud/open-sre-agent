@@ -135,8 +135,8 @@ def test_bindable_output_exposes_turn_cancel_property() -> None:
             _ = (label, chunks)
             return ""
 
-        def finalize(self, text: str) -> None:
-            _ = text
+        def finalize(self, answer: str) -> None:
+            _ = answer
 
     inner = _Inner()
     bindable = BindableOutput()

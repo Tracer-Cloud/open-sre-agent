@@ -12,8 +12,8 @@ from core.agent_harness.ports import AnswerRequest
 from surfaces.interactive_shell.runtime.core.turn_accounting import (
     ToolCallingTurnResult,
 )
-from surfaces.interactive_shell.runtime.shell_turn_execution import execute_shell_turn
 from surfaces.interactive_shell.session import Session
+from tests.shared.harness_turn_driver import run_harness_turn
 
 
 def _console() -> Console:
@@ -56,7 +56,7 @@ def _record_answer() -> tuple[list[dict[str, Any]], Callable[..., None]]:
 def test_gather_string_threads_offscreen_observation() -> None:
     calls, fake_answer = _record_answer()
 
-    execute_shell_turn(
+    run_harness_turn(
         "question",
         Session(),
         _console(),
@@ -74,7 +74,7 @@ def test_gather_string_threads_offscreen_observation() -> None:
 def test_gather_none_passes_through_without_observation() -> None:
     calls, fake_answer = _record_answer()
 
-    execute_shell_turn(
+    run_harness_turn(
         "question",
         Session(),
         _console(),
@@ -110,7 +110,7 @@ def test_existing_command_observation_skips_gather() -> None:
             handled=True,
         )
 
-    execute_shell_turn(
+    run_harness_turn(
         "question",
         Session(),
         _console(),

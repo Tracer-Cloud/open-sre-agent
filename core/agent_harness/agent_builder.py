@@ -13,10 +13,10 @@ from typing import Any, Generic, TypeVar
 from core.agent import Agent
 from core.agent.goals import Goal
 from core.events import RuntimeEventCallback
-from core.execution import ToolExecutionHooks
 from core.llm.types import AgentLLMClient, ResolvedIntegrations
 from core.provider import ProviderHooks
-from core.types import RuntimeTool
+from core.tool.contracts import RuntimeTool
+from core.tool.execution import ToolExecutionHooks
 
 RuntimeToolT = TypeVar("RuntimeToolT", bound=RuntimeTool)
 

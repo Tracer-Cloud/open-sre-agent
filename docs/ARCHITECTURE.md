@@ -152,8 +152,10 @@ The shared runtime and cross-cutting services the capability layer is built on.
 
 - **`core/`** — the provider-agnostic agent runtime: the think → call tools →
   observe loop (`core.agent.Agent`), agent/investigation state (`core/state`) and
-  context-budget enforcement (`core/context_budget.py`), the tool framework primitives
-  (`core/tool_framework`), shared LLM clients (`core/llm`), agent-harness
+  context-budget enforcement (`core/context_budget.py`), tool contracts, schema,
+  registry ports, execution, and error reporting (`core/tool`), tool authoring
+  helpers (`core/tool_framework`),
+  shared LLM clients (`core/llm`), agent-harness
   session handling (`core/agent_harness`), and pure domain rules (`core/domain`).
 - **`platform/`** — cross-cutting services with no investigation logic of their
   own: guardrails, masking, sandbox, analytics, auth, notifications,

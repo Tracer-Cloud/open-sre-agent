@@ -62,10 +62,21 @@ def test_resetting_the_harness_ports_clears_the_presenter() -> None:
     assert harness_ports.get_subprocess_presenter_factory() is None
 
 
-def test_an_explicit_presenter_wins_over_the_registered_one() -> None:
-    """A host with its own presenter (TTY console) must not get the headless default."""
+def test_default_headless_build_injects_the_registered_presenter() -> None:
+    """The default port stack takes the boot-registered factory at construction.
+
+    Hosts that pass their own ``DefaultToolProvider`` keep that factory. The
+    family's bare default is what ``AgentSession.start()`` uses, so it must
+    receive the registered presenter or ``shell_run`` refuses every call. The
+    provider itself must not look the factory up — a missing constructor arg
+    stays missing even when one is registered.
+    """
     # Arrange.
+    from core.agent_harness.session import SessionCore
+    from core.agent_harness.session.persistence.memory import InMemorySessionStore
     from core.agent_harness.tools.tool_provider import DefaultToolProvider
+    from core.agent_harness.turns.headless_adapters import BufferOutputSink
+    from core.agent_harness.turns.headless_build import DefaultHeadlessBuild
 
     def _registered(*_args: object, **_kwargs: object) -> object:
         return object()
@@ -76,7 +87,13 @@ def test_an_explicit_presenter_wins_over_the_registered_one() -> None:
     harness_ports.set_subprocess_presenter_factory(_registered)
     with_explicit = DefaultToolProvider(object(), object(), subprocess_presenter_factory=_explicit)
     without = DefaultToolProvider(object(), object())
+    default_tools = DefaultHeadlessBuild(
+        session=SessionCore(store=InMemorySessionStore()),
+        output=BufferOutputSink(),
+    ).tools()
 
     # Act / Assert.
-    assert with_explicit._resolved_presenter_factory() is _explicit  # noqa: SLF001
-    assert without._resolved_presenter_factory() is _registered  # noqa: SLF001
+    assert with_explicit._subprocess_presenter_factory is _explicit  # noqa: SLF001
+    assert without._subprocess_presenter_factory is None  # noqa: SLF001
+    assert isinstance(default_tools, DefaultToolProvider)
+    assert default_tools._subprocess_presenter_factory is _registered  # noqa: SLF001

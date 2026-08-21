@@ -113,6 +113,32 @@ def test_paginate_follows_link_header(monkeypatch: pytest.MonkeyPatch) -> None:
     assert len(calls) == 2
 
 
+def test_paginate_stops_at_max_pages(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Regression: paginate() followed every Link-header page with no cap, so
+    an endpoint that returns the whole repository's history (e.g.
+    /issues/comments, not scoped to one issue) could run to thousands of
+    pages on an active repo -- observed live as a 100+ second hang against
+    Tracer-Cloud/opensre before this fix."""
+    calls: list[str] = []
+
+    def fake_urlopen(req: request.Request, timeout: int = 0) -> _Response:  # noqa: ARG001
+        calls.append(req.full_url)
+        return _Response(
+            [{"id": len(calls)}],
+            headers={
+                "Link": '<https://api.github.com/repos/o/r/issues/comments?page=X>; rel="next"'
+            },
+        )
+
+    monkeypatch.setattr("integrations.github.client.request.urlopen", fake_urlopen)
+    client = GitHubRestClient(github_token="tok")
+
+    items = client.paginate("/repos/o/r/issues/comments", max_pages=3)
+
+    assert len(calls) == 3
+    assert len(items) == 3
+
+
 def test_http_error_preserves_status_and_rate_limit_headers(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

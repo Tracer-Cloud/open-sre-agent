@@ -28,8 +28,7 @@ from core.messages import MessageMapper, RuntimeMessage, ToolResultRuntimeMessag
 from core.provider import ProviderHooks, ProviderRequest
 from core.state import InvestigationState
 from core.state.evidence import EvidenceEntry
-from core.tool_framework.registered_tool import RegisteredTool
-from core.types import RuntimeTool
+from core.tool import RegisteredTool, RuntimeTool
 from platform.observability import debug_print
 from platform.observability import get_progress_tracker as get_tracker
 from platform.observability.trace.redaction import (

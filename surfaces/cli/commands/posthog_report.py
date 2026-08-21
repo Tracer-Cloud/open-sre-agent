@@ -13,6 +13,7 @@ from rich.table import Table
 
 from bootstrap.process import SCHEDULED_COMMAND_PROFILE, configure_process
 from platform.scheduling.scheduler.delivery import SUPPORTED_DELIVERY_PROVIDERS
+from platform.terminal.theme import GLYPH_ERROR, GLYPH_SUCCESS
 from surfaces.cli.commands.scheduling import add_task_and_echo, validate_cron_and_timezone
 
 _console = Console()
@@ -192,7 +193,7 @@ def posthog_report_schedule_list() -> None:
             task.provider.value,
             task.chat_id,
             period or "—",
-            "✓" if task.enabled else "✗",
+            GLYPH_SUCCESS if task.enabled else GLYPH_ERROR,
             task.last_run or "—",
         )
 

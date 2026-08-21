@@ -34,14 +34,15 @@ _CORE_RUNTIME_MODULES: tuple[Path, ...] = (
     Path("core/agent/mixins.py"),
     Path("core/context_budget.py"),
     Path("core/events.py"),
-    Path("core/execution.py"),
+    Path("core/tool/contracts.py"),
+    Path("core/tool/execution.py"),
+    Path("core/tool/registry.py"),
     Path("core/llm_invoke_errors.py"),
     Path("core/messages/__init__.py"),
     Path("core/messages/message_mapper.py"),
     Path("core/messages/provider_adapters.py"),
     Path("core/messages/runtime_message_types.py"),
     Path("core/provider.py"),
-    Path("core/types.py"),
 )
 # Anything imported from a forbidden prefix by a core module is a
 # layering violation. Inverted dependency: core defines ports, CLI /

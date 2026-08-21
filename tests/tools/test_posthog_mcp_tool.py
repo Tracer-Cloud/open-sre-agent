@@ -485,8 +485,6 @@ def test_list_tools_truncates_long_descriptions() -> None:
 
 def test_query_values_survive_gather_truncation() -> None:
     """Row values must outlive the gather loop's head-first result truncation."""
-    import json
-
     from core.agent_harness.turns.evidence_driver import _MAX_PER_TOOL_CHARS, _truncate
     from integrations.posthog_mcp.tools.posthog_mcp_tool import _normalize_tool_result
 

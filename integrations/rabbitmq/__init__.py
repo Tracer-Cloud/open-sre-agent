@@ -28,7 +28,7 @@ import httpx
 from pydantic import Field, field_validator
 
 from config.strict_config import StrictConfigModel
-from core.tool_framework.utils.tool_availability import tool_unavailable
+from core.tool_framework.utils import tool_unavailable
 from integrations._validation_helpers import report_classify_failure, report_validation_failure
 from platform.text.coercion import safe_int
 
@@ -368,11 +368,16 @@ def get_broker_overview(config: RabbitMQConfig) -> dict[str, Any]:
             msg_stats = overview.get("message_stats") or {}
             object_totals = overview.get("object_totals") or {}
 
-            # /api/healthchecks/alarms returns HTTP 503 (not 200) when alarms
+            # /api/health/checks/alarms returns HTTP 503 (not 200) when alarms
             # are active, so we can't use _http_get which treats >=400 as error.
+            # This is the modern Health Checks API path (RabbitMQ 3.9+, the
+            # project's documented minimum is 3.12+); the older one-word
+            # /api/healthchecks/alarms path was removed and 404s on every
+            # broker version this integration targets - confirmed live
+            # against RabbitMQ 3.13.7, where the old path never worked.
             alarm_payload: dict[str, Any] = {"ok": False, "detail": "unknown"}
             try:
-                alarm_resp = client.get("/api/healthchecks/alarms")
+                alarm_resp = client.get("/api/health/checks/alarms")
             except httpx.RequestError as exc:
                 alarm_payload = {"ok": False, "detail": str(exc)}
             else:

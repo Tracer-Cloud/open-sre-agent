@@ -392,7 +392,7 @@ _BUILTIN_SPECS: tuple[IntegrationSpec, ...] = (
     IntegrationSpec(service="clickhouse", has_verifier=True, verify_order=23),
     IntegrationSpec(service="alicloud", direct_effective=True),
     IntegrationSpec(service="notion"),
-    IntegrationSpec(service="prefect", has_verifier=True, verify_order=51),
+    IntegrationSpec(service="prefect", has_verifier=True, direct_effective=True, verify_order=51),
     IntegrationSpec(
         service="posthog",
         has_verifier=True,

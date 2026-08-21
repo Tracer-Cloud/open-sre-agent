@@ -99,6 +99,7 @@
             "group": "Deploy and APIs",
             "pages": [
               "deployment",
+              "headless-cli",
               "api",
               "python-api",
               "hosting-the-agent"

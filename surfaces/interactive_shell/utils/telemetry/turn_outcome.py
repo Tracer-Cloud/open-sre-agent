@@ -34,6 +34,13 @@ _SUMMARY_ONLY_SLASH_ROOTS: frozenset[str] = frozenset(
         "/help",
         "/?",
         "/investigate",
+        # The user has already read the resume hint and the goodbye on screen,
+        # and neither tells the model anything. Replaying the capture printed
+        # the whole farewell a second time, with the spinner's frames
+        # transcribed one after another — ``console.status`` animates in place
+        # but ``export_text`` records every frame it wrote.
+        "/exit",
+        "/quit",
     }
 )
 

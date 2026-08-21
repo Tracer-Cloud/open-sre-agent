@@ -7,9 +7,9 @@ from typing import Any
 
 from botocore.exceptions import ClientError
 
-from core.tool_framework.telemetry import report_run_error
+from core.tool import report_run_error
 from core.tool_framework.tool_decorator import tool
-from core.tool_framework.utils.tool_availability import tool_unavailable
+from core.tool_framework.utils import tool_unavailable
 from integrations.eks.eks_client import EKSClient
 from integrations.eks.tools._shared import _eks_available, _eks_creds
 

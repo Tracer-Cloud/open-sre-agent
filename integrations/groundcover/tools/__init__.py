@@ -8,7 +8,7 @@ from typing import Any
 
 from core.domain.types.tools import ToolSurface
 from core.tool_framework.tool_decorator import tool
-from core.tool_framework.utils.tool_availability import tool_unavailable
+from core.tool_framework.utils import tool_unavailable
 from integrations.groundcover.availability import groundcover_available_or_backend
 from integrations.groundcover.client import GroundcoverClient
 from integrations.groundcover.helpers import (

@@ -12,6 +12,8 @@ from platform.terminal.theme import (
     BRAND,
     DIM,
     ERROR,
+    GLYPH_ERROR,
+    GLYPH_SUCCESS,
     HIGHLIGHT,
     SECONDARY,
     TEXT,
@@ -229,7 +231,7 @@ class _EventLogDisplay:
             err = event.status == "error"
             t = Text()
             t.append(f"{_elapsed_hms(elapsed_total)}  ", style=SECONDARY)
-            t.append("✗  " if err else "✓  ", style=f"bold {ERROR if err else HIGHLIGHT}")
+            t.append(f"{GLYPH_ERROR}  " if err else f"{GLYPH_SUCCESS}  ", style=f"bold {ERROR if err else HIGHLIGHT}")
             t.append(badge_label, style=f"bold {badge_color}")
             t.append("  ·  ", style=DIM)
             t.append(_node_label(node_name), style=f"bold {TEXT}")

@@ -21,8 +21,8 @@ from core.agent_harness.turns.gather_discovery_budget import (
     is_mcp_list_tools,
     with_gather_discovery_budget,
 )
-from core.execution import ToolExecutionRequest, ToolExecutionResult
 from core.llm.types import ToolCall
+from core.tool.execution import ToolExecutionRequest, ToolExecutionResult
 
 
 def _request(

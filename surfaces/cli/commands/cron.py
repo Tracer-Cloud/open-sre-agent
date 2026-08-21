@@ -13,6 +13,7 @@ from rich.table import Table
 
 from platform.scheduling.scheduler.credentials import requires_explicit_chat_id
 from platform.scheduling.scheduler.types import Provider, TaskKind
+from platform.terminal.theme import GLYPH_ERROR, GLYPH_SUCCESS
 from surfaces.cli.commands.scheduling import validate_cron_and_timezone
 
 _console = Console()
@@ -167,7 +168,7 @@ def cron_list() -> None:
             loop.timezone,
             loop.provider.value,
             ", ".join(loop.channels),
-            "✓" if loop.enabled else "✗",
+            GLYPH_SUCCESS if loop.enabled else GLYPH_ERROR,
             loop.next_run or "—",
             loop.last_run or "—",
         )

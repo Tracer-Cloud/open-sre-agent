@@ -12,10 +12,10 @@ from __future__ import annotations
 from typing import Any, Protocol
 
 from core.events import RuntimeEvent
-from core.execution import ToolExecutionHooks
 from core.messages import ProviderMessage, RuntimeMessage
 from core.provider import ProviderRequest
-from core.types import RuntimeTool
+from core.tool.contracts import RuntimeTool
+from core.tool.execution import ToolExecutionHooks
 
 
 class LoopHost[RuntimeToolT: RuntimeTool](Protocol):
