@@ -65,15 +65,17 @@ Four notes on these grants, each confirmed against a real server:
 - The grant on the **target database** (`MARIADB_DATABASE`) is required -- the connector
   selects it as the default schema on connect, and without it every tool call fails with
   `Access denied ... to database`.
-- `SLAVE MONITOR` is required for `get_mariadb_replication_status` (`SHOW ALL SLAVES STATUS`)
+- The replication-status tool (`SHOW ALL SLAVES STATUS`) needs `SLAVE MONITOR`
   -- MySQL's `REPLICATION CLIENT` name doesn't carry the same privilege on MariaDB (`SHOW
   GRANTS` reports it back as `BINLOG MONITOR`, a related but different privilege that does
-  not cover replica status). Without `SLAVE MONITOR`, that one tool fails with
-  `Access denied; you need (at least one of) the SLAVE MONITOR privilege(s)` even though
-  `integrations verify mariadb` and the other four tools pass.
+  not cover replica status). Without it, that one tool fails with `Access denied; you need
+  (at least one of) the SLAVE MONITOR privilege(s)` even though `integrations verify
+  mariadb` and the other four tools pass. `SLAVE MONITOR` requires **MariaDB 10.5.9+**
+  (the privilege didn't exist before then); on any older MariaDB, grant `SUPER` instead --
+  it has covered `SHOW SLAVE STATUS` across every MariaDB version.
 - Slow queries need `performance_schema`, which is enabled by default on the official
   `mariadb` Docker image but often disabled in production `my.cnf` -- check `SELECT
-  @@performance_schema` if `get_mariadb_slow_queries` returns an empty note.
+  @@performance_schema` if the slow-queries tool returns an empty note.
 
 ### Quick local test with Docker
 
@@ -97,8 +99,7 @@ real one -- its own log line reports `port: 0`. A readiness check against the so
 `mariadb-admin ping`) can succeed against that temporary server and return moments before it
 shuts down and the real server restarts, causing the very next command to fail with `Access
 denied` or a socket error. Waiting for the final server's own log line (`port: 3306`) avoids
-the race; verified by grepping the full container log for both `port: 0` (temporary server)
-and `port: 3306` (real server) after startup.
+the race.
 </Warning>
 
 ```bash
