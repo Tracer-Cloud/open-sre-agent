@@ -100,7 +100,7 @@ def _is_alert_listener_active() -> bool:
     try:
         from config.repl_config import ReplConfig
 
-        return ReplConfig.load(apply_active_theme=False).alert_listener_enabled
+        return ReplConfig.load().alert_listener_enabled
     except Exception:
         return False
 

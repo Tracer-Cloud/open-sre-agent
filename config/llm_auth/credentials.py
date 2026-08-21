@@ -7,6 +7,7 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from enum import StrEnum
 
+from config.llm_auth.cli_probe import resolve_cli_auth_probe
 from config.llm_auth.provider_catalog import (
     API_KEY_PROVIDER_ENVS,
     ProviderSpec,
@@ -253,19 +254,7 @@ def status(provider: str) -> CredentialStatus:
                 detail=record.get("detail") or f"{spec.label} auth metadata is present.",
             )
         try:
-            from integrations.llm_cli.registry import get_cli_provider_registration
-
-            reg = get_cli_provider_registration(spec.value)
-            if reg is None:
-                return CredentialStatus(
-                    spec.value,
-                    False,
-                    CredentialSource.NONE,
-                    False,
-                    False,
-                    "No CLI adapter registered.",
-                )
-            probe = reg.adapter_factory().detect()
+            probe = resolve_cli_auth_probe(spec.value)
         except Exception as exc:
             return CredentialStatus(
                 spec.value,
@@ -274,6 +263,15 @@ def status(provider: str) -> CredentialStatus:
                 False,
                 False,
                 f"CLI auth status could not be checked: {exc}",
+            )
+        if probe is None:
+            return CredentialStatus(
+                spec.value,
+                False,
+                CredentialSource.NONE,
+                False,
+                False,
+                "No CLI adapter registered.",
             )
         configured = probe.installed and probe.logged_in is True
         source: CredentialSource = CredentialSource.CLI if configured else CredentialSource.NONE

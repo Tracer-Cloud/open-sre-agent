@@ -32,6 +32,8 @@ from typing import SupportsIndex
 
 from rich.theme import Theme
 
+from config.constants.repl_theme import DEFAULT_THEME_NAME, THEME_NAMES
+
 
 @dataclass(frozen=True)
 class CliTheme:
@@ -244,8 +246,6 @@ THEME_REGISTRY: dict[str, CliTheme] = {
     ),
 }
 
-DEFAULT_THEME_NAME = "blue"
-
 
 def _fg(rgb: tuple[int, int, int]) -> str:
     return f"\x1b[38;2;{rgb[0]};{rgb[1]};{rgb[2]}m"
@@ -333,7 +333,7 @@ def get_theme(theme_name: str | None) -> CliTheme:
 
 def list_theme_names() -> tuple[str, ...]:
     """Return available theme names in display order."""
-    return tuple(THEME_REGISTRY.keys())
+    return THEME_NAMES
 
 
 def get_active_theme() -> CliTheme:

@@ -48,10 +48,12 @@ _mark_tests_for_analytics()
 @pytest.fixture(autouse=True)
 def _harness_ports_per_test() -> Iterator[None]:
     """Wire harness ports before each test; reset after to avoid session leakage."""
+    from bootstrap.adapters import install_cli_auth_prober
     from infrastructure.harness_ports import reset_harness_ports
     from surfaces.shared.terminal.output.boundary import install_harness_ports
 
     install_harness_ports()
+    install_cli_auth_prober()
     yield
     reset_harness_ports()
 

@@ -146,6 +146,14 @@ def install_scheduled_delivery_adapters() -> None:
     scheduled_delivery_adapters().install()
 
 
+def install_cli_auth_prober() -> None:
+    """Bind the integrations-backed CLI auth prober config reports status through."""
+    from config.llm_auth.cli_probe import CliAuthProber
+    from integrations.llm_cli.auth_probe import probe_cli_auth
+
+    CliAuthProber(probe_cli_auth).install()
+
+
 __all__ = [
     "install_harness_adapters",
     "install_investigation_api",
@@ -154,4 +162,5 @@ __all__ = [
     "install_scheduler_runners",
     "scheduled_delivery_adapters",
     "install_scheduled_delivery_adapters",
+    "install_cli_auth_prober",
 ]
