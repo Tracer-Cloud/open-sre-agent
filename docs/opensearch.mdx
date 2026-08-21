@@ -135,24 +135,10 @@ opensearch │ local env │ ✓ passed │ Configured for OpenSearch at
            │           │          │ http://localhost:9201.
 ```
 
-Register the local instance in the store. `opensre integrations setup opensearch` is interactive; for a scriptable demo, write directly into an isolated store file instead of `~/.opensre/integrations.json` — `OPENSRE_INTEGRATIONS_STORE_PATH` is a genuine, first-class override (`config/constants/tenancy.py`), so this never touches your real config:
+Register the local instance through the supported setup flow:
 
 ```bash
-export OPENSRE_INTEGRATIONS_STORE_PATH=$(mktemp /tmp/opensre-opensearch-demo.XXXXXX)
-python3 <<'PYEOF'
-import json, os, pathlib
-
-path = pathlib.Path(os.environ["OPENSRE_INTEGRATIONS_STORE_PATH"])
-store = json.loads(path.read_text()) if path.stat().st_size else {"version": 2, "integrations": []}
-store["integrations"].append({
-    "id": "opensearch-local-demo",
-    "service": "opensearch",
-    "status": "active",
-    "instances": [{"name": "default", "tags": {}, "credentials": {"url": "http://localhost:9201", "index_pattern": "logs-app"}}],
-})
-path.parent.mkdir(parents=True, exist_ok=True)
-path.write_text(json.dumps(store, indent=2))
-PYEOF
+opensre integrations setup opensearch
 ```
 
 Trigger a real investigation against the seeded index — this is the actual supported entrypoint, not an internal import:
@@ -182,12 +168,6 @@ pods are not running, not ready, or otherwise not serving traffic..."
 ```
 
 The agent found the seeded error via `query_elasticsearch_logs` and didn't need `query_opensearch_analytics` for this alert — both tools share the same credentials and index, so either is reachable from the same setup.
-
-Remove the demo store file when done (no edit to your real store needed):
-
-```bash
-rm -f "$OPENSRE_INTEGRATIONS_STORE_PATH"
-```
 
 Teardown:
 
