@@ -158,6 +158,158 @@ Then run OpenSRE with the alert payload:
 opensre investigate -i alert.json
 ```
 
+### Local verification recipe
+
+Verified both registered tools live against a real local Argo CD install with a real
+GitOps application synced from a public repo.
+
+```bash
+kind create cluster --name opensre-argocd-demo
+kubectl create namespace argocd
+kubectl apply -n argocd -f https://raw.githubusercontent.com/argoproj/argo-cd/stable/manifests/install.yaml \
+  --server-side --force-conflicts
+kubectl -n argocd wait --for=condition=Available deployment/argocd-server --timeout=180s
+kubectl -n argocd wait --for=condition=Available deployment/argocd-repo-server --timeout=180s
+```
+
+<Warning>
+The stock `install.yaml` fails under a plain `kubectl apply` with `metadata.annotations:
+Too long: may not be more than 262144 bytes` -- the ApplicationSet CRD is large enough
+that client-side apply's `kubectl.kubernetes.io/last-applied-configuration` annotation
+exceeds Kubernetes' own annotation size limit. `--server-side --force-conflicts` avoids
+storing that annotation entirely. Confirmed live: the same manifest applied without
+`--server-side` fails on this exact CRD.
+</Warning>
+
+```bash
+kubectl -n argocd port-forward svc/argocd-server 8080:443 &
+sleep 3
+ARGOCD_PWD=$(kubectl -n argocd get secret argocd-initial-admin-secret -o jsonpath="{.data.password}" | base64 -d)
+
+ARGOCD_AUTH_TOKEN=$(curl -sk -X POST https://localhost:8080/api/v1/session \
+  -H "Content-Type: application/json" \
+  -d "{\"username\":\"admin\",\"password\":\"${ARGOCD_PWD}\"}" \
+  | python3 -c "import sys,json; print(json.load(sys.stdin)['token'])")
+
+export ARGOCD_BASE_URL="https://localhost:8080"
+export ARGOCD_AUTH_TOKEN
+export ARGOCD_VERIFY_SSL=false
+```
+
+Create a real Application synced from Argo CD's own public example repo:
+
+```bash
+cat > /tmp/argocd-app.yaml << 'YAML'
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: guestbook
+  namespace: argocd
+spec:
+  project: default
+  source:
+    repoURL: https://github.com/argoproj/argocd-example-apps.git
+    targetRevision: HEAD
+    path: guestbook
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: demo-app
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true
+YAML
+kubectl apply -f /tmp/argocd-app.yaml
+
+i=0
+until kubectl -n argocd get application guestbook -o jsonpath='{.status.health.status}' 2>/dev/null | grep -q "Healthy"; do
+  i=$((i + 1))
+  [ "$i" -ge 60 ] && { echo "ERROR: guestbook never became healthy" >&2; exit 1; }
+  sleep 5
+done
+```
+
+Verify:
+
+```bash
+opensre integrations verify argocd
+```
+
+```
+SERVICE │ SOURCE    │ STATUS   │ DETAIL
+argocd  │ local env │ ✓ passed │ Connected to Argo CD and listed 1 application.
+```
+
+`opensre investigate` only treats an integration as active once the store resolution has
+*something* to fall through to env vars with -- an untouched `~/.opensre/integrations.json`
+with an unrelated integration in it blocks env-var fallback entirely. Point
+`OPENSRE_INTEGRATIONS_STORE_PATH` at an empty, valid store instead, so your real config is
+never read or written and the `ARGOCD_*` vars above are the only source of connection info:
+
+```bash
+export OPENSRE_INTEGRATIONS_STORE_PATH=$(mktemp /tmp/opensre-argocd-demo.XXXXXX)
+echo '{"version": 2, "integrations": []}' > "$OPENSRE_INTEGRATIONS_STORE_PATH"
+```
+
+`argocd_application_diff` needs real drift to return anything interesting -- with
+`selfHeal: true` set above, Argo CD reverts live-cluster drift within seconds, so
+disable automated sync first to introduce a drift that actually sticks:
+
+```bash
+kubectl -n argocd patch application guestbook --type merge -p '{"spec":{"syncPolicy":{"automated":null}}}'
+kubectl -n demo-app patch deployment guestbook-ui -p '{"spec":{"replicas":3}}'
+```
+
+Trigger a real investigation against the drift -- this is the actual supported
+entrypoint, not an internal import:
+
+```bash
+opensre investigate --input-json '{
+  "alert_name": "guestbook OutOfSync",
+  "severity": "warning",
+  "annotations": {
+    "summary": "Argo CD reports guestbook has configuration drift",
+    "argocd_application": "guestbook",
+    "argocd_project": "default"
+  }
+}'
+```
+
+`argocd_application_diff` confirmed with real drift via direct tool invocation (edited
+for length):
+
+```
+{
+  "drift_detected": true,
+  "diffs": [
+    {
+      "kind": "Deployment",
+      "name": "guestbook-ui",
+      "diff": "--- desired
++++ live
+@@ ... @@
+-    "replicas": 1,
++    "replicas": 3,"
+    }
+  ],
+  "diff_count": 1
+}
+```
+
+Both registered tools return real data -- `argocd_application_status` (sync/health
+status, revision, operation phase, image list) and `argocd_application_diff` (the
+sanitized per-resource diff above).
+
+Teardown:
+
+```bash
+kind delete cluster --name opensre-argocd-demo
+rm -f "$OPENSRE_INTEGRATIONS_STORE_PATH"
+unset OPENSRE_INTEGRATIONS_STORE_PATH ARGOCD_BASE_URL ARGOCD_AUTH_TOKEN ARGOCD_VERIFY_SSL
+```
+
 ## Verify
 
 ```bash
