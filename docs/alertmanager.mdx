@@ -128,8 +128,15 @@ Start a disposable Alertmanager without external credentials:
 ```bash
 docker run --rm --detach --name opensre-alertmanager \
   --publish 127.0.0.1:9093:9093 \
-  prom/alertmanager:v0.28.1
-until curl --fail --silent http://127.0.0.1:9093/-/ready; do sleep 1; done
+  prom/alertmanager:v0.28.1 || exit 1
+for attempt in $(seq 1 30); do
+  curl --fail --silent http://127.0.0.1:9093/-/ready && break
+  if [ "$attempt" -eq 30 ]; then
+    docker logs opensre-alertmanager
+    exit 1
+  fi
+  sleep 1
+done
 ```
 
 Seed one firing alert and one active silence so both investigation tools return
