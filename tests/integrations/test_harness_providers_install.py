@@ -48,7 +48,9 @@ def test_port_defaults_to_empty_before_boundary_install() -> None:
 def test_install_product_adapters_wires_tracer_fetcher() -> None:
     output_boundary.install_product_adapters()
 
-    assert harness_providers.integration_resolution._fetch_remote is fetch_tracer_remote_integrations
+    assert (
+        harness_providers.integration_resolution._fetch_remote is fetch_tracer_remote_integrations
+    )
 
 
 def test_registered_fetcher_is_invoked() -> None:
@@ -102,9 +104,18 @@ def test_install_harness_providers_wires_cli_llm_adapters() -> None:
 
     output_boundary.install_harness_providers()
 
-    assert harness_providers.cli_llm._cli_provider_registration_fn is not harness_providers.cli_llm._default_cli_provider_registration
-    assert harness_providers.cli_llm._build_cli_client_fn is not harness_providers.cli_llm._cli_llm_backend_unavailable
-    assert harness_providers.cli_llm._flatten_cli_messages_fn is not harness_providers.cli_llm._cli_llm_backend_unavailable
+    assert (
+        harness_providers.cli_llm._cli_provider_registration_fn
+        is not harness_providers.cli_llm._default_cli_provider_registration
+    )
+    assert (
+        harness_providers.cli_llm._build_cli_client_fn
+        is not harness_providers.cli_llm._cli_llm_backend_unavailable
+    )
+    assert (
+        harness_providers.cli_llm._flatten_cli_messages_fn
+        is not harness_providers.cli_llm._cli_llm_backend_unavailable
+    )
 
 
 def test_install_harness_providers_wires_soc_registries() -> None:
