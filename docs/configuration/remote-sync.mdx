@@ -96,6 +96,9 @@ opensre remote-sync reencrypt           # re-encrypts whole data and encrypts al
 
 The store prefix must be dedicated to OpenSRE — `reencrypt` processes every object it finds there. If anything else shares the prefix, it will be overwritten with an encrypted copy that only OpenSRE can read.
 
+**Warning:** `rotate-passphrase` and `reencrypt` are not safe to run concurrently — not at the same time as each other, and not from two machines at once. 
+Doing so can corrupt the manifest or leave some data undecryptable. Make sure no other rotation or reencrypt is running before starting one.
+
 
 Encryption fails closed. A sync is refused, never downgraded, when:
 
