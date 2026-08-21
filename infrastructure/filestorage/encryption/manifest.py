@@ -25,6 +25,7 @@ from infrastructure.filestorage.encryption.keys import (
     generate_root_secret,
     generate_salt,
     unwrap_root_secret,
+    validated_salt,
     wrap_root_secret,
 )
 from infrastructure.filestorage.errors import RemoteSyncEncryptionError
@@ -84,7 +85,7 @@ def parse_manifest(data: bytes) -> EncryptionManifest:
                 f"unsupported key derivation {kdf.get('name')!r} in this store's manifest"
             )
         return EncryptionManifest(
-            salt=base64.b64decode(kdf["salt"]),
+            salt=validated_salt(base64.b64decode(kdf["salt"])),
             params=ScryptParams(n=int(kdf["n"]), r=int(kdf["r"]), p=int(kdf["p"])),
             active_key_id=str(raw["active_key_id"]),
             wrapped_keys={

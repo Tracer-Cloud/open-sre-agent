@@ -9,6 +9,8 @@ overwrite.
 
 from __future__ import annotations
 
+import base64
+import json
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
@@ -17,8 +19,16 @@ import pytest
 from config.constants.filestorage import REMOTE_SYNC_KEY_CACHE_ENV, REMOTE_SYNC_PASSPHRASE_ENV
 from infrastructure.filestorage.encryption import envelope
 from infrastructure.filestorage.encryption.cipher import ManifestCipher
-from infrastructure.filestorage.encryption.keys import derive_root_key, generate_root_secret
-from infrastructure.filestorage.encryption.manifest import MANIFEST_KEY, load_manifest
+from infrastructure.filestorage.encryption.keys import (
+    ScryptParams,
+    derive_root_key,
+    generate_root_secret,
+)
+from infrastructure.filestorage.encryption.manifest import (
+    MANIFEST_KEY,
+    load_manifest,
+    parse_manifest,
+)
 from infrastructure.filestorage.encryption.resolver import resolve_cipher
 from infrastructure.filestorage.encryption.rotation import reencrypt, rotate_passphrase
 from infrastructure.filestorage.engine import SyncDirection, SyncReport, content_tag, run_sync
@@ -28,6 +38,7 @@ from infrastructure.filestorage.errors import (
     ManifestMissingError,
     MissingPassphraseError,
     PlaintextStoreError,
+    RemoteSyncEncryptionError,
     UndecryptableObjectError,
     WrongPassphraseError,
 )
@@ -473,6 +484,58 @@ def test_an_interrupted_reencrypt_leaves_every_object_readable(
     assert sealed
     for key, data in sealed.items():
         assert gate.cipher.unseal(key, data)
+
+
+# ── The manifest is untrusted input ─────────────────────────────────────────
+
+
+def _manifest_bytes(*, n: int = 131072, r: int = 8, p: int = 1, salt: bytes = b"0" * 16) -> bytes:
+    """A syntactically valid manifest with the given KDF shape."""
+    return json.dumps(
+        {
+            "version": 1,
+            "active_key_id": "aa" * 16,
+            "kdf": {
+                "name": "scrypt",
+                "n": n,
+                "r": r,
+                "p": p,
+                "salt": base64.b64encode(salt).decode(),
+            },
+            "wrapped_keys": {"aa" * 16: "AAAA"},
+        }
+    ).encode()
+
+
+@pytest.mark.parametrize(
+    ("label", "kwargs"),
+    [
+        ("n is not a power of two", {"n": 100_000}),
+        ("n would allocate a terabyte", {"n": 2**30}),
+        ("n below the supported floor", {"n": 1024}),
+        ("r past the supported ceiling", {"r": 1 << 20}),
+        ("p past the supported ceiling", {"p": 1 << 20}),
+        ("salt too short to be one", {"salt": b"x"}),
+        ("salt implausibly long", {"salt": b"x" * 4096}),
+    ],
+)
+def test_a_hostile_manifest_cannot_dictate_the_work_factor(
+    label: str, kwargs: dict[str, object]
+) -> None:
+    """The manifest is remote data, so its KDF cost is untrusted.
+
+    scrypt allocates ``128 * n * r`` bytes before any passphrase is checked, so
+    an unbounded ``n`` is a memory bomb anyone with write access to the store
+    can plant. Malformed values must also surface as this feature's own error
+    rather than escaping as a ``cryptography`` ValueError.
+    """
+    with pytest.raises(RemoteSyncEncryptionError):
+        parse_manifest(_manifest_bytes(**kwargs))  # type: ignore[arg-type]
+
+
+def test_the_shipped_defaults_stay_inside_the_bounds() -> None:
+    """The guard must not reject the parameters opensre itself writes."""
+    assert parse_manifest(_manifest_bytes()).params == ScryptParams()
 
 
 def test_reencrypt_keeps_the_previous_key_in_the_manifest(

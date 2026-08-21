@@ -35,6 +35,7 @@ from config.secrets.store import resolve_secret, save_secret
 from infrastructure.filestorage.encryption.envelope import KEY_ID_LEN
 from infrastructure.filestorage.errors import (
     MissingPassphraseError,
+    RemoteSyncEncryptionError,
     WrongPassphraseError,
 )
 
@@ -43,8 +44,8 @@ KEK_LEN = 32
 SALT_LEN = 16
 _WRAP_NONCE_LEN = 12
 
-#: Interactive-login cost. ~0.4s on a 2020-era laptop, paid once per machine per
-#: salt because the result is cached; see :func:`derive_kek`.
+#: Interactive-login cost. ~0.4s on a 2020-era laptop,so
+#  the result is cached(these parameters are binded to cache key); see :func:`derive_kek`.
 SCRYPT_N = 2**17
 SCRYPT_R = 8
 SCRYPT_P = 1
@@ -54,17 +55,66 @@ _INFO_NONCE = b"opensre/remote-sync/nonce"
 _INFO_KEY_ID = b"opensre/remote-sync/key-id"
 
 
+#: Bounds on what a manifest may ask this machine to compute. The manifest is
+#: remote data, so its cost parameters are untrusted input: scrypt allocates
+#: ``128 * n * r`` bytes, and an ``n`` of 2**30 asks for a terabyte before any
+#: passphrase is checked. The floor matters too — a manifest that lowered the
+#: cost to nothing would make the passphrase cheap to attack offline.
+MIN_SCRYPT_N = 2**14
+MAX_SCRYPT_R = 32
+MAX_SCRYPT_P = 16
+MAX_SCRYPT_MEMORY_BYTES = 512 * 1024 * 1024
+MIN_SALT_LEN = 16
+MAX_SALT_LEN = 64
+
+
 @dataclass(frozen=True)
 class ScryptParams:
-    """Cost parameters a store was keyed with.
+    """Cost parameters a store was keyed with, validated on construction.
 
     Persisted in the manifest so a machine joining later derives the same KEK
-    even if the defaults above change in a future release.
+    even if the defaults above change in a future release. Because that manifest
+    is remote data, the range this machine is willing to honour is enforced
+    here — where the values become an object — rather than at each call site, so
+    no path can reach :class:`Scrypt` with something it never agreed to compute.
     """
 
     n: int = SCRYPT_N
     r: int = SCRYPT_R
     p: int = SCRYPT_P
+
+    def __post_init__(self) -> None:
+        if (
+            not isinstance(self.n, int)
+            or not isinstance(self.r, int)
+            or not isinstance(self.p, int)
+        ):
+            raise RemoteSyncEncryptionError("this store's manifest has non-integer KDF parameters")
+        if self.n < MIN_SCRYPT_N or self.n & (self.n - 1):
+            raise RemoteSyncEncryptionError(
+                f"this store's manifest asks for scrypt n={self.n}, which is not a power of two "
+                f"of at least {MIN_SCRYPT_N}"
+            )
+        if not 1 <= self.r <= MAX_SCRYPT_R or not 1 <= self.p <= MAX_SCRYPT_P:
+            raise RemoteSyncEncryptionError(
+                f"this store's manifest asks for scrypt r={self.r}, p={self.p}, outside the "
+                f"supported range (r 1-{MAX_SCRYPT_R}, p 1-{MAX_SCRYPT_P})"
+            )
+        if 128 * self.n * self.r > MAX_SCRYPT_MEMORY_BYTES:
+            raise RemoteSyncEncryptionError(
+                f"this store's manifest asks for {128 * self.n * self.r // 2**20} MiB of key "
+                f"derivation memory, over the {MAX_SCRYPT_MEMORY_BYTES // 2**20} MiB limit"
+            )
+
+
+def validated_salt(salt: bytes) -> bytes:
+    """The manifest's salt, or a domain error when it is not a plausible one."""
+    if not MIN_SALT_LEN <= len(salt) <= MAX_SALT_LEN:
+        raise RemoteSyncEncryptionError(
+            f"this store's manifest has a {len(salt)}-byte KDF salt, outside the supported "
+            f"{MIN_SALT_LEN}-{MAX_SALT_LEN} bytes"
+        )
+    return salt
 
 
 @dataclass(frozen=True)
@@ -228,6 +278,8 @@ __all__ = [
     "KEK_LEN",
     "ROOT_SECRET_LEN",
     "SALT_LEN",
+    "MAX_SCRYPT_MEMORY_BYTES",
+    "MIN_SCRYPT_N",
     "SCRYPT_N",
     "SCRYPT_P",
     "SCRYPT_R",
@@ -241,5 +293,6 @@ __all__ = [
     "resolve_passphrase",
     "save_passphrase",
     "unwrap_root_secret",
+    "validated_salt",
     "wrap_root_secret",
 ]
