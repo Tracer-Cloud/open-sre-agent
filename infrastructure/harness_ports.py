@@ -24,7 +24,6 @@ from core.domain.types.tools import ToolSurface
 from core.llm.types import CliLLMClient, ModelType
 from core.tool import RegisteredTool
 
-
 if TYPE_CHECKING:
     from core.agent_harness.ports import SubprocessPresenterFactory
     from core.tool import ToolRegistry
