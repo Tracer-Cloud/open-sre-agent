@@ -145,6 +145,52 @@ Status:  passed
 Detail:  Connected to Grafana Tempo HTTP API (/api/search/tags).
 ```
 
+### Local Docker verification
+
+Start a disposable all-in-one Tempo using the repository's local configuration:
+
+```bash
+docker run --rm --detach --name opensre-tempo \
+  --publish 127.0.0.1:3200:3200 \
+  --publish 127.0.0.1:4318:4318 \
+  --volume "$PWD/tests/e2e/tempo/tempo-local.yaml:/etc/tempo.yaml:ro" \
+  grafana/tempo:2.7.2 -config.file=/etc/tempo.yaml
+until curl --fail --silent http://127.0.0.1:3200/ready; do sleep 1; done
+```
+
+Seed a recent two-second checkout error trace through OTLP/HTTP:
+
+```bash
+uv run python -m tests.e2e.tempo.local_seed
+```
+
+From a source checkout, run `uv run opensre integrations setup tempo`. Enter
+`http://127.0.0.1:3200` as the URL and leave the bearer token, username,
+password, and tenant prompts blank. Then verify the connection:
+
+```bash
+uv run opensre integrations verify tempo
+```
+
+The verifier should report a successful connection to the search API. Exercise
+the search, tag-listing, and trace-fetch actions through one agent turn:
+
+```bash
+uv run opensre ask --allowed-tool query_tempo \
+  "Use query_tempo to list services, list span names, search the last 60 minutes for checkout-service, and fetch the full trace returned by the search. Report the trace ID, root span, duration, HTTP status, and span status."
+```
+
+The result should report `checkout-service`, `POST /checkout`, a two-second
+duration, HTTP status `500`, and an error span. Stop the disposable instance
+when finished:
+
+```bash
+docker stop opensre-tempo
+```
+
+This instance has no authentication or TLS. Both ports bind only to loopback,
+and all trace data is discarded with the container.
+
 ## Troubleshooting
 
 | Symptom | Fix |
