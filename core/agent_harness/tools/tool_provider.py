@@ -7,6 +7,7 @@ from collections.abc import Callable
 from typing import Any
 
 from core.agent_harness.ports import (
+    CancelCapableConsole,
     ConfirmFn,
     InvestigationPortsFactory,
     LlmProviderPortsFactory,
@@ -71,7 +72,7 @@ class DefaultToolProvider:
         self._session = session
         self._tool_context = None
 
-    def bind_console(self, console: Any) -> None:
+    def bind_console(self, console: CancelCapableConsole) -> None:
         """Point tool UI (observers, subprocess presenter) at ``console``."""
         self._console = console
         self._tool_context = None

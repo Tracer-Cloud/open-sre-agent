@@ -111,6 +111,18 @@ class SessionBindable(Protocol):
 
 
 @runtime_checkable
+class CancelCapableConsole(Protocol):
+    """Console that exposes a cancellation flag and basic print capability."""
+
+    @property
+    def cancel_requested(self) -> bool:
+        """True if the user requested to cancel the current operation."""
+
+    def print(self, *args: Any, **kwargs: Any) -> None:
+        """Print output to the console."""
+
+
+@runtime_checkable
 class ConsoleBindable(Protocol):
     """Tool port that can retarget the turn console (cancel / TTY observers).
 
@@ -118,7 +130,7 @@ class ConsoleBindable(Protocol):
     the shared ``sink.turn_cancel`` Event for that message.
     """
 
-    def bind_console(self, console: Any) -> None:
+    def bind_console(self, console: CancelCapableConsole) -> None:
         """Point tool UI / cancel probes at ``console`` for this turn."""
 
 
@@ -314,13 +326,14 @@ class TurnBinding:
     output: OutputSink | None = None
     accounting: TurnAccounting | None = None
     tool_hooks: ToolExecutionHooks | None = None
-    console: Any | None = None
+    console: CancelCapableConsole | None = None
     confirm_fn: ConfirmFn | None = None
     is_tty: bool | None = None
 
 
 __all__ = [
     "AnswerRequest",
+    "CancelCapableConsole",
     "StreamAnswerFn",
     "ConfirmFn",
     "ConsoleBindable",

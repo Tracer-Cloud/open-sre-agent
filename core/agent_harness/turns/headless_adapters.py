@@ -11,6 +11,7 @@ from dataclasses import dataclass, field
 from typing import Any
 
 from core.agent_harness.ports import (
+    CancelCapableConsole,
     ConfirmFn,
     ToolEventObserver,
 )
@@ -158,7 +159,7 @@ class NullToolProvider:
         """No tools to retarget."""
         _ = session
 
-    def bind_console(self, console: Any) -> None:
+    def bind_console(self, console: CancelCapableConsole) -> None:
         """No console-backed tools."""
         _ = console
 

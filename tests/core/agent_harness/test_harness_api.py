@@ -38,6 +38,7 @@ ROOT_API = frozenset(
 PORTS = frozenset(
     {
         "AnswerRequest",
+        "CancelCapableConsole",
         "ConfirmFn",
         "ConsoleBindable",
         "ErrorReporter",

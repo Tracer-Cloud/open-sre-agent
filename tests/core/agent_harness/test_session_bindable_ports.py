@@ -5,7 +5,12 @@ from __future__ import annotations
 import threading
 from typing import Any
 
-from core.agent_harness.ports import ConsoleBindable, OutputBindable, SessionBindable
+from core.agent_harness.ports import (
+    CancelCapableConsole,
+    ConsoleBindable,
+    OutputBindable,
+    SessionBindable,
+)
 from core.agent_harness.runtime import TurnBinding
 from core.agent_harness.tools.tool_provider import DefaultToolProvider
 from core.agent_harness.turns.default_reasoning_client import DefaultReasoningClientProvider
@@ -31,7 +36,7 @@ class _SpyTools:
     def bind_session(self, session: Any) -> None:
         self.sessions.append(session)
 
-    def bind_console(self, console: Any) -> None:
+    def bind_console(self, console: CancelCapableConsole) -> None:
         self.consoles.append(console)
 
     def action_tools(self, **_kwargs: Any) -> list[Any]:
@@ -76,8 +81,16 @@ def test_headless_agent_bind_session_invokes_session_bindable() -> None:
 def test_headless_agent_bind_turn_console_invokes_console_bindable() -> None:
     tools = _SpyTools()
     agent = InMemoryHeadlessBuild(session=InMemorySessionState()).agent(tools=tools)
-    agent.bind_turn(TurnBinding(console="second"))
-    assert tools.consoles == ["second"]
+
+    class _StubConsole:
+        cancel_requested = False
+
+        def print(self, *args: Any, **kwargs: Any) -> None:
+            _ = (args, kwargs)
+
+    stub = _StubConsole()
+    agent.bind_turn(TurnBinding(console=stub))
+    assert tools.consoles == [stub]
 
 
 def test_default_reasoning_provider_is_output_bindable() -> None:
