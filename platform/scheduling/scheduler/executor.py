@@ -427,8 +427,12 @@ def _deliver_slack(task: ScheduledTask, message: str) -> tuple[bool, str, str]:
             return False, "Missing chat_id or webhook_url for Slack delivery", ""
         return False, "Scheduled tasks require Slack bot access_token for chat_id delivery", ""
 
-    # Strip HTML tags — Slack uses mrkdwn, not HTML
-    plain_message = _strip_html(message)
+    # Strip HTML tags, then rewrite Markdown as Slack mrkdwn — same conversion
+    # the gateway turn path applies; Slack renders **bold** and [label](url)
+    # literally. Covers both the API and webhook branches below.
+    from integrations.slack.formatting import markdown_to_slack_mrkdwn
+
+    plain_message = markdown_to_slack_mrkdwn(_strip_html(message))
 
     if access_token and chat_id:
         # Direct API post as a new top-level message

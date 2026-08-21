@@ -422,6 +422,46 @@ class TestExecutor:
         assert args[3] == "tok"
         assert args[4] == "u1"
 
+    def test_slack_delivery_converts_markdown_to_mrkdwn(self) -> None:
+        """Regression: the posted text went out as raw Markdown — Slack rendered
+        **bold**, ## headings, and [label](url) literally. The Telegram sibling
+        converts, and so does the Slack gateway turn path."""
+        from platform.delivery.notifications.delivery_transport import DeliveryResponse
+        from platform.scheduling.scheduler.executor import _deliver_slack
+
+        task = ScheduledTask(
+            id="test_sl_mrkdwn",
+            kind=TaskKind.DAILY_SUMMARY,
+            cron="0 9 * * *",
+            provider=Provider.SLACK,
+            chat_id="C123456",
+        )
+        payloads: list[dict] = []
+
+        def _capture_post(url: str, payload: dict, **_kw: object) -> DeliveryResponse:
+            payloads.append(payload)
+            return DeliveryResponse(ok=True, status_code=200, data={"ok": True, "ts": "1.0"})
+
+        with (
+            patch(
+                "platform.scheduling.scheduler.executor.resolve_slack_credentials",
+                return_value={"access_token": "xoxb-token"},
+            ),
+            patch(
+                "platform.delivery.notifications.delivery_transport.post_json",
+                side_effect=_capture_post,
+            ),
+        ):
+            ok, error, _ts = _deliver_slack(
+                task, "## Loop report\n**3 pods failing** — see [runbook](https://example.com/rb)"
+            )
+
+        assert ok is True, error
+        text = payloads[0]["text"]
+        assert "**" not in text
+        assert "](" not in text
+        assert "<https://example.com/rb|runbook>" in text
+
     def test_slack_delivery_fails_with_webhook_when_chat_id_set(self) -> None:
         """Webhook ignores chat_id — must not silently deliver to the wrong channel."""
         task = ScheduledTask(
