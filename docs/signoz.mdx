@@ -61,8 +61,9 @@ release):
 VERSION=v0.2.17
 curl -fsSLO "https://github.com/SigNoz/foundry/releases/download/${VERSION}/foundry_darwin_arm64.tar.gz"
 curl -fsSLO "https://github.com/SigNoz/foundry/releases/download/${VERSION}/foundry_${VERSION#v}_checksums.txt"
-shasum -a 256 -c <(grep darwin_arm64 "foundry_${VERSION#v}_checksums.txt")
-tar -xzf foundry_darwin_arm64.tar.gz && sudo mv foundryctl /usr/local/bin/
+shasum -a 256 -c <(grep darwin_arm64 "foundry_${VERSION#v}_checksums.txt") && \
+  tar -xzf foundry_darwin_arm64.tar.gz && \
+  sudo mv foundryctl /usr/local/bin/
 ```
 
 Swap `darwin_arm64` for your platform (`linux_amd64`, `linux_arm64`, etc.) and use
