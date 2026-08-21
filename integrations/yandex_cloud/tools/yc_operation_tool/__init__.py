@@ -126,6 +126,10 @@ def execute_yc_operation(
     **credentials: Any,
 ) -> dict[str, Any]:
     """Read a Yandex Cloud resource."""
+    # The client resolves hosts case-insensitively, so the index gate and the
+    # folder-scope exception below must see the same id — a case variant like
+    # "Compute" must not skip the allowlist while the request still goes out.
+    service = service.strip().lower()
     # Checked here rather than only in the client: the synthetic-backend path
     # never reaches the client, and a read-only guarantee that depends on which
     # branch the call took is not a guarantee.

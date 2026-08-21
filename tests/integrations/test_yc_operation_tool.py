@@ -275,6 +275,26 @@ class TestTheIndexIsTheAllowlist:
         assert "find_yc_api" in result["error"]
         assert "not a documented read" in result["error"]
 
+    def test_a_case_variant_service_cannot_skip_the_allowlist(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """Regression: the gate compared the raw service id while the client
+        resolves hosts case-insensitively, so service="Compute" skipped the
+        index refusal and the request still went out."""
+
+        def _never(*_a: object, **_k: object) -> None:
+            raise AssertionError("no request should be made")
+
+        monkeypatch.setattr("integrations.yandex_cloud.rest_client.send_request", _never)
+        result = execute_yc_operation(
+            service="Compute",
+            path="/compute/v1/notARealCollection",
+            **_CREDENTIALS,
+        )
+
+        assert result["success"] is False
+        assert "not a documented read" in result["error"]
+
     def test_a_concrete_resource_path_is_sent(self, monkeypatch: pytest.MonkeyPatch) -> None:
         seen: list[str] = []
 
