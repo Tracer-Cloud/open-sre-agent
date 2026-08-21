@@ -108,7 +108,10 @@ curl -s -X POST http://localhost:3001/graphql -H "Content-Type: application/json
 
 ```bash
 export DAGSTER_ENDPOINT="http://localhost:3001"
+export OPENSRE_INTEGRATIONS_STORE_PATH="$(mktemp /tmp/opensre-dagster-demo.XXXXXX)"
 ```
+
+The empty temporary integration store prevents saved integrations from overriding the demo endpoint.
 
 Verify:
 
@@ -152,10 +155,11 @@ billing-api dependency being refused at the TCP layer."
 Cited Evidence: list dagster runs, get dagster run logs
 ```
 
-Teardown by pressing `Ctrl-C` in the terminal running `dagster dev`, then unset the demo endpoint in the second terminal:
+Teardown by pressing `Ctrl-C` in the terminal running `dagster dev`, then remove the temporary store and unset the demo variables in the second terminal:
 
 ```bash
-unset DAGSTER_ENDPOINT
+rm -f "$OPENSRE_INTEGRATIONS_STORE_PATH"
+unset DAGSTER_ENDPOINT OPENSRE_INTEGRATIONS_STORE_PATH
 ```
 
 The temporary `DAGSTER_HOME` is removed when `dagster dev` exits.

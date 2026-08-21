@@ -115,9 +115,12 @@ done
 export JENKINS_URL="http://localhost:8090"
 export JENKINS_USER="admin"
 export JENKINS_API_TOKEN="admin"  # local demo only — real deployments must use a token, not a password
+export OPENSRE_INTEGRATIONS_STORE_PATH="$(mktemp /tmp/opensre-jenkins-demo.XXXXXX)"
 ```
 
 `admin`/`admin` is only valid because this is a disposable local instance with anonymous read disabled — Jenkins accepts a real password over Basic auth the same way it accepts a token when no token is configured. Never do this against a real server.
+
+The empty temporary integration store prevents saved integrations from overriding the demo environment variables.
 
 Verify:
 
@@ -173,7 +176,8 @@ Teardown:
 ```bash
 docker rm -f jenkins-dev
 rm -rf /tmp/jenkins-init
-unset JENKINS_URL JENKINS_USER JENKINS_API_TOKEN
+rm -f "$OPENSRE_INTEGRATIONS_STORE_PATH"
+unset JENKINS_URL JENKINS_USER JENKINS_API_TOKEN OPENSRE_INTEGRATIONS_STORE_PATH
 ```
 
 ## Investigation tools
