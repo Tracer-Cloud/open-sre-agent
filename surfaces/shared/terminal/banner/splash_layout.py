@@ -21,7 +21,7 @@ from rich.console import Group, RenderableType
 from rich.table import Table
 from rich.text import Text
 
-from platform.terminal.theme import BRAND, DIM, SECONDARY
+from infrastructure.terminal.theme import BRAND, DIM, SECONDARY
 
 SplashMode = Literal["wide", "medium", "narrow"]
 

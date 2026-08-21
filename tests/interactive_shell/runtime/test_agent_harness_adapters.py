@@ -99,7 +99,7 @@ def test_finalize_does_not_reprint_an_answer_the_console_already_showed() -> Non
 def test_finalize_satisfies_the_host_contract_while_staying_silent() -> None:
     """Silent, but still a ``TurnOutput`` — the host must be able to call it."""
     # Arrange
-    from platform.turn_host.turn_output import TurnOutput
+    from infrastructure.turn_host.turn_output import TurnOutput
 
     sink = ShellOutputSink(Console(file=io.StringIO(), force_terminal=False))
 

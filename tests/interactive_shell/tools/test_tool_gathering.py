@@ -18,7 +18,7 @@ from typing import Any
 from rich.console import Console
 
 import core as runtime_module
-import platform.harness_ports as harness_ports
+import infrastructure.harness_ports as harness_ports
 from config.constants.runtime_metadata import WORKSPACE_REPO_ENV_KEYS
 from core.agent_harness.turns.evidence_driver import (
     GatherAgentFactory,

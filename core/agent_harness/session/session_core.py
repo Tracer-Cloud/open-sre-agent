@@ -35,7 +35,7 @@ from core.agent_harness.session.persistence.jsonl_store import JsonlSessionStore
 from core.agent_harness.session.persistence.ports import SessionStore
 from core.agent_harness.session_goal.goal import SessionGoal
 from core.state import MutableAgentState
-from platform.scheduling.task_registry import TaskRegistry
+from infrastructure.scheduling.task_registry import TaskRegistry
 
 #: How many recent history rows keep their full response body. Sized above
 #: the conversation window so anything a prompt or a ``*_latest_*`` lookup
@@ -333,7 +333,7 @@ class SessionCore:
     def refresh_runtime_metadata(self) -> None:
         """Rebuild :attr:`runtime_metadata`, including merged capability warnings."""
         from config.runtime_metadata import build_runtime_metadata
-        from platform.safety.sandbox.capabilities import boot_capability_warnings
+        from infrastructure.safety.sandbox.capabilities import boot_capability_warnings
 
         meta = build_runtime_metadata()
         tools = meta.get("tools")

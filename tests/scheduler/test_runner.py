@@ -6,8 +6,8 @@ from unittest.mock import patch
 
 import pytest
 
-from platform.scheduling.scheduler.loop_constants import LOOP_PROMPT_PARAM
-from platform.scheduling.scheduler.runner import (
+from infrastructure.scheduling.scheduler.loop_constants import LOOP_PROMPT_PARAM
+from infrastructure.scheduling.scheduler.runner import (
     _compute_fire_time,
     _make_trigger,
     _on_job_submitted,
@@ -18,7 +18,7 @@ from platform.scheduling.scheduler.runner import (
     resync_scheduler_jobs,
     run_task_now,
 )
-from platform.scheduling.scheduler.types import Provider, ScheduledTask, TaskKind
+from infrastructure.scheduling.scheduler.types import Provider, ScheduledTask, TaskKind
 
 
 class TestMakeTrigger:
@@ -133,8 +133,8 @@ class TestRegisterJobs:
         tmp_path,
         monkeypatch: pytest.MonkeyPatch,
     ) -> None:
-        from platform.scheduling.scheduler import store as scheduler_store
-        from platform.scheduling.scheduler.store import add_task
+        from infrastructure.scheduling.scheduler import store as scheduler_store
+        from infrastructure.scheduling.scheduler.store import add_task
 
         class _FakeScheduler:
             def __init__(self) -> None:
@@ -183,8 +183,8 @@ class TestRegisterJobs:
         tmp_path,
         monkeypatch: pytest.MonkeyPatch,
     ) -> None:
-        from platform.scheduling.scheduler import store as scheduler_store
-        from platform.scheduling.scheduler.store import add_task
+        from infrastructure.scheduling.scheduler import store as scheduler_store
+        from infrastructure.scheduling.scheduler.store import add_task
 
         class _FakeJob:
             def __init__(self, job_id: str) -> None:
@@ -237,7 +237,7 @@ class TestRegisterJobs:
             return sentinel, 2
 
         monkeypatch.setattr(
-            "platform.scheduling.scheduler.runner.start_background_scheduler",
+            "infrastructure.scheduling.scheduler.runner.start_background_scheduler",
             _start_background_scheduler,
         )
         scheduler, count = refresh_background_scheduler(None)
@@ -248,7 +248,7 @@ class TestRegisterJobs:
 class TestRunTaskNow:
     def test_nonexistent_task(self, monkeypatch: pytest.MonkeyPatch) -> None:
         monkeypatch.setattr(
-            "platform.scheduling.scheduler.runner.get_task",
+            "infrastructure.scheduling.scheduler.runner.get_task",
             lambda _task_id: None,
         )
         assert run_task_now("nonexistent") is False
@@ -261,9 +261,11 @@ class TestRunTaskNow:
             provider=Provider.TELEGRAM,
             chat_id="-100",
         )
-        monkeypatch.setattr("platform.scheduling.scheduler.runner.get_task", lambda _task_id: task)
+        monkeypatch.setattr(
+            "infrastructure.scheduling.scheduler.runner.get_task", lambda _task_id: task
+        )
 
-        with patch("platform.scheduling.scheduler.runner.execute_task") as mock_exec:
+        with patch("infrastructure.scheduling.scheduler.runner.execute_task") as mock_exec:
             mock_exec.return_value = True
             result = run_task_now("run_now_test")
 

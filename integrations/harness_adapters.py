@@ -1,10 +1,11 @@
-"""Wire integrations-layer helpers into :mod:`platform.harness_ports`."""
+"""Wire integrations-layer helpers into :mod:`infrastructure.harness_ports`."""
 
 from __future__ import annotations
 
 
 def register_harness_adapters() -> None:
     import integrations.webapp_vault as webapp_vault
+    from infrastructure.harness_ports import set_integration_resolution_adapters
     from integrations.catalog import (
         classify_integrations,
         configured_integration_services,
@@ -13,7 +14,6 @@ def register_harness_adapters() -> None:
         merge_local_integrations,
     )
     from integrations.store import STORE_PATH, load_integrations
-    from platform.harness_ports import set_integration_resolution_adapters
 
     set_integration_resolution_adapters(
         load_integrations=load_integrations,
@@ -26,8 +26,8 @@ def register_harness_adapters() -> None:
         fetch_webapp_vault=lambda: webapp_vault.fetch_webapp_org_integrations(),
     )
 
+    from infrastructure.harness_ports import set_setupable_integration_services
     from integrations.cli import setup_services
-    from platform.harness_ports import set_setupable_integration_services
 
     set_setupable_integration_services(lambda: tuple(setup_services()))
 
@@ -46,12 +46,12 @@ def register_harness_adapters() -> None:
 
 
 def _register_vcs_repo_scope_providers() -> None:
-    from integrations.github.repo_scope import GITHUB_VCS_REPO_SCOPE_PROVIDER
-    from integrations.gitlab.repo_scope import GITLAB_VCS_REPO_SCOPE_PROVIDER
-    from platform.harness_ports import (
+    from infrastructure.harness_ports import (
         clear_vcs_repo_scope_providers,
         register_vcs_repo_scope_provider,
     )
+    from integrations.github.repo_scope import GITHUB_VCS_REPO_SCOPE_PROVIDER
+    from integrations.gitlab.repo_scope import GITLAB_VCS_REPO_SCOPE_PROVIDER
 
     clear_vcs_repo_scope_providers()
     register_vcs_repo_scope_provider(GITHUB_VCS_REPO_SCOPE_PROVIDER)
@@ -98,6 +98,14 @@ def _register_incident_anchor_parsers() -> None:
 
 
 def _register_prompt_fragments() -> None:
+    from infrastructure.harness_ports import (
+        clear_action_prompt_fragments,
+        clear_assistant_prompt_fragments,
+        clear_gather_prompt_fragments,
+        register_action_prompt_fragment,
+        register_assistant_prompt_fragment,
+        register_gather_prompt_fragment,
+    )
     from integrations.buzz.action_prompt import buzz_action_prompt_fragment
     from integrations.github.action_prompt import github_action_prompt_fragment
     from integrations.github.gather_prompt import github_gather_prompt_fragment
@@ -110,14 +118,6 @@ def _register_prompt_fragments() -> None:
     from integrations.slack.assistant_prompt import slack_assistant_prompt_fragment
     from integrations.slack.gather_prompt import slack_gather_prompt_fragment
     from integrations.telegram.action_prompt import telegram_action_prompt_fragment
-    from platform.harness_ports import (
-        clear_action_prompt_fragments,
-        clear_assistant_prompt_fragments,
-        clear_gather_prompt_fragments,
-        register_action_prompt_fragment,
-        register_assistant_prompt_fragment,
-        register_gather_prompt_fragment,
-    )
 
     clear_gather_prompt_fragments()
     register_gather_prompt_fragment(github_gather_prompt_fragment)
@@ -150,11 +150,11 @@ def _register_taxonomy_profiles() -> None:
 
 
 def _register_message_context_strippers() -> None:
-    from integrations.slack.message_context import strip_slack_context_prefix
-    from platform.harness_ports import (
+    from infrastructure.harness_ports import (
         clear_message_context_prefix_strippers,
         register_message_context_prefix_stripper,
     )
+    from integrations.slack.message_context import strip_slack_context_prefix
 
     clear_message_context_prefix_strippers()
     register_message_context_prefix_stripper(strip_slack_context_prefix)
@@ -187,11 +187,11 @@ def _register_secondary_tool_sources() -> None:
 
 
 def _register_gateway_persona() -> None:
-    from integrations.slack.gateway_persona import gateway_persona_prompt_fragment
-    from platform.harness_ports import (
+    from infrastructure.harness_ports import (
         clear_gateway_persona_fragments,
         register_gateway_persona_fragment,
     )
+    from integrations.slack.gateway_persona import gateway_persona_prompt_fragment
 
     clear_gateway_persona_fragments()
     register_gateway_persona_fragment(gateway_persona_prompt_fragment)
@@ -204,15 +204,15 @@ def _register_preferred_evidence_sources() -> None:
     vendor's ``register_*`` call to stop treating it as preferred (no L0 CTA /
     no dialect draft for that id).
     """
+    from infrastructure.harness_ports import (
+        clear_metric_query_drafts,
+        clear_preferred_evidence_sources,
+    )
     from integrations.grafana.metric_drafts import register_grafana_metric_drafts
     from integrations.posthog_mcp.evidence_sources import (
         register_posthog_mcp_evidence_sources,
     )
     from integrations.posthog_mcp.metric_drafts import register_posthog_mcp_metric_drafts
-    from platform.harness_ports import (
-        clear_metric_query_drafts,
-        clear_preferred_evidence_sources,
-    )
 
     clear_preferred_evidence_sources()
     clear_metric_query_drafts()
@@ -224,10 +224,10 @@ def _register_preferred_evidence_sources() -> None:
 def _register_cli_llm_adapters() -> None:
     from typing import Any
 
+    from infrastructure.harness_ports import set_cli_llm_adapters
     from integrations.llm_cli.registry import get_cli_provider_registration
     from integrations.llm_cli.runner import CLIBackedLLMClient
     from integrations.llm_cli.text import flatten_messages_to_prompt
-    from platform.harness_ports import set_cli_llm_adapters
 
     def _build_cli_client(
         adapter: Any,

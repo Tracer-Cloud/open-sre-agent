@@ -428,8 +428,8 @@ class BedrockConverseAgentClient:
             parse_converse_output,
             to_converse_messages,
         )
-        from platform.safety.guardrails.apply import apply_guardrails_to_converse_payload
-        from platform.safety.guardrails.engine import GuardrailBlockedError
+        from infrastructure.safety.guardrails.apply import apply_guardrails_to_converse_payload
+        from infrastructure.safety.guardrails.engine import GuardrailBlockedError
 
         converse_messages = to_converse_messages(strip_internal_message_markers(messages))
         converse_messages, system = apply_guardrails_to_converse_payload(
@@ -792,7 +792,7 @@ class CLIBackedAgentClient:
     )
 
     def __init__(self, adapter: Any, *, model: str | None = None) -> None:
-        from platform.harness_ports import build_cli_client
+        from infrastructure.harness_ports import build_cli_client
 
         self._adapter = adapter
         self._model = model
@@ -825,7 +825,7 @@ class CLIBackedAgentClient:
         system: str | None = None,
         tools: list[dict[str, Any]] | None = None,
     ) -> AgentLLMResponse:
-        from platform.harness_ports import flatten_cli_messages_to_prompt
+        from infrastructure.harness_ports import flatten_cli_messages_to_prompt
 
         tool_block = ""
         if tools:

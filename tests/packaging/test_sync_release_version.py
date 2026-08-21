@@ -5,7 +5,7 @@ import sys
 
 from config.constants.paths import REPO_ROOT
 
-_SCRIPT = REPO_ROOT / "platform" / "deployment" / "packaging" / "sync_release_version.py"
+_SCRIPT = REPO_ROOT / "infrastructure" / "deployment" / "packaging" / "sync_release_version.py"
 
 
 def test_sync_release_version_updates_pyproject() -> None:

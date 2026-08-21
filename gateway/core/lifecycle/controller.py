@@ -35,13 +35,13 @@ from gateway.core.lifecycle.errors import GatewayConfigurationError
 from gateway.core.process.component_status import clear_component_status, write_component_status
 from gateway.core.process.readiness import set_ready
 from gateway.core.process.supervision import GATEWAY_PID_FILE
-from platform.turn_host.concurrency import (
+from infrastructure.turn_host.concurrency import (
     TurnConcurrencyGate,
     process_turn_gate,
     set_process_turn_gate,
 )
-from platform.turn_host.turn_callback import TurnCallback
-from platform.turn_host.turn_handler import TurnHandler
+from infrastructure.turn_host.turn_callback import TurnCallback
+from infrastructure.turn_host.turn_handler import TurnHandler
 
 # The reload watcher only polls a flag, so it should never need the full
 # shutdown budget; cap it so chat workers keep the rest.
@@ -123,15 +123,17 @@ class GatewayController:
         self.components.update(self.surfaces.statuses)
 
     def start_scheduler(self, *, logger: logging.Logger) -> None:
-        """Host ``platform.scheduling.scheduler`` here — runners and APScheduler stay there.
+        """Host ``infrastructure.scheduling.scheduler`` here — runners and APScheduler stay there.
 
         Not a gateway surface. CLI/shell mutate the task store and call
         :func:`request_scheduler_reload`; this process only installs gated
         runners and starts :func:`start_background_scheduler`.
         """
         from bootstrap.adapters import scheduler_runners
-        from platform.scheduling.scheduler.reload_signal import consume_scheduler_reload_request
-        from platform.scheduling.scheduler.runner import start_background_scheduler
+        from infrastructure.scheduling.scheduler.reload_signal import (
+            consume_scheduler_reload_request,
+        )
+        from infrastructure.scheduling.scheduler.runner import start_background_scheduler
 
         # Investigation + multiplexed scheduled-agent runners (Sentry digest, etc.).
         # A scheduled run costs a turn, so both take the same capacity gate chat
@@ -193,7 +195,7 @@ class GatewayController:
             return
 
         def _watch() -> None:
-            from platform.scheduling.scheduler.reload_signal import (
+            from infrastructure.scheduling.scheduler.reload_signal import (
                 RELOAD_POLL_SECONDS,
                 consume_scheduler_reload_request,
             )
@@ -218,7 +220,7 @@ class GatewayController:
 
     def _reload_scheduler(self, logger: logging.Logger) -> None:
         """Resync the live scheduler (or start one) from the current task store."""
-        from platform.scheduling.scheduler.runner import refresh_background_scheduler
+        from infrastructure.scheduling.scheduler.runner import refresh_background_scheduler
 
         scheduler, task_count = refresh_background_scheduler(self.scheduler)
         self.scheduler = scheduler

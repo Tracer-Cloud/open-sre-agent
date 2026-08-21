@@ -8,8 +8,8 @@ from typing import Any
 
 from core.domain.types.tools import ToolSurface
 from core.tool import BaseTool
+from infrastructure.evidence.evidence_compaction import compact_logs, summarize_counts
 from integrations.splunk._client import make_client, unavailable
-from platform.evidence.evidence_compaction import compact_logs, summarize_counts
 
 _ERROR_KEYWORDS = (
     "error",

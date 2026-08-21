@@ -5,7 +5,7 @@ and whose PID is tracked in ``gateway.pid``.
 
 This is process supervision, not the task scheduler. The caller supplies the
 child's ``argv``. This module never imports CLI, never names
-``surfaces.gateway_entry``, and never starts ``platform.scheduling.scheduler`` itself.
+``surfaces.gateway_entry``, and never starts ``infrastructure.scheduling.scheduler`` itself.
 """
 
 from __future__ import annotations

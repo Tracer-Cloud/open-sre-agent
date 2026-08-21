@@ -85,7 +85,7 @@ def test_provider_recomputes_when_an_integration_is_connected(monkeypatch) -> No
 
 def test_provider_recomputes_when_the_scheduler_store_changes(monkeypatch) -> None:
     # Arrange: integrations are unchanged, so only the store fingerprint moves.
-    import platform.setup_state as setup_state
+    import infrastructure.setup_state as setup_state
     from core.agent_harness.prompts.grounding.provider import DefaultPromptContextProvider
 
     provider = DefaultPromptContextProvider(_StubSession(("slack",)))

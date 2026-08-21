@@ -37,7 +37,7 @@ from core.agent_harness.turns.handoff_policy import (
 )
 from core.agent_harness.turns.metric_query_floor import apply_unformed_metric_floor
 from core.agent_harness.turns.turn_route import RouteIntent
-from platform.harness_ports import integration_setup_command
+from infrastructure.harness_ports import integration_setup_command
 
 
 def should_suppress_want_me_to_for_session_goal(session: SessionState) -> bool:

@@ -9,7 +9,7 @@ from enum import StrEnum
 from pydantic import Field, field_validator, model_validator
 
 from config.strict_config import StrictConfigModel
-from platform.scheduling.scheduler.types import Provider
+from infrastructure.scheduling.scheduler.types import Provider
 
 # Providers the watchdog alarm sender actually implements (see runner.py's
 # dispatch). Provider has two more members (slack, discord) that cron

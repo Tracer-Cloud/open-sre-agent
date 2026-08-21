@@ -2,10 +2,11 @@
 
 from __future__ import annotations
 
+import platform
+
 from rich.console import Console
 
-import platform
-from platform.terminal.prompt_support import print_session_resume_hint
+from infrastructure.terminal.prompt_support import print_session_resume_hint
 from surfaces.interactive_shell.command_registry.types import SlashCommand
 from surfaces.interactive_shell.runtime import Session
 from surfaces.interactive_shell.ui import (
@@ -21,7 +22,7 @@ from surfaces.interactive_shell.ui import (
 
 def _flush_analytics_on_exit(console: Console) -> None:
     """Best-effort PostHog drain with a spinner so /quit is not silent or fire-and-forget."""
-    from platform.analytics.provider import analytics_needs_flush, shutdown_analytics
+    from infrastructure.analytics.provider import analytics_needs_flush, shutdown_analytics
 
     if not analytics_needs_flush():
         shutdown_analytics(flush=False)

@@ -26,10 +26,10 @@ from rich.console import Console
 from rich.rule import Rule
 from rich.text import Text
 
-from platform.process.exit_codes import ERROR as EXIT_ERROR
-from platform.process.exit_codes import SUCCESS
-from platform.process.runtime_flags import is_json_output
-from platform.terminal.theme import (
+from infrastructure.process.exit_codes import ERROR as EXIT_ERROR
+from infrastructure.process.exit_codes import SUCCESS
+from infrastructure.process.runtime_flags import is_json_output
+from infrastructure.terminal.theme import (
     DIM,
     ERROR,
     GLYPH_ERROR,

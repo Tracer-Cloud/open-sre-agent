@@ -7,8 +7,8 @@ from typing import Any
 from rich.console import Console, ConsoleOptions, RenderResult
 from rich.text import Text
 
-from platform.observability.trace.redaction import format_json_preview
-from platform.terminal.theme import (
+from infrastructure.observability.trace.redaction import format_json_preview
+from infrastructure.terminal.theme import (
     BRAND,
     DIM,
     ERROR,
@@ -252,7 +252,7 @@ class _EventLogDisplay:
             return
         from rich.markdown import Markdown
 
-        from platform.terminal.theme import MARKDOWN_THEME
+        from infrastructure.terminal.theme import MARKDOWN_THEME
 
         with self._live.console.use_theme(MARKDOWN_THEME):
             self._live.console.print(Markdown(text, code_theme="ansi_dark"))

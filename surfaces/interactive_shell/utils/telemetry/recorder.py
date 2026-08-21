@@ -11,7 +11,7 @@ from typing import Any
 from config.version import get_opensre_version
 from core.agent_harness.spi.accounting import LlmRunInfo
 from core.llm_invoke_errors import LLM_PROVIDER_FAILURE_KINDS, classify_provider_error_kind
-from platform.analytics.provider import JsonValue
+from infrastructure.analytics.provider import JsonValue
 from surfaces.interactive_shell.prompt_history.policy import redact_text
 from surfaces.interactive_shell.utils.telemetry.config import PromptLogConfig
 from surfaces.interactive_shell.utils.telemetry.integration_snapshot import (

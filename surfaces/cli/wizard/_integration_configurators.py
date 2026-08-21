@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from platform.terminal.theme import SECONDARY, WARNING
+from infrastructure.terminal.theme import SECONDARY, WARNING
 from surfaces.cli.wizard._ui import _choose, _console, _step
 from surfaces.cli.wizard.configurators.alerting import (
     _configure_alertmanager,

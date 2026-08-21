@@ -11,7 +11,7 @@ import ast
 import pathlib
 
 from bootstrap.adapters import install_notification_adapters
-from platform.delivery.notifications.outbound_registry import (
+from infrastructure.delivery.notifications.outbound_registry import (
     BACKGROUND_RCA,
     clear_outbound_adapters,
     get_outbound_adapter,
@@ -73,7 +73,15 @@ def test_only_the_composition_root_registers_notification_adapters() -> None:
     # exactly one place. A second loader elsewhere would drift, and a comment
     # asking people not to add one is not enforcement.
     repo = pathlib.Path(__file__).resolve().parents[2]
-    packages = ("bootstrap", "surfaces", "gateway", "tools", "integrations", "platform", "core")
+    packages = (
+        "bootstrap",
+        "surfaces",
+        "gateway",
+        "tools",
+        "integrations",
+        "infrastructure",
+        "core",
+    )
 
     # Act
     definers = sorted(

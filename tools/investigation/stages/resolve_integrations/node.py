@@ -5,8 +5,8 @@ from __future__ import annotations
 from typing import Any
 
 from core.state import InvestigationState
-from platform.harness_ports import resolve_integrations_with_metadata
-from platform.observability import get_progress_tracker as get_tracker
+from infrastructure.harness_ports import resolve_integrations_with_metadata
+from infrastructure.observability import get_progress_tracker as get_tracker
 
 
 def resolve_integrations(state: InvestigationState) -> dict[str, Any]:

@@ -6,6 +6,7 @@ import re
 from dataclasses import dataclass, replace
 from typing import Any
 
+from infrastructure.safety.masking import MaskingContext, MaskingPolicy
 from integrations.github.repo_scope import detect_git_remote_repo_scope
 from integrations.github.tools.ci_fix.errors import (
     ERR_INVALID_INPUT,
@@ -14,7 +15,6 @@ from integrations.github.tools.ci_fix.errors import (
     GitHubCiFixError,
 )
 from integrations.github.tools.ci_fix.gh import run_gh_json, run_gh_text
-from platform.safety.masking import MaskingContext, MaskingPolicy
 
 _PR_URL_RE = re.compile(
     r"https?://github\.com/"

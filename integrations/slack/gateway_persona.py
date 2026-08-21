@@ -1,6 +1,6 @@
 """Slack/gateway teammate persona prompt fragments.
 
-Registered with :func:`platform.harness_ports.register_gateway_persona_fragment`
+Registered with :func:`infrastructure.harness_ports.register_gateway_persona_fragment`
 from ``integrations/harness_adapters.py``. Applied by
 ``core.agent_harness.prompts.assistant`` only when the turn's
 surface is ``"gateway"`` — core owns the CLI persona wording (see

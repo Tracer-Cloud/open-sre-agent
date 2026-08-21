@@ -18,8 +18,8 @@ from datetime import UTC, datetime
 import boto3
 import requests
 
+from infrastructure.observability.trace.hook import traceable
 from integrations.grafana.client import get_grafana_client
-from platform.observability.trace.hook import traceable
 from surfaces.cli.investigation import run_investigation_cli
 from tests.shared.e2e_rca_checks import (
     audit_key_mentioned,

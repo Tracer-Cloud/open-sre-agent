@@ -7,9 +7,9 @@ from typing import Any
 
 import httpx
 
+from infrastructure.observability.errors.service import capture_service_error
 from integrations._validation_helpers import report_validation_failure
 from integrations.config_models import JiraIntegrationConfig
-from platform.observability.errors.service import capture_service_error
 
 logger = logging.getLogger(__name__)
 

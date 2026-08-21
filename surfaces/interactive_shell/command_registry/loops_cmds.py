@@ -7,7 +7,7 @@ from dataclasses import dataclass, field
 from rich.console import Console
 from rich.markup import escape
 
-from platform.scheduling.scheduler.loop_constants import LOOP_TIME_PARAM
+from infrastructure.scheduling.scheduler.loop_constants import LOOP_TIME_PARAM
 from surfaces.interactive_shell.command_registry.types import SlashCommand
 from surfaces.interactive_shell.runtime import Session
 from surfaces.interactive_shell.ui import (
@@ -208,7 +208,7 @@ def _cmd_loops(session: Session, console: Console, args: list[str]) -> bool:
 
 
 def _cmd_loops_list(session: Session, console: Console, args: list[str]) -> bool:  # noqa: ARG001
-    from platform.scheduling.scheduler.loops import list_loop_summaries
+    from infrastructure.scheduling.scheduler.loops import list_loop_summaries
 
     sub = args[0].lower() if args else "list"
     include_disabled = sub != "active"
@@ -262,7 +262,7 @@ def _cmd_loops_list(session: Session, console: Console, args: list[str]) -> bool
 
 
 def _cmd_loops_add(session: Session, console: Console, args: list[str]) -> bool:  # noqa: ARG001
-    from platform.scheduling.scheduler.loops import create_manual_loop
+    from infrastructure.scheduling.scheduler.loops import create_manual_loop
 
     parsed, parse_error = _parse_add_args(args)
     if parsed is None:
@@ -306,7 +306,7 @@ def _cmd_loops_add(session: Session, console: Console, args: list[str]) -> bool:
 
 
 def _cmd_loops_run(session: Session, console: Console, args: list[str]) -> bool:  # noqa: ARG001
-    from platform.scheduling.scheduler.loops import resolve_loop_summary
+    from infrastructure.scheduling.scheduler.loops import resolve_loop_summary
 
     if not args:
         console.print(f"[{ERROR}]usage:[/] /loops run LOOP_ID")
@@ -326,7 +326,7 @@ def _cmd_loops_set_enabled(
     *,
     enabled: bool,
 ) -> bool:  # noqa: ARG001
-    from platform.scheduling.scheduler.loops import set_loop_enabled
+    from infrastructure.scheduling.scheduler.loops import set_loop_enabled
 
     verb = "start" if enabled else "stop"
     if not args:
@@ -347,7 +347,7 @@ def _cmd_loops_set_enabled(
 
 
 def _cmd_loops_delete(session: Session, console: Console, args: list[str]) -> bool:  # noqa: ARG001
-    from platform.scheduling.scheduler.loops import delete_loop
+    from infrastructure.scheduling.scheduler.loops import delete_loop
 
     if not args:
         console.print(f"[{ERROR}]usage:[/] /loops delete LOOP_ID")
@@ -366,7 +366,7 @@ def _cmd_loops_delete(session: Session, console: Console, args: list[str]) -> bo
 
 
 def _cmd_loops_next(session: Session, console: Console, args: list[str]) -> bool:  # noqa: ARG001
-    from platform.scheduling.scheduler.loops import resolve_loop_summary
+    from infrastructure.scheduling.scheduler.loops import resolve_loop_summary
 
     if not args:
         console.print(f"[{ERROR}]usage:[/] /loops next LOOP_ID")
@@ -391,7 +391,7 @@ def _cmd_loops_next(session: Session, console: Console, args: list[str]) -> bool
 
 
 def _cmd_loops_messages(session: Session, console: Console, args: list[str]) -> bool:  # noqa: ARG001
-    from platform.scheduling.scheduler.local_delivery import get_loop_messages
+    from infrastructure.scheduling.scheduler.local_delivery import get_loop_messages
 
     limit = 20
     if args:
@@ -428,7 +428,7 @@ def _cmd_loops_messages(session: Session, console: Console, args: list[str]) -> 
 
 def _run_loop_task_ids_once(console: Console, task_ids: tuple[str, ...]) -> bool:
     from bootstrap.process import SCHEDULED_COMMAND_PROFILE, configure_process
-    from platform.scheduling.scheduler.runner import run_task_now
+    from infrastructure.scheduling.scheduler.runner import run_task_now
 
     configure_process(SCHEDULED_COMMAND_PROFILE)
     failures: list[str] = []

@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import click
 
-from platform.process.runtime_flags import (
+from infrastructure.process.runtime_flags import (
     configure_runtime_flags,
     is_debug,
     is_json_output,

@@ -14,7 +14,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from platform.scheduling.scheduler.runners import SchedulerRunners
+    from infrastructure.scheduling.scheduler.runners import SchedulerRunners
 
 
 def install_investigation_api() -> None:
@@ -36,7 +36,7 @@ def install_harness_adapters() -> None:
     nothing until both registries have been installed. Also installs the
     investigation payload runner used by :meth:`AgentSession.investigate`.
     """
-    import platform.harness_ports as harness_ports
+    import infrastructure.harness_ports as harness_ports
     from integrations.harness_adapters import (
         register_harness_adapters as register_integrations,
     )
@@ -72,14 +72,14 @@ def install_notification_adapters() -> tuple[str, ...]:
     ``clear_outbound_adapters()`` runs no module body and would leave the
     registry empty while this function reported success.
     """
+    from infrastructure.delivery.notifications.outbound_registry import (
+        register_outbound_adapter,
+        registered_outbound_adapter_names,
+    )
     from integrations.buzz.background_adapter import buzz_background_adapter
     from integrations.rocketchat.background_adapter import rocketchat_background_adapter
     from integrations.smtp.background_adapter import email_background_adapter
     from integrations.telegram.background_adapter import telegram_background_adapter
-    from platform.delivery.notifications.outbound_registry import (
-        register_outbound_adapter,
-        registered_outbound_adapter_names,
-    )
 
     for adapter in (
         buzz_background_adapter,
@@ -97,8 +97,8 @@ def scheduler_runners() -> SchedulerRunners:
     The only layer that may see both ``integrations`` and ``tools``, so the
     bundle is built here and handed to whichever host installs it.
     """
+    from infrastructure.scheduling.scheduler.runners import SchedulerRunners
     from integrations.scheduled_agent_bootstrap import run_scheduled_agent_digest
-    from platform.scheduling.scheduler.runners import SchedulerRunners
     from tools.investigation.scheduler_bootstrap import run_scheduled_investigation
 
     return SchedulerRunners(

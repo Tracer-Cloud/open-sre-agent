@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from unittest.mock import patch
 
-from platform.safety.sandbox.runner import SandboxResult
+from infrastructure.safety.sandbox.runner import SandboxResult
 from tests.tools.conftest import BaseToolContract
 from tools.registry import clear_tool_registry_cache, get_registered_tool_map
 from tools.system.python_execution_tool import execute_python_code

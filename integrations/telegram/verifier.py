@@ -6,8 +6,8 @@ from typing import Any
 
 import requests
 
+from infrastructure.delivery.notifications.redaction import redact_token
 from integrations.verification import register_verifier, result
-from platform.delivery.notifications.redaction import redact_token
 
 
 @register_verifier("telegram")

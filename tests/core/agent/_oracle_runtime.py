@@ -21,7 +21,7 @@ import tools.interactive_shell.actions.shell as shell_tool
 import tools.interactive_shell.actions.slash as slash_tool
 import tools.interactive_shell.actions.synthetic as synthetic_tool
 import tools.interactive_shell.actions.task_cancel as task_cancel_tool
-from platform.analytics.repl_context import bound_repl_turn_context
+from infrastructure.analytics.repl_context import bound_repl_turn_context
 from surfaces.interactive_shell.runtime.shell_turn_execution import execute_shell_turn
 from surfaces.interactive_shell.session import Session
 from surfaces.interactive_shell.utils.telemetry import PromptRecorder

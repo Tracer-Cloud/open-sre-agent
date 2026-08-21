@@ -4,43 +4,43 @@ This file is not testing platform code that changes often - it exists as a
 worked example for anyone adding a new cloud backend (an S3-alternative, a
 self-hosted blob store, etc.) to remote sync. The whole contract is:
 
-1. Implement the four :class:`~platform.filestorage.ports.ObjectStore`
+1. Implement the four :class:`~infrastructure.filestorage.ports.ObjectStore`
    protocol methods: ``list_objects``, ``get_object``, ``put_object``,
    ``describe``.
 2. Scope every key through ``config.key_for()`` on write/read, and strip the
    configured prefix back off on list. Every built-in provider does this
-   (see ``platform/filestorage/providers/_s3_shared.py``'s ``_strip_prefix``,
+   (see ``infrastructure/filestorage/providers/_s3_shared.py``'s ``_strip_prefix``,
    used by ``aws.py``/``s3compat.py``, and the same pattern in
    ``gcs.py``/``azure.py``/``vercel.py``) so two configs sharing one bucket
    under different prefixes do not collide.
 3. Record each object's real write time and return that same value on every
    subsequent listing, never a value computed fresh inside ``list_objects``.
    The engine's push/pull compare ``last_modified`` to decide which side is
-   newer (:func:`~platform.filestorage.engine.push`,
-   :func:`~platform.filestorage.engine._should_download`); a timestamp that
+   newer (:func:`~infrastructure.filestorage.engine.push`,
+   :func:`~infrastructure.filestorage.engine._should_download`); a timestamp that
    changes on every listing call breaks that comparison silently.
 4. Protect any shared state ``put_object`` mutates with a lock. A push calls
    it concurrently - up to ``max_parallel_uploads`` at once, a cap the
-   provider declares to :func:`~platform.filestorage.providers.registry.register_object_store`
-   (see the concurrency note on :meth:`~platform.filestorage.ports.ObjectStore.put_object`
+   provider declares to :func:`~infrastructure.filestorage.providers.registry.register_object_store`
+   (see the concurrency note on :meth:`~infrastructure.filestorage.ports.ObjectStore.put_object`
    itself) - so an implementation that mutates shared state unprotected can
    silently lose writes under a real multi-file push.
-5. Call :func:`~platform.filestorage.providers.registry.register_object_store`
+5. Call :func:`~infrastructure.filestorage.providers.registry.register_object_store`
    with a provider name and a factory - typically at import time in your own
-   provider module, the way ``platform/filestorage/providers/aws.py`` does.
+   provider module, the way ``infrastructure/filestorage/providers/aws.py`` does.
 6. Nothing else changes: ``RemoteSyncConfig(provider="your-name", ...)`` plus
-   :func:`~platform.filestorage.providers.registry.build_object_store` resolve
+   :func:`~infrastructure.filestorage.providers.registry.build_object_store` resolve
    to your factory automatically - the engine, CLI, and REPL never import a
-   vendor module directly. :func:`~platform.filestorage.engine.push` and
-   :func:`~platform.filestorage.engine.pull` talk only to the ``ObjectStore``
+   vendor module directly. :func:`~infrastructure.filestorage.engine.push` and
+   :func:`~infrastructure.filestorage.engine.pull` talk only to the ``ObjectStore``
    protocol, so a new backend gets the full sync engine for free, exercised
    below with real temp directories rather than mocks.
 7. Tests unregister what they registered (see the ``fake_provider`` fixture)
    so a test-only provider never leaks into another test file that calls
-   :func:`~platform.filestorage.providers.registry.registered_providers` or
+   :func:`~infrastructure.filestorage.providers.registry.registered_providers` or
    ``build_object_store``.
 
-See ``platform/filestorage/providers/aws.py`` for the same steps against a
+See ``infrastructure/filestorage/providers/aws.py`` for the same steps against a
 real SDK.
 """
 
@@ -54,16 +54,16 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from platform.filestorage.config import RemoteSyncConfig
-from platform.filestorage.engine import content_tag, pull, push
-from platform.filestorage.enums import SyncRootName
-from platform.filestorage.ports import RemoteObject
-from platform.filestorage.providers.registry import (
+from infrastructure.filestorage.config import RemoteSyncConfig
+from infrastructure.filestorage.engine import content_tag, pull, push
+from infrastructure.filestorage.enums import SyncRootName
+from infrastructure.filestorage.ports import RemoteObject
+from infrastructure.filestorage.providers.registry import (
     build_object_store,
     register_object_store,
     unregister_object_store,
 )
-from platform.filestorage.syncable import SyncRoot
+from infrastructure.filestorage.syncable import SyncRoot
 
 _PROVIDER_NAME = "fake"
 
@@ -144,7 +144,7 @@ def fake_provider() -> Iterator[dict[str, tuple[bytes, datetime]]]:
     """Registers "fake" for one test and unregisters it afterward.
 
     Mirrors how a real provider module registers a factory at import time
-    (``platform/filestorage/providers/aws.py``'s
+    (``infrastructure/filestorage/providers/aws.py``'s
     ``register_object_store(PROVIDER_NAME, _factory, ...)``), scoped to a
     single test so no fake store leaks into ``build_object_store`` for any
     other test file. Yields the backing ``bucket`` dict so a test can build
@@ -228,8 +228,8 @@ def test_put_object_records_a_stable_write_time_not_a_fresh_one_per_listing(
     """Catches a template that computes last_modified inside list_objects.
 
     The engine's push/pull decide which side is newer by comparing
-    ``last_modified`` (see :func:`~platform.filestorage.engine.push` and
-    :func:`~platform.filestorage.engine._should_download`). A value
+    ``last_modified`` (see :func:`~infrastructure.filestorage.engine.push` and
+    :func:`~infrastructure.filestorage.engine._should_download`). A value
     recomputed on every listing call would make every remote object look
     freshly written on every list, which can make push wrongly keep back a
     local edit that is actually newer, or make pull wrongly re-download an
@@ -250,7 +250,7 @@ def test_put_object_records_a_stable_write_time_not_a_fresh_one_per_listing(
 def test_put_object_is_safe_under_the_engines_real_concurrent_push(tmp_path: Path) -> None:
     """``put_object`` is called concurrently by a real push - see step 4 in
     the module docstring and the concurrency note on
-    :meth:`~platform.filestorage.ports.ObjectStore.put_object` itself - up to
+    :meth:`~infrastructure.filestorage.ports.ObjectStore.put_object` itself - up to
     ``max_parallel_uploads`` objects in flight at once. A barrier, not a mere
     file count, is what proves genuine overlap happened rather than the
     uploads happening to run one after another; the same technique is used

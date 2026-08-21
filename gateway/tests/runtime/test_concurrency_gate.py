@@ -12,13 +12,13 @@ import pytest
 from gateway.tests.runtime.concurrency_limited_handler import (
     ConcurrencyLimitedTurnHandler,
 )
-from platform.deployment.contracts.models import SizeProfile
-from platform.scheduling.scheduler.agent_runner import (
+from infrastructure.deployment.contracts.models import SizeProfile
+from infrastructure.scheduling.scheduler.agent_runner import (
     invoke_agent_runner,
     register_agent_runner,
 )
-from platform.scheduling.scheduler.runners import SchedulerRunners
-from platform.turn_host.concurrency import TurnConcurrencyGate
+from infrastructure.scheduling.scheduler.runners import SchedulerRunners
+from infrastructure.turn_host.concurrency import TurnConcurrencyGate
 
 
 @pytest.mark.parametrize(
@@ -86,7 +86,7 @@ def test_gateway_turn_handler_gate_refuses_excess_without_second_wrapper(
     """Production path: capacity lives on TurnHandler itself."""
     from rich.console import Console
 
-    from platform.turn_host.turn_handler import TurnHandler
+    from infrastructure.turn_host.turn_handler import TurnHandler
 
     gate = TurnConcurrencyGate(1)
     entered = threading.Event()
@@ -125,7 +125,7 @@ def test_gateway_turn_handler_gate_refuses_excess_without_second_wrapper(
 
 
 def test_process_turn_gate_is_shared_singleton(monkeypatch: pytest.MonkeyPatch) -> None:
-    from platform.turn_host.concurrency import (
+    from infrastructure.turn_host.concurrency import (
         process_turn_gate,
         reset_process_turn_gate_for_tests,
         set_process_turn_gate,
@@ -149,7 +149,7 @@ def test_path2_sync_investigate_busy_drops_when_gate_full(
     from fastapi.testclient import TestClient
 
     from gateway.web import webapp
-    from platform.turn_host.concurrency import (
+    from infrastructure.turn_host.concurrency import (
         TurnConcurrencyGate,
         reset_process_turn_gate_for_tests,
         set_process_turn_gate,
@@ -159,7 +159,7 @@ def test_path2_sync_investigate_busy_drops_when_gate_full(
     gate = TurnConcurrencyGate(1)
     assert gate.try_acquire() is True  # simulate active chat turn
     set_process_turn_gate(gate)
-    monkeypatch.setattr(webapp, "_gateway_auth_error", lambda _req: None)
+    monkeypatch.setattr(webapp, "require_local_or_token", lambda _req: None)
 
     client = TestClient(webapp.app)
     resp = client.post("/investigate", json={"raw_alert": {"alert_name": "x"}})
@@ -175,7 +175,7 @@ def test_investigation_worker_waits_for_the_same_chat_capacity(
 ) -> None:
     from gateway.core.storage.investigations.repository import InMemoryInvestigationRepository
     from gateway.web.worker import InvestigationWorker
-    from platform.turn_host.concurrency import (
+    from infrastructure.turn_host.concurrency import (
         TurnConcurrencyGate,
         reset_process_turn_gate_for_tests,
         set_process_turn_gate,

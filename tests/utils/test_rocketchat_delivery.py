@@ -8,13 +8,13 @@ from unittest.mock import MagicMock
 
 import pytest
 
+from infrastructure.delivery.notifications.delivery_transport import DeliveryResponse
 from integrations.rocketchat import delivery as rocketchat_delivery
 from integrations.rocketchat.delivery import (
     post_rocketchat_message,
     post_rocketchat_webhook,
     send_rocketchat_report,
 )
-from platform.delivery.notifications.delivery_transport import DeliveryResponse
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -41,7 +41,7 @@ def _ok_body(message_id: str = "msg-123") -> dict[str, Any]:
 
 def test_post_message_success(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(
-        "platform.delivery.notifications.delivery_transport.httpx.post",
+        "infrastructure.delivery.notifications.delivery_transport.httpx.post",
         lambda *_a, **_kw: _mock_response(200, _ok_body()),
     )
     ok, error, message_id = post_rocketchat_message(_SERVER, "#incidents", "hello", "tok", "u1")
@@ -61,7 +61,9 @@ def test_post_message_sends_correct_payload(monkeypatch: pytest.MonkeyPatch) -> 
         captured["headers"] = headers
         return _mock_response(200, _ok_body())
 
-    monkeypatch.setattr("platform.delivery.notifications.delivery_transport.httpx.post", _fake_post)
+    monkeypatch.setattr(
+        "infrastructure.delivery.notifications.delivery_transport.httpx.post", _fake_post
+    )
     attachments = [{"title": "Test"}]
     post_rocketchat_message(
         f"{_SERVER}/", "#incidents", "hello", "tok", "u1", attachments=attachments
@@ -81,14 +83,16 @@ def test_post_message_omits_attachments_when_empty(monkeypatch: pytest.MonkeyPat
         captured["json"] = json
         return _mock_response(200, _ok_body())
 
-    monkeypatch.setattr("platform.delivery.notifications.delivery_transport.httpx.post", _fake_post)
+    monkeypatch.setattr(
+        "infrastructure.delivery.notifications.delivery_transport.httpx.post", _fake_post
+    )
     post_rocketchat_message(_SERVER, "#incidents", "hello", "tok", "u1")
     assert "attachments" not in captured["json"]
 
 
 def test_post_message_failure_returns_api_error(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(
-        "platform.delivery.notifications.delivery_transport.httpx.post",
+        "infrastructure.delivery.notifications.delivery_transport.httpx.post",
         lambda *_a, **_kw: _mock_response(400, {"success": False, "error": "error-room-not-found"}),
     )
     ok, error, message_id = post_rocketchat_message(_SERVER, "#nope", "hello", "tok", "u1")
@@ -99,7 +103,7 @@ def test_post_message_failure_returns_api_error(monkeypatch: pytest.MonkeyPatch)
 
 def test_post_message_http_200_but_success_false_fails(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(
-        "platform.delivery.notifications.delivery_transport.httpx.post",
+        "infrastructure.delivery.notifications.delivery_transport.httpx.post",
         lambda *_a, **_kw: _mock_response(200, {"success": False, "error": "invalid-channel"}),
     )
     ok, error, _ = post_rocketchat_message(_SERVER, "#incidents", "hello", "tok", "u1")
@@ -111,7 +115,9 @@ def test_post_message_exception_returns_false(monkeypatch: pytest.MonkeyPatch) -
     def _raise(*_a: Any, **_kw: Any) -> None:
         raise ConnectionError("network down")
 
-    monkeypatch.setattr("platform.delivery.notifications.delivery_transport.httpx.post", _raise)
+    monkeypatch.setattr(
+        "infrastructure.delivery.notifications.delivery_transport.httpx.post", _raise
+    )
     ok, error, message_id = post_rocketchat_message(_SERVER, "#incidents", "hello", "tok", "u1")
     assert ok is False
     assert "network down" in error
@@ -237,7 +243,9 @@ def test_send_report_posts_attachment(monkeypatch: pytest.MonkeyPatch) -> None:
         captured["json"] = json
         return _mock_response(200, _ok_body())
 
-    monkeypatch.setattr("platform.delivery.notifications.delivery_transport.httpx.post", _fake_post)
+    monkeypatch.setattr(
+        "infrastructure.delivery.notifications.delivery_transport.httpx.post", _fake_post
+    )
     ok, error = send_rocketchat_report("Report text", _CTX)
 
     assert ok is True
@@ -251,7 +259,7 @@ def test_send_report_posts_attachment(monkeypatch: pytest.MonkeyPatch) -> None:
 
 def test_send_report_returns_false_on_api_error(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(
-        "platform.delivery.notifications.delivery_transport.httpx.post",
+        "infrastructure.delivery.notifications.delivery_transport.httpx.post",
         lambda *_a, **_kw: _mock_response(403, {"success": False, "error": "unauthorized"}),
     )
     ok, error = send_rocketchat_report("Report", _CTX)
@@ -263,7 +271,7 @@ def test_send_report_truncates_text_to_4096(monkeypatch: pytest.MonkeyPatch) -> 
     captured: dict[str, Any] = {}
 
     monkeypatch.setattr(
-        "platform.delivery.notifications.delivery_transport.httpx.post",
+        "infrastructure.delivery.notifications.delivery_transport.httpx.post",
         lambda *_a, **kw: (
             captured.update({"attachments": kw["json"].get("attachments", [])})
             or _mock_response(200, _ok_body())
@@ -291,7 +299,9 @@ def test_post_webhook_success(monkeypatch: pytest.MonkeyPatch) -> None:
         captured["json"] = json
         return _mock_response(200, {"success": True})
 
-    monkeypatch.setattr("platform.delivery.notifications.delivery_transport.httpx.post", _fake_post)
+    monkeypatch.setattr(
+        "infrastructure.delivery.notifications.delivery_transport.httpx.post", _fake_post
+    )
     attachments = [{"title": "Test"}]
     ok, error = post_rocketchat_webhook(_WEBHOOK, "hello", attachments=attachments)
 
@@ -309,14 +319,16 @@ def test_post_webhook_omits_attachments_when_empty(monkeypatch: pytest.MonkeyPat
         captured["json"] = json
         return _mock_response(200, {"success": True})
 
-    monkeypatch.setattr("platform.delivery.notifications.delivery_transport.httpx.post", _fake_post)
+    monkeypatch.setattr(
+        "infrastructure.delivery.notifications.delivery_transport.httpx.post", _fake_post
+    )
     post_rocketchat_webhook(_WEBHOOK, "hello")
     assert "attachments" not in captured["json"]
 
 
 def test_post_webhook_failure_returns_api_error(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(
-        "platform.delivery.notifications.delivery_transport.httpx.post",
+        "infrastructure.delivery.notifications.delivery_transport.httpx.post",
         lambda *_a, **_kw: _mock_response(400, {"success": False, "error": "Invalid integration"}),
     )
     ok, error = post_rocketchat_webhook(_WEBHOOK, "hello")
@@ -326,7 +338,7 @@ def test_post_webhook_failure_returns_api_error(monkeypatch: pytest.MonkeyPatch)
 
 def test_post_webhook_http_200_but_success_false_fails(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(
-        "platform.delivery.notifications.delivery_transport.httpx.post",
+        "infrastructure.delivery.notifications.delivery_transport.httpx.post",
         lambda *_a, **_kw: _mock_response(200, {"success": False}),
     )
     ok, _error = post_rocketchat_webhook(_WEBHOOK, "hello")
@@ -373,7 +385,9 @@ def test_send_report_prefers_webhook_over_pat(monkeypatch: pytest.MonkeyPatch) -
         captured["json"] = json
         return _mock_response(200, {"success": True})
 
-    monkeypatch.setattr("platform.delivery.notifications.delivery_transport.httpx.post", _fake_post)
+    monkeypatch.setattr(
+        "infrastructure.delivery.notifications.delivery_transport.httpx.post", _fake_post
+    )
     ok, error = send_rocketchat_report("Report text", {**_CTX, "webhook_url": _WEBHOOK})
 
     assert ok is True
@@ -392,7 +406,9 @@ def test_send_report_webhook_only_context(monkeypatch: pytest.MonkeyPatch) -> No
         captured["url"] = url
         return _mock_response(200, {"success": True})
 
-    monkeypatch.setattr("platform.delivery.notifications.delivery_transport.httpx.post", _fake_post)
+    monkeypatch.setattr(
+        "infrastructure.delivery.notifications.delivery_transport.httpx.post", _fake_post
+    )
     ok, _ = send_rocketchat_report("Report", {"webhook_url": _WEBHOOK})
     assert ok is True
     assert captured["url"] == _WEBHOOK
@@ -400,7 +416,7 @@ def test_send_report_webhook_only_context(monkeypatch: pytest.MonkeyPatch) -> No
 
 def test_send_report_webhook_failure_propagates_error(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(
-        "platform.delivery.notifications.delivery_transport.httpx.post",
+        "infrastructure.delivery.notifications.delivery_transport.httpx.post",
         lambda *_a, **_kw: _mock_response(400, {"success": False, "error": "disabled"}),
     )
     ok, error = send_rocketchat_report("Report", {"webhook_url": _WEBHOOK})

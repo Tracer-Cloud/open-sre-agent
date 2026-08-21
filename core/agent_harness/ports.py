@@ -14,6 +14,7 @@ from collections.abc import Callable, Iterable, Mapping, Sequence
 from dataclasses import dataclass
 from typing import Any, Protocol, runtime_checkable
 
+from config.llm_reasoning_effort import ReasoningEffortChoice
 from core.agent_harness.turns.gather_observation import GatheredEvidence
 from core.agent_harness.turns.turn_results import ToolCallingTurnResult, TurnResult
 from core.llm.types import AgentLLMClient, StreamingReasoningClient
@@ -80,7 +81,7 @@ class SessionState(Protocol):
 
     last_state: dict[str, Any] | None
     last_synthetic_observation_path: str | None
-    reasoning_effort: Any | None
+    reasoning_effort: ReasoningEffortChoice | None
 
     # --- turn execution state ---
     history: list[dict[str, Any]]

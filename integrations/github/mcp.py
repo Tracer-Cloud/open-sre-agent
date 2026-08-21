@@ -27,10 +27,10 @@ from rich.panel import Panel
 from rich.table import Table
 
 from config.strict_config import StrictConfigModel
+from infrastructure.terminal.theme import BRAND, DIM, ERROR, HIGHLIGHT
 from integrations._validation_helpers import report_classify_failure, report_validation_failure
 from integrations.mcp_streamable_http_compat import streamable_http_client
 from integrations.mcp_transport import McpTransportMode
-from platform.terminal.theme import BRAND, DIM, ERROR, HIGHLIGHT
 
 logger = logging.getLogger(__name__)
 

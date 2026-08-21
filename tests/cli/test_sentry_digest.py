@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from click.testing import CliRunner
 
-from platform.scheduling.scheduler.delivery import SUPPORTED_DELIVERY_PROVIDERS
+from infrastructure.scheduling.scheduler.delivery import SUPPORTED_DELIVERY_PROVIDERS
 from surfaces.cli.commands.sentry_digest import _PROVIDER_CHOICES, sentry_command
 
 
@@ -21,7 +21,7 @@ def test_schedule_add_requires_delivery_provider(monkeypatch) -> None:
         lambda: ("sentry",),
     )
     monkeypatch.setattr(
-        "platform.scheduling.scheduler.delivery.delivery_provider_ready",
+        "infrastructure.scheduling.scheduler.delivery.delivery_provider_ready",
         lambda _provider: False,
     )
 
@@ -51,11 +51,11 @@ def test_uptime_watch_add_sends_activation_notice(monkeypatch, tmp_path) -> None
         lambda: ("sentry", "telegram"),
     )
     monkeypatch.setattr(
-        "platform.scheduling.scheduler.delivery.delivery_provider_ready",
+        "infrastructure.scheduling.scheduler.delivery.delivery_provider_ready",
         lambda _provider: True,
     )
     monkeypatch.setattr(
-        "platform.scheduling.scheduler.store._default_store_path",
+        "infrastructure.scheduling.scheduler.store._default_store_path",
         lambda: tmp_path / "tasks.json",
     )
     delivered: list[str] = []
@@ -65,7 +65,7 @@ def test_uptime_watch_add_sends_activation_notice(monkeypatch, tmp_path) -> None
         return True, "", "1"
 
     monkeypatch.setattr(
-        "platform.scheduling.scheduler.executor.deliver_scheduled_message",
+        "infrastructure.scheduling.scheduler.executor.deliver_scheduled_message",
         _fake_deliver,
     )
 

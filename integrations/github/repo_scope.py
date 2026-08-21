@@ -157,7 +157,7 @@ def apply_github_repo_scope(
 
 
 class _GithubVcsRepoScopeProvider:
-    """Adapts GitHub's owner/repo scope to :class:`platform.harness_ports.VcsRepoScopeProvider`."""
+    """Adapts GitHub's owner/repo scope to :class:`infrastructure.harness_ports.VcsRepoScopeProvider`."""
 
     vendor = "github"
 

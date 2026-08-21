@@ -27,7 +27,7 @@ from typing import Any
 
 import httpx
 
-from platform.observability.errors.service import capture_service_error
+from infrastructure.observability.errors.service import capture_service_error
 
 logger = logging.getLogger(__name__)
 

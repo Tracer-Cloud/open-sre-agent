@@ -12,17 +12,17 @@ import yaml
 from click.testing import CliRunner
 
 from config.constants.filestorage import REMOTE_SYNC_BUCKET_ENV, REMOTE_SYNC_ENV
-from platform.filestorage.config import RemoteSyncConfig
-from platform.filestorage.engine import SyncProgress, SyncReport
-from platform.filestorage.enums import (
+from infrastructure.filestorage.config import RemoteSyncConfig
+from infrastructure.filestorage.engine import SyncProgress, SyncReport
+from infrastructure.filestorage.enums import (
     BuiltInProvider,
     RemoteSyncSubcommand,
     SyncDirection,
     SyncRootName,
 )
-from platform.filestorage.errors import RemoteSyncConfigError
-from platform.filestorage.operations import SyncRootStatus, SyncStatus
-from platform.filestorage.setup import RemoteSyncSetupRequest
+from infrastructure.filestorage.errors import RemoteSyncConfigError
+from infrastructure.filestorage.operations import SyncRootStatus, SyncStatus
+from infrastructure.filestorage.setup import RemoteSyncSetupRequest
 from surfaces.cli.commands.remote_sync import remote_sync_command
 
 

@@ -30,9 +30,9 @@ from config.constants.new_relic import (
     NEW_RELIC_NRQL_LIMIT_MAX,
     NEW_RELIC_NRQL_TIMEOUT_SECONDS,
 )
+from infrastructure.observability.errors.service import capture_service_error
 from integrations.new_relic.config import NewRelicIntegrationConfig
 from integrations.probes import ProbeResult
-from platform.observability.errors.service import capture_service_error
 
 logger = logging.getLogger(__name__)
 

@@ -14,7 +14,7 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 from core.state import AgentState
-from platform.delivery.reporting.delivery_registry import get_delivery_adapter
+from infrastructure.delivery.reporting.delivery_registry import get_delivery_adapter
 from tools.investigation.reporting.delivery.bootstrap import ensure_delivery_adapters_registered
 from tools.investigation.reporting.delivery.dispatch import dispatch_report
 from tools.investigation.reporting.formatters.messages import ReportMessages

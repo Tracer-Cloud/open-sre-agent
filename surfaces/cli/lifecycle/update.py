@@ -4,7 +4,7 @@ import subprocess
 import sys
 
 from config.version import get_opensre_version
-from platform.process.release_version import (
+from infrastructure.process.release_version import (
     MAIN_BUILD_RELEASE_URL,
     fetch_latest_version,
     is_editable_install,

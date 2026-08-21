@@ -10,7 +10,7 @@ from rich.console import Console
 
 from core.agent_harness.spi.session_state import background_mode_enabled
 from core.domain.stream import StreamEvent
-from platform.scheduling.task_types import TaskRecord
+from infrastructure.scheduling.task_types import TaskRecord
 from surfaces.interactive_shell.session import Session
 from surfaces.interactive_shell.ui.execution_confirm import execution_allowed
 from surfaces.interactive_shell.ui.foreground_investigation import run_foreground_investigation

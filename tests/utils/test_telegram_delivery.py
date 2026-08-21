@@ -35,7 +35,7 @@ def _mock_response(status_code: int, body: dict[str, Any]) -> MagicMock:
 
 def test_post_telegram_message_success(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(
-        "platform.delivery.notifications.delivery_transport.httpx.post",
+        "infrastructure.delivery.notifications.delivery_transport.httpx.post",
         lambda *_a, **_kw: _mock_response(200, {"ok": True, "result": {"message_id": 42}}),
     )
     ok, error, message_id = post_telegram_message("chat-1", "hello", "bot-token")
@@ -52,7 +52,9 @@ def test_post_telegram_message_sends_correct_payload(monkeypatch: pytest.MonkeyP
         captured["json"] = json
         return _mock_response(200, {"ok": True, "result": {"message_id": 1}})
 
-    monkeypatch.setattr("platform.delivery.notifications.delivery_transport.httpx.post", _fake_post)
+    monkeypatch.setattr(
+        "infrastructure.delivery.notifications.delivery_transport.httpx.post", _fake_post
+    )
     post_telegram_message("chat-42", "test text", "my-token")
 
     assert "my-token" in captured["url"]
@@ -68,14 +70,16 @@ def test_post_telegram_message_with_reply_to(monkeypatch: pytest.MonkeyPatch) ->
         captured["json"] = json
         return _mock_response(200, {"ok": True, "result": {"message_id": 2}})
 
-    monkeypatch.setattr("platform.delivery.notifications.delivery_transport.httpx.post", _fake_post)
+    monkeypatch.setattr(
+        "infrastructure.delivery.notifications.delivery_transport.httpx.post", _fake_post
+    )
     post_telegram_message("chat-1", "text", "token", reply_to_message_id="99")
     assert captured["json"]["reply_to_message_id"] == 99
 
 
 def test_post_telegram_message_api_error(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(
-        "platform.delivery.notifications.delivery_transport.httpx.post",
+        "infrastructure.delivery.notifications.delivery_transport.httpx.post",
         lambda *_a, **_kw: _mock_response(
             400, {"ok": False, "description": "Bad Request: chat not found"}
         ),
@@ -90,7 +94,9 @@ def test_post_telegram_message_exception_returns_false(monkeypatch: pytest.Monke
     def _raise(*_a: Any, **_kw: Any) -> None:
         raise ConnectionError("network down")
 
-    monkeypatch.setattr("platform.delivery.notifications.delivery_transport.httpx.post", _raise)
+    monkeypatch.setattr(
+        "infrastructure.delivery.notifications.delivery_transport.httpx.post", _raise
+    )
     ok, error, message_id = post_telegram_message("chat-1", "text", "bot-token")
     assert ok is False
     assert "network down" in error
@@ -103,7 +109,9 @@ def test_post_telegram_message_exception_redacts_token(monkeypatch: pytest.Monke
     def _raise(*_a: Any, **_kw: Any) -> None:
         raise ConnectionError(f"failed to connect to api.telegram.org/bot{secret}/sendMessage")
 
-    monkeypatch.setattr("platform.delivery.notifications.delivery_transport.httpx.post", _raise)
+    monkeypatch.setattr(
+        "infrastructure.delivery.notifications.delivery_transport.httpx.post", _raise
+    )
     ok, error, _ = post_telegram_message("chat-1", "text", secret)
     assert ok is False
     assert secret not in error
@@ -123,7 +131,9 @@ def test_send_telegram_report_posts_to_chat(monkeypatch: pytest.MonkeyPatch) -> 
         captured["json"] = json
         return _mock_response(200, {"ok": True, "result": {"message_id": 5}})
 
-    monkeypatch.setattr("platform.delivery.notifications.delivery_transport.httpx.post", _fake_post)
+    monkeypatch.setattr(
+        "infrastructure.delivery.notifications.delivery_transport.httpx.post", _fake_post
+    )
     ok, error = send_telegram_report("Report text", {"bot_token": "tok", "chat_id": "chat-1"})
 
     assert ok is True
@@ -141,7 +151,9 @@ def test_send_telegram_report_uses_reply_to_message_id(monkeypatch: pytest.Monke
         captured["json"] = json
         return _mock_response(200, {"ok": True, "result": {"message_id": 6}})
 
-    monkeypatch.setattr("platform.delivery.notifications.delivery_transport.httpx.post", _fake_post)
+    monkeypatch.setattr(
+        "infrastructure.delivery.notifications.delivery_transport.httpx.post", _fake_post
+    )
     send_telegram_report(
         "Report",
         {"bot_token": "tok", "chat_id": "chat-1", "reply_to_message_id": "77"},
@@ -156,7 +168,9 @@ def test_send_telegram_report_passes_reply_markup(monkeypatch: pytest.MonkeyPatc
         captured["json"] = json
         return _mock_response(200, {"ok": True, "result": {"message_id": 7}})
 
-    monkeypatch.setattr("platform.delivery.notifications.delivery_transport.httpx.post", _fake_post)
+    monkeypatch.setattr(
+        "infrastructure.delivery.notifications.delivery_transport.httpx.post", _fake_post
+    )
     markup = {"inline_keyboard": [[{"text": "Open", "url": "https://x"}]]}
     ok, err = send_telegram_report(
         "Hi",
@@ -170,7 +184,7 @@ def test_send_telegram_report_passes_reply_markup(monkeypatch: pytest.MonkeyPatc
 
 def test_send_telegram_report_returns_false_on_api_error(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(
-        "platform.delivery.notifications.delivery_transport.httpx.post",
+        "infrastructure.delivery.notifications.delivery_transport.httpx.post",
         lambda *_a, **_kw: _mock_response(403, {"ok": False, "description": "Forbidden"}),
     )
     ok, error = send_telegram_report("Report", {"bot_token": "tok", "chat_id": "chat-1"})
@@ -274,7 +288,8 @@ def test_post_telegram_message_non_json_error_body(monkeypatch: pytest.MonkeyPat
     resp.text = "Bad Gateway"
 
     monkeypatch.setattr(
-        "platform.delivery.notifications.delivery_transport.httpx.post", lambda *_a, **_kw: resp
+        "infrastructure.delivery.notifications.delivery_transport.httpx.post",
+        lambda *_a, **_kw: resp,
     )
     ok, error, message_id = post_telegram_message("chat-1", "text", "tok")
 
@@ -297,7 +312,9 @@ def test_post_telegram_message_reply_to_zero_string_not_sent(
         captured["json"] = json
         return _mock_response(200, {"ok": True, "result": {"message_id": 1}})
 
-    monkeypatch.setattr("platform.delivery.notifications.delivery_transport.httpx.post", _fake_post)
+    monkeypatch.setattr(
+        "infrastructure.delivery.notifications.delivery_transport.httpx.post", _fake_post
+    )
     post_telegram_message("chat-1", "text", "tok", reply_to_message_id="0")
     assert "reply_to_message_id" not in captured["json"]
 
@@ -306,7 +323,7 @@ def test_send_telegram_report_truncates_to_4096(monkeypatch: pytest.MonkeyPatch)
     captured: dict[str, Any] = {}
 
     monkeypatch.setattr(
-        "platform.delivery.notifications.delivery_transport.httpx.post",
+        "infrastructure.delivery.notifications.delivery_transport.httpx.post",
         lambda *_a, **kw: (
             captured.update({"text": kw["json"].get("text", "")})
             or _mock_response(200, {"ok": True, "result": {"message_id": 7}})
@@ -393,7 +410,7 @@ class TestDelegatesToSharedTransport:
         )
 
     def test_post_message_uses_post_json_helper(self, monkeypatch: pytest.MonkeyPatch) -> None:
-        from platform.delivery.notifications.delivery_transport import DeliveryResponse
+        from infrastructure.delivery.notifications.delivery_transport import DeliveryResponse
 
         captured: dict[str, Any] = {}
 
@@ -419,7 +436,7 @@ class TestDelegatesToSharedTransport:
         """When the shared helper returns ``ok=False`` because the transport
         raised, telegram must still scrub the bot token out of the error
         string before propagating it."""
-        from platform.delivery.notifications.delivery_transport import DeliveryResponse
+        from infrastructure.delivery.notifications.delivery_transport import DeliveryResponse
 
         bot_token = "1234567890:ABCDEFverysecretvalue"
         leak_msg = f"connect failed for url=https://api.telegram.org/bot{bot_token}/sendMessage"

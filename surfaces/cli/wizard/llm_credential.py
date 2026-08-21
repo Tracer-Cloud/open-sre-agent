@@ -17,7 +17,7 @@ from rich.text import Text
 
 from config.llm_auth.auth_method import OAUTH_AUTH_METHOD, normalize_llm_auth_method
 from core.llm.providers.azure_openai import is_azure_openai_provider
-from platform.terminal.theme import (
+from infrastructure.terminal.theme import (
     BRAND,
     DIM,
     ERROR,

@@ -11,7 +11,7 @@ from dataclasses import dataclass, field
 
 from prompt_toolkit.application.current import get_app_or_none
 
-from platform.terminal import theme as ui_theme
+from infrastructure.terminal import theme as ui_theme
 from surfaces.shared.terminal.components.token_format import (
     _CHARS_PER_TOKEN,
     format_token_count_short,

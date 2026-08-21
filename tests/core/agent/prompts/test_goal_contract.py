@@ -133,7 +133,7 @@ def test_action_capacity_rule_is_wired_into_stable_system_prompt() -> None:
 
 def test_goal_contract_does_not_belong_in_setup_state_facts() -> None:
     # Arrange: render_setup_state must stay guidance-free (plan invariant).
-    from platform.setup_state import SetupSnapshot, render_setup_state
+    from infrastructure.setup_state import SetupSnapshot, render_setup_state
 
     # Act
     facts = render_setup_state(

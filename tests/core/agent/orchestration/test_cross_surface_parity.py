@@ -19,7 +19,7 @@ import pytest
 
 import surfaces.interactive_shell.runtime.slash_adapter as slash_adapter
 from core.agent_harness.tools.action_tools import get_action_tool
-from platform.turn_host.turn_handler import TurnHandler
+from infrastructure.turn_host.turn_handler import TurnHandler
 from tests.core.agent.orchestration.cross_surface_parity_harness import (
     ALL_SURFACES,
     PARITY_ANSWER,
