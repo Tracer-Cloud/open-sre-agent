@@ -146,12 +146,20 @@ def install_scheduled_delivery_adapters() -> None:
     scheduled_delivery_adapters().install()
 
 
-def install_cli_auth_prober() -> None:
-    """Bind the integrations-backed CLI auth prober config reports status through."""
-    from config.llm_auth.cli_probe import CliAuthProber
-    from integrations.llm_cli.auth_probe import probe_cli_auth
+def install_cli_auth_checker() -> None:
+    """Bind the integrations-backed CLI auth checker config reports status through.
 
-    CliAuthProber(probe_cli_auth).install()
+    The integrations import is deferred to the first check, so a bare CLI
+    invocation (e.g. ``opensre --help``) does not pay the subprocess-client cost.
+    """
+    from config.llm_auth.cli_auth import CliAuthChecker, CliAuthState
+
+    def check(provider: str) -> CliAuthState | None:
+        from integrations.llm_cli.auth_check import check_cli_auth
+
+        return check_cli_auth(provider)
+
+    CliAuthChecker(check).install()
 
 
 __all__ = [
@@ -162,5 +170,5 @@ __all__ = [
     "install_scheduler_runners",
     "scheduled_delivery_adapters",
     "install_scheduled_delivery_adapters",
-    "install_cli_auth_prober",
+    "install_cli_auth_checker",
 ]

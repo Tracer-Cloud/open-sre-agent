@@ -59,6 +59,7 @@ def _init_error_reporting(group: Any, argv: list[str], command: str) -> None:
 
 def run(group: Any, argv: list[str]) -> None:
     """Prepare this process for ``argv``. Safe to call once, before the group."""
+    from bootstrap.adapters import install_cli_auth_checker
     from bootstrap.process import CLI_PROFILE, configure_process
     from infrastructure.terminal.prompt_support import (
         install_questionary_ctrl_c_double_exit,
@@ -69,6 +70,10 @@ def run(group: Any, argv: list[str]) -> None:
 
     command = _first_command(group, argv)
     configure_process(CLI_PROFILE)
+
+    # CLI_PROFILE boots env only; wire the CLI-auth prober so `doctor`/`config`
+    # can report installed CLI providers (the integrations import stays deferred).
+    install_cli_auth_checker()
 
     _init_error_reporting(group, argv, command)
 
