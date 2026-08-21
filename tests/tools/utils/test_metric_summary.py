@@ -74,3 +74,5 @@ def test_format_bytes_rolls_up_at_rendered_boundaries() -> None:
     assert _format_bytes(1023.5) == "1.00 KiB"
     assert _format_bytes(1048570.9) == "1.00 MiB"
     assert _format_bytes(-1023.5) == "-1.00 KiB"
+    # NaN compares false at every boundary and must not walk to "nan TiB".
+    assert _format_bytes(float("nan")) == "nan B"

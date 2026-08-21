@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import math
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from typing import Any
@@ -255,6 +256,10 @@ def _format_bytes(value: float) -> str:
     units = ("B", "KiB", "MiB", "GiB", "TiB")
     amount = abs(value)
     unit_index = 0
+    # NaN compares false against 1024 at every precision, which would walk it
+    # to the top unit; keep a magnitude-less value at the base unit instead.
+    if math.isnan(amount):
+        return f"{value:.0f} {units[0]}"
     # Advance while the amount rendered at this unit's precision would still
     # show 1024: 1023.5 rounds to "1024 B" at .0f and must roll to KiB.
     while unit_index < len(units) - 1:
