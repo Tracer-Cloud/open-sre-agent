@@ -94,9 +94,8 @@ opensre remote-sync reencrypt           # re-encrypts whole data and encrypts al
 
 `reencrypt` re-uploads everything and overwrites each object in place. On a **versioned** bucket the old readable versions survive — remove noncurrent versions yourself.
 
-<Warning>
 The store prefix must be dedicated to OpenSRE — `reencrypt` processes every object it finds there. If anything else shares the prefix, it will be overwritten with an encrypted copy that only OpenSRE can read.
-</Warning>
+
 
 Encryption fails closed. A sync is refused, never downgraded, when:
 
@@ -118,13 +117,11 @@ Encryption assumes the store can be **read** but not **written** by someone you 
 If it gets corrupted, sync refuses in both directions, leaving your local files alone as it as - even though your passphrase is intact. 
 Your own machines still hold the originals, so recovery is restoring the manifest from a bucket version, or emptying the prefix and syncing again from a machine that still has the files.
 
-<Warning>
 A leaked passphrase needs `rotate-passphrase` and `reencrypt`. Only `rotate-passphrase` re-wraps the same content keys, so whoever kept a copy of the old key record and knows the old passphrase can still read every object — including ones uploaded after the rotation. 
 `reencrypt` starts a new key generation and re-seals everything under it.
 
 Even that is not post-compromise recovery: it cannot take write access away from whoever already had it. Revoke the store credentials that leaked alongside the passphrase, 
 and if you cannot be sure they are revoked, sync to a **new bucket or prefix** and treat the old one as exposed.
-</Warning>
 
 Closing the write side is a control on your store, not something OpenSRE can enforce: S3 Object Lock, versioning with a deny-overwrite policy, or write credentials scoped to machines you trust. These differ per provider, and OpenSRE never requires them.
 
