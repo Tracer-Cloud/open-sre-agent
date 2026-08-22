@@ -322,9 +322,10 @@ def start_scheduler(*, idle_when_empty: bool = False) -> None:
     if sigterm is not None:
         signal.signal(sigterm, _shutdown_handler)
 
-    # Drop any reload queued before this process owned the scheduler, then watch
-    # for new ones so `cron add` from another process is picked up live.
-    consume_scheduler_reload_request()
+    # Watch for reloads so a task added by another process (`cron add`) is picked
+    # up live. The startup sentinel is deliberately NOT drained here: a task added
+    # between the initial registration above and now has already written it, so
+    # the watcher must consume and resync it rather than discard it.
     reload_watcher = threading.Thread(
         target=_watch_reload_signal,
         args=(scheduler, stop_event),
