@@ -225,7 +225,7 @@ def _register_cli_llm_adapters() -> None:
     from typing import Any
 
     from core.llm.types import CliLLMClient, ModelType
-    from infrastructure.harness_providers import set_cli_llm_adapters
+    from infrastructure.harness_providers import CliLlmAdapters
     from integrations.llm_cli.registry import get_cli_provider_registration
     from integrations.llm_cli.runner import CLIBackedLLMClient
     from integrations.llm_cli.text import flatten_messages_to_prompt
@@ -244,8 +244,8 @@ def _register_cli_llm_adapters() -> None:
             kwargs["model_type"] = model_type
         return CLIBackedLLMClient(adapter, **kwargs)
 
-    set_cli_llm_adapters(
+    CliLlmAdapters(
         cli_provider_registration=get_cli_provider_registration,
         build_cli_client=_build_cli_client,
         flatten_cli_messages=flatten_messages_to_prompt,
-    )
+    ).install()

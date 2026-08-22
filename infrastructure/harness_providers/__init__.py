@@ -12,12 +12,12 @@ from __future__ import annotations
 
 from infrastructure.harness_providers.cli_llm import (
     BuildCliClientFn,
+    CliLlmAdapters,
     CliProviderRegistrationFn,
     FlattenCliMessagesFn,
     build_cli_client,
     cli_provider_registration,
     flatten_cli_messages_to_prompt,
-    set_cli_llm_adapters,
 )
 from infrastructure.harness_providers.cli_llm import reset as _reset_cli_llm
 from infrastructure.harness_providers.evidence_sources import (
@@ -153,6 +153,7 @@ def reset_harness_providers() -> None:
 
 __all__ = [
     "BuildCliClientFn",
+    "CliLlmAdapters",
     "ClassifyIntegrationsFn",
     "CliProviderRegistrationFn",
     "ConfiguredIntegrationServicesFn",
@@ -218,7 +219,6 @@ __all__ = [
     "resolve_subprocess_presenter",
     "resolve_surface_tool_map",
     "resolve_surface_tools",
-    "set_cli_llm_adapters",
     "set_integration_resolution_adapters",
     "set_integration_setup_command",
     "set_remote_integrations_fetcher",

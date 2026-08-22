@@ -1,13 +1,15 @@
 """CLI-backed LLM adapters (``integrations.llm_cli``).
 
 Core's LLM factory and transports build CLI-backed clients without importing the
-``integrations.llm_cli`` package: it injects the registration lookup, the client
-builder, and the message-flattening helper at boot.
+``integrations.llm_cli`` package: the adapters are assembled once at boot and
+installed as an immutable :class:`CliLlmAdapters`, read through the module
+functions. There is no setter — nothing rewrites them after boot.
 """
 
 from __future__ import annotations
 
 from collections.abc import Callable
+from dataclasses import dataclass
 from typing import Any, Protocol
 
 from core.llm.types import CliLLMClient, ModelType
@@ -42,13 +44,26 @@ def _cli_llm_backend_unavailable(*_args: Any, **_kwargs: Any) -> Any:
     )
 
 
-_cli_provider_registration_fn: CliProviderRegistrationFn = _default_cli_provider_registration
-_build_cli_client_fn: BuildCliClientFn = _cli_llm_backend_unavailable
-_flatten_cli_messages_fn: FlattenCliMessagesFn = _cli_llm_backend_unavailable
+@dataclass(frozen=True)
+class CliLlmAdapters:
+    """The CLI-LLM adapters, installed once at boot."""
+
+    cli_provider_registration: CliProviderRegistrationFn = _default_cli_provider_registration
+    build_cli_client: BuildCliClientFn = _cli_llm_backend_unavailable
+    flatten_cli_messages: FlattenCliMessagesFn = _cli_llm_backend_unavailable
+
+    def install(self) -> None:
+        """Bind these as the process-wide CLI-LLM adapters."""
+        global _installed
+        _installed = self
+
+
+_installed: CliLlmAdapters | None = None
 
 
 def cli_provider_registration(provider: str) -> Any:
-    return _cli_provider_registration_fn(provider)
+    fn = _installed.cli_provider_registration if _installed is not None else None
+    return fn(provider) if fn is not None else None
 
 
 def build_cli_client(
@@ -58,43 +73,27 @@ def build_cli_client(
     max_tokens: int | None = None,
     model_type: ModelType | None = None,
 ) -> CliLLMClient:
-    return _build_cli_client_fn(adapter, model=model, max_tokens=max_tokens, model_type=model_type)
+    fn = _installed.build_cli_client if _installed is not None else _cli_llm_backend_unavailable
+    return fn(adapter, model=model, max_tokens=max_tokens, model_type=model_type)
 
 
 def flatten_cli_messages_to_prompt(messages: list[dict[str, Any]]) -> str:
-    return _flatten_cli_messages_fn(messages)
-
-
-def set_cli_llm_adapters(
-    *,
-    cli_provider_registration: CliProviderRegistrationFn | None = None,
-    build_cli_client: BuildCliClientFn | None = None,
-    flatten_cli_messages: FlattenCliMessagesFn | None = None,
-) -> None:
-    global _cli_provider_registration_fn, _build_cli_client_fn, _flatten_cli_messages_fn
-    if cli_provider_registration is not None:
-        _cli_provider_registration_fn = cli_provider_registration
-    if build_cli_client is not None:
-        _build_cli_client_fn = build_cli_client
-    if flatten_cli_messages is not None:
-        _flatten_cli_messages_fn = flatten_cli_messages
+    fn = _installed.flatten_cli_messages if _installed is not None else _cli_llm_backend_unavailable
+    return fn(messages)
 
 
 def reset() -> None:
-    """Restore the unavailable-backend defaults (tests)."""
-    set_cli_llm_adapters(
-        cli_provider_registration=_default_cli_provider_registration,
-        build_cli_client=_cli_llm_backend_unavailable,
-        flatten_cli_messages=_cli_llm_backend_unavailable,
-    )
+    """Clear the installed CLI-LLM adapters (tests)."""
+    global _installed
+    _installed = None
 
 
 __all__ = [
     "BuildCliClientFn",
+    "CliLlmAdapters",
     "CliProviderRegistrationFn",
     "FlattenCliMessagesFn",
     "build_cli_client",
     "cli_provider_registration",
     "flatten_cli_messages_to_prompt",
-    "set_cli_llm_adapters",
 ]

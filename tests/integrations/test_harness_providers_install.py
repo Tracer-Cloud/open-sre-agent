@@ -104,17 +104,15 @@ def test_install_harness_providers_wires_cli_llm_adapters() -> None:
 
     output_boundary.install_harness_providers()
 
+    installed = harness_providers.cli_llm._installed
+    assert installed is not None
     assert (
-        harness_providers.cli_llm._cli_provider_registration_fn
+        installed.cli_provider_registration
         is not harness_providers.cli_llm._default_cli_provider_registration
     )
+    assert installed.build_cli_client is not harness_providers.cli_llm._cli_llm_backend_unavailable
     assert (
-        harness_providers.cli_llm._build_cli_client_fn
-        is not harness_providers.cli_llm._cli_llm_backend_unavailable
-    )
-    assert (
-        harness_providers.cli_llm._flatten_cli_messages_fn
-        is not harness_providers.cli_llm._cli_llm_backend_unavailable
+        installed.flatten_cli_messages is not harness_providers.cli_llm._cli_llm_backend_unavailable
     )
 
 
