@@ -50,9 +50,9 @@ def install_harness_adapters() -> None:
     register_tools()
     harness_providers.SubprocessPresenterProvider(headless_subprocess_presenter_factory).install()
     # Shell / REPL / gateway slash surface: CTA must name a runnable command.
-    harness_providers.set_integration_setup_command(
+    harness_providers.IntegrationSetupCommand(
         lambda service_id: f"/integrations setup {service_id}"
-    )
+    ).install()
     install_investigation_api()
 
 

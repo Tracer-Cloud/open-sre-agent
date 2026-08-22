@@ -1,9 +1,18 @@
-"""Integration resolution and the surface setup command.
+"""Integration resolution, the remote fetcher, and the surface setup command.
 
 Core resolves which integrations are active (from a remote org vault, the local
 store, or env) without importing the integration store/catalog packages, and
-renders an upgrade CTA without knowing a surface's slash syntax. The adapters
-and the setup-command renderer are injected at boot.
+renders an upgrade CTA without knowing a surface's slash syntax. Three concerns,
+wired at three sites, each an immutable holder installed once at boot and read
+through the module functions — there is no setter:
+
+- :class:`IntegrationResolutionAdapters` — the load/merge/classify adapters
+  (integrations own them; installed in ``integrations/harness_adapters``).
+- :class:`RemoteIntegrationsProvider` — how org integrations are fetched from a
+  remote (installed at the surface; a deployment choice, so gateway/web use the
+  empty default).
+- :class:`IntegrationSetupCommand` — how a surface spells "connect this
+  integration" (installed at the composition root).
 """
 
 from __future__ import annotations
@@ -13,6 +22,7 @@ import json
 import logging
 import os
 from collections.abc import Callable, Mapping
+from dataclasses import dataclass
 from typing import Any
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
@@ -85,73 +95,87 @@ def _default_fetch_webapp_vault() -> list[dict[str, Any]] | None:
     return None
 
 
-_fetch_remote: RemoteIntegrationsFetcher = _default_fetch_remote
-_load_integrations: LoadIntegrationsFn = _default_load_integrations
-_store_path: IntegrationStorePathFn = _default_store_path
-_load_env_integrations: LoadEnvIntegrationsFn = _default_load_env_integrations
-_classify_integrations: ClassifyIntegrationsFn = _default_classify_integrations
-_merge_local_integrations: MergeLocalIntegrationsFn = _default_merge_local
-_merge_integrations_by_service: MergeIntegrationsByServiceFn = _default_merge_by_service
-_configured_integration_services: ConfiguredIntegrationServicesFn = _default_configured_services
-_setupable_integration_services: SetupableIntegrationServicesFn = _default_setupable_services
-_fetch_webapp_vault: WebappVaultFetcherFn = _default_fetch_webapp_vault
+def _default_integration_setup_command(service_id: str) -> str:
+    return f"integrations setup {service_id}"
 
 
-def set_remote_integrations_fetcher(fetcher: RemoteIntegrationsFetcher) -> None:
-    global _fetch_remote
-    _fetch_remote = fetcher
+@dataclass(frozen=True)
+class IntegrationResolutionAdapters:
+    """The load/merge/classify adapters, installed once by ``integrations``."""
+
+    load_integrations: LoadIntegrationsFn = _default_load_integrations
+    integration_store_path: IntegrationStorePathFn = _default_store_path
+    load_env_integrations: LoadEnvIntegrationsFn = _default_load_env_integrations
+    classify_integrations: ClassifyIntegrationsFn = _default_classify_integrations
+    merge_local_integrations: MergeLocalIntegrationsFn = _default_merge_local
+    merge_integrations_by_service: MergeIntegrationsByServiceFn = _default_merge_by_service
+    configured_services: ConfiguredIntegrationServicesFn = _default_configured_services
+    setupable_services: SetupableIntegrationServicesFn = _default_setupable_services
+    fetch_webapp_vault: WebappVaultFetcherFn = _default_fetch_webapp_vault
+
+    def install(self) -> None:
+        """Bind these as the process-wide resolution adapters."""
+        global _installed_adapters
+        _installed_adapters = self
+
+
+@dataclass(frozen=True)
+class RemoteIntegrationsProvider:
+    """How org integrations are fetched from a remote, installed once at the surface."""
+
+    fetch: RemoteIntegrationsFetcher = _default_fetch_remote
+
+    def install(self) -> None:
+        """Bind this as the process-wide remote fetcher."""
+        global _installed_remote
+        _installed_remote = self
+
+
+@dataclass(frozen=True)
+class IntegrationSetupCommand:
+    """How a surface spells the connect command, installed once at boot."""
+
+    render: Callable[[str], str] = _default_integration_setup_command
+
+    def install(self) -> None:
+        """Bind this as the process-wide setup-command renderer."""
+        global _installed_setup
+        _installed_setup = self
+
+
+_installed_adapters: IntegrationResolutionAdapters | None = None
+_installed_remote: RemoteIntegrationsProvider | None = None
+_installed_setup: IntegrationSetupCommand | None = None
+
+_DEFAULT_ADAPTERS = IntegrationResolutionAdapters()
+
+
+def _adapters() -> IntegrationResolutionAdapters:
+    return _installed_adapters if _installed_adapters is not None else _DEFAULT_ADAPTERS
 
 
 def fetch_remote_integrations(*, org_id: str, auth_token: str) -> list[dict[str, Any]]:
-    return _fetch_remote(org_id, auth_token)
+    fetch = _installed_remote.fetch if _installed_remote is not None else _default_fetch_remote
+    return fetch(org_id, auth_token)
 
 
 def configured_integration_services() -> tuple[str, ...]:
-    return _configured_integration_services()
-
-
-def set_setupable_integration_services(fetcher: SetupableIntegrationServicesFn) -> None:
-    """Register the catalog of service ids valid for ``/integrations setup``."""
-    global _setupable_integration_services
-    _setupable_integration_services = fetcher
+    return _adapters().configured_services()
 
 
 def setupable_integration_services() -> tuple[str, ...]:
     """Service ids that have a real setup handler (never invent outside this set)."""
-    return _setupable_integration_services()
+    return _adapters().setupable_services()
 
 
-def set_integration_resolution_adapters(
-    *,
-    load_integrations: LoadIntegrationsFn | None = None,
-    integration_store_path: IntegrationStorePathFn | None = None,
-    load_env_integrations: LoadEnvIntegrationsFn | None = None,
-    classify_integrations: ClassifyIntegrationsFn | None = None,
-    merge_local_integrations: MergeLocalIntegrationsFn | None = None,
-    merge_integrations_by_service: MergeIntegrationsByServiceFn | None = None,
-    configured_services: ConfiguredIntegrationServicesFn | None = None,
-    fetch_webapp_vault: WebappVaultFetcherFn | None = None,
-) -> None:
-    global _load_integrations, _store_path, _load_env_integrations
-    global _classify_integrations, _merge_local_integrations
-    global _merge_integrations_by_service, _configured_integration_services
-    global _fetch_webapp_vault
-    if load_integrations is not None:
-        _load_integrations = load_integrations
-    if integration_store_path is not None:
-        _store_path = integration_store_path
-    if load_env_integrations is not None:
-        _load_env_integrations = load_env_integrations
-    if classify_integrations is not None:
-        _classify_integrations = classify_integrations
-    if merge_local_integrations is not None:
-        _merge_local_integrations = merge_local_integrations
-    if merge_integrations_by_service is not None:
-        _merge_integrations_by_service = merge_integrations_by_service
-    if configured_services is not None:
-        _configured_integration_services = configured_services
-    if fetch_webapp_vault is not None:
-        _fetch_webapp_vault = fetch_webapp_vault
+def integration_setup_command(service_id: str) -> str:
+    """Return the surface command that connects ``service_id``."""
+    render = (
+        _installed_setup.render
+        if _installed_setup is not None
+        else _default_integration_setup_command
+    )
+    return render(service_id)
 
 
 class IntegrationResolutionRequest(BaseModel):
@@ -206,7 +230,7 @@ def resolve_integrations_with_metadata(
         except Exception as exc:
             logger.warning("Remote integrations fetch failed: %s", exc)
             return IntegrationResolutionResult()
-        resolved = _classify_integrations(all_integrations)
+        resolved = _adapters().classify_integrations(all_integrations)
         return IntegrationResolutionResult(
             resolved_integrations=resolved,
             progress_message=_resolved_message(resolved),
@@ -238,21 +262,22 @@ def _resolve_from_webapp_vault_or_local() -> IntegrationResolutionResult:
     Merge order is vault → store → env so ops can still override a vault
     secret with ``GITHUB_MCP_AUTH_TOKEN`` (etc.) on the task definition.
     """
-    remote = _fetch_webapp_vault()
+    adapters = _adapters()
+    remote = adapters.fetch_webapp_vault()
     if remote is None:
         return _resolve_from_local_sources()
     if not remote:
         # Explicit empty vault — still allow local/env overlays (e.g. Slack SSM).
         return _resolve_from_local_sources()
 
-    store_integrations = _load_integrations()
-    env_integrations = _load_env_integrations()
-    integrations = _merge_integrations_by_service(
+    store_integrations = adapters.load_integrations()
+    env_integrations = adapters.load_env_integrations()
+    integrations = adapters.merge_integrations_by_service(
         remote,
         store_integrations,
         env_integrations,
     )
-    resolved = _classify_integrations(integrations)
+    resolved = adapters.classify_integrations(integrations)
     services = [service for service in resolved if not service.startswith("_")]
     return IntegrationResolutionResult(
         resolved_integrations=resolved,
@@ -272,19 +297,20 @@ def _resolved_message(resolved: dict[str, Any]) -> str:
 
 
 def _resolve_from_local_sources() -> IntegrationResolutionResult:
-    store_integrations = _load_integrations()
-    env_integrations = _load_env_integrations() if not store_integrations else []
-    integrations = _merge_local_integrations(store_integrations, env_integrations)
+    adapters = _adapters()
+    store_integrations = adapters.load_integrations()
+    env_integrations = adapters.load_env_integrations() if not store_integrations else []
+    integrations = adapters.merge_local_integrations(store_integrations, env_integrations)
     if not integrations:
         return IntegrationResolutionResult(
             resolved_integrations={},
             progress_message=(
                 f"No auth context and no local integrations found "
-                f"(store: {_store_path()}, env fallback checked)"
+                f"(store: {adapters.integration_store_path()}, env fallback checked)"
             ),
         )
 
-    resolved = _classify_integrations(integrations)
+    resolved = adapters.classify_integrations(integrations)
     services = [service for service in resolved if not service.startswith("_")]
     source_labels: list[str] = []
     if store_integrations:
@@ -304,14 +330,15 @@ def _resolve_from_local_sources() -> IntegrationResolutionResult:
 def _resolve_remote_with_local_fallback(
     remote_integrations: list[dict[str, Any]],
 ) -> IntegrationResolutionResult:
-    store_integrations = _load_integrations()
-    env_integrations = _load_env_integrations()
-    integrations = _merge_integrations_by_service(
+    adapters = _adapters()
+    store_integrations = adapters.load_integrations()
+    env_integrations = adapters.load_env_integrations()
+    integrations = adapters.merge_integrations_by_service(
         env_integrations,
         store_integrations,
         remote_integrations,
     )
-    resolved = _classify_integrations(integrations)
+    resolved = adapters.classify_integrations(integrations)
     services = [service for service in resolved if not service.startswith("_")]
 
     source_labels = ["remote"]
@@ -347,57 +374,28 @@ def _strip_bearer(token: str) -> str:
     return token
 
 
-# ── Integration setup command (surface syntax) ────────────────────────────
-# Core builds the upgrade CTA but must not know slash syntax. The surface
-# registers how it spells "connect this integration" at boot.
-
-
-def _default_integration_setup_command(service_id: str) -> str:
-    return f"integrations setup {service_id}"
-
-
-_integration_setup_command: Callable[[str], str] = _default_integration_setup_command
-
-
-def set_integration_setup_command(render: Callable[[str], str]) -> None:
-    """Register how this surface spells the connect command for a service."""
-    global _integration_setup_command
-    _integration_setup_command = render
-
-
-def integration_setup_command(service_id: str) -> str:
-    """Return the surface command that connects ``service_id``."""
-    return _integration_setup_command(service_id)
-
-
 def reset() -> None:
-    """Restore integration-resolution and setup-command defaults (tests)."""
-    set_remote_integrations_fetcher(_default_fetch_remote)
-    set_integration_resolution_adapters(
-        load_integrations=_default_load_integrations,
-        integration_store_path=_default_store_path,
-        load_env_integrations=_default_load_env_integrations,
-        classify_integrations=_default_classify_integrations,
-        merge_local_integrations=_default_merge_local,
-        merge_integrations_by_service=_default_merge_by_service,
-        configured_services=_default_configured_services,
-        fetch_webapp_vault=_default_fetch_webapp_vault,
-    )
-    set_integration_setup_command(_default_integration_setup_command)
-    set_setupable_integration_services(_default_setupable_services)
+    """Clear all installed integration-resolution holders (tests)."""
+    global _installed_adapters, _installed_remote, _installed_setup
+    _installed_adapters = None
+    _installed_remote = None
+    _installed_setup = None
 
 
 __all__ = [
     "ClassifyIntegrationsFn",
     "ConfiguredIntegrationServicesFn",
+    "IntegrationResolutionAdapters",
     "IntegrationResolutionRequest",
     "IntegrationResolutionResult",
+    "IntegrationSetupCommand",
     "IntegrationStorePathFn",
     "LoadEnvIntegrationsFn",
     "LoadIntegrationsFn",
     "MergeIntegrationsByServiceFn",
     "MergeLocalIntegrationsFn",
     "RemoteIntegrationsFetcher",
+    "RemoteIntegrationsProvider",
     "SetupableIntegrationServicesFn",
     "WebappVaultFetcherFn",
     "configured_integration_services",
@@ -405,9 +403,5 @@ __all__ = [
     "integration_setup_command",
     "resolve_integrations",
     "resolve_integrations_with_metadata",
-    "set_integration_resolution_adapters",
-    "set_integration_setup_command",
-    "set_remote_integrations_fetcher",
-    "set_setupable_integration_services",
     "setupable_integration_services",
 ]

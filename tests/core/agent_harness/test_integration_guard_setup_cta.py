@@ -21,9 +21,9 @@ def _snapshot(*, connected: tuple[str, ...], known: bool = True) -> TurnSnapshot
 
 
 def test_integration_guard_lists_setupable_ids_and_covered_evidence_kinds() -> None:
-    harness_providers.set_setupable_integration_services(
-        lambda: ("posthog_mcp", "grafana", "sentry_mcp")
-    )
+    harness_providers.IntegrationResolutionAdapters(
+        setupable_services=lambda: ("posthog_mcp", "grafana", "sentry_mcp")
+    ).install()
     harness_providers.clear_preferred_evidence_sources()
     harness_providers.register_preferred_evidence_source("metric_read", "posthog_mcp")
 
@@ -51,9 +51,9 @@ def test_integration_guard_keeps_an_empty_session_free_of_the_setup_id_roster() 
     the failing service.
     """
     # Arrange
-    harness_providers.set_setupable_integration_services(
-        lambda: ("posthog_mcp", "grafana", "sentry_mcp")
-    )
+    harness_providers.IntegrationResolutionAdapters(
+        setupable_services=lambda: ("posthog_mcp", "grafana", "sentry_mcp")
+    ).install()
 
     # Act
     text = _build_integration_guard(_snapshot(connected=()))

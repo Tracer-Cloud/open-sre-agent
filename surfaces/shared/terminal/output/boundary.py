@@ -36,16 +36,16 @@ def install_product_adapters() -> None:
     - remote integrations fetcher: empty default → Tracer Cloud adapter
     - harness ports: catalog/store, tool registry, investigation tools, GitHub scope
     """
-    from integrations.tracer.integrations_adapter import (
-        fetch_tracer_remote_integrations,
-    )
-    from infrastructure.harness_providers import set_remote_integrations_fetcher
+    from infrastructure.harness_providers import RemoteIntegrationsProvider
     from infrastructure.observability.render.debug import set_debug_printer
     from infrastructure.observability.render.display import (
         set_investigation_footer_renderer,
         set_investigation_header_renderer,
     )
     from infrastructure.observability.render.progress import set_progress_tracker_factory
+    from integrations.tracer.integrations_adapter import (
+        fetch_tracer_remote_integrations,
+    )
     from surfaces.shared.terminal.output.environment import debug_print
     from surfaces.shared.terminal.output.renderers import (
         render_completed_investigation_footer,
@@ -57,5 +57,5 @@ def install_product_adapters() -> None:
     set_investigation_header_renderer(render_investigation_header)
     set_investigation_footer_renderer(render_completed_investigation_footer)
     set_progress_tracker_factory(get_tracker)
-    set_remote_integrations_fetcher(fetch_tracer_remote_integrations)
+    RemoteIntegrationsProvider(fetch_tracer_remote_integrations).install()
     install_harness_providers()
