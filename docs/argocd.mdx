@@ -183,6 +183,7 @@ storing that annotation entirely.
 ```bash
 kubectl -n argocd port-forward svc/argocd-server 8080:443 &
 ARGOCD_PORT_FORWARD_PID=$!
+trap 'kill "$ARGOCD_PORT_FORWARD_PID" 2>/dev/null' EXIT
 
 i=0
 until curl -sk -o /dev/null https://localhost:8080/api/v1/session; do
