@@ -2,7 +2,7 @@
 
 ``GatewayController`` boots the background agent: logging, credentials,
 :func:`bootstrap.process.configure_process` (``GATEWAY_PROFILE``), then one
-turn handler and the components that use it.
+turn runner and the components that use it.
 
 * :meth:`start_surfaces` starts web and chat transports together
 * :meth:`start_scheduler` hosts the process-wide cron/loop runner
@@ -41,7 +41,7 @@ from infrastructure.turn_host.concurrency import (
     set_process_turn_gate,
 )
 from infrastructure.turn_host.turn_callback import TurnCallback
-from infrastructure.turn_host.turn_handler import TurnHandler
+from infrastructure.turn_host.turn_runner import TurnRunner
 
 # The reload watcher only polls a flag, so it should never need the full
 # shutdown budget; cap it so chat workers keep the rest.
@@ -86,11 +86,11 @@ class GatewayController:
         self._load_credentials(logger)
         configure_process(GATEWAY_PROFILE, logger=logger)
 
-        # One turn handler for every chat transport. Capacity gate lives on the
-        # same object — do not wrap it in a second "turn handler". Action tools
+        # One turn runner for every chat transport. Capacity gate lives on the
+        # same object — do not wrap it in a second "turn runner". Action tools
         # resolve per turn from each chat's live session inside the handler.
         console = Console(force_terminal=False)
-        handler = TurnHandler(
+        handler = TurnRunner(
             console=console,
             slash_ports_factory=self._slash_ports_factory,
             agent_build=chat_agent_build_config(),

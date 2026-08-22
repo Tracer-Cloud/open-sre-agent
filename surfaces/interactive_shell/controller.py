@@ -189,9 +189,9 @@ class InteractiveShellController:
             self.spinner,
             self.runtime_context.pt_session,
         )
-        # Lazy: TurnHandler pulls the agent/action stack — must not load at
+        # Lazy: TurnRunner pulls the agent/action stack — must not load at
         # ``import surfaces.interactive_shell.main``.
-        from infrastructure.turn_host.turn_handler import TurnHandler
+        from infrastructure.turn_host.turn_runner import TurnRunner
         from surfaces.interactive_shell.runtime.shell_agent import shell_agent_build_config
 
         self.turn_runtime = AgentTurnResources(
@@ -201,7 +201,7 @@ class InteractiveShellController:
             invalidate_prompt=lambda: self.prompt.invalidate_prompt(),
             request_exit=self.prompt.request_exit,
             console=self.service_console,
-            turn_handler=TurnHandler(
+            turn_handler=TurnRunner(
                 console=self.service_console,
                 agent_build=shell_agent_build_config(request_exit=self.prompt.request_exit),
                 # One handler for the REPL lifetime; /new and /resume rotate
