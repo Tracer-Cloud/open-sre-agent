@@ -180,19 +180,18 @@ SERVICE │ SOURCE    │ STATUS   │ DETAIL
 splunk  │ local env │ ✓ passed │ Connected to Splunk 10.4.2
 ```
 
-`opensre investigate` only treats an integration as active once the store resolution has
-*something* to fall through to env vars with -- an untouched `~/.opensre/integrations.json`
-with an unrelated integration in it blocks env-var fallback entirely. Point
-`OPENSRE_INTEGRATIONS_STORE_PATH` at an empty, valid store instead, so your real config is
-never read or written and the `SPLUNK_*` vars above are the only source of connection info:
+`opensre investigate` (unlike `opensre integrations verify`) only falls through to env
+vars when the store has no records at all -- any existing record, for any service, blocks
+env-var resolution entirely. Point `OPENSRE_INTEGRATIONS_STORE_PATH` at a path inside a
+fresh empty directory instead, so your real config is never read or written and the
+`SPLUNK_*` vars above are the only source of connection info:
 
 ```bash
-export OPENSRE_INTEGRATIONS_STORE_PATH=$(mktemp /tmp/opensre-splunk-demo.XXXXXX)
-echo '{"version": 2, "integrations": []}' > "$OPENSRE_INTEGRATIONS_STORE_PATH"
+export OPENSRE_DEMO_STORE_DIR="$(mktemp -d /tmp/opensre-splunk-demo.XXXXXX)"
+export OPENSRE_INTEGRATIONS_STORE_PATH="$OPENSRE_DEMO_STORE_DIR/integrations.json"
 ```
 
-Trigger a real investigation against the seeded event -- this is the actual supported
-entrypoint, not an internal import:
+Trigger a real investigation against the seeded event:
 
 ```bash
 opensre investigate --input-json '{
@@ -206,11 +205,9 @@ opensre investigate --input-json '{
 }'
 ```
 
-Real output from a run against this exact local instance (edited for length). An empty
-store makes `opensre investigate` fall through to env-var resolution for *every*
-integration, not just Splunk -- if your shell or machine already resolves another
-integration from its own env vars, it rides along too (harmless, and unrelated to the
-Splunk tool calls below):
+Real output from a run against this exact local instance (edited for length). Another
+integration resolved from your own env/keyring can ride along harmlessly, since the
+store has no records to block fallback for any service:
 
 ```
 Loading integrations: telegram, splunk
@@ -228,15 +225,12 @@ though without cluster/deploy visibility the exact narrow cause cannot be
 confirmed.
 ```
 
-The single registered tool was exercised, correctly scoping the blast radius to a
-missing dependency rather than treating the absence of billing-api logs as inconclusive.
-
 Teardown:
 
 ```bash
 docker rm -f splunk-dev
-rm -f "$OPENSRE_INTEGRATIONS_STORE_PATH"
-unset OPENSRE_INTEGRATIONS_STORE_PATH SPLUNK_URL SPLUNK_TOKEN SPLUNK_VERIFY_SSL
+rm -rf "$OPENSRE_DEMO_STORE_DIR"
+unset OPENSRE_DEMO_STORE_DIR OPENSRE_INTEGRATIONS_STORE_PATH SPLUNK_URL SPLUNK_TOKEN SPLUNK_VERIFY_SSL
 ```
 
 ## Investigation tools
