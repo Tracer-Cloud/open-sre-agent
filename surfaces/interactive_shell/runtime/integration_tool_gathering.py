@@ -10,7 +10,7 @@ console-bound progress renderer and a persister into the shell's session store.
 from __future__ import annotations
 
 import contextlib
-import json
+from collections.abc import Mapping
 from typing import Any
 
 from rich.console import Console
@@ -104,34 +104,29 @@ def _truncate(text: str, limit: int) -> str:
     return text[:limit] + f"\n…[truncated, {len(text)} chars total]"
 
 
-def _persist_tool_calls(session: Session, executed: list[tuple[Any, Any]]) -> None:
-    """Record each gathered tool-call result into the session log.
+def _persist_tool_calls(
+    session: Session,
+    executed: list[tuple[str, Mapping[str, object]]],
+) -> None:
+    """Record each gathered tool call into the session log.
 
-    Arguments and results are redacted and bounded before writing; failures are
-    swallowed so logging never breaks the turn.
+    Arguments are redacted before writing; failures are swallowed so logging
+    never breaks the turn.
     """
     from core.agent_harness.spi.defaults import default_session_store
     from infrastructure.observability.trace.redaction import redact_sensitive
 
     store = default_session_store()
-    for tc, output in executed:
+    for tool_name, tool_input in executed:
         with contextlib.suppress(Exception):
-            body = (
-                output
-                if isinstance(output, str)
-                else json.dumps(redact_sensitive(output), default=str)
-            )
-            arguments = (
-                redact_sensitive(tc.input) if isinstance(tc.input, dict) else {"value": tc.input}
-            )
+            arguments = dict(redact_sensitive(tool_input))
             store.append_tool_call(
                 session.session_id,
-                tool=str(tc.name),
+                tool=tool_name,
                 arguments=arguments,
-                result=_truncate(body, _MAX_PER_TOOL_CHARS),
-                ok=not (isinstance(output, dict) and "error" in output),
+                result="",
+                ok=True,
             )
-
 
 class ShellGatherProgress:
     """Prints one dim line per gather tool call to the turn's console.
@@ -169,7 +164,7 @@ class ShellGatherProgress:
 def shell_gather_phase(session: Session, console: Console) -> GatherPhase:
     """The REPL's gather phase: live progress on ``console``, tool calls persisted to ``session``."""
 
-    def persist(executed: list[tuple[Any, Any]]) -> None:
+    def persist(executed: list[tuple[str, Mapping[str, object]]]) -> None:
         _persist_tool_calls(session, executed)
 
     return GatherPhase(on_progress=ShellGatherProgress(console), persist=persist)
