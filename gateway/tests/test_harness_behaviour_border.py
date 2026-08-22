@@ -9,8 +9,8 @@ reach it at all:
   is not driving the agent, so any module may import them.
 * **Behaviour** — building ports, binding a turn, running a session, formatting
   goal progress — belongs to the host layer. A transport that calls it has
-  become a second turn handler, which is what
-  ``infrastructure/turn_host/turn_handler.py`` exists to prevent.
+  become a second turn runner, which is what
+  ``infrastructure/turn_host/turn_runner.py`` exists to prevent.
 
 The allowlist is compared exactly, so it can only shrink: a new caller fails
 immediately, and a module that stops calling must be removed from it.
@@ -57,7 +57,7 @@ _OUTSIDE_HOST_LAYER: frozenset[str] = frozenset(
         # of going through the host layer, so it gets none of the host's
         # guarantees: agent reuse, approvals hooks, cancel console, capability
         # policy. Listed so the second path stays visible; remove when
-        # POST /investigate runs through the turn handler.
+        # POST /investigate runs through the turn runner.
         "gateway/web/webapp.py",
         "gateway/web/worker.py",
     }
@@ -105,7 +105,7 @@ def test_only_the_host_layer_drives_the_agent() -> None:
     assert added == [], (
         f"gateway modules outside the host layer import harness behaviour: "
         f"{ {name: sorted(callers[name]) for name in added} }. "
-        "Route the turn through infrastructure/turn_host/turn_handler.py, or import only "
+        "Route the turn through infrastructure/turn_host/turn_runner.py, or import only "
         f"contracts ({', '.join(sorted(_HARNESS_CONTRACTS))})."
     )
 
