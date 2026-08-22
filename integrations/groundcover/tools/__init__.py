@@ -11,12 +11,12 @@ from core.tool_framework.tool_decorator import tool
 from core.tool_framework.utils import tool_unavailable
 from integrations.groundcover.availability import groundcover_available_or_backend
 from integrations.groundcover.client import GroundcoverClient
-from integrations.groundcover.helpers import (
+from integrations.groundcover.guidance import (
     DEFAULT_LOGS_QUERY,
     GCQL_GUIDANCE,
-    base_extract_params,
-    run_signal_query,
 )
+from integrations.groundcover.params import base_extract_params
+from integrations.groundcover.query_runner import run_signal_query
 
 _LOGS_SOURCE = "groundcover_logs"
 _LOGS_MCP_TOOL = "query_logs"
@@ -179,7 +179,7 @@ def get_groundcover_query_reference(
 
 
 from core.tool_framework.tool_decorator import tool
-from integrations.groundcover.helpers import (
+from integrations.groundcover.guidance import (
     DEFAULT_TRACES_QUERY,
     GCQL_GUIDANCE,
 )
