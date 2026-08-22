@@ -53,7 +53,7 @@ class _FakeGoalAgent:
 
 
 class _DispatchOnlyAgent:
-    def dispatch(self, message: str) -> TurnResult:
+    def dispatch(self, _message: str) -> TurnResult:
         return _turn("hi")
 
 
