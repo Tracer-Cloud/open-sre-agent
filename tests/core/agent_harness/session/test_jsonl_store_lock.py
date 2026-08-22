@@ -12,6 +12,7 @@ from typing import Any
 
 import pytest
 
+from config.constants.session_store import OPENSRE_SESSION_FILE_LOCK_ENV
 from core.agent_harness.session.persistence import jsonl_store
 from core.agent_harness.session.persistence.jsonl_store import JsonlSessionStore
 from core.agent_harness.session.persistence.paths import session_path
@@ -57,7 +58,7 @@ def test_enabled_lock_skips_a_write_another_holder_is_blocking(
     # Arrange: enable the lock with a short timeout, and open a session.
     from filelock import FileLock
 
-    monkeypatch.setenv("OPENSRE_SESSION_FILE_LOCK", "1")
+    monkeypatch.setenv(OPENSRE_SESSION_FILE_LOCK_ENV, "1")
     monkeypatch.setattr(jsonl_store, "_SESSION_LOCK_TIMEOUT_SECONDS", 0.2)
     session = _session("sess-lock")
     store = JsonlSessionStore()
@@ -84,7 +85,7 @@ def test_flush_completes_with_the_lock_enabled(
     # messages) without deadlocking on its own OS lock.
     import json
 
-    monkeypatch.setenv("OPENSRE_SESSION_FILE_LOCK", "1")
+    monkeypatch.setenv(OPENSRE_SESSION_FILE_LOCK_ENV, "1")
     monkeypatch.setattr(jsonl_store, "_SESSION_LOCK_TIMEOUT_SECONDS", 1.0)
     session = _session("sess-flush-locked")
     store = JsonlSessionStore()
