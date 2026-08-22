@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from collections.abc import Callable
+from datetime import UTC, datetime
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -11,18 +12,32 @@ import pytest
 import yaml
 from click.testing import CliRunner
 
-from config.constants.filestorage import REMOTE_SYNC_BUCKET_ENV, REMOTE_SYNC_ENV
+from config.constants.filestorage import (
+    REMOTE_SYNC_BUCKET_ENV,
+    REMOTE_SYNC_ENV,
+    REMOTE_SYNC_PASSPHRASE_ENV,
+)
+from config.constants.secrets import OPENSRE_DISABLE_KEYRING_ENV
 from infrastructure.filestorage.config import RemoteSyncConfig
-from infrastructure.filestorage.engine import SyncProgress, SyncReport
+from infrastructure.filestorage.encryption.keys import resolve_passphrase
+from infrastructure.filestorage.encryption.manifest import (
+    load_manifest,
+    new_manifest,
+    open_manifest,
+    save_manifest,
+)
+from infrastructure.filestorage.engine import SyncProgress, SyncReport, content_tag
 from infrastructure.filestorage.enums import (
     BuiltInProvider,
     RemoteSyncSubcommand,
     SyncDirection,
     SyncRootName,
 )
-from infrastructure.filestorage.errors import RemoteSyncConfigError
+from infrastructure.filestorage.errors import RemoteSyncConfigError, WrongPassphraseError
 from infrastructure.filestorage.operations import SyncRootStatus, SyncStatus
+from infrastructure.filestorage.ports import RemoteObject
 from infrastructure.filestorage.setup import RemoteSyncSetupRequest
+from infrastructure.process.exit_codes import ERROR
 from surfaces.cli.commands.remote_sync import remote_sync_command
 
 
@@ -582,3 +597,162 @@ def test_setup_help_lists_the_flags(runner: CliRunner) -> None:
     assert result.exit_code == 0
     assert "--provider" in result.output
     assert "--bucket" in result.output
+
+
+# ── rotate-passphrase: the store and this machine must end up agreeing ──────
+#
+# Rotation moves the remote first and stores the new passphrase second, so every
+# way the second half can diverge from the first strands the machine: the next
+# command offers a passphrase the store no longer takes, and the manifest is the
+# only thing that can open its own history.
+
+
+class _ManifestStore:
+    """Enough of an ObjectStore to hold a manifest and be rotated."""
+
+    def __init__(self, passphrase: str) -> None:
+        self.objects: dict[str, bytes] = {}
+        manifest, _cipher = new_manifest(passphrase)
+        save_manifest(self, manifest)
+
+    def list_objects(self, prefix: str) -> list[RemoteObject]:
+        return [
+            RemoteObject(
+                key=key,
+                size=len(data),
+                last_modified=datetime.now(tz=UTC),
+                etag=content_tag(data),
+            )
+            for key, data in sorted(self.objects.items())
+            if key.startswith(prefix)
+        ]
+
+    def get_object(self, key: str) -> bytes:
+        return self.objects[key]
+
+    def put_object(self, key: str, data: bytes) -> None:
+        self.objects[key] = data
+
+    def describe(self) -> str:
+        return "fake://bucket"
+
+    def opens_with(self, passphrase: str) -> bool:
+        try:
+            open_manifest(load_manifest(self), passphrase)
+        except WrongPassphraseError:
+            return False
+        return True
+
+
+ROTATE_OLD_PASSPHRASE = "the old passphrase"
+
+
+@pytest.fixture
+def rotatable_store(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> _ManifestStore:
+    """An encrypted store this machine can rotate, with local secrets sandboxed."""
+    from config.secrets import local_file
+    from infrastructure.filestorage import operations
+
+    store = _ManifestStore(ROTATE_OLD_PASSPHRASE)
+    monkeypatch.setattr(operations, "build_object_store", lambda _config: store)
+    monkeypatch.setattr(operations, "_encrypted_config", lambda: object())
+    monkeypatch.setattr(operations, "_refuse_org_scoped_turn", lambda: None)
+    monkeypatch.setattr(local_file, "store_path", lambda: tmp_path / "credentials.json")
+    monkeypatch.delenv(OPENSRE_DISABLE_KEYRING_ENV, raising=False)
+    return store
+
+
+def _typing(monkeypatch: pytest.MonkeyPatch, *entries: str) -> None:
+    """Answer the masked passphrase prompts with ``entries``, in order."""
+    remaining = iter(entries)
+
+    def _ask_masked(_label: str) -> str:
+        return next(remaining)
+
+    monkeypatch.setattr("surfaces.cli.commands.remote_sync._ask_masked", _ask_masked)
+    _set_interactive(monkeypatch)
+
+
+def test_rotation_seals_the_store_under_the_passphrase_that_resolves_later(
+    runner: CliRunner,
+    monkeypatch: pytest.MonkeyPatch,
+    rotatable_store: _ManifestStore,
+) -> None:
+    """Padding typed at the prompt must not survive into the remote wrap.
+
+    Every secret tier trims, so a store wrapped under the raw keystrokes would
+    be opened next time with the trimmed value — the machine stores one
+    passphrase and the manifest expects another.
+    """
+    monkeypatch.delenv(REMOTE_SYNC_PASSPHRASE_ENV, raising=False)
+    from config.secrets import local_file
+
+    local_file.set(REMOTE_SYNC_PASSPHRASE_ENV, ROTATE_OLD_PASSPHRASE)
+    _typing(monkeypatch, "  padded new pass  ", "  padded new pass  ")
+
+    result = runner.invoke(remote_sync_command, ["rotate-passphrase"])
+
+    assert result.exit_code == 0, result.output
+    assert rotatable_store.opens_with(resolve_passphrase())
+
+
+def test_rotation_that_cannot_store_the_new_passphrase_says_so(
+    runner: CliRunner,
+    monkeypatch: pytest.MonkeyPatch,
+    rotatable_store: _ManifestStore,
+) -> None:
+    """A refused write is reported, not raised past the command.
+
+    ``OPENSRE_DISABLE_KEYRING`` is a documented way to run, and the store has
+    already moved by the time the write is refused, so a traceback here would
+    strand the machine with no statement of what to export.
+    """
+    monkeypatch.setenv(REMOTE_SYNC_PASSPHRASE_ENV, ROTATE_OLD_PASSPHRASE)
+    monkeypatch.setenv(OPENSRE_DISABLE_KEYRING_ENV, "1")
+    _typing(monkeypatch, "a brand new pass", "a brand new pass")
+
+    result = runner.invoke(remote_sync_command, ["rotate-passphrase"])
+
+    assert result.exit_code == ERROR
+    assert isinstance(result.exception, SystemExit)
+    # The rotation did happen: re-running against the old passphrase would fail.
+    assert rotatable_store.opens_with("a brand new pass")
+    assert "Passphrase rotated." in result.output
+    assert f"export {REMOTE_SYNC_PASSPHRASE_ENV}" in result.output
+
+
+def test_rotation_reports_an_exported_passphrase_that_shadows_the_stored_one(
+    runner: CliRunner,
+    monkeypatch: pytest.MonkeyPatch,
+    rotatable_store: _ManifestStore,
+) -> None:
+    """The env tier outranks the file the rotation just wrote.
+
+    Storing the new passphrase succeeds and changes nothing the next command
+    will see, which is the one failure mode that looks entirely like success.
+    """
+    monkeypatch.setenv(REMOTE_SYNC_PASSPHRASE_ENV, ROTATE_OLD_PASSPHRASE)
+    _typing(monkeypatch, "a brand new pass", "a brand new pass")
+
+    result = runner.invoke(remote_sync_command, ["rotate-passphrase"])
+
+    assert result.exit_code == ERROR
+    assert resolve_passphrase() == ROTATE_OLD_PASSPHRASE
+    assert REMOTE_SYNC_PASSPHRASE_ENV in result.output
+    assert f"unset {REMOTE_SYNC_PASSPHRASE_ENV}" in result.output
+
+
+def test_a_failed_rotation_does_not_claim_the_passphrase_changed(
+    runner: CliRunner,
+    monkeypatch: pytest.MonkeyPatch,
+    rotatable_store: _ManifestStore,
+) -> None:
+    """The confirmation is printed only once the store has actually accepted it."""
+    monkeypatch.setenv(REMOTE_SYNC_PASSPHRASE_ENV, "not the store's passphrase")
+    _typing(monkeypatch, "a brand new pass", "a brand new pass")
+
+    result = runner.invoke(remote_sync_command, ["rotate-passphrase"])
+
+    assert result.exit_code == ERROR
+    assert "Passphrase rotated." not in result.output
+    assert rotatable_store.opens_with(ROTATE_OLD_PASSPHRASE)

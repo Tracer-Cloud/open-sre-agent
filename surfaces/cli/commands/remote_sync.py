@@ -12,6 +12,7 @@ from config.constants.filestorage import (
     DEFAULT_REMOTE_SYNC_PROVIDER,
     REMOTE_SYNC_PASSPHRASE_ENV,
 )
+from config.secrets.store import normalize_secret
 from infrastructure.filestorage import (
     MissingPassphraseError,
     RemoteSyncConfigError,
@@ -369,6 +370,14 @@ def _prompt_new_passphrase(label: str) -> str:
     history for every machine that ever set the store up. Mismatches re-ask
     rather than abort: the typo is the likely cause, and making the user re-run
     setup for it teaches nothing.
+
+    Returns the normalized form, which is what the secret tiers will hand back
+    later. Callers wrap the remote store under this value, so returning the
+    keystrokes verbatim would seal it under a passphrase this machine could
+    never resolve again. Normalizing before the comparison too: two entries
+    differing only in invisible padding are the same passphrase once stored, so
+    re-asking would be asking the user to reproduce a difference that cannot
+    survive.
     """
     if not click.get_text_stream("stdin").isatty():
         raise RemoteSyncError(
@@ -376,10 +385,10 @@ def _prompt_new_passphrase(label: str) -> str:
             f"Export {REMOTE_SYNC_PASSPHRASE_ENV} for this command instead."
         )
     while True:
-        passphrase = _ask_masked(label)
-        if not passphrase.strip():
+        passphrase = normalize_secret(_ask_masked(label))
+        if not passphrase:
             raise RemoteSyncError("passphrase cannot be empty")
-        if passphrase == _ask_masked(f"{label} (again)"):
+        if passphrase == normalize_secret(_ask_masked(f"{label} (again)")):
             return passphrase
         click.echo("The two entries did not match — try again.", err=True)
 
@@ -391,15 +400,25 @@ def rotate_passphrase_command() -> None:
         old = resolve_passphrase()
         new = _prompt_new_passphrase("New encryption passphrase")
         rotate_remote_sync_passphrase(old_passphrase=old, new_passphrase=new)
-        # Only after the store accepted it: storing a passphrase the store
-        # never adopted would lock this machine out of its own history.
-        save_passphrase(new)
     except (RemoteSyncError, click.Abort) as exc:
+        # Nothing was rotated, so the old passphrase still opens the store.
         if isinstance(exc, click.Abort):
             raise SystemExit(ERROR) from exc
         click.echo(str(exc), err=True)
         raise SystemExit(ERROR) from exc
+
+    # The store has moved, and saying so before the local half can fail is what
+    # keeps a storage problem from reading as "the rotation did not happen" —
+    # re-running on that belief would offer the old passphrase to a store that
+    # no longer takes it.
     click.echo(ROTATE_CONFIRM)
+    try:
+        # Only after the store accepted it: storing a passphrase the store
+        # never adopted would lock this machine out of its own history.
+        save_passphrase(new)
+    except RemoteSyncError as exc:
+        click.echo(f"\n{exc}", err=True)
+        raise SystemExit(ERROR) from exc
     raise SystemExit(SUCCESS)
 
 

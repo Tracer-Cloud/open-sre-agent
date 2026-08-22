@@ -53,6 +53,16 @@ class WrongPassphraseError(RemoteSyncEncryptionError):
     """
 
 
+class PassphraseNotResolvableError(RemoteSyncEncryptionError):
+    """A passphrase was accepted somewhere it matters, but will not resolve here.
+
+    Raised by the persist step rather than the next command that fails, because
+    the two are far apart: after a rotation the store already expects the new
+    passphrase, so a machine that cannot read it back is stranded, and the only
+    useful moment to say so is while the operator still has it to hand.
+    """
+
+
 class UndecryptableObjectError(RemoteSyncEncryptionError):
     """A stored object could not be opened.
 
@@ -93,6 +103,7 @@ __all__ = [
     "ManifestMissingError",
     "MissingPassphraseError",
     "OrgScopeNotSupportedError",
+    "PassphraseNotResolvableError",
     "PlaintextStoreError",
     "RemoteSyncConfigError",
     "RemoteSyncEncryptionError",

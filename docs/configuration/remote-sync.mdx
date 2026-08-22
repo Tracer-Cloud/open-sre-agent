@@ -92,6 +92,9 @@ opensre remote-sync rotate-passphrase   # re-wraps the key; no object re-uploade
 opensre remote-sync reencrypt           # re-encrypts whole data and encrypts already stored readable data on cloud.
 ```
 
+If `OPENSRE_REMOTE_SYNC_PASSPHRASE` is exported, update that export after rotating, as it outranks `~/.opensre/credentials.json` — a stale one shadows the rotation even on the machine that ran it. 
+With `OPENSRE_DISABLE_KEYRING=1`, the export is the only place it can go.
+
 `reencrypt` re-uploads everything and overwrites each object in place. On a **versioned** bucket the old readable versions survive — remove noncurrent versions yourself.
 
 The store prefix must be dedicated to OpenSRE — `reencrypt` processes every object it finds there. If anything else shares the prefix, it will be overwritten with an encrypted copy that only OpenSRE can read.

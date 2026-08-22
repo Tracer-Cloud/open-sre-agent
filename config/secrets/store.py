@@ -53,6 +53,17 @@ class SecretSaveResult:
         return self.tier == SecretTier.FALLBACK
 
 
+def normalize_secret(value: str) -> str:
+    """The exact form a secret takes once it is stored and read back.
+
+    Public because a caller that has to round-trip a value — rotate-passphrase
+    wraps the remote store under the passphrase it will later resolve — must
+    agree with this module about what comes back out. Every tier normalizes, so
+    a value that differs from this one can be written but never resolved.
+    """
+    return value.strip()
+
+
 def lookup(env_var: str, *, default: str = "") -> SecretLookup:
     """Resolve a secret from the environment, then the local file."""
     env_value = os.getenv(env_var, default).strip()
@@ -99,7 +110,7 @@ def save_secret(env_var: str, value: str) -> SecretSaveResult:
     Raises :class:`KeyringUnavailableError` when the write did not land, so a
     caller that sees no exception knows the credential is durable.
     """
-    normalized = value.strip()
+    normalized = normalize_secret(value)
     if not normalized:
         delete_secret(env_var)
         return SecretSaveResult(SecretTier.NONE, f"{env_var} cleared.")
@@ -177,6 +188,7 @@ __all__ = [
     "delete_secret",
     "keyring_is_disabled",
     "lookup",
+    "normalize_secret",
     "resolve_secret",
     "save_secret",
     "secret_source",

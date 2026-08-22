@@ -30,11 +30,12 @@ from config.constants.filestorage import (
     REMOTE_SYNC_KEY_CACHE_ENV,
     REMOTE_SYNC_PASSPHRASE_ENV,
 )
-from config.secrets.backend import KeyringUnavailableError
-from config.secrets.store import resolve_secret, save_secret
+from config.secrets.backend import KeyringUnavailableError, SecretTier
+from config.secrets.store import lookup, resolve_secret, save_secret
 from infrastructure.filestorage.encryption.envelope import KEY_ID_LEN
 from infrastructure.filestorage.errors import (
     MissingPassphraseError,
+    PassphraseNotResolvableError,
     RemoteSyncEncryptionError,
     WrongPassphraseError,
 )
@@ -217,9 +218,41 @@ def resolve_passphrase() -> str:
 
 
 def save_passphrase(passphrase: str) -> None:
-    """Persist the passphrase through the usual secret tiers."""
-    save_secret(REMOTE_SYNC_PASSPHRASE_ENV, passphrase)
+    """Persist the passphrase and confirm this machine reads back exactly it.
 
+    Storing is not the same as resolving, and callers depend on the stronger
+    guarantee: a rotation wraps the store under the value passed here, so
+    anything that resolves differently afterwards locks this machine out. Two
+    tiers can diverge — a write the machine refuses
+    (``OPENSRE_DISABLE_KEYRING``), and a stale export that outranks the file
+    that was just written — and both raise
+    :class:`PassphraseNotResolvableError` rather than surfacing at the next
+    command as an unexplained wrong-passphrase error.
+    """
+    try:
+        save_secret(REMOTE_SYNC_PASSPHRASE_ENV, passphrase)
+    except KeyringUnavailableError as exc:
+        raise PassphraseNotResolvableError(
+            f"The passphrase was not stored on this machine, so the next command will\n"
+            f"not find it. Export it in every shell that syncs:\n"
+            f"\n"
+            f"  export {REMOTE_SYNC_PASSPHRASE_ENV}=...\n"
+            f"\n"
+            f"{exc}"
+        ) from exc
+
+    resolved = lookup(REMOTE_SYNC_PASSPHRASE_ENV)
+    if resolved.value == passphrase:
+        return
+    if resolved.tier == SecretTier.ENV:
+        raise PassphraseNotResolvableError(
+            f"The passphrase was stored, but {REMOTE_SYNC_PASSPHRASE_ENV} is exported in\n"
+            f"this environment with a different value and outranks stored credentials,\n"
+            f"so the next command would still use the old one. Update or drop it:\n"
+            f"\n"
+            f"  export {REMOTE_SYNC_PASSPHRASE_ENV}=...   # the new passphrase\n"
+            f"  unset {REMOTE_SYNC_PASSPHRASE_ENV}        # or fall back to stored credentials"
+        )
 
 def forget_cached_kek() -> None:
     """Drop the cached derivation, so the next call re-derives from scratch."""
