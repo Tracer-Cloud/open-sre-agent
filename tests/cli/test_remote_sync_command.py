@@ -654,8 +654,9 @@ def rotatable_store(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> _Manifes
     from infrastructure.filestorage import operations
 
     store = _ManifestStore(ROTATE_OLD_PASSPHRASE)
+    config = RemoteSyncConfig(bucket="rotate-test", provider=BuiltInProvider.AWS)
     monkeypatch.setattr(operations, "build_object_store", lambda _config: store)
-    monkeypatch.setattr(operations, "_encrypted_config", lambda: object())
+    monkeypatch.setattr(operations, "_encrypted_config", lambda: config)
     monkeypatch.setattr(operations, "_refuse_org_scoped_turn", lambda: None)
     monkeypatch.setattr(local_file, "store_path", lambda: tmp_path / "credentials.json")
     monkeypatch.delenv(OPENSRE_DISABLE_KEYRING_ENV, raising=False)
