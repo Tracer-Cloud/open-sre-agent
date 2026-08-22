@@ -93,7 +93,7 @@ result = agent.handle(
 )
 ```
 
-The interactive shell shares the same `TurnHandler` → `SessionAgentPool` →
+The interactive shell shares the same `TurnRunner` → `SessionAgentPool` →
 `handle` path as the gateway (TTY accounting / `is_tty=True`). Direct construction
 for tests or a custom host looks like:
 

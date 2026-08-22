@@ -162,7 +162,7 @@ The shared runtime and cross-cutting services the capability layer is built on.
 - **`infrastructure/`** — cross-cutting services with no investigation logic of their
   own: guardrails, masking, sandbox, analytics, auth, notifications,
   observability, scheduler, deployment, and the shared **turn host**
-  (`turn_host`) — the single `TurnHandler` the interactive shell and every
+  (`turn_host`) — the single `TurnRunner` the interactive shell and every
   gateway transport run turns through, so the two entry paths cannot drift.
   Deploy-time assets live under
   `infrastructure/deployment/` (EC2/packaging Python tooling plus the
