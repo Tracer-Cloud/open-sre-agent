@@ -242,3 +242,53 @@ class TestAddTaskDeduplicates:
 
         # Assert
         assert len(list_tasks(store_path)) == 2
+
+
+class TestReloadSignal:
+    """Store mutations wake a running scheduler, so every caller path benefits."""
+
+    @staticmethod
+    def _capture(monkeypatch: pytest.MonkeyPatch) -> list[bool]:
+        signals: list[bool] = []
+        monkeypatch.setattr(
+            "infrastructure.scheduling.scheduler.reload_signal.request_scheduler_reload",
+            lambda: signals.append(True),
+        )
+        return signals
+
+    @staticmethod
+    def _task() -> ScheduledTask:
+        return ScheduledTask(
+            kind=TaskKind.DAILY_SUMMARY,
+            cron="0 9 * * *",
+            provider=Provider.TELEGRAM,
+            chat_id="-100123",
+        )
+
+    def test_add_signals_reload(self, store_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+        signals = self._capture(monkeypatch)
+        add_task(self._task(), store_path)
+        assert signals == [True]
+
+    def test_duplicate_add_does_not_signal_again(
+        self, store_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        signals = self._capture(monkeypatch)
+        task = self._task()
+        add_task(task, store_path)
+        signals.clear()
+        add_task(task, store_path)  # identical schedule → dedup, no change
+        assert signals == []
+
+    def test_remove_signals_reload(self, store_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+        added = add_task(self._task(), store_path)
+        signals = self._capture(monkeypatch)
+        assert remove_task(added.id, store_path) is True
+        assert signals == [True]
+
+    def test_remove_missing_does_not_signal(
+        self, store_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        signals = self._capture(monkeypatch)
+        assert remove_task("does-not-exist", store_path) is False
+        assert signals == []
