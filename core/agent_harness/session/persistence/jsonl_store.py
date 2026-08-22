@@ -30,7 +30,13 @@ _SESSION_LOCK_TIMEOUT_SECONDS = 10
 
 def _session_file_lock_enabled() -> bool:
     """Whether to serialize session writes across processes (scale-out; off by default)."""
-    return os.getenv(OPENSRE_SESSION_FILE_LOCK_ENV, "").strip().lower() in {"1", "true", "yes", "on"}
+    return os.getenv(OPENSRE_SESSION_FILE_LOCK_ENV, "").strip().lower() in {
+        "1",
+        "true",
+        "yes",
+        "on",
+    }
+
 
 _TRIGGER_MAX_CHARS = 200
 # Cold tip scan keeps at most this many trailing bytes resident (then grows by the
