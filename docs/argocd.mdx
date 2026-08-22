@@ -161,12 +161,15 @@ opensre investigate -i alert.json
 ### Local verification recipe
 
 Verified both registered tools live against a real local Argo CD install with a real
-GitOps application synced from a public repo. The `kind delete` below is a no-op the
-first time; it exists so a re-run after an earlier failed attempt doesn't hit `node(s)
-already exist for a cluster with the name "opensre-argocd-demo"`.
+GitOps application synced from a public repo.
 
 ```bash
-kind delete cluster --name opensre-argocd-demo 2>/dev/null
+if kind get clusters 2>/dev/null | grep -qx opensre-argocd-demo; then
+  echo "WARNING: an existing kind cluster named opensre-argocd-demo will be deleted" >&2
+  echo "in 5s -- Ctrl-C now if it isn't from an earlier attempt at this recipe." >&2
+  sleep 5
+  kind delete cluster --name opensre-argocd-demo
+fi
 kind create cluster --name opensre-argocd-demo
 kubectl create namespace argocd
 kubectl apply -n argocd -f https://raw.githubusercontent.com/argoproj/argo-cd/stable/manifests/install.yaml \
