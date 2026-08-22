@@ -69,7 +69,7 @@ def _store_signature(store_path: Path) -> tuple[int, int] | None:
 
 def watch_and_reconcile(
     stop_event: threading.Event,
-    reconcile: Callable[[], None],
+    reconcile: Callable[[], object],
     store_path: Path,
     *,
     poll_seconds: float = RELOAD_POLL_SECONDS,

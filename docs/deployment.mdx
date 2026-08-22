@@ -146,6 +146,11 @@ scheduler as its own single service instead:
 
 Run exactly one scheduler service, never one per gateway task.
 
+The scheduler service and every process that mutates tasks — the gateway,
+`opensre cron`, and `/loops` — must share the **same** task store: the same
+`OPENSRE_HOME` on a shared mount (S3 Files / EFS). The scheduler reconciles from
+that file, so a separate filesystem would leave it running a stale task set.
+
 ### Optional: conversation affinity
 
 The lock keeps N tasks correct. Affinity — routing a conversation to the same
