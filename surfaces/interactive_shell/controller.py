@@ -14,7 +14,7 @@ from rich.console import Console
 
 from config.repl_config import ReplConfig
 from core.domain.alerts import inbox as _alert_inbox
-from surfaces.interactive_shell.runtime.background.workers import BackgroundTaskManager
+from surfaces.interactive_shell.runtime.background.workers import BackgroundTaskPool
 from surfaces.interactive_shell.runtime.context import (
     ReplRuntimeContext,
     create_repl_runtime_context,
@@ -220,7 +220,7 @@ class InteractiveShellController:
             self.session,
             self.echo_console,
         )
-        self.background: BackgroundTaskManager | None = None
+        self.background: BackgroundTaskPool | None = None
         self.tasks: list[tuple[str, asyncio.Task[None]]] = []
 
     async def start_interactive_shell(self) -> None:
@@ -246,7 +246,7 @@ class InteractiveShellController:
 
     def _start_runtime_services(self) -> None:
         self.prompt.setup()
-        self.background = BackgroundTaskManager(
+        self.background = BackgroundTaskPool(
             self.session,
             self.state,
             self.spinner,

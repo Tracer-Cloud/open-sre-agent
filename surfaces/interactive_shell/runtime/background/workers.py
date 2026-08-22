@@ -18,7 +18,7 @@ from surfaces.interactive_shell.ui.alerts import drain_and_render_incoming
 log = logging.getLogger(__name__)
 
 
-class BackgroundTaskManager:
+class BackgroundTaskPool:
     """Start background workers and drain their user-visible output."""
 
     def __init__(

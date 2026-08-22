@@ -5,7 +5,7 @@ from typing import Any, cast
 
 import pytest
 
-from surfaces.interactive_shell.runtime.background.workers import BackgroundTaskManager
+from surfaces.interactive_shell.runtime.background.workers import BackgroundTaskPool
 from surfaces.interactive_shell.runtime.core.state import ReplState, SpinnerState
 from surfaces.interactive_shell.session import Session
 
@@ -22,7 +22,7 @@ async def test_spinner_ticker_invalidates_once_after_streaming_stops(
     state = ReplState()
     spinner = SpinnerState()
     calls: list[int] = []
-    manager = BackgroundTaskManager(
+    manager = BackgroundTaskPool(
         cast(Session, cast(Any, object())),
         state,
         spinner,

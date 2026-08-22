@@ -35,7 +35,7 @@ from surfaces.interactive_shell.runtime.agent_presentation import (
     ConsoleAgentEventSink,
 )
 from surfaces.interactive_shell.runtime.background.workers import (
-    BackgroundTaskManager,
+    BackgroundTaskPool,
 )
 from surfaces.interactive_shell.runtime.core.confirmation import (
     DispatchCancelled,
@@ -222,7 +222,7 @@ async def run_input_loop(
     *,
     state: ReplState,
     session: Session,
-    background: BackgroundTaskManager | None,
+    background: BackgroundTaskPool | None,
     input_reader: PromptInputReader,
     echo_console: Console,
     handle_input_action: Callable[[InputAction], Awaitable[bool]],
