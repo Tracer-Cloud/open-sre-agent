@@ -129,7 +129,6 @@ def query_groundcover_logs(
 
 from typing import cast
 
-from core.tool_framework.tool_decorator import tool
 
 _QUERY_REF_SOURCE = "groundcover_query_reference"
 
@@ -197,9 +196,6 @@ def get_groundcover_query_reference(
 """groundcover traces query tool (gcQL over query_traces)."""
 
 
-from core.tool_framework.tool_decorator import tool
-from integrations.groundcover.client_injection import base_extract_params
-from integrations.groundcover.query_runner import run_signal_query
 
 _TRACES_SOURCE = "groundcover_traces"
 _TRACES_MCP_TOOL = "query_traces"
