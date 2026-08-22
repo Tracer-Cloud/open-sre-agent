@@ -255,6 +255,17 @@ signoz  │ local env │ ✓ passed │ Connected to SigNoz Query API (/api/v2/
         │           │          │ /api/v5/query_range for logs/metrics/traces).
 ```
 
+`opensre investigate` (unlike `opensre integrations verify`) only falls through to env
+vars when the store has no records at all -- any existing record, for any service, blocks
+env-var resolution entirely. Point `OPENSRE_INTEGRATIONS_STORE_PATH` at a path inside a
+fresh empty directory instead, so your real config is never read or written and the
+`SIGNOZ_*` vars above are the only source of connection info:
+
+```bash
+export OPENSRE_DEMO_STORE_DIR="$(mktemp -d /tmp/opensre-signoz-demo.XXXXXX)"
+export OPENSRE_INTEGRATIONS_STORE_PATH="$OPENSRE_DEMO_STORE_DIR/integrations.json"
+```
+
 ```bash
 opensre investigate --input-json '{
   "alert_source": "signoz",
@@ -271,7 +282,9 @@ opensre investigate --input-json '{
 }'
 ```
 
-Real output from a run against this exact local stack (edited for length):
+Real output from a run against this exact local stack (edited for length). Another
+integration resolved from your own env/keyring can ride along harmlessly, since the store
+has no records to block fallback for any service:
 
 ```
 Loading integrations: telegram, signoz
@@ -291,17 +304,10 @@ running. Because payment traffic is very low (~0.03 rps), a single failed
 call is enough to trip a ratio-based HighErrorRate alert.
 ```
 
-All 3 registered tools were exercised in this single turn.
+Teardown:
 
-<Warning>
-While seeding telemetry to verify `query_signoz_metrics`, a real bug surfaced and was
-fixed: the query builder hard-coded `"temporality": "unspecified"` for every metric
-query. SigNoz's backend requires the query's temporality to match how the metric was
-actually ingested -- a Python OTel SDK counter defaults to `cumulative`, while SigNoz's
-own internal `signoz_calls_total` metric is `delta` -- so `"unspecified"` silently
-returned zero rows for **any** real counter/sum metric regardless of aggregation or
-service filter. Fixed by looking up the metric's actual temporality via
-`GET /api/v2/metrics/metadata` before querying, with a fallback to the prior behavior
-if that lookup fails. Confirmed live: `payment_errors_total` (cumulative) and
-`signoz_calls_total` (delta) both now return real data through the same code path.
-</Warning>
+```bash
+docker compose -f pours/deployment/compose.yaml down
+rm -rf "$OPENSRE_DEMO_STORE_DIR" /tmp/signoz-otel-venv
+unset OPENSRE_DEMO_STORE_DIR OPENSRE_INTEGRATIONS_STORE_PATH SIGNOZ_URL SIGNOZ_API_KEY
+```
