@@ -26,7 +26,7 @@ The two deliberately root-level modules are:
 | --- | --- | --- |
 | `alert_intake.py` | Minimal HTTP surface (`POST /alerts`) that depends only on the alert domain model. Both the gateway web app and the interactive shell can host it without importing each other. | Gateway-specific or REPL-specific logic |
 | `asgi_server.py` | Generic transport: run any ASGI app in a background thread (`serve_asgi_in_thread`). One app, one port per host process; `port=0` binds an ephemeral port. | Any particular web surface or application logic |
-| `setup_state.py` | Install/setup facts surfaced to agents and the doctor command. | Runtime configuration or agent loop state |
+| `setup_state.py` | Install/setup facts surfaced to agents through prompt context. | Runtime configuration or agent loop state |
 
 When a change crosses package boundaries, extract a small helper into the
 owning area rather than adding logic to the caller.
