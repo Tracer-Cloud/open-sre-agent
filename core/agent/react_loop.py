@@ -17,7 +17,7 @@ from dataclasses import dataclass
 from typing import Any
 
 from core.agent.cancel import tool_resources_cancel_requested
-from core.agent.handle_conclusion import ConclusionHandler
+from core.agent.conclusion_parser import ConclusionParser
 from core.agent.loop_host import LoopHost
 from core.agent.run_io import AgentRunInput, AgentRunResult
 from core.context_budget import (
@@ -109,7 +109,7 @@ class ReactLoop[RuntimeToolT: RuntimeTool]:
         self._iterations_used = 0
         self._stop_reason = "iteration_cap"
         self._operation_run_id = uuid.uuid4().hex[:12]
-        self._conclusion = ConclusionHandler(host, self._messages, self._runtime_tools)
+        self._conclusion = ConclusionParser(host, self._messages, self._runtime_tools)
 
     def run(self) -> AgentRunResult:
         """Drive the loop to completion and return its outcome."""
