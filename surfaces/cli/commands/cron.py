@@ -118,6 +118,7 @@ def cron_add(
     )
 
     from infrastructure.scheduling.scheduler.operation_log import record_scheduler_task_operation
+    from infrastructure.scheduling.scheduler.reload_signal import request_scheduler_reload
     from infrastructure.scheduling.scheduler.store import add_task
 
     added = add_task(task)
@@ -130,6 +131,8 @@ def cron_add(
             "deduplicated": added.id != task.id,
         },
     )
+    # Wake any running scheduler (gateway or dedicated service) to pick this up.
+    request_scheduler_reload()
     _console.print(f"[green]Task {added.id} created.[/green]")
     if added.name:
         _console.print(f"  Name: {added.name}")
@@ -181,6 +184,7 @@ def cron_list() -> None:
 def cron_remove(task_id: str) -> None:
     """Remove a scheduled delivery task by ID."""
     from infrastructure.scheduling.scheduler.operation_log import record_scheduler_task_operation
+    from infrastructure.scheduling.scheduler.reload_signal import request_scheduler_reload
     from infrastructure.scheduling.scheduler.store import get_task, remove_task
 
     task = get_task(task_id)
@@ -191,6 +195,8 @@ def cron_remove(task_id: str) -> None:
                 task,
                 extra={"command": "cron_remove"},
             )
+        # Wake any running scheduler so the removed task stops firing.
+        request_scheduler_reload()
         _console.print(f"[green]Task {task_id} removed.[/green]")
     else:
         _console.print(f"[red]Error: task {task_id} not found.[/red]")

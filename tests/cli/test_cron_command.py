@@ -160,3 +160,56 @@ def test_cron_add_still_requires_chat_id_for_telegram() -> None:
     )
     assert result.exit_code == 2
     assert "--chat-id is required" in result.output
+
+
+def test_cron_add_signals_a_scheduler_reload(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # A running scheduler (gateway or dedicated service) must be told to resync.
+    from infrastructure.scheduling.scheduler import store as scheduler_store
+
+    monkeypatch.setattr(scheduler_store, "_default_store_path", lambda: tmp_path / "tasks.json")
+    reloads: list[bool] = []
+    monkeypatch.setattr(
+        "infrastructure.scheduling.scheduler.reload_signal.request_scheduler_reload",
+        lambda: reloads.append(True),
+    )
+
+    result = CliRunner().invoke(
+        cron_command,
+        ["add", "--kind", "daily_summary", "--cron", "0 9 * * *",
+         "--provider", "telegram", "--chat-id", "-100123"],
+    )
+
+    assert result.exit_code == 0, result.output
+    assert reloads == [True]
+
+
+def test_cron_remove_signals_a_scheduler_reload(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    import re
+
+    from infrastructure.scheduling.scheduler import store as scheduler_store
+
+    monkeypatch.setattr(scheduler_store, "_default_store_path", lambda: tmp_path / "tasks.json")
+    reloads: list[bool] = []
+    monkeypatch.setattr(
+        "infrastructure.scheduling.scheduler.reload_signal.request_scheduler_reload",
+        lambda: reloads.append(True),
+    )
+    runner = CliRunner()
+    added = runner.invoke(
+        cron_command,
+        ["add", "--kind", "daily_summary", "--cron", "0 9 * * *",
+         "--provider", "telegram", "--chat-id", "-100123"],
+    )
+    assert added.exit_code == 0, added.output
+    match = re.search(r"Task (\S+) created", added.output)
+    assert match is not None, added.output
+    reloads.clear()
+
+    removed = runner.invoke(cron_command, ["remove", match.group(1)])
+
+    assert removed.exit_code == 0, removed.output
+    assert reloads == [True]
