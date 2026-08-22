@@ -347,3 +347,33 @@ class TestStartSchedulerIdle:
         watcher.join(timeout=1.0)
 
         assert resynced == [scheduler]
+
+    def test_reload_watcher_reconciles_without_a_signal(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        # A dropped signal (best-effort write) or a transient resync failure still
+        # converges: the watcher periodically resyncs even with no reload request.
+        import threading
+        import time
+
+        from infrastructure.scheduling.scheduler import runner
+
+        resynced: list[object] = []
+        monkeypatch.setattr(runner, "RELOAD_POLL_SECONDS", 0.01)
+        monkeypatch.setattr(runner, "_RELOAD_RECONCILE_SECONDS", 0.02)
+        monkeypatch.setattr(runner, "consume_scheduler_reload_request", lambda: False)
+        monkeypatch.setattr(
+            runner, "resync_scheduler_jobs", lambda scheduler, **_kw: resynced.append(scheduler)
+        )
+
+        scheduler = object()
+        stop = threading.Event()
+        watcher = threading.Thread(
+            target=runner._watch_reload_signal, args=(scheduler, stop), daemon=True
+        )
+        watcher.start()
+        time.sleep(0.1)  # several reconcile intervals
+        stop.set()
+        watcher.join(timeout=1.0)
+
+        assert len(resynced) >= 1

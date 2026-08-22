@@ -11,6 +11,7 @@ from __future__ import annotations
 import logging
 import signal
 import threading
+import time
 from collections.abc import Callable
 from datetime import UTC, datetime
 from typing import Any, cast
@@ -276,20 +277,33 @@ def start_background_scheduler(
     return scheduler, enabled_count
 
 
+# Safety-net full reconcile interval. The reload signal is the fast path; this
+# bounds how long a lost signal (best-effort write) or a transient resync failure
+# can leave the live scheduler out of sync with the committed task store.
+_RELOAD_RECONCILE_SECONDS = 60.0
+
+
 def _watch_reload_signal(scheduler: Any, stop_event: threading.Event) -> None:
-    """Poll the reload signal and resync jobs onto ``scheduler`` until stopped.
+    """Keep ``scheduler``'s jobs in sync with the task store until stopped.
 
     The blocking scheduler registers tasks once, so without this a task added by
-    another process (``opensre cron add``) would not run until a restart. Mirrors
-    the gateway's reload watcher.
+    another process (``opensre cron add``) would not run until a restart. Resyncs
+    on an explicit reload signal (fast path) and, independently, on a periodic
+    reconcile — so a dropped signal or a transient resync failure still converges,
+    since the resync reads the whole store rather than trusting the last event.
     """
+    last_reconcile = time.monotonic()
     while not stop_event.wait(RELOAD_POLL_SECONDS):
-        if not consume_scheduler_reload_request():
+        signalled = consume_scheduler_reload_request()
+        overdue = time.monotonic() - last_reconcile >= _RELOAD_RECONCILE_SECONDS
+        if not signalled and not overdue:
             continue
         try:
             resync_scheduler_jobs(scheduler)
+            last_reconcile = time.monotonic()
         except Exception as exc:  # noqa: BLE001
-            logger.warning("Scheduler reload resync failed: %s", exc)
+            # Leave last_reconcile stale so the next poll retries promptly.
+            logger.warning("Scheduler reload resync failed; will retry: %s", exc)
 
 
 def start_scheduler(*, idle_when_empty: bool = False) -> None:
