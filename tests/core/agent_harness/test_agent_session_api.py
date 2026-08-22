@@ -106,7 +106,9 @@ def test_start_registers_harness_adapters_so_integrations_resolve() -> None:
 
     # Tool registry is populated even when the local store is empty (CI).
     grafana_tools = list(
-        resolve_investigation_tools({"grafana": {"endpoint": "http://g", "connection_verified": True}})
+        resolve_investigation_tools(
+            {"grafana": {"endpoint": "http://g", "connection_verified": True}}
+        )
     )
     assert any(t.name.startswith("query_grafana") for t in grafana_tools)
 
