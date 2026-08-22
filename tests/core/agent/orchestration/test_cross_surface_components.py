@@ -13,13 +13,13 @@ from core.agent_harness.session import InMemorySessionStore
 from core.agent_harness.tools.tool_provider import DefaultToolProvider
 from core.agent_harness.turns.orchestrator import run_turn
 from core.agent_harness.turns.turn_results import ToolCallingTurnResult, TurnResult
-from infrastructure.turn_host.turn_handler import TurnHandler
+from infrastructure.turn_host.turn_runner import TurnRunner
 from surfaces.interactive_shell.session import Session
 from tests.shared.default_headless_build_stub import default_headless_build_stub
 from tests.shared.fake_agent import fake_agent
 
 
-def test_gateway_turn_handler_delegates_to_agent_dispatch(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_gateway_turn_runner_delegates_to_agent_dispatch(monkeypatch: pytest.MonkeyPatch) -> None:
     agent = fake_agent()
     agent.dispatch.return_value = TurnResult(
         final_intent="cli_agent_handled",
@@ -41,7 +41,7 @@ def test_gateway_turn_handler_delegates_to_agent_dispatch(monkeypatch: pytest.Mo
 
     session = Session(store=InMemorySessionStore())
     sink = MagicMock()
-    handler = TurnHandler(console=Console(force_terminal=False))
+    handler = TurnRunner(console=Console(force_terminal=False))
     handler("hello gateway", session, sink, logging.getLogger("test.gateway.module"))
 
     # The message is dispatched per-turn; session-stable ports are wired once,
@@ -69,7 +69,7 @@ def test_gateway_turn_handler_delegates_to_agent_dispatch(monkeypatch: pytest.Mo
     sink.finalize.assert_called_once_with("gateway-ok")
 
 
-def test_gateway_turn_handler_does_not_finalize_answered_turn(
+def test_gateway_turn_runner_does_not_finalize_answered_turn(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     agent = fake_agent()
@@ -86,7 +86,7 @@ def test_gateway_turn_handler_does_not_finalize_answered_turn(
 
     session = Session(store=InMemorySessionStore())
     sink = MagicMock()
-    handler = TurnHandler(console=Console(force_terminal=False))
+    handler = TurnRunner(console=Console(force_terminal=False))
     handler("why", session, sink, logging.getLogger("test.gateway.module.answer"))
 
     sink.finalize.assert_not_called()

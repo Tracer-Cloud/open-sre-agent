@@ -9,6 +9,8 @@ from __future__ import annotations
 
 import ast
 import pathlib
+import subprocess
+import sys
 
 from bootstrap.adapters import install_notification_adapters
 from infrastructure.delivery.notifications.outbound_registry import (
@@ -39,10 +41,11 @@ def test_step_is_idempotent() -> None:
 def test_step_repopulates_a_cleared_registry() -> None:
     """Calling it twice proves nothing on its own: the second call is a no-op
     against an already-full registry either way. Registration has to survive a
-    clear, because the step registers adapter objects rather than relying on the
-    module import side effect, and imports are cached. Relying on the import
-    alone leaves the registry empty here while the step reports success, which
-    would make ``/background notify set email`` reject its own shipped channel."""
+    clear, because the step registers adapter objects and the adapter modules
+    themselves register nothing — an import is cached, so a step that leaned on
+    the module body would leave the registry empty here while reporting success,
+    which would make ``/background notify set email`` reject its own shipped
+    channel."""
     clear_outbound_adapters()
 
     names = install_notification_adapters()
@@ -94,3 +97,33 @@ def test_only_the_composition_root_registers_notification_adapters() -> None:
 
     # Assert
     assert definers == ["bootstrap/adapters.py::install_notification_adapters"], definers
+
+
+# Importing an adapter module must define its adapter and register nothing: the
+# registry's contents are then a fact about who called the bootstrap step, not
+# about which module some unrelated import happened to pull in first.
+_IMPORT_ONLY_PROBE = (
+    "import integrations.buzz.background_adapter; "
+    "import integrations.rocketchat.background_adapter; "
+    "import integrations.smtp.background_adapter; "
+    "import integrations.telegram.background_adapter; "
+    "import infrastructure.delivery.notifications.outbound_registry as registry; "
+    "names = registry.registered_outbound_adapter_names(); "
+    "assert names == (), names; "
+    "print('OK: import registers nothing')"
+)
+
+
+def test_importing_an_adapter_module_registers_nothing() -> None:
+    """A fresh interpreter, because ``sys.modules`` is process-global: by the
+    time this test runs, another test has already imported every adapter module
+    and filled the registry, so an in-process import would pass vacuously."""
+    completed = subprocess.run(
+        [sys.executable, "-c", _IMPORT_ONLY_PROBE],
+        capture_output=True,
+        text=True,
+        timeout=30,
+    )
+
+    assert completed.returncode == 0, completed.stderr
+    assert "OK: import registers nothing" in completed.stdout

@@ -5,12 +5,49 @@ from __future__ import annotations
 import logging
 import os
 from dataclasses import dataclass
+from enum import StrEnum
 from typing import Any
 
-_VALID_LAYOUTS = ("classic", "pinned")
+from config.constants.repl_theme import DEFAULT_THEME_NAME, Theme
+
 _FALSE_VALUES = ("", "0", "false", "off", "no")
 
 log = logging.getLogger(__name__)
+
+
+class Layout(StrEnum):
+    """Interactive-shell layout: scrolling transcript vs. fixed input bar."""
+
+    CLASSIC = "classic"
+    PINNED = "pinned"
+
+
+def _resolve_theme(raw: str, *, source: str | None) -> Theme:
+    """Return a valid theme, defaulting on unknown input.
+
+    ``source`` is the setting label used in the warning for env/file values; a
+    ``None`` source (CLI flag) defaults silently.
+    """
+    try:
+        return Theme((raw or "").strip().lower())
+    except ValueError:
+        if source is not None:
+            log.warning(
+                "%s=%r is not a valid theme; defaulting to %r.",
+                source,
+                raw,
+                DEFAULT_THEME_NAME.value,
+            )
+        return DEFAULT_THEME_NAME
+
+
+def _resolve_layout(raw: str) -> Layout:
+    """Return a valid layout, defaulting to ``CLASSIC`` on unknown input."""
+    try:
+        return Layout((raw or "").strip().lower())
+    except ValueError:
+        return Layout.CLASSIC
+
 
 # ── Release notes ─────────────────────────────────────────────────────────────
 # Shown in the "What's new" panel on startup. Update this each release with
@@ -63,21 +100,21 @@ class ReplConfig:
         the ``OPENSRE_INTERACTIVE`` env var, or ``interactive.enabled`` in
         ``~/.opensre/config.yml``.
 
-    layout : str  ("classic" | "pinned")
+    layout : Layout  ("classic" | "pinned")
         Which renderer to use.  Only ``classic`` is wired today; ``pinned``
         is accepted and stored so the flag round-trips cleanly once P3 lands.
         Controlled by ``--layout`` CLI option, ``OPENSRE_LAYOUT`` env var, or
         ``interactive.layout`` in ``~/.opensre/config.yml``.
 
-    theme : str
+    theme : Theme
         Interactive shell color palette. Controlled by ``--theme`` CLI option,
         ``OPENSRE_THEME`` env var, or ``interactive.theme`` in
         ``~/.opensre/config.yml``.
     """
 
     enabled: bool = True
-    layout: str = "classic"
-    theme: str = "blue"
+    layout: Layout = Layout.CLASSIC
+    theme: Theme = DEFAULT_THEME_NAME
     alert_listener_enabled: bool = False
     alert_listener_host: str = "127.0.0.1"
     alert_listener_port: int = 0
@@ -98,7 +135,6 @@ class ReplConfig:
         cli_enabled: bool | None = None,
         cli_layout: str | None = None,
         cli_theme: str | None = None,
-        apply_active_theme: bool = True,
     ) -> ReplConfig:
         """Resolve config from all three tiers.
 
@@ -108,9 +144,8 @@ class ReplConfig:
             3. Config file — ``~/.opensre/config.yml`` ``interactive`` section
             4. Built-in defaults (enabled=True, layout="classic", theme="blue")
 
-        When ``apply_active_theme`` is False, resolve the theme string without
-        calling :func:`set_active_theme` (for passive config reads during a live
-        REPL session, e.g. banner rendering).
+        Resolution is pure: the returned ``theme`` is a validated palette name,
+        but activating it (the live terminal side effect) is the caller's job.
         """
         file_conf = _read_config_file()
 
@@ -124,50 +159,22 @@ class ReplConfig:
 
         # --- layout ---
         if cli_layout is not None:
-            layout = cli_layout.lower()
+            layout = _resolve_layout(cli_layout)
         elif (env_val := os.getenv("OPENSRE_LAYOUT")) is not None:
-            layout = env_val.lower()
+            layout = _resolve_layout(env_val)
         else:
-            layout = str(file_conf.get("layout", "classic")).lower()
-
-        if layout not in _VALID_LAYOUTS:
-            layout = "classic"
+            layout = _resolve_layout(str(file_conf.get("layout", Layout.CLASSIC)))
 
         # --- theme ---
-        from infrastructure.terminal.theme import (
-            DEFAULT_THEME_NAME,
-            get_theme,
-            list_theme_names,
-            set_active_theme,
-        )
-
         if cli_theme is not None:
-            theme = cli_theme.strip().lower()
+            theme = _resolve_theme(cli_theme, source=None)
         elif (env_val := os.getenv("OPENSRE_THEME")) is not None:
-            theme = env_val.strip().lower()
-            if theme not in list_theme_names():
-                log.warning(
-                    "OPENSRE_THEME=%r is not a valid theme; defaulting to %r.",
-                    env_val,
-                    DEFAULT_THEME_NAME,
-                )
-                theme = DEFAULT_THEME_NAME
+            theme = _resolve_theme(env_val, source="OPENSRE_THEME")
         else:
-            raw_theme = file_conf.get("theme", DEFAULT_THEME_NAME)
-            theme = str(raw_theme).strip().lower()
-            if theme not in list_theme_names():
-                log.warning(
-                    "config.yml interactive.theme=%r is not a valid theme; defaulting to %r.",
-                    raw_theme,
-                    DEFAULT_THEME_NAME,
-                )
-                theme = DEFAULT_THEME_NAME
-
-        if apply_active_theme:
-            active_theme = set_active_theme(theme)
-            theme = active_theme.name
-        else:
-            theme = get_theme(theme).name
+            theme = _resolve_theme(
+                str(file_conf.get("theme", DEFAULT_THEME_NAME)),
+                source="config.yml interactive.theme",
+            )
 
         # --- alert_listener_enabled ---
         if (env_val := os.getenv("OPENSRE_ALERT_LISTENER_ENABLED")) is not None:

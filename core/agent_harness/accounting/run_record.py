@@ -4,7 +4,8 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any
 
-from core.agent_harness.accounting.token_accounting import build_llm_run_info
+from core.agent_harness.accounting.token_accounting import LlmRunInfo, build_llm_run_info
+from core.llm.types import StreamingReasoningClient
 
 if TYPE_CHECKING:
     from core.agent_harness.accounting.token_accounting import LlmRunInfo

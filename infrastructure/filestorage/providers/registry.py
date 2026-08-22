@@ -1,6 +1,6 @@
 """Register object-store backends without changing the sync engine.
 
-The engine talks only to :class:`~infrastructure.filestorage.ports.ObjectStore`.
+The engine talks only to :class:`~infrastructure.filestorage.contracts.ObjectStore`.
 Each cloud vendor ships a factory here; surfaces call
 :func:`build_object_store` and never import a vendor module directly.
 Adding GCS, Azure, or another backend is a new module plus one
@@ -27,7 +27,7 @@ from infrastructure.filestorage.exposure import PublicAccessChecker, PublicAcces
 
 if TYPE_CHECKING:
     from infrastructure.filestorage.config import RemoteSyncConfig
-    from infrastructure.filestorage.ports import ObjectStore
+    from infrastructure.filestorage.contracts import ObjectStore
 
 ObjectStoreFactory = Callable[["RemoteSyncConfig"], "ObjectStore"]
 

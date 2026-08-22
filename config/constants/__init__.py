@@ -291,6 +291,7 @@ from config.constants.redis import (
     REDIS_SSL_ENV,
     REDIS_USERNAME_ENV,
 )
+from config.constants.repl_theme import DEFAULT_THEME_NAME, THEME_NAMES, Theme
 from config.constants.reporting import SLACK_LINK_RE
 from config.constants.runtime_metadata import (
     GITHUB_REPO_ENV,
@@ -467,6 +468,7 @@ __all__ = [
     "DEFAULT_MAX_PARALLEL_UPLOADS",
     "DEFAULT_REMOTE_SYNC_PREFIX",
     "DEFAULT_REMOTE_SYNC_PROVIDER",
+    "DEFAULT_THEME_NAME",
     "REMOTE_SYNC_BUCKET_ENV",
     "REMOTE_SYNC_ENDPOINT_URL_ENV",
     "REMOTE_SYNC_ENV",
@@ -673,6 +675,8 @@ __all__ = [
     "TEMPO_PASSWORD_ENV",
     "TEMPO_URL_ENV",
     "TEMPO_USERNAME_ENV",
+    "THEME_NAMES",
+    "Theme",
     "TRACER_BASE_URL_ENV",
     "TRACER_JWT_TOKEN_ENV",
     "TWILIO_ACCOUNT_SID_ENV",

@@ -17,7 +17,7 @@ import ast
 import inspect
 import textwrap
 
-from infrastructure.scheduling.scheduler import delivery, executor
+from infrastructure.scheduling.scheduler import delivery
 from infrastructure.scheduling.scheduler.types import Provider
 from tools.system.watch_dog import runner
 from tools.system.watch_dog.config import WATCHDOG_SUPPORTED_PROVIDERS
@@ -25,8 +25,8 @@ from tools.system.watch_dog.config import WATCHDOG_SUPPORTED_PROVIDERS
 #: Every member the vocabulary offers a caller.
 ALL_PROVIDERS = frozenset(Provider)
 
-#: What ``executor._deliver_single`` has an explicit branch for. Anything else
-#: reaches the ``else`` and fails the task with "Unsupported provider".
+#: What the installed delivery bundle has an adapter for. Anything else resolves
+#: to no adapter and fails the task with "Unsupported provider".
 EXECUTOR_DELIVERS = frozenset(
     {
         Provider.TELEGRAM,
@@ -70,9 +70,11 @@ def _providers_branched_on(function: object) -> frozenset[Provider]:
 
 
 def test_the_executor_delivers_to_exactly_these_providers() -> None:
-    """The send path's branches are the real answer to "can this be delivered?"."""
-    # Arrange / Act
-    reachable = _providers_branched_on(executor._deliver_single)
+    """The installed adapter bundle is the real answer to "can this be delivered?"."""
+    # Arrange / Act: the composition root assembles exactly the deliverable set.
+    from bootstrap.adapters import scheduled_delivery_adapters
+
+    reachable = scheduled_delivery_adapters().providers()
 
     # Assert
     assert reachable == EXECUTOR_DELIVERS

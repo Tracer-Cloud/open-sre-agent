@@ -11,11 +11,12 @@ from __future__ import annotations
 
 import contextlib
 import json
-from typing import Any
+from typing import Any, cast
 
 from rich.console import Console
 from rich.markup import escape
 
+from core.agent_harness.ports import SessionState
 from core.agent_harness.runtime import GatherPhase
 from surfaces.interactive_shell.session import Session
 from surfaces.interactive_shell.ui import DIM
@@ -166,8 +167,15 @@ class ShellGatherProgress:
             self._console.print(f"[{DIM}]· gathering cancelled[/]")
 
 
-def shell_gather_phase(session: Session, console: Console) -> GatherPhase:
-    """The REPL's gather phase: live progress on ``console``, tool calls persisted to ``session``."""
+def shell_gather_phase(session: SessionState, console: Console) -> GatherPhase:
+    """The REPL's gather phase: live progress on ``console``, tool calls persisted to ``session``.
+
+    ``session`` is typed to the ``BuildGather`` Protocol's base ``SessionState``
+    (contravariance requires implementations accept at least as wide a type as
+    declared), but this factory is only ever wired up by the shell's own
+    :func:`shell_agent_build_config`, which always passes a real ``Session``.
+    """
+    session = cast(Session, session)
 
     def persist(executed: list[tuple[Any, Any]]) -> None:
         _persist_tool_calls(session, executed)

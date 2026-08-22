@@ -39,7 +39,7 @@ class DiscordTurnOutput:
         tool_hooks: object | None = None,
     ) -> None:
         self.tool_hooks = tool_hooks
-        # Set per turn by this transport's dispatcher; the turn handler reads it
+        # Set per turn by this transport's dispatcher; the turn runner reads it
         # to give tools a cooperative cancel signal on soft timeout or stop.
         self.turn_cancel: threading.Event | None = None
         self._bot_token = bot_token

@@ -12,7 +12,7 @@ point the reader at ``/background show`` for the rest.
 
 from __future__ import annotations
 
-from infrastructure.scheduling.background_investigations.types import BackgroundInvestigationRecord
+from core.domain.background_investigations import BackgroundInvestigationRecord
 
 _COMMAND_CHARS = 200
 _ROOT_CAUSE_CHARS = 1000

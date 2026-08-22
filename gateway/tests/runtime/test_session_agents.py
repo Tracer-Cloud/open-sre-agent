@@ -14,7 +14,7 @@ from core.agent_harness.session.persistence.memory import InMemorySessionStore
 from core.agent_harness.turns.turn_results import ToolCallingTurnResult, TurnResult
 from infrastructure.turn_host.bindable_output import BindableOutput
 from infrastructure.turn_host.session_agents import SessionAgentPool
-from infrastructure.turn_host.turn_handler import TurnHandler
+from infrastructure.turn_host.turn_runner import TurnRunner
 from tests.shared.default_headless_build_stub import default_headless_build_stub
 from tests.shared.fake_agent import fake_agent
 
@@ -22,13 +22,13 @@ from tests.shared.fake_agent import fake_agent
 @pytest.fixture(autouse=True)
 def _stub_gateway_turn_analytics(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(
-        "infrastructure.turn_host.turn_handler.capture_gateway_turn_started", lambda **_: None
+        "infrastructure.turn_host.turn_runner.capture_gateway_turn_started", lambda **_: None
     )
     monkeypatch.setattr(
-        "infrastructure.turn_host.turn_handler.capture_gateway_turn_completed", lambda **_: None
+        "infrastructure.turn_host.turn_runner.capture_gateway_turn_completed", lambda **_: None
     )
     monkeypatch.setattr(
-        "infrastructure.turn_host.turn_handler.capture_gateway_turn_failed", lambda **_: None
+        "infrastructure.turn_host.turn_runner.capture_gateway_turn_failed", lambda **_: None
     )
 
 
@@ -142,7 +142,7 @@ def test_pool_rebinds_current_session_on_cache_hit(monkeypatch: pytest.MonkeyPat
     assert agent_b.session is second
 
 
-def test_turn_handler_reuses_headless_agent_across_turns(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_turn_runner_reuses_headless_agent_across_turns(monkeypatch: pytest.MonkeyPatch) -> None:
     agent = fake_agent(dispatch_result=_empty_result())
     factory = MagicMock(return_value=agent)
     monkeypatch.setattr(
@@ -151,7 +151,7 @@ def test_turn_handler_reuses_headless_agent_across_turns(monkeypatch: pytest.Mon
     )
 
     session = SessionCore(store=InMemorySessionStore())
-    handler = TurnHandler(console=Console(force_terminal=False))
+    handler = TurnRunner(console=Console(force_terminal=False))
     logger = logging.getLogger("test.reuse")
     handler("one", session, MagicMock(), logger)
     handler("two", session, MagicMock(), logger)
@@ -268,7 +268,7 @@ def test_drop_session_removes_cached_agent_and_output(monkeypatch: pytest.Monkey
 def test_retain_only_current_session_drops_stale_ids_after_rotation(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """Shell /new and /resume rotate session_id; the REPL keeps one TurnHandler."""
+    """Shell /new and /resume rotate session_id; the REPL keeps one TurnRunner."""
     constructed: list[str] = []
 
     class _FakeAgent:
@@ -300,7 +300,7 @@ def test_retain_only_current_session_drops_stale_ids_after_rotation(
 def test_gateway_default_retains_multiple_session_agents(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """Chat hosts many conversations on one TurnHandler — do not cull peers."""
+    """Chat hosts many conversations on one TurnRunner — do not cull peers."""
     pool = _fake_agent_pool(monkeypatch)
     assert pool._retain_only_current_session is False
     logger = logging.getLogger("test.pool.gateway")

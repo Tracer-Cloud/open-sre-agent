@@ -2,7 +2,7 @@
 
 One Event per turn (``output.turn_cancel``). Soft timeout and ``/stop``
 (:class:`~gateway.core.middleware.active_turns.ActiveTurnRegistry`) both ``set()``
-it. :class:`TurnHandler` binds this wrapper so tools and ReAct see
+it. :class:`TurnRunner` binds this wrapper so tools and ReAct see
 ``cancel_requested`` like the interactive shell's ``StreamingConsole``.
 
 The Event itself is created/attached by

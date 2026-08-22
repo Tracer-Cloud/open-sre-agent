@@ -35,7 +35,7 @@ import logging
 from datetime import datetime
 from typing import Any, TypeVar
 
-from core.agent_harness.session.persistence.ports import SessionRepo, SessionStore
+from core.agent_harness.session.persistence.contracts import SessionRepo, SessionStore
 
 # Import from submodules (not the package __init__) so the session package can
 # re-export SessionManager without a circular import.

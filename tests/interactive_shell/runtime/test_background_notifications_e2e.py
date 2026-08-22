@@ -20,7 +20,10 @@ from rich.console import Console
 
 from surfaces.interactive_shell.command_registry import dispatch_slash
 from surfaces.interactive_shell.runtime.background import runner as runner_mod
-from surfaces.interactive_shell.runtime.background.runner import _start_background_investigation
+from surfaces.interactive_shell.runtime.background.runner import (
+    BackgroundRunResult,
+    _start_background_investigation,
+)
 from surfaces.interactive_shell.session import Session
 from surfaces.interactive_shell.session.background_investigations import (
     BackgroundInvestigationRecord,
@@ -30,7 +33,7 @@ from surfaces.interactive_shell.session.background_investigations import (
 def _run_investigation_to_completion(
     session: Session,
     monkeypatch: pytest.MonkeyPatch,
-    final_state: dict[str, object],
+    final_state: BackgroundRunResult,
 ) -> tuple[str, BackgroundInvestigationRecord]:
     """Drive the REAL runner completion hook (runner.py `_worker`) to completion.
 
@@ -54,9 +57,9 @@ def _run_investigation_to_completion(
         lambda exc, **_kwargs: caught.setdefault("exc", exc),
     )
 
-    def _fake_run(*, cancel_requested, **_kwargs: object) -> dict[str, object]:
+    def _fake_run(*, cancel_requested: threading.Event) -> BackgroundRunResult:
         _ = cancel_requested
-        return dict(final_state)
+        return final_state.copy()
 
     console = Console(file=io.StringIO(), force_terminal=False, highlight=False)
     task_id = _start_background_investigation(
@@ -64,7 +67,6 @@ def _run_investigation_to_completion(
         console=console,
         display_command="/investigate checkout-latency",
         run_fn=_fake_run,
-        kwargs={},
     )
     # Join the real daemon worker so the completion hook has run to
     # completion before we inspect the record.
@@ -134,7 +136,7 @@ def test_e2e_happy_path_full_chain(
 
     # (2) REAL runner completes a synthetic investigation and fires the real
     # completion hook, which fans out to the real dispatcher.
-    final_state = {
+    final_state: BackgroundRunResult = {
         "root_cause": "ROOTSENTINEL postgres connection pool saturation",
         "validated_claims": [{"claim": "TOPCLAIM rds cpu spike to 98%"}],
         "remediation_steps": ["NEXTSTEP raise pool max to 40"],
@@ -195,7 +197,7 @@ def test_e2e_failure_400_renders_in_background_show(monkeypatch: pytest.MonkeyPa
     console = Console(file=io.StringIO(), force_terminal=False, highlight=False)
     assert dispatch_slash("/background notify set telegram", session, console) is True
 
-    final_state: dict[str, object] = {
+    final_state: BackgroundRunResult = {
         "root_cause": "kafka rebalance storm",
         "remediation_steps": ["pin partitions"],
     }
@@ -211,8 +213,9 @@ def test_e2e_failure_400_renders_in_background_show(monkeypatch: pytest.MonkeyPa
     assert "parse_mode" not in payload
 
     # REAL `/background show` renders the failed row.
-    show_console = Console(file=io.StringIO(), force_terminal=False, highlight=False)
+    show_output = io.StringIO()
+    show_console = Console(file=show_output, force_terminal=False, highlight=False)
     assert dispatch_slash(f"/background show {task_id}", session, show_console) is True
-    out = show_console.file.getvalue()
+    out = show_output.getvalue()
     assert "telegram:failed: Bad Request: chat not found" in out
     assert "MarkupError" not in out

@@ -18,7 +18,7 @@ junk drawer. Prefer leaf imports over re-export shims.
   (`process/turn_capacity/`), and installed vs latest release version
   (`process/release_version.py`).
 - `setup_state.py` — install/setup facts surfaced to agents and doctor.
-- `harness_ports.py` — integration port registries wired into the harness.
+- `harness_providers/` — integration provider registries wired into the harness.
 
 ## Contracts
 

@@ -23,6 +23,7 @@ from infrastructure.filestorage.config import (
     load_remote_sync_config,
     remote_sync_enabled,
 )
+from infrastructure.filestorage.contracts import ObjectStore, RemoteObject
 from infrastructure.filestorage.engine import (
     SyncReport,
     local_files,
@@ -67,7 +68,6 @@ from infrastructure.filestorage.operations import (
     get_sync_status,
     run_remote_sync,
 )
-from infrastructure.filestorage.ports import ObjectStore, RemoteObject
 from infrastructure.filestorage.providers import build_object_store, check_bucket_exposure
 from infrastructure.filestorage.syncable import (
     SyncRoot,

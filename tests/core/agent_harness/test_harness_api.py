@@ -174,6 +174,7 @@ RUNTIME = frozenset(
         "build_agent",
         "default_llm_factory",
         "default_reasoning_llm_factory",
+        "resolve_agent_ports",
     }
 )
 

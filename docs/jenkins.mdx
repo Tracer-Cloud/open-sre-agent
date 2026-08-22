@@ -55,6 +55,131 @@ In Jenkins: click your **username** (top-right) → **Security** → **API Token
 
 API access uses HTTP Basic auth with your **username** and this **token** (not your password).
 
+### Quick local test with Docker
+
+Bring up a disposable Jenkins with a pre-configured admin account (no setup wizard):
+
+```bash
+mkdir -p /tmp/jenkins-init
+cat > /tmp/jenkins-init/basic-security.groovy << 'EOF'
+import jenkins.model.*
+import hudson.security.*
+
+def instance = Jenkins.get()
+def realm = new HudsonPrivateSecurityRealm(false)
+realm.createAccount("admin", "admin")
+instance.setSecurityRealm(realm)
+def strategy = new FullControlOnceLoggedInAuthorizationStrategy()
+strategy.setAllowAnonymousRead(false)
+instance.setAuthorizationStrategy(strategy)
+instance.save()
+EOF
+
+docker run -d --name jenkins-dev -p 127.0.0.1:8090:8080 \
+  -e JAVA_OPTS="-Djenkins.install.runSetupWizard=false" \
+  -v /tmp/jenkins-init/basic-security.groovy:/usr/share/jenkins/ref/init.groovy.d/basic-security.groovy \
+  jenkins/jenkins:lts-jdk17
+```
+
+Wait for it to come up, then create and run a job so there is a real build to inspect:
+
+```bash
+i=0
+until curl -sf -o /dev/null -u admin:admin http://localhost:8090/crumbIssuer/api/json; do
+  i=$((i + 1))
+  [ "$i" -ge 30 ] && { echo "ERROR: Jenkins never became ready" >&2; exit 1; }
+  sleep 2
+done
+
+COOKIE_JAR=/tmp/jenkins-init/cookies.txt
+CRUMB=$(curl -s -c "$COOKIE_JAR" -u admin:admin http://localhost:8090/crumbIssuer/api/json | python3 -c "import json,sys;print(json.load(sys.stdin)['crumb'])")
+
+curl -s -b "$COOKIE_JAR" -u admin:admin -H "Jenkins-Crumb: $CRUMB" -H "Content-Type: application/xml" \
+  --data-binary '<project><builders><hudson.tasks.Shell><command>echo deploying payment-service; exit 1</command></hudson.tasks.Shell></builders></project>' \
+  "http://localhost:8090/createItem?name=payment-service-deploy"
+
+curl -s -b "$COOKIE_JAR" -u admin:admin -H "Jenkins-Crumb: $CRUMB" -X POST \
+  "http://localhost:8090/job/payment-service-deploy/build"
+
+# The build runs async — wait for it to leave the queue and finish before inspecting it
+i=0
+until curl -s -u admin:admin "http://localhost:8090/job/payment-service-deploy/lastBuild/api/json" \
+  | python3 -c "import json,sys; sys.exit(0 if json.load(sys.stdin).get('result') else 1)" 2>/dev/null; do
+  i=$((i + 1))
+  [ "$i" -ge 30 ] && { echo "ERROR: build never finished" >&2; exit 1; }
+  sleep 2
+done
+```
+
+```bash
+export JENKINS_URL="http://localhost:8090"
+export JENKINS_USER="admin"
+export JENKINS_API_TOKEN="admin"  # local demo only — real deployments must use a token, not a password
+export OPENSRE_INTEGRATIONS_STORE_PATH="$(mktemp /tmp/opensre-jenkins-demo.XXXXXX)"
+```
+
+`admin`/`admin` is only valid because this is a disposable local instance with anonymous read disabled — Jenkins accepts a real password over Basic auth the same way it accepts a token when no token is configured. Never do this against a real server.
+
+The empty temporary integration store prevents saved integrations from overriding the demo environment variables.
+
+Verify:
+
+```bash
+opensre integrations verify jenkins
+```
+
+```
+SERVICE │ SOURCE    │ STATUS   │ DETAIL
+jenkins │ local env │ ✓ passed │ Jenkins connectivity successful at
+        │           │          │ http://localhost:8090 (node: built-in)
+```
+
+The exported variables also make Jenkins available to investigations; no separate setup step is required.
+
+Trigger a real investigation against the failing build — this exercises `list_jenkins_jobs`, `list_jenkins_running_builds`, `get_jenkins_pipeline_stages`, and `get_jenkins_build_log` in a single supported turn (not a raw internal import):
+
+```bash
+opensre investigate --input-json '{
+  "alert_name": "JenkinsBuildFailed",
+  "severity": "critical",
+  "commonAnnotations": {
+    "summary": "Jenkins job payment-service-deploy failed on latest build",
+    "job_name": "payment-service-deploy"
+  }
+}'
+```
+
+Real output from a run against this exact local build (edited for length):
+
+```
+Loading integrations: jenkins
+↳ Jenkins · list jenkins jobs
+↳ Jenkins · list jenkins running builds
+↳ Jenkins · get jenkins pipeline stages
+↳ Jenkins · get jenkins build log
+
+root_cause: "The Jenkins freestyle job `payment-service-deploy` is
+misconfigured: its only 'Execute shell' build step is a placeholder
+that runs `echo deploying payment-service` followed by `exit 1`.
+The job has no actual deployment logic, so every build fails
+deterministically."
+
+validity_score: 0.95
+Cited Evidence: list jenkins jobs, list jenkins running builds,
+                get jenkins pipeline stages, get jenkins build log
+```
+
+`list_jenkins_builds` is the one registered tool not called here -- `list_jenkins_jobs` already returned this job's last-build number and status, so the agent went straight to `get_jenkins_pipeline_stages`/`get_jenkins_build_log` for that specific build instead of a redundant builds listing.
+
+Teardown:
+
+```bash
+docker rm -f jenkins-dev
+rm -rf /tmp/jenkins-init
+rm -f "$OPENSRE_INTEGRATIONS_STORE_PATH"
+unset JENKINS_URL JENKINS_USER JENKINS_API_TOKEN OPENSRE_INTEGRATIONS_STORE_PATH
+```
+
 ## Investigation tools
 
 | Tool | What it does |

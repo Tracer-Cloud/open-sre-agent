@@ -21,7 +21,7 @@ from typing import TYPE_CHECKING, Any
 from rich.console import Console
 
 if TYPE_CHECKING:
-    from infrastructure.turn_host.turn_handler import TurnHandler
+    from infrastructure.turn_host.turn_runner import TurnRunner
 
 from infrastructure.analytics.repl_context import bound_repl_turn_context
 from infrastructure.analytics.usage_context import UsageSurface, bound_usage_context
@@ -77,7 +77,7 @@ class AgentTurnResources:
     #: tool output land in the same stream as the startup renders.
     console: Console | None = None
     #: Session-scoped turn host; each turn binds its own streaming console.
-    turn_handler: TurnHandler | None = None
+    turn_handler: TurnRunner | None = None
 
 
 def _streaming_console(
