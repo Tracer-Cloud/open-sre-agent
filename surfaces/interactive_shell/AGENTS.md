@@ -1,11 +1,11 @@
 # Interactive shell package
 
-These instructions apply to `interactive_shell/` and all of its
+These instructions apply to `surfaces/interactive_shell/` and all of its
 subdirectories. The repo-root `AGENTS.md` still applies.
 
 ## Purpose
 
-`interactive_shell/` owns the interactive OpenSRE terminal surface: the REPL
+`surfaces/interactive_shell/` owns the interactive OpenSRE terminal surface: the REPL
 loop, slash-command surface, local alert ingestion, shell execution, and Rich /
 prompt-toolkit UI. Reusable agent session state, prompt history, grounding, and
 prompt construction live under `core.agent_harness`.
@@ -23,9 +23,11 @@ should be predictable, interruptible, explainable, and safe by default.
 | `command_registry/` | slash-command definitions, argument validation, command dispatch | long-running implementation details better placed in services/runtime modules |
 | `runtime/` | background task workers, lifecycle/`ReplState`, runtime context assembly, semantic shell-turn execution, and core harness adapters | prompt text, reusable session persistence, or compatibility shims |
 | `tools/interactive_shell/shell/` | shell command parsing, shell execution policy, subprocess execution, and the `run_shell_command`/`run_cd`/`run_pwd` runner (next to the `shell_run` tool in `tools/interactive_shell/actions/shell.py`) | slash-command execution |
-| `references/` | CLI/docs/source/AGENTS reference loading and caching | generated model prose |
-| `config/` | interactive-shell config loading and tool catalog metadata | global app config unrelated to the REPL |
-| `ui/` | Rich/prompt-toolkit rendering, theme, menus, streaming output, and domain views such as `incoming_alerts.py` (receiver/queue/listener lifecycle lives in `core.domain.alerts.inbox`) | business logic or network calls |
+| `grounding/` | CLI/docs/source/AGENTS reference loading, caching, and cache diagnostics for grounded help answers (`grounding/cli_reference.py`) | network calls or generated model prose |
+| `session/` | per-REPL session state: `Session` composed over `core.agent_harness.SessionCore`, terminal UI/background facets (`session/terminal_session.py`), the bounded received-alert inbox, background-investigation records and notification preferences, JSONL trace-store binding | alert listener lifecycle or network I/O (owned by `core.domain.alerts.inbox`) |
+| `prompt_history/` | persistent prompt-command history storage plus redaction and retention policy (`RedactingFileHistory`, entry caps) | console/UI interaction |
+| `utils/` | shell turn telemetry: `PromptRecorder`, sink routing (`utils/telemetry/sinks/`), investigation analytics and LLM-usage events | turn-flow control or UI rendering |
+| `ui/` | Rich/prompt-toolkit rendering, theme, menus, streaming output, and domain views such as `ui/alerts/` formatting (receiver/queue/listener lifecycle lives in `core.domain.alerts.inbox`) | business logic or network calls |
 
 When a change crosses these boundaries, prefer extracting a small helper in the
 owning area rather than adding more logic to the caller.
@@ -54,11 +56,13 @@ owning area rather than adding more logic to the caller.
   planner tool specs, and compact help text. Without it, CI fails
   (`test_slash_catalog_covers_all_registered_commands`).
   - **New REPL-only slash command:** add `SlashCommand` in the owning
-    `command_registry/*` module **and** `_mcp(...)` in `slash_catalog.py` (keep
+    `command_registry/*` module **and** `_mcp(...)` in
+    `command_registry/slash_catalog.py` (keep
     keys sorted alphabetically in `MCP_BY_COMMAND`).
   - **New CLI with REPL parity:** add the Click command under `surfaces/cli/commands/`,
     register a `SlashCommand` in `command_registry/cli_parity.py` (subprocess to
-    `opensre …`), **and** add `MCP_BY_COMMAND` in `slash_catalog.py` with
+    `opensre …`), **and** add `MCP_BY_COMMAND` in
+    `command_registry/slash_catalog.py` with
     `llm_description`, `use_cases`, and `anti_examples` aligned to the command’s
     `usage` tuple.
   - **Verify before push:**
@@ -66,16 +70,18 @@ owning area rather than adding more logic to the caller.
 - Use `validate_args` for cheap pre-policy validation so bad arguments do not
   trigger confirmations or side effects.
 - Send command execution through the central dispatch and execution-policy
-  helpers. Do not bypass `execution_policy.py` for new commands.
+  helpers. Do not bypass `tools/interactive_shell/shared/execution_policy.py`
+  for new commands.
 - **Alpha allow-all execution policy (current behavior):** the REPL runs with
-  **no command guardrails**. `execution_policy.py` resolves every action to
+  **no command guardrails**. `tools/interactive_shell/shared/execution_policy.py`
+  resolves every action to
   `allow` with **no confirmation prompt** — all slash/`opensre` commands,
   investigations, synthetic tests, code-agent launches, LLM runtime switches, and
   **all** shell commands run immediately, in any context (TTY or not, trust mode
   or not). There is **no shell-command safety policy**: the
   read-only/mutating/restricted classification and the `deny` floor were removed
-  (`shell_policy.py` deleted; parsing/policy/execution live under
-  `tools/shell/`). Mutating commands (`rm`/`mv`/`docker`), `restricted` commands
+  (the shell-policy module was deleted; parsing/policy/execution live under
+  `tools/interactive_shell/shell/`). Mutating commands (`rm`/`mv`/`docker`), `restricted` commands
   (`sudo`, `systemctl`, `kill`, `dd`, …), shell operators (`| && ; > <`), and
   command substitution all run; the `!` prefix is honored but optional. The only
   shell input still rejected is genuinely empty input (a bare `!` or whitespace).
@@ -83,7 +89,8 @@ owning area rather than adding more logic to the caller.
   `docs/interactive-shell-action-policy.md`. The former `ExecutionTier`
   classification was removed because it gated nothing under default-allow; if an
   opt-in stricter policy is reintroduced after alpha, gate it in
-  `execution_policy.py` (the `ask` verdict, confirmation UX, and `trust_mode` are
+  `tools/interactive_shell/shared/execution_policy.py` (the `ask` verdict,
+  confirmation UX, and `trust_mode` are
   retained as the hook), not via a planner-stage denial.
 - Non-TTY behavior under default-allow: actions no longer fail closed on
   non-interactive stdin (there is nothing to confirm). The fail-closed path only
@@ -148,13 +155,13 @@ owning area rather than adding more logic to the caller.
   mutating actions are ever introduced, gate them with the
   execution-stage confirmation policy (`tools/interactive_shell/shared/execution_policy.py`), not a
   planner-stage denial.
-- Keep deterministic command detection in `orchestration/` for terminal UI
-  policy only; use the action agent for slash/tool action selection.
+- Keep deterministic command detection in `runtime/utils/input_policy.py` for
+  terminal UI policy only; use the action agent for slash/tool action selection.
 - Send uncertainty to a safe surface: help/chat or a clarification, not direct
   mutation or shell execution.
 - LLM-generated text must never execute directly. Convert proposed actions into
   explicit planned actions, show them to the user when appropriate, then execute
-  through `orchestration/` and policy gates.
+  through the harness action turn (`runtime/action_turn.py`) and policy gates.
 - When adding a new action type, test allowed, denied, and confirmation-required
   paths.
 
@@ -189,8 +196,8 @@ owning area rather than adding more logic to the caller.
 
 ## Shell, subprocesses, and local system effects
 
-- Shell execution changes belong under `shell/` and must preserve parsing,
-  quoting, timeout, redaction, and policy behavior.
+- Shell execution changes belong under `tools/interactive_shell/shell/` and
+  must preserve parsing, quoting, timeout, redaction, and policy behavior.
 - Treat subprocess output as untrusted display text; escape it before Rich
   markup and cap what is retained or sent to prompts.
 - Use explicit timeouts and clear cancellation behavior for subprocesses. Avoid
@@ -229,8 +236,8 @@ owning area rather than adding more logic to the caller.
 ## Testing expectations
 
 - Put tests under `tests/interactive_shell/`, mirroring the package area
-  when useful (`orchestration/`, `ui/`, etc.). Never add tests under
-  source packages.
+  when useful (`command_registry/`, `runtime/`, `session/`, `ui/`, etc.). Never
+  add tests under source packages.
 - For focused changes, run the closest tests, for example:
   - `uv run python -m pytest tests/core/domain/alerts/test_inbox.py`
   - `uv run python -m pytest tests/interactive_shell/<area>/`
