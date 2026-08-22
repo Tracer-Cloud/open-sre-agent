@@ -8,11 +8,16 @@ from __future__ import annotations
 
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass
+from typing import Any
 
 from core.agent_harness.ports import ToolEventObserver
 
 #: Persists gathered tool calls as ``[(tool_name, tool_input), ...]``.
-PersistToolCalls = Callable[[list[tuple[str, Mapping[str, object]]]], None]
+#: Persists gathered tool calls as ``[(tool_name, tool_input, output), ...]``.
+PersistToolCalls = Callable[
+    [list[tuple[str, Mapping[str, object], Any]]],
+    None,
+]
 
 #: Loop budget for headless metric reports (PostHog / digests): schema discovery plus
 #: one query per metric needs more than the chat default; passed as ``max_iterations``.
