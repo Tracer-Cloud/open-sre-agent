@@ -10,8 +10,8 @@ from here.
 from __future__ import annotations
 
 
-def install_harness_ports() -> None:
-    """Register integrations/tools adapters into :mod:`infrastructure.harness_ports`.
+def install_harness_providers() -> None:
+    """Register integrations/tools adapters into :mod:`infrastructure.harness_providers`.
 
     Harness composition root for the interactive shell and tests. Lives in
     ``surfaces`` (not ``tools``) because ``tools`` and ``integrations`` are
@@ -39,7 +39,7 @@ def install_product_adapters() -> None:
     from integrations.tracer.integrations_adapter import (
         fetch_tracer_remote_integrations,
     )
-    from infrastructure.harness_ports import set_remote_integrations_fetcher
+    from infrastructure.harness_providers import set_remote_integrations_fetcher
     from infrastructure.observability.render.debug import set_debug_printer
     from infrastructure.observability.render.display import (
         set_investigation_footer_renderer,
@@ -58,4 +58,4 @@ def install_product_adapters() -> None:
     set_investigation_footer_renderer(render_completed_investigation_footer)
     set_progress_tracker_factory(get_tracker)
     set_remote_integrations_fetcher(fetch_tracer_remote_integrations)
-    install_harness_ports()
+    install_harness_providers()

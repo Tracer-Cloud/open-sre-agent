@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-import infrastructure.harness_ports as harness_ports
+import infrastructure.harness_providers as harness_providers
 from core.agent_harness.prompts.assistant.turn import _build_integration_guard
 from core.agent_harness.turns.turn_snapshot import TurnSnapshot
 
@@ -21,11 +21,11 @@ def _snapshot(*, connected: tuple[str, ...], known: bool = True) -> TurnSnapshot
 
 
 def test_integration_guard_lists_setupable_ids_and_covered_evidence_kinds() -> None:
-    harness_ports.set_setupable_integration_services(
+    harness_providers.set_setupable_integration_services(
         lambda: ("posthog_mcp", "grafana", "sentry_mcp")
     )
-    harness_ports.clear_preferred_evidence_sources()
-    harness_ports.register_preferred_evidence_source("metric_read", "posthog_mcp")
+    harness_providers.clear_preferred_evidence_sources()
+    harness_providers.register_preferred_evidence_source("metric_read", "posthog_mcp")
 
     text = _build_integration_guard(_snapshot(connected=("posthog_mcp", "grafana", "github")))
 
@@ -51,7 +51,7 @@ def test_integration_guard_keeps_an_empty_session_free_of_the_setup_id_roster() 
     the failing service.
     """
     # Arrange
-    harness_ports.set_setupable_integration_services(
+    harness_providers.set_setupable_integration_services(
         lambda: ("posthog_mcp", "grafana", "sentry_mcp")
     )
 

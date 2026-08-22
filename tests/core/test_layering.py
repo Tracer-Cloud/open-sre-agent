@@ -53,7 +53,7 @@ _CORE_RUNTIME_MODULES: tuple[Path, ...] = (
 #   needs CLI internals; if you think you do, file a new
 #   observability port instead.
 # - ``integrations.tracer`` — closed by #36
-#   (``infrastructure.harness_ports`` ``fetch_remote_integrations``).
+#   (``infrastructure.harness_providers`` ``fetch_remote_integrations``).
 #   Hosted LLM provider code lives in ``core.llm`` and remains core runtime
 #   capability access rather than integration-coupled transport.
 _FORBIDDEN_PREFIXES: tuple[str, ...] = (
@@ -101,7 +101,7 @@ def test_core_module_does_not_import_forbidden_layers(module_path: Path) -> None
     """Core modules must avoid forbidden boundary packages.
 
     Use ports instead — ``infrastructure.observability`` for progress/debug/display,
-    ``infrastructure.harness_ports`` for remote integrations — and register
+    ``infrastructure.harness_providers`` for remote integrations — and register
     concrete adapters via ``install_product_adapters``.
     """
     source = module_path.read_text(encoding="utf-8")
@@ -113,7 +113,7 @@ def test_core_module_does_not_import_forbidden_layers(module_path: Path) -> None
     }
     assert not leaks, (
         f"{module_path} imports forbidden module(s) {sorted(leaks)} — route through a "
-        "port (``infrastructure.observability.*`` or ``infrastructure.harness_ports.*``) and register "
+        "port (``infrastructure.observability.*`` or ``infrastructure.harness_providers.*``) and register "
         "adapters via ``install_product_adapters``."
     )
 

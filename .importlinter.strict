@@ -26,10 +26,6 @@ layers =
     core : infrastructure
     config
 ignore_imports =
-    # config upward imports (T-4 debt — refactor into lower layers)
-    config.config -> core.llm.providers.azure_openai
-    config.llm_auth.credentials -> integrations.llm_cli.registry
-    config.repl_config -> infrastructure.terminal.theme
     # infrastructure -> integrations (T-4 debt — scheduler / observability)
     infrastructure.analytics.cli -> integrations.github.identity
     infrastructure.observability.errors.sentry -> integrations.llm_cli.errors

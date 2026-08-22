@@ -7,6 +7,7 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from enum import StrEnum
 
+from config.llm_auth.cli_auth import resolve_cli_auth_state
 from config.llm_auth.provider_catalog import (
     API_KEY_PROVIDER_ENVS,
     ProviderSpec,
@@ -253,19 +254,7 @@ def status(provider: str) -> CredentialStatus:
                 detail=record.get("detail") or f"{spec.label} auth metadata is present.",
             )
         try:
-            from integrations.llm_cli.registry import get_cli_provider_registration
-
-            reg = get_cli_provider_registration(spec.value)
-            if reg is None:
-                return CredentialStatus(
-                    spec.value,
-                    False,
-                    CredentialSource.NONE,
-                    False,
-                    False,
-                    "No CLI adapter registered.",
-                )
-            probe = reg.adapter_factory().detect()
+            cli_auth = resolve_cli_auth_state(spec.value)
         except Exception as exc:
             return CredentialStatus(
                 spec.value,
@@ -275,7 +264,16 @@ def status(provider: str) -> CredentialStatus:
                 False,
                 f"CLI auth status could not be checked: {exc}",
             )
-        configured = probe.installed and probe.logged_in is True
+        if cli_auth is None:
+            return CredentialStatus(
+                spec.value,
+                False,
+                CredentialSource.NONE,
+                False,
+                False,
+                "No CLI adapter registered.",
+            )
+        configured = cli_auth.installed and cli_auth.logged_in is True
         source: CredentialSource = CredentialSource.CLI if configured else CredentialSource.NONE
         return CredentialStatus(
             provider=spec.value,
@@ -283,7 +281,7 @@ def status(provider: str) -> CredentialStatus:
             source=source,
             verified=configured,
             stale=False,
-            detail=probe.detail,
+            detail=cli_auth.detail,
         )
 
     if spec.credential_kind == "ambient":

@@ -358,14 +358,20 @@ class TestThemeRegistry:
         assert active.name == DEFAULT_THEME_NAME
         assert get_active_theme().name == DEFAULT_THEME_NAME
 
-    def test_load_without_apply_active_theme_leaves_global_palette(
+    def test_load_is_pure_and_never_activates_a_palette(
         self, monkeypatch: pytest.MonkeyPatch
     ) -> None:
+        # Arrange: a palette is active and a different theme is configured.
         from infrastructure.terminal.theme import get_active_theme_name, set_active_theme
 
-        monkeypatch.delenv("OPENSRE_THEME", raising=False)
+        monkeypatch.setenv("OPENSRE_THEME", "amber")
         set_active_theme("pink")
-        ReplConfig.load(apply_active_theme=False)
+
+        # Act: resolving config must not touch the live terminal palette.
+        cfg = ReplConfig.load()
+
+        # Assert: the name is resolved, but activation stays the caller's job.
+        assert cfg.theme == "amber"
         assert get_active_theme_name() == "pink"
 
 

@@ -239,7 +239,9 @@ def cli(
         )
 
     # Apply interactive.theme / OPENSRE_THEME / --theme for subcommands (onboard, etc.).
-    ReplConfig.load(cli_theme=theme)
+    from infrastructure.terminal.theme import set_active_theme
+
+    set_active_theme(ReplConfig.load(cli_theme=theme).theme)
 
 
 def _should_capture_cli_exception(exc: click.ClickException) -> bool:

@@ -3,12 +3,13 @@
 ``AgentSession.start()`` is the documented Python entry point. With no
 subprocess presenter, ``shell_run`` refuses every call ("subprocess presenter
 is required for this action tool") and the agent silently degrades to writing
-a plan it cannot execute — which reads as a reasoning failure but is a wiring
-gap. Observed live: the 5-step goal prompt returned PLANNED=4 / EXECUTED=0.
+a plan it cannot execute — which reads as a reasoning failure but is a
+registration gap. Observed live: the 5-step goal prompt returned PLANNED=4 /
+EXECUTED=0.
 
 The presenter cannot be a core default: it lives in ``tools`` (its process
 helpers) and ``core.agent_harness`` may import neither ``tools`` nor
-``gateway``. It is registered on this port at process boot instead.
+``gateway``. It is installed as an immutable provider at process boot instead.
 """
 
 from __future__ import annotations
@@ -17,21 +18,22 @@ from collections.abc import Iterator
 
 import pytest
 
-import infrastructure.harness_ports as harness_ports
+import infrastructure.harness_providers as harness_providers
+from infrastructure.harness_providers import subprocess_presenter
 
 
 @pytest.fixture(autouse=True)
-def _restore_port() -> Iterator[None]:
-    """Keep this module's writes out of every other test in the process."""
-    previous = harness_ports.get_subprocess_presenter_factory()
+def _restore_presenter() -> Iterator[None]:
+    """Keep this module's installs out of every other test in the process."""
+    previous = subprocess_presenter._installed  # noqa: SLF001
     yield
-    harness_ports.set_subprocess_presenter_factory(previous)
+    subprocess_presenter._installed = previous  # noqa: SLF001
 
 
 def test_process_boot_installs_a_subprocess_presenter_for_the_default_agent() -> None:
-    """Boot leaves a presenter registered so the default port stack can execute."""
+    """Boot leaves a presenter installed so the default port stack can execute."""
     # Arrange.
-    harness_ports.set_subprocess_presenter_factory(None)
+    subprocess_presenter.reset()
 
     # Act.
     from bootstrap.adapters import install_harness_adapters
@@ -39,37 +41,37 @@ def test_process_boot_installs_a_subprocess_presenter_for_the_default_agent() ->
     install_harness_adapters()
 
     # Assert.
-    assert harness_ports.get_subprocess_presenter_factory() is not None
+    assert harness_providers.resolve_subprocess_presenter() is not None
 
 
-def test_resetting_the_harness_ports_clears_the_presenter() -> None:
-    """A booted presenter must not leak into tests that reset the ports.
+def test_resetting_the_harness_providers_clears_the_presenter() -> None:
+    """A booted presenter must not leak into tests that reset the providers.
 
-    ``reset_harness_ports`` is the suite's "back to noop defaults" call; a port
-    it forgets stays registered for the rest of the process.
+    ``reset_harness_providers`` is the suite's "back to noop defaults" call; a
+    provider it forgets stays installed for the rest of the process.
     """
 
-    # Arrange: something registered, as after boot.
+    # Arrange: something installed, as after boot.
     def _presenter(*_args: object, **_kwargs: object) -> object:
         return object()
 
-    harness_ports.set_subprocess_presenter_factory(_presenter)
+    harness_providers.SubprocessPresenterProvider(_presenter).install()
 
     # Act.
-    harness_ports.reset_harness_ports()
+    harness_providers.reset_harness_providers()
 
     # Assert.
-    assert harness_ports.get_subprocess_presenter_factory() is None
+    assert harness_providers.resolve_subprocess_presenter() is None
 
 
-def test_default_headless_build_injects_the_registered_presenter() -> None:
-    """The default port stack takes the boot-registered factory at construction.
+def test_default_headless_build_injects_the_installed_presenter() -> None:
+    """The default port stack takes the boot-installed factory at construction.
 
     Hosts that pass their own ``DefaultToolProvider`` keep that factory. The
     family's bare default is what ``AgentSession.start()`` uses, so it must
-    receive the registered presenter or ``shell_run`` refuses every call. The
+    receive the installed presenter or ``shell_run`` refuses every call. The
     provider itself must not look the factory up — a missing constructor arg
-    stays missing even when one is registered.
+    stays missing even when one is installed.
     """
     # Arrange.
     from core.agent_harness.session import SessionCore
@@ -78,13 +80,13 @@ def test_default_headless_build_injects_the_registered_presenter() -> None:
     from core.agent_harness.turns.headless_adapters import BufferOutputSink
     from core.agent_harness.turns.headless_build import DefaultHeadlessBuild
 
-    def _registered(*_args: object, **_kwargs: object) -> object:
+    def _installed(*_args: object, **_kwargs: object) -> object:
         return object()
 
     def _explicit(*_args: object, **_kwargs: object) -> object:
         return object()
 
-    harness_ports.set_subprocess_presenter_factory(_registered)
+    harness_providers.SubprocessPresenterProvider(_installed).install()
     with_explicit = DefaultToolProvider(object(), object(), subprocess_presenter_factory=_explicit)
     without = DefaultToolProvider(object(), object())
     default_tools = DefaultHeadlessBuild(
@@ -96,4 +98,4 @@ def test_default_headless_build_injects_the_registered_presenter() -> None:
     assert with_explicit._subprocess_presenter_factory is _explicit  # noqa: SLF001
     assert without._subprocess_presenter_factory is None  # noqa: SLF001
     assert isinstance(default_tools, DefaultToolProvider)
-    assert default_tools._subprocess_presenter_factory is _registered  # noqa: SLF001
+    assert default_tools._subprocess_presenter_factory is _installed  # noqa: SLF001

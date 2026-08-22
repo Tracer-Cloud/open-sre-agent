@@ -15,6 +15,7 @@ Per-message values are bound on the agent with :meth:`HeadlessAgent.handle`
 from __future__ import annotations
 
 import logging
+from collections.abc import Callable
 from dataclasses import dataclass
 from functools import cached_property
 from io import StringIO
@@ -23,6 +24,7 @@ from typing import TYPE_CHECKING, Any
 from rich.console import Console
 
 from core.agent_harness.accounting.run_record import DefaultRunRecordFactory
+from core.agent_harness.agent_build_config import AgentBuildConfig
 from core.agent_harness.error_reporting import DefaultErrorReporter
 from core.agent_harness.llm_resolution import default_llm_factory
 from core.agent_harness.ports import (
@@ -33,6 +35,7 @@ from core.agent_harness.ports import (
     ReasoningClientProvider,
     RunRecordFactory,
     SessionState,
+    ToolEventObserver,
     ToolProvider,
 )
 from core.agent_harness.prompts.grounding import (
@@ -51,7 +54,7 @@ from core.agent_harness.turns.headless_adapters import (
     StaticReasoningClientProvider,
 )
 from core.agent_harness.turns.headless_agent import HeadlessAgent
-from infrastructure.harness_ports import get_subprocess_presenter_factory
+from infrastructure.harness_providers import resolve_subprocess_presenter
 
 if TYPE_CHECKING:
     from core.agent_harness.session.session_core import SessionCore
@@ -157,7 +160,7 @@ class DefaultHeadlessBuild:
             self.session,
             self._console,
             tool_action_logger=self._logger,
-            subprocess_presenter_factory=get_subprocess_presenter_factory(),
+            subprocess_presenter_factory=resolve_subprocess_presenter(),
         )
 
     def prompts(self) -> PromptContextProvider:
@@ -200,4 +203,39 @@ class DefaultHeadlessBuild:
         )
 
 
-__all__ = ["DefaultHeadlessBuild", "InMemoryHeadlessBuild"]
+def resolve_agent_ports(
+    config: AgentBuildConfig,
+    *,
+    session: Any,
+    console: Any,
+    logger: logging.Logger,
+    observer: ToolEventObserver | None = None,
+    default_tools: Callable[[], ToolProvider] | None = None,
+    default_gather: GatherPhase | None = None,
+) -> tuple[ToolProvider | None, PromptContextProvider | None, GatherPhase | None]:
+    """Resolve ``(tools, prompts, gather)`` from a host's :class:`AgentBuildConfig`.
+
+    The single expansion of ``build_tools`` / ``build_prompts`` / ``build_gather``,
+    each falling back to ``default_tools`` / ``None`` / ``default_gather`` when
+    the hook is omitted. Callers pass the result to
+    ``DefaultHeadlessBuild(...).agent(...)``. The gateway pool and the shell
+    builder share this so both expand a config the same way.
+
+    ``config.apply_capability_policy`` is the caller's to run, not this
+    function's: the pool applies it every turn (the session is re-resolved even
+    on a cached agent), so binding it here would skip it on cache hits.
+    """
+    if config.build_tools is not None:
+        tools: ToolProvider | None = config.build_tools(session, console, logger, observer)
+    elif default_tools is not None:
+        tools = default_tools()
+    else:
+        tools = None
+    prompts = config.build_prompts(session) if config.build_prompts is not None else None
+    gather = (
+        config.build_gather(session, console) if config.build_gather is not None else default_gather
+    )
+    return tools, prompts, gather
+
+
+__all__ = ["DefaultHeadlessBuild", "InMemoryHeadlessBuild", "resolve_agent_ports"]

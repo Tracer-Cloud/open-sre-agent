@@ -263,7 +263,7 @@ def wire_tool_registry(monkeypatch: Any, tools: list[RegisteredTool]) -> None:
             del surface
             return dict(by_name)
 
-    from infrastructure.harness_ports import set_tool_registry
+    from infrastructure.harness_providers import set_tool_registry
 
     set_tool_registry(_FixedToolRegistry())
 
