@@ -219,8 +219,10 @@ SETUP_DISABLED_CONFIRM = (
 
 ROTATE_CONFIRM = (
     "Passphrase rotated.\n"
-    "No object was rewritten — only the key protecting them was re-wrapped, so this\n"
-    "took effect everywhere at once and the old passphrase no longer opens anything."
+    "No object was rewritten — only the key protecting them was re-wrapped, so this took\n"
+    "effect everywhere at once. The content keys are unchanged: anyone who kept a copy of\n"
+    "the old key record and knows the old passphrase can still read every object, including\n"
+    "ones uploaded from now on. Run `opensre remote-sync reencrypt` to end that."
 )
 
 #: Extracted rather than written inline in the list below: two adjacent string
