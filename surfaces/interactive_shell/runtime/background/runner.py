@@ -4,9 +4,9 @@ from __future__ import annotations
 
 import contextvars
 import threading
-from collections.abc import Callable
+from collections.abc import Mapping
 from contextlib import nullcontext
-from typing import Any
+from typing import Any, Protocol, TypedDict, cast
 from uuid import uuid4
 
 from prompt_toolkit.patch_stdout import patch_stdout
@@ -27,7 +27,28 @@ from surfaces.interactive_shell.runtime.background.notifications import (
 from surfaces.interactive_shell.ui import DIM, ERROR, HIGHLIGHT, WARNING
 from surfaces.shared.error_handling.exception_reporting import report_exception
 
-BackgroundRunFn = Callable[..., dict[str, Any]]
+
+class BackgroundRunResult(TypedDict, total=False):
+    """Fields consumed from a background investigation result."""
+
+    root_cause: str
+    validated_claims: list[dict[str, Any]]
+    remediation_steps: list[str]
+    evidence_entries: list[Any]
+    investigation_loop_count: int
+    validity_score: float
+
+
+class BackgroundRunFn(Protocol):
+    """Callable contract for running a background investigation."""
+
+    def __call__(
+        self,
+        *,
+        cancel_requested: threading.Event,
+        **kwargs: Any,
+    ) -> BackgroundRunResult:
+        """Run an investigation with cooperative cancellation support."""
 
 
 def _persist_record(session: Session, record: BackgroundInvestigationRecord) -> None:
@@ -91,7 +112,7 @@ def _build_record(
     )
 
 
-def _top_analysis(final_state: dict[str, Any]) -> tuple[str, ...]:
+def _top_analysis(final_state: Mapping[str, Any]) -> tuple[str, ...]:
     claims = final_state.get("validated_claims", [])
     if not isinstance(claims, list):
         return ()
@@ -107,7 +128,7 @@ def _top_analysis(final_state: dict[str, Any]) -> tuple[str, ...]:
     return tuple(lines)
 
 
-def _next_steps(final_state: dict[str, Any]) -> tuple[str, ...]:
+def _next_steps(final_state: Mapping[str, Any]) -> tuple[str, ...]:
     steps = final_state.get("remediation_steps", [])
     if not isinstance(steps, list):
         return ()
@@ -119,7 +140,7 @@ def _next_steps(final_state: dict[str, Any]) -> tuple[str, ...]:
     return tuple(values)
 
 
-def _stats(final_state: dict[str, Any]) -> dict[str, Any]:
+def _stats(final_state: Mapping[str, Any]) -> dict[str, Any]:
     tool_calls = final_state.get("evidence_entries", [])
     loops = final_state.get("investigation_loop_count", 0)
     validity = final_state.get("validity_score", 0.0)
@@ -255,7 +276,7 @@ def start_background_text_investigation(
         session=session,
         console=console,
         display_command=display_command,
-        run_fn=run_investigation_for_session_background,
+        run_fn=cast(BackgroundRunFn, run_investigation_for_session_background),
         kwargs={
             "alert_text": alert_text,
             "context_overrides": session.accumulated_context or None,
@@ -281,7 +302,7 @@ def start_background_template_investigation(
         session=session,
         console=console,
         display_command=display_command,
-        run_fn=run_sample_alert_for_session_background,
+        run_fn=cast(BackgroundRunFn, run_sample_alert_for_session_background),
         kwargs={
             "template_name": template_name,
             "context_overrides": session.accumulated_context or None,
