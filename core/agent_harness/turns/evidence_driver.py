@@ -400,7 +400,9 @@ def gather_tool_evidence(
             log.debug("gather_evidence done: no tools executed")
             return None
         if persist is not None:
-            persist(result.executed)
+            persist(
+                [(tool_call.name, tool_call.input) for tool_call, _output in result.executed]
+            )
         log.debug("gather_evidence done tools_executed=%s", len(result.executed))
         return GatheredEvidence(
             observation=_format_observation(result.executed),
