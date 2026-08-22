@@ -429,7 +429,7 @@ class BedrockConverseAgentClient:
             to_converse_messages,
         )
         from infrastructure.safety.guardrails.apply import apply_guardrails_to_converse_payload
-        from infrastructure.safety.guardrails.engine import GuardrailBlockedError
+        from infrastructure.safety.guardrails.evaluator import GuardrailBlockedError
 
         converse_messages = to_converse_messages(strip_internal_message_markers(messages))
         converse_messages, system = apply_guardrails_to_converse_payload(

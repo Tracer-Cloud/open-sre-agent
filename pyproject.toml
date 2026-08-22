@@ -233,7 +233,7 @@ ignore_names = [
   "parse_chunk", "from_tokens",                    # fleet_monitoring meter protocol
   "steer", "emit_update", "on_update",             # agent runtime protocol surface
   "tool_description",                              # slash adapter protocol
-  "reset_guardrail_engine", "reset_runtime_flags", "reset_cli_session_id",
+  "reset_guardrail_evaluator", "reset_runtime_flags", "reset_cli_session_id",
   "register_external_tool_package", "get_tool_descriptors", "load_tool",
   "signoz_is_available",
   "load_remote_url", "save_named_remote", "delete_named_remote", "save_remote_ops_config",

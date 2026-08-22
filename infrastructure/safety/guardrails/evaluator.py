@@ -1,4 +1,4 @@
-"""Guardrail scanning engine: detect, redact, block, and audit sensitive content."""
+"""Evaluate guardrail rules to detect, redact, block, and audit sensitive content."""
 
 from __future__ import annotations
 
@@ -31,7 +31,7 @@ class ScanMatch:
 
 
 class _MergedSpan(NamedTuple):
-    """One contiguous interval produced by ``GuardrailEngine._redact`` after
+    """One contiguous interval produced by ``GuardrailEvaluator._redact`` after
     overlapping ``ScanMatch`` ranges have been collapsed.
 
     ``rule_name`` is the *representative* rule for the span — the contributing
@@ -71,7 +71,7 @@ class GuardrailBlockedError(Exception):
         super().__init__(f"Guardrail blocked by rules: {', '.join(rule_names)}.")
 
 
-class GuardrailEngine:
+class GuardrailEvaluator:
     """Scan text against configured rules and apply redact/block/audit actions."""
 
     def __init__(
@@ -226,19 +226,19 @@ class GuardrailEngine:
         return f"[REDACTED:{rule_name}]"
 
 
-_engine: GuardrailEngine | None = None
+_evaluator: GuardrailEvaluator | None = None
 
 
-def get_guardrail_engine() -> GuardrailEngine:
-    """Return the module-level singleton engine, loading rules from default path."""
-    global _engine
-    if _engine is None:
+def get_guardrail_evaluator() -> GuardrailEvaluator:
+    """Return the module-level singleton evaluator, loading rules from default path."""
+    global _evaluator
+    if _evaluator is None:
         rules = load_rules(get_default_rules_path())
-        _engine = GuardrailEngine(rules, audit_logger=AuditLogger())
-    return _engine
+        _evaluator = GuardrailEvaluator(rules, audit_logger=AuditLogger())
+    return _evaluator
 
 
-def reset_guardrail_engine() -> None:
+def reset_guardrail_evaluator() -> None:
     """Clear the singleton (for tests and config reload)."""
-    global _engine
-    _engine = None
+    global _evaluator
+    _evaluator = None

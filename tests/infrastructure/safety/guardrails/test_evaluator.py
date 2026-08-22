@@ -7,11 +7,11 @@ import pytest
 import yaml
 
 from infrastructure.safety.guardrails.audit import AuditLogger
-from infrastructure.safety.guardrails.engine import (
+from infrastructure.safety.guardrails.evaluator import (
     GuardrailBlockedError,
-    GuardrailEngine,
-    get_guardrail_engine,
-    reset_guardrail_engine,
+    GuardrailEvaluator,
+    get_guardrail_evaluator,
+    reset_guardrail_evaluator,
 )
 from infrastructure.safety.guardrails.rules import GuardrailAction, GuardrailRule
 
@@ -36,47 +36,47 @@ def _rule(
 
 class TestScan:
     def test_no_rules_returns_empty(self) -> None:
-        engine = GuardrailEngine([])
-        result = engine.scan("anything")
+        evaluator = GuardrailEvaluator([])
+        result = evaluator.scan("anything")
         assert result.matches == ()
         assert result.blocked is False
 
     def test_pattern_match_returns_positions(self) -> None:
-        engine = GuardrailEngine([_rule(patterns=["AKIA[0-9A-Z]{16}"])])
-        result = engine.scan("key=AKIAIOSFODNN7EXAMPLE here")
+        evaluator = GuardrailEvaluator([_rule(patterns=["AKIA[0-9A-Z]{16}"])])
+        result = evaluator.scan("key=AKIAIOSFODNN7EXAMPLE here")
         assert len(result.matches) == 1
         assert result.matches[0].matched_text == "AKIAIOSFODNN7EXAMPLE"
         assert result.matches[0].start == 4
 
     def test_keyword_match_case_insensitive(self) -> None:
-        engine = GuardrailEngine([_rule(keywords=["secret-host"])])
-        result = engine.scan("Connecting to SECRET-HOST now")
+        evaluator = GuardrailEvaluator([_rule(keywords=["secret-host"])])
+        result = evaluator.scan("Connecting to SECRET-HOST now")
         assert len(result.matches) == 1
         assert result.matches[0].matched_text == "SECRET-HOST"
 
     def test_multiple_matches_same_text(self) -> None:
-        engine = GuardrailEngine(
+        evaluator = GuardrailEvaluator(
             [
                 _rule(name="r1", patterns=["\\d{4}"]),
             ]
         )
-        result = engine.scan("codes 1234 and 5678")
+        result = evaluator.scan("codes 1234 and 5678")
         assert len(result.matches) == 2
 
     def test_no_match_returns_empty(self) -> None:
-        engine = GuardrailEngine([_rule(patterns=["AKIA[0-9A-Z]{16}"])])
-        result = engine.scan("nothing sensitive here")
+        evaluator = GuardrailEvaluator([_rule(patterns=["AKIA[0-9A-Z]{16}"])])
+        result = evaluator.scan("nothing sensitive here")
         assert result.matches == ()
 
     def test_block_action_sets_blocked(self) -> None:
-        engine = GuardrailEngine([_rule(action="block", keywords=["forbidden"])])
-        result = engine.scan("this is forbidden data")
+        evaluator = GuardrailEvaluator([_rule(action="block", keywords=["forbidden"])])
+        result = evaluator.scan("this is forbidden data")
         assert result.blocked is True
         assert "test" in result.blocking_rules
 
     def test_redact_does_not_set_blocked(self) -> None:
-        engine = GuardrailEngine([_rule(action="redact", keywords=["secret"])])
-        result = engine.scan("my secret value")
+        evaluator = GuardrailEvaluator([_rule(action="redact", keywords=["secret"])])
+        result = evaluator.scan("my secret value")
         assert result.blocked is False
 
     def test_disabled_rule_ignored(self) -> None:
@@ -86,73 +86,73 @@ class TestScan:
             keywords=("danger",),
             enabled=False,
         )
-        engine = GuardrailEngine([rule])
-        result = engine.scan("danger ahead")
+        evaluator = GuardrailEvaluator([rule])
+        result = evaluator.scan("danger ahead")
         assert result.matches == ()
 
 
 class TestApply:
     def test_redacts_matched_text(self) -> None:
-        engine = GuardrailEngine([_rule(patterns=["AKIA[0-9A-Z]{16}"])])
-        result = engine.apply("key=AKIAIOSFODNN7EXAMPLE")
+        evaluator = GuardrailEvaluator([_rule(patterns=["AKIA[0-9A-Z]{16}"])])
+        result = evaluator.apply("key=AKIAIOSFODNN7EXAMPLE")
         assert "AKIA" not in result
         assert "[REDACTED:test]" in result
 
     def test_uses_custom_replacement(self) -> None:
-        engine = GuardrailEngine(
+        evaluator = GuardrailEvaluator(
             [
                 _rule(patterns=["\\d{16}"], replacement="[CC_MASKED]"),
             ]
         )
-        result = engine.apply("card 4111111111111111")
+        result = evaluator.apply("card 4111111111111111")
         assert "[CC_MASKED]" in result
 
     def test_preserves_unmatched_text(self) -> None:
-        engine = GuardrailEngine([_rule(keywords=["secret"])])
-        result = engine.apply("before secret after")
+        evaluator = GuardrailEvaluator([_rule(keywords=["secret"])])
+        result = evaluator.apply("before secret after")
         assert result.startswith("before ")
         assert result.endswith(" after")
 
     def test_multiple_redactions(self) -> None:
-        engine = GuardrailEngine([_rule(patterns=["\\bpassword\\b"])])
-        result = engine.apply("password one and password two")
+        evaluator = GuardrailEvaluator([_rule(patterns=["\\bpassword\\b"])])
+        result = evaluator.apply("password one and password two")
         assert "password" not in result
         assert result.count("[REDACTED:test]") == 2
 
     def test_raises_on_block(self) -> None:
-        engine = GuardrailEngine([_rule(action="block", keywords=["forbidden"])])
+        evaluator = GuardrailEvaluator([_rule(action="block", keywords=["forbidden"])])
         with pytest.raises(GuardrailBlockedError, match="test"):
-            engine.apply("this is forbidden")
+            evaluator.apply("this is forbidden")
 
     def test_audit_action_passes_through(self) -> None:
-        engine = GuardrailEngine([_rule(action="audit", keywords=["monitored"])])
-        result = engine.apply("this is monitored text")
+        evaluator = GuardrailEvaluator([_rule(action="audit", keywords=["monitored"])])
+        result = evaluator.apply("this is monitored text")
         assert result == "this is monitored text"
 
     def test_no_match_returns_original(self) -> None:
-        engine = GuardrailEngine([_rule(patterns=["xyz123"])])
+        evaluator = GuardrailEvaluator([_rule(patterns=["xyz123"])])
         text = "clean text here"
-        assert engine.apply(text) == text
+        assert evaluator.apply(text) == text
 
     def test_audit_logger_called_on_match(self, tmp_path: Path) -> None:
         audit = AuditLogger(path=tmp_path / "audit.jsonl")
-        engine = GuardrailEngine(
+        evaluator = GuardrailEvaluator(
             [_rule(action="redact", keywords=["secret"])],
             audit_logger=audit,
         )
-        engine.apply("my secret data")
+        evaluator.apply("my secret data")
         entries = audit.read_entries()
         assert len(entries) == 1
         assert entries[0]["rule_name"] == "test"
 
     def test_audit_logger_called_on_block(self, tmp_path: Path) -> None:
         audit = AuditLogger(path=tmp_path / "audit.jsonl")
-        engine = GuardrailEngine(
+        evaluator = GuardrailEvaluator(
             [_rule(action="block", keywords=["danger"])],
             audit_logger=audit,
         )
         with pytest.raises(GuardrailBlockedError):
-            engine.apply("danger zone")
+            evaluator.apply("danger zone")
         entries = audit.read_entries()
         assert len(entries) == 1
 
@@ -161,14 +161,14 @@ class TestApply:
         only shows a single merged redaction. Guarantees that a reviewer
         tracing audit → output can account for every rule that fired."""
         audit = AuditLogger(path=tmp_path / "audit.jsonl")
-        engine = GuardrailEngine(
+        evaluator = GuardrailEvaluator(
             [
                 _rule(name="long", action="redact", keywords=["super_secret_token_value"]),
                 _rule(name="short", action="redact", keywords=["secret_token"]),
             ],
             audit_logger=audit,
         )
-        out = engine.apply("data super_secret_token_value end")
+        out = evaluator.apply("data super_secret_token_value end")
         # Single merged redaction in output
         assert out == "data [REDACTED:long] end"
         # But both matches recorded in audit
@@ -182,47 +182,47 @@ class TestApply:
 
 class TestEdgeCases:
     def test_empty_string(self) -> None:
-        engine = GuardrailEngine([_rule(keywords=["secret"])])
-        assert engine.apply("") == ""
-        assert engine.scan("").matches == ()
+        evaluator = GuardrailEvaluator([_rule(keywords=["secret"])])
+        assert evaluator.apply("") == ""
+        assert evaluator.scan("").matches == ()
 
     def test_unicode_content(self) -> None:
-        engine = GuardrailEngine([_rule(keywords=["password"])])
+        evaluator = GuardrailEvaluator([_rule(keywords=["password"])])
         text = "my password is p@\u00e9\u00df\u00f1"
-        result = engine.apply(text)
+        result = evaluator.apply(text)
         assert "[REDACTED:test]" in result
 
     def test_overlapping_keyword_matches(self) -> None:
-        engine = GuardrailEngine(
+        evaluator = GuardrailEvaluator(
             [
                 _rule(name="r1", action="redact", keywords=["secret"]),
                 _rule(name="r2", action="redact", keywords=["secret_key"]),
             ]
         )
-        result = engine.scan("my secret_key here")
+        result = evaluator.scan("my secret_key here")
         assert len(result.matches) >= 2
 
     def test_overlapping_keyword_redaction_prefers_longest(self) -> None:
         """Overlapping keywords at the same start must redact the longest match."""
-        engine = GuardrailEngine(
+        evaluator = GuardrailEvaluator(
             [
                 _rule(name="r1", action="redact", keywords=["secret"]),
                 _rule(name="r2", action="redact", keywords=["secret_key"]),
             ]
         )
-        result = engine.apply("my secret_key=xyz")
+        result = evaluator.apply("my secret_key=xyz")
         # The longer keyword "secret_key" should win; no leftover "_key"
         assert "_key" not in result
         assert "=xyz" in result
 
     def test_overlapping_keyword_same_rule_redaction(self) -> None:
         """Overlapping keywords within a single rule must redact the longest match."""
-        engine = GuardrailEngine(
+        evaluator = GuardrailEvaluator(
             [
                 _rule(name="r1", action="redact", keywords=["api", "api_key"]),
             ]
         )
-        result = engine.apply("my api_key=123")
+        result = evaluator.apply("my api_key=123")
         assert "_key" not in result
         assert "=123" in result
 
@@ -235,13 +235,13 @@ class TestEdgeCases:
         matching ``super_secret_token_value`` (wide) and ``secret_token``
         (contained), the ``super_`` and ``_value`` bookends survived.
         """
-        engine = GuardrailEngine(
+        evaluator = GuardrailEvaluator(
             [
                 _rule(name="long", action="redact", keywords=["super_secret_token_value"]),
                 _rule(name="short", action="redact", keywords=["secret_token"]),
             ]
         )
-        result = engine.apply("data super_secret_token_value end")
+        result = evaluator.apply("data super_secret_token_value end")
         assert "super_" not in result
         assert "_value" not in result
         assert "secret" not in result.lower()
@@ -250,26 +250,26 @@ class TestEdgeCases:
     def test_contained_span_uses_longest_rule_name(self) -> None:
         """When one match fully contains another, the union redaction carries
         the wider rule's name, not the inner one's."""
-        engine = GuardrailEngine(
+        evaluator = GuardrailEvaluator(
             [
                 _rule(name="wide", action="redact", keywords=["aaa_bbb_ccc_ddd_eee"]),
                 _rule(name="inner", action="redact", keywords=["ccc"]),
             ]
         )
-        result = engine.apply("xx aaa_bbb_ccc_ddd_eee yy")
+        result = evaluator.apply("xx aaa_bbb_ccc_ddd_eee yy")
         assert "[REDACTED:wide]" in result
         assert "[REDACTED:inner]" not in result
 
     def test_partial_overlap_redacts_union(self) -> None:
         """Two partially-overlapping matches neither contained in the other
         must produce one redaction covering the full union span."""
-        engine = GuardrailEngine(
+        evaluator = GuardrailEvaluator(
             [
                 _rule(name="a", action="redact", keywords=["abcdefghij"]),  # [0:10]
                 _rule(name="b", action="redact", keywords=["fghijklmno"]),  # [5:15]
             ]
         )
-        result = engine.apply("abcdefghijklmno tail")
+        result = evaluator.apply("abcdefghijklmno tail")
         # Neither raw keyword nor its tail survives; a single redaction
         # covers the union [0:15].
         for frag in ("abcde", "fghij", "klmno"):
@@ -280,37 +280,37 @@ class TestEdgeCases:
     def test_disjoint_matches_stay_separate(self) -> None:
         """Non-overlapping matches produce independent redactions with the
         unaffected text between them preserved verbatim."""
-        engine = GuardrailEngine(
+        evaluator = GuardrailEvaluator(
             [
                 _rule(name="a", action="redact", keywords=["foo"]),
                 _rule(name="b", action="redact", keywords=["bar"]),
             ]
         )
-        result = engine.apply("foo middle bar")
+        result = evaluator.apply("foo middle bar")
         assert result == "[REDACTED:a] middle [REDACTED:b]"
 
     def test_adjacent_matches_not_merged(self) -> None:
         """Matches that touch at exactly one offset (end of A == start of B)
         must remain separate redactions — they do not actually overlap."""
-        engine = GuardrailEngine(
+        evaluator = GuardrailEvaluator(
             [
                 _rule(name="a", action="redact", keywords=["foo"]),
                 _rule(name="b", action="redact", keywords=["bar"]),
             ]
         )
-        result = engine.apply("foobar rest")
+        result = evaluator.apply("foobar rest")
         assert result == "[REDACTED:a][REDACTED:b] rest"
 
     def test_three_way_chain_of_overlaps_redacts_single_union(self) -> None:
         """Transitive overlap A∩B, B∩C but A⊥C still collapses to one span."""
-        engine = GuardrailEngine(
+        evaluator = GuardrailEvaluator(
             [
                 _rule(name="a", action="redact", keywords=["abcdefg"]),  # [0:7]
                 _rule(name="b", action="redact", keywords=["efghijk"]),  # [4:11]
                 _rule(name="c", action="redact", keywords=["ijklmno"]),  # [8:15]
             ]
         )
-        result = engine.apply("abcdefghijklmno tail")
+        result = evaluator.apply("abcdefghijklmno tail")
         assert result.count("[REDACTED:") == 1
         assert result.endswith("tail")
         # No keyword fragments leak out either end.
@@ -320,13 +320,13 @@ class TestEdgeCases:
     def test_contained_pattern_with_wider_keyword_preserves_wider_name(self) -> None:
         """Mixing a regex pattern and a keyword on the same span behaves the
         same as two keywords — the wider match wins."""
-        engine = GuardrailEngine(
+        evaluator = GuardrailEvaluator(
             [
                 _rule(name="pat_short", action="redact", patterns=[r"\d{4}"]),
                 _rule(name="kw_wide", action="redact", keywords=["cc_1234_xyz"]),
             ]
         )
-        result = engine.apply("pay cc_1234_xyz now")
+        result = evaluator.apply("pay cc_1234_xyz now")
         assert "[REDACTED:kw_wide]" in result
         assert "[REDACTED:pat_short]" not in result
         assert "1234" not in result
@@ -341,7 +341,7 @@ class TestEdgeCases:
         is itself an AWS access key. The pre-fix output leaked the
         ``api_key=`` prefix; the merged output fully redacts both the label
         and the key."""
-        engine = GuardrailEngine(
+        evaluator = GuardrailEvaluator(
             [
                 _rule(
                     name="aws_access_key",
@@ -359,7 +359,7 @@ class TestEdgeCases:
             ]
         )
         text = "config: api_key=AKIAIOSFODNN7EXAMPLE"
-        result = engine.apply(text)
+        result = evaluator.apply(text)
         assert "AKIA" not in result
         assert "api_key=" not in result  # ← pre-fix leaked this
         assert "IOSFOD" not in result
@@ -371,7 +371,7 @@ class TestEdgeCases:
         that happens to start with an AWS access key produces two redact
         matches with containment. Pre-fix, the wider ``aws_secret_key`` span
         was dropped and the label + tail leaked."""
-        engine = GuardrailEngine(
+        evaluator = GuardrailEvaluator(
             [
                 _rule(
                     name="aws_access_key",
@@ -386,87 +386,87 @@ class TestEdgeCases:
             ]
         )
         text = "export aws_secret_access_key=AKIAIOSFODNN7EXAMPLEabcdefghijklmnopqrst"
-        result = engine.apply(text)
+        result = evaluator.apply(text)
         assert "aws_secret_access_key" not in result  # ← pre-fix leaked the label
         assert "AKIA" not in result
         assert "abcdefghij" not in result  # ← pre-fix leaked the 40-char tail
         assert result == "export [REDACTED:aws_secret_key]"
 
     def test_multiple_rules_on_same_span(self) -> None:
-        engine = GuardrailEngine(
+        evaluator = GuardrailEvaluator(
             [
                 _rule(name="r1", action="audit", keywords=["token"]),
                 _rule(name="r2", action="redact", keywords=["token"]),
             ]
         )
-        result = engine.apply("my token value")
+        result = evaluator.apply("my token value")
         assert "[REDACTED:r2]" in result
 
     def test_very_long_text(self) -> None:
-        engine = GuardrailEngine([_rule(patterns=["AKIA[A-Z0-9]{16}"])])
+        evaluator = GuardrailEvaluator([_rule(patterns=["AKIA[A-Z0-9]{16}"])])
         text = "x" * 10000 + "AKIAIOSFODNN7EXAMPLE" + "y" * 10000
-        result = engine.apply(text)
+        result = evaluator.apply(text)
         assert "AKIA" not in result
         assert result.startswith("x" * 10000)
         assert result.endswith("y" * 10000)
 
     def test_pattern_at_start_and_end(self) -> None:
-        engine = GuardrailEngine([_rule(patterns=["\\bsecret\\b"])])
-        assert "[REDACTED" in engine.apply("secret")
-        assert engine.apply("secret").startswith("[REDACTED")
+        evaluator = GuardrailEvaluator([_rule(patterns=["\\bsecret\\b"])])
+        assert "[REDACTED" in evaluator.apply("secret")
+        assert evaluator.apply("secret").startswith("[REDACTED")
 
     def test_adjacent_matches(self) -> None:
-        engine = GuardrailEngine([_rule(patterns=["\\d{4}"])])
-        result = engine.apply("12345678")
+        evaluator = GuardrailEvaluator([_rule(patterns=["\\d{4}"])])
+        result = evaluator.apply("12345678")
         assert "1234" not in result
         assert "5678" not in result
 
     def test_mixed_block_and_redact(self) -> None:
-        engine = GuardrailEngine(
+        evaluator = GuardrailEvaluator(
             [
                 _rule(name="blocker", action="block", keywords=["forbidden"]),
                 _rule(name="redactor", action="redact", keywords=["secret"]),
             ]
         )
         with pytest.raises(GuardrailBlockedError):
-            engine.apply("secret and forbidden")
+            evaluator.apply("secret and forbidden")
 
     def test_case_insensitive_pattern(self) -> None:
-        engine = GuardrailEngine([_rule(patterns=["akia[a-z0-9]{16}"])])
-        result = engine.scan("key=AKIAIOSFODNN7EXAMPLE")
+        evaluator = GuardrailEvaluator([_rule(patterns=["akia[a-z0-9]{16}"])])
+        result = evaluator.scan("key=AKIAIOSFODNN7EXAMPLE")
         assert len(result.matches) == 1
 
 
 class TestShouldBlock:
     def test_true_for_block_rule(self) -> None:
-        engine = GuardrailEngine([_rule(action="block", keywords=["nope"])])
-        assert engine.should_block("nope") is True
+        evaluator = GuardrailEvaluator([_rule(action="block", keywords=["nope"])])
+        assert evaluator.should_block("nope") is True
 
     def test_false_for_redact_rule(self) -> None:
-        engine = GuardrailEngine([_rule(action="redact", keywords=["fine"])])
-        assert engine.should_block("fine") is False
+        evaluator = GuardrailEvaluator([_rule(action="redact", keywords=["fine"])])
+        assert evaluator.should_block("fine") is False
 
     def test_false_for_no_match(self) -> None:
-        engine = GuardrailEngine([_rule(action="block", keywords=["xyz"])])
-        assert engine.should_block("clean") is False
+        evaluator = GuardrailEvaluator([_rule(action="block", keywords=["xyz"])])
+        assert evaluator.should_block("clean") is False
 
 
 class TestIsActive:
     def test_false_when_no_rules(self) -> None:
-        assert GuardrailEngine([]).is_active is False
+        assert GuardrailEvaluator([]).is_active is False
 
     def test_true_when_rules_loaded(self) -> None:
-        assert GuardrailEngine([_rule()]).is_active is True
+        assert GuardrailEvaluator([_rule()]).is_active is True
 
     def test_false_when_all_disabled(self) -> None:
         rule = GuardrailRule(
             name="off", action=GuardrailAction.REDACT, keywords=("x",), enabled=False
         )
-        assert GuardrailEngine([rule]).is_active is False
+        assert GuardrailEvaluator([rule]).is_active is False
 
 
 class TestSingleton:
-    def test_get_returns_engine(self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    def test_get_returns_evaluator(self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
         config = tmp_path / "guardrails.yml"
         config.write_text(
             yaml.dump(
@@ -479,19 +479,19 @@ class TestSingleton:
             encoding="utf-8",
         )
         monkeypatch.setattr(
-            "infrastructure.safety.guardrails.engine.get_default_rules_path", lambda: config
+            "infrastructure.safety.guardrails.evaluator.get_default_rules_path", lambda: config
         )
-        reset_guardrail_engine()
+        reset_guardrail_evaluator()
 
-        engine = get_guardrail_engine()
-        assert engine.is_active is True
+        evaluator = get_guardrail_evaluator()
+        assert evaluator.is_active is True
 
     def test_reset_clears_singleton(self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
         monkeypatch.setattr(
-            "infrastructure.safety.guardrails.engine.get_default_rules_path",
+            "infrastructure.safety.guardrails.evaluator.get_default_rules_path",
             lambda: tmp_path / "missing.yml",
         )
-        reset_guardrail_engine()
-        engine = get_guardrail_engine()
-        assert engine.is_active is False
-        reset_guardrail_engine()
+        reset_guardrail_evaluator()
+        evaluator = get_guardrail_evaluator()
+        assert evaluator.is_active is False
+        reset_guardrail_evaluator()
