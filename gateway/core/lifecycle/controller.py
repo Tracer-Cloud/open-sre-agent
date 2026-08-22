@@ -50,6 +50,18 @@ SCHEDULER_RELOAD_JOIN_TIMEOUT_SECONDS = 2.0
 CredentialHydratorFactory = Callable[[], GatewayCredentialHydrator | None]
 
 
+def _gateway_hosts_scheduler() -> bool:
+    """Whether this gateway process co-hosts the scheduler loop (default true).
+
+    Set ``OPENSRE_GATEWAY_HOST_SCHEDULER`` false to run the scheduler as its own
+    service (``MODE=scheduler``) so scheduled tasks are not fired by two processes.
+    """
+    from config.constants.scheduler import OPENSRE_GATEWAY_HOST_SCHEDULER_ENV
+
+    value = os.getenv(OPENSRE_GATEWAY_HOST_SCHEDULER_ENV)
+    return value is None or value.strip().lower() not in {"0", "false", "no", "off"}
+
+
 class GatewayController:
     """Composition root and lifecycle handle for the running gateway process."""
 
@@ -98,7 +110,11 @@ class GatewayController:
         )
 
         self.start_surfaces(logger=logger, handler=handler)
-        self.start_scheduler(logger=logger)
+        if _gateway_hosts_scheduler():
+            self.start_scheduler(logger=logger)
+        else:
+            self.components["scheduler"] = "external (dedicated MODE=scheduler service)"
+            logger.info("[gateway] in-process scheduler disabled; run it as its own service")
         self._publish_status(logger)
         # Deploy health waits (EC2 Docker + AMI) match this line for Telegram
         # and/or Slack — do not rely on transport-specific log strings alone.

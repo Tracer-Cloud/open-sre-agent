@@ -278,3 +278,38 @@ class TestRunTaskNow:
         assert "T" in fire_time
         # Ad-hoc runs use second-precision to avoid colliding with scheduled runs
         assert len(fire_time.split("T")[1].rstrip("Z").split(":")) == 3
+
+
+class TestStartSchedulerIdle:
+    """start_scheduler exits on empty for the CLI, idles for a dedicated service."""
+
+    def test_empty_exits_by_default(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        from infrastructure.scheduling.scheduler import runner
+
+        monkeypatch.setattr(runner, "_register_jobs", lambda _scheduler, **_kw: 0)
+        monkeypatch.setattr(runner, "record_scheduler_service_operation", lambda *_a, **_k: None)
+        with pytest.raises(SystemExit):
+            runner.start_scheduler()
+
+    def test_empty_idles_when_service(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        import apscheduler.schedulers.blocking as blocking
+
+        from infrastructure.scheduling.scheduler import runner
+
+        started: list[bool] = []
+
+        class _FakeScheduler:
+            def start(self) -> None:
+                started.append(True)  # no-op instead of blocking forever
+
+            def shutdown(self, wait: bool = False) -> None:
+                pass
+
+        monkeypatch.setattr(blocking, "BlockingScheduler", _FakeScheduler)
+        monkeypatch.setattr(runner, "_register_jobs", lambda _scheduler, **_kw: 0)
+        monkeypatch.setattr(runner, "record_scheduler_service_operation", lambda *_a, **_k: None)
+        monkeypatch.setattr(runner.signal, "signal", lambda *_a, **_k: None)
+
+        # Must not raise the "no tasks" SystemExit; reaches the (mocked) start.
+        runner.start_scheduler(idle_when_empty=True)
+        assert started == [True]

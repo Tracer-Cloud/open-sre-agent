@@ -272,17 +272,20 @@ def start_background_scheduler(
     return scheduler, enabled_count
 
 
-def start_scheduler() -> None:
+def start_scheduler(*, idle_when_empty: bool = False) -> None:
     """Load all enabled tasks and start the blocking scheduler.
 
     Blocks until SIGINT or SIGTERM. Invalid tasks (bad cron, bad timezone)
-    are logged and skipped rather than crashing the entire daemon.
+    are logged and skipped rather than crashing the entire daemon. With no
+    enabled tasks the CLI exits with guidance; ``idle_when_empty`` (a dedicated
+    scheduler service) idles and waits instead, so tasks can be added later
+    without the process crash-looping.
     """
     from apscheduler.schedulers.blocking import BlockingScheduler
 
     scheduler = BlockingScheduler()
     enabled_count = _register_jobs(scheduler)
-    if enabled_count == 0:
+    if enabled_count == 0 and not idle_when_empty:
         logger.warning("No enabled tasks found. Scheduler has nothing to run.")
         record_scheduler_service_operation("scheduler_idle", task_count=0)
         raise SystemExit("No enabled tasks found. Add tasks with `opensre cron add` first.")
@@ -298,9 +301,12 @@ def start_scheduler() -> None:
     if sigterm is not None:
         signal.signal(sigterm, _shutdown_handler)
 
-    logger.info("Scheduler started with %d task(s). Waiting for triggers...", enabled_count)
+    if enabled_count == 0:
+        logger.info("No enabled tasks yet; scheduler idle, waiting (add with `opensre cron add`).")
+    else:
+        logger.info("Scheduler started with %d task(s). Waiting for triggers...", enabled_count)
     record_scheduler_service_operation(
-        "scheduler_started",
+        "scheduler_started" if enabled_count else "scheduler_idle",
         task_count=enabled_count,
         extra={"blocking": True},
     )

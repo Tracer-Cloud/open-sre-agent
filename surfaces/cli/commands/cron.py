@@ -278,7 +278,14 @@ def cron_logs(task_id: str, limit: int) -> None:
 
 
 @cron_command.command(name="start")
-def cron_start() -> None:
+@click.option(
+    "--service",
+    is_flag=True,
+    default=False,
+    help="Run as a long-lived service: idle and wait when no tasks are enabled, "
+    "instead of exiting (for a dedicated MODE=scheduler deployment).",
+)
+def cron_start(service: bool) -> None:
     """Start the scheduler daemon (blocks until interrupted)."""
     from bootstrap.process import SCHEDULER_WORKER_PROFILE, configure_process
     from infrastructure.scheduling.scheduler.runner import start_scheduler
@@ -288,7 +295,7 @@ def cron_start() -> None:
 
     _console.print("[bold]Starting scheduler daemon...[/bold]")
     _console.print("Press Ctrl+C to stop.")
-    start_scheduler()
+    start_scheduler(idle_when_empty=service)
 
 
 def _validate_chat_id_for_provider(provider: str, chat_id: str) -> None:
