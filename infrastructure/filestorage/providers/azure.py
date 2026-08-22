@@ -10,10 +10,10 @@ from urllib.parse import quote
 import httpx
 
 from infrastructure.filestorage.config import RemoteSyncConfig
+from infrastructure.filestorage.contracts import RemoteObject
 from infrastructure.filestorage.enums import BucketExposure, BuiltInProvider, RemoteSyncField
 from infrastructure.filestorage.errors import RemoteSyncUnavailableError
 from infrastructure.filestorage.exposure import PublicAccessStatus
-from infrastructure.filestorage.ports import RemoteObject
 from infrastructure.filestorage.providers.registry import SetupExtraField, register_object_store
 
 PROVIDER_NAME = BuiltInProvider.AZURE

@@ -5,7 +5,7 @@ from __future__ import annotations
 from typing import Any
 
 import core.agent_harness.turns.evidence_driver as evidence_agent
-import infrastructure.harness_ports as harness_ports
+import infrastructure.harness_providers as harness_providers
 from surfaces.interactive_shell.session import Session
 
 
@@ -33,7 +33,7 @@ def test_tool_discovery_raise_is_swallowed(monkeypatch: Any) -> None:
     def _boom(_resolved: dict[str, Any]) -> Any:
         raise RuntimeError("tool registry import blew up")
 
-    monkeypatch.setattr(harness_ports, "get_investigation_tools", _boom)
+    monkeypatch.setattr(harness_providers, "resolve_investigation_tools", _boom)
 
     reporter = _RecordingReporter()
     result = evidence_agent.gather_tool_evidence(
@@ -71,7 +71,7 @@ def test_no_error_reporter_still_swallows(monkeypatch: Any) -> None:
     def _boom(_resolved: dict[str, Any]) -> Any:
         raise RuntimeError("tool registry import blew up")
 
-    monkeypatch.setattr(harness_ports, "get_investigation_tools", _boom)
+    monkeypatch.setattr(harness_providers, "resolve_investigation_tools", _boom)
 
     assert evidence_agent.gather_tool_evidence("why?", _session()) is None
 
@@ -82,7 +82,7 @@ def test_empty_tools_returns_none(monkeypatch: Any) -> None:
         "_resolve_gather_integrations",
         lambda *_args, **_kwargs: {"datadog": {}},
     )
-    monkeypatch.setattr(harness_ports, "get_investigation_tools", lambda _resolved: [])
+    monkeypatch.setattr(harness_providers, "resolve_investigation_tools", lambda _resolved: [])
 
     assert evidence_agent.gather_tool_evidence("status?", _session()) is None
 

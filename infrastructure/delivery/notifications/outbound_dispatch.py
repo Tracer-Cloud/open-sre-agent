@@ -9,11 +9,11 @@ from __future__ import annotations
 
 import logging
 
+from core.domain.background_investigations import BackgroundInvestigationRecord
 from infrastructure.delivery.notifications.outbound_registry import (
     BACKGROUND_RCA,
     get_outbound_adapter,
 )
-from infrastructure.scheduling.background_investigations.types import BackgroundInvestigationRecord
 
 logger = logging.getLogger(__name__)
 

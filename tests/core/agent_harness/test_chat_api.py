@@ -136,6 +136,6 @@ def test_only_chat_api_module_defines_dispatch_chat_turn() -> None:
             continue
         for node in ast.walk(tree):
             if isinstance(node, ast.FunctionDef) and node.name == "dispatch_chat_turn":
-                definers.append(str(path.relative_to(root)))
+                definers.append(path.relative_to(root).as_posix())
 
     assert definers == ["core/agent_harness/turns/chat_api.py"], definers

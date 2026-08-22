@@ -21,7 +21,7 @@ from infrastructure.scheduling.task_types import TaskRecord
 from tools.interactive_shell.shared.execution_policy import (
     plan_foreground_tool,
 )
-from tools.interactive_shell.shared.host_ports import ExecutionGate
+from tools.interactive_shell.shared.host_contracts import ExecutionGate
 
 
 class ForegroundInvestigationStatus(StrEnum):

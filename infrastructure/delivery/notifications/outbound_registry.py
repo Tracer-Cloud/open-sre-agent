@@ -12,16 +12,17 @@ chose, and ``/background show`` renders the result mapping in that order, so
 resolving by name keeps the caller's ordering authoritative.
 
 Mutation is an unsynchronised module dict, matching the report registry. The sole
-caller runs on a daemon thread, but dict writes are atomic under the GIL and
-CPython's per-module import lock serialises the adapter imports, so the race is
-benign.
+registrar is ``bootstrap.adapters.install_notification_adapters``, which a daemon
+thread may run concurrently with a ``/background notify set`` on the REPL thread,
+but every call writes the same names to the same adapter objects and dict writes
+are atomic under the GIL, so the race is benign.
 """
 
 from __future__ import annotations
 
 from typing import Protocol, runtime_checkable
 
-from infrastructure.scheduling.background_investigations.types import BackgroundInvestigationRecord
+from core.domain.background_investigations import BackgroundInvestigationRecord
 
 ChannelName = str
 

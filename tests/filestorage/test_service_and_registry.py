@@ -15,6 +15,7 @@ from config.constants.filestorage import (
     REMOTE_SYNC_PROVIDER_ENV,
 )
 from infrastructure.filestorage.config import RemoteSyncConfig
+from infrastructure.filestorage.contracts import RemoteObject
 from infrastructure.filestorage.engine import SyncReport, content_tag
 from infrastructure.filestorage.enums import RemoteSyncField, SyncDirection, SyncRootName
 from infrastructure.filestorage.errors import RemoteSyncConfigError
@@ -26,7 +27,6 @@ from infrastructure.filestorage.messages import (
     sanitize_terminal_text,
 )
 from infrastructure.filestorage.operations import get_sync_status, run_remote_sync
-from infrastructure.filestorage.ports import RemoteObject
 from infrastructure.filestorage.providers import build_object_store as surface_build
 from infrastructure.filestorage.providers.registry import (
     SetupExtraField,

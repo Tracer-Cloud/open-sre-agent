@@ -92,6 +92,67 @@ opensre integrations verify redis
 
 Alias: `valkey`.
 
+### Local Docker verification
+
+Use this disposable instance to verify Redis without external credentials. The
+diagnostic settings make the slow log and latency tools return useful sample
+data; do not copy them to a production server.
+
+```bash
+docker run --rm --detach --name opensre-redis \
+  --publish 127.0.0.1:6379:6379 \
+  redis:7-alpine redis-server \
+  --latency-monitor-threshold 1 \
+  --slowlog-log-slower-than 0 \
+  --slowlog-max-len 128 \
+  --enable-debug-command yes
+```
+
+Wait for Redis, then seed two keys and one latency event:
+
+```bash
+until docker exec opensre-redis redis-cli ping; do sleep 1; done
+docker exec opensre-redis redis-cli RPUSH opensre:jobs job-1 job-2 job-3
+docker exec opensre-redis redis-cli SET opensre:service:status degraded EX 3600
+docker exec opensre-redis redis-cli DEBUG SLEEP 0.02
+```
+
+From a source checkout, configure the local connection with
+`uv run opensre integrations setup redis` and use these answers:
+
+| Prompt | Answer |
+| --- | --- |
+| Host | `127.0.0.1` |
+| Port | `6379` |
+| Username | leave blank |
+| Password | leave blank |
+| Database number | `0` |
+| Use TLS | `false` |
+
+Verify the connection:
+
+```bash
+uv run opensre integrations verify redis
+```
+
+The result should report a successful connection to Redis 7 on database 0. To
+exercise `scan_redis_keys` through an agent turn, run:
+
+```bash
+uv run opensre ask --allowed-tool scan_redis_keys \
+  "Use scan_redis_keys with pattern opensre:* and sample_limit 10. Report each key's type and TTL."
+```
+
+The result should include the `opensre:jobs` list and the expiring
+`opensre:service:status` string. Stop the disposable instance when finished:
+
+```bash
+docker stop opensre-redis
+```
+
+This local instance has no password. It binds only to loopback, and the recipe
+does not write a secret to the repository.
+
 ## Troubleshooting
 
 | Symptom | Fix |

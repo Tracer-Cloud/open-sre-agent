@@ -10,19 +10,20 @@ import pytest
 from rich.console import Console
 
 from infrastructure.scheduling.background_investigations.store import (
-    BackgroundInvestigationStore,
-    BackgroundInvestigationStoreLockTimeout,
+    RecordStore,
+    StoreLockTimeout,
 )
 from surfaces.interactive_shell.command_registry import dispatch_slash
+from surfaces.interactive_shell.runtime.background import runner as runner_mod
 from surfaces.interactive_shell.runtime.background.runner import (
+    BackgroundRunFn,
     drain_background_notices,
     start_background_template_investigation,
+    start_background_text_investigation,
 )
 from surfaces.interactive_shell.session import Session
 
-_STORE_FACTORY = (
-    "infrastructure.scheduling.background_investigations.store.background_investigation_store"
-)
+_STORE_FACTORY = "infrastructure.scheduling.background_investigations.store.open_record_store"
 
 
 def _noop_tracker(**_kwargs: Any) -> Any:
@@ -62,18 +63,82 @@ def _run_to_completion(session: Session, monkeypatch: pytest.MonkeyPatch) -> str
 
 
 def test_enqueue_and_drain_background_notices() -> None:
-    import io
-
-    from rich.console import Console
-
     session = Session()
     session.terminal.enqueue_background_notice("[bold]done[/bold]")
-    console = Console(file=io.StringIO(), force_terminal=False, highlight=False)
+    output = io.StringIO()
+    console = Console(file=output, force_terminal=False, highlight=False)
 
     drain_background_notices(session, console)
 
     assert session.terminal.drain_background_notices() == []
-    assert "done" in console.file.getvalue()
+    assert "done" in output.getvalue()
+
+
+@pytest.mark.parametrize("mode", ["text", "template"])
+def test_background_launcher_snapshots_context_before_worker_starts(
+    mode: str,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    captured_runs: list[BackgroundRunFn] = []
+    seen_contexts: list[dict[str, Any] | None] = []
+
+    def _capture_start(*, run_fn: BackgroundRunFn, **_kwargs: Any) -> str:
+        captured_runs.append(run_fn)
+        return "task-id"
+
+    def _fake_text_run(
+        *,
+        alert_text: str,
+        context_overrides: dict[str, Any] | None,
+        cancel_requested: threading.Event | None,
+    ) -> dict[str, Any]:
+        _ = (alert_text, cancel_requested)
+        seen_contexts.append(context_overrides)
+        return {"root_cause": "done"}
+
+    def _fake_template_run(
+        *,
+        template_name: str,
+        context_overrides: dict[str, Any] | None,
+        cancel_requested: threading.Event | None,
+    ) -> dict[str, Any]:
+        _ = (template_name, cancel_requested)
+        seen_contexts.append(context_overrides)
+        return {"root_cause": "done"}
+
+    monkeypatch.setattr(runner_mod, "_start_background_investigation", _capture_start)
+    monkeypatch.setattr(
+        "surfaces.interactive_shell.runtime.investigation_adapter"
+        ".run_investigation_for_session_background",
+        _fake_text_run,
+    )
+    monkeypatch.setattr(
+        "surfaces.interactive_shell.runtime.investigation_adapter"
+        ".run_sample_alert_for_session_background",
+        _fake_template_run,
+    )
+
+    session = Session()
+    session.accumulated_context = {"service": "launch-context"}
+    console = Console(file=io.StringIO(), force_terminal=False, highlight=False)
+    if mode == "text":
+        start_background_text_investigation(
+            alert_text="checkout latency",
+            session=session,
+            console=console,
+        )
+    else:
+        start_background_template_investigation(
+            template_name="generic",
+            session=session,
+            console=console,
+            display_command="/investigate generic",
+        )
+
+    session.accumulated_context["service"] = "later-context"
+    captured_runs[0](cancel_requested=threading.Event())
+
+    assert seen_contexts == [{"service": "launch-context"}]
 
 
 def test_start_background_template_investigation_assigns_fresh_investigation_id(
@@ -129,7 +194,7 @@ class _RaisingStore:
     def save(self, record: Any) -> None:
         _ = record
         self.attempts += 1
-        raise BackgroundInvestigationStoreLockTimeout("locked")
+        raise StoreLockTimeout("locked")
 
 
 def test_a_completed_investigation_is_readable_from_another_store_instance(
@@ -138,12 +203,12 @@ def test_a_completed_investigation_is_readable_from_another_store_instance(
     """ "Readable across processes" is only true once the record reaches the file.
     A second instance over the same path is the closest in-process proxy."""
     path = tmp_path / "background" / "investigations.json"
-    monkeypatch.setattr(_STORE_FACTORY, lambda: BackgroundInvestigationStore(path))
+    monkeypatch.setattr(_STORE_FACTORY, lambda: RecordStore(path))
     session = Session()
 
     task_id = _run_to_completion(session, monkeypatch)
 
-    stored = BackgroundInvestigationStore(path).get(task_id)
+    stored = RecordStore(path).get(task_id)
     assert stored is not None
     assert stored.status == "completed"
     assert stored.root_cause == "pool saturation"
@@ -193,7 +258,7 @@ def test_a_raising_notification_channel_does_not_fail_the_investigation(
     )
 
     path = tmp_path / "background" / "investigations.json"
-    monkeypatch.setattr(_STORE_FACTORY, lambda: BackgroundInvestigationStore(path))
+    monkeypatch.setattr(_STORE_FACTORY, lambda: RecordStore(path))
     monkeypatch.setattr("bootstrap.adapters.install_notification_adapters", lambda: ("telegram",))
     clear_outbound_adapters()
     register_outbound_adapter(_ExplodingAdapter())
@@ -203,7 +268,7 @@ def test_a_raising_notification_channel_does_not_fail_the_investigation(
     task_id = _run_to_completion(session, monkeypatch)
     clear_outbound_adapters()
 
-    stored = BackgroundInvestigationStore(path).get(task_id)
+    stored = RecordStore(path).get(task_id)
     assert stored is not None
     assert stored.status == "completed"
     assert stored.root_cause == "pool saturation"
@@ -216,14 +281,14 @@ def test_new_resets_the_session_without_deleting_durable_records(
     """#4426's scoping asks that /new reset the interactive session but leave the
     durable records and the notification preferences alone."""
     path = tmp_path / "background" / "investigations.json"
-    monkeypatch.setattr(_STORE_FACTORY, lambda: BackgroundInvestigationStore(path))
+    monkeypatch.setattr(_STORE_FACTORY, lambda: RecordStore(path))
     session = Session()
     task_id = _run_to_completion(session, monkeypatch)
     session.terminal.background_notification_preferences.set_channels(["telegram"])
 
     dispatch_slash("/new", session, Console(file=io.StringIO(), force_terminal=False))
 
-    assert BackgroundInvestigationStore(path).get(task_id) is not None
+    assert RecordStore(path).get(task_id) is not None
     assert session.terminal.background_investigations == {}
     assert session.terminal.background_notification_preferences.channels == ("telegram",)
 

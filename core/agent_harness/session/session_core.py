@@ -31,8 +31,8 @@ from core.agent_harness.session.pending_offer import (
     PendingInvestigationOffer,
     PendingScheduleOffer,
 )
+from core.agent_harness.session.persistence.contracts import SessionStore
 from core.agent_harness.session.persistence.jsonl_store import JsonlSessionStore
-from core.agent_harness.session.persistence.ports import SessionStore
 from core.agent_harness.session_goal.goal import SessionGoal
 from core.state import MutableAgentState
 from infrastructure.scheduling.task_registry import TaskRegistry

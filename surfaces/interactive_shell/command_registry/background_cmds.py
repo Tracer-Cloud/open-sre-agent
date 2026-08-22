@@ -15,7 +15,7 @@ from core.agent_harness.spi.session_state import (
     background_notification_channels,
     session_terminal,
 )
-from infrastructure.scheduling.background_investigations.types import BackgroundInvestigationRecord
+from core.domain.background_investigations import BackgroundInvestigationRecord
 from surfaces.interactive_shell.command_registry.types import SlashCommand
 from surfaces.interactive_shell.runtime import Session
 from surfaces.interactive_shell.ui import (
@@ -84,10 +84,10 @@ def _tracked_records(
     records: dict[str, BackgroundInvestigationRecord] = dict(background_investigations(session))
     try:
         from infrastructure.scheduling.background_investigations.store import (
-            background_investigation_store,
+            open_record_store,
         )
 
-        stored = background_investigation_store().list_recent(limit=None)
+        stored = open_record_store().list_recent(limit=None)
     except Exception as exc:  # noqa: BLE001
         report_exception(exc, context="surfaces.interactive_shell.background_read")
         console.print(
@@ -111,10 +111,10 @@ def _notify_channels(session: Session) -> tuple[str, ...]:
         return channels
     try:
         from infrastructure.scheduling.background_investigations.store import (
-            background_investigation_store,
+            open_record_store,
         )
 
-        return background_investigation_store().notify_channels()
+        return open_record_store().notify_channels()
     except Exception:  # noqa: BLE001
         return ()
 
@@ -128,10 +128,10 @@ def _persist_notify_channels(console: Console, channels: tuple[str, ...]) -> Non
     """
     try:
         from infrastructure.scheduling.background_investigations.store import (
-            background_investigation_store,
+            open_record_store,
         )
 
-        background_investigation_store().set_notify_channels(channels)
+        open_record_store().set_notify_channels(channels)
     except Exception as exc:  # noqa: BLE001
         report_exception(exc, context="surfaces.interactive_shell.background_notify_persist")
         console.print(

@@ -21,6 +21,7 @@ from collections.abc import Callable, Iterator
 from contextlib import contextmanager
 from dataclasses import replace
 
+from core.agent_harness.accounting.token_accounting import LlmRunInfo
 from core.agent_harness.accounting.turn_accounting import DefaultTurnAccounting
 from core.agent_harness.ports import (
     AnswerRequest,
@@ -276,7 +277,7 @@ class HeadlessAgent:
             confirm_fn=confirm_fn,
         )
 
-    def _answer(self, text: str, request: AnswerRequest) -> object:
+    def _answer(self, text: str, request: AnswerRequest) -> LlmRunInfo | None:
         return stream_answer(
             text,
             self._session,

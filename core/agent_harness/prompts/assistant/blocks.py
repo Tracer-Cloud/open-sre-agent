@@ -30,7 +30,7 @@ from core.agent_harness.prompts.kernel.envelope import (
     PromptTier,
 )
 from core.agent_harness.prompts.kernel.surfaces import SurfaceProfile
-from infrastructure.harness_ports import (
+from infrastructure.harness_providers import (
     assistant_prompt_vendor_fragments,
     gateway_persona_fragments,
 )
@@ -131,7 +131,7 @@ def contribute_vendor_fragments(
             f"{vendor_fragments_text}\n\n",
             kind=PromptBlockKind.RULE,
             tier=PromptTier.STABLE,
-            provenance="infrastructure.harness_ports.assistant_prompt_vendor_fragments",
+            provenance="infrastructure.harness_providers.assistant_prompt_vendor_fragments",
         )
     ]
 
@@ -168,7 +168,7 @@ def contribute_gateway_persona(
             f"{gateway_persona_fragments()}\n\n",
             kind=PromptBlockKind.RULE,
             tier=PromptTier.STABLE,
-            provenance="infrastructure.harness_ports.gateway_persona_fragments",
+            provenance="infrastructure.harness_providers.gateway_persona_fragments",
         )
     ]
 

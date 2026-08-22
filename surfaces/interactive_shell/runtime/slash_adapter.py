@@ -19,7 +19,7 @@ from surfaces.interactive_shell.utils.telemetry.turn_outcome import (
     format_terminal_turn_outcome,
 )
 from tools.interactive_shell.shared.execution_policy import ExecutionPolicyResult
-from tools.interactive_shell.shared.host_ports import ExecutionGate
+from tools.interactive_shell.shared.host_contracts import ExecutionGate
 
 
 class SlashPorts(ExecutionGate, Protocol):

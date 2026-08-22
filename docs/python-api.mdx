@@ -157,12 +157,12 @@ integrations and forward findings to team channels:
 ```python
 from bootstrap.process import EMBEDDED_PROFILE, configure_process
 from core.agent_harness import AgentSession
-from core.agent_harness.turns.gather_ports import GatherPorts
+from core.agent_harness.runtime import GatherPhase
 
 configure_process(EMBEDDED_PROFILE)
 
 # Start session with live evidence gathering enabled for configured integrations
-session = AgentSession.start(gather=GatherPorts(enabled=True))
+session = AgentSession.start(gather=GatherPhase(enabled=True))
 
 result = session.chat("summarize critical alerts and deployment changes from the last 24h")
 action_ok = (
@@ -260,7 +260,7 @@ session = AgentSession.start(SessionConfig(prompts=my_provider))
 If omitted, `core.agent_harness.spi.defaults.DefaultPromptContextProvider` is
 used. A custom provider must implement
 `core.agent_harness.ports.PromptContextProvider`. The same `prompts=` argument
-is accepted by `DefaultPorts.agent()` on the custom-ports path below.
+is accepted by `DefaultHeadlessBuild.agent()` on the custom-ports path below.
 
 ## Custom output and ports
 
@@ -269,13 +269,13 @@ stream to a websocket), build the agent and pass your own sink:
 
 ```python
 from core.agent_harness import AgentSession, SessionConfig
-from core.agent_harness.runtime import DefaultPorts
+from core.agent_harness.runtime import DefaultHeadlessBuild
 from core.agent_harness.turns.headless_adapters import BufferOutputSink
 
 session = AgentSession(SessionConfig())
 startup = session.startup()
 sink = BufferOutputSink()
-agent = DefaultPorts(session=startup.session, output=sink).agent(
+agent = DefaultHeadlessBuild(session=startup.session, output=sink).agent(
     prompts=my_provider,  # optional — same port as SessionConfig.prompts
 )
 session.attach_agent(agent)
@@ -288,7 +288,7 @@ print(sink.streamed)   # streamed answer chunks
 Any object implementing the `OutputSink` protocol
 (`core.agent_harness.ports.OutputSink`: `print`, `render_response_header`,
 `render_error`, `stream`) may replace `BufferOutputSink`.
-`DefaultPorts` also takes a custom logger, console, and prompt surface; its
+`DefaultHeadlessBuild` also takes a custom logger, console, and prompt surface; its
 `agent()` takes your own tool provider (`tools=`, usually a configured
 `DefaultToolProvider`) and gather ports — see its docstring.
 

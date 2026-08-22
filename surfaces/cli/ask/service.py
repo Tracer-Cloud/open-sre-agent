@@ -14,18 +14,22 @@ from typing import Any
 
 from rich.console import Console
 
-from core.agent_harness import AgentSession, SessionConfig, SessionManager, TurnResult
-from core.agent_harness.ports import TurnBinding
-from core.agent_harness.runtime import (
-    DefaultHeadlessBuild,
-    DefaultToolProvider,
-    GatherPhase,
-    HeadlessAgent,
+from core.agent_harness import (
+    AgentSession,
+    SessionConfig,
+    SessionCore,
+    SessionManager,
+    TurnResult,
 )
+from core.agent_harness.runtime import GatherPhase
 from core.agent_harness.spi.cancel import ensure_turn_cancel
 from core.tool import ToolExecutionHooks
 from infrastructure.errors import OpenSREError
 from surfaces.cli.ask.approval import ApprovalTracker, build_approval_hooks
+
+#: Capabilities the one-shot ``ask`` agent must not reach — it answers or runs a
+#: bounded action, not investigations, slash commands, or task cancellation.
+_ASK_DISABLED_CAPABILITIES = ("investigation", "llm_provider", "slash_commands", "task_cancel")
 
 
 class AskStatus(StrEnum):
@@ -121,16 +125,6 @@ class _AskOutputSink:
         _ = answer
 
 
-@dataclass(frozen=True, slots=True)
-class _BoundDispatcher:
-    agent: HeadlessAgent
-    binding: TurnBinding
-
-    def dispatch(self, message: str) -> TurnResult:
-        """Run one message through the shared host entrypoint."""
-        return self.agent.handle(message, self.binding)
-
-
 @contextmanager
 def ask_signal_scope(cancel_event: threading.Event | None = None) -> Iterator[None]:
     """Map process termination signals to ``AskSignal`` within one CLI scope."""
@@ -151,57 +145,41 @@ def ask_signal_scope(cancel_event: threading.Event | None = None) -> Iterator[No
             signal.signal(sig, handler)
 
 
+def _restrict_ask_capabilities(session: SessionCore) -> None:
+    """Zero the capabilities the one-shot ask agent must not use."""
+    for capability in _ASK_DISABLED_CAPABILITIES:
+        session.available_capabilities[capability] = ()
+
+
 def _run_agent_turn(prompt: str, hooks: ToolExecutionHooks) -> TurnResult:
     manager = SessionManager()
-    agent_session = AgentSession(
-        SessionConfig(
-            load_env=True,
-            hydrate_integrations=True,
-            warm_integrations=True,
-            persistent_tasks=False,
-            open_store=False,
-            session_manager=manager,
-        )
-    )
     output = _AskOutputSink()
     cancel_event = ensure_turn_cancel(output)
     console = _CancellableConsole(cancel_event)
-    session = None
+    session: SessionCore | None = None
     try:
         with ask_signal_scope(cancel_event):
-            startup = agent_session.startup()
-            session = startup.session
-            for capability in (
-                "investigation",
-                "llm_provider",
-                "slash_commands",
-                "task_cancel",
-            ):
-                session.available_capabilities[capability] = ()
-
-            tools = DefaultToolProvider(session, console)
-            agent = DefaultHeadlessBuild(
-                session=session,
+            agent_session = AgentSession.start(
+                SessionConfig(
+                    load_env=True,
+                    hydrate_integrations=True,
+                    warm_integrations=True,
+                    persistent_tasks=False,
+                    open_store=False,
+                    session_manager=manager,
+                ),
                 output=output,
-                console=console,
-            ).agent(
-                tools=tools,
-                prompts=startup.prompts,
+                prepare_session=_restrict_ask_capabilities,
                 gather=GatherPhase(),
+                console=console,
+                is_tty=False,
+                tool_hooks=hooks,
             )
-            agent_session.attach_agent(
-                _BoundDispatcher(
-                    agent=agent,
-                    binding=TurnBinding(
-                        session=session,
-                        output=output,
-                        tool_hooks=hooks,
-                        console=console,
-                        is_tty=False,
-                    ),
-                )
-            )
-            return agent_session.chat(prompt)
+            session = agent_session.bound_session
+            # chat_until_goal, not chat: a multi-step ask can attach a session
+            # goal via an assistant_handoff, and it must run to completion rather
+            # than stop after the first turn.
+            return agent_session.chat_until_goal(prompt).last_result
     finally:
         if session is not None:
             manager.close(session, extract_memory=False)

@@ -159,6 +159,7 @@ def sentry_uptime_watch_add(
     if params:
         _console.print(f"  Project: {params['project_slug']}")
 
+    from bootstrap.adapters import install_scheduled_delivery_adapters
     from infrastructure.scheduling.scheduler.executor import deliver_scheduled_message
     from integrations.sentry.uptime import format_uptime_watch_active_message
 
@@ -168,6 +169,9 @@ def sentry_uptime_watch_add(
         timezone=added.timezone,
         project_slug=params.get("project_slug", ""),
     )
+    # This command boots no scheduler profile, so bind the delivery adapters the
+    # activation notice resolves through before sending it.
+    install_scheduled_delivery_adapters()
     ok, error, _message_id = deliver_scheduled_message(added, active_message)
     if ok:
         _console.print("[green]Activation notice sent to chat.[/green]")

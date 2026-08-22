@@ -792,7 +792,7 @@ class CLIBackedAgentClient:
     )
 
     def __init__(self, adapter: Any, *, model: str | None = None) -> None:
-        from infrastructure.harness_ports import build_cli_client
+        from infrastructure.harness_providers import build_cli_client
 
         self._adapter = adapter
         self._model = model
@@ -825,7 +825,7 @@ class CLIBackedAgentClient:
         system: str | None = None,
         tools: list[dict[str, Any]] | None = None,
     ) -> AgentLLMResponse:
-        from infrastructure.harness_ports import flatten_cli_messages_to_prompt
+        from infrastructure.harness_providers import flatten_cli_messages_to_prompt
 
         tool_block = ""
         if tools:
