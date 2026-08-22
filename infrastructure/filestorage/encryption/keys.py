@@ -254,6 +254,7 @@ def save_passphrase(passphrase: str) -> None:
             f"  unset {REMOTE_SYNC_PASSPHRASE_ENV}        # or fall back to stored credentials"
         )
 
+
 def forget_cached_kek() -> None:
     """Drop the cached derivation, so the next call re-derives from scratch."""
     _write_cache("")
