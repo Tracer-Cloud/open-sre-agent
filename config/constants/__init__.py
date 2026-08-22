@@ -329,6 +329,7 @@ from config.constants.servicenow import (
     SERVICENOW_PASSWORD_ENV,
     SERVICENOW_USERNAME_ENV,
 )
+from config.constants.session_store import OPENSRE_SESSION_FILE_LOCK_ENV
 from config.constants.signoz import SIGNOZ_API_KEY_ENV, SIGNOZ_URL_ENV
 from config.constants.slack import (
     SLACK_APP_TOKEN_ENV,
@@ -603,6 +604,7 @@ __all__ = [
     "OPENSRE_MEMORY_DIR_ENV",
     "OPENSRE_MEMORY_DISABLED_ENV",
     "OPENSRE_MEMORY_GATEWAY_ENABLED_ENV",
+    "OPENSRE_SESSION_FILE_LOCK_ENV",
     "OPENSRE_SIZE_PROFILE_ENV",
     "OPENSRE_WORK_ITEMS_DIR_ENV",
     "OPENSRE_TMP_DIR",

@@ -25,6 +25,7 @@ def get_mongodb_replica_status(
     connection_string: str,
     auth_source: str = "admin",
     tls: bool = True,
+    **_kwargs: Any,
 ) -> dict[str, Any]:
     """Fetch status of all members in the MongoDB replica set."""
     config = MongoDBConfig(

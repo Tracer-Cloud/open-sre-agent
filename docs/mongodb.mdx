@@ -119,6 +119,75 @@ Status: passed
 Detail: Connected to MongoDB 6.0.5; target database: production
 ```
 
+### Local Docker verification
+
+Start a disposable single-node replica set without external credentials:
+
+```bash
+docker run --rm --detach --name opensre-mongodb \
+  --publish 127.0.0.1:27018:27018 \
+  mongo:7 --replSet rs0 --bind_ip_all --port 27018
+until docker exec opensre-mongodb mongosh --port 27018 --quiet \
+  --eval 'db.adminCommand({ping:1}).ok' | grep --quiet 1; do sleep 1; done
+docker exec opensre-mongodb mongosh --port 27018 --quiet \
+  --eval 'rs.initiate({_id:"rs0",members:[{_id:0,host:"localhost:27018"}]})'
+until docker exec opensre-mongodb mongosh --port 27018 --quiet \
+  --eval 'db.hello().isWritablePrimary' | grep --quiet true; do sleep 1; done
+```
+
+Seed a collection, enable profiling, complete one slow query for profiler data,
+and leave another running for current-operation data:
+
+```bash
+docker exec opensre-mongodb mongosh --port 27018 --quiet opensre_verify --eval '
+  db.setProfilingLevel(2);
+  db.metrics.insertMany(Array.from({length:1000}, (_,i) => ({service:"checkout", value:i, ts:new Date()})));
+  db.metrics.createIndex({service:1});
+  db.slow.insertOne({name:"profile-seed"});
+  db.slow.find({$where:"sleep(2000); return true"}).toArray();
+'
+docker exec --detach opensre-mongodb mongosh --port 27018 --quiet \
+  opensre_verify --eval 'db.slow.find({$where:"sleep(60000); return true"}).toArray()'
+```
+
+From a source checkout, run `uv run opensre integrations setup mongodb` and use
+these answers:
+
+| Prompt | Answer |
+| --- | --- |
+| Connection string | `mongodb://127.0.0.1:27018/?directConnection=true` |
+| Database name | `opensre_verify` |
+| Auth source | `admin` |
+| TLS enabled | `false` |
+
+Verify the connection:
+
+```bash
+uv run opensre integrations verify mongodb
+```
+
+The verifier should report MongoDB 7 and the `opensre_verify` database. While
+the slow query is still running, exercise `get_mongodb_current_ops` through an
+agent turn:
+
+```bash
+uv run opensre ask \
+  --allowed-tool get_mongodb_current_ops \
+  "Use get_mongodb_current_ops with threshold_ms 1000 now. Report every operation above the threshold."
+```
+
+The result should include the running `COLLSCAN` on `opensre_verify.slow`.
+The other MongoDB tools can now read the seeded collection, profiler entries,
+single healthy primary member, and server status. Stop the disposable instance
+when finished:
+
+```bash
+docker stop opensre-mongodb
+```
+
+This instance has no authentication or TLS. It binds only to loopback and is
+for local verification only.
+
 ## Troubleshooting
 
 | Symptom | Fix |
