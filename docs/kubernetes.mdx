@@ -312,22 +312,6 @@ certainly a demo/training fixture with no production impact.
 (`kubernetes_get_pod_logs`, `kubernetes_list_nodes`) were confirmed separately via direct
 tool calls, both returning real data.
 
-<Warning>
-Two real bugs surfaced and were fixed while building this recipe:
-
-- `kubernetes_get_pod_logs` could return the Python `repr()` of a bytes object
-  (literally `"b'...'"`) instead of decoded text -- confirmed against
-  kubernetes-client 36.0.3, while `kubectl logs` on the same pod showed plain text.
-  The tool now detects and unwraps this artifact.
-- `kubernetes_describe_pod` omitted a container's `command`/`args` entirely. For a
-  bare pod with no working directory context (like the crash-looping pod above),
-  this is often the actual root cause -- and its absence caused an earlier
-  investigation run to misdiagnose the crash as "no command set" instead of
-  identifying the actual (deliberately failing) command. `kubernetes_get_resource`
-  was unaffected, since it serializes the full API object rather than a curated
-  subset.
-</Warning>
-
 Teardown:
 
 ```bash

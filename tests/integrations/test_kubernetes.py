@@ -235,46 +235,71 @@ def test_env_loader_skips_when_no_kubeconfig_set(monkeypatch: pytest.MonkeyPatch
 # ---------------------------------------------------------------------------
 
 
-def test_get_pod_logs_unwraps_bytes_repr_artifact() -> None:
-    """kubernetes-client 36.0.3's read_namespaced_pod_log can return the Python
-    repr() of a bytes object (literally "b'...'") instead of decoded text --
-    confirmed live against a real cluster while kubectl logs shows plain text
-    for the same pod. The tool must surface the real log text, not the repr."""
+def test_get_pod_logs_decodes_raw_response_correctly() -> None:
+    """kubernetes-client 36.0.3's generated deserializer declares this endpoint's
+    response type as str, but a plain-text log body is never valid JSON, so its
+    fallback path calls str() directly on the raw response bytes instead of
+    decoding them -- producing the literal text "b'...'" rather than the actual
+    log content (confirmed live against a real cluster, while kubectl logs on
+    the same pod showed plain text). Fetching with _preload_content=False and
+    decoding the raw bytes ourselves sidesteps that broken path entirely."""
     from integrations.kubernetes.client import KubernetesClient
 
     cfg = KubernetesIntegrationConfig.model_validate({"kubeconfig": _MINIMAL_KUBECONFIG})
     client = KubernetesClient(cfg)
 
+    raw_response = MagicMock()
+    raw_response.data = b"payment-service: connection refused to billing-api\n"
+
     mock_core = MagicMock()
-    mock_core.read_namespaced_pod_log.return_value = (
-        "b'payment-service: connection refused to billing-api\\n'"
-    )
+    mock_core.read_namespaced_pod_log.return_value = raw_response
 
     with patch.object(client, "_get_clients", return_value=(mock_core, MagicMock(), MagicMock())):
         result = client.get_pod_logs(namespace="demo", pod_name="demo-crashloop")
 
     assert result["success"] is True
     assert result["lines"] == ["payment-service: connection refused to billing-api"]
+    assert mock_core.read_namespaced_pod_log.call_args.kwargs["_preload_content"] is False
 
 
-def test_get_pod_logs_leaves_normal_text_unchanged() -> None:
+def test_get_pod_logs_preserves_content_that_looks_like_a_bytes_repr() -> None:
+    """A real log line can legitimately read like a Python bytes repr (e.g. an
+    app that logs raw byte strings for debugging) -- decoding the raw response
+    directly, rather than pattern-matching the final string for a "b\'...\'"
+    wrapper, must never rewrite genuine log content that merely looks similar."""
     from integrations.kubernetes.client import KubernetesClient
 
     cfg = KubernetesIntegrationConfig.model_validate({"kubeconfig": _MINIMAL_KUBECONFIG})
     client = KubernetesClient(cfg)
 
+    raw_response = MagicMock()
+    raw_response.data = b"b'this legitimately looks like bytes repr'"
+
     mock_core = MagicMock()
-    mock_core.read_namespaced_pod_log.return_value = "line one\nline two"
+    mock_core.read_namespaced_pod_log.return_value = raw_response
+
+    with patch.object(client, "_get_clients", return_value=(mock_core, MagicMock(), MagicMock())):
+        result = client.get_pod_logs(namespace="demo", pod_name="demo-web")
+
+    assert result["lines"] == ["b'this legitimately looks like bytes repr'"]
+
+
+def test_get_pod_logs_handles_multiline_text() -> None:
+    from integrations.kubernetes.client import KubernetesClient
+
+    cfg = KubernetesIntegrationConfig.model_validate({"kubeconfig": _MINIMAL_KUBECONFIG})
+    client = KubernetesClient(cfg)
+
+    raw_response = MagicMock()
+    raw_response.data = b"line one\nline two"
+
+    mock_core = MagicMock()
+    mock_core.read_namespaced_pod_log.return_value = raw_response
 
     with patch.object(client, "_get_clients", return_value=(mock_core, MagicMock(), MagicMock())):
         result = client.get_pod_logs(namespace="demo", pod_name="demo-web")
 
     assert result["lines"] == ["line one", "line two"]
-
-
-# ---------------------------------------------------------------------------
-# KubernetesClient.describe_pod() -- container command/args
-# ---------------------------------------------------------------------------
 
 
 def test_describe_pod_includes_container_command_and_args() -> None:
