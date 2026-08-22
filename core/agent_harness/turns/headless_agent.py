@@ -146,7 +146,7 @@ class HeadlessAgent:
     def run_goal(
         self,
         text: str,
-        binding: TurnBinding,
+        binding: TurnBinding | None = None,
         *,
         goal: SessionGoal | None = None,
         evaluate: Callable[..., str] | None = None,
@@ -154,27 +154,33 @@ class HeadlessAgent:
         cancel_requested: Callable[[], bool] | None = None,
         on_progress: Callable[[SessionGoal], None] | None = None,
     ) -> SessionGoalRunResult:
-        """Bind the turn, dispatch, and continue while a session goal is attached.
+        """Dispatch, and continue while a session goal is attached; the one loop driver.
 
-        The single session-goal loop driver — both the host loop
-        (:meth:`handle`) and :meth:`AgentSession.chat_until_goal` run through it,
-        so there is one loop, not two. ``binding`` states the whole turn;
-        ``accounting_factory`` (message → accounting) is applied per outer turn
-        because the loop may dispatch several, each with different text; ``None``
-        uses the default per-message accounting. ``goal`` attaches an explicit
-        host-owned goal; ``evaluate`` overrides goal completion; both default to
-        the handoff-tag path. ``cancel_requested`` is checked between outer
-        turns; ``on_progress`` receives the goal after each.
+        Both the host loop (:meth:`handle`) and
+        :meth:`AgentSession.chat_until_goal` run through this, so there is one
+        loop, not two. A ``binding`` states the whole turn and is re-applied per
+        outer turn — a per-turn host (gateway/shell) passes one so no field is
+        inherited across turns (see :class:`TurnBinding`); ``accounting_factory``
+        (message → accounting) then varies accounting per outer turn. A host that
+        configured the agent once and reuses it (``AgentSession``) omits the
+        binding: the agent keeps its bound turn context and ``accounting_factory``
+        is not used. ``goal`` attaches an explicit host-owned goal; ``evaluate``
+        overrides goal completion; both default to the handoff-tag path.
+        ``cancel_requested`` is checked between outer turns; ``on_progress``
+        receives the goal after each.
         """
 
         def _one_turn(message: str) -> TurnResult:
-            accounting = accounting_factory(message) if accounting_factory is not None else None
-            self.bind_turn(replace(binding, accounting=accounting))
+            if binding is not None:
+                accounting = accounting_factory(message) if accounting_factory is not None else None
+                self.bind_turn(replace(binding, accounting=accounting))
             return self.dispatch(message)
 
         # The goal loop reads and writes goal state on the session this turn
-        # states, not on whatever the previous binding left behind.
-        session = binding.session if binding.session is not None else self._session
+        # states; with no binding it is the agent's currently bound session.
+        session = self._session
+        if binding is not None and binding.session is not None:
+            session = binding.session
         with self._one_turn_at_a_time():
             return run_until_session_goal(
                 _one_turn,

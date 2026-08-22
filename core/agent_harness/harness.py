@@ -62,7 +62,7 @@ class GoalDispatcher(ChatDispatcher, Protocol):
     def run_goal(
         self,
         text: str,
-        binding: TurnBinding,
+        binding: TurnBinding | None = None,
         *,
         goal: SessionGoal | None = None,
         evaluate: Callable[..., str] | None = None,
@@ -289,18 +289,17 @@ class AgentSession:
         """Run the session-goal loop for ``message`` until the goal completes.
 
         Delegates to the attached agent's :meth:`HeadlessAgent.run_goal` — the
-        same loop the gateway host runs — so there is one goal loop, not two.
-        Requires an agent that drives goals (a :class:`GoalDispatcher`); a
-        dispatch-only agent raises. Pass ``goal=`` explicitly, or let the first
-        action turn attach one via a ``session_goal:`` handoff tag. Does not scan
-        user prose for intent. Caps at ``goal.max_outer_turns``. Honors
-        ``cancel_requested`` between turns. ``on_progress`` receives the goal
-        after each turn (checklist UI).
+        same loop the gateway host runs — so there is one goal loop, not two. No
+        binding is passed: the agent was configured once at :meth:`start` /
+        :meth:`attach_agent`, so the loop reuses its bound turn context (tool
+        hooks, tty) rather than replacing it per turn. Requires an agent that
+        drives goals (a :class:`GoalDispatcher`); a dispatch-only agent raises.
+        Pass ``goal=`` explicitly, or let the first action turn attach one via a
+        ``session_goal:`` handoff tag. Does not scan user prose for intent. Caps
+        at ``goal.max_outer_turns``. Honors ``cancel_requested`` between turns.
+        ``on_progress`` receives the goal after each turn (checklist UI).
         """
-        from core.agent_harness.ports import TurnBinding
-
-        session = self._bound_session
-        if session is None:
+        if self._bound_session is None:
             raise RuntimeError(
                 "AgentSession.chat_until_goal requires a bound session "
                 "(call AgentSession.start() first)."
@@ -313,7 +312,6 @@ class AgentSession:
             )
         return agent.run_goal(
             message,
-            TurnBinding(session=session),
             goal=goal,
             evaluate=evaluate,
             cancel_requested=cancel_requested,

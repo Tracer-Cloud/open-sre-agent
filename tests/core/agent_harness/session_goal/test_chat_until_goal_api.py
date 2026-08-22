@@ -31,18 +31,25 @@ def _turn(body: str) -> TurnResult:
 
 
 class _FakeGoalAgent:
-    """Stand-in for HeadlessAgent: one dispatch verb, one goal loop over it."""
+    """Stand-in for HeadlessAgent: one dispatch verb, one goal loop over it.
 
-    def __init__(self) -> None:
+    Records the ``binding`` it was handed so a test can assert AgentSession does
+    not push a per-turn binding (which would wipe the agent's bound turn context).
+    """
+
+    def __init__(self, session: SessionCore) -> None:
+        self._session = session
         self.calls: list[str] = []
+        self.binding_seen: Any = "unset"
 
     def dispatch(self, message: str) -> TurnResult:
         self.calls.append(message)
         body = "working session_goal:done=0" if len(self.calls) == 1 else "done session_goal:done=1"
         return _turn(body)
 
-    def run_goal(self, text: str, binding: Any, **kwargs: Any) -> SessionGoalRunResult:
-        return run_until_session_goal(self.dispatch, binding.session, text, **kwargs)
+    def run_goal(self, text: str, binding: Any = None, **kwargs: Any) -> SessionGoalRunResult:
+        self.binding_seen = binding
+        return run_until_session_goal(self.dispatch, self._session, text, **kwargs)
 
 
 class _DispatchOnlyAgent:
@@ -52,9 +59,10 @@ class _DispatchOnlyAgent:
 
 def test_chat_until_goal_delegates_to_the_agent_loop_until_achieved() -> None:
     # Arrange: an AgentSession bound to a goal-driving agent.
-    agent = _FakeGoalAgent()
+    session = SessionCore()
+    agent = _FakeGoalAgent(session)
     api = AgentSession(SessionConfig(load_env=False))
-    api._bound_session = SessionCore()
+    api._bound_session = session
     api.attach_agent(agent)  # type: ignore[arg-type]
 
     # Act: run the goal loop through the public verb.
@@ -67,6 +75,22 @@ def test_chat_until_goal_delegates_to_the_agent_loop_until_achieved() -> None:
     assert len(agent.calls) == 2
     assert outcome.goal.status == SessionGoalStatus.ACHIEVED
     assert "session_goal:" not in (outcome.last_result.assistant_response_text or "")
+
+
+def test_chat_until_goal_reuses_agent_context_without_a_per_turn_binding() -> None:
+    # Arrange: a configured-once agent whose bound tty/tool-hooks must survive.
+    session = SessionCore()
+    agent = _FakeGoalAgent(session)
+    api = AgentSession(SessionConfig(load_env=False))
+    api._bound_session = session
+    api.attach_agent(agent)  # type: ignore[arg-type]
+
+    # Act.
+    api.chat_until_goal("go", goal=SessionGoal(condition="x", max_outer_turns=1))
+
+    # Assert: no binding was pushed, so run_goal reuses the agent's bound context
+    # (a sparse TurnBinding would wipe tool_hooks/is_tty by design).
+    assert agent.binding_seen is None
 
 
 def test_chat_until_goal_requires_a_goal_driving_agent() -> None:
