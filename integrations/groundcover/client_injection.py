@@ -23,7 +23,6 @@ def groundcover_creds(gc: dict[str, Any]) -> dict[str, Any]:
     }
 
 
-
 def make_client(creds: dict[str, Any]) -> GroundcoverClient | None:
     """Build a GroundcoverClient, or None when credentials are missing/invalid."""
     if not creds.get("api_key"):
@@ -45,11 +44,9 @@ def make_client(creds: dict[str, Any]) -> GroundcoverClient | None:
     return GroundcoverClient(config)
 
 
-
 def client_for_source(gc: dict[str, Any]) -> GroundcoverClient | None:
     """Build a GroundcoverClient from a resolved ``groundcover`` source entry."""
     return make_client(groundcover_creds(gc))
-
 
 
 def base_extract_params(

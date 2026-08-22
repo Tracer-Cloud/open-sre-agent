@@ -15,7 +15,6 @@ def unavailable(source: str, error: str, **extra: Any) -> dict[str, Any]:
     return tool_unavailable(source, error, data=[], summary={}, truncated=False, **extra)
 
 
-
 def needs_query(source: str) -> dict[str, Any]:
     """Cheap envelope returned when a signal tool is invoked without a gcQL query.
 
@@ -37,12 +36,10 @@ def needs_query(source: str) -> dict[str, Any]:
     }
 
 
-
 def _truncate_value(value: Any) -> Any:
     if isinstance(value, str) and len(value) > _MAX_FIELD_CHARS:
         return value[: _MAX_FIELD_CHARS - 3] + "..."
     return value
-
 
 
 def compact_rows(rows: list[Any], limit: int = _ENVELOPE_ROW_CAP) -> tuple[list[Any], bool]:
@@ -57,7 +54,6 @@ def compact_rows(rows: list[Any], limit: int = _ENVELOPE_ROW_CAP) -> tuple[list[
     return out, capped
 
 
-
 def time_range(start: str, end: str, period: str) -> dict[str, str]:
     """Echo the requested time window; period defaults to the server default (1h)."""
     return {
@@ -65,7 +61,6 @@ def time_range(start: str, end: str, period: str) -> dict[str, str]:
         "end": end or "",
         "period": period or ("" if (start and end) else "PT1H"),
     }
-
 
 
 def build_envelope(
@@ -112,7 +107,6 @@ def build_envelope(
     if result.notes:
         envelope["notes"] = result.notes
     return envelope
-
 
 
 def run_signal_query(
