@@ -459,6 +459,35 @@ def test_reencrypt_adopts_a_store_that_predates_encryption(
     assert gate.cipher is not None
 
 
+def test_reencrypt_refuses_a_passphrase_that_does_not_open_the_store(
+    roots: tuple[SyncRoot, ...],
+) -> None:
+    """A changed passphrase must stop the run before the manifest is written.
+
+    Minting the new generation cannot fail on its own — wrapping a fresh secret
+    checks nothing, and the cipher built afterwards opens that new key while
+    silently skipping the old ones. Without an upfront check the run persisted a
+    manifest no single passphrase could open in full, then died on the first
+    object with an error that read like remote corruption.
+    """
+    # Arrange
+    store = FakeObjectStore()
+    _encrypted_push(store, roots)
+    before = dict(store.objects)
+
+    # Act / Assert
+    with pytest.raises(WrongPassphraseError):
+        reencrypt(store, passphrase="not the right one")
+
+    # Nothing was written, and the real passphrase still opens every object.
+    assert store.objects == before
+    gate = resolve_cipher(store, encrypted=True)
+    assert gate.cipher is not None
+    for key, data in store.objects.items():
+        if key != MANIFEST_KEY:
+            assert gate.cipher.unseal(key, data)
+
+
 def test_an_interrupted_reencrypt_leaves_every_object_readable(
     roots: tuple[SyncRoot, ...],
 ) -> None:
