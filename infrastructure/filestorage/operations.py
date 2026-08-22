@@ -164,29 +164,24 @@ def _root_status(root: SyncRoot, exclusions: ExclusionRules) -> SyncRootStatus:
 def _encryption_status(config: RemoteSyncConfig) -> EncryptionStatus:
     """Report what a sync would decide about encryption, without doing one.
 
-    Runs the same gate the transfer runs, so ``status`` and ``sync`` can never
-    disagree about whether this machine may talk to this store. Every failure
-    is reported rather than raised: status exists to explain a problem, and one
-    that ends in a traceback explains less than a line saying what is wrong.
+    Runs the same gate the transfer runs — in both directions, so encryption
+    being off on this machine never skips the check — and ``status`` and
+    ``sync`` can therefore never disagree about whether this machine may talk
+    to this store. A missing manifest is the case that needs it: no listing
+    tells a sealed store whose keys were deleted apart from a plaintext one.
+    Every failure is reported rather than raised: status exists to explain a
+    problem, and one that ends in a traceback explains less than a line saying
+    what is wrong.
     """
     try:
         store = build_object_store(config)
-        listing = store.list_objects("")
-        store_encrypted = manifest_in_listing(listing)
-        if not config.encrypted:
-            problem = (
-                "this store is encrypted but encryption is off on this machine; "
-                "a sync would be refused"
-                if store_encrypted
-                else ""
-            )
-            return EncryptionStatus(
-                configured=False, store_encrypted=store_encrypted, problem=problem
-            )
-        # Resolving the cipher is what proves the passphrase opens the store.
-        resolve_cipher(store, encrypted=True, dry_run=True)
+        # The gate hands back the listing it had to read, so presence of the
+        # manifest is answered without listing the store a second time.
+        gate = resolve_cipher(store, encrypted=config.encrypted, dry_run=True)
         return EncryptionStatus(
-            configured=True, store_encrypted=store_encrypted, key_available=True
+            configured=config.encrypted,
+            store_encrypted=manifest_in_listing(gate.listing),
+            key_available=config.encrypted,
         )
     except RemoteSyncEncryptionError as exc:
         # Our own wording, written for an operator to act on, so it is shown.
@@ -210,8 +205,10 @@ def get_sync_status() -> SyncStatus:
 
     Makes network calls only when sync is on: the exposure check (if the
     provider registered a checker; see
-    :func:`~infrastructure.filestorage.providers.check_bucket_exposure`) and one
-    listing for the encryption check.
+    :func:`~infrastructure.filestorage.providers.check_bucket_exposure`) and the
+    encryption gate — one listing, plus a read of the smallest mirrored object
+    when there is no manifest and only its bytes can say whether the store is
+    sealed.
     """
     _refuse_org_scoped_turn()
     config = load_remote_sync_config()

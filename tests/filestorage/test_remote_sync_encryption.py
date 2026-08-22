@@ -364,6 +364,45 @@ def test_a_deleted_manifest_never_looks_like_a_plaintext_store(
         resolve_cipher(store, encrypted=True)
 
 
+def test_status_reports_the_deleted_manifest_that_sync_refuses(
+    home: Path, roots: tuple[SyncRoot, ...], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Status must not call a store healthy that ``sync`` would refuse.
+
+    With encryption off on this machine the listing alone reads as a plaintext
+    store, so status has to run the same gate — otherwise the operator is told
+    everything is fine and only learns otherwise mid-sync.
+    """
+    # Arrange: a sealed store minus its manifest, and encryption off here.
+    from config.constants import paths
+    from config.constants.filestorage import (
+        REMOTE_SYNC_BUCKET_ENV,
+        REMOTE_SYNC_ENCRYPT_ENV,
+        REMOTE_SYNC_ENV,
+    )
+    from infrastructure.filestorage import operations
+
+    store = FakeObjectStore()
+    _encrypted_push(store, roots)
+    del store.objects[MANIFEST_KEY]
+
+    monkeypatch.setattr(paths, "OPENSRE_HOME_DIR", home)
+    monkeypatch.setenv(REMOTE_SYNC_ENV, "1")
+    monkeypatch.setenv(REMOTE_SYNC_BUCKET_ENV, "b")
+    monkeypatch.setenv(REMOTE_SYNC_ENCRYPT_ENV, "0")
+    monkeypatch.setattr(operations, "build_object_store", lambda _config: store)
+
+    # Act
+    status = operations.get_sync_status()
+
+    # Assert
+    assert status.encryption is not None
+    assert status.encryption.healthy is False
+    assert "manifest" in status.encryption.problem
+    with pytest.raises(ManifestMissingError):
+        operations.run_remote_sync()
+
+
 def test_a_genuinely_plaintext_store_still_syncs_unencrypted() -> None:
     """The sealed-payload probe must not refuse an ordinary unencrypted store."""
     # Arrange
