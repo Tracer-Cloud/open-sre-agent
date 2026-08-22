@@ -14,6 +14,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
+from infrastructure.filestorage.contracts import ObjectStore
 from infrastructure.filestorage.encryption import envelope
 from infrastructure.filestorage.encryption.cipher import ManifestCipher
 from infrastructure.filestorage.encryption.keys import forget_cached_kek
@@ -29,7 +30,6 @@ from infrastructure.filestorage.encryption.manifest import (
 )
 from infrastructure.filestorage.encryption.resolver import holds_mirrored_objects
 from infrastructure.filestorage.errors import RemoteSyncEncryptionError
-from infrastructure.filestorage.ports import ObjectStore
 
 
 @dataclass(frozen=True)

@@ -17,6 +17,7 @@ from pathlib import Path
 import pytest
 
 from config.constants.filestorage import REMOTE_SYNC_KEY_CACHE_ENV, REMOTE_SYNC_PASSPHRASE_ENV
+from infrastructure.filestorage.contracts import RemoteObject
 from infrastructure.filestorage.encryption import envelope
 from infrastructure.filestorage.encryption.cipher import ManifestCipher
 from infrastructure.filestorage.encryption.keys import (
@@ -42,7 +43,6 @@ from infrastructure.filestorage.errors import (
     UndecryptableObjectError,
     WrongPassphraseError,
 )
-from infrastructure.filestorage.ports import RemoteObject
 from infrastructure.filestorage.syncable import SyncRoot
 
 PASSPHRASE = "correct horse battery staple"

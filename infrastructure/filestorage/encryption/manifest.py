@@ -17,6 +17,7 @@ import json
 from dataclasses import dataclass, field
 from typing import Any
 
+from infrastructure.filestorage.contracts import ObjectStore, RemoteObject
 from infrastructure.filestorage.encryption.cipher import ManifestCipher
 from infrastructure.filestorage.encryption.keys import (
     RootKey,
@@ -30,7 +31,6 @@ from infrastructure.filestorage.encryption.keys import (
     wrap_root_secret,
 )
 from infrastructure.filestorage.errors import RemoteSyncEncryptionError
-from infrastructure.filestorage.ports import ObjectStore, RemoteObject
 
 #: Object key the manifest lives under, relative to the configured prefix.
 MANIFEST_KEY = ".opensre-sync-manifest.json"

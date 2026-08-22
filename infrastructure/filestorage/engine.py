@@ -46,6 +46,7 @@ from pathlib import Path
 
 from config.constants.filestorage import DEFAULT_MAX_PARALLEL_UPLOADS
 from infrastructure.filestorage.contracts import ObjectStore, RemoteObject
+from infrastructure.filestorage.encryption.ports import Cipher
 from infrastructure.filestorage.enums import SyncDirection
 from infrastructure.filestorage.errors import RemoteSyncConfigError, UnsyncablePathError
 from infrastructure.filestorage.exclusions import NO_EXCLUSIONS, ExclusionRules

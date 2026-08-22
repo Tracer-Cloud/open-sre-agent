@@ -10,6 +10,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
+from infrastructure.filestorage.contracts import ObjectStore, RemoteObject
 from infrastructure.filestorage.encryption import envelope
 from infrastructure.filestorage.encryption.keys import resolve_passphrase
 from infrastructure.filestorage.encryption.manifest import (
@@ -26,7 +27,6 @@ from infrastructure.filestorage.errors import (
     ManifestMissingError,
     PlaintextStoreError,
 )
-from infrastructure.filestorage.ports import ObjectStore, RemoteObject
 
 _ROOT_HEADS = frozenset(root.value for root in SyncRootName)
 

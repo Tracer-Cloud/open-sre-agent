@@ -19,6 +19,7 @@ from config.constants.filestorage import (
 )
 from config.constants.secrets import OPENSRE_DISABLE_KEYRING_ENV
 from infrastructure.filestorage.config import RemoteSyncConfig
+from infrastructure.filestorage.contracts import RemoteObject
 from infrastructure.filestorage.encryption.keys import resolve_passphrase
 from infrastructure.filestorage.encryption.manifest import (
     load_manifest,
@@ -35,7 +36,6 @@ from infrastructure.filestorage.enums import (
 )
 from infrastructure.filestorage.errors import RemoteSyncConfigError, WrongPassphraseError
 from infrastructure.filestorage.operations import SyncRootStatus, SyncStatus
-from infrastructure.filestorage.ports import RemoteObject
 from infrastructure.filestorage.setup import RemoteSyncSetupRequest
 from infrastructure.process.exit_codes import ERROR
 from surfaces.cli.commands.remote_sync import remote_sync_command
