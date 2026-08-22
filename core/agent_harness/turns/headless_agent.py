@@ -43,7 +43,7 @@ from core.agent_harness.ports import (
     TurnBinding,
 )
 from core.agent_harness.session_goal.goal import SessionGoal
-from core.agent_harness.session_goal.run_until import run_until_session_goal
+from core.agent_harness.session_goal.run_until import SessionGoalRunResult, run_until_session_goal
 from core.agent_harness.turns.action_driver import ActionTurnRunner
 from core.agent_harness.turns.chat_api import ChatTurnBindings, dispatch_chat_turn
 from core.agent_harness.turns.evidence_driver import gather_tool_evidence
@@ -75,12 +75,14 @@ class HeadlessAgent:
     (the product defaults; gateway and shell). Hosts do not call this
     constructor.
 
-    Per message a host calls :meth:`handle` with a :class:`TurnBinding`; it
-    binds the turn, dispatches, and continues while a session goal is
-    attached. :meth:`dispatch` is the single-turn verb underneath; whole-stage
+    Per message a host calls :meth:`handle` with a :class:`TurnBinding`. The
+    session-goal loop lives in :meth:`run_goal` — the one driver both
+    :meth:`handle` (which returns its last result) and
+    :meth:`AgentSession.chat_until_goal` delegate to, so there is one loop, not
+    two. :meth:`dispatch` is the single-turn verb underneath; whole-stage
     replacements for tests go through :meth:`bind_stages`. One agent serves
-    one turn at a time — an overlapping :meth:`handle` or :meth:`dispatch`
-    raises :class:`AgentBusyError`.
+    one turn at a time — an overlapping :meth:`handle`, :meth:`run_goal` or
+    :meth:`dispatch` raises :class:`AgentBusyError`.
     """
 
     def __init__(
@@ -127,14 +129,42 @@ class HeadlessAgent:
         cancel_requested: Callable[[], bool] | None = None,
         on_progress: Callable[[SessionGoal], None] | None = None,
     ) -> TurnResult:
-        """Handle one inbound message: bind the turn, dispatch, continue while a session goal is attached.
+        """Handle one inbound message and return the goal loop's last turn result.
 
         The one host loop — gateway and shell call this and nothing else per
-        message. ``binding`` states the whole turn; ``accounting_factory``
-        (message → accounting) is applied per outer turn because the goal loop
-        may dispatch several, each with different text; ``None`` uses the
-        default per-message accounting. ``cancel_requested`` is checked between
-        outer turns; ``on_progress`` receives the goal after each.
+        message. A thin wrapper over :meth:`run_goal` for callers that only need
+        the final :class:`TurnResult`; :meth:`run_goal` returns the full run.
+        """
+        return self.run_goal(
+            text,
+            binding,
+            accounting_factory=accounting_factory,
+            cancel_requested=cancel_requested,
+            on_progress=on_progress,
+        ).last_result
+
+    def run_goal(
+        self,
+        text: str,
+        binding: TurnBinding,
+        *,
+        goal: SessionGoal | None = None,
+        evaluate: Callable[..., str] | None = None,
+        accounting_factory: Callable[[str], TurnAccounting] | None = None,
+        cancel_requested: Callable[[], bool] | None = None,
+        on_progress: Callable[[SessionGoal], None] | None = None,
+    ) -> SessionGoalRunResult:
+        """Bind the turn, dispatch, and continue while a session goal is attached.
+
+        The single session-goal loop driver — both the host loop
+        (:meth:`handle`) and :meth:`AgentSession.chat_until_goal` run through it,
+        so there is one loop, not two. ``binding`` states the whole turn;
+        ``accounting_factory`` (message → accounting) is applied per outer turn
+        because the loop may dispatch several, each with different text; ``None``
+        uses the default per-message accounting. ``goal`` attaches an explicit
+        host-owned goal; ``evaluate`` overrides goal completion; both default to
+        the handoff-tag path. ``cancel_requested`` is checked between outer
+        turns; ``on_progress`` receives the goal after each.
         """
 
         def _one_turn(message: str) -> TurnResult:
@@ -150,9 +180,11 @@ class HeadlessAgent:
                 _one_turn,
                 session,
                 text,
+                goal=goal,
+                evaluate=evaluate,
                 cancel_requested=cancel_requested,
                 on_progress=on_progress,
-            ).last_result
+            )
 
     def dispatch(self, message: str) -> TurnResult:
         """Run one turn for ``message`` on the currently bound turn (see :meth:`handle`)."""
