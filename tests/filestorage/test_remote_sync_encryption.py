@@ -602,6 +602,31 @@ def test_a_hostile_manifest_cannot_dictate_the_work_factor(
         parse_manifest(_manifest_bytes(**kwargs))  # type: ignore[arg-type]
 
 
+@pytest.mark.parametrize(
+    ("label", "manifest"),
+    [
+        ("kdf is a list, not an object", {"kdf": []}),
+        ("kdf is a bare string", {"kdf": "scrypt"}),
+        ("wrapped_keys is a list of ids", {"wrapped_keys": ["aa" * 16]}),
+        ("wrapped_keys is null", {"wrapped_keys": None}),
+    ],
+)
+def test_a_manifest_of_the_wrong_json_shape_is_reported_as_damaged(
+    label: str, manifest: dict[str, object]
+) -> None:
+    """A member of the wrong JSON type must not escape as an ``AttributeError``.
+
+    ``kdf.get`` and ``wrapped_keys.items()`` are attribute lookups, so a list or
+    string in either slot raised past the parser's own error and out of every
+    caller that only expects ``RemoteSyncEncryptionError``.
+    """
+    payload = json.loads(_manifest_bytes())
+    payload.update(manifest)
+
+    with pytest.raises(RemoteSyncEncryptionError):
+        parse_manifest(json.dumps(payload).encode())
+
+
 def test_the_shipped_defaults_stay_inside_the_bounds() -> None:
     """The guard must not reject the parameters opensre itself writes."""
     assert parse_manifest(_manifest_bytes()).params == ScryptParams()

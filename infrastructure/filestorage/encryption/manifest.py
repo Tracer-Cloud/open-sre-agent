@@ -15,6 +15,7 @@ from __future__ import annotations
 import base64
 import json
 from dataclasses import dataclass, field
+from typing import Any
 
 from infrastructure.filestorage.encryption.cipher import ManifestCipher
 from infrastructure.filestorage.encryption.keys import (
@@ -70,16 +71,28 @@ class EncryptionManifest:
         ).encode("utf-8")
 
 
+def _json_object(value: object) -> dict[str, Any]:
+    """``value`` as a JSON object, or a ``TypeError`` :func:`parse_manifest` reports.
+
+    Raising keeps a manifest whose ``kdf`` or ``wrapped_keys`` is a list or a
+    string on the damaged-manifest path instead of letting an ``AttributeError``
+    escape from the ``.get`` / ``.items`` call below.
+    """
+    if not isinstance(value, dict):
+        raise TypeError(f"expected a JSON object, got {type(value).__name__}")
+    return value
+
+
 def parse_manifest(data: bytes) -> EncryptionManifest:
     """Read a manifest, or raise when it is not one this version understands."""
     try:
-        raw = json.loads(data)
+        raw = _json_object(json.loads(data))
         version = int(raw["version"])
         if version > MANIFEST_VERSION:
             raise RemoteSyncEncryptionError(
                 f"this store's encryption manifest is version {version}; upgrade opensre to use it"
             )
-        kdf = raw["kdf"]
+        kdf = _json_object(raw["kdf"])
         if kdf.get("name") != "scrypt":
             raise RemoteSyncEncryptionError(
                 f"unsupported key derivation {kdf.get('name')!r} in this store's manifest"
@@ -90,7 +103,7 @@ def parse_manifest(data: bytes) -> EncryptionManifest:
             active_key_id=str(raw["active_key_id"]),
             wrapped_keys={
                 str(key_id): base64.b64decode(value)
-                for key_id, value in raw["wrapped_keys"].items()
+                for key_id, value in _json_object(raw["wrapped_keys"]).items()
             },
         )
     except RemoteSyncEncryptionError:
