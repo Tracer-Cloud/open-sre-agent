@@ -21,6 +21,10 @@ from infrastructure.scheduling.scheduler.operation_log import (
     record_scheduler_service_operation,
     record_scheduler_task_operation,
 )
+from infrastructure.scheduling.scheduler.reload_signal import (
+    RELOAD_POLL_SECONDS,
+    consume_scheduler_reload_request,
+)
 from infrastructure.scheduling.scheduler.store import get_task, list_tasks, update_task
 from infrastructure.scheduling.scheduler.types import ScheduledTask, TaskStatus
 
@@ -272,6 +276,22 @@ def start_background_scheduler(
     return scheduler, enabled_count
 
 
+def _watch_reload_signal(scheduler: Any, stop_event: threading.Event) -> None:
+    """Poll the reload signal and resync jobs onto ``scheduler`` until stopped.
+
+    The blocking scheduler registers tasks once, so without this a task added by
+    another process (``opensre cron add``) would not run until a restart. Mirrors
+    the gateway's reload watcher.
+    """
+    while not stop_event.wait(RELOAD_POLL_SECONDS):
+        if not consume_scheduler_reload_request():
+            continue
+        try:
+            resync_scheduler_jobs(scheduler)
+        except Exception as exc:  # noqa: BLE001
+            logger.warning("Scheduler reload resync failed: %s", exc)
+
+
 def start_scheduler(*, idle_when_empty: bool = False) -> None:
     """Load all enabled tasks and start the blocking scheduler.
 
@@ -279,7 +299,8 @@ def start_scheduler(*, idle_when_empty: bool = False) -> None:
     are logged and skipped rather than crashing the entire daemon. With no
     enabled tasks the CLI exits with guidance; ``idle_when_empty`` (a dedicated
     scheduler service) idles and waits instead, so tasks can be added later
-    without the process crash-looping.
+    without the process crash-looping. Tasks added while running are picked up
+    from the reload signal without a restart.
     """
     from apscheduler.schedulers.blocking import BlockingScheduler
 
@@ -301,6 +322,17 @@ def start_scheduler(*, idle_when_empty: bool = False) -> None:
     if sigterm is not None:
         signal.signal(sigterm, _shutdown_handler)
 
+    # Drop any reload queued before this process owned the scheduler, then watch
+    # for new ones so `cron add` from another process is picked up live.
+    consume_scheduler_reload_request()
+    reload_watcher = threading.Thread(
+        target=_watch_reload_signal,
+        args=(scheduler, stop_event),
+        name="scheduler-reload-watch",
+        daemon=True,
+    )
+    reload_watcher.start()
+
     if enabled_count == 0:
         logger.info("No enabled tasks yet; scheduler idle, waiting (add with `opensre cron add`).")
     else:
@@ -315,6 +347,8 @@ def start_scheduler(*, idle_when_empty: bool = False) -> None:
     except (KeyboardInterrupt, SystemExit):
         logger.info("Scheduler stopped.")
     finally:
+        stop_event.set()
+        reload_watcher.join(timeout=RELOAD_POLL_SECONDS + 1.0)
         record_scheduler_service_operation("scheduler_stopped", task_count=enabled_count)
 
 

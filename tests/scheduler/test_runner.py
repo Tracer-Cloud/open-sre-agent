@@ -308,8 +308,42 @@ class TestStartSchedulerIdle:
         monkeypatch.setattr(blocking, "BlockingScheduler", _FakeScheduler)
         monkeypatch.setattr(runner, "_register_jobs", lambda _scheduler, **_kw: 0)
         monkeypatch.setattr(runner, "record_scheduler_service_operation", lambda *_a, **_k: None)
+        monkeypatch.setattr(runner, "consume_scheduler_reload_request", lambda: False)
         monkeypatch.setattr(runner.signal, "signal", lambda *_a, **_k: None)
 
         # Must not raise the "no tasks" SystemExit; reaches the (mocked) start.
         runner.start_scheduler(idle_when_empty=True)
         assert started == [True]
+
+    def test_reload_watcher_resyncs_when_a_task_is_added(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        # A task added after start (e.g. `cron add` from another process) is
+        # picked up live via the reload signal, not only on restart.
+        import threading
+        import time
+
+        from infrastructure.scheduling.scheduler import runner
+
+        resynced: list[object] = []
+        reloads = iter([True])  # one reload request, then nothing
+
+        monkeypatch.setattr(runner, "RELOAD_POLL_SECONDS", 0.01)
+        monkeypatch.setattr(
+            runner, "consume_scheduler_reload_request", lambda: next(reloads, False)
+        )
+        monkeypatch.setattr(
+            runner, "resync_scheduler_jobs", lambda scheduler, **_kw: resynced.append(scheduler)
+        )
+
+        scheduler = object()
+        stop = threading.Event()
+        watcher = threading.Thread(
+            target=runner._watch_reload_signal, args=(scheduler, stop), daemon=True
+        )
+        watcher.start()
+        time.sleep(0.05)  # a few poll cycles
+        stop.set()
+        watcher.join(timeout=1.0)
+
+        assert resynced == [scheduler]
