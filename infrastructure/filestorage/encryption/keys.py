@@ -45,8 +45,7 @@ KEK_LEN = 32
 SALT_LEN = 16
 _WRAP_NONCE_LEN = 12
 
-#: Interactive-login cost. ~0.4s on a 2020-era laptop,so
-#  the result is cached(these parameters are binded to cache key); see :func:`derive_kek`.
+# Scrypt parameters to derive a KEK from a passphrase.
 SCRYPT_N = 2**17
 SCRYPT_R = 8
 SCRYPT_P = 1
