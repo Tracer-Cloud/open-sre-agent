@@ -18,6 +18,11 @@ junk drawer. Prefer leaf imports over re-export shims.
   (`process/turn_capacity/`), and installed vs latest release version
   (`process/release_version.py`).
 - `setup_state.py` — install/setup facts surfaced to agents and doctor.
+- `alert_intake.py` — minimal HTTP intake (`POST /alerts`) into the process-wide
+  inbox; depends only on the alert domain model so gateway and interactive
+  shell can both host it.
+- `asgi_server.py` — generic ASGI transport: run any ASGI app in a background
+  thread (`serve_asgi_in_thread`).
 - `harness_providers/` — integration provider registries wired into the harness.
 
 ## Contracts
