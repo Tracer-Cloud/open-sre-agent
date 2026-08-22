@@ -255,15 +255,15 @@ SERVICE │ SOURCE    │ STATUS   │ DETAIL
 argocd  │ local env │ ✓ passed │ Connected to Argo CD and listed 1 application.
 ```
 
-`opensre investigate` only treats an integration as active once the store resolution has
-*something* to fall through to env vars with -- an untouched `~/.opensre/integrations.json`
-with an unrelated integration in it blocks env-var fallback entirely. Point
-`OPENSRE_INTEGRATIONS_STORE_PATH` at an empty, valid store instead, so your real config is
-never read or written and the `ARGOCD_*` vars above are the only source of connection info:
+`opensre investigate` (unlike `opensre integrations verify`) only falls through to env
+vars when the store has no records at all -- any existing record, for any service, blocks
+env-var resolution entirely. Point `OPENSRE_INTEGRATIONS_STORE_PATH` at a path inside a
+fresh empty directory instead, so your real config is never read or written and the
+`ARGOCD_*` vars above are the only source of connection info:
 
 ```bash
-export OPENSRE_INTEGRATIONS_STORE_PATH=$(mktemp /tmp/opensre-argocd-demo.XXXXXX)
-echo '{"version": 2, "integrations": []}' > "$OPENSRE_INTEGRATIONS_STORE_PATH"
+export OPENSRE_DEMO_STORE_DIR="$(mktemp -d /tmp/opensre-argocd-demo.XXXXXX)"
+export OPENSRE_INTEGRATIONS_STORE_PATH="$OPENSRE_DEMO_STORE_DIR/integrations.json"
 ```
 
 `argocd_application_diff` needs real drift to return anything interesting -- with
@@ -275,8 +275,7 @@ kubectl -n argocd patch application guestbook --type merge -p '{"spec":{"syncPol
 kubectl -n demo-app patch deployment guestbook-ui -p '{"spec":{"replicas":3}}'
 ```
 
-Trigger a real investigation against the drift -- this is the actual supported
-entrypoint, not an internal import:
+Trigger a real investigation against the drift:
 
 ```bash
 opensre investigate --input-json '{
@@ -337,8 +336,8 @@ Teardown:
 ```bash
 kill "$ARGOCD_PORT_FORWARD_PID" 2>/dev/null
 kind delete cluster --name opensre-argocd-demo
-rm -f "$OPENSRE_INTEGRATIONS_STORE_PATH"
-unset OPENSRE_INTEGRATIONS_STORE_PATH ARGOCD_BASE_URL ARGOCD_AUTH_TOKEN ARGOCD_VERIFY_SSL ARGOCD_PORT_FORWARD_PID
+rm -rf "$OPENSRE_DEMO_STORE_DIR"
+unset OPENSRE_DEMO_STORE_DIR OPENSRE_INTEGRATIONS_STORE_PATH ARGOCD_BASE_URL ARGOCD_AUTH_TOKEN ARGOCD_VERIFY_SSL ARGOCD_PORT_FORWARD_PID
 ```
 
 ## Verify
