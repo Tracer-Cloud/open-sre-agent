@@ -165,9 +165,8 @@ GitOps application synced from a public repo.
 
 ```bash
 if kind get clusters 2>/dev/null | grep -qx opensre-argocd-demo; then
-  echo "WARNING: an existing kind cluster named opensre-argocd-demo will be deleted" >&2
-  echo "in 5s -- Ctrl-C now if it isn't from an earlier attempt at this recipe." >&2
-  sleep 5
+  read -r -p "A kind cluster named opensre-argocd-demo already exists. Delete it and continue? [y/N] " confirm
+  [ "$confirm" = "y" ] || [ "$confirm" = "Y" ] || { echo "Aborted -- rename the recipe's cluster or clean up the existing one first." >&2; exit 1; }
   kind delete cluster --name opensre-argocd-demo
 fi
 kind create cluster --name opensre-argocd-demo
