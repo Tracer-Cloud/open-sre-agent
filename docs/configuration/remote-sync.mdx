@@ -125,7 +125,7 @@ Encryption assumes the store can be **read** but not **written** by someone you 
 
 **Out of scope:** Anyone who can **write** to the store, can corrupt it. Encryption stops them reading your history; it does not stop them wrecking the manifest — the small key record OpenSRE keeps in the store, which holds the encrypted root keys.
 
-If it gets corrupted, sync refuses in both directions and leaves your local files untouched — even though your passphrase is intact.
+If it gets corrupted, sync may refuse in both directions and content may get sealed against an unintended key — even if your passphrase remains intact — though it leaves your local files untouched.
 Your own machines still hold the originals, so recovery is restoring the manifest from a bucket version, or emptying the prefix and syncing again from a machine that still has the files.
 
 A leaked passphrase needs `rotate-passphrase` and `reencrypt`. Only `rotate-passphrase` re-wraps the same content keys, so whoever kept a copy of the old key record and knows the old passphrase can still read every object — including ones uploaded after the rotation. 
