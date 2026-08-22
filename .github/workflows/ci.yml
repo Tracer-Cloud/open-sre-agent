@@ -180,6 +180,7 @@ jobs:
             shard: integrations-and-misc
             pytest_paths: >-
               tests/integrations
+              tests/bootstrap
               tests/benchmarks
               tests/chaos_engineering
               tests/shared

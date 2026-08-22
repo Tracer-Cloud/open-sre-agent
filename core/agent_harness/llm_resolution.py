@@ -22,4 +22,19 @@ def default_reasoning_llm_factory() -> Any:
     return get_llm(LLMRole.REASONING)
 
 
-__all__ = ["default_llm_factory", "default_reasoning_llm_factory"]
+def agent_llm_is_cli_backed() -> bool:
+    """True when configured routing sends the agent LLM to a CLI subprocess backend.
+
+    Reads the shared routing decision and constructs no client, so a caller
+    picking a policy by transport does not pay for a client it may not use.
+    """
+    from core.llm.factory import resolve_llm_route
+
+    return resolve_llm_route().cli_provider_registration is not None
+
+
+__all__ = [
+    "agent_llm_is_cli_backed",
+    "default_llm_factory",
+    "default_reasoning_llm_factory",
+]

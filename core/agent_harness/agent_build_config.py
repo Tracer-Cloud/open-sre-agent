@@ -13,7 +13,9 @@ from typing import Any, Protocol
 from core.agent_harness.ports import (
     ErrorReporter,
     PromptContextProvider,
+    SessionState,
     SubprocessPresenterFactory,
+    ToolEventObserver,
     ToolProvider,
 )
 from core.agent_harness.turns.gather_phase import GatherPhase
@@ -29,10 +31,10 @@ class BuildTools(Protocol):
 
     def __call__(
         self,
-        session: Any,
+        session: SessionState,
         console: Any,
         logger: logging.Logger,
-        observer: Any,
+        observer: ToolEventObserver | None,
         /,
     ) -> ToolProvider:
         """Return the tools for this session."""
@@ -41,14 +43,14 @@ class BuildTools(Protocol):
 class BuildPrompts(Protocol):
     """``(session) -> PromptContextProvider``."""
 
-    def __call__(self, session: Any, /) -> PromptContextProvider:
+    def __call__(self, session: SessionState, /) -> PromptContextProvider:
         """Return the prompt context for this session."""
 
 
 class BuildGather(Protocol):
     """``(session, console) -> GatherPhase``."""
 
-    def __call__(self, session: Any, console: Any, /) -> GatherPhase:
+    def __call__(self, session: SessionState, console: Any, /) -> GatherPhase:
         """Return how this host runs the gather phase."""
 
 
@@ -66,7 +68,7 @@ class DescribeTool(Protocol):
 class ApplyCapabilityPolicy(Protocol):
     """``(session) -> None``. ``None`` on the config field means do not call."""
 
-    def __call__(self, session: Any, /) -> None:
+    def __call__(self, session: SessionState, /) -> None:
         """Mutate ``session`` capabilities, or do nothing."""
 
 

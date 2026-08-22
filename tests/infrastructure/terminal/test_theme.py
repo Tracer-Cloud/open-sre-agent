@@ -81,3 +81,17 @@ def test_muted_tokens_are_readable_on_theme_background() -> None:
         theme = get_theme(name)
         assert _contrast(theme.SECONDARY, theme.BG) >= 6.0, name
         assert _contrast(theme.DIM, theme.BG) >= 3.0, name
+
+
+def test_palette_registry_keys_match_the_config_vocabulary() -> None:
+    """The infra palettes must cover exactly the config-owned theme names.
+
+    ``config.constants.repl_theme.THEME_NAMES`` is the leaf-tier vocabulary the
+    config validator trusts. A palette added or removed here without updating
+    that tuple would let config accept a name with no palette, or reject one
+    that renders — this pins them to the same set and order.
+    """
+    from config.constants.repl_theme import THEME_NAMES
+    from infrastructure.terminal.theme import THEME_REGISTRY
+
+    assert tuple(THEME_REGISTRY.keys()) == THEME_NAMES

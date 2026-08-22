@@ -14,6 +14,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
+    from infrastructure.scheduling.scheduler.delivery_bundle import ScheduledDeliveryAdapters
     from infrastructure.scheduling.scheduler.runners import SchedulerRunners
 
 
@@ -36,7 +37,7 @@ def install_harness_adapters() -> None:
     nothing until both registries have been installed. Also installs the
     investigation payload runner used by :meth:`AgentSession.investigate`.
     """
-    import infrastructure.harness_ports as harness_ports
+    import infrastructure.harness_providers as harness_providers
     from integrations.harness_adapters import (
         register_harness_adapters as register_integrations,
     )
@@ -47,11 +48,11 @@ def install_harness_adapters() -> None:
 
     register_integrations()
     register_tools()
-    harness_ports.set_subprocess_presenter_factory(headless_subprocess_presenter_factory)
+    harness_providers.SubprocessPresenterProvider(headless_subprocess_presenter_factory).install()
     # Shell / REPL / gateway slash surface: CTA must name a runnable command.
-    harness_ports.set_integration_setup_command(
+    harness_providers.IntegrationSetupCommand(
         lambda service_id: f"/integrations setup {service_id}"
-    )
+    ).install()
     install_investigation_api()
 
 
@@ -67,10 +68,11 @@ def install_notification_adapters() -> tuple[str, ...]:
     its vendor transport, because each keeps its client import inside the
     delivery function.
 
-    Registers the adapter objects rather than relying on the import side effect
-    alone. Imports are cached, so a re-import after
-    ``clear_outbound_adapters()`` runs no module body and would leave the
-    registry empty while this function reported success.
+    The adapter modules only define their adapter; this step is the one place
+    that registers one. Nothing registers at import time, so a module imported
+    on its own (a tool reaching for ``deliver_email_notification``, say) leaves
+    the registry untouched, and this step still repopulates a registry a test
+    cleared, because it registers objects rather than replaying a cached import.
     """
     from infrastructure.delivery.notifications.outbound_registry import (
         register_outbound_adapter,
@@ -112,10 +114,61 @@ def install_scheduler_runners() -> None:
     scheduler_runners().install()
 
 
+def scheduled_delivery_adapters() -> ScheduledDeliveryAdapters:
+    """Assemble the per-provider adapters scheduled delivery dispatches through.
+
+    The only layer that may see both ``integrations`` and ``infrastructure``, so
+    the vendor adapters are bundled here and handed to whichever host installs it.
+    """
+    from infrastructure.scheduling.scheduler.delivery_bundle import ScheduledDeliveryAdapters
+    from infrastructure.scheduling.scheduler.interactive_shell_delivery import (
+        InteractiveShellScheduledDelivery,
+    )
+    from infrastructure.scheduling.scheduler.types import Provider
+    from integrations.discord.scheduled_delivery import DiscordScheduledDelivery
+    from integrations.rocketchat.scheduled_delivery import RocketChatScheduledDelivery
+    from integrations.slack.scheduled_delivery import SlackScheduledDelivery
+    from integrations.telegram.scheduled_delivery import TelegramScheduledDelivery
+
+    return ScheduledDeliveryAdapters(
+        {
+            Provider.TELEGRAM: TelegramScheduledDelivery(),
+            Provider.SLACK: SlackScheduledDelivery(),
+            Provider.DISCORD: DiscordScheduledDelivery(),
+            Provider.ROCKETCHAT: RocketChatScheduledDelivery(),
+            Provider.INTERACTIVE_SHELL: InteractiveShellScheduledDelivery(),
+        }
+    )
+
+
+def install_scheduled_delivery_adapters() -> None:
+    """Bind the scheduled-delivery adapters (worker and CLI hosts)."""
+    scheduled_delivery_adapters().install()
+
+
+def install_cli_auth_checker() -> None:
+    """Bind the integrations-backed CLI auth checker config reports status through.
+
+    The integrations import is deferred to the first check, so a bare CLI
+    invocation (e.g. ``opensre --help``) does not pay the subprocess-client cost.
+    """
+    from config.llm_auth.cli_auth import CliAuthChecker, CliAuthState
+
+    def check(provider: str) -> CliAuthState | None:
+        from integrations.llm_cli.auth_check import check_cli_auth
+
+        return check_cli_auth(provider)
+
+    CliAuthChecker(check).install()
+
+
 __all__ = [
     "install_harness_adapters",
     "install_investigation_api",
     "install_notification_adapters",
     "scheduler_runners",
     "install_scheduler_runners",
+    "scheduled_delivery_adapters",
+    "install_scheduled_delivery_adapters",
+    "install_cli_auth_checker",
 ]

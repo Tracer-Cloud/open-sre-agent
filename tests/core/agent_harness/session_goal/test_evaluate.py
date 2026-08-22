@@ -16,6 +16,7 @@ from core.agent_harness.session_goal.goal import (
 )
 from core.agent_harness.session_goal.run_until import run_until_session_goal
 from core.agent_harness.turns.turn_results import ToolCallingTurnResult, TurnResult
+from core.llm.types import AgentLLMResponse
 
 
 def _result(
@@ -685,7 +686,7 @@ def test_llm_evaluator_rejects_soft_achieve() -> None:
 
         def invoke(self, messages, *, system=None, tools=None):  # noqa: ANN001
             _ = (messages, system, tools)
-            return type("R", (), {"content": '{"verdict": "NOT_REACHED"}'})()
+            return AgentLLMResponse(content='{"verdict": "NOT_REACHED"}')
 
         def tool_schemas(self, tools):  # noqa: ANN001
             _ = tools
@@ -715,7 +716,7 @@ def test_llm_reject_survives_outer_loop_session_reread() -> None:
 
         def invoke(self, messages, *, system=None, tools=None):  # noqa: ANN001
             _ = (messages, system, tools)
-            return type("R", (), {"content": '{"verdict": "NOT_REACHED"}'})()
+            return AgentLLMResponse(content='{"verdict": "NOT_REACHED"}')
 
         def tool_schemas(self, tools):  # noqa: ANN001
             _ = tools
@@ -770,7 +771,7 @@ def test_llm_evaluator_confirms_soft_achieve() -> None:
 
         def invoke(self, messages, *, system=None, tools=None):  # noqa: ANN001
             _ = (messages, system, tools)
-            return type("R", (), {"content": '{"verdict": "GOAL_REACHED"}'})()
+            return AgentLLMResponse(content='{"verdict": "GOAL_REACHED"}')
 
         def tool_schemas(self, tools):  # noqa: ANN001
             _ = tools
@@ -792,7 +793,7 @@ def test_llm_evaluator_fails_closed_on_free_text_verdict() -> None:
 
         def invoke(self, messages, *, system=None, tools=None):  # noqa: ANN001
             _ = (messages, system, tools)
-            return type("R", (), {"content": "GOAL_REACHED — looks done to me"})()
+            return AgentLLMResponse(content="GOAL_REACHED — looks done to me")
 
         def tool_schemas(self, tools):  # noqa: ANN001
             _ = tools

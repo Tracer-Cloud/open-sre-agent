@@ -35,7 +35,8 @@ def run_connected_investigation(
     which are merged in. Pure function: inputs in, state out.
 
     ``agent_class``: optional override for the investigation agent class.
-    Defaults to :class:`ConnectedInvestigationAgent`. Callers that need a
+    When omitted, the pipeline selects CLI-backed vs hosted policy from
+    configured LLM routing without constructing a client. Callers that need a
     custom termination policy, structured-stage progression, or other
     agent-level extensions can pass a subclass instead.
     """

@@ -6,10 +6,8 @@ from collections.abc import Iterator
 
 import pytest
 
-from infrastructure.harness_ports import (
-    _default_fetch_remote,
-    reset_harness_ports,
-    set_remote_integrations_fetcher,
+from infrastructure.harness_providers import (
+    reset_harness_providers,
 )
 from infrastructure.observability import (
     NoopProgressTracker,
@@ -45,8 +43,7 @@ def _reset_all_ports() -> None:
     set_debug_printer(obs_debug._default_debug_printer)
     set_investigation_header_renderer(obs_display._default_header_renderer)
     set_investigation_footer_renderer(obs_display._default_footer_renderer)
-    set_remote_integrations_fetcher(_default_fetch_remote)
-    reset_harness_ports()
+    reset_harness_providers()
 
 
 @pytest.fixture(autouse=True)

@@ -42,12 +42,12 @@ def _persist_record(session: Session, record: BackgroundInvestigationRecord) -> 
     configures no logging and a lost record is otherwise invisible.
     """
     from infrastructure.scheduling.background_investigations.store import (
-        UnreadableBackgroundInvestigationsError,
-        background_investigation_store,
+        UnreadableStoreError,
+        open_record_store,
     )
 
     try:
-        background_investigation_store().save(record)
+        open_record_store().save(record)
     except Exception as exc:  # noqa: BLE001
         report_exception(exc, context="surfaces.interactive_shell.background_persist")
         # A damaged document fails every later save too, so name it rather than
@@ -55,7 +55,7 @@ def _persist_record(session: Session, record: BackgroundInvestigationRecord) -> 
         # already carries the path, and the local terminal is not an external sink.
         detail = (
             escape(str(exc))
-            if isinstance(exc, UnreadableBackgroundInvestigationsError)
+            if isinstance(exc, UnreadableStoreError)
             else escape(type(exc).__name__)
         )
         session.terminal.enqueue_background_notice(

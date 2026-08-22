@@ -6,6 +6,7 @@ from collections.abc import Iterator
 
 import pytest
 
+from core.domain.background_investigations import BackgroundInvestigationRecord
 from infrastructure.delivery.notifications.outbound_dispatch import (
     dispatch_background_notifications,
 )
@@ -17,7 +18,6 @@ from infrastructure.delivery.notifications.outbound_registry import (
     register_outbound_adapter,
     registered_outbound_adapter_names,
 )
-from infrastructure.scheduling.background_investigations.types import BackgroundInvestigationRecord
 
 
 @pytest.fixture(autouse=True)

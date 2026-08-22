@@ -7,6 +7,8 @@ from dataclasses import dataclass, field
 from enum import StrEnum
 from typing import Any, Protocol, TypeAlias, runtime_checkable
 
+from pydantic import BaseModel
+
 ResolvedIntegrations: TypeAlias = dict[str, Any]  # noqa: UP040
 
 
@@ -137,9 +139,27 @@ class StreamingReasoningClient(Protocol):
         """Stream the assistant reply as text chunks."""
 
 
+@runtime_checkable
+class CliLLMClient(Protocol):
+    """The prompt-in/response-out contract a CLI-backed subprocess client exposes."""
+
+    def with_config(self, **kwargs: Any) -> CliLLMClient:
+        """Return a client bound to the given per-call overrides."""
+
+    def with_structured_output(self, model: type[BaseModel]) -> Any:
+        """Return a client that parses replies into instances of ``model``."""
+
+    def invoke(self, prompt_or_messages: Any) -> LLMResponse:
+        """Run one subprocess CLI invocation and return its response."""
+
+    def invoke_stream(self, prompt_or_messages: Any) -> Iterator[str]:
+        """Stream the assistant reply as text chunks."""
+
+
 __all__ = [
     "AgentLLMClient",
     "AgentLLMResponse",
+    "CliLLMClient",
     "LLMResponse",
     "LLMRoute",
     "ModelType",

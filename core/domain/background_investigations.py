@@ -1,4 +1,4 @@
-"""Background-investigation value types shared across surfaces."""
+"""Background-investigation record: the domain contract for a detached investigation."""
 
 from __future__ import annotations
 

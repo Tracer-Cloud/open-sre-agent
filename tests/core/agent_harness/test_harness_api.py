@@ -170,9 +170,11 @@ RUNTIME = frozenset(
         "InMemoryHeadlessBuild",
         "TurnBinding",
         "TurnPlan",
+        "agent_llm_is_cli_backed",
         "build_agent",
         "default_llm_factory",
         "default_reasoning_llm_factory",
+        "resolve_agent_ports",
     }
 )
 

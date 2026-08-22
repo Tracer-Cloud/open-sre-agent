@@ -9,7 +9,6 @@ nudge the model until every planned tool has been called at least once.
 from __future__ import annotations
 
 from typing import Any
-from unittest import mock
 
 from config.constants.investigation import MAX_INVESTIGATION_LOOPS
 from tools.investigation.stages.gather_evidence.agent import CLIBackedInvestigationAgent
@@ -105,34 +104,35 @@ class TestShouldAcceptConclusion:
 
 
 class TestGetInvestigationAgentClass:
-    """get_investigation_agent_class() selects the right agent class for the active LLM.
-
-    The factory lives in agent.py and is called by pipeline.py, keeping the pipeline
-    free of direct vendor service imports (layering rule: tests/tools/investigation/test_layering.py).
-    """
+    """The selector is a pure flag → policy dispatch; the pipeline derives the flag."""
 
     def test_cli_backed_investigation_agent_is_subclass_of_connected(self) -> None:
         from tools.investigation.stages.gather_evidence import ConnectedInvestigationAgent
 
         assert issubclass(CLIBackedInvestigationAgent, ConnectedInvestigationAgent)
 
-    def test_returns_cli_agent_class_for_cli_backed_llm(self, monkeypatch: Any) -> None:
-        from core.llm.transports.sdk.agent_clients import CLIBackedAgentClient
-        from tools.investigation.stages.gather_evidence.agent import get_investigation_agent_class
-
-        monkeypatch.setattr(
-            "tools.investigation.stages.gather_evidence.agent.default_llm_factory",
-            lambda: mock.MagicMock(spec=CLIBackedAgentClient),
-        )
-        assert get_investigation_agent_class() is CLIBackedInvestigationAgent
-
-    def test_returns_base_agent_class_for_non_cli_llm(self, monkeypatch: Any) -> None:
-        from core.llm.transports.sdk.agent_clients import AnthropicAgentClient
+    def test_selects_policy_from_the_flag_without_constructing_an_llm(
+        self, monkeypatch: Any
+    ) -> None:
         from tools.investigation.stages.gather_evidence import ConnectedInvestigationAgent
         from tools.investigation.stages.gather_evidence.agent import get_investigation_agent_class
 
+        def _fail_factory() -> None:
+            raise AssertionError("selector must not construct an LLM client")
+
         monkeypatch.setattr(
             "tools.investigation.stages.gather_evidence.agent.default_llm_factory",
-            lambda: mock.MagicMock(spec=AnthropicAgentClient),
+            _fail_factory,
         )
-        assert get_investigation_agent_class() is ConnectedInvestigationAgent
+
+        assert get_investigation_agent_class(cli_backed=True) is CLIBackedInvestigationAgent
+        assert get_investigation_agent_class(cli_backed=False) is ConnectedInvestigationAgent
+
+    def test_omitted_flag_follows_configured_routing(self, monkeypatch: Any) -> None:
+        from tools.investigation.stages.gather_evidence.agent import get_investigation_agent_class
+
+        monkeypatch.setattr(
+            "core.agent_harness.runtime.agent_llm_is_cli_backed",
+            lambda: True,
+        )
+        assert get_investigation_agent_class() is CLIBackedInvestigationAgent

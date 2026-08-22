@@ -80,13 +80,13 @@ def test_chat_handler_refuses_excess_turn_without_calling_handler() -> None:
     assert finalized == ["OpenSRE is at capacity. Please try again shortly."]
 
 
-def test_gateway_turn_handler_gate_refuses_excess_without_second_wrapper(
+def test_gateway_turn_runner_gate_refuses_excess_without_second_wrapper(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """Production path: capacity lives on TurnHandler itself."""
+    """Production path: capacity lives on TurnRunner itself."""
     from rich.console import Console
 
-    from infrastructure.turn_host.turn_handler import TurnHandler
+    from infrastructure.turn_host.turn_runner import TurnRunner
 
     gate = TurnConcurrencyGate(1)
     entered = threading.Event()
@@ -98,7 +98,7 @@ def test_gateway_turn_handler_gate_refuses_excess_without_second_wrapper(
         def finalize(self, answer: str) -> None:
             finalized.append(answer)
 
-    handler = TurnHandler(console=Console(force_terminal=False), gate=gate)
+    handler = TurnRunner(console=Console(force_terminal=False), gate=gate)
 
     def _fake_run(self, text, session, sink, logger, **_kwargs):  # noqa: ANN001
         # ``**_kwargs`` absorbs the caller-context keywords ``run`` forwards.
@@ -107,7 +107,7 @@ def test_gateway_turn_handler_gate_refuses_excess_without_second_wrapper(
         entered.set()
         release.wait(1)
 
-    monkeypatch.setattr(TurnHandler, "_run_turn", _fake_run)
+    monkeypatch.setattr(TurnRunner, "_run_turn", _fake_run)
 
     first = threading.Thread(
         target=handler,

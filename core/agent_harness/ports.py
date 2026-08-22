@@ -360,7 +360,7 @@ SubprocessPresenterFactory = Callable[
 # Host capabilities an action tool calls back into: named commands, LLM-provider
 # switching, task cancellation and investigation launch. Their contracts live in
 # ``tools`` beside the tools that call them (see
-# ``tools.interactive_shell.shared.host_ports.ExecutionGate``), and naming those
+# ``tools.interactive_shell.shared.host_contracts.ExecutionGate``), and naming those
 # Protocols here would mean ``core`` importing ``tools``.
 #
 # The return is ``object``, not ``Any``: ``core`` calls the factory and hands the

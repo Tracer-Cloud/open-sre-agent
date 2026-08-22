@@ -3,13 +3,14 @@
 from __future__ import annotations
 
 import logging
-from collections.abc import Callable, Mapping, Sequence
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, replace
 from typing import Any, cast
 
 from config.constants.investigation import MAX_INVESTIGATION_LOOPS
 from core import RuntimeEventCallback, TupleEventCallback, execute_tools, summarise, tool_source
 from core.agent.goals import Goal, GoalObservation
+from core.agent_harness.ports import LlmFactory
 from core.agent_harness.runtime import AgentConfig, build_agent, default_llm_factory
 from core.events import (
     AgentEndEvent,
@@ -61,8 +62,6 @@ from tools.investigation.stages.gather_evidence.tools import (
 )
 
 logger = logging.getLogger(__name__)
-
-LlmFactory = Callable[[], Any]
 
 
 @dataclass
@@ -557,11 +556,19 @@ class ConnectedInvestigationAgent:
 InvestigationAgent = ConnectedInvestigationAgent
 
 
-def get_investigation_agent_class() -> type[ConnectedInvestigationAgent]:
-    """Return the investigation policy appropriate for the active agent LLM."""
-    from core.llm.transports.sdk.agent_clients import CLIBackedAgentClient
+def get_investigation_agent_class(
+    *, cli_backed: bool | None = None
+) -> type[ConnectedInvestigationAgent]:
+    """Return the investigation policy for a CLI-backed vs hosted agent LLM.
 
-    if isinstance(default_llm_factory(), CLIBackedAgentClient):
+    When ``cli_backed`` is omitted, routing is read from configuration. Callers
+    that already know the transport pass the flag so they do not re-resolve it.
+    """
+    if cli_backed is None:
+        from core.agent_harness.runtime import agent_llm_is_cli_backed
+
+        cli_backed = agent_llm_is_cli_backed()
+    if cli_backed:
         return CLIBackedInvestigationAgent
     return ConnectedInvestigationAgent
 

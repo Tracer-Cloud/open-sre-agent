@@ -84,6 +84,97 @@ Use API key **or** basic auth, not both — verify rejects both set together. If
 
 Prefer a dedicated read-only user (or API key) scoped to the indices OpenSRE should search. For AWS ES, use fine-grained access control with an internal user — see [AWS Elasticsearch](/elasticsearch).
 
+### Quick local test with Docker
+
+```bash
+docker run -d --name opensearch-dev -p 127.0.0.1:9201:9200 \
+  -e "discovery.type=single-node" \
+  -e "DISABLE_SECURITY_PLUGIN=true" \
+  -e "OPENSEARCH_JAVA_OPTS=-Xms256m -Xmx256m" \
+  opensearchproject/opensearch:2
+
+i=0
+until curl -sf -o /dev/null http://localhost:9201; do
+  i=$((i + 1))
+  [ "$i" -ge 30 ] && { echo "ERROR: OpenSearch never became ready" >&2; exit 1; }
+  sleep 2
+done
+```
+
+Seed the index with an error **and** a non-error log line — both are needed to match the two-record output shown below. The tools sort on `@timestamp`, so use that field name, not `timestamp`:
+
+```bash
+curl -sf -X POST "http://localhost:9201/logs-app/_doc" -H "Content-Type: application/json" -d '{
+  "@timestamp": "'"$(date -u +%Y-%m-%dT%H:%M:%S)"'Z",
+  "level": "ERROR",
+  "message": "payment-service: connection timeout while calling billing-api",
+  "service": "payment-service"
+}' > /dev/null &&
+curl -sf -X POST "http://localhost:9201/logs-app/_doc" -H "Content-Type: application/json" -d '{
+  "@timestamp": "'"$(date -u +%Y-%m-%dT%H:%M:%S)"'Z",
+  "level": "INFO",
+  "message": "payment-service: request completed",
+  "service": "payment-service"
+}' > /dev/null &&
+curl -sf -X POST "http://localhost:9201/logs-app/_refresh" > /dev/null || { echo "ERROR: seeding failed" >&2; exit 1; }
+```
+
+```bash
+export OPENSEARCH_URL="http://localhost:9201"
+```
+
+Verify:
+
+```bash
+opensre integrations verify opensearch
+```
+
+```
+SERVICE    │ SOURCE    │ STATUS   │ DETAIL
+opensearch │ local env │ ✓ passed │ Configured for OpenSearch at
+           │           │          │ http://localhost:9201.
+```
+
+Register the local instance through the supported setup flow:
+
+```bash
+opensre integrations setup opensearch
+```
+
+Trigger a real investigation against the seeded index — this is the actual supported entrypoint, not an internal import:
+
+```bash
+opensre investigate --input-json '{
+  "alert_name": "PaymentServiceErrors",
+  "severity": "critical",
+  "commonAnnotations": {
+    "summary": "payment-service throwing connection timeout errors calling billing-api"
+  }
+}'
+```
+
+Real output from a run against this exact seeded index (edited for length):
+
+```
+Loading integrations: opensearch
+↳ Elasticsearch · query elasticsearch logs (service:payment-service AND (timeout OR "connection" OR error)) → total: 1
+↳ Elasticsearch · query elasticsearch logs (service:billing-api AND (error OR exception OR timeout ...)) → total: 0
+
+root_cause: "billing-api appears to be non-functional or absent -- it has
+produced zero logs across the entire 6-hour observation window while its
+dependent caller (payment-service) has begun reporting connection
+timeouts against it. The most likely explanation is that billing-api
+pods are not running, not ready, or otherwise not serving traffic..."
+```
+
+The agent found the seeded error via `query_elasticsearch_logs` and didn't need `query_opensearch_analytics` for this alert — both tools share the same credentials and index, so either is reachable from the same setup.
+
+Teardown:
+
+```bash
+docker rm -f opensearch-dev
+```
+
 ## Investigation tools
 
 | Tool | What it does |

@@ -2,13 +2,10 @@
 
 from __future__ import annotations
 
-from infrastructure.delivery.notifications.outbound_registry import (
-    BACKGROUND_RCA,
-    register_outbound_adapter,
-)
+from core.domain.background_investigations import BackgroundInvestigationRecord
+from infrastructure.delivery.notifications.outbound_registry import BACKGROUND_RCA
 from infrastructure.delivery.notifications.rca_summary import summary_sections
 from infrastructure.errors import OpenSREError
-from infrastructure.scheduling.background_investigations.types import BackgroundInvestigationRecord
 
 
 def deliver_telegram_notification(record: BackgroundInvestigationRecord) -> str:
@@ -58,4 +55,3 @@ class _TelegramBackgroundAdapter:
 
 
 telegram_background_adapter = _TelegramBackgroundAdapter()
-register_outbound_adapter(telegram_background_adapter)

@@ -21,8 +21,8 @@ from core.agent_harness.spi.session_goal import (
     format_session_goal_progress,
 )
 from core.tool import ToolExecutionHooks
-from infrastructure.turn_host.turn_handler import TurnHandler
 from infrastructure.turn_host.turn_output import TurnOutput
+from infrastructure.turn_host.turn_runner import TurnRunner
 from surfaces.interactive_shell.runtime.agent_harness_adapters import ShellOutputSink
 from surfaces.interactive_shell.runtime.core.turn_accounting import ShellTurnAccounting
 from surfaces.interactive_shell.runtime.shell_agent import shell_agent_build_config
@@ -39,13 +39,13 @@ def execute_shell_turn(
     confirm_fn: Callable[[str], str] | None = None,
     is_tty: bool | None = None,
     request_exit: Callable[[], None] | None = None,
-    handler: TurnHandler | None = None,
+    handler: TurnRunner | None = None,
     output: TurnOutput | None = None,
     tool_hooks: ToolExecutionHooks | None = None,
 ) -> TurnResult:
     """Run one submitted shell turn through the shared turn host.
 
-    The same :class:`TurnHandler` the chat transports use, built with the
+    The same :class:`TurnRunner` the chat transports use, built with the
     shell's own :func:`shell_agent_build_config` so the REPL keeps its tools,
     prompts and gather phase. Pass a long-lived ``handler`` (the REPL builds one
     at startup) so the tool stack is not rebuilt every turn.
@@ -55,7 +55,7 @@ def execute_shell_turn(
     # transport supplies them.
     resolved_output.tool_hooks = tool_hooks  # type: ignore[attr-defined]
     if handler is None:
-        handler = TurnHandler(
+        handler = TurnRunner(
             console=console,
             agent_build=shell_agent_build_config(request_exit=request_exit),
             retain_only_current_session=True,

@@ -11,8 +11,8 @@ from pathlib import Path
 from typing import Any
 
 from config.version import get_opensre_version
+from core.agent_harness.session.persistence.contracts import CHAT_KINDS, SessionPersistenceSource
 from core.agent_harness.session.persistence.paths import session_path
-from core.agent_harness.session.persistence.ports import CHAT_KINDS, SessionPersistenceSource
 
 _TRIGGER_MAX_CHARS = 200
 # Cold tip scan keeps at most this many trailing bytes resident (then grows by the
