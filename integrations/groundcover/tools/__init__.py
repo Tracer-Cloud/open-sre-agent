@@ -11,11 +11,30 @@ from core.tool_framework.tool_decorator import tool
 from core.tool_framework.utils import tool_unavailable
 from integrations.groundcover.availability import groundcover_available_or_backend
 from integrations.groundcover.client import GroundcoverClient
-from integrations.groundcover.helpers import (
-    DEFAULT_LOGS_QUERY,
-    GCQL_GUIDANCE,
-    base_extract_params,
-    run_signal_query,
+from integrations.groundcover.client_injection import base_extract_params
+from integrations.groundcover.query_runner import run_signal_query
+
+DEFAULT_LOGS_QUERY = "level:error | fields _time, workload, instance, content | limit 50"
+DEFAULT_TRACES_QUERY = (
+    "status:error | fields _time, workload, span_name, status_code, duration_seconds | limit 50"
+)
+
+
+# Reusable query-guidance preamble embedded in every gcQL tool description.
+# This is deliberately redundant with the upstream gcQL reference so OpenSRE
+# ships efficient query behavior even when the model never calls the reference.
+GCQL_GUIDANCE = (
+    "Time range is controlled by start/end/period parameters, NOT in the query. "
+    "Keep the window as narrow as the question allows: start with the last 1h (default) and "
+    "widen only after an empty/inconclusive result. Wide multi-day scans with selective filters "
+    "can time out — '| limit N' caps rows RETURNED, not data SCANNED, so for wide ranges prefer "
+    "stats/aggregations over raw row pulls. Queries must start with the filter directly "
+    "(e.g. 'level:error | fields _time, content | limit 50') or '*' for match-all — never a bare "
+    "'|', and the '| filter' pipe is only for post-aggregation conditions on computed aliases. "
+    "Always include '| limit N'. For raw rows, project the fields you need with '| fields ...' "
+    "rather than returning all columns; otherwise aggregate with '| stats ...'. "
+    "Discover fields before guessing. "
+    "Call get_groundcover_query_reference once per session before composing non-trivial gcQL."
 )
 
 _LOGS_SOURCE = "groundcover_logs"
@@ -179,10 +198,8 @@ def get_groundcover_query_reference(
 
 
 from core.tool_framework.tool_decorator import tool
-from integrations.groundcover.helpers import (
-    DEFAULT_TRACES_QUERY,
-    GCQL_GUIDANCE,
-)
+from integrations.groundcover.client_injection import base_extract_params
+from integrations.groundcover.query_runner import run_signal_query
 
 _TRACES_SOURCE = "groundcover_traces"
 _TRACES_MCP_TOOL = "query_traces"
