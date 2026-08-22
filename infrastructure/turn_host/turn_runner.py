@@ -52,6 +52,7 @@ from infrastructure.turn_host.cancel_console import CancelConsole
 from infrastructure.turn_host.concurrency import AT_CAPACITY_MESSAGE, TurnConcurrencyGate
 from infrastructure.turn_host.session_agents import SessionAgentPool
 from infrastructure.turn_host.status_messages import EMPTY_RESPONSE_MESSAGE
+from infrastructure.turn_host.turn_memory import current_rss_bytes, peak_rss_bytes
 from infrastructure.turn_host.turn_output import TurnOutput
 
 
@@ -162,6 +163,7 @@ class TurnRunner:
             logger.warning("gateway_turn missing surface binding; started/completed omit surface")
             surface = None
         started = time.monotonic()
+        rss_before = current_rss_bytes()
 
         cancel = ensure_turn_cancel(output)
         turn_console = CancelConsole(console or self._console, cancel)
@@ -213,6 +215,19 @@ class TurnRunner:
                     turn_result.answered,
                     len(outbound_text),
                 )
+                rss_after = current_rss_bytes()
+                if rss_before is not None and rss_after is not None:
+                    peak = peak_rss_bytes()
+                    # One turn's resident-memory cost; the concurrency ceiling
+                    # for a task is its memory divided by this. See turn_memory.
+                    logger.debug(
+                        "gateway_turn_memory rss_start_mb=%.1f rss_end_mb=%.1f "
+                        "rss_delta_mb=%.1f peak_mb=%s",
+                        rss_before / 1_048_576,
+                        rss_after / 1_048_576,
+                        (rss_after - rss_before) / 1_048_576,
+                        f"{peak / 1_048_576:.1f}" if peak is not None else "unknown",
+                    )
                 # Host soft-timeout (or stop) already owns the output terminal
                 # message — do not overwrite it with empty/fallback finalize.
                 cancelled = isinstance(cancel, threading.Event) and cancel.is_set()
