@@ -11,7 +11,6 @@ from __future__ import annotations
 import logging
 import signal
 import threading
-import time
 from collections.abc import Callable
 from datetime import UTC, datetime
 from typing import Any, cast
@@ -24,9 +23,14 @@ from infrastructure.scheduling.scheduler.operation_log import (
 )
 from infrastructure.scheduling.scheduler.reload_signal import (
     RELOAD_POLL_SECONDS,
-    consume_scheduler_reload_request,
+    watch_and_reconcile,
 )
-from infrastructure.scheduling.scheduler.store import get_task, list_tasks, update_task
+from infrastructure.scheduling.scheduler.store import (
+    _default_store_path,
+    get_task,
+    list_tasks,
+    update_task,
+)
 from infrastructure.scheduling.scheduler.types import ScheduledTask, TaskStatus
 
 logger = logging.getLogger(__name__)
@@ -277,33 +281,20 @@ def start_background_scheduler(
     return scheduler, enabled_count
 
 
-# Safety-net full reconcile interval. The reload signal is the fast path; this
-# bounds how long a lost signal (best-effort write) or a transient resync failure
-# can leave the live scheduler out of sync with the committed task store.
-_RELOAD_RECONCILE_SECONDS = 60.0
-
-
 def _watch_reload_signal(scheduler: Any, stop_event: threading.Event) -> None:
-    """Keep ``scheduler``'s jobs in sync with the task store until stopped.
+    """Keep the blocking scheduler's jobs in sync with the task store until stopped.
 
     The blocking scheduler registers tasks once, so without this a task added by
-    another process (``opensre cron add``) would not run until a restart. Resyncs
-    on an explicit reload signal (fast path) and, independently, on a periodic
-    reconcile — so a dropped signal or a transient resync failure still converges,
-    since the resync reads the whole store rather than trusting the last event.
+    another process (``opensre cron add``) would not run until a restart.
+    Delegates to the shared watcher: reload signal (fast path) plus a store-file
+    reconcile, so a dropped signal still converges on the next poll.
     """
-    last_reconcile = time.monotonic()
-    while not stop_event.wait(RELOAD_POLL_SECONDS):
-        signalled = consume_scheduler_reload_request()
-        overdue = time.monotonic() - last_reconcile >= _RELOAD_RECONCILE_SECONDS
-        if not signalled and not overdue:
-            continue
-        try:
-            resync_scheduler_jobs(scheduler)
-            last_reconcile = time.monotonic()
-        except Exception as exc:  # noqa: BLE001
-            # Leave last_reconcile stale so the next poll retries promptly.
-            logger.warning("Scheduler reload resync failed; will retry: %s", exc)
+    watch_and_reconcile(
+        stop_event,
+        lambda: resync_scheduler_jobs(scheduler),
+        _default_store_path(),
+        on_error=lambda exc: logger.warning("Scheduler resync failed; will retry: %s", exc),
+    )
 
 
 def start_scheduler(*, idle_when_empty: bool = False) -> None:

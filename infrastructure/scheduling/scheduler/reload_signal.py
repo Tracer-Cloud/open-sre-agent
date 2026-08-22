@@ -9,6 +9,8 @@ scheduler inside ``gateway/``.
 from __future__ import annotations
 
 import logging
+import threading
+from collections.abc import Callable
 from datetime import UTC, datetime
 from pathlib import Path
 
@@ -56,8 +58,48 @@ def consume_scheduler_reload_request() -> bool:
     return True
 
 
+def _store_signature(store_path: Path) -> tuple[int, int] | None:
+    """The task store's (mtime_ns, size), or None if it does not exist yet."""
+    try:
+        stat = store_path.stat()
+    except OSError:
+        return None
+    return (stat.st_mtime_ns, stat.st_size)
+
+
+def watch_and_reconcile(
+    stop_event: threading.Event,
+    reconcile: Callable[[], None],
+    store_path: Path,
+    *,
+    poll_seconds: float = RELOAD_POLL_SECONDS,
+    on_error: Callable[[BaseException], None] | None = None,
+) -> None:
+    """Keep a live scheduler in sync with the task store until ``stop_event``.
+
+    Reconciles when a reload signal arrives (fast path) or when the store file
+    itself changed since the last reconcile. The file's ``(mtime, size)`` is the
+    authoritative level-state, so a dropped best-effort signal still converges on
+    the next poll, and an idle store is a cheap ``stat`` with no work. On a
+    reconcile failure the signature is not advanced, so the next poll retries.
+    """
+    last = _store_signature(store_path)
+    while not stop_event.wait(poll_seconds):
+        signalled = consume_scheduler_reload_request()
+        signature = _store_signature(store_path)
+        if not signalled and signature == last:
+            continue
+        try:
+            reconcile()
+            last = signature
+        except Exception as exc:  # noqa: BLE001
+            if on_error is not None:
+                on_error(exc)
+
+
 __all__ = [
     "RELOAD_POLL_SECONDS",
     "consume_scheduler_reload_request",
     "request_scheduler_reload",
+    "watch_and_reconcile",
 ]
