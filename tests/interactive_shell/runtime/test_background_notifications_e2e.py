@@ -54,7 +54,7 @@ def _run_investigation_to_completion(
         lambda exc, **_kwargs: caught.setdefault("exc", exc),
     )
 
-    def _fake_run(*, cancel_requested, **_kwargs: object) -> dict[str, object]:
+    def _fake_run(*, cancel_requested) -> dict[str, object]:
         _ = cancel_requested
         return dict(final_state)
 
@@ -64,7 +64,6 @@ def _run_investigation_to_completion(
         console=console,
         display_command="/investigate checkout-latency",
         run_fn=_fake_run,
-        kwargs={},
     )
     # Join the real daemon worker so the completion hook has run to
     # completion before we inspect the record.

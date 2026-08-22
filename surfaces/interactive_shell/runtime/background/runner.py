@@ -46,9 +46,8 @@ class BackgroundRunFn(Protocol):
         self,
         *,
         cancel_requested: threading.Event,
-        **kwargs: Any,
     ) -> BackgroundRunResult:
-        """Run an investigation with cooperative cancellation support."""
+        """Run a background investigation with cooperative cancellation support."""
 
 
 def _persist_record(session: Session, record: BackgroundInvestigationRecord) -> None:
@@ -157,7 +156,6 @@ def _start_background_investigation(
     console: Console,
     display_command: str,
     run_fn: BackgroundRunFn,
-    kwargs: dict[str, Any],
     investigation_target: str = "",
     input_path: str | None = None,
 ) -> str:
@@ -189,7 +187,7 @@ def _start_background_investigation(
                     investigation_target=investigation_target or None,
                     session=session,
                 ) as tracker:
-                    final_state = run_fn(cancel_requested=task.cancel_requested, **kwargs)
+                    final_state = run_fn(cancel_requested=task.cancel_requested)
                     tracker.record_loop_metrics_from_state(final_state)
                 root = str(final_state.get("root_cause") or "")
                 record.status = "completed"
@@ -272,15 +270,21 @@ def start_background_text_investigation(
         run_investigation_for_session_background,
     )
 
+    def _run(*, cancel_requested: threading.Event) -> BackgroundRunResult:
+        return cast(
+            BackgroundRunResult,
+            run_investigation_for_session_background(
+                alert_text=alert_text,
+                context_overrides=session.accumulated_context or None,
+                cancel_requested=cancel_requested,
+            ),
+        )
+
     return _start_background_investigation(
         session=session,
         console=console,
         display_command=display_command,
-        run_fn=cast(BackgroundRunFn, run_investigation_for_session_background),
-        kwargs={
-            "alert_text": alert_text,
-            "context_overrides": session.accumulated_context or None,
-        },
+        run_fn=_run,
         investigation_target=investigation_target,
         input_path=display_command,
     )
@@ -298,15 +302,21 @@ def start_background_template_investigation(
         run_sample_alert_for_session_background,
     )
 
+    def _run(*, cancel_requested: threading.Event) -> BackgroundRunResult:
+        return cast(
+            BackgroundRunResult,
+            run_sample_alert_for_session_background(
+                template_name=template_name,
+                context_overrides=session.accumulated_context or None,
+                cancel_requested=cancel_requested,
+            ),
+        )
+
     return _start_background_investigation(
         session=session,
         console=console,
         display_command=display_command,
-        run_fn=cast(BackgroundRunFn, run_sample_alert_for_session_background),
-        kwargs={
-            "template_name": template_name,
-            "context_overrides": session.accumulated_context or None,
-        },
+        run_fn=_run,
         investigation_target=investigation_target,
         input_path=f"template:{template_name}",
     )
