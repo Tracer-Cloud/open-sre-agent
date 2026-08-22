@@ -139,23 +139,18 @@ mariadb  │ local env │ ✓ passed │ Connected to MariaDB 11.8.8-MariaDB-ub
          │           │          │ target database: app_db.
 ```
 
-`opensre investigate` only treats an integration as active once the store resolution has
-*something* to fall through to env vars with -- an untouched `~/.opensre/integrations.json`
-with an unrelated integration in it blocks env-var fallback entirely. Point
-`OPENSRE_INTEGRATIONS_STORE_PATH` at an empty, valid store instead, so your real config is
-never read or written and the `MARIADB_*` vars above are the only source of connection info:
+`opensre investigate` (unlike `opensre integrations verify`) only falls through to env
+vars when the store has no records at all -- any existing record, for any service, blocks
+env-var resolution entirely. Point `OPENSRE_INTEGRATIONS_STORE_PATH` at a path inside a
+fresh empty directory instead, so your real config is never read or written and the
+`MARIADB_*` vars above are the only source of connection info:
 
 ```bash
-export OPENSRE_INTEGRATIONS_STORE_PATH=$(mktemp /tmp/opensre-mariadb-demo.XXXXXX)
-echo '{"version": 2, "integrations": []}' > "$OPENSRE_INTEGRATIONS_STORE_PATH"
+export OPENSRE_DEMO_STORE_DIR="$(mktemp -d /tmp/opensre-mariadb-demo.XXXXXX)"
+export OPENSRE_INTEGRATIONS_STORE_PATH="$OPENSRE_DEMO_STORE_DIR/integrations.json"
 ```
 
-A literal zero-byte file does not work here -- the store loader expects valid JSON and raises
-on an empty read, so this writes an explicitly empty (but valid) store rather than just
-creating the file with `mktemp` alone.
-
-Trigger a real investigation against the seeded slow query -- this is the actual supported
-entrypoint, not an internal import:
+Trigger a real investigation against the seeded slow query:
 
 ```bash
 opensre investigate --input-json '{
@@ -167,10 +162,9 @@ opensre investigate --input-json '{
 }'
 ```
 
-Real output from a run against this exact local instance (edited for length). An empty store
-makes `opensre investigate` fall through to env-var resolution for *every* integration, not
-just MariaDB -- if your shell or machine already resolves another integration from its own
-env vars, it rides along too (harmless, and unrelated to the MariaDB tool calls below):
+Real output from a run against this exact local instance (edited for length). Another
+integration resolved from your own env/keyring can ride along harmlessly, since the store
+has no records to block fallback for any service:
 
 ```
 Loading integrations: telegram, mariadb
@@ -198,8 +192,8 @@ Teardown:
 
 ```bash
 docker rm -f mariadb-dev
-rm -f "$OPENSRE_INTEGRATIONS_STORE_PATH"
-unset OPENSRE_INTEGRATIONS_STORE_PATH
+rm -rf "$OPENSRE_DEMO_STORE_DIR"
+unset OPENSRE_DEMO_STORE_DIR OPENSRE_INTEGRATIONS_STORE_PATH
 unset MARIADB_HOST MARIADB_PORT MARIADB_DATABASE MARIADB_USERNAME MARIADB_PASSWORD MARIADB_SSL
 ```
 
