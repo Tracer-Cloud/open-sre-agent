@@ -10,6 +10,7 @@ from integrations.groundcover.client import GroundcoverClient, GroundcoverToolRe
 _ENVELOPE_ROW_CAP = 100
 _MAX_FIELD_CHARS = 1000
 
+
 def unavailable(source: str, error: str, **extra: Any) -> dict[str, Any]:
     """tool_unavailable envelope with data=[], summary={}, truncated=False defaults."""
     return tool_unavailable(source, error, data=[], summary={}, truncated=False, **extra)

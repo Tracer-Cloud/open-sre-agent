@@ -12,6 +12,7 @@ from integrations.groundcover.client import GroundcoverClient, GroundcoverConfig
 
 logger = logging.getLogger(__name__)
 
+
 def groundcover_creds(gc: dict[str, Any]) -> dict[str, Any]:
     """Extract api_key/mcp_url/tenant_uuid/backend_id/timezone from a source entry."""
     return {
