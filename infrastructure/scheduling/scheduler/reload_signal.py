@@ -8,10 +8,13 @@ scheduler inside ``gateway/``.
 
 from __future__ import annotations
 
+import logging
 from datetime import UTC, datetime
 from pathlib import Path
 
 from config.constants import OPENSRE_HOME_DIR
+
+logger = logging.getLogger(__name__)
 
 _RELOAD_FILENAME = "scheduler_reload_requested"
 # Gateway poll interval for the reload signal file.
@@ -23,20 +26,32 @@ def _signal_path() -> Path:
 
 
 def request_scheduler_reload() -> None:
-    """Ask any live scheduler host to resync jobs from the task store."""
+    """Ask any live scheduler host to resync jobs from the task store.
+
+    Best-effort: a failure to write the signal is logged, never raised, so it
+    cannot fail the store mutation that triggered it — the scheduler still
+    resyncs on its next poll or on restart.
+    """
     path = _signal_path()
-    path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(datetime.now(UTC).isoformat(), encoding="utf-8")
+    try:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(datetime.now(UTC).isoformat(), encoding="utf-8")
+    except OSError:
+        logger.warning("Could not write scheduler reload signal at %s", path, exc_info=True)
 
 
 def consume_scheduler_reload_request() -> bool:
-    """Return True once if a reload was requested, clearing the signal."""
-    path = _signal_path()
-    if not path.exists():
-        return False
+    """Return True once if a reload was requested, clearing the signal.
+
+    Atomic: the unlink both tests for and clears the request, so two polls
+    cannot both observe the same one.
+    """
     try:
-        path.unlink()
+        _signal_path().unlink()
+    except FileNotFoundError:
+        return False
     except OSError:
+        logger.warning("Could not clear scheduler reload signal", exc_info=True)
         return False
     return True
 
