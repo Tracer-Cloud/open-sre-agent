@@ -10,14 +10,11 @@ from typing import Any, cast
 from core.domain.types.tools import ToolSurface
 from core.tool_framework.tool_decorator import tool
 from core.tool_framework.utils import code_host_unavailable_payload
-from integrations.github.helpers import (
-    GITHUB_INJECTED_PARAMS,
-    github_creds,
-    github_source_available,
-    normalize_github_tool_result,
-    resolve_github_mcp_config,
-)
+from integrations.github.availability import github_source_available
+from integrations.github.credentials import GITHUB_INJECTED_PARAMS, github_creds
 from integrations.github.mcp import call_github_mcp_tool
+from integrations.github.mcp_config import resolve_github_mcp_config
+from integrations.github.result_normalizer import normalize_github_tool_result
 
 
 def _extract_json_text(result: dict[str, Any]) -> dict[str, Any] | str | None:

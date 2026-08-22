@@ -61,7 +61,7 @@ ignore_imports =
     tools.investigation.reporting.upstream_correlation.registry -> integrations.datadog.correlation.registration
     tools.investigation.state_factory -> integrations.opensre.hf_remote
     tools.system.python_execution_tool.credentials -> integrations.github.client
-    tools.system.python_execution_tool.credentials -> integrations.github.helpers
+    tools.system.python_execution_tool.credentials -> integrations.github.credentials
     tools.system.watch_dog.runner -> integrations.buzz.alarms
     tools.system.watch_dog.runner -> integrations.buzz.credentials
     tools.system.watch_dog.runner -> integrations.rocketchat.alarms

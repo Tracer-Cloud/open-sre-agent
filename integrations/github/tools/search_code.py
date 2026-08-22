@@ -7,17 +7,14 @@ from typing import Any
 from core.domain.types.tools import ToolSurface
 from core.tool_framework.tool_decorator import tool
 from core.tool_framework.utils import code_host_unavailable_payload
-from integrations.github.helpers import (
-    GITHUB_INJECTED_PARAMS,
-    github_creds,
-    github_source_available,
-    normalize_github_tool_result,
-    resolve_github_mcp_config,
-)
+from integrations.github.availability import github_source_available
+from integrations.github.credentials import GITHUB_INJECTED_PARAMS, github_creds
 from integrations.github.mcp import (
     build_github_code_search_query,
     call_github_mcp_tool,
 )
+from integrations.github.mcp_config import resolve_github_mcp_config
+from integrations.github.result_normalizer import normalize_github_tool_result
 
 
 def _search_github_code_extract_params(sources: dict[str, dict]) -> dict[str, Any]:

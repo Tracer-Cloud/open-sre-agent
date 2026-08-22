@@ -8,12 +8,9 @@ from core.agent_harness.tools import action_context_from_agent_context
 from core.domain.types.tools import ToolSurface
 from core.tool import SideEffectLevel
 from core.tool_framework.tool_decorator import tool
+from integrations.github.availability import github_source_available
 from integrations.github.client import resolve_github_token
-from integrations.github.helpers import (
-    GITHUB_INJECTED_PARAMS,
-    github_creds,
-    github_source_available,
-)
+from integrations.github.credentials import GITHUB_INJECTED_PARAMS, github_creds
 from integrations.github.tools.security_fix.runner import run_security_fix
 
 _INPUT_SCHEMA: dict[str, Any] = {

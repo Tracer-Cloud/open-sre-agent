@@ -14,7 +14,7 @@ from typing import Any
 from config.constants import GH_TOKEN_ENV, GITHUB_MCP_AUTH_TOKEN_ENV, GITHUB_TOKEN_ENV
 
 # Keys ``extract_params`` may inject that must beat model-supplied kwargs.
-# Narrower than ``integrations.github.helpers.GITHUB_INJECTED_PARAMS``: the CLI
+# Narrower than ``integrations.github.credentials.GITHUB_INJECTED_PARAMS``: the CLI
 # protects only the token; owner/repo stay model-overridable.
 GITHUB_CLI_INJECTED_PARAMS: tuple[str, ...] = ("github_token",)
 

@@ -8,12 +8,9 @@ from core.domain.types.tools import ToolSurface
 from core.tool import SideEffectLevel, report_run_error
 from core.tool_framework.tool_decorator import tool
 from core.tool_framework.utils import tool_unavailable
+from integrations.github.availability import github_source_available
 from integrations.github.client import GitHubApiError, GitHubRestClient, resolve_github_token
-from integrations.github.helpers import (
-    GITHUB_INJECTED_PARAMS,
-    github_creds,
-    github_source_available,
-)
+from integrations.github.credentials import GITHUB_INJECTED_PARAMS, github_creds
 
 
 def _github_repository_available(sources: dict[str, dict]) -> bool:

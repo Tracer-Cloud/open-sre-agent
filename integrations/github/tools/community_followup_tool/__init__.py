@@ -9,12 +9,9 @@ from core.domain.types.tools import ToolSurface
 from core.tool import SideEffectLevel
 from core.tool_framework.tool_decorator import tool
 from core.tool_framework.utils import tool_unavailable
+from integrations.github.availability import github_source_available
 from integrations.github.client import GitHubApiError, GitHubRestClient, resolve_github_token
-from integrations.github.helpers import (
-    GITHUB_INJECTED_PARAMS,
-    github_creds,
-    github_source_available,
-)
+from integrations.github.credentials import GITHUB_INJECTED_PARAMS, github_creds
 from integrations.github.tools.workflow import summarize_community_followups_from_comments
 
 

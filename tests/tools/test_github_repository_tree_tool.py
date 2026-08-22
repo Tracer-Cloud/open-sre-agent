@@ -32,7 +32,7 @@ def test_extract_params_maps_fields() -> None:
 
 
 def test_run_returns_unavailable_when_no_config() -> None:
-    with patch("integrations.github.helpers.github_mcp_config_from_env", return_value=None):
+    with patch("integrations.github.mcp_config.github_mcp_config_from_env", return_value=None):
         result = get_github_repository_tree(owner="org", repo="repo")
     assert result["available"] is False
 
@@ -48,9 +48,9 @@ def test_run_happy_path() -> None:
     }
     mock_config = MagicMock()
     with (
-        patch("integrations.github.helpers.github_mcp_config_from_env", return_value=None),
+        patch("integrations.github.mcp_config.github_mcp_config_from_env", return_value=None),
         patch(
-            "integrations.github.helpers.build_github_mcp_config",
+            "integrations.github.mcp_config.build_github_mcp_config",
             return_value=mock_config,
         ),
         patch(

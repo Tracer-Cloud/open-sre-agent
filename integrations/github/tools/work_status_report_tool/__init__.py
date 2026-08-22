@@ -7,12 +7,9 @@ from typing import Any
 from core.domain.types.tools import ToolSurface
 from core.tool import SideEffectLevel
 from core.tool_framework.tool_decorator import tool
+from integrations.github.availability import github_source_available
 from integrations.github.client import resolve_github_token
-from integrations.github.helpers import (
-    GITHUB_INJECTED_PARAMS,
-    github_creds,
-    github_source_available,
-)
+from integrations.github.credentials import GITHUB_INJECTED_PARAMS, github_creds
 from integrations.github.tools.work_status import list_github_work_items, summarize_github_pr_status
 from integrations.github.tools.workflow import build_work_status_report
 
