@@ -200,7 +200,7 @@ def with_new_generation(
 ) -> tuple[EncryptionManifest, ManifestCipher]:
     """Add a fresh content key and make it active, keeping the old ones readable."""
 
-    #  The passphrase is proved against the manifest before a newkey is minted. 
+    #  The passphrase is proved against the manifest before a newkey is minted.
     # If the passphrase is wrong, the new key is never generated and the manifest is unchanged.
     #open_manifest(manifest, passphrase) will fail to unwrap the active key if the passphrase is wrong, raising a WrongPassphraseError.
     open_manifest(manifest, passphrase)
