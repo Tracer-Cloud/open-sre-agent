@@ -9,15 +9,16 @@ from typing import Any
 
 import pytest
 
-import infrastructure.harness_ports as harness_ports
-from surfaces.shared.terminal.output.boundary import install_harness_ports
+from infrastructure.harness_providers import integration_resolution as harness_providers
+from infrastructure.harness_providers import reset_harness_providers
+from surfaces.shared.terminal.output.boundary import install_harness_providers
 
 
 @pytest.fixture(autouse=True)
-def _harness_ports() -> Iterator[None]:
-    install_harness_ports()
+def _harness_providers() -> Iterator[None]:
+    install_harness_providers()
     yield
-    harness_ports.reset_harness_ports()
+    reset_harness_providers()
 
 
 def _jwt(payload: dict[str, Any]) -> str:
@@ -32,7 +33,7 @@ def test_resolve_integrations_returns_existing_state_without_lookup(monkeypatch:
 
     monkeypatch.setattr("integrations.store.load_integrations", _unexpected_lookup)
 
-    resolved = harness_ports.resolve_integrations(
+    resolved = harness_providers.resolve_integrations(
         {"resolved_integrations": {"datadog": {"site": "datadoghq.com"}}}
     )
 
@@ -40,7 +41,7 @@ def test_resolve_integrations_returns_existing_state_without_lookup(monkeypatch:
 
 
 def test_resolution_request_ignores_unrelated_runtime_state() -> None:
-    request = harness_ports.IntegrationResolutionRequest.model_validate(
+    request = harness_providers.IntegrationResolutionRequest.model_validate(
         {
             "_auth_token": " Bearer token ",
             "org_id": " org-123 ",
@@ -56,7 +57,7 @@ def test_resolution_request_ignores_unrelated_runtime_state() -> None:
 
 def test_resolution_result_rejects_unknown_fields() -> None:
     with pytest.raises(ValueError):
-        harness_ports.IntegrationResolutionResult.model_validate(
+        harness_providers.IntegrationResolutionResult.model_validate(
             {
                 "resolved_integrations": {},
                 "unexpected": True,
@@ -67,20 +68,20 @@ def test_resolution_result_rejects_unknown_fields() -> None:
 def test_resolve_local_store_sources_returns_progress_metadata(monkeypatch: Any) -> None:
     store_records = [{"service": "datadog", "status": "active", "credentials": {}}]
     monkeypatch.delenv("JWT_TOKEN", raising=False)
-    monkeypatch.setattr(harness_ports, "_load_integrations", lambda: store_records)
-    monkeypatch.setattr(harness_ports, "_load_env_integrations", lambda: [])
+    monkeypatch.setattr(harness_providers, "_load_integrations", lambda: store_records)
+    monkeypatch.setattr(harness_providers, "_load_env_integrations", lambda: [])
     monkeypatch.setattr(
-        harness_ports,
+        harness_providers,
         "_merge_local_integrations",
         lambda store, env: [*store, *env],
     )
     monkeypatch.setattr(
-        harness_ports,
+        harness_providers,
         "_classify_integrations",
         lambda _records: {"datadog": {"site": "datadoghq.com"}},
     )
 
-    result = harness_ports.resolve_integrations_with_metadata()
+    result = harness_providers.resolve_integrations_with_metadata()
 
     assert result.resolved_integrations == {"datadog": {"site": "datadoghq.com"}}
     assert result.services == ("datadog",)
@@ -88,7 +89,7 @@ def test_resolve_local_store_sources_returns_progress_metadata(monkeypatch: Any)
 
 
 def test_resolution_result_is_strict_pydantic_model() -> None:
-    result = harness_ports.IntegrationResolutionResult(
+    result = harness_providers.IntegrationResolutionResult(
         resolved_integrations={
             "datadog": {"site": "datadoghq.com"},
             "_gateway_chat_id": "chat-1",
@@ -132,20 +133,20 @@ def test_resolve_env_token_merges_remote_store_and_env(monkeypatch: Any) -> None
 
     monkeypatch.setenv("JWT_TOKEN", f"Bearer {_jwt({'organization': 'org-123'})}")
     monkeypatch.setattr(
-        harness_ports,
+        harness_providers,
         "fetch_remote_integrations",
         _fetch_remote_integrations,
     )
-    monkeypatch.setattr(harness_ports, "_load_integrations", lambda: store_records)
-    monkeypatch.setattr(harness_ports, "_load_env_integrations", lambda: env_records)
-    monkeypatch.setattr(harness_ports, "_merge_integrations_by_service", _merge)
+    monkeypatch.setattr(harness_providers, "_load_integrations", lambda: store_records)
+    monkeypatch.setattr(harness_providers, "_load_env_integrations", lambda: env_records)
+    monkeypatch.setattr(harness_providers, "_merge_integrations_by_service", _merge)
     monkeypatch.setattr(
-        harness_ports,
+        harness_providers,
         "_classify_integrations",
         lambda _records: {"datadog": {}, "grafana": {}, "sentry": {}},
     )
 
-    result = harness_ports.resolve_integrations_with_metadata()
+    result = harness_providers.resolve_integrations_with_metadata()
 
     assert captured_fetch == {
         "org_id": "org-123",
@@ -164,10 +165,10 @@ def test_resolve_env_token_merges_remote_store_and_env(monkeypatch: Any) -> None
 
 def test_resolve_without_sources_reports_empty_local_lookup(monkeypatch: Any) -> None:
     monkeypatch.delenv("JWT_TOKEN", raising=False)
-    monkeypatch.setattr(harness_ports, "_load_integrations", list)
-    monkeypatch.setattr(harness_ports, "_load_env_integrations", list)
+    monkeypatch.setattr(harness_providers, "_load_integrations", list)
+    monkeypatch.setattr(harness_providers, "_load_env_integrations", list)
 
-    result = harness_ports.resolve_integrations_with_metadata()
+    result = harness_providers.resolve_integrations_with_metadata()
 
     assert result.resolved_integrations == {}
     assert result.progress_message is not None

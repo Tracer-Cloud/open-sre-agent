@@ -11,16 +11,18 @@ from __future__ import annotations
 
 import logging
 from collections.abc import Callable
-from typing import Any
+from typing import Any, cast
 
 from rich.console import Console
 
 from core.agent_harness import OutputSink
+from core.agent_harness.ports import SessionState, ToolEventObserver
 from core.agent_harness.runtime import (
     AgentBuildConfig,
     DefaultHeadlessBuild,
     DefaultToolProvider,
     HeadlessAgent,
+    resolve_agent_ports,
 )
 from surfaces.interactive_shell.grounding.cli_reference import shell_prompt_context_provider
 from surfaces.interactive_shell.runtime.agent_harness_adapters import (
@@ -80,12 +82,15 @@ def shell_agent_build_config(
     """REPL wiring: shell tools, CLI grounding, console gather; no withholds."""
 
     def build_tools(
-        session: Session,
+        session: SessionState,
         console: Console,
         _logger: logging.Logger,
-        _observer: Any,
+        _observer: ToolEventObserver | None,
     ) -> DefaultToolProvider:
-        return shell_tool_provider(session, console, request_exit=request_exit)
+        # BuildTools' Protocol declares the base SessionState (contravariance
+        # requires accepting at least as wide a type); this closure is only
+        # ever wired up below with a real interactive-shell Session.
+        return shell_tool_provider(cast(Session, session), console, request_exit=request_exit)
 
     return AgentBuildConfig(
         build_tools=build_tools,
@@ -124,28 +129,21 @@ def build_shell_agent(
 ) -> HeadlessAgent:
     """One shell agent from :func:`shell_agent_build_config`; per-turn values via ``bind_turn``."""
     config = shell_agent_build_config(request_exit=request_exit)
-    policy = config.apply_capability_policy
-    if policy is not None:
-        policy(session)
-    logger = logging.getLogger("opensre.interactive_shell")
-    tools = (
-        config.build_tools(session, console, logger, None)
-        if config.build_tools is not None
-        else None
+    if config.apply_capability_policy is not None:
+        config.apply_capability_policy(session)
+    tools, prompts, gather = resolve_agent_ports(
+        config,
+        session=session,
+        console=console,
+        logger=logging.getLogger("opensre.interactive_shell"),
     )
-    prompts = config.build_prompts(session) if config.build_prompts is not None else None
-    gather = config.build_gather(session, console) if config.build_gather is not None else None
     return DefaultHeadlessBuild(
         session=session,
         output=resolve_output_sink(console, output),
         console=console,
         surface="interactive_shell",
         error_reporter=config.error_reporter,
-    ).agent(
-        tools=tools,
-        prompts=prompts,
-        gather=gather,
-    )
+    ).agent(tools=tools, prompts=prompts, gather=gather)
 
 
 __all__ = [

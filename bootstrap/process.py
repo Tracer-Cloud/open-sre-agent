@@ -22,6 +22,7 @@ from enum import StrEnum
 from typing import Final
 
 from bootstrap.adapters import (
+    install_cli_auth_checker,
     install_harness_adapters,
     install_scheduled_delivery_adapters,
     install_scheduler_runners,
@@ -144,6 +145,7 @@ def _run_sentry(profile: ProcessProfile, _log: logging.Logger) -> None:
 
 def _run_harness_adapters(_profile: ProcessProfile, _log: logging.Logger) -> None:
     install_harness_adapters()
+    install_cli_auth_checker()
 
 
 def _run_scheduler_runners(_profile: ProcessProfile, _log: logging.Logger) -> None:

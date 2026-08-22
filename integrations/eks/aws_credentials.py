@@ -1,7 +1,7 @@
-"""EKS helper utilities.
+"""Normalize stored AWS credentials for botocore.
 
-Provides shared logic to normalize internal AWS credential structures (which use
-snake_case keys) into botocore-compatible formats (which use PascalCase keys).
+Maps internal snake_case credential keys to the PascalCase dict botocore
+clients expect.
 """
 
 from __future__ import annotations

@@ -98,6 +98,104 @@ Restart PostgreSQL, then:
 CREATE EXTENSION IF NOT EXISTS pg_stat_statements;
 ```
 
+### Quick local test with Docker
+
+```bash
+docker run -d --name postgres-dev -p 127.0.0.1:5433:5432 \
+  -e POSTGRES_PASSWORD=verifypass \
+  -e POSTGRES_DB=app_db \
+  postgres:16 -c shared_preload_libraries=pg_stat_statements -c pg_stat_statements.track=all
+
+i=0
+until docker exec postgres-dev pg_isready -U postgres > /dev/null 2>&1; do
+  i=$((i + 1))
+  [ "$i" -ge 30 ] && { echo "ERROR: PostgreSQL never became ready" >&2; exit 1; }
+  sleep 2
+done
+
+docker exec postgres-dev psql -U postgres -d app_db -c "CREATE EXTENSION IF NOT EXISTS pg_stat_statements;"
+docker exec postgres-dev psql -U postgres -d app_db -c "
+CREATE TABLE orders (id INT PRIMARY KEY, amount DECIMAL(10,2));
+INSERT INTO orders VALUES (1, 42.50), (2, 17.00);
+"
+docker exec postgres-dev psql -U postgres -d app_db -c "SELECT pg_sleep(2);" > /dev/null
+```
+
+```bash
+export POSTGRESQL_HOST=127.0.0.1
+export POSTGRESQL_PORT=5433
+export POSTGRESQL_DATABASE=app_db
+export POSTGRESQL_USERNAME=postgres
+export POSTGRESQL_PASSWORD=verifypass
+export POSTGRESQL_SSL_MODE=disable
+```
+
+Verify:
+
+```bash
+opensre integrations verify postgresql
+```
+
+```
+SERVICE    │ SOURCE    │ STATUS   │ DETAIL
+postgresql │ local env │ ✓ passed │ Connected to PostgreSQL 16.15
+           │           │          │ target database: app_db.
+```
+
+Use a temporary integration-store path so saved integrations cannot override the demo environment variables:
+
+```bash
+export OPENSRE_DEMO_STORE_DIR="$(mktemp -d /tmp/opensre-postgresql-demo.XXXXXX)"
+export OPENSRE_INTEGRATIONS_STORE_PATH="$OPENSRE_DEMO_STORE_DIR/integrations.json"
+```
+
+The file does not need to exist. OpenSRE treats the missing temporary store as empty and resolves PostgreSQL from the exported variables above.
+
+Trigger a real investigation against the slow query — this is the actual supported entrypoint, not an internal import:
+
+```bash
+opensre investigate --input-json '{
+  "alert_name": "PostgreSQLSlowQuery",
+  "severity": "warning",
+  "commonAnnotations": {
+    "summary": "app_db PostgreSQL instance has a slow query"
+  }
+}'
+```
+
+Real output from a run against this exact local instance (edited for length):
+
+```
+Loading integrations: postgresql
+↳ PostgreSQL · get postgresql slow queries
+↳ PostgreSQL · get postgresql server status
+↳ PostgreSQL · get postgresql current queries
+↳ PostgreSQL · get postgresql lock status
+↳ PostgreSQL · get postgresql table stats
+↳ PostgreSQL · get postgresql replication status
+
+Triage complete: Single flagged slow query is SELECT pg_sleep($1)
+averaging 2016 ms -- an intentional sleep call; all other PostgreSQL
+health indicators are normal (8/100 connections, 97.97% cache hit,
+0 locks/waits, 0 long-running queries, primary with no replicas).
+
+Hypothesis confirmed: pg_sleep() is intentional latency, not a
+performance problem -- no other slow queries, no locks, no long
+transactions, no bloat, healthy cache/connection counts.
+```
+
+All 6 registered tools were exercised in this single turn.
+
+Teardown:
+
+```bash
+docker rm -f postgres-dev
+rm -rf "$OPENSRE_DEMO_STORE_DIR"
+unset OPENSRE_DEMO_STORE_DIR OPENSRE_INTEGRATIONS_STORE_PATH
+unset POSTGRESQL_HOST POSTGRESQL_PORT POSTGRESQL_DATABASE
+unset POSTGRESQL_USERNAME POSTGRESQL_PASSWORD POSTGRESQL_SSL_MODE
+```
+
 ## Investigation tools
 
 | Tool | What it does |

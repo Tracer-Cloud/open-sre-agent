@@ -1,4 +1,4 @@
-"""Integration tests for CLI → harness port wiring."""
+"""Integration tests for CLI → harness-provider install."""
 
 from __future__ import annotations
 
@@ -6,7 +6,7 @@ from collections.abc import Iterator
 
 import pytest
 
-import infrastructure.harness_ports as harness_ports
+import infrastructure.harness_providers as harness_providers
 from infrastructure.observability import NoopProgressTracker
 from infrastructure.observability.render import debug as obs_debug
 from infrastructure.observability.render import display as obs_display
@@ -25,7 +25,7 @@ from surfaces.shared.terminal.output import boundary as output_boundary
 
 
 def _reset_all_ports() -> None:
-    harness_ports.reset_harness_ports()
+    harness_providers.reset_harness_providers()
     set_progress_tracker(NoopProgressTracker())
     set_progress_tracker_factory(None)
     obs_progress._silenced = False
@@ -42,13 +42,15 @@ def _reset_integrations_port() -> Iterator[None]:
 
 
 def test_port_defaults_to_empty_before_boundary_install() -> None:
-    assert harness_ports.fetch_remote_integrations(org_id="org-1", auth_token="tok") == []
+    assert harness_providers.fetch_remote_integrations(org_id="org-1", auth_token="tok") == []
 
 
 def test_install_product_adapters_wires_tracer_fetcher() -> None:
     output_boundary.install_product_adapters()
 
-    assert harness_ports._fetch_remote is fetch_tracer_remote_integrations
+    assert (
+        harness_providers.integration_resolution._fetch_remote is fetch_tracer_remote_integrations
+    )
 
 
 def test_registered_fetcher_is_invoked() -> None:
@@ -58,8 +60,8 @@ def test_registered_fetcher_is_invoked() -> None:
         calls.append((org_id, auth_token))
         return [{"service": "grafana", "config": {}}]
 
-    harness_ports.set_remote_integrations_fetcher(_fake_fetcher)
-    result = harness_ports.fetch_remote_integrations(org_id="org-42", auth_token="jwt-here")
+    harness_providers.set_remote_integrations_fetcher(_fake_fetcher)
+    result = harness_providers.fetch_remote_integrations(org_id="org-42", auth_token="jwt-here")
 
     assert calls == [("org-42", "jwt-here")]
     assert result == [{"service": "grafana", "config": {}}]
@@ -71,46 +73,58 @@ def test_reset_restores_webapp_vault_fetcher_default() -> None:
     def _sentinel_vault() -> list[dict[str, object]]:
         return [{"service": "leaked-vault-marker"}]
 
-    harness_ports.set_integration_resolution_adapters(fetch_webapp_vault=_sentinel_vault)
-    assert harness_ports._fetch_webapp_vault is _sentinel_vault
+    harness_providers.set_integration_resolution_adapters(fetch_webapp_vault=_sentinel_vault)
+    assert harness_providers.integration_resolution._fetch_webapp_vault is _sentinel_vault
 
     # Act
-    harness_ports.reset_harness_ports()
+    harness_providers.reset_harness_providers()
 
     # Assert: the noop default is restored, not the leaked sentinel.
-    assert harness_ports._fetch_webapp_vault is harness_ports._default_fetch_webapp_vault
+    assert (
+        harness_providers.integration_resolution._fetch_webapp_vault
+        is harness_providers.integration_resolution._default_fetch_webapp_vault
+    )
 
 
-def test_install_harness_ports_wires_catalog_and_registry() -> None:
-    output_boundary.install_harness_ports()
-
-    assert harness_ports._load_integrations is not harness_ports._default_load_integrations
-    assert isinstance(harness_ports.get_surface_tools("action"), list)
-
-
-def test_install_harness_ports_wires_cli_llm_adapters() -> None:
-    # Before wiring, the CLI-LLM backend fails loudly instead of silently no-op'ing.
-    harness_ports.reset_harness_ports()
-    with pytest.raises(RuntimeError, match="not registered"):
-        harness_ports.build_cli_client(object(), model="x")
-
-    output_boundary.install_harness_ports()
+def test_install_harness_providers_wires_catalog_and_registry() -> None:
+    output_boundary.install_harness_providers()
 
     assert (
-        harness_ports._cli_provider_registration_fn
-        is not harness_ports._default_cli_provider_registration
+        harness_providers.integration_resolution._load_integrations
+        is not harness_providers.integration_resolution._default_load_integrations
     )
-    assert harness_ports._build_cli_client_fn is not harness_ports._cli_llm_backend_unavailable
-    assert harness_ports._flatten_cli_messages_fn is not harness_ports._cli_llm_backend_unavailable
+    assert isinstance(harness_providers.get_surface_tools("action"), list)
 
 
-def test_install_harness_ports_wires_soc_registries() -> None:
+def test_install_harness_providers_wires_cli_llm_adapters() -> None:
+    # Before install, the CLI-LLM backend fails loudly instead of silently no-op'ing.
+    harness_providers.reset_harness_providers()
+    with pytest.raises(RuntimeError, match="not registered"):
+        harness_providers.build_cli_client(object(), model="x")
+
+    output_boundary.install_harness_providers()
+
+    assert (
+        harness_providers.cli_llm._cli_provider_registration_fn
+        is not harness_providers.cli_llm._default_cli_provider_registration
+    )
+    assert (
+        harness_providers.cli_llm._build_cli_client_fn
+        is not harness_providers.cli_llm._cli_llm_backend_unavailable
+    )
+    assert (
+        harness_providers.cli_llm._flatten_cli_messages_fn
+        is not harness_providers.cli_llm._cli_llm_backend_unavailable
+    )
+
+
+def test_install_harness_providers_wires_soc_registries() -> None:
     """SoC registries must not stay silently empty after install (or leak after reset).
 
     Alert routing, Hermes taxonomy, VCS scope, prompt fragments, Slack prefix
     stripping, secondary sources, and alert-detail fields all moved out of
     core into registered adapters. Empty registries look like "healthy but
-    dumb" product behavior — this test fails loud if wiring regresses.
+    dumb" product behavior — this test fails loud if install regresses.
     """
     from core.agent_harness.prompts import build_action_system_prompt
     from core.agent_harness.turns.turn_snapshot import TurnSnapshot
@@ -122,33 +136,33 @@ def test_install_harness_ports_wires_soc_registries() -> None:
     from core.domain.alerts.extraction import alert_detail_field_names
     from core.domain.diagnosis import taxonomy_categories_for_alert_source
 
-    harness_ports.reset_harness_ports()
+    harness_providers.reset_harness_providers()
 
     assert alert_source_routing() == {}
     assert secondary_tool_sources() == frozenset()
     assert "agent_hang" not in taxonomy_categories_for_alert_source("hermes")
     assert "kube_namespace" not in alert_detail_field_names()
-    assert harness_ports.action_prompt_vendor_fragments() == ""
-    assert harness_ports.gateway_persona_fragments() == ""
-    prefix, remainder = harness_ports.strip_message_context_prefix("[Slack channel_id=C1]\nyes")
+    assert harness_providers.action_prompt_vendor_fragments() == ""
+    assert harness_providers.gateway_persona_fragments() == ""
+    prefix, remainder = harness_providers.strip_message_context_prefix("[Slack channel_id=C1]\nyes")
     assert prefix == ""
     assert remainder.startswith("[Slack")
 
-    output_boundary.install_harness_ports()
+    output_boundary.install_harness_providers()
 
     assert "grafana" in alert_source_routing()
     assert seed_tool_sources_for_alert({"alert_source": "grafana"}) == ("grafana",)
     assert "knowledge" in secondary_tool_sources()
     assert "agent_hang" in taxonomy_categories_for_alert_source("hermes")
     assert "kube_namespace" in alert_detail_field_names()
-    assert "slack_send_message" in harness_ports.action_prompt_vendor_fragments()
-    assert "telegram_send_message" in harness_ports.action_prompt_vendor_fragments()
-    assert "colleague in Slack" in harness_ports.gateway_persona_fragments()
-    prefix, remainder = harness_ports.strip_message_context_prefix("[Slack channel_id=C1]\nyes")
+    assert "slack_send_message" in harness_providers.action_prompt_vendor_fragments()
+    assert "telegram_send_message" in harness_providers.action_prompt_vendor_fragments()
+    assert "colleague in Slack" in harness_providers.gateway_persona_fragments()
+    prefix, remainder = harness_providers.strip_message_context_prefix("[Slack channel_id=C1]\nyes")
     assert prefix.startswith("[Slack")
     assert remainder.strip() == "yes"
 
-    enriched = harness_ports.enrich_resolved_with_repo_scopes(
+    enriched = harness_providers.enrich_resolved_with_repo_scopes(
         resolved={"github": {"connection_verified": True}},
         message="https://github.com/Tracer-Cloud/opensre",
         conversation_messages=None,
@@ -173,7 +187,7 @@ def test_install_harness_ports_wires_soc_registries() -> None:
     assert "slack_send_message" in action_prompt
     assert "GITHUB CLI REQUESTS" in action_prompt
 
-    harness_ports.reset_harness_ports()
+    harness_providers.reset_harness_providers()
     assert alert_source_routing() == {}
     assert "agent_hang" not in taxonomy_categories_for_alert_source("hermes")
-    assert harness_ports.action_prompt_vendor_fragments() == ""
+    assert harness_providers.action_prompt_vendor_fragments() == ""
