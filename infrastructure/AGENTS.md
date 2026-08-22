@@ -20,7 +20,7 @@ Name packages by **what they do**. Do not create `common/`, `shared/`, or
 ## Package map and ownership
 
 See the full ownership map in [`README.md`](./README.md).  
-The two deliberately root-level modules are:
+The three deliberately root-level modules are:
 
 | Module | Owns | Keep out |
 | --- | --- | --- |
