@@ -1,13 +1,15 @@
 """Tool registry and investigation-tool resolution.
 
 Core resolves the tools for a surface and the investigation tool list without
-importing the tool packages: ``tools/harness_adapters.py`` injects a real
-registry at boot.
+importing the tool packages: ``tools/harness_adapters.py`` installs the real
+sources once at boot, read afterwards through ``resolve_*``. There is no
+setter — nothing rewrites the sources after boot.
 """
 
 from __future__ import annotations
 
 from collections.abc import Callable
+from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
 from core.domain.types.tools import ToolSurface
@@ -20,7 +22,7 @@ InvestigationToolsFn = Callable[[dict[str, Any]], list[RegisteredTool]]
 
 
 class _EmptyToolRegistry:
-    """Default tool registry that resolves nothing until one is injected."""
+    """Default tool registry that resolves nothing until one is installed."""
 
     def tools_for_surface(self, _surface: ToolSurface) -> list[RegisteredTool]:
         return []
@@ -33,46 +35,50 @@ def _default_investigation_tools(_resolved: dict[str, Any]) -> list[RegisteredTo
     return []
 
 
-_tool_registry: ToolRegistry = _EmptyToolRegistry()
-_get_investigation_tools: InvestigationToolsFn = _default_investigation_tools
+_EMPTY_REGISTRY: ToolRegistry = _EmptyToolRegistry()
 
 
-def get_surface_tools(surface: ToolSurface) -> list[RegisteredTool]:
-    return _tool_registry.tools_for_surface(surface)
+@dataclass(frozen=True)
+class ToolSources:
+    """The tool registry and investigation-tool resolver, installed once at boot."""
+
+    registry: ToolRegistry = _EMPTY_REGISTRY
+    investigation_tools: InvestigationToolsFn = _default_investigation_tools
+
+    def install(self) -> None:
+        """Bind these as the process-wide tool sources."""
+        global _installed
+        _installed = self
 
 
-def get_surface_tool_map(surface: ToolSurface) -> dict[str, RegisteredTool]:
-    return _tool_registry.tool_map_for_surface(surface)
+_installed: ToolSources | None = None
 
 
-def get_investigation_tools(resolved_integrations: dict[str, Any]) -> list[RegisteredTool]:
-    return _get_investigation_tools(resolved_integrations)
+def resolve_surface_tools(surface: ToolSurface) -> list[RegisteredTool]:
+    """Return the installed registry's tools for ``surface`` (empty before boot)."""
+    return _installed.registry.tools_for_surface(surface) if _installed is not None else []
 
 
-def set_tool_registry(registry: ToolRegistry) -> None:
-    global _tool_registry
-    _tool_registry = registry
+def resolve_surface_tool_map(surface: ToolSurface) -> dict[str, RegisteredTool]:
+    """Return the installed registry's name→tool map for ``surface`` (empty before boot)."""
+    return _installed.registry.tool_map_for_surface(surface) if _installed is not None else {}
 
 
-def set_investigation_tools_adapter(
-    get_investigation_tools: InvestigationToolsFn | None = None,
-) -> None:
-    global _get_investigation_tools
-    if get_investigation_tools is not None:
-        _get_investigation_tools = get_investigation_tools
+def resolve_investigation_tools(resolved_integrations: dict[str, Any]) -> list[RegisteredTool]:
+    """Return the investigation tools for ``resolved_integrations`` (empty before boot)."""
+    return _installed.investigation_tools(resolved_integrations) if _installed is not None else []
 
 
 def reset() -> None:
-    """Restore the empty registry and noop investigation tools (tests)."""
-    set_tool_registry(_EmptyToolRegistry())
-    set_investigation_tools_adapter(get_investigation_tools=_default_investigation_tools)
+    """Clear the installed tool sources (tests)."""
+    global _installed
+    _installed = None
 
 
 __all__ = [
     "InvestigationToolsFn",
-    "get_investigation_tools",
-    "get_surface_tool_map",
-    "get_surface_tools",
-    "set_investigation_tools_adapter",
-    "set_tool_registry",
+    "ToolSources",
+    "resolve_investigation_tools",
+    "resolve_surface_tool_map",
+    "resolve_surface_tools",
 ]

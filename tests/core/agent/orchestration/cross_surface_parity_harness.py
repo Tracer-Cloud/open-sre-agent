@@ -263,9 +263,9 @@ def wire_tool_registry(monkeypatch: Any, tools: list[RegisteredTool]) -> None:
             del surface
             return dict(by_name)
 
-    from infrastructure.harness_providers import set_tool_registry
+    from infrastructure.harness_providers import ToolSources
 
-    set_tool_registry(_FixedToolRegistry())
+    ToolSources(registry=_FixedToolRegistry()).install()
 
     from core.agent_harness.tools.action_tools import _sources_for_context
 

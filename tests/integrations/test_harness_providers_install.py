@@ -93,7 +93,7 @@ def test_install_harness_providers_wires_catalog_and_registry() -> None:
         harness_providers.integration_resolution._load_integrations
         is not harness_providers.integration_resolution._default_load_integrations
     )
-    assert isinstance(harness_providers.get_surface_tools("action"), list)
+    assert isinstance(harness_providers.resolve_surface_tools("action"), list)
 
 
 def test_install_harness_providers_wires_cli_llm_adapters() -> None:
