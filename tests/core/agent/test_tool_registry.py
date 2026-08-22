@@ -11,7 +11,7 @@ from core.agent_harness.tools.action_tools import (
     get_action_tools_from_integrations_context,
 )
 from core.agent_harness.tools.tool_context import (
-    ActionToolContext,
+    ActionToolScope,
 )
 from surfaces.interactive_shell.command_registry import SLASH_COMMANDS
 from surfaces.interactive_shell.session import Session
@@ -24,7 +24,7 @@ def _action_tools(
     *,
     resolved_integrations: dict[str, dict[str, str]] | None = None,
 ) -> list[object]:
-    ctx = ActionToolContext(session=session, console=Console(force_terminal=False))
+    ctx = ActionToolScope(session=session, console=Console(force_terminal=False))
     return get_action_tools_from_integrations_context(
         ctx, resolved_integrations=resolved_integrations
     )
@@ -220,7 +220,7 @@ def test_llm_set_provider_offered_by_default() -> None:
 
 def test_registry_agent_tools_exclude_unavailable_tool() -> None:
     session = Session(available_capabilities={"slash_commands": ()})
-    ctx = ActionToolContext(session=session, console=Console(force_terminal=False))
+    ctx = ActionToolScope(session=session, console=Console(force_terminal=False))
     names = {tool.name for tool in get_action_tools_from_integrations_context(ctx)}
     assert "slash_invoke" not in names
 

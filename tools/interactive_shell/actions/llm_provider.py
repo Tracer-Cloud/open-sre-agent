@@ -8,7 +8,7 @@ from rich.markup import escape
 
 from config.llm_auth.provider_catalog import PROVIDER_BY_VALUE
 from core.agent_harness.tools import (
-    ActionToolContext,
+    ActionToolScope,
     capability_available_from_sources,
     execute_with_action_context,
 )
@@ -38,13 +38,13 @@ def _target_property_schema() -> dict[str, Any]:
     }
 
 
-def _apply_model_set_target(target: str, ctx: ActionToolContext) -> bool:
+def _apply_model_set_target(target: str, ctx: ActionToolScope) -> bool:
     if ctx.llm_provider_ports is None:
         raise RuntimeError("LLM provider tool requires provider runtime ports")
     return bool(ctx.llm_provider_ports.apply_target(target, ctx.console))
 
 
-def execute_llm_provider_tool(args: dict[str, Any], ctx: ActionToolContext) -> bool:
+def execute_llm_provider_tool(args: dict[str, Any], ctx: ActionToolScope) -> bool:
     target = str(args.get("target", args.get("provider", ""))).strip()
     if not target:
         return False

@@ -364,7 +364,7 @@ SubprocessPresenterFactory = Callable[
 # Protocols here would mean ``core`` importing ``tools``.
 #
 # The return is ``object``, not ``Any``: ``core`` calls the factory and hands the
-# result to ``ActionToolContext`` without reading a single attribute, and
+# result to ``ActionToolScope`` without reading a single attribute, and
 # ``object`` is the type that says so. ``Any`` would silence a typo here as
 # readily as it silences the import ``core`` is avoiding.
 InvestigationPortsFactory = Callable[[], object]

@@ -25,7 +25,7 @@ from core.domain.work_items import (
     update_work_item,
     work_items_path,
 )
-from core.tool import AgentToolContext, SideEffectLevel
+from core.tool import AgentToolScope, SideEffectLevel
 from core.tool_framework.tool_decorator import tool
 from infrastructure.scheduling.scheduler.store import add_task as add_scheduled_task
 from infrastructure.scheduling.scheduler.store import list_tasks, update_task
@@ -55,7 +55,7 @@ def _work_items_available(_sources: dict[str, dict[str, Any]]) -> bool:
     return True
 
 
-def _gateway_delivery_context(context: AgentToolContext | None) -> tuple[str, str]:
+def _gateway_delivery_context(context: AgentToolScope | None) -> tuple[str, str]:
     if context is None:
         return "", ""
     try:
@@ -76,7 +76,7 @@ def _delivery_targets(
     chat_id: str,
     item: WorkItem | None = None,
     channel_targets: list[dict[str, str]] | None = None,
-    context: AgentToolContext | None = None,
+    context: AgentToolScope | None = None,
 ) -> list[WorkItemChannelTarget]:
     default_provider, default_chat_id = _gateway_delivery_context(context)
     targets: list[WorkItemChannelTarget] = []
@@ -269,7 +269,7 @@ def work_task_add(
     channel_id: str = "",
     channel_targets: list[dict[str, str]] | None = None,
     timezone: str = "UTC",
-    context: AgentToolContext | None = None,
+    context: AgentToolScope | None = None,
 ) -> dict[str, Any]:
     if not str(title or "").strip():
         return {"error": "empty_title", "detail": "title must be a non-empty string"}
@@ -464,7 +464,7 @@ def work_task_update(
     channel_id: str = "",
     channel_targets: list[dict[str, str]] | None = None,
     timezone: str = "UTC",
-    context: AgentToolContext | None = None,
+    context: AgentToolScope | None = None,
 ) -> dict[str, Any]:
     changes: WorkItemUpdates = {}
     if status:
@@ -659,7 +659,7 @@ def work_task_schedule_checkin(
     channel_targets: list[dict[str, str]] | None = None,
     project: str = "",
     limit: int = DEFAULT_PRIORITY_LIMIT,
-    context: AgentToolContext | None = None,
+    context: AgentToolScope | None = None,
 ) -> dict[str, Any]:
     parts = cron.split()
     if len(parts) != 5:

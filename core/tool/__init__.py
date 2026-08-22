@@ -2,7 +2,7 @@
 
 from core.tool.contracts import (
     REGISTERED_TOOL_ATTR,
-    AgentToolContext,
+    AgentToolScope,
     BaseTool,
     EvidenceType,
     RegisteredTool,
@@ -22,7 +22,7 @@ from core.tool.registry import ToolRegistry, normalize_surfaces
 
 __all__ = [
     "REGISTERED_TOOL_ATTR",
-    "AgentToolContext",
+    "AgentToolScope",
     "BaseTool",
     "BeforeToolCallResult",
     "EvidenceType",

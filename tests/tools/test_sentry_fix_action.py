@@ -16,18 +16,18 @@ from rich.console import Console
 import tools.interactive_shell.actions.sentry_fix as sentry_fix
 from core.agent_harness.tools.tool_context import (
     ACTION_TOOL_CONTEXT_RESOURCE_KEY,
-    ActionToolContext,
+    ActionToolScope,
 )
-from core.tool.contracts import AgentToolContext
+from core.tool.contracts import AgentToolScope
 
 _TOOL_RUN = "tools.interactive_shell.actions.sentry_fix.fix_sentry_issue.run"
 _URL = "https://acme.sentry.io/issues/12345/"
 
 
-def _ctx() -> tuple[ActionToolContext, io.StringIO]:
+def _ctx() -> tuple[ActionToolScope, io.StringIO]:
     buf = io.StringIO()
     console = Console(file=buf, force_terminal=False, highlight=False, width=200)
-    return ActionToolContext(session=MagicMock(), console=console), buf
+    return ActionToolScope(session=MagicMock(), console=console), buf
 
 
 # --------------------------------------------------------------------------- #
@@ -155,7 +155,7 @@ def test_renders_pr_failed_recovery_says_already_pushed(mock_run: MagicMock) -> 
 @patch(_TOOL_RUN, return_value={"success": True, "issue_id": "1", "pr_url": None})
 def test_run_sentry_fix_uses_action_context(mock_run: MagicMock) -> None:
     action_ctx, _ = _ctx()
-    agent_ctx = AgentToolContext(
+    agent_ctx = AgentToolScope(
         resolved_integrations={},
         resources={ACTION_TOOL_CONTEXT_RESOURCE_KEY: action_ctx},
     )

@@ -8,7 +8,7 @@ from core.agent_harness.spi.session_state import (
     PendingScheduleOffer,
     clear_competing_pending_offers,
 )
-from core.agent_harness.tools import ActionToolContext, execute_with_action_context
+from core.agent_harness.tools import ActionToolScope, execute_with_action_context
 from core.domain.types.tools import ToolSurface
 from core.tool import RegisteredTool, SideEffectLevel
 from core.tool_framework.utils import object_schema, string_property
@@ -68,7 +68,7 @@ def _briefing_looks_real(text: str) -> bool:
 
 
 def execute_propose_scheduled_delivery_tool(
-    args: dict[str, Any], ctx: ActionToolContext
+    args: dict[str, Any], ctx: ActionToolScope
 ) -> dict[str, Any]:
     kind = str(args.get("kind", "")).strip().lower()
     cron = " ".join(str(args.get("cron", "")).split())

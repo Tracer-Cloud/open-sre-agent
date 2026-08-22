@@ -8,7 +8,7 @@ from typing import Any
 from rich.console import Console
 
 from core.agent_harness.tools import (
-    ActionToolContext,
+    ActionToolScope,
     capability_available_from_sources,
     execute_with_action_context,
 )
@@ -70,7 +70,7 @@ def run_sample_alert(
     )
 
 
-def execute_sample_alert_tool(args: dict[str, Any], ctx: ActionToolContext) -> bool:
+def execute_sample_alert_tool(args: dict[str, Any], ctx: ActionToolScope) -> bool:
     template = str(args.get("template", "")).strip()
     if not template:
         return False

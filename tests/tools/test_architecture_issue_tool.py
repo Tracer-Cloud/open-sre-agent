@@ -196,19 +196,19 @@ def test_architecture_save_observations_tool_reads_session_from_context(
 ) -> None:
     from core.agent_harness.tools.tool_context import (
         ACTION_TOOL_CONTEXT_RESOURCE_KEY,
-        ActionToolContext,
+        ActionToolScope,
     )
-    from core.tool.contracts import AgentToolContext
+    from core.tool.contracts import AgentToolScope
 
     monkeypatch.setattr(
         "integrations.github.tools.architecture_issue_tool.tool.save_architecture_observations",
         partial(save_architecture_observations, home_dir=tmp_path),
     )
     session = SimpleNamespace(session_id="ctx-session-id")
-    context = AgentToolContext(
+    context = AgentToolScope(
         resolved_integrations={},
         resources={
-            ACTION_TOOL_CONTEXT_RESOURCE_KEY: ActionToolContext(
+            ACTION_TOOL_CONTEXT_RESOURCE_KEY: ActionToolScope(
                 session=session,
                 console=SimpleNamespace(),
             )

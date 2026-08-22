@@ -121,7 +121,7 @@ def _json_type_matches(value: Any, schema_type: str) -> bool:
     if schema_type == "integer":
         return isinstance(value, int) and not isinstance(value, bool)
     if schema_type == "number":
-        return isinstance(value, (int, float)) and not isinstance(value, bool)
+        return isinstance(value, int | float) and not isinstance(value, bool)
     if schema_type == "boolean":
         return isinstance(value, bool)
     if schema_type == "array":
@@ -700,7 +700,7 @@ class RegisteredTool:
 
 
 @dataclass(frozen=True)
-class AgentToolContext:
+class AgentToolScope:
     """Resources available while a first-class agent tool executes."""
 
     resolved_integrations: dict[str, Any]
@@ -719,7 +719,7 @@ class AgentToolContext:
 
 
 # CodeQL currently misses PEP 695 ``type`` aliases in ``__all__`` export checks.
-AgentToolExecutor: TypeAlias = Callable[[dict[str, Any], AgentToolContext], Any]  # noqa: UP040
+AgentToolExecutor: TypeAlias = Callable[[dict[str, Any], AgentToolScope], Any]  # noqa: UP040
 
 
 class ToolParallelism(StrEnum):
@@ -797,8 +797,8 @@ RuntimeTool: TypeAlias = AgentTool | RegisteredTool  # noqa: UP040
 
 __all__ = [
     "AgentTool",
-    "AgentToolContext",
     "AgentToolExecutor",
+    "AgentToolScope",
     "BaseTool",
     "EvidenceType",
     "REGISTERED_TOOL_ATTR",

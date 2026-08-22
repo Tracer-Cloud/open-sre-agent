@@ -8,7 +8,7 @@ from typing import Any
 from rich.markup import escape
 
 from core.agent_harness.tools import (
-    ActionToolContext,
+    ActionToolScope,
     capability_available_from_sources,
     execute_with_action_context,
 )
@@ -19,7 +19,7 @@ from infrastructure.scheduling.task_types import TaskKind, TaskStatus
 from tools.interactive_shell.shared import plan_foreground_tool
 
 
-def _running_task_matches(ctx: ActionToolContext, target: str) -> Sequence[object]:
+def _running_task_matches(ctx: ActionToolScope, target: str) -> Sequence[object]:
     running = [
         task
         for task in ctx.session.task_registry.list_recent(n=50)
@@ -32,7 +32,7 @@ def _running_task_matches(ctx: ActionToolContext, target: str) -> Sequence[objec
     return []
 
 
-def _resolve_task_cancel_target(ctx: ActionToolContext, target: str) -> str | None:
+def _resolve_task_cancel_target(ctx: ActionToolScope, target: str) -> str | None:
     if target in {"synthetic_test", "task"}:
         matches = _running_task_matches(ctx, target)
         if not matches:
@@ -66,7 +66,7 @@ def _resolve_task_cancel_target(ctx: ActionToolContext, target: str) -> str | No
     return str(candidates[0].task_id)
 
 
-def execute_task_cancel_tool(args: dict[str, Any], ctx: ActionToolContext) -> bool:
+def execute_task_cancel_tool(args: dict[str, Any], ctx: ActionToolScope) -> bool:
     target = str(args.get("target", "")).strip()
     if not target:
         return False

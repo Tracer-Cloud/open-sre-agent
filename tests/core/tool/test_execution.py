@@ -9,7 +9,7 @@ import pytest
 from core.agent import Agent
 from core.llm.types import AgentLLMResponse, ToolCall
 from core.provider import ProviderHooks, ProviderRequest
-from core.tool.contracts import AgentTool, AgentToolContext, RegisteredTool
+from core.tool.contracts import AgentTool, AgentToolScope, RegisteredTool
 from core.tool.execution import (
     BeforeToolCallResult,
     ToolExecutionHooks,
@@ -58,7 +58,7 @@ def _call(name: str = "echo", value: str = "ok") -> ToolCall:
 def test_execute_tool_calls_validates_arguments_before_execution() -> None:
     called = False
 
-    def execute(_args: dict[str, Any], _ctx: AgentToolContext) -> dict[str, Any]:
+    def execute(_args: dict[str, Any], _ctx: AgentToolScope) -> dict[str, Any]:
         nonlocal called
         called = True
         return {"ok": True}
@@ -215,7 +215,7 @@ def test_after_hook_runs_when_tool_raises() -> None:
     """Raised exceptions become error results and still notify after_tool_call."""
     seen: list[str] = []
 
-    def execute(_args: dict[str, Any], _ctx: AgentToolContext) -> dict[str, Any]:
+    def execute(_args: dict[str, Any], _ctx: AgentToolScope) -> dict[str, Any]:
         raise ConnectionError("Connection to 172.29.15.185 timed out. (connect timeout=10)")
 
     def after(request: ToolExecutionRequest, result: ToolExecutionResult) -> None:
@@ -237,7 +237,7 @@ def test_after_hook_runs_when_tool_raises() -> None:
 def test_partial_tool_update_events_are_forwarded() -> None:
     updates: list[tuple[str, Any]] = []
 
-    def execute(args: dict[str, Any], ctx: AgentToolContext) -> dict[str, Any]:
+    def execute(args: dict[str, Any], ctx: AgentToolScope) -> dict[str, Any]:
         ctx.emit_update({"seen": args["value"]})
         return {"done": True}
 
@@ -257,7 +257,7 @@ def test_partial_tool_update_events_are_forwarded() -> None:
 def test_registered_tool_receives_runtime_context_only_when_opted_in() -> None:
     seen: dict[str, Any] = {}
 
-    def run(value: str, context: AgentToolContext) -> dict[str, Any]:
+    def run(value: str, context: AgentToolScope) -> dict[str, Any]:
         seen["value"] = value
         seen["resource"] = context.resources["marker"]
         return {"ok": True}
@@ -792,10 +792,10 @@ def test_execute_tool_calls_span_marks_tool_error_and_exception(
     session_id = "sess-tool-err"
     path = _activate_tool_trace(tmp_path, monkeypatch, session_id)
 
-    def soft_fail(_args: dict[str, Any], _ctx: AgentToolContext) -> dict[str, Any]:
+    def soft_fail(_args: dict[str, Any], _ctx: AgentToolScope) -> dict[str, Any]:
         return {"error": "soft fail"}
 
-    def hard_fail(_args: dict[str, Any], _ctx: AgentToolContext) -> dict[str, Any]:
+    def hard_fail(_args: dict[str, Any], _ctx: AgentToolScope) -> dict[str, Any]:
         raise RuntimeError("hard fail")
 
     try:

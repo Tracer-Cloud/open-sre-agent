@@ -181,7 +181,7 @@ RUNTIME = frozenset(
 TOOLS = frozenset(
     {
         "EVIDENCE_KIND_VALUES",
-        "ActionToolContext",
+        "ActionToolScope",
         "HandoffField",
         "action_context_from_agent_context",
         "capability_available_from_sources",

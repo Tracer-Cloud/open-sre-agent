@@ -8,9 +8,9 @@ from unittest.mock import MagicMock, patch
 
 from core.agent_harness.tools.tool_context import (
     ACTION_TOOL_CONTEXT_RESOURCE_KEY,
-    ActionToolContext,
+    ActionToolScope,
 )
-from core.tool.contracts import AgentToolContext, RegisteredTool
+from core.tool.contracts import AgentToolScope, RegisteredTool
 from integrations.coding_agent import CodingResult
 from integrations.github.tools.ci_fix.context import (
     CiFixContext,
@@ -450,10 +450,10 @@ def test_tool_passes_shell_confirmation_function() -> None:
     def confirm(_prompt: str) -> str:
         return "y"
 
-    agent_context = AgentToolContext(
+    agent_context = AgentToolScope(
         resolved_integrations={},
         resources={
-            ACTION_TOOL_CONTEXT_RESOURCE_KEY: ActionToolContext(
+            ACTION_TOOL_CONTEXT_RESOURCE_KEY: ActionToolScope(
                 session=object(),
                 console=SimpleNamespace(),
                 confirm_fn=confirm,

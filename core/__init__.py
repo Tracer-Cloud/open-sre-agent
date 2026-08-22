@@ -63,8 +63,8 @@ _EXPORT_MODULES = {
     "ProviderRequest": "core.provider",
     "resolve_llm_api_key": "core.provider",
     "AgentTool": "core.tool.contracts",
-    "AgentToolContext": "core.tool.contracts",
     "AgentToolExecutor": "core.tool.contracts",
+    "AgentToolScope": "core.tool.contracts",
     "RuntimeTool": "core.tool.contracts",
     "ToolParallelism": "core.tool.contracts",
 }

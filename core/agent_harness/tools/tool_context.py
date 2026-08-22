@@ -6,16 +6,16 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from typing import Any
 
-from core.tool.contracts import AgentToolContext
+from core.tool.contracts import AgentToolScope
 
 ToolExecutionPayload = bool | dict[str, Any]
-ToolExecutor = Callable[[dict[str, Any], "ActionToolContext"], ToolExecutionPayload]
+ToolExecutor = Callable[[dict[str, Any], "ActionToolScope"], ToolExecutionPayload]
 ACTION_TOOL_CONTEXT_RESOURCE_KEY = "action_tool_context"
 _ACTION_SESSION_SOURCE = "_action_session"
 
 
 @dataclass(frozen=True)
-class ActionToolContext:
+class ActionToolScope:
     """Per-turn resources exposed to action-surface tools."""
 
     session: Any
@@ -39,16 +39,16 @@ class ActionToolContext:
     slash_ports: Any = None
 
 
-def action_context_from_agent_context(context: AgentToolContext) -> ActionToolContext:
+def action_context_from_agent_context(context: AgentToolScope) -> ActionToolScope:
     action_context = context.resources.get(ACTION_TOOL_CONTEXT_RESOURCE_KEY)
-    if not isinstance(action_context, ActionToolContext):
+    if not isinstance(action_context, ActionToolScope):
         raise RuntimeError("action tool requires action runtime context")
     return action_context
 
 
 def execute_with_action_context(
     args: dict[str, Any],
-    context: AgentToolContext,
+    context: AgentToolScope,
     execute: ToolExecutor,
 ) -> dict[str, Any]:
     action_context = action_context_from_agent_context(context)
@@ -89,7 +89,7 @@ def capability_not_explicitly_disabled(session: Any, capability_name: str) -> bo
 
 __all__ = [
     "ACTION_TOOL_CONTEXT_RESOURCE_KEY",
-    "ActionToolContext",
+    "ActionToolScope",
     "ToolExecutor",
     "ToolExecutionPayload",
     "action_context_from_agent_context",

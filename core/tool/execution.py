@@ -12,7 +12,7 @@ from typing import Any, Literal
 from pydantic import BaseModel
 
 from core.llm.types import ToolCall
-from core.tool.contracts import AgentTool, AgentToolContext, RuntimeTool
+from core.tool.contracts import AgentTool, AgentToolScope, RuntimeTool
 from infrastructure.observability.errors.boundary import report_exception
 from infrastructure.observability.trace.redaction import redact_sensitive
 from infrastructure.observability.trace.spans import mark_span_outcome, tool_span
@@ -437,7 +437,7 @@ def _invoke_runtime_tool(
 ) -> Any:
     """Dispatch to AgentTool.execute or RegisteredTool.run."""
     if isinstance(tool, AgentTool):
-        context = AgentToolContext(
+        context = AgentToolScope(
             resolved_integrations=resolved_integrations,
             resources=runtime_resources,
             _emit_update=lambda update: _run_update_hook(hooks, request, update),
@@ -453,7 +453,7 @@ def _invoke_runtime_tool(
         if key in protected and value not in (None, "", []):
             kwargs[key] = value
     if getattr(tool, "accepts_runtime_context", False):
-        context = AgentToolContext(
+        context = AgentToolScope(
             resolved_integrations=resolved_integrations,
             resources=runtime_resources,
             _emit_update=lambda update: _run_update_hook(hooks, request, update),

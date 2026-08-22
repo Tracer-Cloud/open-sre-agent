@@ -1,6 +1,6 @@
 """What an action tool implements and calls: the harness API for tool authors.
 
-An action tool receives an :class:`ActionToolContext`, runs its body under it
+An action tool receives an :class:`ActionToolScope`, runs its body under it
 with :func:`execute_with_action_context`, and may ask whether a capability is
 available. The handoff and evidence shapes are what a tool hands back to the
 engine. Import-cheap: nothing here loads the agent loop.
@@ -13,7 +13,7 @@ role), :mod:`core.agent_harness.runtime` (build and run the agent).
 from __future__ import annotations
 
 from core.agent_harness.tools.tool_context import (
-    ActionToolContext,
+    ActionToolScope,
     action_context_from_agent_context,
     capability_available_from_sources,
     execute_with_action_context,
@@ -24,7 +24,7 @@ from core.agent_harness.turns.handoff_keys import HandoffField
 
 __all__ = [
     "EVIDENCE_KIND_VALUES",
-    "ActionToolContext",
+    "ActionToolScope",
     "HandoffField",
     "action_context_from_agent_context",
     "capability_available_from_sources",

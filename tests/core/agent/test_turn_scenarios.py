@@ -11,13 +11,13 @@ from typing import Any, NotRequired, TypedDict, cast
 import pytest
 from rich.console import Console
 
-from core import Agent, AgentTool, AgentToolContext
+from core import Agent, AgentTool, AgentToolScope
 from core.agent_harness.prompts import (
     build_action_system_prompt,
     build_action_user_message,
 )
 from core.agent_harness.tools.action_tools import get_action_tools_from_integrations_context
-from core.agent_harness.tools.tool_context import ActionToolContext
+from core.agent_harness.tools.tool_context import ActionToolScope
 from core.agent_harness.turns.action_driver import _MAX_TOOL_CALLING_ITERATIONS
 from core.llm.shared.llm_retry import LLMCreditExhaustedError
 from core.llm.types import ToolCall
@@ -219,7 +219,7 @@ def _build_actual_action(action: ToolCall) -> ExpectedAction:
 def _planning_probe_tool(tool: AgentTool) -> AgentTool:
     """Return an inert copy of an action tool for live planning assertions."""
 
-    def _execute(args: dict[str, Any], _ctx: AgentToolContext) -> dict[str, Any]:
+    def _execute(args: dict[str, Any], _ctx: AgentToolScope) -> dict[str, Any]:
         if tool.name == "slash_invoke":
             command = str(args.get("command", "")).strip()
             raw_args = args.get("args")
@@ -630,7 +630,7 @@ def _assert_live_action_planning_once(case: ScenarioCase) -> None:
         _assert_planned_actions_match(actual_actions, expected_actions)
         return
 
-    ctx = ActionToolContext(
+    ctx = ActionToolScope(
         session=session, console=Console(file=io.StringIO(), force_terminal=False)
     )
     tools = get_action_tools_from_integrations_context(ctx, resolved_integrations=resolved_override)

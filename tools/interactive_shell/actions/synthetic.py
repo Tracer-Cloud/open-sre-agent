@@ -7,7 +7,7 @@ from typing import Any
 
 from config.constants.paths import SYNTHETIC_SCENARIOS_DIR
 from core.agent_harness.tools import (
-    ActionToolContext,
+    ActionToolScope,
     capability_available_from_sources,
     execute_with_action_context,
 )
@@ -35,7 +35,7 @@ def list_rds_postgres_scenarios() -> tuple[str, ...]:
     )
 
 
-def execute_synthetic_tool(args: dict[str, Any], ctx: ActionToolContext) -> bool:
+def execute_synthetic_tool(args: dict[str, Any], ctx: ActionToolScope) -> bool:
     suite = str(args.get("suite", "")).strip()
     scenario = str(args.get("scenario", "")).strip()
     if not suite or not scenario:

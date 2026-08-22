@@ -18,7 +18,7 @@ from core.agent_harness.ports import (
 from core.agent_harness.tools.action_tools import get_action_tools_from_integrations_context
 from core.agent_harness.tools.tool_context import (
     ACTION_TOOL_CONTEXT_RESOURCE_KEY,
-    ActionToolContext,
+    ActionToolScope,
 )
 
 ActionObserverFactory = Callable[[str], ToolEventObserver]
@@ -64,7 +64,7 @@ class DefaultToolProvider:
         self._llm_provider_ports_factory = llm_provider_ports_factory
         self._task_cancel_ports_factory = task_cancel_ports_factory
         self._slash_ports_factory = slash_ports_factory
-        self._tool_context: ActionToolContext | None = None
+        self._tool_context: ActionToolScope | None = None
 
     def bind_session(self, session: Any) -> None:
         """Point this provider at a freshly resolved session (gateway reuse)."""
@@ -110,7 +110,7 @@ class DefaultToolProvider:
         if self._slash_ports_factory is not None:
             slash_ports = self._slash_ports_factory()
 
-        ctx = ActionToolContext(
+        ctx = ActionToolScope(
             session=self._session,
             console=self._console,
             confirm_fn=confirm_fn,

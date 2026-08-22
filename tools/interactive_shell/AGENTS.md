@@ -34,7 +34,7 @@ Subprocess runners must stay split into two layers:
    no `execution_confirm`.
 2. **REPL presentation** under `surfaces/interactive_shell/runtime/subprocess_runner/`
    — `ReplSubprocessPresenter` implements `SubprocessPresenter` and is injected
-   through `ActionToolContext.subprocess_presenter` from `action_turn.py`.
+   through `ActionToolScope.subprocess_presenter` from `action_turn.py`.
 
 Shared stdlib-only helpers live in `tools/interactive_shell/subprocess.py`.
 Rich stream relay stays in `surfaces/.../subprocess_runner/task_streaming.py`.

@@ -24,7 +24,7 @@ from core.messages import (
     UserRuntimeMessage,
 )
 from core.provider import ProviderHooks
-from core.tool.contracts import AgentTool, AgentToolContext, RegisteredTool
+from core.tool.contracts import AgentTool, AgentToolScope, RegisteredTool
 
 
 class FakeLLM:
@@ -546,7 +546,7 @@ def test_follow_up_runs_after_an_accepted_final_answer() -> None:
 
 
 def test_agent_tool_context_update_emits_tool_execution_update() -> None:
-    def execute(_payload: dict[str, Any], context: AgentToolContext) -> dict[str, Any]:
+    def execute(_payload: dict[str, Any], context: AgentToolScope) -> dict[str, Any]:
         assert context.on_update is not None
         context.on_update({"status": "halfway"})
         return {"ok": True}
