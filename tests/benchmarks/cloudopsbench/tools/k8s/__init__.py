@@ -33,6 +33,7 @@ from __future__ import annotations
 from collections.abc import Callable
 from typing import Any, Protocol, cast
 
+from core.domain.types.evidence import record_evidence_entry
 from core.tool_framework.tool_decorator import tool
 
 # --------------------------------------------------------------------------- #
@@ -265,9 +266,228 @@ def _run_backend(cloudops_backend: Any, method_name: str, **kwargs: Any) -> dict
     return method(**kwargs)
 
 
+def _cloudopsbench_snippet(value: Any) -> str | None:
+    if value in (None, "", [], {}):
+        return None
+    compact = " ".join(str(value).split())
+    compact = compact.replace("{", "").replace("}", "").replace("[", "").replace("]", "")
+    return compact[:140] or None
+
+
+def _record_cloudopsbench_evidence(
+    evidence: dict[str, Any],
+    output: dict[str, Any],
+    tool_input: dict[str, Any],
+    *,
+    source: str,
+    label: str,
+    summary: str,
+) -> None:
+    if not output.get("available", False):
+        return
+    rendered_output = output.get("output")
+    if rendered_output in (None, "", [], {}):
+        return
+    record_evidence_entry(
+        evidence,
+        source=source,
+        label=label,
+        summary=summary,
+        snippet=_cloudopsbench_snippet(rendered_output),
+    )
+
+
+def _cloudopsbench_action_input(
+    output: dict[str, Any], tool_input: dict[str, Any]
+) -> dict[str, Any]:
+    action_input = output.get("action_input")
+    if isinstance(action_input, dict):
+        return action_input
+    return tool_input
+
+
+def _map_get_resources(
+    evidence: dict[str, Any], output: dict[str, Any], tool_input: dict[str, Any]
+) -> None:
+    action_input = _cloudopsbench_action_input(output, tool_input)
+    resource_type = str(
+        action_input.get("resource_type") or tool_input.get("resource_type") or _DEFAULT_RESOURCE_TYPE
+    )
+    namespace = action_input.get("namespace") or tool_input.get("namespace") or _DEFAULT_NAMESPACE
+    _record_cloudopsbench_evidence(
+        evidence,
+        output,
+        tool_input,
+        source="GetResources",
+        label="Kubernetes Resources",
+        summary=f"{resource_type} in {namespace or 'cluster scope'}",
+    )
+
+
+def _map_describe_resource(
+    evidence: dict[str, Any], output: dict[str, Any], tool_input: dict[str, Any]
+) -> None:
+    action_input = _cloudopsbench_action_input(output, tool_input)
+    resource_type = str(
+        action_input.get("resource_type")
+        or tool_input.get("resource_type")
+        or _DEFAULT_DESCRIBE_RESOURCE_TYPE
+    )
+    name = str(
+        action_input.get("name") or tool_input.get("name") or _DEFAULT_SERVICE
+    )
+    namespace = action_input.get("namespace") or tool_input.get("namespace")
+    summary = f"{resource_type} {name}"
+    if namespace:
+        summary = f"{summary} in {namespace}"
+    _record_cloudopsbench_evidence(
+        evidence,
+        output,
+        tool_input,
+        source="DescribeResource",
+        label="Kubernetes Resource Details",
+        summary=summary,
+    )
+
+
+def _map_get_cluster_configuration(
+    evidence: dict[str, Any], output: dict[str, Any], tool_input: dict[str, Any]
+) -> None:
+    _record_cloudopsbench_evidence(
+        evidence,
+        output,
+        tool_input,
+        source="GetClusterConfiguration",
+        label="Cluster Configuration",
+        summary="cluster configuration snapshot",
+    )
+
+
+def _map_get_alerts(
+    evidence: dict[str, Any], output: dict[str, Any], tool_input: dict[str, Any]
+) -> None:
+    _record_cloudopsbench_evidence(
+        evidence,
+        output,
+        tool_input,
+        source="GetAlerts",
+        label="Cluster Alerts",
+        summary="active alerts snapshot",
+    )
+
+
+def _map_get_error_logs(
+    evidence: dict[str, Any], output: dict[str, Any], tool_input: dict[str, Any]
+) -> None:
+    action_input = _cloudopsbench_action_input(output, tool_input)
+    service_name = str(
+        action_input.get("service_name") or tool_input.get("service_name") or _DEFAULT_SERVICE
+    )
+    _record_cloudopsbench_evidence(
+        evidence,
+        output,
+        tool_input,
+        source="GetErrorLogs",
+        label="Service Error Logs",
+        summary=f"{service_name} error logs",
+    )
+
+
+def _map_get_recent_logs(
+    evidence: dict[str, Any], output: dict[str, Any], tool_input: dict[str, Any]
+) -> None:
+    action_input = _cloudopsbench_action_input(output, tool_input)
+    service_name = str(
+        action_input.get("service_name") or tool_input.get("service_name") or _DEFAULT_SERVICE
+    )
+    _record_cloudopsbench_evidence(
+        evidence,
+        output,
+        tool_input,
+        source="GetRecentLogs",
+        label="Recent Service Logs",
+        summary=f"{service_name} recent logs",
+    )
+
+
+def _map_get_service_dependencies(
+    evidence: dict[str, Any], output: dict[str, Any], tool_input: dict[str, Any]
+) -> None:
+    action_input = _cloudopsbench_action_input(output, tool_input)
+    service_name = str(
+        action_input.get("service_name") or tool_input.get("service_name") or _DEFAULT_SERVICE
+    )
+    _record_cloudopsbench_evidence(
+        evidence,
+        output,
+        tool_input,
+        source="GetServiceDependencies",
+        label="Service Dependencies",
+        summary=f"{service_name} dependencies",
+    )
+
+
+def _map_get_app_yaml(
+    evidence: dict[str, Any], output: dict[str, Any], tool_input: dict[str, Any]
+) -> None:
+    action_input = _cloudopsbench_action_input(output, tool_input)
+    app_name = str(action_input.get("app_name") or tool_input.get("app_name") or _DEFAULT_SERVICE)
+    _record_cloudopsbench_evidence(
+        evidence,
+        output,
+        tool_input,
+        source="GetAppYAML",
+        label="Application YAML",
+        summary=f"{app_name} deployment YAML",
+    )
+
+
+def _map_check_service_connectivity(
+    evidence: dict[str, Any], output: dict[str, Any], tool_input: dict[str, Any]
+) -> None:
+    action_input = _cloudopsbench_action_input(output, tool_input)
+    service_name = str(
+        action_input.get("service_name") or tool_input.get("service_name") or _DEFAULT_SERVICE
+    )
+    port = action_input.get("port") or tool_input.get("port") or _DEFAULT_HTTP_PORT
+    _record_cloudopsbench_evidence(
+        evidence,
+        output,
+        tool_input,
+        source="CheckServiceConnectivity",
+        label="Service Connectivity",
+        summary=f"{service_name}:{port} connectivity",
+    )
+
+
+def _map_check_node_service_status(
+    evidence: dict[str, Any], output: dict[str, Any], tool_input: dict[str, Any]
+) -> None:
+    action_input = _cloudopsbench_action_input(output, tool_input)
+    node_name = str(
+        action_input.get("node_name")
+        or tool_input.get("node_name")
+        or _DEFAULT_CONTROL_PLANE_NODE
+    )
+    service_name = str(
+        action_input.get("service_name")
+        or tool_input.get("service_name")
+        or _DEFAULT_CONTROL_PLANE_SERVICE
+    )
+    _record_cloudopsbench_evidence(
+        evidence,
+        output,
+        tool_input,
+        source="CheckNodeServiceStatus",
+        label="Node Service Status",
+        summary=f"{node_name} {service_name} status",
+    )
+
+
 @tool(
     name="GetResources",
     source="eks",
+    evidence_mapper=_map_get_resources,
     description=(
         "List Kubernetes resources in the cluster — pods, deployments, "
         "services, events, nodes, replicasets. Use this FIRST in most "
@@ -312,6 +532,7 @@ def get_resources(
 @tool(
     name="DescribeResource",
     source="eks",
+    evidence_mapper=_map_describe_resource,
     description=(
         "Get detailed configuration for a specific named Kubernetes resource "
         "(pod, deployment, service, statefulset). Use AFTER GetResources "
@@ -348,6 +569,7 @@ def describe_resource(
 @tool(
     name="GetClusterConfiguration",
     source="eks",
+    evidence_mapper=_map_get_cluster_configuration,
     description=(
         "Get cluster-level state: node health, control-plane component "
         "status (kubelet, kube-scheduler, kube-proxy, containerd), and "
@@ -372,6 +594,7 @@ def get_cluster_configuration(cloudops_backend: Any) -> dict[str, Any]:
 @tool(
     name="GetAlerts",
     source="eks",
+    evidence_mapper=_map_get_alerts,
     description=(
         "Get the active alerts that triggered this investigation. Call "
         "this FIRST in every case — the alert message identifies the "
@@ -397,6 +620,7 @@ def get_alerts(cloudops_backend: Any) -> dict[str, Any]:
 @tool(
     name="GetErrorLogs",
     source="eks",
+    evidence_mapper=_map_get_error_logs,
     description=(
         "Get aggregated error-log signals for a specific service: counts "
         "and example messages grouped by error type. Use AFTER finding a "
@@ -432,6 +656,7 @@ def get_error_logs(
 @tool(
     name="GetRecentLogs",
     source="eks",
+    evidence_mapper=_map_get_recent_logs,
     description=(
         "Get the most recent log lines from a service — chronologically "
         "ordered, unfiltered. Use when GetErrorLogs aggregation isn't "
@@ -468,6 +693,7 @@ def get_recent_logs(
 @tool(
     name="GetServiceDependencies",
     source="eks",
+    evidence_mapper=_map_get_service_dependencies,
     description=(
         "Map a service's upstream and downstream dependencies. Use this "
         "to trace cascading failures: if service A is failing, what "
@@ -496,6 +722,7 @@ def get_service_dependencies(cloudops_backend: Any, service_name: str) -> dict[s
 @tool(
     name="GetAppYAML",
     source="eks",
+    evidence_mapper=_map_get_app_yaml,
     description=(
         "Get the full deployment YAML for an application — shows every "
         "secret reference, env var, volume mount, image tag, and resource "
@@ -522,6 +749,7 @@ def get_app_yaml(cloudops_backend: Any, app_name: str) -> dict[str, Any]:
 @tool(
     name="CheckServiceConnectivity",
     source="eks",
+    evidence_mapper=_map_check_service_connectivity,
     description=(
         "Test reachability of a Kubernetes service from inside the "
         "cluster. Use to confirm suspected service-routing failures: "
@@ -558,6 +786,7 @@ def check_service_connectivity(
 @tool(
     name="CheckNodeServiceStatus",
     source="eks",
+    evidence_mapper=_map_check_node_service_status,
     description=(
         "Check the health of a specific Kubernetes control-plane "
         "component (kubelet, kube-scheduler, kube-proxy, containerd) "
