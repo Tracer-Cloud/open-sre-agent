@@ -306,6 +306,40 @@ def test_build_report_context_cites_mapper_recorded_entry() -> None:
     assert entry["display_id"].startswith("E")
 
 
+def test_mapped_duplicate_sources_attach_all_related_ids_to_claim() -> None:
+    state = _make_state()
+    state["validated_claims"] = [
+        {
+            "claim": "Multiple VictoriaLogs queries show the error pattern.",
+            "evidence_sources": ["victoria_logs_query"],
+        }
+    ]
+    state["evidence"]["catalog_entries"] = [
+        {
+            "source": "victoria_logs_query",
+            "label": "VictoriaLogs Logs",
+            "summary": "1 log entries",
+            "url": None,
+            "snippet": "level:error",
+        },
+        {
+            "source": "victoria_logs_query#2",
+            "label": "VictoriaLogs Query #2",
+            "summary": "1 log entries",
+            "url": None,
+            "snippet": "level:warn",
+        },
+    ]
+
+    ctx = build_report_context(state)
+
+    claim = ctx["validated_claims"][0]
+    assert set(claim["evidence_ids"]) == {
+        "evidence/mapped/victoria_logs_query",
+        "evidence/mapped/victoria_logs_query#2",
+    }
+
+
 def test_bespoke_reader_wins_over_mapped_entry_for_same_source() -> None:
     # _make_state has grafana_logs, which the bespoke reader already catalogs.
     state = _make_state()
