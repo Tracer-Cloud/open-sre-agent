@@ -25,7 +25,7 @@ def _config(**overrides: object) -> RemoteSyncConfig:
 class _FakeTransport(httpx.BaseTransport):
     def __init__(self) -> None:
         self.objects: dict[str, bytes] = {}
-        self.md5s: dict[str, str] = {}
+        self.md5_overrides: dict[str, str | None] = {}
 
     def handle_request(self, request: httpx.Request) -> httpx.Response:
         path = request.url.path
@@ -38,9 +38,15 @@ class _FakeTransport(httpx.BaseTransport):
             blobs_xml = []
             for k, v in self.objects.items():
                 if k.startswith(prefix):
-                    md5_xml = ""
-                    if k in self.md5s:
-                        md5_xml = f"<Content-MD5>{self.md5s[k]}</Content-MD5>"
+                    if k in self.md5_overrides:
+                        override = self.md5_overrides[k]
+                        md5_xml = (
+                            f"<Content-MD5>{override}</Content-MD5>" if override is not None else ""
+                        )
+                    else:
+                        md5_b64 = base64.b64encode(hashlib.md5(v).digest()).decode("ascii")
+                        md5_xml = f"<Content-MD5>{md5_b64}</Content-MD5>"
+
                     blobs_xml.append(f"""
                         <Blob>
                             <Name>{k}</Name>
@@ -68,9 +74,6 @@ class _FakeTransport(httpx.BaseTransport):
 
         if request.method == "PUT":
             self.objects[blob_key] = request.content
-            md5_header = request.headers.get("x-ms-blob-content-md5")
-            if md5_header:
-                self.md5s[blob_key] = md5_header
             return httpx.Response(201, request=request)
 
         return httpx.Response(400, request=request)
@@ -107,34 +110,38 @@ def test_put_list_get_round_trip() -> None:
     assert store.get_object("sessions/a.jsonl") == payload
 
 
-def test_list_objects_falls_back_to_etag_when_content_md5_is_missing() -> None:
+def test_list_objects_degrades_to_empty_fingerprint_when_content_md5_is_missing() -> None:
     transport = _FakeTransport()
     store = AzureBlobObjectStore(_config(), token="fake", client=httpx.Client(transport=transport))
 
-    # Injecting a blob without an MD5 header simulating an older Azure upload
     transport.objects["opensre/sessions/old.jsonl"] = b"data"
+    transport.md5_overrides["opensre/sessions/old.jsonl"] = None
 
     listing = store.list_objects("")
     assert len(listing) == 1
     assert listing[0].key == "sessions/old.jsonl"
-    # Fails over gracefully to Azure's native Etag
-    assert listing[0].etag == "fake-etag"
+    assert listing[0].etag == ""
 
 
-def test_list_objects_falls_back_to_etag_when_content_md5_is_malformed() -> None:
+def test_list_objects_degrades_to_empty_fingerprint_when_content_md5_is_malformed() -> None:
     transport = _FakeTransport()
     store = AzureBlobObjectStore(_config(), token="fake", client=httpx.Client(transport=transport))
 
-    transport.objects["opensre/sessions/bad.jsonl"] = b"data"
-
     # Test invalid base64 padding/characters
-    transport.md5s["opensre/sessions/bad.jsonl"] = "not_valid_b64!!!"
-    assert store.list_objects("")[0].etag == "fake-etag"
+    transport.objects["opensre/sessions/bad1.jsonl"] = b"data"
+    transport.md5_overrides["opensre/sessions/bad1.jsonl"] = "not_valid_b64!!!"
 
     # Test mathematically valid base64 but with wrong digest length
-    short_b64 = base64.b64encode(b"short").decode("ascii")
-    transport.md5s["opensre/sessions/bad.jsonl"] = short_b64
-    assert store.list_objects("")[0].etag == "fake-etag"
+    transport.objects["opensre/sessions/bad2.jsonl"] = b"data"
+    transport.md5_overrides["opensre/sessions/bad2.jsonl"] = base64.b64encode(b"short").decode(
+        "ascii"
+    )
+
+    listing = store.list_objects("")
+    assert len(listing) == 2
+    # Both invalid base64 and invalid length fall back to an empty fingerprint ("")
+    assert listing[0].etag == ""
+    assert listing[1].etag == ""
 
 
 def test_put_get_round_trip_with_key_needing_percent_encoding() -> None:
