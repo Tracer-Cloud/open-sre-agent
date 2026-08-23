@@ -28,11 +28,9 @@ def build_report_context(state: InvestigationState) -> ReportContext:
             catalog[entry_id]["provenance"] = source_provenance[provenance_key]["summary"]
 
     display_map = {eid: entry.get("display_id", eid) for eid, entry in catalog.items()}
-    validated_claims = attach_evidence_to_claims(
-        ns.validated_claims, source_to_id, display_map, catalog
-    )
+    validated_claims = attach_evidence_to_claims(ns.validated_claims, source_to_id, display_map)
     non_validated_claims = attach_evidence_to_claims(
-        ns.non_validated_claims, source_to_id, display_map, catalog
+        ns.non_validated_claims, source_to_id, display_map
     )
 
     return {

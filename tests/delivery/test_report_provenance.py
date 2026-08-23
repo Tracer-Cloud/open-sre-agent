@@ -316,8 +316,8 @@ def test_mapped_duplicate_sources_attach_all_related_ids_to_claim() -> None:
     ]
     state["evidence"]["catalog_entries"] = [
         {
-            "source": "victoria_logs_query",
-            "label": "VictoriaLogs Logs",
+            "source": "victoria_logs_query#1",
+            "label": "VictoriaLogs Query #1",
             "summary": "1 log entries",
             "url": None,
             "snippet": "level:error",
@@ -334,10 +334,9 @@ def test_mapped_duplicate_sources_attach_all_related_ids_to_claim() -> None:
     ctx = build_report_context(state)
 
     claim = ctx["validated_claims"][0]
-    assert set(claim["evidence_ids"]) == {
-        "evidence/mapped/victoria_logs_query",
-        "evidence/mapped/victoria_logs_query#2",
-    }
+    # Generic source is an alias for the first numbered query only; it must not
+    # pull in unrelated later queries.
+    assert set(claim["evidence_ids"]) == {"evidence/mapped/victoria_logs_query#1"}
 
 
 def test_claim_text_evidence_tag_attaches_specific_ordinal_mapped_id() -> None:
@@ -350,8 +349,8 @@ def test_claim_text_evidence_tag_attaches_specific_ordinal_mapped_id() -> None:
     ]
     state["evidence"]["catalog_entries"] = [
         {
-            "source": "victoria_logs_query",
-            "label": "VictoriaLogs Logs",
+            "source": "victoria_logs_query#1",
+            "label": "VictoriaLogs Query #1",
             "summary": "1 log entries",
             "url": None,
             "snippet": "level:error",

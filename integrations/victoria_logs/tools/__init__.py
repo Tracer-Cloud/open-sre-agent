@@ -34,10 +34,10 @@ def _map_victoria_logs_query(
 ) -> None:
     """Lift VictoriaLogs query rows into citeable report evidence.
 
-    Each query invocation gets its own catalog source so repeated queries do
-    not collapse into one ambiguous citation. The first invocation keeps the
-    generic ``victoria_logs_query`` source for compatibility; later ones use
-    ``victoria_logs_query#N``.
+    Each query invocation gets its own numbered catalog source
+    (``victoria_logs_query#1``, ``#2``, ...) so repeated queries never collapse
+    into one ambiguous citation and a claim can cite the exact query that
+    supports it.
     """
     rows = output.get("rows", [])
     if not rows:
@@ -55,8 +55,8 @@ def _map_victoria_logs_query(
             and e["source"].startswith(base_source)
         )
     occurrence = prior_count + 1
-    source = base_source if occurrence == 1 else f"{base_source}#{occurrence}"
-    label = "VictoriaLogs Logs" if occurrence == 1 else f"VictoriaLogs Query #{occurrence}"
+    source = f"{base_source}#{occurrence}"
+    label = f"VictoriaLogs Query #{occurrence}"
 
     query = output.get("query")
     record_evidence_entry(

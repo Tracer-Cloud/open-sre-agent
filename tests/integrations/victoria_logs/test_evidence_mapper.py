@@ -31,7 +31,7 @@ def test_mapper_records_catalog_entry_for_rows() -> None:
     entries = evidence.get("catalog_entries")
     assert isinstance(entries, list)
     assert len(entries) == 1
-    assert entries[0]["source"] == "victoria_logs_query"
+    assert entries[0]["source"] == "victoria_logs_query#1"
     assert entries[0]["summary"] == "2 log entries"
 
 
@@ -67,8 +67,9 @@ def test_mapper_records_separate_entries_for_repeated_queries() -> None:
     entries = evidence.get("catalog_entries")
     assert isinstance(entries, list)
     assert len(entries) == 2
-    assert entries[0]["source"] == "victoria_logs_query"
+    assert entries[0]["source"] == "victoria_logs_query#1"
     assert entries[1]["source"] == "victoria_logs_query#2"
+    assert entries[0]["snippet"] == "level:error"
     assert entries[1]["snippet"] == "level:warn"
 
     # Per-query keys must also be exposed to the diagnosis/claim pipeline.

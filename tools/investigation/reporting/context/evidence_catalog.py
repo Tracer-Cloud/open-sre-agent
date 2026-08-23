@@ -453,37 +453,31 @@ def _add_mapped_entries(
             "snippet": entry.get("snippet"),
         }
         source_to_id[source] = eid
+        # Treat an unnumbered source as an alias for the first numbered query.
+        if source.endswith("#1"):
+            generic = source.removesuffix("#1")
+            source_to_id.setdefault(generic, eid)
 
 
 def _related_mapped_ids(
     source: str,
     source_to_id: dict[str, str],
-    catalog: dict[str, dict],
 ) -> list[str]:
-    """Return all mapped catalog ids for a source, including per-query variants.
+    """Return the single mapped catalog id for a source.
 
-    Some tools (e.g. a log query called multiple times) register several
-    mapped entries whose ids share the ``evidence/mapped/<source>`` prefix
-    (``victoria_logs_query``, ``victoria_logs_query#2``, ...). A claim that
-    cites the generic source should receive every related id so repeated
-    evidence does not collapse into one ambiguous citation.
+    Generic unnumbered sources are registered as aliases of the first numbered
+    query (``victoria_logs_query`` -> ``victoria_logs_query#1``), so an exact
+    citation resolves to exactly one support entry and never pulls in unrelated
+    query results.
     """
-    ids: list[str] = []
     eid = source_to_id.get(source)
-    if eid:
-        ids.append(eid)
-    prefix = f"evidence/mapped/{source}#"
-    for candidate in catalog:
-        if candidate.startswith(prefix) and candidate not in ids:
-            ids.append(candidate)
-    return ids
+    return [eid] if eid else []
 
 
 def attach_evidence_to_claims(
     claims: list[dict],
     source_to_id: dict[str, str],
     display_map: dict[str, str],
-    catalog: dict[str, dict],
 ) -> list[dict]:
     """Return a copy of claims with evidence_ids, evidence_labels attached."""
     result: list[dict] = []
@@ -495,7 +489,7 @@ def attach_evidence_to_claims(
             key = SOURCE_ALIASES.get(src, src)
             if key == "evidence_analysis":
                 continue
-            matched_ids = _related_mapped_ids(key, source_to_id, catalog)
+            matched_ids = _related_mapped_ids(key, source_to_id)
             for eid in matched_ids:
                 if eid not in evidence_ids:
                     evidence_ids.append(eid)
@@ -506,7 +500,7 @@ def attach_evidence_to_claims(
             key = SOURCE_ALIASES.get(tag_src.strip(), tag_src.strip())
             if key == "evidence_analysis":
                 continue
-            matched_ids = _related_mapped_ids(key, source_to_id, catalog)
+            matched_ids = _related_mapped_ids(key, source_to_id)
             for eid in matched_ids:
                 if eid not in evidence_ids:
                     evidence_ids.append(eid)
