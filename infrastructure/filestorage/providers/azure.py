@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import base64
 import json
 import os
 import subprocess
@@ -63,7 +64,7 @@ class AzureBlobObjectStore:
                     key=self._strip_prefix(name),
                     size=_parse_size(props),
                     last_modified=_parse_last_modified(props),
-                    etag=_parse_etag(props),
+                    etag=normalize_azure_md5(_parse_md5(props)),
                 )
                 for name, props in blobs
             ]
@@ -163,10 +164,22 @@ def _parse_last_modified(props: ET.Element | None) -> datetime:
     return datetime.strptime(lm_str[:-4], "%a, %d %b %Y %H:%M:%S").replace(tzinfo=UTC)
 
 
-def _parse_etag(props: ET.Element | None) -> str:
+def _parse_md5(props: ET.Element | None) -> str:
     if props is None:
         return ""
-    return (props.findtext("Etag") or "").strip('"')
+    return (props.findtext("Content-MD5") or "").strip('"')
+
+
+def normalize_azure_md5(azure_b64_md5: str) -> str:
+    """
+    Converts Azure's Base64 encoded Content-MD5 into a hex string
+    that matches hashlib.md5().hexdigest()
+    """
+    if not azure_b64_md5:
+        return ""
+
+    raw_bytes = base64.b64decode(azure_b64_md5)
+    return raw_bytes.hex()
 
 
 def _get_azure_access_token() -> str:
