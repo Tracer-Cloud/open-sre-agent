@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import base64
+import binascii
+import hashlib
 import json
 import os
 import subprocess
@@ -64,7 +66,7 @@ class AzureBlobObjectStore:
                     key=self._strip_prefix(name),
                     size=_parse_size(props),
                     last_modified=_parse_last_modified(props),
-                    etag=normalize_azure_md5(_parse_md5(props)),
+                    etag=_parse_etag(props),
                 )
                 for name, props in blobs
             ]
@@ -111,9 +113,16 @@ class AzureBlobObjectStore:
 
     def put_object(self, key: str, data: bytes) -> None:
         url = f"https://{self._account_name}.blob.core.windows.net/{self._config.bucket}/{self._blob_path(key)}"
+
+        # Compute Content-MD5 locally and send it so Azure stores it for sync comparisons
+        md5_b64 = base64.b64encode(hashlib.md5(data, usedforsecurity=False).digest()).decode(
+            "ascii"
+        )
+
         headers = {
             **self._auth_headers(),
             "x-ms-blob-type": "BlockBlob",
+            "x-ms-blob-content-md5": md5_b64,
             "Content-Length": str(len(data)),
         }
         try:
@@ -164,22 +173,21 @@ def _parse_last_modified(props: ET.Element | None) -> datetime:
     return datetime.strptime(lm_str[:-4], "%a, %d %b %Y %H:%M:%S").replace(tzinfo=UTC)
 
 
-def _parse_md5(props: ET.Element | None) -> str:
+def _parse_etag(props: ET.Element | None) -> str:
+    """Extracts a valid MD5 hex hash, safely degrading to Etag if missing or malformed."""
     if props is None:
         return ""
-    return (props.findtext("Content-MD5") or "").strip('"')
 
+    md5_b64 = props.findtext("Content-MD5")
+    if md5_b64:
+        try:
+            digest = base64.b64decode(md5_b64, validate=True)
+            if len(digest) == 16:
+                return digest.hex()
+        except (ValueError, binascii.Error):
+            pass
 
-def normalize_azure_md5(azure_b64_md5: str) -> str:
-    """
-    Converts Azure's Base64 encoded Content-MD5 into a hex string
-    that matches hashlib.md5().hexdigest()
-    """
-    if not azure_b64_md5:
-        return ""
-
-    raw_bytes = base64.b64decode(azure_b64_md5)
-    return raw_bytes.hex()
+    return (props.findtext("Etag") or "").strip('"')
 
 
 def _get_azure_access_token() -> str:
