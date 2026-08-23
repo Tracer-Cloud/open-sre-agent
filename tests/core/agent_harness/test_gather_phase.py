@@ -71,7 +71,7 @@ class TestAgentForwardsGatherPhase:
         def _on_progress(_kind: str, _data: dict[str, Any]) -> None:
             return None
 
-        def _persist(_executed: list[tuple[str, Mapping[str, object]]]) -> None:
+        def _persist(_executed: list[tuple[str, Mapping[str, object], Any]]) -> None:
             return None
 
         agent = InMemoryHeadlessBuild(session=headless_adapters.InMemorySessionState()).agent(
