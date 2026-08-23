@@ -157,6 +157,41 @@ def test_tool_attaches_registered_tool_when_parallel_safe_overridden() -> None:
     assert registered.parallel_safe is False
 
 
+def test_tool_attaches_evidence_mapper_to_base_tool() -> None:
+    """``@tool(evidence_mapper=...)`` on a BaseTool must register the mapper."""
+
+    def _map_ok(evidence: dict[str, Any], output: dict[str, Any], _input: dict[str, Any]) -> None:
+        evidence["ok"] = output.get("ok")
+
+    instance = _ABaseTool()
+    result = tool(instance, evidence_mapper=_map_ok)
+    assert result is instance
+    registered = getattr(instance, REGISTERED_TOOL_ATTR)
+    assert registered.evidence_mapper is _map_ok
+    lifted: dict[str, Any] = {}
+    registered.evidence_mapper(lifted, {"ok": True}, {})
+    assert lifted == {"ok": True}
+
+
+def test_tool_evidence_mapper_overrides_base_tool_class_mapper() -> None:
+    class _MappedTool(_ABaseTool):
+        @staticmethod
+        def evidence_mapper(
+            evidence: dict[str, Any], _output: dict[str, Any], _input: dict[str, Any]
+        ) -> None:
+            evidence["from_class"] = True
+
+    def _from_decorator(
+        evidence: dict[str, Any], _output: dict[str, Any], _input: dict[str, Any]
+    ) -> None:
+        evidence["from_decorator"] = True
+
+    instance = _MappedTool()
+    tool(instance, evidence_mapper=_from_decorator)
+    registered = getattr(instance, REGISTERED_TOOL_ATTR)
+    assert registered.evidence_mapper is _from_decorator
+
+
 # ---------------------------------------------------------------------------
 # display_name registration
 # ---------------------------------------------------------------------------

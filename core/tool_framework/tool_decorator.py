@@ -211,6 +211,7 @@ def tool[F: Callable[..., Any]](
                 or approval_expiry_seconds is not None
                 or parallel_safe is not None
                 or accepts_runtime_context is not None
+                or evidence_mapper is not None
             ):
                 setattr(
                     target,
@@ -225,6 +226,7 @@ def tool[F: Callable[..., Any]](
                         approval_expiry_seconds=approval_expiry_seconds,
                         parallel_safe=parallel_safe,
                         accepts_runtime_context=accepts_runtime_context,
+                        evidence_mapper=evidence_mapper,
                     ),
                 )
             return target

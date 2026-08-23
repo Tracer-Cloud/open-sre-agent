@@ -559,6 +559,7 @@ class RegisteredTool:
         approval_expiry_seconds: int | None = None,
         parallel_safe: bool | None = None,
         accepts_runtime_context: bool | None = None,
+        evidence_mapper: EvidenceMapper | None = None,
     ) -> RegisteredTool:
         metadata = tool.metadata()
         input_model = cast(type[BaseModel] | None, getattr(tool, "input_model", None))
@@ -593,7 +594,11 @@ class RegisteredTool:
             retrieval_controls=retrieval_controls or metadata.retrieval_controls,
             surfaces=resolved_surfaces,
             run=tool.run,  # type: ignore[attr-defined]
-            evidence_mapper=getattr(tool.__class__, "evidence_mapper", None),
+            evidence_mapper=(
+                evidence_mapper
+                if evidence_mapper is not None
+                else getattr(tool.__class__, "evidence_mapper", None)
+            ),
             is_available=tool.is_available,
             extract_params=tool.extract_params,
             tags=resolved_tags,
