@@ -29,11 +29,10 @@ import shlex
 from dataclasses import dataclass
 
 _EXPLICIT_SHELL_PREFIX = "!"
-_SHELL_OPERATOR_RE = re.compile(r"(^|\s)(\|\||&&|[|;<>]|>>|<<|2>)(\s|$)")
+_SHELL_OPERATOR_RE = re.compile(r"\|\||&&|[|;&<>]")
 _INLINE_SUBSHELL_RE = re.compile(r"`|\$\(")
-# Heredoc starts such as ``<<'PY'`` or ``<<EOF`` — ``<<`` alone is already covered
-# by ``_SHELL_OPERATOR_RE`` only when followed by whitespace; quoted/unquoted
-# delimiters need an explicit match so ``python3 - <<'PY'`` is not tokenized.
+# Heredoc starts such as ``<<'PY'`` or ``<<EOF``; the explicit pattern preserves
+# that intent even though the broad operator check already catches ``<``.
 _HEREDOC_START_RE = re.compile(r"(^|\s)<<-?\s*(?:'[^'\n]+'|\"[^\"\n]+\"|[^\s\\|;&<>]+)")
 
 

@@ -51,6 +51,30 @@ def test_operators_run_through_shell_without_block() -> None:
     assert parsed.parse_error is None
 
 
+def test_glued_redirection_runs_through_shell() -> None:
+    parsed = parse_shell_command("echo hello >out.txt 2>&1", is_windows=False)
+
+    assert parsed.use_shell is True
+    assert parsed.argv is None
+    assert parsed.parse_error is None
+
+
+def test_glued_append_redirection_runs_through_shell() -> None:
+    parsed = parse_shell_command("printf hello>>out.txt", is_windows=False)
+
+    assert parsed.use_shell is True
+    assert parsed.argv is None
+    assert parsed.parse_error is None
+
+
+def test_background_operator_runs_through_shell() -> None:
+    parsed = parse_shell_command("sleep 1&", is_windows=False)
+
+    assert parsed.use_shell is True
+    assert parsed.argv is None
+    assert parsed.parse_error is None
+
+
 def test_command_substitution_runs_through_shell() -> None:
     parsed = parse_shell_command("echo $(date)", is_windows=False)
 
