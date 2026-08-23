@@ -12,6 +12,7 @@ from dataclasses import dataclass
 
 from infrastructure.filestorage.contracts import ObjectStore, RemoteObject
 from infrastructure.filestorage.encryption import envelope
+from infrastructure.filestorage.encryption.contracts import Cipher
 from infrastructure.filestorage.encryption.keys import resolve_passphrase
 from infrastructure.filestorage.encryption.manifest import (
     load_manifest,
@@ -20,7 +21,6 @@ from infrastructure.filestorage.encryption.manifest import (
     open_manifest,
     save_manifest,
 )
-from infrastructure.filestorage.encryption.ports import Cipher
 from infrastructure.filestorage.enums import SyncRootName
 from infrastructure.filestorage.errors import (
     EncryptedStoreError,
