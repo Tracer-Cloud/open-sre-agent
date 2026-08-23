@@ -16,6 +16,7 @@ import json
 import logging
 from typing import Any, cast
 
+from core.domain.types.evidence import record_evidence_entry
 from core.domain.types.tools import ToolSurface
 from core.tool_framework import tool
 from core.tool_framework.utils import tool_unavailable
@@ -73,6 +74,28 @@ def _parse_attributes(raw_attrs: dict[str, str]) -> dict[str, Any]:
     }
 
 
+def _map_get_sqs_queue_attributes(
+    evidence: dict[str, Any], output: dict[str, Any], _input: dict[str, Any]
+) -> None:
+    queues = output.get("queues") or []
+    if not isinstance(queues, list):
+        return
+    evidence["sqs_queues"] = queues
+    if not queues:
+        return
+    visible = sum(q.get("visible_count") or 0 for q in queues if isinstance(q, dict))
+    in_flight = sum(q.get("in_flight_count") or 0 for q in queues if isinstance(q, dict))
+    with_dlq = sum(1 for q in queues if isinstance(q, dict) and q.get("has_dlq"))
+    record_evidence_entry(
+        evidence,
+        source="get_sqs_queue_attributes",
+        label="SQS Queues",
+        summary=(
+            f"{len(queues)} queues, {visible} visible, {in_flight} in-flight, {with_dlq} with DLQ"
+        ),
+    )
+
+
 @tool(
     name="get_sqs_queue_attributes",
     display_name="SQS queues",
@@ -119,6 +142,7 @@ def _parse_attributes(raw_attrs: dict[str, str]) -> dict[str, Any]:
     is_available=sqs_is_available,
     extract_params=sqs_extract_params,
     surfaces=(ToolSurface.INVESTIGATION, ToolSurface.CHAT),
+    evidence_mapper=_map_get_sqs_queue_attributes,
 )
 def get_sqs_queue_attributes(
     queue_name_prefix: str = "",
