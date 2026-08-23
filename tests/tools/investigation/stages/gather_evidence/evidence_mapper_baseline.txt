@@ -158,7 +158,6 @@ query_datadog_monitors
 query_grafana_annotations
 query_groundcover_logs
 query_groundcover_traces
-query_splunk_logs
 query_yc_metrics
 read_yc_logs
 redeploy_railway_service
