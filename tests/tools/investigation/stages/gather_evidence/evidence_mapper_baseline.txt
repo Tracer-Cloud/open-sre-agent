@@ -19,7 +19,6 @@ describe_eks_cluster
 describe_rds_events
 describe_rds_instance
 ec2_instances_by_tag
-execute_aws_operation
 execute_python_code
 execute_yc_operation
 fetch_failed_run
