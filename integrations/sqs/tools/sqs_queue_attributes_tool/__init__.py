@@ -74,6 +74,28 @@ def _parse_attributes(raw_attrs: dict[str, str]) -> dict[str, Any]:
     }
 
 
+def _sqs_summary(queues: list[dict[str, Any]]) -> str:
+    measured = [
+        q
+        for q in queues
+        if "attributes_error" not in q
+        and isinstance(q.get("visible_count"), int)
+        and isinstance(q.get("in_flight_count"), int)
+    ]
+    parts = [f"{len(queues)} queues"]
+    if measured:
+        visible = sum(q["visible_count"] for q in measured)
+        in_flight = sum(q["in_flight_count"] for q in measured)
+        with_dlq = sum(1 for q in measured if q.get("has_dlq"))
+        parts.append(f"{visible} visible, {in_flight} in-flight, {with_dlq} with DLQ")
+        if len(measured) < len(queues):
+            parts[-1] += f" across {len(measured)} measured"
+    unreadable = len(queues) - len(measured)
+    if unreadable:
+        parts.append(f"{unreadable} unreadable")
+    return ", ".join(parts)
+
+
 def _map_get_sqs_queue_attributes(
     evidence: dict[str, Any], output: dict[str, Any], _input: dict[str, Any]
 ) -> None:
@@ -88,10 +110,7 @@ def _map_get_sqs_queue_attributes(
     evidence["sqs_queues"] = list(merged.values())
     if not merged:
         return
-    visible = sum(q.get("visible_count") or 0 for q in merged.values())
-    in_flight = sum(q.get("in_flight_count") or 0 for q in merged.values())
-    with_dlq = sum(1 for q in merged.values() if q.get("has_dlq"))
-    summary = f"{len(merged)} queues, {visible} visible, {in_flight} in-flight, {with_dlq} with DLQ"
+    summary = _sqs_summary(list(merged.values()))
     entries = evidence.get(CATALOG_ENTRIES_KEY)
     if isinstance(entries, list):
         for entry in entries:
