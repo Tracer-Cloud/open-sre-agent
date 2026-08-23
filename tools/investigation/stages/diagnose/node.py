@@ -105,6 +105,11 @@ Investigation conclusion:
 
 Evidence keys collected: {", ".join(evidence.keys()) if evidence else "none"}
 
+When listing validated_claims, preserve or add exact evidence citations as inline
+[evidence: <evidence key>] tags, e.g. "errors increased [evidence: victoria_logs_query#2]".
+Use the exact numbered key when one is listed above; do not broaden a claim to
+every numbered variant of the same tool.
+
 Extract incident-command fields when present:
 - triage_summary: the one-line scope after "Triage complete"
 - incident_status: the full "Status — ..." block
