@@ -29,11 +29,7 @@ import shlex
 from dataclasses import dataclass
 
 _EXPLICIT_SHELL_PREFIX = "!"
-_SHELL_OPERATOR_RE = re.compile(r"\|\||&&|[|;&<>]")
 _INLINE_SUBSHELL_RE = re.compile(r"`|\$\(")
-# Heredoc starts such as ``<<'PY'`` or ``<<EOF``; the explicit pattern preserves
-# that intent even though the broad operator check already catches ``<``.
-_HEREDOC_START_RE = re.compile(r"(^|\s)<<-?\s*(?:'[^'\n]+'|\"[^\"\n]+\"|[^\s\\|;&<>]+)")
 
 
 @dataclass(frozen=True)
@@ -63,6 +59,48 @@ def _split_argv(command: str, *, is_windows: bool) -> list[str] | None:
             return None
 
 
+def _has_unquoted_shell_operator(command: str) -> bool:
+    """Return True when shell metacharacters appear outside quotes.
+
+    The parser needs to notice glued operators like ``>out.txt`` or ``2>&1``,
+    but a literal ``&`` inside ``cd "dir&name"`` must stay an argument so the
+    REPL builtin path can preserve the working directory.
+    """
+    in_single_quote = False
+    in_double_quote = False
+    escaped = False
+
+    for ch in command:
+        if escaped:
+            escaped = False
+            continue
+
+        if ch == "\\" and not in_single_quote:
+            escaped = True
+            continue
+
+        if in_single_quote:
+            if ch == "'":
+                in_single_quote = False
+            continue
+
+        if in_double_quote:
+            if ch == '"':
+                in_double_quote = False
+            continue
+
+        if ch == "'":
+            in_single_quote = True
+            continue
+        if ch == '"':
+            in_double_quote = True
+            continue
+        if ch in "|;&<>":
+            return True
+
+    return False
+
+
 def parse_shell_command(command: str, *, is_windows: bool) -> ParsedShellCommand:
     """Parse command text into an executable shape (no safety policy applied)."""
     stripped = command.strip()
@@ -84,10 +122,8 @@ def parse_shell_command(command: str, *, is_windows: bool) -> ParsedShellCommand
             use_shell=True,
         )
 
-    if (
-        _SHELL_OPERATOR_RE.search(stripped) is not None
-        or _INLINE_SUBSHELL_RE.search(stripped) is not None
-        or _HEREDOC_START_RE.search(stripped) is not None
+    if _INLINE_SUBSHELL_RE.search(stripped) is not None or _has_unquoted_shell_operator(
+        stripped
     ):
         # Operators / substitution need a real shell; alpha mode runs them.
         return ParsedShellCommand(

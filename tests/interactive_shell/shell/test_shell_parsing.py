@@ -51,6 +51,14 @@ def test_operators_run_through_shell_without_block() -> None:
     assert parsed.parse_error is None
 
 
+def test_quoted_operator_stays_in_argv_mode() -> None:
+    parsed = parse_shell_command('cd "dir&name"', is_windows=False)
+
+    assert parsed.use_shell is False
+    assert parsed.argv == ["cd", "dir&name"]
+    assert parsed.parse_error is None
+
+
 def test_glued_redirection_runs_through_shell() -> None:
     parsed = parse_shell_command("echo hello >out.txt 2>&1", is_windows=False)
 
@@ -138,3 +146,11 @@ def test_argv_for_repl_builtin_detection_skips_operator_command() -> None:
     """A leading ``cd`` in an operator command must not be hijacked as a builtin."""
     parsed = parse_shell_command("cd /tmp && ls", is_windows=False)
     assert argv_for_repl_builtin_detection(parsed=parsed, is_windows=False) is None
+
+
+def test_argv_for_repl_builtin_detection_keeps_quoted_operator_arg() -> None:
+    parsed = parse_shell_command('cd "dir&name"', is_windows=False)
+    assert argv_for_repl_builtin_detection(parsed=parsed, is_windows=False) == [
+        "cd",
+        "dir&name",
+    ]
