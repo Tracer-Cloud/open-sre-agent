@@ -80,6 +80,20 @@ def _record_catalog_entry_once(
     record_evidence_entry(evidence, source=source, label=label, summary=summary)
 
 
+def _merge_tool_descriptor(existing: dict[str, Any], incoming: dict[str, Any]) -> dict[str, Any]:
+    """Merge repeated tool descriptors without dropping previously seen fields."""
+    merged = dict(existing)
+    for key, value in incoming.items():
+        previous = merged.get(key)
+        if isinstance(previous, dict) and isinstance(value, dict):
+            # MCP schemas can be nested, so merge them recursively to keep metadata
+            # learned from either compact or schema-rich inventory responses.
+            merged[key] = _merge_tool_descriptor(previous, value)
+        else:
+            merged[key] = value
+    return merged
+
+
 def _map_x_tool_listing(
     evidence: dict[str, Any], output: dict[str, Any], _input: dict[str, Any]
 ) -> None:
@@ -92,7 +106,8 @@ def _map_x_tool_listing(
     if not isinstance(inventory, list):
         return
 
-    # Merge repeated filtered listings by tool name while retaining richer later descriptors.
+    # Merge repeated filtered listings by tool name without making descriptor richness
+    # depend on whether compact or schema-rich inventory responses arrive first.
     positions = {
         str(item.get("name")): index
         for index, item in enumerate(inventory)
@@ -103,7 +118,9 @@ def _map_x_tool_listing(
             continue
         name = str(descriptor["name"])
         if name in positions:
-            inventory[positions[name]] = descriptor
+            existing = inventory[positions[name]]
+            if isinstance(existing, dict):
+                inventory[positions[name]] = _merge_tool_descriptor(existing, descriptor)
         else:
             positions[name] = len(inventory)
             inventory.append(descriptor)

@@ -137,6 +137,35 @@ def test_repeated_x_calls_accumulate_without_duplicate_catalog_rows() -> None:
     assert [entry["source"] for entry in entries] == ["x_mcp_tools", "x_mcp_results"]
 
 
+def test_repeated_x_tool_listing_preserves_rich_descriptor_in_reverse_order() -> None:
+    """A later compact listing must not erase schema metadata already collected."""
+    evidence: dict[str, object] = {}
+    rich_descriptor = {
+        "name": "search-tweets",
+        "description": "Search recent tweets",
+        "input_schema": {
+            "type": "object",
+            "properties": {"query": {"type": "string"}},
+        },
+    }
+
+    merge_tool_evidence(
+        evidence,
+        "list_x_tools",
+        {"available": True, "tools": [rich_descriptor]},
+        {},
+    )
+    merge_tool_evidence(
+        evidence,
+        "list_x_tools",
+        {"available": True, "tools": [{"name": "search-tweets"}]},
+        {},
+    )
+
+    assert evidence["x_mcp_tools"] == [rich_descriptor]
+    assert len(evidence["catalog_entries"]) == 1
+
+
 @pytest.mark.parametrize(
     ("tool_name", "output"),
     [
