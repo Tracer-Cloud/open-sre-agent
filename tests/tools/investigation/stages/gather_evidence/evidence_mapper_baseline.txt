@@ -225,7 +225,6 @@ query_signoz_metrics
 query_signoz_traces
 query_snowflake_history
 query_splunk_logs
-query_tempo
 query_yc_metrics
 read_yc_logs
 redeploy_railway_service

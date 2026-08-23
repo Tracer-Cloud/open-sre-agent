@@ -7,6 +7,7 @@ from __future__ import annotations
 from collections.abc import Callable
 from typing import Any
 
+from core.domain.types.evidence import record_evidence_entry
 from core.tool_framework import tool
 from core.tool_framework.utils import tool_unavailable
 from integrations.tempo import TempoConfig, tempo_extract_params
@@ -30,6 +31,21 @@ def _tempo_extract_params(sources: dict[str, dict]) -> dict[str, Any]:
 
 
 _VALID_ACTIONS = ("search", "get_trace", "list_services", "list_span_names")
+
+
+def _map_query_tempo(
+    evidence: dict[str, Any], output: dict[str, Any], _input: dict[str, Any]
+) -> None:
+    for result_key in ("traces", "spans", "services", "span_names"):
+        items = output.get(result_key, [])
+        if items:
+            record_evidence_entry(
+                evidence,
+                source="query_tempo",
+                label="Tempo Query",
+                summary=f"{len(items)} {result_key.replace('_', ' ')}",
+            )
+            return
 
 
 def _dispatch(
@@ -72,6 +88,7 @@ def _dispatch(
     name="query_tempo",
     display_name="Grafana Tempo",
     source="tempo",
+    evidence_mapper=_map_query_tempo,
     tags=("traces", "observability"),
     description=(
         "Query a standalone Grafana Tempo backend for distributed traces. "
