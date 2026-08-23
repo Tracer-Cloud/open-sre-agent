@@ -166,7 +166,7 @@ def _parse_last_modified(props: ET.Element | None) -> datetime:
 
 
 def _parse_etag(props: ET.Element | None) -> str:
-    """Extracts a valid MD5 hex hash, safely degrading to Etag if missing or malformed."""
+    """Extracts a valid MD5 hex hash, or an empty string if unavailable."""
     if props is None:
         return ""
 
@@ -177,15 +177,15 @@ def _parse_etag(props: ET.Element | None) -> str:
             if len(digest) == 16:
                 return digest.hex()
         except (ValueError, binascii.Error):
-            # A malformed Content-MD5 degrades to the Etag fallback below
-            # rather than aborting the entire listing operation.
+            # Malformed Base64 or non-MD5 content degrades to an unavailable
+            # fingerprint instead of crashing the listing.
             pass
 
-    # Fall back to the resource Etag. While opaque on real Azure (e.g., 0x8D...),
-    # returning it preserves the fingerprint for tests and emulators that map
-    # MD5s to the Etag property, preventing an empty fingerprint from
-    # unconditionally forcing timestamp-based transfers.
-    return (props.findtext("Etag") or "").strip('"')
+    # Missing or invalid Content-MD5 degrades to an unavailable fingerprint ("").
+    # Returning Azure's opaque Etag here would place unchanged blobs on an
+    # incompatible fingerprint path, because the sync engine compares remote
+    # tags with a local MD5 hex.
+    return ""
 
 
 def _get_azure_access_token() -> str:
