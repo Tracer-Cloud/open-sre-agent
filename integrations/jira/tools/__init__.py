@@ -6,9 +6,36 @@ from __future__ import annotations
 
 from typing import Any
 
+from core.domain.types.evidence import record_evidence_entry
 from core.tool import BaseTool
 from core.tool_framework.utils import tool_unavailable
 from integrations.jira.client import make_jira_client
+
+
+def _map_jira_issue_detail(
+    evidence: dict[str, Any], output: dict[str, Any], _input: dict[str, Any]
+) -> None:
+    issue = output.get("issue")
+    if isinstance(issue, dict) and issue:
+        record_evidence_entry(
+            evidence,
+            source="jira_issue_detail",
+            label="Jira Issue Detail",
+            summary=str(issue.get("summary") or issue.get("issue_key") or "Issue details"),
+        )
+
+
+def _map_jira_search_issues(
+    evidence: dict[str, Any], output: dict[str, Any], _input: dict[str, Any]
+) -> None:
+    issues = output.get("issues", [])
+    if isinstance(issues, list) and issues:
+        record_evidence_entry(
+            evidence,
+            source="jira_search_issues",
+            label="Jira Search Results",
+            summary=f"{len(issues)} issues",
+        )
 
 
 class JiraAddCommentTool(BaseTool):
@@ -242,6 +269,7 @@ class JiraIssueDetailTool(BaseTool):
 
     name = "jira_issue_detail"
     source = "jira"
+    evidence_mapper = _map_jira_issue_detail
     description = (
         "Fetch the full details of a specific Jira issue to pull context, status, "
         "and description into the current investigation."
@@ -341,6 +369,7 @@ class JiraSearchIssuesTool(BaseTool):
 
     name = "jira_search_issues"
     source = "jira"
+    evidence_mapper = _map_jira_search_issues
     description = (
         "Search Jira issues using JQL to find related incidents, open bugs, or recent tasks "
         "that may provide context for the current investigation."

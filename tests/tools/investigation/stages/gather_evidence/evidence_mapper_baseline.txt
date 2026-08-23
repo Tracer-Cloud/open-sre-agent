@@ -146,8 +146,6 @@ inspect_railway_deployment
 inspect_s3_object
 jira_add_comment
 jira_create_issue
-jira_issue_detail
-jira_search_issues
 kubernetes_describe_pod
 kubernetes_get_events
 kubernetes_get_pod_logs

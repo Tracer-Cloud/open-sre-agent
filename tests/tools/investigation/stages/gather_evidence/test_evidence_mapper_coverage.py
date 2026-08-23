@@ -138,3 +138,36 @@ class TestGrafanaMappingCharacterization:
         entries = evidence["catalog_entries"]
         assert isinstance(entries, list)
         assert any(e["source"] == "grafana_metrics" for e in entries)
+
+
+class TestJiraMapping:
+    """Jira read tools expose their useful results as citeable evidence."""
+
+    def test_issue_detail_mapping_records_issue_evidence(self) -> None:
+        evidence: dict[str, object] = {}
+        merge_tool_evidence(
+            evidence,
+            "jira_issue_detail",
+            {"issue": {"issue_key": "OPS-42", "summary": "DB spike"}},
+            {},
+        )
+
+        assert evidence["jira_issue_detail"] == {
+            "issue": {"issue_key": "OPS-42", "summary": "DB spike"}
+        }
+        entries = evidence["catalog_entries"]
+        assert isinstance(entries, list)
+        assert any(entry["source"] == "jira_issue_detail" for entry in entries)
+
+    def test_search_mapping_records_issue_list_evidence(self) -> None:
+        evidence: dict[str, object] = {}
+        merge_tool_evidence(
+            evidence,
+            "jira_search_issues",
+            {"issues": [{"issue_key": "OPS-42", "summary": "DB spike"}], "total": 1},
+            {},
+        )
+
+        entries = evidence["catalog_entries"]
+        assert isinstance(entries, list)
+        assert any(entry["source"] == "jira_search_issues" for entry in entries)
