@@ -144,7 +144,13 @@ def score_periodic_spikes(
     values: tuple[float, ...],
     spike_threshold: float,
 ) -> PeriodicityScore:
-    repeated_spikes = sum(1 for value in values if value >= spike_threshold)
+    # Count upward threshold crossings so a sustained elevation scores as one
+    # spike, not one per elevated sample.
+    repeated_spikes = sum(
+        1
+        for previous, value in zip(values, values[1:])
+        if previous < spike_threshold and value >= spike_threshold
+    )
 
     if repeated_spikes <= 1:
         score = 0.0
