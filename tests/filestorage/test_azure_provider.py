@@ -1,5 +1,8 @@
 from __future__ import annotations
 
+import base64
+import hashlib
+
 import httpx
 import pytest
 
@@ -34,13 +37,14 @@ class _FakeTransport(httpx.BaseTransport):
             blobs_xml = []
             for k, v in self.objects.items():
                 if k.startswith(prefix):
+                    md5_b64 = base64.b64encode(hashlib.md5(v).digest()).decode("ascii")
                     blobs_xml.append(f"""
                         <Blob>
                             <Name>{k}</Name>
                             <Properties>
                                 <Content-Length>{len(v)}</Content-Length>
                                 <Last-Modified>Sun, 27 Sep 2009 18:41:57 GMT</Last-Modified>
-                                <Etag>"fake-etag"</Etag>
+                                <Content-MD5>{md5_b64}</Content-MD5>
                             </Properties>
                         </Blob>
                     """)
@@ -91,7 +95,7 @@ def test_put_list_get_round_trip() -> None:
     assert len(listing) == 1
     assert listing[0].key == "sessions/a.jsonl"
     assert listing[0].size == len(payload)
-    assert listing[0].etag == "fake-etag"
+    assert listing[0].etag == hashlib.md5(payload).hexdigest()
 
     assert store.get_object("sessions/a.jsonl") == payload
 
