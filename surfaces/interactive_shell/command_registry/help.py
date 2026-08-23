@@ -65,7 +65,7 @@ def _raw_help_sections() -> list[HelpSection]:
     from surfaces.interactive_shell.command_registry.privacy_cmds import (
         COMMANDS as PRIVACY_CMDS,
     )
-    from surfaces.interactive_shell.command_registry.rca_cmds import COMMANDS as RCA_CMDS
+    from surfaces.interactive_shell.command_registry.rca import COMMANDS as RCA_CMDS
     from surfaces.interactive_shell.command_registry.remote_sync_cmds import (
         COMMANDS as REMOTE_SYNC_CMDS,
     )

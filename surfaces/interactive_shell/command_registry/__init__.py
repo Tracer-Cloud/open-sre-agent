@@ -48,7 +48,7 @@ from surfaces.interactive_shell.command_registry.model import (
 from surfaces.interactive_shell.command_registry.privacy_cmds import (
     COMMANDS as PRIVACY_COMMANDS,
 )
-from surfaces.interactive_shell.command_registry.rca_cmds import COMMANDS as RCA_COMMANDS
+from surfaces.interactive_shell.command_registry.rca import COMMANDS as RCA_COMMANDS
 from surfaces.interactive_shell.command_registry.remote_sync_cmds import (
     COMMANDS as REMOTE_SYNC_COMMANDS,
 )
