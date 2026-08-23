@@ -4,15 +4,21 @@ from __future__ import annotations
 
 import pytest
 
+from core.agent_harness.ports import AnswerRequest, ConfirmFn
 from core.agent_harness.prompts.memory.conversation import expand_affirmative_follow_up
 from core.agent_harness.session.pending_offer import PendingScheduleOffer
 from core.agent_harness.tools.tool_context import ActionToolContext
 from core.agent_harness.turns.headless_adapters import InMemorySessionState, NoopTurnAccounting
 from core.agent_harness.turns.orchestrator import run_turn
 from core.agent_harness.turns.turn_results import ToolCallingTurnResult
+from tests.shared.harness_turn_driver import no_evidence
 from tools.interactive_shell.actions.propose_scheduled_delivery import (
     execute_propose_scheduled_delivery_tool,
 )
+
+
+def no_answer(text: str, request: AnswerRequest) -> None:
+    """A StreamAnswerFn that produces no answer."""
 
 
 def test_pending_offer_to_slash_omits_slack_chat_id() -> None:
@@ -138,8 +144,8 @@ def test_run_turn_consumes_pending_schedule_on_yes() -> None:
         "yes",
         session,
         execute_actions=execute_actions,
-        answer=lambda *_a, **_k: None,
-        gather=lambda *_a, **_k: None,
+        answer=no_answer,
+        gather=no_evidence,
         accounting=NoopTurnAccounting(),
     )
 
@@ -329,7 +335,13 @@ def test_a_failed_schedule_keeps_the_offer_for_a_second_try() -> None:
         kind="daily_summary", cron="0 8 * * 1-5", timezone="UTC", provider="slack"
     )
 
-    def _execute_failing(_text: str, **_kwargs: object) -> ToolCallingTurnResult:
+    def _execute_failing(
+        text: str,
+        *,
+        confirm_fn: ConfirmFn | None = None,
+        is_tty: bool | None = None,
+        turn_plan: object = None,
+    ) -> ToolCallingTurnResult:
         return ToolCallingTurnResult(
             planned_count=1,
             executed_count=1,
@@ -343,8 +355,8 @@ def test_a_failed_schedule_keeps_the_offer_for_a_second_try() -> None:
         "yes",
         session,
         execute_actions=_execute_failing,
-        answer=lambda *_a, **_k: None,
-        gather=lambda *_a, **_k: "",
+        answer=no_answer,
+        gather=no_evidence,
         accounting=NoopTurnAccounting(),
     )
 
@@ -367,7 +379,13 @@ def test_a_successful_schedule_consumes_the_offer() -> None:
         kind="daily_summary", cron="0 8 * * 1-5", timezone="UTC", provider="slack"
     )
 
-    def _execute_ok(_text: str, **_kwargs: object) -> ToolCallingTurnResult:
+    def _execute_ok(
+        text: str,
+        *,
+        confirm_fn: ConfirmFn | None = None,
+        is_tty: bool | None = None,
+        turn_plan: object = None,
+    ) -> ToolCallingTurnResult:
         return ToolCallingTurnResult(
             planned_count=1,
             executed_count=1,
@@ -382,8 +400,8 @@ def test_a_successful_schedule_consumes_the_offer() -> None:
         "yes",
         session,
         execute_actions=_execute_ok,
-        answer=lambda *_a, **_k: None,
-        gather=lambda *_a, **_k: "",
+        answer=no_answer,
+        gather=no_evidence,
         accounting=NoopTurnAccounting(),
     )
 
