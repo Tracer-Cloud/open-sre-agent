@@ -2,13 +2,14 @@
 
 from __future__ import annotations
 
+import dataclasses
 from pathlib import Path
 from typing import Any
 
 import pytest
 
 from core.domain.work_items import WorkItemChannelTarget, WorkItemPriority, make_work_item
-from infrastructure.scheduling.scheduler.types import Provider, ScheduledTask
+from infrastructure.scheduling.scheduler.types import Provider
 from tools.system.work_items.delivery import (
     delivery_targets,
     gateway_delivery_context,
@@ -130,29 +131,15 @@ def test_invalid_delivery_targets() -> None:
     assert "unsupported provider" in invalid_pigeon[0]
 
 
-def test_reminder_scheduling(monkeypatch: pytest.MonkeyPatch) -> None:
-    tasks: list[ScheduledTask] = []
-
-    def _list_tasks() -> list[ScheduledTask]:
-        return tasks
-
-    def _add_task(task: ScheduledTask) -> ScheduledTask:
-        task.id = f"task-{len(tasks) + 1}"
-        tasks.append(task)
-        return task
-
-    def _update_task(task: ScheduledTask) -> bool:
-        for i, existing in enumerate(tasks):
-            if existing.id == task.id:
-                tasks[i] = task
-                return True
-        return False
-
-    from tools.system.work_items import reminders
-
-    monkeypatch.setattr(reminders, "list_tasks", _list_tasks)
-    monkeypatch.setattr(reminders, "add_scheduled_task", _add_task)
-    monkeypatch.setattr(reminders, "update_task", _update_task)
+def test_reminder_scheduling(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(
+        "infrastructure.scheduling.scheduler.store._default_store_path",
+        lambda: tmp_path / "scheduler_tasks.json",
+    )
+    monkeypatch.setattr(
+        "infrastructure.scheduling.scheduler.reload_signal.request_scheduler_reload",
+        lambda: None,
+    )
 
     item = make_work_item(
         title="Check clusters",
@@ -161,12 +148,19 @@ def test_reminder_scheduling(monkeypatch: pytest.MonkeyPatch) -> None:
     targets = [WorkItemChannelTarget(provider="slack", chat_id="C999")]
     scheduled = schedule_item_reminder(item, targets=targets, timezone="UTC")
     assert scheduled is not None
+
+    from infrastructure.scheduling.scheduler.store import list_tasks
+
+    tasks = list_tasks()
     assert len(tasks) == 1
     assert tasks[0].enabled is True
 
-    # Rescheduling for the same item disables the prior reminder
-    scheduled2 = schedule_item_reminder(item, targets=targets, timezone="UTC")
+    # Rescheduling with a new reminder time disables the prior reminder
+    updated_item = dataclasses.replace(item, remind_at="2026-08-24T14:00:00Z")
+    scheduled2 = schedule_item_reminder(updated_item, targets=targets, timezone="UTC")
     assert scheduled2 is not None
+
+    tasks = list_tasks()
     assert len(tasks) == 2
     assert tasks[0].enabled is False
     assert tasks[1].enabled is True
@@ -174,12 +168,22 @@ def test_reminder_scheduling(monkeypatch: pytest.MonkeyPatch) -> None:
 
 def test_work_task_tools_lifecycle(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     work_items_file = tmp_path / "work_items.json"
+    scheduler_file = tmp_path / "scheduler_tasks.json"
+
     monkeypatch.setattr("tools.system.work_items.tool.work_items_path", lambda: work_items_file)
     monkeypatch.setattr("tools.system.work_items.results.work_items_path", lambda: work_items_file)
     monkeypatch.setattr(
         "tools.system.work_items.reminders.work_items_path", lambda: work_items_file
     )
     monkeypatch.setattr("core.domain.work_items.store.work_items_path", lambda: work_items_file)
+    monkeypatch.setattr(
+        "infrastructure.scheduling.scheduler.store._default_store_path",
+        lambda: scheduler_file,
+    )
+    monkeypatch.setattr(
+        "infrastructure.scheduling.scheduler.reload_signal.request_scheduler_reload",
+        lambda: None,
+    )
 
     # 1. work_task_add
     add_resp = work_task_add(
