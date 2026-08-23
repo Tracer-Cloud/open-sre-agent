@@ -9,16 +9,18 @@ from __future__ import annotations
 from typing import Any
 
 from core.agent_harness.accounting.turn_accounting import DefaultTurnAccounting
-from core.agent_harness.ports import AnswerRequest
+from core.agent_harness.ports import AnswerRequest, ConfirmFn
 from core.agent_harness.session.pending_offer import (
     PendingIntegrationSetupOffer,
     first_pending_offer,
 )
+from core.agent_harness.spi.accounting import LlmRunInfo
 from core.agent_harness.turns.assistant_handoff import AssistantHandoff
 from core.agent_harness.turns.evidence_need import EvidenceKind
 from core.agent_harness.turns.orchestrator import run_turn
 from core.agent_harness.turns.turn_results import ToolCallingTurnResult
 from surfaces.interactive_shell.session import Session
+from tests.shared.harness_turn_driver import answer_with_text, fake_llm_run
 
 _WINDOWS_USERS_ASK = "how many windows users did we have in the last 7 days"
 
@@ -55,36 +57,61 @@ def _action_metric_handoff_typed() -> ToolCallingTurnResult:
     )
 
 
+def _execute_metric_handoff(
+    text: str,
+    *,
+    confirm_fn: ConfirmFn | None = None,
+    is_tty: bool | None = None,
+    turn_plan: Any = None,
+) -> ToolCallingTurnResult:
+    """An ExecuteActions handing off a content-tagged metric read."""
+    return _action_metric_handoff()
+
+
+def _execute_metric_handoff_typed(
+    text: str,
+    *,
+    confirm_fn: ConfirmFn | None = None,
+    is_tty: bool | None = None,
+    turn_plan: Any = None,
+) -> ToolCallingTurnResult:
+    """An ExecuteActions handing off a schema-field metric read."""
+    return _action_metric_handoff_typed()
+
+
+def _no_answer(text: str, request: AnswerRequest) -> LlmRunInfo | None:
+    """A StreamAnswerFn that produces no answer."""
+    return None
+
+
+def _gather_should_not_run(text: str, *, turn_plan: Any = None) -> str:
+    """An EvidenceGatherer whose output marks a gather that must not happen."""
+    return "should-not-run"
+
+
 def test_before_after_metric_ask_skips_gather_and_adds_cta_without_investigate_offer() -> None:
     session = Session()
     session.resolved_integrations_cache = {}
     gather_calls: list[str] = []
     answer_calls: list[str] = []
 
-    def _execute(*_args: object, **_kwargs: object) -> ToolCallingTurnResult:
-        return _action_metric_handoff()
-
-    def _gather(text: str, *_args: object, **_kwargs: object) -> str:
+    def _gather(text: str, *, turn_plan: Any = None) -> str:
         gather_calls.append(text)
         return "Tool: list_posthog_tools\nResult: (discovery only — should not run)"
 
-    def _answer(text: str, request: AnswerRequest, **_kwargs: Any) -> Any:
+    def _answer(text: str, request: AnswerRequest) -> LlmRunInfo | None:
         answer_calls.append(text)
-        return type(
-            "Run",
-            (),
-            {
-                "response_text": (
-                    "Without live analytics I can outline a count query, "
-                    "but I cannot return the real number yet."
-                )
-            },
-        )()
+        return fake_llm_run(
+            response_text=(
+                "Without live analytics I can outline a count query, "
+                "but I cannot return the real number yet."
+            )
+        )
 
     result = run_turn(
         _WINDOWS_USERS_ASK,
         session,
-        execute_actions=_execute,
+        execute_actions=_execute_metric_handoff,
         gather=_gather,
         answer=_answer,
         accounting=DefaultTurnAccounting(session, _WINDOWS_USERS_ASK),
@@ -108,19 +135,16 @@ def test_metric_ask_with_source_connected_still_gathers() -> None:
     session.resolved_integrations_cache = {"posthog_mcp": {"configured": True}}
     gather_calls: list[str] = []
 
-    def _execute(*_args: object, **_kwargs: object) -> ToolCallingTurnResult:
-        return _action_metric_handoff()
-
-    def _gather(text: str, *_args: object, **_kwargs: object) -> str:
+    def _gather(text: str, *, turn_plan: Any = None) -> str:
         gather_calls.append(text)
         return "Tool: execute-sql\nResult: windows_users=42"
 
     run_turn(
         _WINDOWS_USERS_ASK,
         session,
-        execute_actions=_execute,
+        execute_actions=_execute_metric_handoff,
         gather=_gather,
-        answer=lambda *_a, **_k: None,
+        answer=_no_answer,
         accounting=DefaultTurnAccounting(session, _WINDOWS_USERS_ASK),
     )
 
@@ -134,7 +158,7 @@ def test_connected_source_auth_failure_gathers_then_appends_reconnect_cta() -> N
     gather_calls: list[str] = []
     answer_handoffs: list[tuple[str, ...]] = []
 
-    def _gather(text: str, *_args: object, **_kwargs: object) -> str:
+    def _gather(text: str, *, turn_plan: Any = None) -> str:
         gather_calls.append(text)
         # Typed tool_unavailable envelope (Python repr — how gather often
         # stringifies dict results). Must not rely on prose "401" alone.
@@ -143,23 +167,18 @@ def test_connected_source_auth_failure_gathers_then_appends_reconnect_cta() -> N
             "Result: {'available': False, 'error': '401 Unauthorized — invalid api key'}"
         )
 
-    def _answer(text: str, request: AnswerRequest, **_kwargs: Any) -> Any:
+    def _answer(text: str, request: AnswerRequest) -> LlmRunInfo | None:
         answer_handoffs.append(tuple(request.handoff_contents or ()))
-        return type(
-            "Run",
-            (),
-            {
-                "response_text": (
-                    "PostHog returned 401 — credentials look wrong. "
-                    "Draft HogQL once reconnect works."
-                )
-            },
-        )()
+        return fake_llm_run(
+            response_text=(
+                "PostHog returned 401 — credentials look wrong. Draft HogQL once reconnect works."
+            )
+        )
 
     result = run_turn(
         _WINDOWS_USERS_ASK,
         session,
-        execute_actions=lambda *_a, **_k: _action_metric_handoff(),
+        execute_actions=_execute_metric_handoff,
         gather=_gather,
         answer=_answer,
         accounting=DefaultTurnAccounting(session, _WINDOWS_USERS_ASK),
@@ -185,20 +204,16 @@ def test_connected_source_hogql_failure_gathers_without_cta() -> None:
     session.resolved_integrations_cache = {"posthog_mcp": {"url": "https://mcp.example"}}
     gather_calls: list[str] = []
 
-    def _gather(text: str, *_args: object, **_kwargs: object) -> str:
+    def _gather(text: str, *, turn_plan: Any = None) -> str:
         gather_calls.append(text)
         return "Tool: posthog_mcp\nResult: HogQL syntax error near WHERE"
 
     result = run_turn(
         _WINDOWS_USERS_ASK,
         session,
-        execute_actions=lambda *_a, **_k: _action_metric_handoff(),
+        execute_actions=_execute_metric_handoff,
         gather=_gather,
-        answer=lambda *_a, **_k: type(
-            "Run",
-            (),
-            {"response_text": "The HogQL query failed; try a simpler property."},
-        )(),
+        answer=answer_with_text("The HogQL query failed; try a simpler property."),
         accounting=DefaultTurnAccounting(session, _WINDOWS_USERS_ASK),
     )
 
@@ -214,7 +229,7 @@ def test_connected_source_without_a_live_query_still_drafts_hogql_and_setup() ->
     session.resolved_integrations_cache = {"posthog_mcp": {"configured": True}}
     answer_handoffs: list[tuple[str, ...]] = []
 
-    def _gather(text: str, *_args: object, **_kwargs: object) -> str:
+    def _gather(text: str, *, turn_plan: Any = None) -> str:
         return (
             "Tool: list_posthog_tools\nArguments: {}\nResult: []\n\n"
             "Tool: call_posthog_tool\n"
@@ -222,18 +237,16 @@ def test_connected_source_without_a_live_query_still_drafts_hogql_and_setup() ->
             "Result: []"
         )
 
-    def _answer(text: str, request: AnswerRequest, **_kwargs: Any) -> Any:
+    def _answer(text: str, request: AnswerRequest) -> LlmRunInfo | None:
         answer_handoffs.append(tuple(request.handoff_contents or ()))
-        return type(
-            "Run",
-            (),
-            {"response_text": ("I could not identify a signup event, so I cannot return a count.")},
-        )()
+        return fake_llm_run(
+            response_text="I could not identify a signup event, so I cannot return a count."
+        )
 
     result = run_turn(
         "How many Windows users signed up in the last 7 days?",
         session,
-        execute_actions=lambda *_a, **_k: _action_metric_handoff(),
+        execute_actions=_execute_metric_handoff,
         gather=_gather,
         answer=_answer,
         accounting=DefaultTurnAccounting(
@@ -255,7 +268,13 @@ def test_without_evidence_kind_handoff_does_not_skip_gather() -> None:
     session.resolved_integrations_cache = {}
     gather_calls: list[str] = []
 
-    def _execute(*_args: object, **_kwargs: object) -> ToolCallingTurnResult:
+    def _execute(
+        text: str,
+        *,
+        confirm_fn: ConfirmFn | None = None,
+        is_tty: bool | None = None,
+        turn_plan: Any = None,
+    ) -> ToolCallingTurnResult:
         return ToolCallingTurnResult(
             planned_count=0,
             executed_count=0,
@@ -265,12 +284,16 @@ def test_without_evidence_kind_handoff_does_not_skip_gather() -> None:
             handoff_contents=("Look up the Windows user count in product analytics.",),
         )
 
+    def _gather(text: str, *, turn_plan: Any = None) -> str:
+        gather_calls.append(text)
+        return "evidence"
+
     run_turn(
         _WINDOWS_USERS_ASK,
         session,
         execute_actions=_execute,
-        gather=lambda text, *_a, **_k: gather_calls.append(text) or "evidence",
-        answer=lambda *_a, **_k: type("Run", (), {"response_text": "ok"})(),
+        gather=_gather,
+        answer=answer_with_text("ok"),
         accounting=DefaultTurnAccounting(session, _WINDOWS_USERS_ASK),
     )
 
@@ -283,12 +306,16 @@ def test_typed_evidence_kind_schema_field_skips_gather_like_content_tag() -> Non
     session.resolved_integrations_cache = {}
     gather_calls: list[str] = []
 
+    def _gather(text: str, *, turn_plan: Any = None) -> str:
+        gather_calls.append(text)
+        return "should-not-run"
+
     run_turn(
         _WINDOWS_USERS_ASK,
         session,
-        execute_actions=lambda *_a, **_k: _action_metric_handoff_typed(),
-        gather=lambda text, *_a, **_k: gather_calls.append(text) or "should-not-run",
-        answer=lambda *_a, **_k: type("Run", (), {"response_text": "Connect PostHog."})(),
+        execute_actions=_execute_metric_handoff_typed,
+        gather=_gather,
+        answer=answer_with_text("Connect PostHog."),
         accounting=DefaultTurnAccounting(session, _WINDOWS_USERS_ASK),
     )
 
@@ -307,27 +334,22 @@ def test_upgrade_cta_reoffers_when_user_asks_again() -> None:
     """
     session = Session()
     session.resolved_integrations_cache = {}
-
-    def _execute(*_args: object, **_kwargs: object) -> ToolCallingTurnResult:
-        return _action_metric_handoff()
-
-    def _answer(*_args: object, **_kwargs: Any) -> Any:
-        return type("Run", (), {"response_text": "Draft query outline."})()
+    answer = answer_with_text("Draft query outline.")
 
     first = run_turn(
         _WINDOWS_USERS_ASK,
         session,
-        execute_actions=_execute,
-        gather=lambda *_a, **_k: "should-not-run",
-        answer=_answer,
+        execute_actions=_execute_metric_handoff,
+        gather=_gather_should_not_run,
+        answer=answer,
         accounting=DefaultTurnAccounting(session, _WINDOWS_USERS_ASK),
     )
     second = run_turn(
         _WINDOWS_USERS_ASK,
         session,
-        execute_actions=_execute,
-        gather=lambda *_a, **_k: "should-not-run",
-        answer=_answer,
+        execute_actions=_execute_metric_handoff,
+        gather=_gather_should_not_run,
+        answer=answer,
         accounting=DefaultTurnAccounting(session, _WINDOWS_USERS_ASK),
     )
 
