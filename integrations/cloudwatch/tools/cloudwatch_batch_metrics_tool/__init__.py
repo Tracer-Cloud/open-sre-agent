@@ -5,7 +5,7 @@ from __future__ import annotations
 from typing import Any
 
 from core.tool import report_run_error
-from core.tool_framework.tool_decorator import tool
+from core.tool_framework import tool
 from infrastructure.evidence.evidence_compaction import truncate_list
 from integrations.aws.cloudwatch_client import get_metric_statistics
 from integrations.cloudwatch.availability import cloudwatch_is_available

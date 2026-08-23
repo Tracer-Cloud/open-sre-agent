@@ -3,17 +3,16 @@
 ``core/tool/`` (contract, execution, registry port) and ``core/tool_framework/``
 (``@tool``, skill guidance, payload utilities) are one tier to everything above
 them. Three doors are open: ``core.tool`` (the contract — what a tool is, how
-it runs, where it is registered), ``core.tool_framework.utils`` (schema builders,
-MCP readers, availability envelopes), and the ``core.tool_framework`` root, which
-exports nothing yet. Everything reaching past a door is listed below, and these
-allowlists are the measurement of the seam.
+it runs, where it is registered), ``core.tool_framework`` (the ``@tool``
+decorator, planning tags, skill guidance), and ``core.tool_framework.utils``
+(schema builders, MCP readers, availability envelopes). Everything reaching past
+a door is listed below, and these allowlists are the measurement of the seam.
 
-``gateway``, ``surfaces`` and ``infrastructure`` are at zero: they use the contract and
-nothing behind it.
+Every consumer is now at zero: they use the tier's doors and nothing behind them.
 
 Each allowlist is compared exactly in both directions: a new internal import
-fails immediately, and an entry no longer imported must be removed. Widening a
-door and moving callers onto it is how these get shorter.
+fails immediately, and an entry no longer imported must be removed. The seam is
+closed — keep it closed.
 """
 
 from __future__ import annotations
@@ -30,19 +29,8 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 
 #: Internal tool-tier modules each consumer still imports directly.
 _ALLOWED: dict[str, frozenset[str]] = {
-    "tools": frozenset(
-        {
-            "core.tool_framework.skill_guidance",
-            "core.tool_framework.tags",
-            "core.tool_framework.tool_decorator",
-        }
-    ),
-    "integrations": frozenset(
-        {
-            "core.tool_framework.tags",
-            "core.tool_framework.tool_decorator",
-        }
-    ),
+    "tools": frozenset(),
+    "integrations": frozenset(),
     "gateway": frozenset(),
     "surfaces": frozenset(),
     "infrastructure": frozenset(),

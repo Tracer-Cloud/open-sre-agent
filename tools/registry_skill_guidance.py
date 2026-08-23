@@ -13,7 +13,7 @@ from pathlib import Path
 
 from config.constants.paths import REPO_ROOT
 from core.tool import RegisteredTool
-from core.tool_framework.skill_guidance import format_tool_skill_guidance, load_tool_skill_guidance
+from core.tool_framework import format_tool_skill_guidance, load_tool_skill_guidance
 
 logger = logging.getLogger(__name__)
 

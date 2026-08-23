@@ -6,8 +6,7 @@ from typing import Any
 
 from core.domain.types.tools import ToolSurface
 from core.tool import BaseTool, SideEffectLevel
-from core.tool_framework.tags import SUMMARIZE_OBSERVATION_TAG
-from core.tool_framework.tool_decorator import tool
+from core.tool_framework import SUMMARIZE_OBSERVATION_TAG, tool
 from integrations.slack.tools.slack_read_messages_tool.constants import (
     DEFAULT_MESSAGE_LIMIT,
     SOURCE,

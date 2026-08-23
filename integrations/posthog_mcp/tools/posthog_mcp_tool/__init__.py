@@ -15,7 +15,7 @@ from typing import Any
 
 from core.domain.types.tools import ToolSurface
 from core.tool import report_run_error
-from core.tool_framework.tool_decorator import tool
+from core.tool_framework import tool
 from core.tool_framework.utils import (
     build_mcp_tool_listing,
     first_list,

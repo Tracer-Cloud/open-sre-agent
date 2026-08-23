@@ -3,7 +3,7 @@
 from typing import Any
 
 from core.domain.types.tools import ToolSurface
-from core.tool_framework.tool_decorator import tool
+from core.tool_framework import tool
 from integrations.rabbitmq import (
     RabbitMQConfig,
     get_connection_stats,

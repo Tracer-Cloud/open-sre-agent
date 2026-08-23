@@ -7,7 +7,7 @@ from __future__ import annotations
 from typing import Any
 
 from core.domain.types.tools import ToolSurface
-from core.tool_framework.tool_decorator import tool
+from core.tool_framework import tool
 from core.tool_framework.utils import tool_unavailable
 from integrations.groundcover.availability import groundcover_available_or_backend
 from integrations.groundcover.client import GroundcoverClient
@@ -110,7 +110,7 @@ def query_groundcover_logs(
 
 from typing import cast
 
-from core.tool_framework.tool_decorator import tool
+from core.tool_framework import tool
 
 _QUERY_REF_SOURCE = "groundcover_query_reference"
 
@@ -178,7 +178,7 @@ def get_groundcover_query_reference(
 """groundcover traces query tool (gcQL over query_traces)."""
 
 
-from core.tool_framework.tool_decorator import tool
+from core.tool_framework import tool
 from integrations.groundcover.guidance import (
     DEFAULT_TRACES_QUERY,
     GCQL_GUIDANCE,

@@ -4,9 +4,8 @@
 ``core/tool_framework/`` holds the authoring helpers (``@tool``, skill guidance,
 shared payload utilities). Together they are one tier to their consumers.
 
-Neither root exports anything yet, so every import below is internal and the
-border test's allowlists record exactly that. Introducing an API module is the
-next step; the allowlists are how it gets measured.
+Both roots now curate a public surface, so consumers import the tier through
+these modules and the border test's allowlists are empty.
 """
 
 from __future__ import annotations

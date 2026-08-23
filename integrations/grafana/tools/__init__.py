@@ -8,7 +8,7 @@ from typing import Any
 
 from core.domain.types.evidence import record_evidence_entry
 from core.tool import EvidenceType, SideEffectLevel
-from core.tool_framework.tool_decorator import tool
+from core.tool_framework import tool
 from core.tool_framework.utils import tool_unavailable
 
 _GRAFANA_RUNTIME_PARAMS = (
@@ -154,7 +154,7 @@ def query_grafana_alert_rules(
 import time
 from datetime import UTC, datetime
 
-from core.tool_framework.tool_decorator import tool
+from core.tool_framework import tool
 from integrations.grafana.base import _epoch_ms_to_iso, _map_annotation
 
 
@@ -296,7 +296,7 @@ def query_grafana_annotations(
 """Grafana Loki log query tool — primary owner of Grafana helpers."""
 
 
-from core.tool_framework.tool_decorator import tool
+from core.tool_framework import tool
 from infrastructure.evidence.evidence_compaction import summarize_counts
 from infrastructure.evidence.log_compaction import build_error_taxonomy, deduplicate_logs
 from integrations.grafana.client import get_grafana_client_from_credentials
@@ -546,7 +546,7 @@ def query_grafana_logs(
 
 from pydantic import BaseModel, Field
 
-from core.tool_framework.tool_decorator import tool
+from core.tool_framework import tool
 
 
 class QueryGrafanaMetricsInput(BaseModel):
@@ -682,7 +682,7 @@ def query_grafana_metrics(
 """Grafana Loki service name discovery tool."""
 
 
-from core.tool_framework.tool_decorator import tool
+from core.tool_framework import tool
 
 
 def _query_grafana_service_names_extract_params(sources: dict[str, dict]) -> dict[str, Any]:
@@ -774,7 +774,7 @@ def query_grafana_service_names(
 
 
 from core.domain.pipeline_spans import extract_pipeline_spans as _extract_pipeline_spans
-from core.tool_framework.tool_decorator import tool
+from core.tool_framework import tool
 from infrastructure.evidence.evidence_compaction import DEFAULT_TRACE_LIMIT, compact_traces
 
 

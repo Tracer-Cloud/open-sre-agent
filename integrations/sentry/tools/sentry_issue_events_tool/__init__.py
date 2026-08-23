@@ -5,7 +5,7 @@ from __future__ import annotations
 from typing import Any
 
 from core.domain.types.tools import ToolSurface
-from core.tool_framework.tool_decorator import tool
+from core.tool_framework import tool
 from core.tool_framework.utils import tool_unavailable
 from integrations.sentry import list_sentry_issue_events as sentry_list_issue_events
 from integrations.sentry.tools.sentry_search_issues_tool import (
