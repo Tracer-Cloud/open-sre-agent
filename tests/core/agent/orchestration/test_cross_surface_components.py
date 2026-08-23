@@ -3,13 +3,16 @@
 from __future__ import annotations
 
 import logging
+from collections.abc import Callable
 from typing import Any
 from unittest.mock import MagicMock
 
 import pytest
 from rich.console import Console
 
+from core.agent_harness.ports import AnswerRequest
 from core.agent_harness.session import InMemorySessionStore
+from core.agent_harness.spi.accounting import LlmRunInfo
 from core.agent_harness.tools.tool_provider import DefaultToolProvider
 from core.agent_harness.turns.orchestrator import run_turn
 from core.agent_harness.turns.turn_results import ToolCallingTurnResult, TurnResult
@@ -17,6 +20,7 @@ from infrastructure.turn_host.turn_runner import TurnRunner
 from surfaces.interactive_shell.session import Session
 from tests.shared.default_headless_build_stub import default_headless_build_stub
 from tests.shared.fake_agent import fake_agent
+from tests.shared.harness_turn_driver import fake_llm_run, no_evidence
 
 
 def test_gateway_turn_runner_delegates_to_agent_dispatch(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -96,15 +100,20 @@ def test_run_turn_routes_unhandled_action_to_answer_callback() -> None:
     action = ToolCallingTurnResult(0, 0, 0, False, False)
     answer_calls: list[str] = []
 
-    def execute_actions(_text: str, **_kwargs: object) -> ToolCallingTurnResult:
+    def execute_actions(
+        text: str,
+        *,
+        confirm_fn: Callable[[str], str] | None = None,
+        is_tty: bool | None = None,
+        turn_plan: Any = None,
+    ) -> ToolCallingTurnResult:
+        del text, confirm_fn, is_tty, turn_plan
         return action
 
-    def answer(text: str, _request: object = None, **_kwargs: object) -> object:
+    def answer(text: str, request: AnswerRequest) -> LlmRunInfo:
+        del request
         answer_calls.append(text)
-        return type("Run", (), {"response_text": "answered"})()
-
-    def gather(_text: str, **_kwargs: object) -> None:
-        return None
+        return fake_llm_run(response_text="answered")
 
     class _Accounting:
         def record_action_result(self, _result: ToolCallingTurnResult) -> None:
@@ -119,7 +128,7 @@ def test_run_turn_routes_unhandled_action_to_answer_callback() -> None:
         session,
         execute_actions=execute_actions,
         answer=answer,
-        gather=gather,
+        gather=no_evidence,
         accounting=_Accounting(),
     )
 
@@ -140,16 +149,19 @@ def test_run_turn_builds_turn_plan_for_action_path(
     captured: list[Any] = []
 
     def execute_actions(
-        _text: str, *, turn_plan: Any = None, **_kwargs: object
+        text: str,
+        *,
+        confirm_fn: Callable[[str], str] | None = None,
+        is_tty: bool | None = None,
+        turn_plan: Any = None,
     ) -> ToolCallingTurnResult:
+        del text, confirm_fn, is_tty
         captured.append(turn_plan)
         return ToolCallingTurnResult(0, 0, 0, False, False)
 
-    def answer(_text: str, _request: object = None, **_kwargs: object) -> object:
-        return type("Run", (), {"response_text": "answered"})()
-
-    def gather(_text: str, **_kwargs: object) -> None:
-        return None
+    def answer(text: str, request: AnswerRequest) -> LlmRunInfo:
+        del text, request
+        return fake_llm_run(response_text="answered")
 
     class _Accounting:
         def record_action_result(self, _result: ToolCallingTurnResult) -> None:
@@ -164,7 +176,7 @@ def test_run_turn_builds_turn_plan_for_action_path(
         session,
         execute_actions=execute_actions,
         answer=answer,
-        gather=gather,
+        gather=no_evidence,
         accounting=_Accounting(),
     )
 
@@ -183,13 +195,22 @@ def test_run_turn_passes_turn_plan_to_gather(
     )
     gather_calls: list[Any] = []
 
-    def execute_actions(_text: str, **_kwargs: object) -> ToolCallingTurnResult:
+    def execute_actions(
+        text: str,
+        *,
+        confirm_fn: Callable[[str], str] | None = None,
+        is_tty: bool | None = None,
+        turn_plan: Any = None,
+    ) -> ToolCallingTurnResult:
+        del text, confirm_fn, is_tty, turn_plan
         return ToolCallingTurnResult(0, 0, 0, False, False)
 
-    def answer(_text: str, _request: object = None, **_kwargs: object) -> object:
-        return type("Run", (), {"response_text": "answered"})()
+    def answer(text: str, request: AnswerRequest) -> LlmRunInfo:
+        del text, request
+        return fake_llm_run(response_text="answered")
 
-    def gather(_text: str, *, turn_plan: Any = None, **_kwargs: object) -> None:
+    def gather(text: str, *, turn_plan: Any = None) -> None:
+        del text
         gather_calls.append(turn_plan.resolved_integrations if turn_plan is not None else None)
         return None
 
@@ -224,15 +245,20 @@ def test_run_turn_passes_turn_plan_to_answer(
     )
     answer_plans: list[Any] = []
 
-    def execute_actions(_text: str, **_kwargs: object) -> ToolCallingTurnResult:
+    def execute_actions(
+        text: str,
+        *,
+        confirm_fn: Callable[[str], str] | None = None,
+        is_tty: bool | None = None,
+        turn_plan: Any = None,
+    ) -> ToolCallingTurnResult:
+        del text, confirm_fn, is_tty, turn_plan
         return ToolCallingTurnResult(0, 0, 0, False, False)
 
-    def answer(_text: str, request: Any = None, **_kwargs: object) -> object:
-        answer_plans.append(getattr(request, "turn_plan", None))
-        return type("Run", (), {"response_text": "answered"})()
-
-    def gather(_text: str, **_kwargs: object) -> None:
-        return None
+    def answer(text: str, request: AnswerRequest) -> LlmRunInfo:
+        del text
+        answer_plans.append(request.turn_plan)
+        return fake_llm_run(response_text="answered")
 
     class _Accounting:
         def record_action_result(self, _result: ToolCallingTurnResult) -> None:
@@ -247,7 +273,7 @@ def test_run_turn_passes_turn_plan_to_answer(
         session,
         execute_actions=execute_actions,
         answer=answer,
-        gather=gather,
+        gather=no_evidence,
         accounting=_Accounting(),
     )
 
