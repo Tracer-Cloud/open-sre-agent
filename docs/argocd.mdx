@@ -289,47 +289,13 @@ opensre investigate --input-json '{
 }'
 ```
 
-The investigation planner does not guarantee `argocd_application_diff` runs on any
-given turn -- it decides which tools to call. To reproduce the diff tool's output
-directly against this exact drift, call it the same way the planner would:
-
-```bash
-uv run python3 -c "
-from integrations.argocd.tools import ArgoCDApplicationDiffTool
-import json, os
-result = ArgoCDApplicationDiffTool().run(
-    application_name='guestbook',
-    base_url=os.environ['ARGOCD_BASE_URL'],
-    bearer_token=os.environ['ARGOCD_AUTH_TOKEN'],
-    verify_ssl=False,
-)
-print(json.dumps(result, indent=2))
-"
-```
-
-Real output from this exact drift (edited for length):
-
-```
-{
-  "drift_detected": true,
-  "diffs": [
-    {
-      "kind": "Deployment",
-      "name": "guestbook-ui",
-      "diff": "--- desired
-+++ live
-@@ ... @@
--    "replicas": 1,
-+    "replicas": 3,"
-    }
-  ],
-  "diff_count": 1
-}
-```
-
-Both registered tools return real data -- `argocd_application_status` (sync/health
-status, revision, operation phase, image list, confirmed via the `opensre investigate`
-call above) and `argocd_application_diff` (the sanitized per-resource diff above).
+The investigation planner decides which tools to call on a given turn, so
+`argocd_application_diff` isn't guaranteed to run on every investigation -- on a turn
+where it did, it correctly reported the drift introduced above: `guestbook-ui`'s
+replica count changed from the desired `1` to the live `3`. Both registered tools
+return real data through this same `opensre investigate` flow --
+`argocd_application_status` for sync/health status, revision, and operation phase, and
+`argocd_application_diff` for per-resource drift when the planner calls it.
 
 Teardown:
 
