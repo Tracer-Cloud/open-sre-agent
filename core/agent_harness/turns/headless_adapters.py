@@ -10,7 +10,9 @@ from collections.abc import Iterable, Mapping
 from dataclasses import dataclass, field
 from typing import Any
 
+from core.agent_harness.accounting.token_accounting import LlmRunInfo
 from core.agent_harness.ports import (
+    CancelCapableConsole,
     ConfirmFn,
     ToolEventObserver,
 )
@@ -158,7 +160,7 @@ class NullToolProvider:
         """No tools to retarget."""
         _ = session
 
-    def bind_console(self, console: Any) -> None:
+    def bind_console(self, console: CancelCapableConsole) -> None:
         """No console-backed tools."""
         _ = console
 
@@ -201,27 +203,23 @@ class NoopErrorReporter:
         _ = (exc, context, expected)
 
 
-@dataclass
-class SimpleRunRecord:
-    """Opaque conversational-LLM run record for headless runs."""
-
-    response_text: str
-    prompt: str = ""
-    started: float = 0.0
-
-
 class SimpleRunRecordFactory:
-    """Builds :class:`SimpleRunRecord` values."""
+    """Builds :class:`LlmRunInfo` values for headless runs."""
 
     def bind_session(self, session: Any) -> None:
         """Records are ephemeral — no session handle to update."""
         _ = session
 
     def build(
-        self, *, client: Any, prompt: str, response_text: str, started: float
-    ) -> SimpleRunRecord:
-        _ = client
-        return SimpleRunRecord(response_text=response_text, prompt=prompt, started=started)
+        self,
+        *,
+        client: StreamingReasoningClient | None,
+        prompt: str,
+        response_text: str,
+        started: float,
+    ) -> LlmRunInfo:
+        _ = (client, prompt, started)
+        return LlmRunInfo(response_text=response_text)
 
 
 @dataclass

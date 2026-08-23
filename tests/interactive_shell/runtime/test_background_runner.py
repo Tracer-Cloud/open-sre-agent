@@ -14,9 +14,12 @@ from infrastructure.scheduling.background_investigations.store import (
     StoreLockTimeout,
 )
 from surfaces.interactive_shell.command_registry import dispatch_slash
+from surfaces.interactive_shell.runtime.background import runner as runner_mod
 from surfaces.interactive_shell.runtime.background.runner import (
+    BackgroundRunFn,
     drain_background_notices,
     start_background_template_investigation,
+    start_background_text_investigation,
 )
 from surfaces.interactive_shell.session import Session
 
@@ -60,18 +63,82 @@ def _run_to_completion(session: Session, monkeypatch: pytest.MonkeyPatch) -> str
 
 
 def test_enqueue_and_drain_background_notices() -> None:
-    import io
-
-    from rich.console import Console
-
     session = Session()
     session.terminal.enqueue_background_notice("[bold]done[/bold]")
-    console = Console(file=io.StringIO(), force_terminal=False, highlight=False)
+    output = io.StringIO()
+    console = Console(file=output, force_terminal=False, highlight=False)
 
     drain_background_notices(session, console)
 
     assert session.terminal.drain_background_notices() == []
-    assert "done" in console.file.getvalue()
+    assert "done" in output.getvalue()
+
+
+@pytest.mark.parametrize("mode", ["text", "template"])
+def test_background_launcher_snapshots_context_before_worker_starts(
+    mode: str,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    captured_runs: list[BackgroundRunFn] = []
+    seen_contexts: list[dict[str, Any] | None] = []
+
+    def _capture_start(*, run_fn: BackgroundRunFn, **_kwargs: Any) -> str:
+        captured_runs.append(run_fn)
+        return "task-id"
+
+    def _fake_text_run(
+        *,
+        alert_text: str,
+        context_overrides: dict[str, Any] | None,
+        cancel_requested: threading.Event | None,
+    ) -> dict[str, Any]:
+        _ = (alert_text, cancel_requested)
+        seen_contexts.append(context_overrides)
+        return {"root_cause": "done"}
+
+    def _fake_template_run(
+        *,
+        template_name: str,
+        context_overrides: dict[str, Any] | None,
+        cancel_requested: threading.Event | None,
+    ) -> dict[str, Any]:
+        _ = (template_name, cancel_requested)
+        seen_contexts.append(context_overrides)
+        return {"root_cause": "done"}
+
+    monkeypatch.setattr(runner_mod, "_start_background_investigation", _capture_start)
+    monkeypatch.setattr(
+        "surfaces.interactive_shell.runtime.investigation_adapter"
+        ".run_investigation_for_session_background",
+        _fake_text_run,
+    )
+    monkeypatch.setattr(
+        "surfaces.interactive_shell.runtime.investigation_adapter"
+        ".run_sample_alert_for_session_background",
+        _fake_template_run,
+    )
+
+    session = Session()
+    session.accumulated_context = {"service": "launch-context"}
+    console = Console(file=io.StringIO(), force_terminal=False, highlight=False)
+    if mode == "text":
+        start_background_text_investigation(
+            alert_text="checkout latency",
+            session=session,
+            console=console,
+        )
+    else:
+        start_background_template_investigation(
+            template_name="generic",
+            session=session,
+            console=console,
+            display_command="/investigate generic",
+        )
+
+    session.accumulated_context["service"] = "later-context"
+    captured_runs[0](cancel_requested=threading.Event())
+
+    assert seen_contexts == [{"service": "launch-context"}]
 
 
 def test_start_background_template_investigation_assigns_fresh_investigation_id(

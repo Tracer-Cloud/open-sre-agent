@@ -21,7 +21,7 @@ from typing import TYPE_CHECKING, Any
 from rich.console import Console
 
 if TYPE_CHECKING:
-    from infrastructure.turn_host.turn_handler import TurnHandler
+    from infrastructure.turn_host.turn_runner import TurnRunner
 
 from infrastructure.analytics.repl_context import bound_repl_turn_context
 from infrastructure.analytics.usage_context import UsageSurface, bound_usage_context
@@ -35,7 +35,7 @@ from surfaces.interactive_shell.runtime.agent_presentation import (
     ConsoleAgentEventSink,
 )
 from surfaces.interactive_shell.runtime.background.workers import (
-    BackgroundTaskManager,
+    BackgroundTaskPool,
 )
 from surfaces.interactive_shell.runtime.core.confirmation import (
     DispatchCancelled,
@@ -77,7 +77,7 @@ class AgentTurnResources:
     #: tool output land in the same stream as the startup renders.
     console: Console | None = None
     #: Session-scoped turn host; each turn binds its own streaming console.
-    turn_handler: TurnHandler | None = None
+    turn_handler: TurnRunner | None = None
 
 
 def _streaming_console(
@@ -222,7 +222,7 @@ async def run_input_loop(
     *,
     state: ReplState,
     session: Session,
-    background: BackgroundTaskManager | None,
+    background: BackgroundTaskPool | None,
     input_reader: PromptInputReader,
     echo_console: Console,
     handle_input_action: Callable[[InputAction], Awaitable[bool]],

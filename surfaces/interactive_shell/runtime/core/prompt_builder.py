@@ -32,7 +32,7 @@ from surfaces.shared.terminal.components.cpr_stdin import drain_stale_cpr_bytes
 _CPR_SETTLE_SECONDS = 0.05
 
 
-class PromptManager:
+class PromptBuilder:
     """Own prompt-toolkit setup, prompt rendering, and prompt redraw hooks."""
 
     def __init__(
@@ -68,7 +68,7 @@ class PromptManager:
     @property
     def invalidate_prompt(self) -> Callable[[], None]:
         if self._invalidate_prompt is None:
-            raise RuntimeError("PromptManager.setup() must run before prompt invalidation")
+            raise RuntimeError("PromptBuilder.setup() must run before prompt invalidation")
         return self._invalidate_prompt
 
     def request_exit(self) -> None:
@@ -92,7 +92,7 @@ class PromptManager:
 
     async def read_prompt_text(self) -> str:
         if self.pt_session is None:
-            raise RuntimeError("PromptManager.setup() must run before reading prompts")
+            raise RuntimeError("PromptBuilder.setup() must run before reading prompts")
 
         if self.session.terminal.pending_theme_refresh:
             self.session.terminal.pending_theme_refresh = False

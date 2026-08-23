@@ -5,7 +5,7 @@ from __future__ import annotations
 
 def register_harness_adapters() -> None:
     import integrations.webapp_vault as webapp_vault
-    from infrastructure.harness_providers import set_integration_resolution_adapters
+    from infrastructure.harness_providers import IntegrationResolutionAdapters
     from integrations.catalog import (
         classify_integrations,
         configured_integration_services,
@@ -13,9 +13,10 @@ def register_harness_adapters() -> None:
         merge_integrations_by_service,
         merge_local_integrations,
     )
+    from integrations.cli import setup_services
     from integrations.store import STORE_PATH, load_integrations
 
-    set_integration_resolution_adapters(
+    IntegrationResolutionAdapters(
         load_integrations=load_integrations,
         integration_store_path=lambda: str(STORE_PATH),
         load_env_integrations=load_env_integrations,
@@ -23,13 +24,9 @@ def register_harness_adapters() -> None:
         merge_local_integrations=merge_local_integrations,
         merge_integrations_by_service=merge_integrations_by_service,
         configured_services=lambda: tuple(configured_integration_services()),
+        setupable_services=lambda: tuple(setup_services()),
         fetch_webapp_vault=lambda: webapp_vault.fetch_webapp_org_integrations(),
-    )
-
-    from infrastructure.harness_providers import set_setupable_integration_services
-    from integrations.cli import setup_services
-
-    set_setupable_integration_services(lambda: tuple(setup_services()))
+    ).install()
 
     _register_vcs_repo_scope_providers()
     _register_cli_llm_adapters()
@@ -225,7 +222,7 @@ def _register_cli_llm_adapters() -> None:
     from typing import Any
 
     from core.llm.types import CliLLMClient, ModelType
-    from infrastructure.harness_providers import set_cli_llm_adapters
+    from infrastructure.harness_providers import CliLlmAdapters
     from integrations.llm_cli.registry import get_cli_provider_registration
     from integrations.llm_cli.runner import CLIBackedLLMClient
     from integrations.llm_cli.text import flatten_messages_to_prompt
@@ -244,8 +241,8 @@ def _register_cli_llm_adapters() -> None:
             kwargs["model_type"] = model_type
         return CLIBackedLLMClient(adapter, **kwargs)
 
-    set_cli_llm_adapters(
+    CliLlmAdapters(
         cli_provider_registration=get_cli_provider_registration,
         build_cli_client=_build_cli_client,
         flatten_cli_messages=flatten_messages_to_prompt,
-    )
+    ).install()

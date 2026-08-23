@@ -17,7 +17,7 @@ from pydantic import BaseModel, Field, field_validator
 
 from config.constants.investigation import DEFAULT_APPROVAL_EXPIRY_SECONDS
 from config.strict_config import StrictConfigModel
-from core.domain.types.evidence import EvidenceSource
+from core.domain.types.evidence import EvidenceMapper, EvidenceSource
 from core.domain.types.retrieval import RetrievalControls
 from core.domain.types.tools import ToolSurface
 from core.tool.registry import BaseToolRegistryMetadata, normalize_surfaces
@@ -279,6 +279,8 @@ class BaseTool(ABC):
     outputs: ClassVar[dict[str, str]] = {}  # Output field -> description (optional, for prompting)
     output_schema: ClassVar[dict[str, Any] | None] = None
     output_model: ClassVar[type[BaseModel] | None] = None
+    #: Optional per-tool output→evidence mapper; assign a module-level function.
+    evidence_mapper: ClassVar[EvidenceMapper | None] = None
     injected_params: ClassVar[Sequence[str]] = ()
     retrieval_controls: ClassVar[RetrievalControls] = (
         RetrievalControls()
@@ -406,6 +408,7 @@ class RegisteredTool:
     requires: list[str] = field(default_factory=list)
     outputs: dict[str, str] = field(default_factory=dict)
     output_schema: dict[str, Any] | None = None
+    evidence_mapper: EvidenceMapper | None = field(default=None, repr=False)
     injected_params: tuple[str, ...] = ()
     retrieval_controls: RetrievalControls = field(
         default_factory=RetrievalControls,
@@ -556,6 +559,7 @@ class RegisteredTool:
         approval_expiry_seconds: int | None = None,
         parallel_safe: bool | None = None,
         accepts_runtime_context: bool | None = None,
+        evidence_mapper: EvidenceMapper | None = None,
     ) -> RegisteredTool:
         metadata = tool.metadata()
         input_model = cast(type[BaseModel] | None, getattr(tool, "input_model", None))
@@ -590,6 +594,11 @@ class RegisteredTool:
             retrieval_controls=retrieval_controls or metadata.retrieval_controls,
             surfaces=resolved_surfaces,
             run=tool.run,  # type: ignore[attr-defined]
+            evidence_mapper=(
+                evidence_mapper
+                if evidence_mapper is not None
+                else getattr(tool.__class__, "evidence_mapper", None)
+            ),
             is_available=tool.is_available,
             extract_params=tool.extract_params,
             tags=resolved_tags,
@@ -640,6 +649,7 @@ class RegisteredTool:
         outputs: dict[str, str] | None = None,
         output_schema: dict[str, Any] | None = None,
         output_model: type[BaseModel] | None = None,
+        evidence_mapper: EvidenceMapper | None = None,
         injected_params: tuple[str, ...] | None = None,
         retrieval_controls: RetrievalControls | None = None,
         is_available: Callable[[dict[str, dict]], bool] | None = None,
@@ -679,6 +689,7 @@ class RegisteredTool:
             requires=list(requires or []),
             outputs=dict(outputs or {}),
             output_schema=resolved_output_schema,
+            evidence_mapper=evidence_mapper,
             injected_params=tuple(injected_params or ()),
             retrieval_controls=retrieval_controls or RetrievalControls(),
             run=func,

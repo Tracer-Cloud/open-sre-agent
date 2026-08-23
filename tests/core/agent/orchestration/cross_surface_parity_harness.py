@@ -1,6 +1,6 @@
 """Shared harness for cross-surface turn parity tests.
 
-Every client (interactive shell, headless dispatch, gateway turn handler) must
+Every client (interactive shell, headless dispatch, gateway turn runner) must
 route through the same ``run_turn`` engine and produce the same outcome for the
 same input, tools, and LLM wiring.
 """
@@ -28,7 +28,7 @@ from core.agent_harness.turns.turn_results import TurnResult
 from core.domain.types.tools import ToolSurface
 from core.llm.types import AgentLLMResponse, ToolCall
 from core.tool.contracts import RegisteredTool
-from infrastructure.turn_host.turn_handler import TurnHandler
+from infrastructure.turn_host.turn_runner import TurnRunner
 from surfaces.interactive_shell.runtime.shell_turn_execution import execute_shell_turn
 from surfaces.interactive_shell.runtime.slash_adapter import headless_slash_ports
 from surfaces.interactive_shell.session import Session
@@ -263,9 +263,9 @@ def wire_tool_registry(monkeypatch: Any, tools: list[RegisteredTool]) -> None:
             del surface
             return dict(by_name)
 
-    from infrastructure.harness_providers import set_tool_registry
+    from infrastructure.harness_providers import ToolSources
 
-    set_tool_registry(_FixedToolRegistry())
+    ToolSources(registry=_FixedToolRegistry()).install()
 
     from core.agent_harness.tools.action_tools import _sources_for_context
 
@@ -399,7 +399,7 @@ def snapshot_gateway_handler(
     captured: list[TurnResult] = []
     _install_gateway_dispatch_spy(monkeypatch, captured)
     before = probe_run_count()
-    handler = TurnHandler(
+    handler = TurnRunner(
         console=console(),
         slash_ports_factory=headless_slash_ports,
     )
@@ -467,7 +467,7 @@ def run_gateway_turn_with_sink(
     captured: list[TurnResult] = []
     _install_gateway_dispatch_spy(monkeypatch, captured)
     before = probe_run_count()
-    handler = TurnHandler(
+    handler = TurnRunner(
         console=console(),
         slash_ports_factory=headless_slash_ports,
     )

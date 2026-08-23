@@ -8,7 +8,7 @@ from typing import Any
 from config.constants.slack import SLACK_WEBHOOK_URL_ENV
 from core.domain.types.tools import ToolSurface
 from core.tool import BaseTool, SideEffectLevel
-from core.tool_framework.tool_decorator import tool
+from core.tool_framework import tool
 from integrations.slack.tools.slack_send_message_tool.constants import SOURCE
 from integrations.slack.tools.slack_send_message_tool.delivery import (
     dispatch_message,

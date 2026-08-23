@@ -5,7 +5,7 @@ from __future__ import annotations
 from typing import Any
 
 from core.domain.types.tools import ToolSurface
-from core.tool_framework.tool_decorator import tool
+from core.tool_framework import tool
 from core.tool_framework.utils import validate_host_metrics
 from integrations.tracer import get_tracer_web_client
 from integrations.tracer.tools.tracer_failed_jobs_tool import _tracer_available, _tracer_trace_id

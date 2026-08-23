@@ -19,7 +19,7 @@ from core.domain.memory import (
 )
 from core.domain.types.tools import ToolSurface
 from core.tool import SideEffectLevel
-from core.tool_framework.tool_decorator import tool
+from core.tool_framework import tool
 from tools.system.agent_memory.results import (
     deleted_result,
     index_result,

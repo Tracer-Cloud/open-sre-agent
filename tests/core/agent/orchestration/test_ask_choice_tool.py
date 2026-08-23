@@ -14,7 +14,7 @@ from typing import Any
 
 from rich.console import Console
 
-from core.agent_harness.tools.tool_context import ActionToolContext
+from core.agent_harness.tools.tool_context import ActionToolScope
 from core.agent_harness.turns.headless_adapters import InMemorySessionState
 from surfaces.interactive_shell.session import Session
 from tools.interactive_shell.actions.ask_choice import (
@@ -45,9 +45,9 @@ def _ctx(
     session: Any | None = None,
     ports: _Ports | None = None,
     is_tty: bool | None = None,
-) -> ActionToolContext:
+) -> ActionToolScope:
     console = Console(file=io.StringIO(), force_terminal=False, highlight=False)
-    return ActionToolContext(
+    return ActionToolScope(
         session=session if session is not None else Session(),
         console=console,
         slash_ports=ports if ports is not None else _Ports(),

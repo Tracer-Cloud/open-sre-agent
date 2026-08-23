@@ -16,7 +16,7 @@ from rich.console import Console
 import tools.interactive_shell.actions.sentry_fix as sentry_fix
 from core.agent_harness.tools.tool_context import (
     ACTION_TOOL_CONTEXT_RESOURCE_KEY,
-    ActionToolContext,
+    ActionToolScope,
 )
 from core.tool.contracts import AgentToolContext
 
@@ -24,10 +24,10 @@ _TOOL_RUN = "tools.interactive_shell.actions.sentry_fix.fix_sentry_issue.run"
 _URL = "https://acme.sentry.io/issues/12345/"
 
 
-def _ctx() -> tuple[ActionToolContext, io.StringIO]:
+def _ctx() -> tuple[ActionToolScope, io.StringIO]:
     buf = io.StringIO()
     console = Console(file=buf, force_terminal=False, highlight=False, width=200)
-    return ActionToolContext(session=MagicMock(), console=console), buf
+    return ActionToolScope(session=MagicMock(), console=console), buf
 
 
 # --------------------------------------------------------------------------- #

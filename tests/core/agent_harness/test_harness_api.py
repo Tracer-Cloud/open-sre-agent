@@ -38,6 +38,7 @@ ROOT_API = frozenset(
 PORTS = frozenset(
     {
         "AnswerRequest",
+        "CancelCapableConsole",
         "ConfirmFn",
         "ConsoleBindable",
         "ErrorReporter",
@@ -181,9 +182,10 @@ RUNTIME = frozenset(
 TOOLS = frozenset(
     {
         "EVIDENCE_KIND_VALUES",
-        "ActionToolContext",
+        "ActionToolScope",
         "HandoffField",
         "action_context_from_agent_context",
+        "action_scope_from_agent_context",
         "capability_available_from_sources",
         "coerce_gathered_evidence",
         "execute_with_action_context",

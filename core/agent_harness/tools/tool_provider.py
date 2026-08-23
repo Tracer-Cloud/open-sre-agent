@@ -7,6 +7,7 @@ from collections.abc import Callable
 from typing import Any
 
 from core.agent_harness.ports import (
+    CancelCapableConsole,
     ConfirmFn,
     InvestigationPortsFactory,
     LlmProviderPortsFactory,
@@ -18,7 +19,7 @@ from core.agent_harness.ports import (
 from core.agent_harness.tools.action_tools import get_action_tools_from_integrations_context
 from core.agent_harness.tools.tool_context import (
     ACTION_TOOL_CONTEXT_RESOURCE_KEY,
-    ActionToolContext,
+    ActionToolScope,
 )
 
 ActionObserverFactory = Callable[[str], ToolEventObserver]
@@ -64,17 +65,17 @@ class DefaultToolProvider:
         self._llm_provider_ports_factory = llm_provider_ports_factory
         self._task_cancel_ports_factory = task_cancel_ports_factory
         self._slash_ports_factory = slash_ports_factory
-        self._tool_context: ActionToolContext | None = None
+        self._tool_scope: ActionToolScope | None = None
 
     def bind_session(self, session: Any) -> None:
         """Point this provider at a freshly resolved session (gateway reuse)."""
         self._session = session
-        self._tool_context = None
+        self._tool_scope = None
 
-    def bind_console(self, console: Any) -> None:
+    def bind_console(self, console: CancelCapableConsole) -> None:
         """Point tool UI (observers, subprocess presenter) at ``console``."""
         self._console = console
-        self._tool_context = None
+        self._tool_scope = None
 
     def action_tools(
         self,
@@ -110,7 +111,7 @@ class DefaultToolProvider:
         if self._slash_ports_factory is not None:
             slash_ports = self._slash_ports_factory()
 
-        ctx = ActionToolContext(
+        ctx = ActionToolScope(
             session=self._session,
             console=self._console,
             confirm_fn=confirm_fn,
@@ -126,7 +127,7 @@ class DefaultToolProvider:
             task_cancel_ports=task_cancel_ports,
             slash_ports=slash_ports,
         )
-        self._tool_context = ctx
+        self._tool_scope = ctx
         if self._precomputed_action_tools is not None:
             return list(self._precomputed_action_tools)
         resolved = (
@@ -137,9 +138,9 @@ class DefaultToolProvider:
         return get_action_tools_from_integrations_context(ctx, resolved_integrations=resolved)
 
     def tool_resources(self) -> dict[str, Any]:
-        if self._tool_context is None:
+        if self._tool_scope is None:
             return {}
-        return {ACTION_TOOL_CONTEXT_RESOURCE_KEY: self._tool_context}
+        return {ACTION_TOOL_CONTEXT_RESOURCE_KEY: self._tool_scope}
 
     def observer(self, *, message: str) -> ToolEventObserver:
         if self._observer_factory is not None:

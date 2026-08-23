@@ -6,7 +6,7 @@ import re
 from dataclasses import dataclass, replace
 from typing import Any
 
-from infrastructure.safety.masking import MaskingContext, MaskingPolicy
+from infrastructure.safety.masking import MaskingPolicy, MaskingRules
 from integrations.github.repo_scope import detect_git_remote_repo_scope
 from integrations.github.tools.ci_fix.errors import (
     ERR_INVALID_INPUT,
@@ -249,7 +249,7 @@ def _log_excerpt(raw: str) -> str:
 
 
 def _build_task(ctx: CiFixContext) -> str:
-    masker = MaskingContext(MaskingPolicy.from_env())
+    masker = MaskingRules(MaskingPolicy.from_env())
     lines = [
         f"Fix the failing GitHub Actions CI checks for {ctx.owner}/{ctx.repo} PR #{ctx.number}.",
         "",

@@ -3,13 +3,14 @@
 from __future__ import annotations
 
 import logging
-from collections.abc import Callable, Mapping, Sequence
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, replace
 from typing import Any, cast
 
 from config.constants.investigation import MAX_INVESTIGATION_LOOPS
 from core import RuntimeEventCallback, TupleEventCallback, execute_tools, summarise, tool_source
 from core.agent.goals import Goal, GoalObservation
+from core.agent_harness.ports import LlmFactory
 from core.agent_harness.runtime import AgentConfig, build_agent, default_llm_factory
 from core.events import (
     AgentEndEvent,
@@ -61,8 +62,6 @@ from tools.investigation.stages.gather_evidence.tools import (
 )
 
 logger = logging.getLogger(__name__)
-
-LlmFactory = Callable[[], Any]
 
 
 @dataclass

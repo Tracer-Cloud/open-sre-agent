@@ -10,7 +10,7 @@ The terminal UI has four pieces, all composed from this module:
 Pieces 1–2 are static chrome printed once by :func:`render_terminal_ui`.
 Pieces 3–4 form the live prompt region: prompt-toolkit re-evaluates them on
 every keystroke, spinner tick, and prompt invalidation, so they are composed
-by :func:`render_prompt_region`, which ``PromptManager`` calls per redraw.
+by :func:`render_prompt_region`, which ``PromptBuilder`` calls per redraw.
 """
 
 from __future__ import annotations

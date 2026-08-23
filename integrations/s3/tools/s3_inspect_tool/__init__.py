@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from core.tool_framework.tool_decorator import tool
+from core.tool_framework import tool
 from infrastructure.delivery.notifications.limits import MAX_MESSAGE_SIZE
 from integrations.aws.s3_client import get_object_metadata, get_object_sample
 

@@ -8,7 +8,7 @@ from typing import Any
 from rich.console import Console
 
 from core.agent_harness.tools import (
-    ActionToolContext,
+    ActionToolScope,
     capability_available_from_sources,
     execute_with_action_context,
 )
@@ -90,7 +90,7 @@ def run_text_investigation(
     )
 
 
-def execute_investigation_tool(args: dict[str, Any], ctx: ActionToolContext) -> bool:
+def execute_investigation_tool(args: dict[str, Any], ctx: ActionToolScope) -> bool:
     alert_text = normalize_investigation_alert_text(str(args.get("alert_text", "")))
     if not alert_text:
         return False

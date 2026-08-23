@@ -2,7 +2,7 @@
 
 ``GatewayController`` boots the background agent: logging, credentials,
 :func:`bootstrap.process.configure_process` (``GATEWAY_PROFILE``), then one
-turn handler and the components that use it.
+turn runner and the components that use it.
 
 * :meth:`start_surfaces` starts web and chat transports together
 * :meth:`start_scheduler` hosts the process-wide cron/loop runner
@@ -41,13 +41,25 @@ from infrastructure.turn_host.concurrency import (
     set_process_turn_gate,
 )
 from infrastructure.turn_host.turn_callback import TurnCallback
-from infrastructure.turn_host.turn_handler import TurnHandler
+from infrastructure.turn_host.turn_runner import TurnRunner
 
 # The reload watcher only polls a flag, so it should never need the full
 # shutdown budget; cap it so chat workers keep the rest.
 SCHEDULER_RELOAD_JOIN_TIMEOUT_SECONDS = 2.0
 
 CredentialHydratorFactory = Callable[[], GatewayCredentialHydrator | None]
+
+
+def _gateway_hosts_scheduler() -> bool:
+    """Whether this gateway process co-hosts the scheduler loop (default true).
+
+    Set ``OPENSRE_GATEWAY_HOST_SCHEDULER`` false to run the scheduler as its own
+    service (``MODE=scheduler``) so scheduled tasks are not fired by two processes.
+    """
+    from config.constants.scheduler import OPENSRE_GATEWAY_HOST_SCHEDULER_ENV
+
+    value = os.getenv(OPENSRE_GATEWAY_HOST_SCHEDULER_ENV)
+    return value is None or value.strip().lower() not in {"0", "false", "no", "off"}
 
 
 class GatewayController:
@@ -86,11 +98,11 @@ class GatewayController:
         self._load_credentials(logger)
         configure_process(GATEWAY_PROFILE, logger=logger)
 
-        # One turn handler for every chat transport. Capacity gate lives on the
-        # same object — do not wrap it in a second "turn handler". Action tools
+        # One turn runner for every chat transport. Capacity gate lives on the
+        # same object — do not wrap it in a second "turn runner". Action tools
         # resolve per turn from each chat's live session inside the handler.
         console = Console(force_terminal=False)
-        handler = TurnHandler(
+        handler = TurnRunner(
             console=console,
             slash_ports_factory=self._slash_ports_factory,
             agent_build=chat_agent_build_config(),
@@ -98,7 +110,11 @@ class GatewayController:
         )
 
         self.start_surfaces(logger=logger, handler=handler)
-        self.start_scheduler(logger=logger)
+        if _gateway_hosts_scheduler():
+            self.start_scheduler(logger=logger)
+        else:
+            self.components["scheduler"] = "external (dedicated MODE=scheduler service)"
+            logger.info("[gateway] in-process scheduler disabled; run it as its own service")
         self._publish_status(logger)
         # Deploy health waits (EC2 Docker + AMI) match this line for Telegram
         # and/or Slack — do not rely on transport-specific log strings alone.
@@ -191,26 +207,26 @@ class GatewayController:
         return self._stopped.wait(timeout)
 
     def _start_scheduler_reload_watcher(self, logger: logging.Logger) -> None:
-        """Poll for cross-process reload requests from `/loops` and cron mutations."""
+        """Keep the co-hosted scheduler in sync with cron / `/loops` mutations.
+
+        Uses the shared watcher (reload signal + store-file reconcile), so a
+        dropped best-effort signal still converges on the next poll.
+        """
         if self._scheduler_reload_thread is not None:
             return
 
         def _watch() -> None:
-            from infrastructure.scheduling.scheduler.reload_signal import (
-                RELOAD_POLL_SECONDS,
-                consume_scheduler_reload_request,
-            )
+            from infrastructure.scheduling.scheduler.reload_signal import watch_and_reconcile
+            from infrastructure.scheduling.scheduler.store import _default_store_path
 
-            while not self._stopped.wait(timeout=RELOAD_POLL_SECONDS):
-                if not consume_scheduler_reload_request():
-                    continue
-                try:
-                    self._reload_scheduler(logger)
-                except Exception as exc:  # noqa: BLE001
-                    logger.warning(
-                        "Scheduler reload failed (%s)",
-                        type(exc).__name__,
-                    )
+            watch_and_reconcile(
+                self._stopped,
+                lambda: self._reload_scheduler(logger),
+                _default_store_path(),
+                on_error=lambda exc: logger.warning(
+                    "Scheduler reload failed (%s)", type(exc).__name__
+                ),
+            )
 
         self._scheduler_reload_thread = threading.Thread(
             target=_watch,

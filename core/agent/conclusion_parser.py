@@ -1,6 +1,6 @@
 """Decide what to do with a no-tool-call reply from the model.
 
-A reply without tool calls is a candidate conclusion. ``ConclusionHandler``
+A reply without tool calls is a candidate conclusion. ``ConclusionParser``
 runs the acceptance protocol the ReAct loop (``core.agent.react_loop``) used
 to inline: bounce a tool invocation degraded into plain text, ask the host
 whether the conclusion may stand, replay a queued follow-up, or push the
@@ -28,7 +28,7 @@ logger = logging.getLogger(__name__)
 _MAX_TEXTUAL_TOOL_CALL_NUDGES = 2
 
 
-class ConclusionHandler[RuntimeToolT: RuntimeTool]:
+class ConclusionParser[RuntimeToolT: RuntimeTool]:
     """Accept, follow up on, or nudge a reply that requested no tools.
 
     Shares the loop's live message list and host by reference; ``handle``
@@ -119,4 +119,4 @@ class ConclusionHandler[RuntimeToolT: RuntimeTool]:
         return False
 
 
-__all__ = ["ConclusionHandler"]
+__all__ = ["ConclusionParser"]

@@ -305,7 +305,7 @@ def gather_tool_evidence(
         # Tool discovery, integration resolution, and LLM load run inside this
         # helper, within the ``_safe_execute`` fallback boundary.
         from core.agent_harness.turns.host_cancel import cancel_tool_resources
-        from infrastructure.harness_providers import get_investigation_tools
+        from infrastructure.harness_providers import resolve_investigation_tools
 
         if is_cancelled is not None and is_cancelled():
             log.debug("gather_evidence skip: host cancelled")
@@ -313,7 +313,7 @@ def gather_tool_evidence(
         resolved = _resolve_gather_integrations(
             session, message, resolved_integrations=resolved_integrations
         )
-        gather_tools = list(get_investigation_tools(resolved))
+        gather_tools = list(resolve_investigation_tools(resolved))
         if not _has_usable_gather_tools(gather_tools):
             log.debug("gather_evidence skip: no usable tools")
             return None

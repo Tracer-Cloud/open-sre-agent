@@ -196,7 +196,7 @@ def test_architecture_save_observations_tool_reads_session_from_context(
 ) -> None:
     from core.agent_harness.tools.tool_context import (
         ACTION_TOOL_CONTEXT_RESOURCE_KEY,
-        ActionToolContext,
+        ActionToolScope,
     )
     from core.tool.contracts import AgentToolContext
 
@@ -208,7 +208,7 @@ def test_architecture_save_observations_tool_reads_session_from_context(
     context = AgentToolContext(
         resolved_integrations={},
         resources={
-            ACTION_TOOL_CONTEXT_RESOURCE_KEY: ActionToolContext(
+            ACTION_TOOL_CONTEXT_RESOURCE_KEY: ActionToolScope(
                 session=session,
                 console=SimpleNamespace(),
             )

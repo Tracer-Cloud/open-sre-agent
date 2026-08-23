@@ -7,7 +7,7 @@ does the same job directly: build an agent, bind the turn, replace whichever
 stages the test names, and hand back the :class:`TurnResult`.
 
 Production code must not import this. The shell reaches the agent through
-:class:`infrastructure.turn_host.turn_handler.TurnHandler`; nothing else does.
+:class:`infrastructure.turn_host.turn_runner.TurnRunner`; nothing else does.
 """
 
 from __future__ import annotations
@@ -28,7 +28,8 @@ from core.agent_harness.ports import (
 from core.agent_harness.runtime import HeadlessAgent
 from core.agent_harness.spi.accounting import LlmRunInfo
 from core.agent_harness.spi.session_goal import SessionGoal, format_session_goal_progress
-from core.agent_harness.turns.host_cancel import host_cancel_requested
+from core.agent_harness.turns.host_cancel import ensure_turn_cancel
+from infrastructure.turn_host.cancel_console import CancelConsole
 from surfaces.interactive_shell.runtime.agent_harness_adapters import resolve_output_sink
 from surfaces.interactive_shell.runtime.core.turn_accounting import ShellTurnAccounting
 from surfaces.interactive_shell.runtime.shell_agent import build_shell_agent
@@ -63,6 +64,8 @@ def run_harness_turn(
     turns; otherwise one is built for this call.
     """
     resolved_output = resolve_output_sink(console, output)
+    turn_cancel = ensure_turn_cancel(resolved_output)
+    turn_console = CancelConsole(console, turn_cancel)
     if agent is None:
         agent = build_shell_agent(
             session, console, output=resolved_output, request_exit=request_exit
@@ -94,12 +97,12 @@ def run_harness_turn(
             session=session,
             output=resolved_output,
             tool_hooks=tool_hooks,
-            console=console,
+            console=turn_console,
             confirm_fn=confirm_fn,
             is_tty=is_tty,
         ),
         accounting_factory=_accounting,
-        cancel_requested=lambda: host_cancel_requested(resolved_output),
+        cancel_requested=turn_cancel.is_set,
         on_progress=_on_progress,
     )
 

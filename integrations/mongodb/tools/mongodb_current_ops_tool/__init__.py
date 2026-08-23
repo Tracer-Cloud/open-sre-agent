@@ -3,7 +3,7 @@
 from typing import Any
 
 from core.domain.types.tools import ToolSurface
-from core.tool_framework.tool_decorator import tool
+from core.tool_framework import tool
 from integrations.mongodb import (
     MongoDBConfig,
     get_current_ops,
@@ -26,6 +26,7 @@ def get_mongodb_current_ops(
     threshold_ms: int = 1000,
     auth_source: str = "admin",
     tls: bool = True,
+    **_kwargs: Any,
 ) -> dict[str, Any]:
     """Fetch currently running operations above the threshold (default 1000ms)."""
     config = MongoDBConfig(

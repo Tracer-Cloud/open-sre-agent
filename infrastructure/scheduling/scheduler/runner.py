@@ -21,7 +21,16 @@ from infrastructure.scheduling.scheduler.operation_log import (
     record_scheduler_service_operation,
     record_scheduler_task_operation,
 )
-from infrastructure.scheduling.scheduler.store import get_task, list_tasks, update_task
+from infrastructure.scheduling.scheduler.reload_signal import (
+    RELOAD_POLL_SECONDS,
+    watch_and_reconcile,
+)
+from infrastructure.scheduling.scheduler.store import (
+    _default_store_path,
+    get_task,
+    list_tasks,
+    update_task,
+)
 from infrastructure.scheduling.scheduler.types import ScheduledTask, TaskStatus
 
 logger = logging.getLogger(__name__)
@@ -272,17 +281,37 @@ def start_background_scheduler(
     return scheduler, enabled_count
 
 
-def start_scheduler() -> None:
+def _watch_reload_signal(scheduler: Any, stop_event: threading.Event) -> None:
+    """Keep the blocking scheduler's jobs in sync with the task store until stopped.
+
+    The blocking scheduler registers tasks once, so without this a task added by
+    another process (``opensre cron add``) would not run until a restart.
+    Delegates to the shared watcher: reload signal (fast path) plus a store-file
+    reconcile, so a dropped signal still converges on the next poll.
+    """
+    watch_and_reconcile(
+        stop_event,
+        lambda: resync_scheduler_jobs(scheduler),
+        _default_store_path(),
+        on_error=lambda exc: logger.warning("Scheduler resync failed; will retry: %s", exc),
+    )
+
+
+def start_scheduler(*, idle_when_empty: bool = False) -> None:
     """Load all enabled tasks and start the blocking scheduler.
 
     Blocks until SIGINT or SIGTERM. Invalid tasks (bad cron, bad timezone)
-    are logged and skipped rather than crashing the entire daemon.
+    are logged and skipped rather than crashing the entire daemon. With no
+    enabled tasks the CLI exits with guidance; ``idle_when_empty`` (a dedicated
+    scheduler service) idles and waits instead, so tasks can be added later
+    without the process crash-looping. Tasks added while running are picked up
+    from the reload signal without a restart.
     """
     from apscheduler.schedulers.blocking import BlockingScheduler
 
     scheduler = BlockingScheduler()
     enabled_count = _register_jobs(scheduler)
-    if enabled_count == 0:
+    if enabled_count == 0 and not idle_when_empty:
         logger.warning("No enabled tasks found. Scheduler has nothing to run.")
         record_scheduler_service_operation("scheduler_idle", task_count=0)
         raise SystemExit("No enabled tasks found. Add tasks with `opensre cron add` first.")
@@ -298,9 +327,24 @@ def start_scheduler() -> None:
     if sigterm is not None:
         signal.signal(sigterm, _shutdown_handler)
 
-    logger.info("Scheduler started with %d task(s). Waiting for triggers...", enabled_count)
+    # Watch for reloads so a task added by another process (`cron add`) is picked
+    # up live. The startup sentinel is deliberately NOT drained here: a task added
+    # between the initial registration above and now has already written it, so
+    # the watcher must consume and resync it rather than discard it.
+    reload_watcher = threading.Thread(
+        target=_watch_reload_signal,
+        args=(scheduler, stop_event),
+        name="scheduler-reload-watch",
+        daemon=True,
+    )
+    reload_watcher.start()
+
+    if enabled_count == 0:
+        logger.info("No enabled tasks yet; scheduler idle, waiting (add with `opensre cron add`).")
+    else:
+        logger.info("Scheduler started with %d task(s). Waiting for triggers...", enabled_count)
     record_scheduler_service_operation(
-        "scheduler_started",
+        "scheduler_started" if enabled_count else "scheduler_idle",
         task_count=enabled_count,
         extra={"blocking": True},
     )
@@ -309,6 +353,8 @@ def start_scheduler() -> None:
     except (KeyboardInterrupt, SystemExit):
         logger.info("Scheduler stopped.")
     finally:
+        stop_event.set()
+        reload_watcher.join(timeout=RELOAD_POLL_SECONDS + 1.0)
         record_scheduler_service_operation("scheduler_stopped", task_count=enabled_count)
 
 

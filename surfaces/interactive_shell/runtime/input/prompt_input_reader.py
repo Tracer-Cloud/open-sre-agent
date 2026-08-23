@@ -9,7 +9,7 @@ from infrastructure.terminal.prompt_support import (
     repl_prompt_note_ctrl_c,
     repl_reset_ctrl_c_gate,
 )
-from surfaces.interactive_shell.runtime.core.prompt_manager import PromptManager
+from surfaces.interactive_shell.runtime.core.prompt_builder import PromptBuilder
 from surfaces.interactive_shell.runtime.core.state import ReplState
 from surfaces.interactive_shell.runtime.input.events import (
     InputCancelled,
@@ -30,7 +30,7 @@ class PromptInputReader:
 
     def __init__(
         self,
-        prompt: PromptManager,
+        prompt: PromptBuilder,
         state: ReplState,
         session: Session,
         console: Console,

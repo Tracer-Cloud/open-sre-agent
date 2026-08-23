@@ -42,7 +42,7 @@ _CGROUP_RUNTIME_MARKERS: Final[tuple[tuple[str, str], ...]] = (
 
 
 @dataclass(frozen=True, slots=True)
-class RuntimeContext:
+class AnalyticsRuntime:
     """Stable, queryable classification for an analytics-emitting process."""
 
     execution_environment: str
@@ -105,10 +105,10 @@ def detect_container_runtime(
     return None
 
 
-def detect_runtime_context(
+def detect_analytics_runtime(
     environ: Mapping[str, str] | None = None,
     filesystem_root: Path | None = None,
-) -> RuntimeContext:
+) -> AnalyticsRuntime:
     """Return first-party traffic dimensions for analytics filtering."""
     is_ci = is_ci_environment(environ)
     container_runtime = detect_container_runtime(environ, filesystem_root)
@@ -123,7 +123,7 @@ def detect_runtime_context(
     else:
         execution_environment = "local"
 
-    return RuntimeContext(
+    return AnalyticsRuntime(
         execution_environment=execution_environment,
         is_ci=is_ci,
         is_container=is_container,

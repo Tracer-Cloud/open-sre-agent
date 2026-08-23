@@ -25,12 +25,12 @@ import httpx
 from config.constants import get_store_path
 from config.constants.posthog import POSTHOG_CAPTURE_API_KEY, POSTHOG_HOST
 from config.version import get_opensre_version
-from infrastructure.analytics.events import Event
-from infrastructure.analytics.runtime_context import (
+from infrastructure.analytics.analytics_runtime import (
+    detect_analytics_runtime,
     detect_container_runtime,
-    detect_runtime_context,
     is_ci_environment,
 )
+from infrastructure.analytics.events import Event
 from infrastructure.analytics.usage_context import (
     ORGANIZATION_GROUP_TYPE,
     merge_usage_enrichment,
@@ -681,7 +681,7 @@ def _is_json_value(value: object) -> bool:
 
 
 _COMPOSITE_FINGERPRINT = _build_composite_fingerprint()
-_RUNTIME_CONTEXT = detect_runtime_context()
+_ANALYTICS_RUNTIME = detect_analytics_runtime()
 
 _BASE_PROPERTIES: Final[Properties] = {
     "cli_version": _cli_version(),
@@ -691,10 +691,10 @@ _BASE_PROPERTIES: Final[Properties] = {
     "composite_fingerprint": _COMPOSITE_FINGERPRINT.value,
     "composite_fingerprint_version": _COMPOSITE_FINGERPRINT_VERSION,
     "composite_fingerprint_components": _COMPOSITE_FINGERPRINT.components,
-    "execution_environment": _RUNTIME_CONTEXT.execution_environment,
-    "is_ci": _RUNTIME_CONTEXT.is_ci,
-    "is_container": _RUNTIME_CONTEXT.is_container,
-    "container_runtime": _RUNTIME_CONTEXT.container_runtime,
+    "execution_environment": _ANALYTICS_RUNTIME.execution_environment,
+    "is_ci": _ANALYTICS_RUNTIME.is_ci,
+    "is_container": _ANALYTICS_RUNTIME.is_container,
+    "container_runtime": _ANALYTICS_RUNTIME.container_runtime,
     "$process_person_profile": False,
 }
 

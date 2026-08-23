@@ -8,7 +8,7 @@ import httpx
 
 from core.domain.types.tools import ToolSurface
 from core.tool import report_run_error
-from core.tool_framework.tool_decorator import tool
+from core.tool_framework import tool
 from core.tool_framework.utils import tool_unavailable
 from integrations.sentry import (
     DEFAULT_SENTRY_ISSUE_LIMIT,

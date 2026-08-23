@@ -10,7 +10,7 @@ import re
 from typing import Any
 
 from core.tool import EvidenceType, SideEffectLevel
-from core.tool_framework.tool_decorator import tool
+from core.tool_framework import tool
 from core.tool_framework.utils import tool_unavailable
 from infrastructure.evidence.evidence_compaction import compact_logs, summarize_counts
 from integrations.datadog._client import make_async_client
@@ -291,7 +291,7 @@ def fetch_datadog_context(
 """Datadog events query tool."""
 
 
-from core.tool_framework.tool_decorator import tool
+from core.tool_framework import tool
 from integrations.datadog._client import make_client, unavailable
 
 
@@ -366,7 +366,7 @@ def query_datadog_events(
 
 from typing import cast
 
-from core.tool_framework.tool_decorator import tool
+from core.tool_framework import tool
 from integrations.datadog.availability import datadog_available_or_backend
 
 _ERROR_KEYWORDS = (
@@ -505,7 +505,7 @@ def query_datadog_logs(
 
 from pydantic import BaseModel, Field
 
-from core.tool_framework.tool_decorator import tool
+from core.tool_framework import tool
 
 
 class QueryDatadogMetricsInput(BaseModel):
@@ -598,7 +598,7 @@ def query_datadog_metrics(
 """Datadog monitor listing tool."""
 
 
-from core.tool_framework.tool_decorator import tool
+from core.tool_framework import tool
 
 
 def _monitors_is_available(sources: dict[str, dict]) -> bool:
@@ -680,7 +680,7 @@ def query_datadog_monitors(
 """Datadog tool: resolve a node IP to the pods running on that node."""
 
 
-from core.tool_framework.tool_decorator import tool
+from core.tool_framework import tool
 
 
 def _node_pods_is_available(sources: dict[str, dict]) -> bool:

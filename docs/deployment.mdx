@@ -8,12 +8,13 @@ OpenSRE deploys as a standard Python FastAPI application. Use the repository
 `Dockerfile` with Railway, EC2, ECS, Vercel, or another ASGI-capable host. For
 local containers, see [Docker](/environments/docker).
 
-The image supports two values of `MODE`:
+The image supports three values of `MODE`:
 
 | `MODE` | Runtime |
 | --- | --- |
 | `web` (default) | HTTP API — health checks, alert intake, and investigations |
 | `gateway` | Messaging gateway (Slack / Telegram) and related services |
+| `scheduler` | Dedicated cron/loop scheduler service (no gateway or web) |
 
 ## Environment setup
 
@@ -99,3 +100,69 @@ Complete route reference: [HTTP API](/api).
    strings.
 3. Optionally set `OPENSRE_DEPLOYMENT_METHOD=railway` for telemetry labeling.
 4. Deploy the service through your Railway project.
+
+## Horizontal scale-out
+
+Run more than one gateway task to serve more concurrent conversations.
+
+### Required: a shared, locked session store
+
+All tasks must use the same session store — a shared mount such as an S3 Files or
+EFS volume. Turn on the cross-process lock so two tasks never corrupt one
+session's file:
+
+```bash
+OPENSRE_SESSION_FILE_LOCK=1
+```
+
+Without it, two tasks handling turns for the same conversation at the same moment
+can interleave writes and lose turns. A single-task deployment does not need it
+and should leave it off.
+
+### Concurrency per task
+
+Each task runs a bounded number of turns at once (default 1). Turns are I/O-bound
+— mostly waiting on the model — so a small task can run several; the limit is the
+task's memory, since each concurrent turn holds its context resident. Raise it
+without changing the task size:
+
+```bash
+OPENSRE_MAX_CONCURRENT_TURNS=2
+```
+
+Read the `gateway_turn_memory` debug lines (`delta_mb`, `peak_mb`) from a real run
+to size this against the task's memory limit before raising it.
+
+### Dedicated scheduler service
+
+By default the gateway process also runs the cron/loop scheduler. With more than
+one gateway task that would fire every scheduled task once per task. Run the
+scheduler as its own single service instead:
+
+- Deploy one `MODE=scheduler` task. It runs `opensre cron start --service`,
+  idling until tasks exist rather than exiting.
+- Set `OPENSRE_GATEWAY_HOST_SCHEDULER=0` on the gateway tasks so they stop
+  hosting the scheduler in-process.
+
+Run exactly one scheduler service, never one per gateway task.
+
+The scheduler service and every process that mutates tasks — the gateway,
+`opensre cron`, and `/loops` — must share the **same** task store: the same
+`OPENSRE_HOME` on a shared mount (S3 Files / EFS). The scheduler reconciles from
+that file, so a separate filesystem would leave it running a stale task set.
+
+### Optional: conversation affinity
+
+The lock keeps N tasks correct. Affinity — routing a conversation to the same
+task each time — is a performance option: it keeps that conversation's warm agent
+in one task's memory instead of cold-rebuilding when a turn lands elsewhere.
+
+Affinity is a routing concern, not an app setting:
+
+- Behind an HTTP load balancer (Slack Events API), enable consistent hashing on
+  the conversation (Slack channel and thread) so a thread sticks to one task.
+- With the pull transports (Slack Socket Mode, Telegram, Discord), each task
+  connects independently and the provider spreads events across tasks, so there
+  is no built-in affinity. The lock keeps this correct; affinity would need an
+  external dispatcher and is worth adding only when warm-agent reuse measurably
+  helps.

@@ -1,4 +1,4 @@
-"""Slack-reactions port for the investigation intake and delivery flows.
+"""Slack-reactions provider for the investigation intake and delivery flows.
 
 Both ``tools/investigation/stages/intake/node.py`` (which flips an eyes/check
 reaction to signal that a Slack-triggered investigation started or was
@@ -9,14 +9,14 @@ emoji when the report is posted. Both used to call
 
 This module owns the neutral seam:
 
-* :class:`SlackReactionsPort` — the small protocol the investigation code
+* :class:`SlackReactionsProvider` — the small protocol the investigation code
   talks to.
-* :func:`register_slack_reactions_port` — the Slack integration adapter calls
+* :func:`register_slack_reactions_provider` — the Slack integration adapter calls
   this at import time to advertise its concrete implementation.
-* :func:`get_slack_reactions_port` — investigation code retrieves the port
-  and treats a missing port as "reactions are not wired for this run".
+* :func:`get_slack_reactions_provider` — investigation code retrieves the provider
+  and treats a missing provider as "reactions are not wired for this run".
 
-Registration is process-scoped. Tests may pass ``None`` to clear the port,
+Registration is process-scoped. Tests may pass ``None`` to clear the provider,
 or bind a stub implementation to verify emoji transitions without hitting the
 Slack API.
 """
@@ -27,7 +27,7 @@ from typing import Protocol, runtime_checkable
 
 
 @runtime_checkable
-class SlackReactionsPort(Protocol):
+class SlackReactionsProvider(Protocol):
     """Abstract Slack reaction operations used by the investigation flow.
 
     Concrete implementations live in the Slack integration package. The two
@@ -49,28 +49,28 @@ class SlackReactionsPort(Protocol):
         """Replace ``remove_emoji`` with ``add_emoji`` on the target message."""
 
 
-_port: SlackReactionsPort | None = None
+_provider: SlackReactionsProvider | None = None
 
 
-def register_slack_reactions_port(port: SlackReactionsPort | None) -> None:
-    """Bind (or clear) the concrete Slack reactions port.
+def register_slack_reactions_provider(provider: SlackReactionsProvider | None) -> None:
+    """Bind (or clear) the concrete Slack reactions provider.
 
-    Passing ``None`` clears the port — used in tests that need to assert the
+    Passing ``None`` clears the provider — used in tests that need to assert the
     default no-reactions-wired branch. The Slack integration adapter registers
     the real implementation at ``integrations.slack.reporting_adapter`` import
     time.
     """
-    global _port
-    _port = port
+    global _provider
+    _provider = provider
 
 
-def get_slack_reactions_port() -> SlackReactionsPort | None:
-    """Return the currently registered port, or ``None`` when unset."""
-    return _port
+def get_slack_reactions_provider() -> SlackReactionsProvider | None:
+    """Return the currently registered provider, or ``None`` when unset."""
+    return _provider
 
 
 __all__ = [
-    "SlackReactionsPort",
-    "get_slack_reactions_port",
-    "register_slack_reactions_port",
+    "SlackReactionsProvider",
+    "get_slack_reactions_provider",
+    "register_slack_reactions_provider",
 ]

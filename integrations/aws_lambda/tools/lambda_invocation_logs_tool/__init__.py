@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from core.tool_framework.tool_decorator import tool
+from core.tool_framework import tool
 from infrastructure.evidence.evidence_compaction import (
     compact_invocations,
     compact_logs,

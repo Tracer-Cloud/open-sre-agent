@@ -1,19 +1,19 @@
-"""Tests for MaskingContext — mask/unmask round-trip, stability, structured payloads."""
+"""Tests for MaskingRules — mask/unmask round-trip, stability, structured payloads."""
 
 from __future__ import annotations
 
-from infrastructure.safety.masking.context import MaskingContext
 from infrastructure.safety.masking.policy import ALL_KINDS, MaskingPolicy
+from infrastructure.safety.masking.rules import MaskingRules
 
 
-def _enabled_ctx() -> MaskingContext:
+def _enabled_ctx() -> MaskingRules:
     policy = MaskingPolicy.model_validate({"enabled": True, "kinds": ALL_KINDS})
-    return MaskingContext(policy=policy)
+    return MaskingRules(policy=policy)
 
 
-def _disabled_ctx() -> MaskingContext:
+def _disabled_ctx() -> MaskingRules:
     policy = MaskingPolicy.model_validate({"enabled": False, "kinds": ALL_KINDS})
-    return MaskingContext(policy=policy)
+    return MaskingRules(policy=policy)
 
 
 def test_disabled_policy_is_identity() -> None:
@@ -93,7 +93,7 @@ def test_from_state_reconstructs_context() -> None:
     masked = ctx.mask("kube_namespace:prod incident")
     # Simulate state carrying the map between nodes
     state = {"masking_map": ctx.to_state()}
-    reconstructed = MaskingContext.from_state(state)
+    reconstructed = MaskingRules.from_state(state)
     assert reconstructed.unmask(masked) == "kube_namespace:prod incident"
 
 
@@ -125,7 +125,7 @@ def test_counters_stable_when_map_iterated_out_of_order() -> None:
         "<NAMESPACE_0>": "alpha",
         "<NAMESPACE_1>": "beta",
     }
-    ctx = MaskingContext(policy=policy, placeholder_map=seeded)
+    ctx = MaskingRules(policy=policy, placeholder_map=seeded)
     # Allocate a fresh namespace; its index must be exactly 3 (one past the max).
     masked = ctx.mask("kube_namespace:delta fresh")
     fresh_placeholder = next(p for p, v in ctx.placeholder_map.items() if v == "delta")
@@ -147,7 +147,7 @@ def test_partial_overlap_matches_do_not_corrupt_text() -> None:
             "extra_patterns": {"partial": r"(192\.168\.1\.)"},
         }
     )
-    ctx = MaskingContext(policy=policy)
+    ctx = MaskingRules(policy=policy)
     masked = ctx.mask("host 192.168.1.50 online")
     # Exactly one placeholder used; the other overlap was dropped.
     assert masked.count("<") == 1

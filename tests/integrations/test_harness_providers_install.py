@@ -24,7 +24,7 @@ from integrations.tracer.integrations_adapter import fetch_tracer_remote_integra
 from surfaces.shared.terminal.output import boundary as output_boundary
 
 
-def _reset_all_ports() -> None:
+def _reset_all_providers() -> None:
     harness_providers.reset_harness_providers()
     set_progress_tracker(NoopProgressTracker())
     set_progress_tracker_factory(None)
@@ -35,22 +35,22 @@ def _reset_all_ports() -> None:
 
 
 @pytest.fixture(autouse=True)
-def _reset_integrations_port() -> Iterator[None]:
-    _reset_all_ports()
+def _reset_integrations_providers() -> Iterator[None]:
+    _reset_all_providers()
     yield
-    _reset_all_ports()
+    _reset_all_providers()
 
 
-def test_port_defaults_to_empty_before_boundary_install() -> None:
+def test_remote_fetch_defaults_to_empty_before_boundary_install() -> None:
     assert harness_providers.fetch_remote_integrations(org_id="org-1", auth_token="tok") == []
 
 
 def test_install_product_adapters_wires_tracer_fetcher() -> None:
     output_boundary.install_product_adapters()
 
-    assert (
-        harness_providers.integration_resolution._fetch_remote is fetch_tracer_remote_integrations
-    )
+    installed_remote = harness_providers.integration_resolution._installed_remote
+    assert installed_remote is not None
+    assert installed_remote.fetch is fetch_tracer_remote_integrations
 
 
 def test_registered_fetcher_is_invoked() -> None:
@@ -60,7 +60,7 @@ def test_registered_fetcher_is_invoked() -> None:
         calls.append((org_id, auth_token))
         return [{"service": "grafana", "config": {}}]
 
-    harness_providers.set_remote_integrations_fetcher(_fake_fetcher)
+    harness_providers.RemoteIntegrationsProvider(_fake_fetcher).install()
     result = harness_providers.fetch_remote_integrations(org_id="org-42", auth_token="jwt-here")
 
     assert calls == [("org-42", "jwt-here")]
@@ -73,15 +73,17 @@ def test_reset_restores_webapp_vault_fetcher_default() -> None:
     def _sentinel_vault() -> list[dict[str, object]]:
         return [{"service": "leaked-vault-marker"}]
 
-    harness_providers.set_integration_resolution_adapters(fetch_webapp_vault=_sentinel_vault)
-    assert harness_providers.integration_resolution._fetch_webapp_vault is _sentinel_vault
+    harness_providers.IntegrationResolutionAdapters(fetch_webapp_vault=_sentinel_vault).install()
+    assert (
+        harness_providers.integration_resolution._adapters().fetch_webapp_vault is _sentinel_vault
+    )
 
     # Act
     harness_providers.reset_harness_providers()
 
     # Assert: the noop default is restored, not the leaked sentinel.
     assert (
-        harness_providers.integration_resolution._fetch_webapp_vault
+        harness_providers.integration_resolution._adapters().fetch_webapp_vault
         is harness_providers.integration_resolution._default_fetch_webapp_vault
     )
 
@@ -90,10 +92,10 @@ def test_install_harness_providers_wires_catalog_and_registry() -> None:
     output_boundary.install_harness_providers()
 
     assert (
-        harness_providers.integration_resolution._load_integrations
+        harness_providers.integration_resolution._adapters().load_integrations
         is not harness_providers.integration_resolution._default_load_integrations
     )
-    assert isinstance(harness_providers.get_surface_tools("action"), list)
+    assert isinstance(harness_providers.resolve_surface_tools("action"), list)
 
 
 def test_install_harness_providers_wires_cli_llm_adapters() -> None:
@@ -104,17 +106,15 @@ def test_install_harness_providers_wires_cli_llm_adapters() -> None:
 
     output_boundary.install_harness_providers()
 
+    installed = harness_providers.cli_llm._installed
+    assert installed is not None
     assert (
-        harness_providers.cli_llm._cli_provider_registration_fn
+        installed.cli_provider_registration
         is not harness_providers.cli_llm._default_cli_provider_registration
     )
+    assert installed.build_cli_client is not harness_providers.cli_llm._cli_llm_backend_unavailable
     assert (
-        harness_providers.cli_llm._build_cli_client_fn
-        is not harness_providers.cli_llm._cli_llm_backend_unavailable
-    )
-    assert (
-        harness_providers.cli_llm._flatten_cli_messages_fn
-        is not harness_providers.cli_llm._cli_llm_backend_unavailable
+        installed.flatten_cli_messages is not harness_providers.cli_llm._cli_llm_backend_unavailable
     )
 
 

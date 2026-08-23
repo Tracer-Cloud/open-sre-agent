@@ -16,8 +16,8 @@ from infrastructure.delivery.reporting.delivery_registry import (
     register_delivery_adapter,
 )
 from infrastructure.delivery.reporting.slack_reactions import (
-    SlackReactionsPort,
-    register_slack_reactions_port,
+    SlackReactionsProvider,
+    register_slack_reactions_provider,
 )
 
 logger = logging.getLogger(__name__)
@@ -95,8 +95,8 @@ class _SlackReportDeliveryAdapter:
         return True
 
 
-class _SlackReactionsPort(SlackReactionsPort):
-    """Concrete Slack reactions port backed by ``integrations.slack.delivery``."""
+class _SlackReactionsProvider(SlackReactionsProvider):
+    """Concrete Slack reactions provider backed by ``integrations.slack.delivery``."""
 
     def add_reaction(self, emoji: str, channel: str, timestamp: str, token: str) -> None:
         from integrations.slack.delivery import add_reaction
@@ -117,10 +117,10 @@ class _SlackReactionsPort(SlackReactionsPort):
 
 
 slack_delivery_adapter = _SlackReportDeliveryAdapter()
-slack_reactions_port = _SlackReactionsPort()
+slack_reactions_provider = _SlackReactionsProvider()
 
 register_delivery_adapter(slack_delivery_adapter)
-register_slack_reactions_port(slack_reactions_port)
+register_slack_reactions_provider(slack_reactions_provider)
 
 
-__all__ = ["slack_delivery_adapter", "slack_reactions_port"]
+__all__ = ["slack_delivery_adapter", "slack_reactions_provider"]

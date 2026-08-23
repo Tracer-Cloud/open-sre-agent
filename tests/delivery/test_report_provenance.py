@@ -285,6 +285,46 @@ def test_build_report_context_handles_new_relic_alert_with_no_condition_name() -
     assert catalog_entry["snippet"] is None
 
 
+def test_build_report_context_cites_mapper_recorded_entry() -> None:
+    # A tool with no bespoke catalog reader becomes citeable via a recorded entry.
+    state = _make_state()
+    state["evidence"]["catalog_entries"] = [
+        {
+            "source": "postgresql_slow_queries",
+            "label": "PostgreSQL Slow Queries",
+            "summary": "3 queries",
+            "url": None,
+            "snippet": None,
+        }
+    ]
+
+    ctx = build_report_context(state)
+
+    entry = ctx["evidence_catalog"]["evidence/mapped/postgresql_slow_queries"]
+    assert entry["label"] == "PostgreSQL Slow Queries"
+    assert entry["summary"] == "3 queries"
+    assert entry["display_id"].startswith("E")
+
+
+def test_bespoke_reader_wins_over_mapped_entry_for_same_source() -> None:
+    # _make_state has grafana_logs, which the bespoke reader already catalogs.
+    state = _make_state()
+    state["evidence"]["catalog_entries"] = [
+        {
+            "source": "grafana_logs",
+            "label": "Should be ignored",
+            "summary": None,
+            "url": None,
+            "snippet": None,
+        }
+    ]
+
+    ctx = build_report_context(state)
+
+    assert "evidence/grafana/loki" in ctx["evidence_catalog"]
+    assert "evidence/mapped/grafana_logs" not in ctx["evidence_catalog"]
+
+
 def test_build_report_context_drops_empty_provenance_summaries() -> None:
     state = _make_state()
     state["available_sources"]["github"] = {}

@@ -79,7 +79,7 @@ def test_no_tools_available_returns_none(monkeypatch: Any) -> None:
     session = Session()
     session.resolved_integrations_cache = {}
 
-    monkeypatch.setattr(harness_providers, "get_investigation_tools", lambda _resolved: [])
+    monkeypatch.setattr(harness_providers, "resolve_investigation_tools", lambda _resolved: [])
 
     assert gather_shell_evidence("any question", session, _console()) is None
 
@@ -90,7 +90,7 @@ def test_secondary_only_tools_return_none(monkeypatch: Any) -> None:
 
     monkeypatch.setattr(
         harness_providers,
-        "get_investigation_tools",
+        "resolve_investigation_tools",
         lambda _resolved: [_DummyTool("get_sre_guidance", source="knowledge")],
     )
 
@@ -108,7 +108,7 @@ def test_executed_results_return_formatted_observation(monkeypatch: Any) -> None
 
     monkeypatch.setattr(
         harness_providers,
-        "get_investigation_tools",
+        "resolve_investigation_tools",
         lambda _resolved: [_DummyTool("search_github_issues")],
     )
     monkeypatch.setattr("core.llm.factory.get_llm", lambda _role: object())
@@ -147,7 +147,7 @@ def test_no_executed_returns_none(monkeypatch: Any) -> None:
 
     monkeypatch.setattr(
         harness_providers,
-        "get_investigation_tools",
+        "resolve_investigation_tools",
         lambda _resolved: [_DummyTool("search_github_issues")],
     )
     monkeypatch.setattr("core.llm.factory.get_llm", lambda _role: object())
@@ -174,7 +174,7 @@ def test_exception_path_returns_none(monkeypatch: Any) -> None:
 
     monkeypatch.setattr(
         harness_providers,
-        "get_investigation_tools",
+        "resolve_investigation_tools",
         lambda _resolved: [_DummyTool("search_github_issues")],
     )
 
@@ -234,7 +234,7 @@ def test_gathering_progress_lines_print_on_tool_start(monkeypatch: Any) -> None:
 
     monkeypatch.setattr(
         harness_providers,
-        "get_investigation_tools",
+        "resolve_investigation_tools",
         lambda _resolved: [_DummyTool("query_grafana_metrics", source="grafana")],
     )
     monkeypatch.setattr("core.llm.factory.get_llm", lambda _role: object())
@@ -413,7 +413,7 @@ def test_gather_enriches_github_before_selecting_tools(monkeypatch: Any) -> None
             return [_DummyTool("search_github_issues")]
         return []
 
-    monkeypatch.setattr(harness_providers, "get_investigation_tools", _capture_tools)
+    monkeypatch.setattr(harness_providers, "resolve_investigation_tools", _capture_tools)
     monkeypatch.setattr("core.llm.factory.get_llm", lambda _role: object())
 
     def _fake_run(
@@ -447,7 +447,7 @@ def test_gather_enriches_gitlab_before_selecting_tools(monkeypatch: Any) -> None
             return [_DummyTool("get_gitlab_file", source="gitlab")]
         return []
 
-    monkeypatch.setattr(harness_providers, "get_investigation_tools", _capture_tools)
+    monkeypatch.setattr(harness_providers, "resolve_investigation_tools", _capture_tools)
     monkeypatch.setattr("core.llm.factory.get_llm", lambda _role: object())
 
     def _fake_run(
@@ -475,7 +475,7 @@ def test_gather_user_message_includes_recent_conversation(monkeypatch: Any) -> N
 
     monkeypatch.setattr(
         harness_providers,
-        "get_investigation_tools",
+        "resolve_investigation_tools",
         lambda _resolved: [_DummyTool("search_github_issues")],
     )
     monkeypatch.setattr("core.llm.factory.get_llm", lambda _role: object())

@@ -70,7 +70,7 @@ class CancelProbeConsole:
 
 @dataclass(frozen=True, slots=True)
 class CancelProbeContext:
-    """Stand-in ``ActionToolContext`` carrying only the cancel console."""
+    """Stand-in ``ActionToolScope`` carrying only the cancel console."""
 
     console: CancelProbeConsole
 

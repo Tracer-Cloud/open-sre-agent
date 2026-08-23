@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from core.tool_framework.tool_decorator import tool
+from core.tool_framework import tool
 from integrations.aws.lambda_client import get_function_configuration
 from integrations.aws_lambda.availability import lambda_available, lambda_name
 

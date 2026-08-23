@@ -12,7 +12,7 @@ from __future__ import annotations
 from typing import Any
 
 from core.domain.types.tools import ToolSurface
-from core.tool_framework.tool_decorator import tool
+from core.tool_framework import tool
 from integrations.yandex_cloud.api_index import (
     DEFAULT_LIMIT,
     endpoint_count,

@@ -4,9 +4,9 @@ from pathlib import Path
 
 import pytest
 
-from infrastructure.analytics.runtime_context import (
+from infrastructure.analytics.analytics_runtime import (
+    detect_analytics_runtime,
     detect_container_runtime,
-    detect_runtime_context,
     is_ci_environment,
 )
 
@@ -76,7 +76,7 @@ def test_detect_container_runtime_returns_none_without_signals(tmp_path: Path) -
         ({"CI": "true"}, True, "ci_container", True, True),
     ],
 )
-def test_detect_runtime_context_builds_filterable_dimensions(
+def test_detect_analytics_runtime_builds_filterable_dimensions(
     tmp_path: Path,
     environment: dict[str, str],
     with_docker: bool,
@@ -87,7 +87,7 @@ def test_detect_runtime_context_builds_filterable_dimensions(
     if with_docker:
         (tmp_path / ".dockerenv").touch()
 
-    context = detect_runtime_context(environment, tmp_path)
+    context = detect_analytics_runtime(environment, tmp_path)
 
     assert context.execution_environment == expected_environment
     assert context.is_ci is is_ci

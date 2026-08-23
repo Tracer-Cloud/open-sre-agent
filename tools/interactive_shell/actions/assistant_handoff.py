@@ -6,7 +6,7 @@ from typing import Any
 
 from core.agent_harness.tools import (
     EVIDENCE_KIND_VALUES,
-    ActionToolContext,
+    ActionToolScope,
     HandoffField,
     execute_with_action_context,
 )
@@ -15,7 +15,7 @@ from core.tool import RegisteredTool, SideEffectLevel
 from core.tool_framework.utils import object_schema, string_array_property, string_property
 
 
-def execute_assistant_handoff_tool(args: dict[str, Any], ctx: ActionToolContext) -> bool:
+def execute_assistant_handoff_tool(args: dict[str, Any], ctx: ActionToolScope) -> bool:
     _ = args
     _ = ctx
     # Handoffs are informational planning outputs and intentionally

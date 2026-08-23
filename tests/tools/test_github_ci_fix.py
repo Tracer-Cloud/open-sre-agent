@@ -8,7 +8,7 @@ from unittest.mock import MagicMock, patch
 
 from core.agent_harness.tools.tool_context import (
     ACTION_TOOL_CONTEXT_RESOURCE_KEY,
-    ActionToolContext,
+    ActionToolScope,
 )
 from core.tool.contracts import AgentToolContext, RegisteredTool
 from integrations.coding_agent import CodingResult
@@ -453,7 +453,7 @@ def test_tool_passes_shell_confirmation_function() -> None:
     agent_context = AgentToolContext(
         resolved_integrations={},
         resources={
-            ACTION_TOOL_CONTEXT_RESOURCE_KEY: ActionToolContext(
+            ACTION_TOOL_CONTEXT_RESOURCE_KEY: ActionToolScope(
                 session=object(),
                 console=SimpleNamespace(),
                 confirm_fn=confirm,

@@ -250,7 +250,7 @@ def test_run_repl_async_identifies_saved_github_username(monkeypatch: Any) -> No
 
     monkeypatch.setattr(
         main_entrypoint,
-        "create_repl_runtime_context",
+        "create_repl_runtime",
         lambda **_kwargs: SimpleNamespace(session=Session(), inbox=None),
     )
 
@@ -308,7 +308,7 @@ def test_run_repl_async_failed_resume_flushes_starter_session(
     )
     monkeypatch.setattr(
         main_entrypoint,
-        "create_repl_runtime_context",
+        "create_repl_runtime",
         lambda **_kwargs: SimpleNamespace(session=session, inbox=None),
     )
 
@@ -424,7 +424,7 @@ def test_run_repl_async_routes_the_console_into_resume(monkeypatch: Any, tmp_pat
     monkeypatch.setattr(main_entrypoint, "build_prompt_session", lambda: _PromptSession())
     monkeypatch.setattr(
         main_entrypoint,
-        "create_repl_runtime_context",
+        "create_repl_runtime",
         lambda **_kwargs: SimpleNamespace(session=Session(), inbox=None),
     )
     captured = Console(file=StringIO(), force_terminal=False, width=80)
@@ -567,7 +567,7 @@ def test_initial_input_replay_uses_the_supplied_console(monkeypatch: Any) -> Non
     monkeypatch.setattr(main_entrypoint, "build_prompt_session", lambda: _PromptSession())
     monkeypatch.setattr(
         main_entrypoint,
-        "create_repl_runtime_context",
+        "create_repl_runtime",
         lambda **_kwargs: SimpleNamespace(session=Session(), inbox=None),
     )
     captured = Console(file=StringIO(), force_terminal=False, width=80)

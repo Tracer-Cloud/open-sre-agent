@@ -184,6 +184,15 @@ If the tool/integration is relevant to investigations:
 - [ ] Review alert-source seeding in `core/domain/alerts/alert_source.py`
 - [ ] Review source-priority/prompt mapping in `tools/investigation/stages/gather_evidence/prompt.py`
 - [ ] Review evidence/source registration in `core/domain/types/` or related state models
+- [ ] **Declare `@tool(evidence_mapper=...)`** (or set the `evidence_mapper`
+  class attribute on a `BaseTool`) if the tool's output should be citeable in the
+  report. The mapper lifts the raw output into the canonical report keys the
+  evidence catalog cites, and it lives with the tool in its own package — the
+  investigation stage stays vendor-agnostic. A tool with no mapper keeps its raw
+  output only; the catalog never mints a citeable key for it. The coverage guard
+  (`tests/tools/investigation/stages/gather_evidence/test_evidence_mapper_coverage.py`)
+  fails until you either add the mapper or record the tool in
+  `evidence_mapper_baseline.txt` as a deliberate known gap.
 - [ ] Add scenario coverage proving the tool surfaces useful RCA evidence
 
 If the integration is first-class for an `alert_source`, review the source-to-tool maps explicitly.

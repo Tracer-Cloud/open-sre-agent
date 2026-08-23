@@ -19,8 +19,8 @@ from core.domain.alerts.extraction import (
 from core.domain.types.incident_window import resolve_incident_window
 from core.state import InvestigationState
 from infrastructure.delivery.reporting.slack_reactions import (
-    SlackReactionsPort,
-    get_slack_reactions_port,
+    SlackReactionsProvider,
+    get_slack_reactions_provider,
 )
 from infrastructure.observability import (
     debug_print,
@@ -190,10 +190,10 @@ def _handle_noise_reaction(state: InvestigationState) -> None:
         return
 
     channel, timestamp, token = slack_context
-    port = _resolve_slack_reactions_port()
-    if port is None:
+    provider = _resolve_slack_reactions_provider()
+    if provider is None:
         return
-    port.swap_reaction("eyes", "white_check_mark", channel, timestamp, token)
+    provider.swap_reaction("eyes", "white_check_mark", channel, timestamp, token)
 
 
 def _handle_start_reaction(state: InvestigationState) -> None:
@@ -202,22 +202,22 @@ def _handle_start_reaction(state: InvestigationState) -> None:
         return
 
     channel, timestamp, token = slack_context
-    port = _resolve_slack_reactions_port()
-    if port is None:
+    provider = _resolve_slack_reactions_provider()
+    if provider is None:
         return
-    port.add_reaction("eyes", channel, timestamp, token)
+    provider.add_reaction("eyes", channel, timestamp, token)
 
 
-def _resolve_slack_reactions_port() -> SlackReactionsPort | None:
-    """Return the currently registered Slack reactions port, loading adapters on demand.
+def _resolve_slack_reactions_provider() -> SlackReactionsProvider | None:
+    """Return the currently registered Slack reactions provider, loading adapters on demand.
 
     The delivery bootstrap is idempotent and cheap; calling it here guarantees
-    the Slack integration adapter has had a chance to register its port
+    the Slack integration adapter has had a chance to register its provider
     without ``core/`` or ``tools/investigation/stages/`` importing
     ``integrations.slack`` directly (T-4 layering audit, issue #3352).
     """
     ensure_delivery_adapters_registered()
-    return get_slack_reactions_port()
+    return get_slack_reactions_provider()
 
 
 def _slack_reaction_context(state: InvestigationState) -> tuple[str, str, str] | None:

@@ -84,16 +84,16 @@ def test_start_registers_harness_adapters_so_integrations_resolve() -> None:
     )
     from infrastructure.harness_providers import (
         configured_integration_services,
-        get_investigation_tools,
         reset_harness_providers,
         resolve_integrations,
+        resolve_investigation_tools,
     )
 
     reset_harness_providers()
     reset_process_runtime_for_tests()
     assert configured_integration_services() == ()
     assert resolve_integrations() == {}
-    assert list(get_investigation_tools({"grafana": {"connection_verified": True}})) == []
+    assert list(resolve_investigation_tools({"grafana": {"connection_verified": True}})) == []
 
     AgentSession.start(
         SessionConfig(
@@ -106,7 +106,9 @@ def test_start_registers_harness_adapters_so_integrations_resolve() -> None:
 
     # Tool registry is populated even when the local store is empty (CI).
     grafana_tools = list(
-        get_investigation_tools({"grafana": {"endpoint": "http://g", "connection_verified": True}})
+        resolve_investigation_tools(
+            {"grafana": {"endpoint": "http://g", "connection_verified": True}}
+        )
     )
     assert any(t.name.startswith("query_grafana") for t in grafana_tools)
 

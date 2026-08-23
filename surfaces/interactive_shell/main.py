@@ -14,7 +14,7 @@ from infrastructure.analytics.cli import identify_saved_github_username
 from infrastructure.logging import install_shell_log_handler, quiet_noisy_third_party_loggers
 from infrastructure.terminal.theme import set_active_theme
 from surfaces.interactive_shell.controller import InteractiveShellController
-from surfaces.interactive_shell.runtime.context import create_repl_runtime_context
+from surfaces.interactive_shell.runtime.context import create_repl_runtime
 from surfaces.interactive_shell.runtime.startup.first_launch_github import (
     require_startup_github_login,
 )
@@ -56,7 +56,7 @@ async def run_repl_async(
     # of racing the spinner's redraw on the tty and staircasing what follows.
     install_shell_log_handler(lambda: out)
     pt_session = build_prompt_session()
-    runtime_context = create_repl_runtime_context(pt_session=pt_session)
+    runtime_context = create_repl_runtime(pt_session=pt_session)
     session = runtime_context.session
     session.terminal.cli_command_group = cli_command_group
 

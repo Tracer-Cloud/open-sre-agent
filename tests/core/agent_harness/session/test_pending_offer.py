@@ -6,7 +6,7 @@ import pytest
 
 from core.agent_harness.prompts.memory.conversation import expand_affirmative_follow_up
 from core.agent_harness.session.pending_offer import PendingScheduleOffer
-from core.agent_harness.tools.tool_context import ActionToolContext
+from core.agent_harness.tools.tool_context import ActionToolScope
 from core.agent_harness.turns.headless_adapters import InMemorySessionState, NoopTurnAccounting
 from core.agent_harness.turns.orchestrator import run_turn
 from core.agent_harness.turns.turn_results import ToolCallingTurnResult
@@ -65,7 +65,7 @@ def test_propose_tool_sets_session_pending_offer() -> None:
         ok=True,
         response_text="Some headline",
     )
-    ctx = ActionToolContext(session=session, console=object())
+    ctx = ActionToolScope(session=session, console=object())
     briefing = (
         "Good morning! Here is your briefing.\n"
         "Weather — Amsterdam: ☀️ +20°C\n"
@@ -94,7 +94,7 @@ def test_propose_tool_sets_session_pending_offer() -> None:
 def test_propose_alone_without_briefing_work_is_rejected() -> None:
     """User symptom: 'give me a morning report' → only Want me to, no weather."""
     session = InMemorySessionState()
-    ctx = ActionToolContext(session=session, console=object())
+    ctx = ActionToolScope(session=session, console=object())
     result = execute_propose_scheduled_delivery_tool(
         {
             "kind": "daily_summary",
@@ -231,10 +231,10 @@ def test_slash_tool_rebuild_keeps_cron_expression_for_dispatch() -> None:
     dispatched: list[str] = []
     from rich.console import Console
 
-    from core.agent_harness.tools.tool_context import ActionToolContext
+    from core.agent_harness.tools.tool_context import ActionToolScope
     from core.agent_harness.turns.headless_adapters import InMemorySessionState
 
-    ctx = ActionToolContext(
+    ctx = ActionToolScope(
         session=InMemorySessionState(),
         console=Console(force_terminal=False, highlight=False),
         slash_ports=_Ports(),
@@ -400,7 +400,7 @@ def test_a_stale_fetch_from_an_earlier_turn_does_not_unlock_the_offer() -> None:
     reached through a different door.
     """
     # Arrange
-    from core.agent_harness.tools.tool_context import ActionToolContext
+    from core.agent_harness.tools.tool_context import ActionToolScope
     from core.agent_harness.turns.headless_adapters import InMemorySessionState
     from tools.interactive_shell.actions.propose_scheduled_delivery import (
         execute_propose_scheduled_delivery_tool,
@@ -411,7 +411,7 @@ def test_a_stale_fetch_from_an_earlier_turn_does_not_unlock_the_offer() -> None:
     session.record("shell", "curl -s 'wttr.in/Amsterdam?format=3'", ok=True)
     session.record("shell", "curl -s 'https://feeds.bbci.co.uk/news/rss.xml'", ok=True)
     # This turn starts here and fetches nothing.
-    ctx = ActionToolContext(session=session, console=object(), history_start=len(session.history))
+    ctx = ActionToolScope(session=session, console=object(), history_start=len(session.history))
 
     # Act
     result = execute_propose_scheduled_delivery_tool(
@@ -448,7 +448,7 @@ def test_the_turn_boundary_reaches_the_tool_context_in_production() -> None:
 
     # Act
     provider.action_tools(confirm_fn=None, is_tty=False)
-    ctx = provider._tool_context
+    ctx = provider._tool_scope
 
     # Assert
     assert ctx is not None

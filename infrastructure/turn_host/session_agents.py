@@ -1,6 +1,6 @@
-"""Session-scoped :class:`HeadlessAgent` pool for the turn handler.
+"""Session-scoped :class:`HeadlessAgent` pool for the turn runner.
 
-Keeps agent construction out of :class:`TurnHandler` so the handler
+Keeps agent construction out of :class:`TurnRunner` so the handler
 stays a thin dispatch/finalize orchestrator. Construction goes through
 :meth:`~core.agent_harness.turns.headless_build.DefaultHeadlessBuild.agent`
 once per session — not a second port-construction path.
@@ -70,7 +70,7 @@ class SessionAgentPool:
                 apply_capability_policy=ensure_gateway_capability_policy,
             )
         )
-        # Interactive shell keeps one TurnHandler for the REPL lifetime while
+        # Interactive shell keeps one TurnRunner for the REPL lifetime while
         # /new and /resume rotate session_id in place. When this flag is set,
         # handing out an agent for the live id drops every other cached entry
         # so rotations do not accumulate unreachable agents, outputs, and locks.

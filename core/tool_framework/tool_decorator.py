@@ -7,7 +7,7 @@ from typing import Any, cast, overload
 
 from pydantic import BaseModel
 
-from core.domain.types.evidence import EvidenceSource
+from core.domain.types.evidence import EvidenceMapper, EvidenceSource
 from core.domain.types.retrieval import RetrievalControls
 from core.domain.types.tools import ToolSurface
 from core.tool.contracts import (
@@ -40,6 +40,7 @@ def tool(
     outputs: dict[str, str] | None = None,
     output_schema: dict[str, Any] | None = None,
     output_model: type[BaseModel] | None = None,
+    evidence_mapper: EvidenceMapper | None = None,
     injected_params: tuple[str, ...] | None = None,
     retrieval_controls: RetrievalControls | None = None,
     is_available: Callable[[dict[str, dict]], bool] | None = None,
@@ -75,6 +76,7 @@ def tool[F: Callable[..., Any]](
     outputs: dict[str, str] | None = None,
     output_schema: dict[str, Any] | None = None,
     output_model: type[BaseModel] | None = None,
+    evidence_mapper: EvidenceMapper | None = None,
     injected_params: tuple[str, ...] | None = None,
     retrieval_controls: RetrievalControls | None = None,
     is_available: Callable[[dict[str, dict]], bool] | None = None,
@@ -110,6 +112,7 @@ def tool[F: Callable[..., Any]](
     outputs: dict[str, str] | None = None,
     output_schema: dict[str, Any] | None = None,
     output_model: type[BaseModel] | None = None,
+    evidence_mapper: EvidenceMapper | None = None,
     injected_params: tuple[str, ...] | None = None,
     retrieval_controls: RetrievalControls | None = None,
     is_available: Callable[[dict[str, dict]], bool] | None = None,
@@ -144,6 +147,7 @@ def tool[F: Callable[..., Any]](
     outputs: dict[str, str] | None = None,
     output_schema: dict[str, Any] | None = None,
     output_model: type[BaseModel] | None = None,
+    evidence_mapper: EvidenceMapper | None = None,
     injected_params: tuple[str, ...] | None = None,
     retrieval_controls: RetrievalControls | None = None,
     is_available: Callable[[dict[str, dict]], bool] | None = None,
@@ -182,6 +186,7 @@ def tool[F: Callable[..., Any]](
                 bool(outputs),
                 output_schema is not None,
                 output_model is not None,
+                evidence_mapper is not None,
                 bool(injected_params),
                 retrieval_controls is not None,
                 is_available is not None,
@@ -206,6 +211,7 @@ def tool[F: Callable[..., Any]](
                 or approval_expiry_seconds is not None
                 or parallel_safe is not None
                 or accepts_runtime_context is not None
+                or evidence_mapper is not None
             ):
                 setattr(
                     target,
@@ -220,6 +226,7 @@ def tool[F: Callable[..., Any]](
                         approval_expiry_seconds=approval_expiry_seconds,
                         parallel_safe=parallel_safe,
                         accepts_runtime_context=accepts_runtime_context,
+                        evidence_mapper=evidence_mapper,
                     ),
                 )
             return target
@@ -247,6 +254,7 @@ def tool[F: Callable[..., Any]](
                     outputs=outputs,
                     output_schema=output_schema,
                     output_model=output_model,
+                    evidence_mapper=evidence_mapper,
                     injected_params=injected_params,
                     retrieval_controls=retrieval_controls,
                     is_available=is_available,

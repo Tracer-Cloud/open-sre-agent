@@ -5,7 +5,7 @@ from __future__ import annotations
 from typing import Any
 
 from core.agent_harness.tools import (
-    ActionToolContext,
+    ActionToolScope,
     capability_available_from_sources,
     execute_with_action_context,
 )
@@ -18,7 +18,7 @@ from tools.interactive_shell.implementation.claude_code_executor import (
 from tools.interactive_shell.subprocess import require_subprocess_presenter
 
 
-def execute_implementation_tool(args: dict[str, Any], ctx: ActionToolContext) -> bool:
+def execute_implementation_tool(args: dict[str, Any], ctx: ActionToolScope) -> bool:
     task = str(args.get("task", "")).strip()
     if not task:
         return False

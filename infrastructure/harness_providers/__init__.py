@@ -12,12 +12,12 @@ from __future__ import annotations
 
 from infrastructure.harness_providers.cli_llm import (
     BuildCliClientFn,
+    CliLlmAdapters,
     CliProviderRegistrationFn,
     FlattenCliMessagesFn,
     build_cli_client,
     cli_provider_registration,
     flatten_cli_messages_to_prompt,
-    set_cli_llm_adapters,
 )
 from infrastructure.harness_providers.cli_llm import reset as _reset_cli_llm
 from infrastructure.harness_providers.evidence_sources import (
@@ -41,14 +41,17 @@ from infrastructure.harness_providers.evidence_sources import reset as _reset_ev
 from infrastructure.harness_providers.integration_resolution import (
     ClassifyIntegrationsFn,
     ConfiguredIntegrationServicesFn,
+    IntegrationResolutionAdapters,
     IntegrationResolutionRequest,
     IntegrationResolutionResult,
+    IntegrationSetupCommand,
     IntegrationStorePathFn,
     LoadEnvIntegrationsFn,
     LoadIntegrationsFn,
     MergeIntegrationsByServiceFn,
     MergeLocalIntegrationsFn,
     RemoteIntegrationsFetcher,
+    RemoteIntegrationsProvider,
     SetupableIntegrationServicesFn,
     WebappVaultFetcherFn,
     configured_integration_services,
@@ -56,10 +59,6 @@ from infrastructure.harness_providers.integration_resolution import (
     integration_setup_command,
     resolve_integrations,
     resolve_integrations_with_metadata,
-    set_integration_resolution_adapters,
-    set_integration_setup_command,
-    set_remote_integrations_fetcher,
-    set_setupable_integration_services,
     setupable_integration_services,
 )
 from infrastructure.harness_providers.integration_resolution import (
@@ -104,11 +103,10 @@ from infrastructure.harness_providers.subprocess_presenter import (
 )
 from infrastructure.harness_providers.tool_registry import (
     InvestigationToolsFn,
-    get_investigation_tools,
-    get_surface_tool_map,
-    get_surface_tools,
-    set_investigation_tools_adapter,
-    set_tool_registry,
+    ToolSources,
+    resolve_investigation_tools,
+    resolve_surface_tool_map,
+    resolve_surface_tools,
 )
 from infrastructure.harness_providers.tool_registry import reset as _reset_tool_registry
 
@@ -154,12 +152,15 @@ def reset_harness_providers() -> None:
 
 __all__ = [
     "BuildCliClientFn",
+    "CliLlmAdapters",
     "ClassifyIntegrationsFn",
     "CliProviderRegistrationFn",
     "ConfiguredIntegrationServicesFn",
     "FlattenCliMessagesFn",
+    "IntegrationResolutionAdapters",
     "IntegrationResolutionRequest",
     "IntegrationResolutionResult",
+    "IntegrationSetupCommand",
     "IntegrationStorePathFn",
     "InvestigationToolsFn",
     "LoadEnvIntegrationsFn",
@@ -171,8 +172,10 @@ __all__ = [
     "MetricQueryDraft",
     "PromptFragmentFn",
     "RemoteIntegrationsFetcher",
+    "RemoteIntegrationsProvider",
     "SetupableIntegrationServicesFn",
     "SubprocessPresenterProvider",
+    "ToolSources",
     "VcsRepoScopeProvider",
     "WebappVaultFetcherFn",
     "action_prompt_vendor_fragments",
@@ -193,9 +196,6 @@ __all__ = [
     "flatten_cli_messages_to_prompt",
     "gateway_persona_fragments",
     "gather_prompt_vendor_fragments",
-    "get_investigation_tools",
-    "get_surface_tool_map",
-    "get_surface_tools",
     "integration_setup_command",
     "metric_cohort_resolved_for",
     "metric_query_draft_for",
@@ -217,14 +217,10 @@ __all__ = [
     "reset_harness_providers",
     "resolve_integrations",
     "resolve_integrations_with_metadata",
+    "resolve_investigation_tools",
     "resolve_subprocess_presenter",
-    "set_cli_llm_adapters",
-    "set_integration_resolution_adapters",
-    "set_integration_setup_command",
-    "set_investigation_tools_adapter",
-    "set_remote_integrations_fetcher",
-    "set_setupable_integration_services",
-    "set_tool_registry",
+    "resolve_surface_tool_map",
+    "resolve_surface_tools",
     "setupable_integration_services",
     "strip_message_context_prefix",
 ]

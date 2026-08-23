@@ -18,7 +18,7 @@ from core.agent_harness.spi.session_state import (
     session_terminal,
     set_auto_command,
 )
-from core.agent_harness.tools import ActionToolContext, execute_with_action_context
+from core.agent_harness.tools import ActionToolScope, execute_with_action_context
 from core.domain.types.tools import ToolSurface
 from core.tool import RegisteredTool, SideEffectLevel
 from core.tool_framework.utils import object_schema, string_array_property, string_property
@@ -40,7 +40,7 @@ _QUEUED_INSTRUCTION = (
 )
 
 
-def _menu_available(ctx: ActionToolContext) -> bool:
+def _menu_available(ctx: ActionToolScope) -> bool:
     """True when the REPL can render the deferred ``/choose`` picker.
 
     Mirrors ``_slash_drives_interactive_picker``: gateway/headless sessions have
@@ -53,7 +53,7 @@ def _menu_available(ctx: ActionToolContext) -> bool:
     return ports is not None and bool(ports.tty_interactive())
 
 
-def execute_ask_user_choice_tool(args: dict[str, Any], ctx: ActionToolContext) -> dict[str, Any]:
+def execute_ask_user_choice_tool(args: dict[str, Any], ctx: ActionToolScope) -> dict[str, Any]:
     title = str(args.get("title", "")).strip()
     raw_options = args.get("options")
     options: list[str] = []

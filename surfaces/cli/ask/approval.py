@@ -13,7 +13,7 @@ from core.tool import (
     ToolExecutionHooks,
     ToolExecutionRequest,
 )
-from infrastructure.harness_providers import get_surface_tool_map
+from infrastructure.harness_providers import resolve_surface_tool_map
 
 _GATED_SIDE_EFFECTS = frozenset({SideEffectLevel.MUTATING, SideEffectLevel.EXTERNAL})
 
@@ -51,7 +51,7 @@ def registered_ask_tool_names() -> frozenset[str]:
     """Return every registered tool name the ask action or gather phases can reach."""
     names: set[str] = set()
     for surface in (ToolSurface.ACTION, ToolSurface.INVESTIGATION):
-        names.update(get_surface_tool_map(surface))
+        names.update(resolve_surface_tool_map(surface))
     return frozenset(names)
 
 

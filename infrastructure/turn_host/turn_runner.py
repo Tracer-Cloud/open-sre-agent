@@ -1,17 +1,17 @@
 """Dispatch one inbound message through the shared headless agent.
 
-This is the **only** turn handler. Transport dispatchers
+This is the **only** turn runner. Transport dispatchers
 (Slack/Discord/Telegram) are ingress adapters: they authorize, resolve a
 session, build turn output, then call this callback. Process-wide capacity is an
-optional gate on the same object — not a second handler.
+optional gate on the same object — not a second runner.
 
 Transport-agnostic: takes ``(text, session, output, logger)``, runs the turn, and
 finalizes outbound text on the output. Agent reuse is handled by
 :class:`SessionAgentPool`.
 
-Two entries, one turn. :meth:`TurnHandler.__call__` is the
+Two entries, one turn. :meth:`TurnRunner.__call__` is the
 ``TurnCallback`` the four chat transports use and returns nothing.
-:meth:`TurnHandler.run` is the same turn for an in-process caller that
+:meth:`TurnRunner.run` is the same turn for an in-process caller that
 needs the outcome as a value and has a terminal to bind — it returns the
 ``TurnResult`` (``None`` at capacity) and accepts the caller's console,
 ``confirm_fn`` and ``is_tty``. Every keyword defaults to the transport path, so
@@ -52,10 +52,11 @@ from infrastructure.turn_host.cancel_console import CancelConsole
 from infrastructure.turn_host.concurrency import AT_CAPACITY_MESSAGE, TurnConcurrencyGate
 from infrastructure.turn_host.session_agents import SessionAgentPool
 from infrastructure.turn_host.status_messages import EMPTY_RESPONSE_MESSAGE
+from infrastructure.turn_host.turn_memory import log_turn_memory, resident_memory_bytes
 from infrastructure.turn_host.turn_output import TurnOutput
 
 
-class TurnHandler:
+class TurnRunner:
     """Services one inbound gateway message per call (a :data:`TurnCallback`).
 
     One :class:`HeadlessAgent` is kept per logical session and reused across
@@ -65,7 +66,7 @@ class TurnHandler:
     isolated.
 
     When ``gate`` is set, capacity is checked here before the turn runs — the
-    manager must not wrap this class in a second "turn handler".
+    manager must not wrap this class in a second "turn runner".
     """
 
     def __init__(
@@ -162,6 +163,7 @@ class TurnHandler:
             logger.warning("gateway_turn missing surface binding; started/completed omit surface")
             surface = None
         started = time.monotonic()
+        memory_before = resident_memory_bytes()
 
         cancel = ensure_turn_cancel(output)
         turn_console = CancelConsole(console or self._console, cancel)
@@ -213,6 +215,7 @@ class TurnHandler:
                     turn_result.answered,
                     len(outbound_text),
                 )
+                log_turn_memory(logger, memory_before)
                 # Host soft-timeout (or stop) already owns the output terminal
                 # message — do not overwrite it with empty/fallback finalize.
                 cancelled = isinstance(cancel, threading.Event) and cancel.is_set()
@@ -243,4 +246,4 @@ class TurnHandler:
                 raise
 
 
-__all__ = ["TurnHandler"]
+__all__ = ["TurnRunner"]

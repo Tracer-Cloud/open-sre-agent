@@ -8,7 +8,7 @@ from typing import Any
 
 from core.domain.types.tools import ToolSurface
 from core.tool import BaseTool, SideEffectLevel
-from core.tool_framework.tool_decorator import tool
+from core.tool_framework import tool
 from core.tool_framework.utils import tool_unavailable
 from integrations.slack.tools.slack_read_list_tool.constants import (
     DEFAULT_ITEM_LIMIT,

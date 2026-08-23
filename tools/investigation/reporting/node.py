@@ -16,7 +16,7 @@ from core.state import InvestigationState
 from infrastructure.delivery.notifications.ingest_delivery import (
     create_investigation_and_attach_url,
 )
-from infrastructure.safety.masking import MaskingContext
+from infrastructure.safety.masking import MaskingRules
 from tools.investigation.reporting.context import build_report_context
 from tools.investigation.reporting.delivery import dispatch_report
 from tools.investigation.reporting.evaluation import run_optional_opensre_evaluation
@@ -56,7 +56,7 @@ def generate_report(
 
     # Restore any masked infrastructure identifiers in user-facing output.
     # No-op when masking is disabled or the state has no placeholders.
-    masking_ctx = MaskingContext.from_state(dict(enriched_state))
+    masking_ctx = MaskingRules.from_state(dict(enriched_state))
     messages = ReportMessages(
         slack_text=masking_ctx.unmask(messages.slack_text),
         telegram_html=masking_ctx.unmask(messages.telegram_html),

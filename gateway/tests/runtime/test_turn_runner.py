@@ -1,4 +1,4 @@
-"""Tests for the gateway turn handler."""
+"""Tests for the gateway turn runner."""
 
 from __future__ import annotations
 
@@ -16,7 +16,7 @@ from core.agent_harness.session import SessionCore
 from core.agent_harness.session.persistence.memory import InMemorySessionStore
 from core.agent_harness.turns.turn_results import ToolCallingTurnResult, TurnResult
 from infrastructure.turn_host.session_agents import SessionAgentPool
-from infrastructure.turn_host.turn_handler import TurnHandler
+from infrastructure.turn_host.turn_runner import TurnRunner
 from tests.core.agent.orchestration.cross_surface_parity_harness import (
     RecordingTurnOutput,
 )
@@ -27,13 +27,13 @@ from tests.shared.fake_agent import fake_agent
 @pytest.fixture(autouse=True)
 def _stub_gateway_turn_analytics(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(
-        "infrastructure.turn_host.turn_handler.capture_gateway_turn_started", lambda **_: None
+        "infrastructure.turn_host.turn_runner.capture_gateway_turn_started", lambda **_: None
     )
     monkeypatch.setattr(
-        "infrastructure.turn_host.turn_handler.capture_gateway_turn_completed", lambda **_: None
+        "infrastructure.turn_host.turn_runner.capture_gateway_turn_completed", lambda **_: None
     )
     monkeypatch.setattr(
-        "infrastructure.turn_host.turn_handler.capture_gateway_turn_failed", lambda **_: None
+        "infrastructure.turn_host.turn_runner.capture_gateway_turn_failed", lambda **_: None
     )
 
 
@@ -68,7 +68,7 @@ def _patch_headless_agent(monkeypatch: Any, result: TurnResult) -> MagicMock:
     return factory
 
 
-def test_turn_handler_resolves_action_tools_from_live_session(monkeypatch: Any) -> None:
+def test_turn_runner_resolves_action_tools_from_live_session(monkeypatch: Any) -> None:
     """Per-chat session integrations must drive the action tool list each turn.
 
     Precomputing tools at gateway boot (from an empty boot session) left the
@@ -108,8 +108,8 @@ def test_turn_handler_resolves_action_tools_from_live_session(monkeypatch: Any) 
     chat_integrations = {"slack": {"webhook_url": "https://hooks.example/test"}}
     session.resolved_integrations_cache = chat_integrations
 
-    handler = TurnHandler(console=Console(force_terminal=False))
-    handler("send slack update", session, MagicMock(), logging.getLogger("test.turn_handler"))
+    handler = TurnRunner(console=Console(force_terminal=False))
+    handler("send slack update", session, MagicMock(), logging.getLogger("test.turn_runner"))
 
     tool_provider = agent_cls.return_value.tools_for_test
     tools = tool_provider.action_tools(confirm_fn=None, is_tty=False)
@@ -133,7 +133,7 @@ def _empty_turn_result(*, llm_run: Any = None) -> TurnResult:
     )
 
 
-def test_turn_handler_continues_outer_loop_for_active_session_goal(
+def test_turn_runner_continues_outer_loop_for_active_session_goal(
     monkeypatch: Any,
 ) -> None:
     """Gateway wraps chat in run_until_session_goal like the interactive shell."""
@@ -179,7 +179,7 @@ def test_turn_handler_continues_outer_loop_for_active_session_goal(
         ),
     )
     sink = MagicMock()
-    handler = TurnHandler(console=Console(force_terminal=False))
+    handler = TurnRunner(console=Console(force_terminal=False))
     handler("go", session, sink, logging.getLogger("test"))
 
     assert len(calls) == 2
@@ -193,7 +193,7 @@ def test_turn_handler_continues_outer_loop_for_active_session_goal(
     assert any("◎ /goal" in text and "turn " in text for text in status_texts)
 
 
-def test_turn_handler_flushes_session_goal_for_next_resolve(
+def test_turn_runner_flushes_session_goal_for_next_resolve(
     monkeypatch: Any,
 ) -> None:
     """End-of-turn flush so the next inbound ``resolve`` sees goal mutations.
@@ -225,7 +225,7 @@ def test_turn_handler_flushes_session_goal_for_next_resolve(
             host_owned=True,
         ),
     )
-    handler = TurnHandler(console=Console(force_terminal=False))
+    handler = TurnRunner(console=Console(force_terminal=False))
     handler("side question", session, MagicMock(), logging.getLogger("test"))
 
     goal_records = [
@@ -254,26 +254,26 @@ def test_turn_handler_flushes_session_goal_for_next_resolve(
     assert session_goal_is_paused(restored)
 
 
-def test_turn_handler_finalizes_fallback_on_empty_response(monkeypatch: Any) -> None:
+def test_turn_runner_finalizes_fallback_on_empty_response(monkeypatch: Any) -> None:
     """An empty, non-answered turn still finalizes so the placeholder status can't hang."""
     _patch_headless_agent(monkeypatch, _empty_turn_result())
     sink = MagicMock()
-    handler = TurnHandler(console=Console(force_terminal=False))
+    handler = TurnRunner(console=Console(force_terminal=False))
     handler("/", SessionCore(store=InMemorySessionStore()), sink, logging.getLogger("test"))
     sink.finalize.assert_called_once_with("I didn't have anything to add for that.")
 
 
-def test_turn_handler_skips_finalize_when_answer_was_streamed(monkeypatch: Any) -> None:
+def test_turn_runner_skips_finalize_when_answer_was_streamed(monkeypatch: Any) -> None:
     """A streamed answer (llm_run set) already resolved the status; do not re-finalize."""
     result = _empty_turn_result(llm_run=MagicMock())  # answered=True
     _patch_headless_agent(monkeypatch, result)
     sink = MagicMock()
-    handler = TurnHandler(console=Console(force_terminal=False))
+    handler = TurnRunner(console=Console(force_terminal=False))
     handler("hi", SessionCore(store=InMemorySessionStore()), sink, logging.getLogger("test"))
     sink.finalize.assert_not_called()
 
 
-def test_turn_handler_skips_finalize_when_turn_cancelled(monkeypatch: Any) -> None:
+def test_turn_runner_skips_finalize_when_turn_cancelled(monkeypatch: Any) -> None:
     """Soft timeout / stop owns the sink; do not overwrite with empty finalize."""
     from infrastructure.turn_host.cancel_console import CancelConsole
 
@@ -287,7 +287,7 @@ def test_turn_handler_skips_finalize_when_turn_cancelled(monkeypatch: Any) -> No
         return _empty_turn_result()
 
     agent_cls.return_value.dispatch.side_effect = _dispatch
-    handler = TurnHandler(console=Console(force_terminal=False))
+    handler = TurnRunner(console=Console(force_terminal=False))
     handler("hi", SessionCore(store=InMemorySessionStore()), sink, logging.getLogger("test"))
     sink.finalize.assert_not_called()
     console = agent_cls.return_value.bind_turn.call_args.args[0].console
@@ -295,13 +295,13 @@ def test_turn_handler_skips_finalize_when_turn_cancelled(monkeypatch: Any) -> No
     assert console.cancel_requested is True
 
 
-def test_turn_handler_binds_cancel_console_each_turn(monkeypatch: Any) -> None:
+def test_turn_runner_binds_cancel_console_each_turn(monkeypatch: Any) -> None:
     """Each turn rebinds a CancelConsole so timeout Events stay turn-scoped."""
     from infrastructure.turn_host.cancel_console import CancelConsole
 
     agent_cls = _patch_headless_agent(monkeypatch, _empty_turn_result())
     sink = MagicMock()
-    handler = TurnHandler(console=Console(force_terminal=False))
+    handler = TurnRunner(console=Console(force_terminal=False))
     handler("hi", SessionCore(store=InMemorySessionStore()), sink, logging.getLogger("test"))
     console = agent_cls.return_value.bind_turn.call_args.args[0].console
     assert isinstance(console, CancelConsole)
@@ -309,19 +309,19 @@ def test_turn_handler_binds_cancel_console_each_turn(monkeypatch: Any) -> None:
     assert isinstance(sink.turn_cancel, threading.Event)
 
 
-def test_turn_handler_forwards_sink_tool_hooks_to_agent(monkeypatch: Any) -> None:
+def test_turn_runner_forwards_sink_tool_hooks_to_agent(monkeypatch: Any) -> None:
     """A sink carrying tool hooks (Slack's approval gate) rebinds them each turn."""
     agent_cls = _patch_headless_agent(monkeypatch, _empty_turn_result())
     sink = MagicMock()
     hooks = object()
     sink.tool_hooks = hooks
-    handler = TurnHandler(console=Console(force_terminal=False))
+    handler = TurnRunner(console=Console(force_terminal=False))
     handler("hi", SessionCore(store=InMemorySessionStore()), sink, logging.getLogger("test"))
     agent = agent_cls.return_value
     assert agent.bind_turn.call_args.args[0].tool_hooks is hooks
 
 
-def test_turn_handler_tolerates_sinks_without_tool_hooks(monkeypatch: Any) -> None:
+def test_turn_runner_tolerates_sinks_without_tool_hooks(monkeypatch: Any) -> None:
     """Sinks without tool_hooks (Telegram today) run unhooked — documented host gap."""
 
     class _BareSink:
@@ -329,16 +329,16 @@ def test_turn_handler_tolerates_sinks_without_tool_hooks(monkeypatch: Any) -> No
             self.finalized = answer
 
     agent_cls = _patch_headless_agent(monkeypatch, _empty_turn_result())
-    handler = TurnHandler(console=Console(force_terminal=False))
+    handler = TurnRunner(console=Console(force_terminal=False))
     handler("hi", SessionCore(store=InMemorySessionStore()), _BareSink(), logging.getLogger("test"))
     agent = agent_cls.return_value
     assert agent.bind_turn.call_args.args[0].tool_hooks is None
 
 
-def test_turn_handler_disables_unsupported_gateway_capabilities(monkeypatch: Any) -> None:
+def test_turn_runner_disables_unsupported_gateway_capabilities(monkeypatch: Any) -> None:
     _patch_headless_agent(monkeypatch, _empty_turn_result())
     session = SessionCore(store=InMemorySessionStore())
-    handler = TurnHandler(console=Console(force_terminal=False))
+    handler = TurnRunner(console=Console(force_terminal=False))
 
     handler(
         "hello",
@@ -352,7 +352,7 @@ def test_turn_handler_disables_unsupported_gateway_capabilities(monkeypatch: Any
     assert session.available_capabilities["task_cancel"] == ()
 
 
-def test_turn_handler_preserves_supported_capabilities(monkeypatch: Any) -> None:
+def test_turn_runner_preserves_supported_capabilities(monkeypatch: Any) -> None:
     _patch_headless_agent(monkeypatch, _empty_turn_result())
     session = SessionCore(store=InMemorySessionStore())
     session.available_capabilities.update(
@@ -365,7 +365,7 @@ def test_turn_handler_preserves_supported_capabilities(monkeypatch: Any) -> None
         }
     )
 
-    handler = TurnHandler(console=Console(force_terminal=False))
+    handler = TurnRunner(console=Console(force_terminal=False))
     handler(
         "hello",
         session,
@@ -381,12 +381,12 @@ def test_turn_handler_preserves_supported_capabilities(monkeypatch: Any) -> None
     assert session.available_capabilities["custom_gateway_capability"] == ("enabled",)
 
 
-def test_turn_handler_capability_gating_is_stable_across_turns(monkeypatch: Any) -> None:
+def test_turn_runner_capability_gating_is_stable_across_turns(monkeypatch: Any) -> None:
     _patch_headless_agent(monkeypatch, _empty_turn_result())
     session = SessionCore(store=InMemorySessionStore())
     session.available_capabilities["shell_commands"] = ("shell",)
 
-    handler = TurnHandler(console=Console(force_terminal=False))
+    handler = TurnRunner(console=Console(force_terminal=False))
     logger = logging.getLogger("test.gateway.capabilities")
 
     handler("first turn", session, RecordingTurnOutput(), logger)
@@ -398,16 +398,16 @@ def test_turn_handler_capability_gating_is_stable_across_turns(monkeypatch: Any)
     assert session.available_capabilities["shell_commands"] == ("shell",)
 
 
-def test_turn_handler_emits_gateway_turn_analytics(monkeypatch: Any) -> None:
+def test_turn_runner_emits_gateway_turn_analytics(monkeypatch: Any) -> None:
     started: list[dict[str, object]] = []
     completed: list[dict[str, object]] = []
 
     monkeypatch.setattr(
-        "infrastructure.turn_host.turn_handler.capture_gateway_turn_started",
+        "infrastructure.turn_host.turn_runner.capture_gateway_turn_started",
         lambda **kwargs: started.append(kwargs),
     )
     monkeypatch.setattr(
-        "infrastructure.turn_host.turn_handler.capture_gateway_turn_completed",
+        "infrastructure.turn_host.turn_runner.capture_gateway_turn_completed",
         lambda **kwargs: completed.append(kwargs),
     )
     _patch_headless_agent(monkeypatch, _empty_turn_result())
@@ -415,7 +415,7 @@ def test_turn_handler_emits_gateway_turn_analytics(monkeypatch: Any) -> None:
     from infrastructure.analytics.usage_context import UsageSurface, bound_usage_context
 
     session = SessionCore(store=InMemorySessionStore())
-    handler = TurnHandler(console=Console(force_terminal=False))
+    handler = TurnRunner(console=Console(force_terminal=False))
     with bound_usage_context(surface=UsageSurface.SLACK, user_id="U1"):
         handler("hi", session, MagicMock(), logging.getLogger("test"))
 
@@ -425,7 +425,7 @@ def test_turn_handler_emits_gateway_turn_analytics(monkeypatch: Any) -> None:
     assert completed[0]["answered"] is False
 
 
-def test_turn_handler_holds_the_session_lock_for_the_whole_turn(monkeypatch: Any) -> None:
+def test_turn_runner_holds_the_session_lock_for_the_whole_turn(monkeypatch: Any) -> None:
     """The handler must take the pool's lock, not the unsynchronised primitive.
 
     ``session_agent`` holds the per-session lock across dispatch. Calling
@@ -436,7 +436,7 @@ def test_turn_handler_holds_the_session_lock_for_the_whole_turn(monkeypatch: Any
     # Arrange: record when the lock is held relative to the dispatch.
     _patch_headless_agent(monkeypatch, _empty_turn_result())
     events: list[str] = []
-    handler = TurnHandler(console=Console(force_terminal=False))
+    handler = TurnRunner(console=Console(force_terminal=False))
     real_session_agent = handler._pool.session_agent
 
     @contextmanager
@@ -456,7 +456,7 @@ def test_turn_handler_holds_the_session_lock_for_the_whole_turn(monkeypatch: Any
     assert events == ["lock-acquired", "lock-released"]
 
 
-def test_turn_handler_forwards_agent_build_to_the_pool(
+def test_turn_runner_forwards_agent_build_to_the_pool(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     seen: list[Any] = []
@@ -468,14 +468,14 @@ def test_turn_handler_forwards_agent_build_to_the_pool(
 
     monkeypatch.setattr(SessionAgentPool, "__init__", _init)
     agent_build = AgentBuildConfig()
-    TurnHandler(console=Console(force_terminal=False), agent_build=agent_build)
+    TurnRunner(console=Console(force_terminal=False), agent_build=agent_build)
     assert seen == [agent_build]
 
 
-def _handler_with_fake_agent(monkeypatch: Any, result: TurnResult) -> tuple[TurnHandler, MagicMock]:
+def _handler_with_fake_agent(monkeypatch: Any, result: TurnResult) -> tuple[TurnRunner, MagicMock]:
     """A handler plus the fake agent it will build, so tests can read the binding."""
     factory = _patch_headless_agent(monkeypatch, result)
-    return TurnHandler(console=Console(force_terminal=False)), factory.return_value
+    return TurnRunner(console=Console(force_terminal=False)), factory.return_value
 
 
 def _last_binding(agent: MagicMock) -> Any:
@@ -566,7 +566,7 @@ def test_run_returns_none_and_says_at_capacity_when_the_gate_refuses(monkeypatch
     _patch_headless_agent(monkeypatch, _empty_turn_result())
     gate = TurnConcurrencyGate(1)
     assert gate.try_acquire() is True  # the only slot is taken
-    handler = TurnHandler(console=Console(force_terminal=False), gate=gate)
+    handler = TurnRunner(console=Console(force_terminal=False), gate=gate)
     sink = RecordingTurnOutput()
 
     # Act

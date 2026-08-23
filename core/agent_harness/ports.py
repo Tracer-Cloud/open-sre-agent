@@ -15,6 +15,7 @@ from dataclasses import dataclass
 from typing import Any, Protocol, runtime_checkable
 
 from config.llm_reasoning_effort import ReasoningEffortChoice
+from core.agent_harness.accounting.token_accounting import LlmRunInfo
 from core.agent_harness.turns.gather_observation import GatheredEvidence
 from core.agent_harness.turns.turn_results import ToolCallingTurnResult, TurnResult
 from core.llm.types import AgentLLMClient, StreamingReasoningClient
@@ -111,6 +112,18 @@ class SessionBindable(Protocol):
 
 
 @runtime_checkable
+class CancelCapableConsole(Protocol):
+    """Console that exposes a cancellation flag and basic print capability."""
+
+    @property
+    def cancel_requested(self) -> bool:
+        """True if the user requested to cancel the current operation."""
+
+    def print(self, *args: Any, **kwargs: Any) -> None:
+        """Print output to the console."""
+
+
+@runtime_checkable
 class ConsoleBindable(Protocol):
     """Tool port that can retarget the turn console (cancel / TTY observers).
 
@@ -118,7 +131,7 @@ class ConsoleBindable(Protocol):
     the shared ``sink.turn_cancel`` Event for that message.
     """
 
-    def bind_console(self, console: Any) -> None:
+    def bind_console(self, console: CancelCapableConsole) -> None:
         """Point tool UI / cancel probes at ``console`` for this turn."""
 
 
@@ -229,8 +242,15 @@ class ReasoningClientProvider(Protocol):
 class RunRecordFactory(Protocol):
     """Builds the opaque per-answer LLM-run record (telemetry) from raw inputs."""
 
-    def build(self, *, client: Any, prompt: str, response_text: str, started: float) -> Any:
-        raise NotImplementedError
+    def build(
+        self,
+        *,
+        client: StreamingReasoningClient | None,
+        prompt: str,
+        response_text: str,
+        started: float,
+    ) -> LlmRunInfo:
+        """Build the run record for one streamed answer."""
 
 
 @dataclass(frozen=True)
@@ -257,7 +277,7 @@ class AnswerRequest:
 class StreamAnswerFn(Protocol):
     """Bound direct-answer callable (no tools) handed to ``run_turn``."""
 
-    def __call__(self, text: str, request: AnswerRequest) -> Any:
+    def __call__(self, text: str, request: AnswerRequest) -> LlmRunInfo | None:
         """Stream one grounded answer; return the LLM-run record or None."""
 
 
@@ -314,13 +334,14 @@ class TurnBinding:
     output: OutputSink | None = None
     accounting: TurnAccounting | None = None
     tool_hooks: ToolExecutionHooks | None = None
-    console: Any | None = None
+    console: CancelCapableConsole | None = None
     confirm_fn: ConfirmFn | None = None
     is_tty: bool | None = None
 
 
 __all__ = [
     "AnswerRequest",
+    "CancelCapableConsole",
     "StreamAnswerFn",
     "ConfirmFn",
     "ConsoleBindable",
@@ -360,11 +381,11 @@ SubprocessPresenterFactory = Callable[
 # Host capabilities an action tool calls back into: named commands, LLM-provider
 # switching, task cancellation and investigation launch. Their contracts live in
 # ``tools`` beside the tools that call them (see
-# ``tools.interactive_shell.shared.host_ports.ExecutionGate``), and naming those
+# ``tools.interactive_shell.shared.host_contracts.ExecutionGate``), and naming those
 # Protocols here would mean ``core`` importing ``tools``.
 #
 # The return is ``object``, not ``Any``: ``core`` calls the factory and hands the
-# result to ``ActionToolContext`` without reading a single attribute, and
+# result to ``ActionToolScope`` without reading a single attribute, and
 # ``object`` is the type that says so. ``Any`` would silence a typo here as
 # readily as it silences the import ``core`` is avoiding.
 InvestigationPortsFactory = Callable[[], object]

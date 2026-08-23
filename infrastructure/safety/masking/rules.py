@@ -1,6 +1,6 @@
-"""Per-investigation masking context.
+"""Per-investigation masking rules.
 
-``MaskingContext`` holds a ``MaskingPolicy`` and a stable placeholder map
+``MaskingRules`` holds a ``MaskingPolicy`` and a stable placeholder map
 for the lifetime of a single investigation. Mask and unmask operations run
 over strings, lists, and dicts. The placeholder map is serialized to
 ``AgentState["masking_map"]`` so it survives node-to-node transitions.
@@ -19,7 +19,7 @@ from infrastructure.safety.masking.policy import MaskingPolicy, compile_extra_pa
 _PLACEHOLDER_TOKEN_RE = re.compile(r"<[^<>]+>")
 
 
-class MaskingContext:
+class MaskingRules:
     """Stable masking state for one investigation."""
 
     def __init__(
@@ -40,7 +40,7 @@ class MaskingContext:
         self._compiled_extras: dict[str, re.Pattern[str]] = compile_extra_patterns(policy)
 
     @classmethod
-    def from_state(cls, state: dict[str, Any]) -> MaskingContext:
+    def from_state(cls, state: dict[str, Any]) -> MaskingRules:
         """Reconstruct a context from an investigation state dict.
 
         Policy is re-read from the environment so env changes are honoured.
@@ -173,4 +173,4 @@ class MaskingContext:
         return dict(self._placeholder_map)
 
 
-__all__ = ["MaskingContext"]
+__all__ = ["MaskingRules"]

@@ -300,6 +300,7 @@ from config.constants.runtime_metadata import (
     OPENSRE_WORKSPACE_REPO_ENV,
     WORKSPACE_REPO_ENV_KEYS,
 )
+from config.constants.scheduler import OPENSRE_GATEWAY_HOST_SCHEDULER_ENV
 from config.constants.secrets import (
     CREDENTIAL_FALLBACK_FILENAME,
     KEYRING_SERVICE,
@@ -328,6 +329,7 @@ from config.constants.servicenow import (
     SERVICENOW_PASSWORD_ENV,
     SERVICENOW_USERNAME_ENV,
 )
+from config.constants.session_store import OPENSRE_SESSION_FILE_LOCK_ENV
 from config.constants.signoz import SIGNOZ_API_KEY_ENV, SIGNOZ_URL_ENV
 from config.constants.slack import (
     SLACK_APP_TOKEN_ENV,
@@ -372,6 +374,10 @@ from config.constants.tenancy import (
     INTEGRATIONS_STORE_PATH_ENV,
 )
 from config.constants.tracer import TRACER_BASE_URL_ENV, TRACER_JWT_TOKEN_ENV
+from config.constants.turn_concurrency import (
+    OPENSRE_MAX_CONCURRENT_TURNS_ENV,
+    OPENSRE_SIZE_PROFILE_ENV,
+)
 from config.constants.twilio import (
     TWILIO_ACCOUNT_SID_ENV,
     TWILIO_AUTH_TOKEN_ENV,
@@ -585,6 +591,7 @@ __all__ = [
     "OPENSEARCH_USERNAME_ENV",
     "DEFAULT_OPENSRE_OPERATIONS_LOG_MAX_BYTES",
     "OPENSRE_DISABLE_KEYRING_ENV",
+    "OPENSRE_GATEWAY_HOST_SCHEDULER_ENV",
     "OPENSRE_OPERATIONS_LOG_DISABLED_ENV",
     "OPENSRE_OPERATIONS_LOG_FILENAME",
     "OPENSRE_OPERATIONS_LOG_MAX_BYTES_ENV",
@@ -592,10 +599,13 @@ __all__ = [
     "OPENSRE_HOME_DIR",
     "OPENSRE_HOME_ENV",
     "OPENSRE_LLM_NATIVE_STRUCTURED_OUTPUT_ENV",
+    "OPENSRE_MAX_CONCURRENT_TURNS_ENV",
     "OPENSRE_MEMORY_AUTOEXTRACT_DISABLED_ENV",
     "OPENSRE_MEMORY_DIR_ENV",
     "OPENSRE_MEMORY_DISABLED_ENV",
     "OPENSRE_MEMORY_GATEWAY_ENABLED_ENV",
+    "OPENSRE_SESSION_FILE_LOCK_ENV",
+    "OPENSRE_SIZE_PROFILE_ENV",
     "OPENSRE_WORK_ITEMS_DIR_ENV",
     "OPENSRE_TMP_DIR",
     "ORGANIZATION_ID_ENV",

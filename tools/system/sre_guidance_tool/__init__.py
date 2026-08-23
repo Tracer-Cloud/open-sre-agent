@@ -4,8 +4,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from core.tool_framework.tags import FALLBACK_PLANNING_TAG
-from core.tool_framework.tool_decorator import tool
+from core.tool_framework import FALLBACK_PLANNING_TAG, tool
 from tools.system.sre_guidance_tool.knowledge_base import (
     get_sre_guidance as _get_sre_guidance,
 )

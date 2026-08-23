@@ -12,7 +12,10 @@ from __future__ import annotations
 import contextlib
 import json
 from collections.abc import Mapping
-from typing import Any
+from typing import TYPE_CHECKING, Any, cast
+
+if TYPE_CHECKING:
+    from core.agent_harness.ports import CancelCapableConsole
 
 from rich.console import Console
 from rich.markup import escape
@@ -145,10 +148,10 @@ class ShellGatherProgress:
     """
 
     def __init__(self, console: Console) -> None:
-        self._console = console
+        self._console: Console | CancelCapableConsole = console
         self._source_call_counts: dict[str, int] = {}
 
-    def bind_console(self, console: Any) -> None:
+    def bind_console(self, console: CancelCapableConsole) -> None:
         self._console = console
         self._source_call_counts = {}
 

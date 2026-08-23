@@ -12,7 +12,7 @@ import time
 from dataclasses import dataclass
 from typing import Any, Protocol, runtime_checkable
 
-from core.agent_harness.tools import ActionToolContext
+from core.agent_harness.tools import ActionToolScope
 from tools.interactive_shell.shared import ExecutionPolicyResult
 
 # --- constants ---
@@ -198,7 +198,7 @@ class SubprocessPresenter(Protocol):
         """Launch a background opensre CLI subprocess with streamed output."""
 
 
-def require_subprocess_presenter(ctx: ActionToolContext) -> SubprocessPresenter:
+def require_subprocess_presenter(ctx: ActionToolScope) -> SubprocessPresenter:
     presenter = ctx.subprocess_presenter
     if not isinstance(presenter, SubprocessPresenter):
         raise RuntimeError("subprocess presenter is required for this action tool")
