@@ -62,10 +62,17 @@ def _normalize_backend_alert_rules(raw: dict[str, Any]) -> list[dict[str, Any]]:
     return rules
 
 
+def _map_grafana_alert_rules(
+    evidence: dict[str, Any], output: dict[str, Any], _input: dict[str, Any]
+) -> None:
+    evidence["grafana_alert_rules"] = output.get("rules", [])
+
+
 @tool(
     name="query_grafana_alert_rules",
     display_name="Grafana alerts",
     source="grafana",
+    evidence_mapper=_map_grafana_alert_rules,
     description="Query Grafana alert rules to understand what is being monitored.",
     use_cases=[
         "Investigating DatasourceNoData alerts to find the exact PromQL/LogQL query",
@@ -373,10 +380,20 @@ _GRAFANA_LOGS_ANTI = (
 )
 
 
+def _map_grafana_logs(
+    evidence: dict[str, Any], output: dict[str, Any], _input: dict[str, Any]
+) -> None:
+    evidence["grafana_logs"] = output.get("logs", [])
+    evidence["grafana_error_logs"] = output.get("error_logs", [])
+    evidence["grafana_logs_query"] = output.get("query", "")
+    evidence["grafana_logs_service"] = output.get("service_name", "")
+
+
 @tool(
     name="query_grafana_logs",
     display_name="Grafana Loki",
     source="grafana",
+    evidence_mapper=_map_grafana_logs,
     description=(
         "Query Grafana Loki log streams for one service_name (required). "
         "Optionally narrow with execution_run_id or pipeline_name and a lookback window."
@@ -559,10 +576,21 @@ def _query_grafana_metrics_available(sources: dict[str, dict]) -> bool:
     return _grafana_available(sources)
 
 
+def _map_grafana_metrics(
+    evidence: dict[str, Any], output: dict[str, Any], tool_input: dict[str, Any]
+) -> None:
+    metric_name = str(output.get("metric_name") or tool_input.get("metric_name") or "")
+    metric_results = evidence.setdefault("grafana_metric_results", {})
+    if isinstance(metric_results, dict) and metric_name:
+        metric_results[metric_name] = output
+    evidence["grafana_metrics"] = output.get("metrics", [])
+
+
 @tool(
     name="query_grafana_metrics",
     display_name="Grafana Mimir",
     source="grafana",
+    evidence_mapper=_map_grafana_metrics,
     description="Query Grafana Cloud Mimir for pipeline metrics.",
     use_cases=[
         "Checking pipeline throughput and error rate metrics",
@@ -652,9 +680,16 @@ def _query_grafana_service_names_available(sources: dict[str, dict]) -> bool:
     return _grafana_available(sources)
 
 
+def _map_grafana_service_names(
+    evidence: dict[str, Any], output: dict[str, Any], _input: dict[str, Any]
+) -> None:
+    evidence["grafana_service_names"] = output.get("service_names", [])
+
+
 @tool(
     name="query_grafana_service_names",
     source="grafana",
+    evidence_mapper=_map_grafana_service_names,
     description="Discover available service names in Loki.",
     use_cases=[
         "Finding the correct service_name label when query_grafana_logs returns no results",
@@ -741,10 +776,18 @@ def _query_grafana_traces_available(sources: dict[str, dict]) -> bool:
     return _grafana_available(sources)
 
 
+def _map_grafana_traces(
+    evidence: dict[str, Any], output: dict[str, Any], _input: dict[str, Any]
+) -> None:
+    evidence["grafana_traces"] = output.get("traces", [])
+    evidence["grafana_pipeline_spans"] = output.get("pipeline_spans", [])
+
+
 @tool(
     name="query_grafana_traces",
     display_name="Grafana Tempo",
     source="grafana",
+    evidence_mapper=_map_grafana_traces,
     description="Query Grafana Cloud Tempo for pipeline traces.",
     use_cases=[
         "Tracing distributed request flows during a pipeline failure",
