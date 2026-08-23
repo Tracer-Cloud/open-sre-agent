@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from typing import Any
 
+from core.domain.types.evidence import CATALOG_ENTRIES_KEY
 from tools.investigation.reporting.context.normalize import (
     NormalizedState,
     as_snippet,
@@ -415,11 +416,42 @@ def build_evidence_catalog(
     _add_coralogix_logs(ns.evidence, catalog, source_to_id)
     _add_betterstack_logs(ns.evidence, catalog, source_to_id)
     _add_new_relic_alerts(ns.evidence, catalog, source_to_id)
+    _add_mapped_entries(ns.evidence, catalog, source_to_id)
 
     for i, entry in enumerate(catalog.values()):
         entry["display_id"] = f"E{i + 1}"
 
     return catalog, source_to_id
+
+
+def _add_mapped_entries(
+    evidence: dict[str, Any],
+    catalog: dict[str, dict],
+    source_to_id: dict[str, str],
+) -> None:
+    """Add catalog entries recorded by per-tool evidence mappers.
+
+    Lets any tool contribute citeable evidence via ``record_evidence_entry``
+    without a bespoke reader here. A source already claimed by a bespoke reader
+    above is skipped so the richer, hand-written entry wins.
+    """
+    entries = evidence.get(CATALOG_ENTRIES_KEY) or []
+    if not isinstance(entries, list):
+        return
+    for entry in entries:
+        if not isinstance(entry, dict):
+            continue
+        source = entry.get("source")
+        if not source or source in source_to_id:
+            continue
+        eid = f"evidence/mapped/{source}"
+        catalog[eid] = {
+            "label": entry.get("label") or source,
+            "url": entry.get("url"),
+            "summary": entry.get("summary"),
+            "snippet": entry.get("snippet"),
+        }
+        source_to_id[source] = eid
 
 
 def attach_evidence_to_claims(

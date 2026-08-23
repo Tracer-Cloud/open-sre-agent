@@ -6,6 +6,7 @@ from __future__ import annotations
 
 from typing import Any
 
+from core.domain.types.evidence import record_evidence_entry
 from core.tool import EvidenceType, SideEffectLevel
 from core.tool_framework.tool_decorator import tool
 from core.tool_framework.utils import tool_unavailable
@@ -65,7 +66,15 @@ def _normalize_backend_alert_rules(raw: dict[str, Any]) -> list[dict[str, Any]]:
 def _map_grafana_alert_rules(
     evidence: dict[str, Any], output: dict[str, Any], _input: dict[str, Any]
 ) -> None:
-    evidence["grafana_alert_rules"] = output.get("rules", [])
+    rules = output.get("rules", [])
+    evidence["grafana_alert_rules"] = rules
+    if rules:
+        record_evidence_entry(
+            evidence,
+            source="grafana_alert_rules",
+            label="Grafana Alert Rules",
+            summary=f"{len(rules)} rules",
+        )
 
 
 @tool(
@@ -583,7 +592,15 @@ def _map_grafana_metrics(
     metric_results = evidence.setdefault("grafana_metric_results", {})
     if isinstance(metric_results, dict) and metric_name:
         metric_results[metric_name] = output
-    evidence["grafana_metrics"] = output.get("metrics", [])
+    metrics = output.get("metrics", [])
+    evidence["grafana_metrics"] = metrics
+    if metrics:
+        record_evidence_entry(
+            evidence,
+            source="grafana_metrics",
+            label="Grafana Metrics",
+            summary=", ".join(p for p in [metric_name or None, f"{len(metrics)} series"] if p),
+        )
 
 
 @tool(
@@ -683,7 +700,15 @@ def _query_grafana_service_names_available(sources: dict[str, dict]) -> bool:
 def _map_grafana_service_names(
     evidence: dict[str, Any], output: dict[str, Any], _input: dict[str, Any]
 ) -> None:
-    evidence["grafana_service_names"] = output.get("service_names", [])
+    service_names = output.get("service_names", [])
+    evidence["grafana_service_names"] = service_names
+    if service_names:
+        record_evidence_entry(
+            evidence,
+            source="grafana_service_names",
+            label="Grafana Service Names",
+            summary=f"{len(service_names)} services",
+        )
 
 
 @tool(
@@ -779,8 +804,16 @@ def _query_grafana_traces_available(sources: dict[str, dict]) -> bool:
 def _map_grafana_traces(
     evidence: dict[str, Any], output: dict[str, Any], _input: dict[str, Any]
 ) -> None:
-    evidence["grafana_traces"] = output.get("traces", [])
+    traces = output.get("traces", [])
+    evidence["grafana_traces"] = traces
     evidence["grafana_pipeline_spans"] = output.get("pipeline_spans", [])
+    if traces:
+        record_evidence_entry(
+            evidence,
+            source="grafana_traces",
+            label="Grafana Traces",
+            summary=f"{len(traces)} traces",
+        )
 
 
 @tool(

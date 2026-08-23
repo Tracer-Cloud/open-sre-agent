@@ -124,3 +124,17 @@ class TestGrafanaMappingCharacterization:
         merge_tool_evidence(evidence, "query_grafana_logs", "not-a-dict", {})
         assert evidence["query_grafana_logs"] == "not-a-dict"
         assert "grafana_logs" not in evidence
+
+    def test_mapper_records_citeable_catalog_entry(self) -> None:
+        # A mapper makes its output citeable by recording a catalog entry that
+        # build_evidence_catalog turns into a display id.
+        evidence: dict[str, object] = {}
+        merge_tool_evidence(
+            evidence,
+            "query_grafana_metrics",
+            {"metrics": [{"v": 1}], "metric_name": "cpu"},
+            {},
+        )
+        entries = evidence["catalog_entries"]
+        assert isinstance(entries, list)
+        assert any(e["source"] == "grafana_metrics" for e in entries)
