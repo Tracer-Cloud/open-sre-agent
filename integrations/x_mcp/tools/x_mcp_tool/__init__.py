@@ -9,6 +9,9 @@ X adds or renames individual MCP-side tools.
 
 from __future__ import annotations
 
+from typing import Any
+
+from core.domain.types.evidence import CATALOG_ENTRIES_KEY, record_evidence_entry
 from core.domain.types.tools import ToolSurface
 from core.tool import report_run_error
 from core.tool_framework import tool
@@ -46,6 +49,104 @@ def _unavailable_response(
 
 
 _KNOWN_X_MCP_MODES = frozenset(McpTransportMode)
+
+
+def _has_evidence_payload(value: object) -> bool:
+    """Return whether an MCP payload value contains reportable data."""
+    if value is None:
+        return False
+    if isinstance(value, str):
+        return bool(value.strip())
+    if isinstance(value, bool):
+        return False
+    if isinstance(value, (int, float)):
+        return True
+    if isinstance(value, dict):
+        return any(_has_evidence_payload(item) for item in value.values())
+    if isinstance(value, (list, tuple, set)):
+        return any(_has_evidence_payload(item) for item in value)
+    return False
+
+
+def _record_catalog_entry_once(
+    evidence: dict[str, Any], *, source: str, label: str, summary: str
+) -> None:
+    """Record one catalog row for an accumulating canonical evidence key."""
+    entries = evidence.get(CATALOG_ENTRIES_KEY)
+    if isinstance(entries, list) and any(
+        isinstance(entry, dict) and entry.get("source") == source for entry in entries
+    ):
+        return
+    record_evidence_entry(evidence, source=source, label=label, summary=summary)
+
+
+def _map_x_tool_listing(
+    evidence: dict[str, Any], output: dict[str, Any], _input: dict[str, Any]
+) -> None:
+    """Make a successful X MCP tool inventory citeable in incident reports."""
+    tools = output.get("tools")
+    if output.get("available") is not True or not isinstance(tools, list) or not tools:
+        return
+
+    inventory = evidence.setdefault("x_mcp_tools", [])
+    if not isinstance(inventory, list):
+        return
+
+    # Merge repeated filtered listings by tool name while retaining richer later descriptors.
+    positions = {
+        str(item.get("name")): index
+        for index, item in enumerate(inventory)
+        if isinstance(item, dict) and item.get("name")
+    }
+    for descriptor in tools:
+        if not isinstance(descriptor, dict) or not descriptor.get("name"):
+            continue
+        name = str(descriptor["name"])
+        if name in positions:
+            inventory[positions[name]] = descriptor
+        else:
+            positions[name] = len(inventory)
+            inventory.append(descriptor)
+
+    if not inventory:
+        evidence.pop("x_mcp_tools", None)
+        return
+    _record_catalog_entry_once(
+        evidence,
+        source="x_mcp_tools",
+        label="X MCP Tool Inventory",
+        summary="Available X MCP tools",
+    )
+
+
+def _map_x_tool_result(
+    evidence: dict[str, Any], output: dict[str, Any], _input: dict[str, Any]
+) -> None:
+    """Make a successful X MCP tool result citeable in incident reports."""
+    payload_fields = ("text", "structured_content", "content")
+    if output.get("available") is not True or not any(
+        _has_evidence_payload(output.get(field)) for field in payload_fields
+    ):
+        return
+
+    results = evidence.setdefault("x_mcp_results", [])
+    if not isinstance(results, list):
+        return
+    # Keep only response data in the canonical report key; raw output remains available
+    # through merge_tool_evidence without duplicating echoed call arguments here.
+    result = {
+        field: output.get(field)
+        for field in ("tool", "text", "structured_content", "content")
+        if field in output
+    }
+    results.append(result)
+
+    _record_catalog_entry_once(
+        evidence,
+        source="x_mcp_results",
+        label="X MCP Results",
+        summary="X MCP tool results",
+    )
 
 
 def _resolve_config(
@@ -128,6 +229,7 @@ def _normalize_tool_result(result: XMCPToolCallResult) -> XMCPResponse:
 @tool(
     name="list_x_tools",
     source="x_mcp",
+    evidence_mapper=_map_x_tool_listing,
     description=(
         "List the tools exposed by the configured X (Twitter) MCP server. Pass "
         "name_filter (e.g. 'search tweet timeline') to narrow the list, and "
@@ -232,6 +334,7 @@ def list_x_tools(
 @tool(
     name="call_x_tool",
     source="x_mcp",
+    evidence_mapper=_map_x_tool_result,
     description=(
         "Call a named tool exposed by the configured X (Twitter) MCP server "
         "(e.g. search tweets, inspect a user's timeline, look up a tweet by ID)."

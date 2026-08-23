@@ -19,7 +19,6 @@ buzz_send_message
 call_openclaw_tool
 call_posthog_tool
 call_sentry_tool
-call_x_tool
 check_s3_marker
 create_google_docs_incident_report
 describe_eks_addon
@@ -142,7 +141,6 @@ list_openclaw_tools
 list_posthog_tools
 list_s3_objects
 list_sentry_tools
-list_x_tools
 list_yc_instances
 list_yc_log_groups
 list_yc_metrics
