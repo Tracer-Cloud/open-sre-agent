@@ -10,7 +10,7 @@ from core.agent_harness.ports import (
     ErrorReporter,
     OutputSink,
 )
-from core.llm.types import StreamingReasoningClient
+from core.llm.types import AgentLLMClient
 
 
 def _llm_client_unavailable_message(exc: Exception) -> str:
@@ -47,7 +47,7 @@ class DefaultReasoningClientProvider:
         """Retarget LLM-unavailable error rendering after ``bind_turn(output=)``."""
         self._output = output
 
-    def get(self) -> StreamingReasoningClient | None:
+    def get(self) -> AgentLLMClient | None:
         try:
             from core.llm.factory import LLMRole, get_llm
         except Exception as exc:
@@ -58,8 +58,8 @@ class DefaultReasoningClientProvider:
         try:
             # ``get_llm`` stays untyped for this role on purpose: other callers
             # use the same client for structured output, not streaming. This
-            # provider promises only the streaming contract, so narrow here.
-            return cast(StreamingReasoningClient, get_llm(LLMRole.REASONING))
+            # provider promises the agent client contract, so narrow here.
+            return cast(AgentLLMClient, get_llm(LLMRole.REASONING))
         except Exception as exc:
             self._handle_unavailable(
                 exc, context="core.agent_harness.default_reasoning_client.create"

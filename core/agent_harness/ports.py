@@ -234,7 +234,7 @@ class PromptContextProvider(Protocol):
 class ReasoningClientProvider(Protocol):
     """Provides the streaming reasoning LLM client for the assistant answer."""
 
-    def get(self) -> StreamingReasoningClient | None:
+    def get(self) -> AgentLLMClient | None:
         """Return the reasoning client, or ``None`` when one cannot be built."""
 
 

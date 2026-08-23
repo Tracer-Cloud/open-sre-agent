@@ -19,7 +19,7 @@ from __future__ import annotations
 import logging
 import time
 from dataclasses import dataclass, replace
-from typing import Any
+from typing import Any, cast
 
 from config.llm_reasoning_effort import apply_reasoning_effort
 from core.agent_harness.ports import (
@@ -90,6 +90,7 @@ from core.agent_harness.turns.turn_route import (
     routing_input_from_result,
 )
 from core.agent_harness.turns.turn_snapshot import TurnSnapshot
+from core.llm.types import StreamingReasoningClient
 from core.llm_invoke_errors import is_cli_timeout_error, remediate_missing_llm_credentials
 from infrastructure.harness_providers import preferred_evidence_sources_for
 from infrastructure.observability.trace.spans import component_span, emit_route
@@ -222,9 +223,10 @@ def stream_answer(
     rather than the live session.
     """
     req = request if request is not None else AnswerRequest()
-    client = reasoning.get()
-    if client is None:
+    agent_client = reasoning.get()
+    if agent_client is None:
         return None
+    client = cast(StreamingReasoningClient, agent_client)
 
     turn_plan = req.turn_plan
     ctx = (
