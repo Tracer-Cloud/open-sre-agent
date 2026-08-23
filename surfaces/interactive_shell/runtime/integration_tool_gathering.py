@@ -138,6 +138,7 @@ def _persist_tool_calls(
                 ok=not (isinstance(output, dict) and "error" in output),
             )
 
+
 class ShellGatherProgress:
     """Prints one dim line per gather tool call to the turn's console.
 

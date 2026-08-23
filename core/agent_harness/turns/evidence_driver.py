@@ -401,10 +401,7 @@ def gather_tool_evidence(
             return None
         if persist is not None:
             persist(
-                [
-                    (tool_call.name, tool_call.input, output)
-                    for tool_call, output in result.executed
-                ]
+                [(tool_call.name, tool_call.input, output) for tool_call, output in result.executed]
             )
         log.debug("gather_evidence done tools_executed=%s", len(result.executed))
         return GatheredEvidence(

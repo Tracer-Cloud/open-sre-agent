@@ -12,7 +12,6 @@ from typing import Any
 
 from core.agent_harness.ports import ToolEventObserver
 
-#: Persists gathered tool calls as ``[(tool_name, tool_input), ...]``.
 #: Persists gathered tool calls as ``[(tool_name, tool_input, output), ...]``.
 PersistToolCalls = Callable[
     [list[tuple[str, Mapping[str, object], Any]]],
