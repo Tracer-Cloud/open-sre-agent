@@ -431,3 +431,54 @@ def test_tool_run_returns_logs_on_success() -> None:
     assert result["available"] is True
     assert result["source"] == "elasticsearch_logs"
     assert len(result["logs"]) == 1
+
+
+def test_elasticsearch_evidence_mapper_with_logs_and_errors() -> None:
+    from integrations.elasticsearch.tools import _map_elasticsearch_logs
+
+    evidence: dict[str, object] = {}
+    output = {
+        "logs": [{"message": "hello"}, {"message": "error occurred"}],
+        "error_logs": [{"message": "error occurred"}],
+        "query": "status:500",
+    }
+    _map_elasticsearch_logs(evidence, output, {"query": "status:500"})
+
+    assert evidence["elasticsearch_logs"] == output["logs"]
+    assert evidence["elasticsearch_error_logs"] == output["error_logs"]
+    assert evidence["elasticsearch_logs_query"] == "status:500"
+    entries = evidence.get("catalog_entries")
+    assert isinstance(entries, list)
+    assert len(entries) == 1
+    assert entries[0] == {
+        "source": "query_elasticsearch_logs",
+        "label": "Elasticsearch Logs",
+        "summary": "2 logs, 1 errors",
+        "url": None,
+        "snippet": None,
+    }
+
+
+def test_elasticsearch_evidence_mapper_without_logs() -> None:
+    from integrations.elasticsearch.tools import _map_elasticsearch_logs
+
+    evidence: dict[str, object] = {}
+    output = {
+        "logs": [],
+        "error_logs": [],
+        "query": "status:500",
+    }
+    _map_elasticsearch_logs(evidence, output, {"query": "status:500"})
+
+    assert evidence["elasticsearch_logs"] == []
+    assert evidence["elasticsearch_error_logs"] == []
+    assert evidence["elasticsearch_logs_query"] == "status:500"
+    assert "catalog_entries" not in evidence
+
+
+def test_elasticsearch_tool_carries_evidence_mapper() -> None:
+    from tools.registry import get_registered_tool
+
+    tool = get_registered_tool("query_elasticsearch_logs")
+    assert tool is not None
+    assert tool.evidence_mapper is not None
