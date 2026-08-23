@@ -95,6 +95,14 @@ class ForegroundCliResult:
     start_error: str | None = None
 
 
+def _text_from_timeout_stream(raw: str | bytes | None) -> str:
+    if raw is None:
+        return ""
+    if isinstance(raw, str):
+        return raw
+    return raw.decode("utf-8", errors="replace")
+
+
 def _sys_executable_is_python() -> bool:
     return Path(sys.executable).name.lower().startswith(_PYTHON_EXECUTABLE_PREFIXES)
 
@@ -238,8 +246,8 @@ def run_foreground_cli(
         )
     except subprocess.TimeoutExpired as exc:
         return ForegroundCliResult(
-            stdout=str(exc.output or ""),
-            stderr=str(exc.stderr or ""),
+            stdout=_text_from_timeout_stream(exc.output),
+            stderr=_text_from_timeout_stream(exc.stderr),
             exit_code=None,
             timed_out=True,
             start_failed=False,
