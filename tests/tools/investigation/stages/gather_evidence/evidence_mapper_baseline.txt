@@ -48,7 +48,6 @@ get_eks_nodegroup_health
 get_eks_pod_logs
 get_elb_target_health
 get_error_logs
-get_failed_jobs
 get_failed_tools
 get_git_deploy_timeline
 get_github_actions_step_log
