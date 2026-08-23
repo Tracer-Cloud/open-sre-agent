@@ -43,3 +43,23 @@ def test_tool_carries_mapper() -> None:
     registered = get_registered_tool("get_sqs_queue_attributes")
     assert registered is not None
     assert registered.evidence_mapper is _map_get_sqs_queue_attributes
+
+
+def test_repeated_calls_accumulate_and_keep_one_entry() -> None:
+    evidence: dict[str, Any] = {}
+    first = [
+        {"name": "payments", "url": "https://sqs/payments", "visible_count": 10, "has_dlq": True}
+    ]
+    second = [
+        {"name": "payments", "url": "https://sqs/payments", "visible_count": 12, "has_dlq": True},
+        {"name": "emails", "url": "https://sqs/emails", "visible_count": 3, "in_flight_count": 2},
+    ]
+
+    _map_get_sqs_queue_attributes(evidence, _output(first), {"queue_name_prefix": "pay"})
+    _map_get_sqs_queue_attributes(evidence, _output(second), {"queue_name_prefix": ""})
+
+    assert [q["name"] for q in evidence["sqs_queues"]] == ["payments", "emails"]
+    assert evidence["sqs_queues"][0]["visible_count"] == 12
+    entries = evidence["catalog_entries"]
+    assert len(entries) == 1
+    assert entries[0]["summary"] == "2 queues, 15 visible, 2 in-flight, 1 with DLQ"

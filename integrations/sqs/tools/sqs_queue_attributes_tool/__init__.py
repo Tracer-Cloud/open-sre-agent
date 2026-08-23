@@ -16,7 +16,7 @@ import json
 import logging
 from typing import Any, cast
 
-from core.domain.types.evidence import record_evidence_entry
+from core.domain.types.evidence import CATALOG_ENTRIES_KEY, record_evidence_entry
 from core.domain.types.tools import ToolSurface
 from core.tool_framework import tool
 from core.tool_framework.utils import tool_unavailable
@@ -80,19 +80,29 @@ def _map_get_sqs_queue_attributes(
     queues = output.get("queues") or []
     if not isinstance(queues, list):
         return
-    evidence["sqs_queues"] = queues
-    if not queues:
+    existing = evidence.get("sqs_queues")
+    merged: dict[str, dict[str, Any]] = {}
+    for q in [*(existing if isinstance(existing, list) else []), *queues]:
+        if isinstance(q, dict):
+            merged[str(q.get("url") or q.get("name") or id(q))] = q
+    evidence["sqs_queues"] = list(merged.values())
+    if not merged:
         return
-    visible = sum(q.get("visible_count") or 0 for q in queues if isinstance(q, dict))
-    in_flight = sum(q.get("in_flight_count") or 0 for q in queues if isinstance(q, dict))
-    with_dlq = sum(1 for q in queues if isinstance(q, dict) and q.get("has_dlq"))
+    visible = sum(q.get("visible_count") or 0 for q in merged.values())
+    in_flight = sum(q.get("in_flight_count") or 0 for q in merged.values())
+    with_dlq = sum(1 for q in merged.values() if q.get("has_dlq"))
+    summary = f"{len(merged)} queues, {visible} visible, {in_flight} in-flight, {with_dlq} with DLQ"
+    entries = evidence.get(CATALOG_ENTRIES_KEY)
+    if isinstance(entries, list):
+        for entry in entries:
+            if isinstance(entry, dict) and entry.get("source") == "get_sqs_queue_attributes":
+                entry["summary"] = summary
+                return
     record_evidence_entry(
         evidence,
         source="get_sqs_queue_attributes",
         label="SQS Queues",
-        summary=(
-            f"{len(queues)} queues, {visible} visible, {in_flight} in-flight, {with_dlq} with DLQ"
-        ),
+        summary=summary,
     )
 
 
