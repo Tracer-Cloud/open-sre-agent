@@ -18,7 +18,11 @@ from __future__ import annotations
 
 from typing import Any, ClassVar
 
-from core.domain.types.evidence import EvidenceMapper, record_evidence_entry
+from core.domain.types.evidence import (
+    CATALOG_ENTRIES_KEY,
+    EvidenceMapper,
+    record_evidence_entry,
+)
 from core.domain.types.tools import ToolSurface
 from core.tool import BaseTool
 from core.tool_framework.utils import tool_unavailable
@@ -28,15 +32,40 @@ from integrations.victoria_logs.client import make_victoria_logs_client
 def _map_victoria_logs_query(
     evidence: dict[str, Any], output: dict[str, Any], _input: dict[str, Any]
 ) -> None:
-    """Lift VictoriaLogs query rows into citeable report evidence."""
+    """Lift VictoriaLogs query rows into citeable report evidence.
+
+    Each query invocation gets its own catalog source so repeated queries do
+    not collapse into one ambiguous citation. The first invocation keeps the
+    generic ``victoria_logs_query`` source for compatibility; later ones use
+    ``victoria_logs_query#N``.
+    """
     rows = output.get("rows", [])
-    if rows:
-        record_evidence_entry(
-            evidence,
-            source="victoria_logs_query",
-            label="VictoriaLogs Logs",
-            summary=f"{len(rows)} log entries",
+    if not rows:
+        return
+
+    base_source = "victoria_logs_query"
+    entries = evidence.get(CATALOG_ENTRIES_KEY, [])
+    prior_count = 0
+    if isinstance(entries, list):
+        prior_count = sum(
+            1
+            for e in entries
+            if isinstance(e, dict)
+            and isinstance(e.get("source"), str)
+            and e["source"].startswith(base_source)
         )
+    occurrence = prior_count + 1
+    source = base_source if occurrence == 1 else f"{base_source}#{occurrence}"
+    label = "VictoriaLogs Logs" if occurrence == 1 else f"VictoriaLogs Query #{occurrence}"
+
+    query = output.get("query")
+    record_evidence_entry(
+        evidence,
+        source=source,
+        label=label,
+        summary=f"{len(rows)} log entries",
+        snippet=str(query)[:200] if query else None,
+    )
 
 
 class VictoriaLogsTool(BaseTool):
