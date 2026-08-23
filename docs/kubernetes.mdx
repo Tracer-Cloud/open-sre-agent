@@ -213,7 +213,10 @@ YAML
 i=0
 until kubectl apply -f /tmp/k8s-demo-workload.yaml; do
   i=$((i + 1))
-  [ "$i" -ge 10 ] && { echo "ERROR: workload apply never succeeded" >&2; exit 1; }
+  if [ "$i" -ge 10 ]; then
+    echo "workload apply never succeeded; check: kubectl get events -n demo" >&2
+    break
+  fi
   sleep 2
 done
 ```
@@ -234,6 +237,18 @@ export KUBECONFIG_CONTEXT="kind-opensre-k8s-demo"
 export KUBECONFIG_NAMESPACE="demo"
 ```
 
+`opensre integrations verify` checks a saved store record before env vars, and
+`opensre investigate` only falls through to env vars when the store has no records at
+all -- any existing record, for any service, blocks env-var resolution entirely. Point
+`OPENSRE_INTEGRATIONS_STORE_PATH` at a path inside a fresh empty directory before
+verifying, so a real saved record can't shadow the `KUBECONFIG_*` vars above for either
+command, and your real config is never read or written:
+
+```bash
+export OPENSRE_DEMO_STORE_DIR="$(mktemp -d /tmp/opensre-k8s-demo.XXXXXX)"
+export OPENSRE_INTEGRATIONS_STORE_PATH="$OPENSRE_DEMO_STORE_DIR/integrations.json"
+```
+
 Verify:
 
 ```bash
@@ -245,17 +260,6 @@ SERVICE    │ SOURCE    │ STATUS   │ DETAIL
 kubernetes │ local env │ ✓ passed │ Connected to Kubernetes cluster
            │           │          │ namespace 'demo' accessible (1 pod(s)
            │           │          │ visible).
-```
-
-`opensre investigate` (unlike `opensre integrations verify`) only falls through to env
-vars when the store has no records at all -- any existing record, for any service, blocks
-env-var resolution entirely. Point `OPENSRE_INTEGRATIONS_STORE_PATH` at a path inside a
-fresh empty directory instead, so your real config is never read or written and the
-`KUBECONFIG_*` vars above are the only source of connection info:
-
-```bash
-export OPENSRE_DEMO_STORE_DIR="$(mktemp -d /tmp/opensre-k8s-demo.XXXXXX)"
-export OPENSRE_INTEGRATIONS_STORE_PATH="$OPENSRE_DEMO_STORE_DIR/integrations.json"
 ```
 
 Trigger a real investigation against the crash-looping pod:
