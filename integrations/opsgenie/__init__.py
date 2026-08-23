@@ -7,8 +7,11 @@ from typing import Any
 
 from integrations._validation_helpers import report_classify_failure
 from integrations.config_models import OpsGenieIntegrationConfig
+from integrations.opsgenie.client import OpsGenieClient, OpsGenieConfig
 
 logger = logging.getLogger(__name__)
+
+__all__ = ["OpsGenieClient", "OpsGenieConfig", "classify"]
 
 
 def classify(
