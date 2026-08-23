@@ -66,6 +66,13 @@ def _map_victoria_logs_query(
         summary=f"{len(rows)} log entries",
         snippet=str(query)[:200] if query else None,
     )
+    # Expose the per-query key to the diagnosis/claim pipeline as well, not only
+    # to the report catalog. This lets generated identifiers be cited directly.
+    evidence[f"{base_source}#{occurrence}"] = {
+        "query": query,
+        "rows": rows,
+        "total": len(rows),
+    }
 
 
 class VictoriaLogsTool(BaseTool):

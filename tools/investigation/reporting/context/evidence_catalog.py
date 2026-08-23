@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import re
 from typing import Any
 
 from core.domain.types.evidence import CATALOG_ENTRIES_KEY
@@ -499,6 +500,18 @@ def attach_evidence_to_claims(
                 if eid not in evidence_ids:
                     evidence_ids.append(eid)
                     evidence_labels.append(display_map.get(eid, eid))
+
+        claim_text = str(new_claim.get("claim") or "")
+        for tag_src in re.findall(r"\[evidence:\s*([^\]]+)\]", claim_text, re.IGNORECASE):
+            key = SOURCE_ALIASES.get(tag_src.strip(), tag_src.strip())
+            if key == "evidence_analysis":
+                continue
+            matched_ids = _related_mapped_ids(key, source_to_id, catalog)
+            for eid in matched_ids:
+                if eid not in evidence_ids:
+                    evidence_ids.append(eid)
+                    evidence_labels.append(display_map.get(eid, eid))
+
         if evidence_ids:
             new_claim["evidence_ids"] = evidence_ids
             new_claim["evidence_labels"] = evidence_labels
