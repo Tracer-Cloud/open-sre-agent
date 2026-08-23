@@ -11,7 +11,7 @@ from rich.console import Console
 
 import surfaces.interactive_shell.runtime.slash_adapter as slash_adapter
 from core.agent_harness.accounting.turn_accounting import DefaultTurnAccounting
-from core.agent_harness.ports import AnswerRequest
+from core.agent_harness.ports import AnswerRequest, ConfirmFn
 from core.agent_harness.prompts.memory.prior_investigation import (
     PRIOR_INVESTIGATION_RECALL_SECONDS,
 )
@@ -1552,7 +1552,13 @@ def test_route_investigation_dispatch_skips_gather_even_with_handoff() -> None:
 def test_run_turn_passes_handoff_contents_to_assistant() -> None:
     captured: list[tuple[str, ...]] = []
 
-    def _execute(*_args: object, **_kwargs: object) -> ToolCallingTurnResult:
+    def _execute(
+        text: str,
+        *,
+        confirm_fn: ConfirmFn | None = None,
+        is_tty: bool | None = None,
+        turn_plan: Any = None,
+    ) -> ToolCallingTurnResult:
         return ToolCallingTurnResult(
             planned_count=0,
             executed_count=0,
@@ -1562,7 +1568,7 @@ def test_run_turn_passes_handoff_contents_to_assistant() -> None:
             handoff_contents=("provider:local_llama_connect",),
         )
 
-    def _answer(_text: str, request: AnswerRequest, **_kwargs: Any) -> None:
+    def _answer(text: str, request: AnswerRequest) -> None:
         captured.append(request.handoff_contents)
         return None
 
@@ -1603,7 +1609,13 @@ def test_run_turn_mixed_action_and_handoff_routes_to_assistant() -> None:
     """Handled action plus handoff tags must not take the handled_without_llm path."""
     captured: list[tuple[str, ...]] = []
 
-    def _execute(*_args: object, **_kwargs: object) -> ToolCallingTurnResult:
+    def _execute(
+        text: str,
+        *,
+        confirm_fn: ConfirmFn | None = None,
+        is_tty: bool | None = None,
+        turn_plan: Any = None,
+    ) -> ToolCallingTurnResult:
         return ToolCallingTurnResult(
             planned_count=1,
             executed_count=1,
@@ -1614,7 +1626,7 @@ def test_run_turn_mixed_action_and_handoff_routes_to_assistant() -> None:
             handoff_contents=("provider:local_llama_connect",),
         )
 
-    def _answer(_text: str, request: AnswerRequest, **_kwargs: Any) -> None:
+    def _answer(text: str, request: AnswerRequest) -> None:
         captured.append(request.handoff_contents)
         return None
 
@@ -1641,7 +1653,13 @@ def test_run_turn_skips_gather_for_follow_up_handoff_with_prior_state() -> None:
     gather_calls: list[str] = []
     answer_kwargs: list[dict[str, Any]] = []
 
-    def _execute(*_args: object, **_kwargs: object) -> ToolCallingTurnResult:
+    def _execute(
+        text: str,
+        *,
+        confirm_fn: ConfirmFn | None = None,
+        is_tty: bool | None = None,
+        turn_plan: Any = None,
+    ) -> ToolCallingTurnResult:
         return ToolCallingTurnResult(
             planned_count=1,
             executed_count=1,
@@ -1651,11 +1669,11 @@ def test_run_turn_skips_gather_for_follow_up_handoff_with_prior_state() -> None:
             handoff_contents=("follow_up:prior_investigation",),
         )
 
-    def _gather(text: str, *_args: object, **_kwargs: object) -> str:
+    def _gather(text: str, *, turn_plan: Any = None) -> str:
         gather_calls.append(text)
         return "Tool: search_sentry_issues\nArguments: {}\nResult: should-not-run"
 
-    def _answer(_text: str, request: AnswerRequest, **_kwargs: Any) -> None:
+    def _answer(text: str, request: AnswerRequest) -> None:
         answer_kwargs.append(
             {
                 "tool_observation": request.tool_observation,
@@ -1700,7 +1718,13 @@ def test_database_query_handoff_keeps_connect_want_me_to_closer() -> None:
         "**Want me to:** walk you through `/mcp connect mysql`?"
     )
 
-    def _execute(*_args: object, **_kwargs: object) -> ToolCallingTurnResult:
+    def _execute(
+        text: str,
+        *,
+        confirm_fn: ConfirmFn | None = None,
+        is_tty: bool | None = None,
+        turn_plan: Any = None,
+    ) -> ToolCallingTurnResult:
         return ToolCallingTurnResult(
             planned_count=1,
             executed_count=1,
@@ -1739,7 +1763,6 @@ def test_follow_up_answer_with_want_me_to_paints_on_non_tty_console() -> None:
     and the console oracle sees an empty response.
     """
     import io
-    from types import SimpleNamespace
 
     from surfaces.interactive_shell.runtime.agent_harness_adapters import ShellOutputSink
 
@@ -1752,7 +1775,13 @@ def test_follow_up_answer_with_want_me_to_paints_on_non_tty_console() -> None:
         "investigation_started_at": time.monotonic(),
     }
 
-    def _execute(*_args: object, **_kwargs: object) -> ToolCallingTurnResult:
+    def _execute(
+        text: str,
+        *,
+        confirm_fn: ConfirmFn | None = None,
+        is_tty: bool | None = None,
+        turn_plan: Any = None,
+    ) -> ToolCallingTurnResult:
         return ToolCallingTurnResult(
             planned_count=1,
             executed_count=1,
@@ -1762,14 +1791,14 @@ def test_follow_up_answer_with_want_me_to_paints_on_non_tty_console() -> None:
             handoff_contents=("follow_up:prior_investigation",),
         )
 
-    def _answer(_text: str, request: AnswerRequest, **_kwargs: Any) -> Any:
+    def _answer(text: str, request: AnswerRequest) -> LlmRunInfo | None:
         body = "The disk was full on orders-api.\n\n**Want me to:** run a full investigation"
         painted = sink.stream(
             label="OpenSRE",
             chunks=[body],
             defer_want_me_to_closer=request.defer_want_me_to_closer,
         )
-        return SimpleNamespace(response_text=painted)
+        return fake_llm_run(response_text=painted)
 
     result = run_turn(
         "why did it fail?",
@@ -1797,7 +1826,13 @@ def test_run_turn_still_gathers_for_non_follow_up_handoff_with_prior_state() -> 
     gather_calls: list[str] = []
     answer_kwargs: list[dict[str, Any]] = []
 
-    def _execute(*_args: object, **_kwargs: object) -> ToolCallingTurnResult:
+    def _execute(
+        text: str,
+        *,
+        confirm_fn: ConfirmFn | None = None,
+        is_tty: bool | None = None,
+        turn_plan: Any = None,
+    ) -> ToolCallingTurnResult:
         return ToolCallingTurnResult(
             planned_count=1,
             executed_count=1,
@@ -1807,11 +1842,11 @@ def test_run_turn_still_gathers_for_non_follow_up_handoff_with_prior_state() -> 
             handoff_contents=("provider:local_llama_connect",),
         )
 
-    def _gather(text: str, *_args: object, **_kwargs: object) -> str:
+    def _gather(text: str, *, turn_plan: Any = None) -> str:
         gather_calls.append(text)
         return "Tool: x\nArguments: {}\nResult: y"
 
-    def _answer(_text: str, request: AnswerRequest, **_kwargs: Any) -> None:
+    def _answer(text: str, request: AnswerRequest) -> None:
         answer_kwargs.append({"defer_want_me_to_closer": request.defer_want_me_to_closer})
         return None
 
@@ -2201,7 +2236,13 @@ def test_run_turn_skips_gather_for_follow_up_even_when_investigation_is_old() ->
     }
     gather_calls: list[str] = []
 
-    def _execute(*_args: object, **_kwargs: object) -> ToolCallingTurnResult:
+    def _execute(
+        text: str,
+        *,
+        confirm_fn: ConfirmFn | None = None,
+        is_tty: bool | None = None,
+        turn_plan: Any = None,
+    ) -> ToolCallingTurnResult:
         return ToolCallingTurnResult(
             planned_count=1,
             executed_count=1,
@@ -2211,7 +2252,7 @@ def test_run_turn_skips_gather_for_follow_up_even_when_investigation_is_old() ->
             handoff_contents=("follow_up:prior_investigation",),
         )
 
-    def _gather(text: str, *_args: object, **_kwargs: object) -> str:
+    def _gather(text: str, *, turn_plan: Any = None) -> str:
         gather_calls.append(text)
         return "Tool: search_sentry_issues\nArguments: {}\nResult: should-not-run"
 
@@ -2244,7 +2285,13 @@ def test_run_turn_does_not_gather_after_the_action_turn_already_did_the_work() -
     gather_calls: list[str] = []
     answer_kwargs: list[dict[str, Any]] = []
 
-    def _execute(*_args: object, **_kwargs: object) -> ToolCallingTurnResult:
+    def _execute(
+        text: str,
+        *,
+        confirm_fn: ConfirmFn | None = None,
+        is_tty: bool | None = None,
+        turn_plan: Any = None,
+    ) -> ToolCallingTurnResult:
         return ToolCallingTurnResult(
             planned_count=2,
             executed_count=2,
@@ -2255,11 +2302,11 @@ def test_run_turn_does_not_gather_after_the_action_turn_already_did_the_work() -
             handoff_requires_gather=False,
         )
 
-    def _gather(text: str, *_args: object, **_kwargs: object) -> str:
+    def _gather(text: str, *, turn_plan: Any = None) -> str:
         gather_calls.append(text)
         return "Tool: kubernetes_list_pods\nResult: should-not-run"
 
-    def _answer(_text: str, request: AnswerRequest, **_kwargs: Any) -> None:
+    def _answer(text: str, request: AnswerRequest) -> None:
         answer_kwargs.append({"handoff_contents": request.handoff_contents})
         return None
 
@@ -2289,7 +2336,13 @@ def test_run_turn_skips_gather_for_stream_only_conversational_handoff() -> None:
     gather_calls: list[str] = []
     answer_calls: list[dict[str, Any]] = []
 
-    def _execute(*_args: object, **_kwargs: object) -> ToolCallingTurnResult:
+    def _execute(
+        text: str,
+        *,
+        confirm_fn: ConfirmFn | None = None,
+        is_tty: bool | None = None,
+        turn_plan: Any = None,
+    ) -> ToolCallingTurnResult:
         return ToolCallingTurnResult(
             planned_count=1,
             executed_count=1,
@@ -2300,11 +2353,11 @@ def test_run_turn_skips_gather_for_stream_only_conversational_handoff() -> None:
             handoff_requires_gather=False,
         )
 
-    def _gather(text: str, *_args: object, **_kwargs: object) -> str:
+    def _gather(text: str, *, turn_plan: Any = None) -> str:
         gather_calls.append(text)
         return "Tool: should_not_run\nResult: unused"
 
-    def _answer(_text: str, request: AnswerRequest, **_kwargs: Any) -> None:
+    def _answer(text: str, request: AnswerRequest) -> None:
         answer_calls.append({"handoff_contents": request.handoff_contents})
         return None
 
@@ -2332,7 +2385,13 @@ def test_run_turn_still_gathers_after_actions_when_the_handoff_did_not_opt_out()
     session = Session()
     gather_calls: list[str] = []
 
-    def _execute(*_args: object, **_kwargs: object) -> ToolCallingTurnResult:
+    def _execute(
+        text: str,
+        *,
+        confirm_fn: ConfirmFn | None = None,
+        is_tty: bool | None = None,
+        turn_plan: Any = None,
+    ) -> ToolCallingTurnResult:
         return ToolCallingTurnResult(
             planned_count=1,
             executed_count=1,
@@ -2342,7 +2401,7 @@ def test_run_turn_still_gathers_after_actions_when_the_handoff_did_not_opt_out()
             handoff_contents=("provider:local_llama_connect",),
         )
 
-    def _gather(text: str, *_args: object, **_kwargs: object) -> str:
+    def _gather(text: str, *, turn_plan: Any = None) -> str:
         gather_calls.append(text)
         return "Tool: x\nArguments: {}\nResult: y"
 
@@ -2363,7 +2422,13 @@ def test_run_turn_still_gathers_when_the_action_turn_executed_nothing() -> None:
     session = Session()
     gather_calls: list[str] = []
 
-    def _execute(*_args: object, **_kwargs: object) -> ToolCallingTurnResult:
+    def _execute(
+        text: str,
+        *,
+        confirm_fn: ConfirmFn | None = None,
+        is_tty: bool | None = None,
+        turn_plan: Any = None,
+    ) -> ToolCallingTurnResult:
         return ToolCallingTurnResult(
             planned_count=0,
             executed_count=0,
@@ -2373,7 +2438,7 @@ def test_run_turn_still_gathers_when_the_action_turn_executed_nothing() -> None:
             handoff_contents=("why is the orders-api slow?",),
         )
 
-    def _gather(text: str, *_args: object, **_kwargs: object) -> str:
+    def _gather(text: str, *, turn_plan: Any = None) -> str:
         gather_calls.append(text)
         return "Tool: search_sentry_issues\nResult: 3 issues"
 
@@ -2484,7 +2549,13 @@ def test_run_turn_skips_gather_and_answer_when_the_action_turn_was_cancelled() -
     gather_calls: list[str] = []
     answer_calls: list[str] = []
 
-    def _execute(*_args: object, **_kwargs: object) -> ToolCallingTurnResult:
+    def _execute(
+        text: str,
+        *,
+        confirm_fn: ConfirmFn | None = None,
+        is_tty: bool | None = None,
+        turn_plan: Any = None,
+    ) -> ToolCallingTurnResult:
         return ToolCallingTurnResult(
             planned_count=2,
             executed_count=1,
@@ -2494,7 +2565,7 @@ def test_run_turn_skips_gather_and_answer_when_the_action_turn_was_cancelled() -
             cancelled=True,
         )
 
-    def _gather(text: str, *_args: object, **_kwargs: object) -> str:
+    def _gather(text: str, *, turn_plan: Any = None) -> str:
         gather_calls.append(text)
         return "Tool: kubernetes_list_pods\nResult: should-not-run"
 
