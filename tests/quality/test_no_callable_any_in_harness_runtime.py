@@ -21,13 +21,12 @@ _REPO_ROOT = Path(__file__).resolve().parents[2]
 
 _COVERED_PATHS: tuple[str, ...] = (
     "core/agent_harness/ports.py",
-    "infrastructure/harness_ports.py",
     # Entire runtime directory tree
     "surfaces/interactive_shell/runtime/",
 )
 
-# Pinned baseline as of 2026-08-20: a single ``BuildCliClientFn = Callable[..., Any]``
-# in ``infrastructure/harness_ports.py``. If you legitimately need a new
+# Pinned baseline as of 2026-08-23: a single ``StreamAnswerFn = Callable[..., Any]``
+# in ``core/agent_harness/ports.py``. If you legitimately need a new
 # ``Callable[..., Any]`` in a covered path, bump this number and explain why in
 # the PR description. If you remove the last occurrence, lower it too — the gate
 # requires an exact match so a stale baseline cannot hide a future regression.
