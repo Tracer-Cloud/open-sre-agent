@@ -129,7 +129,13 @@ def test_run_turn_consumes_pending_schedule_on_yes() -> None:
     )
     seen: list[str] = []
 
-    def execute_actions(text: str, **_kwargs: object) -> ToolCallingTurnResult:
+    def execute_actions(
+        text: str,
+        *,
+        confirm_fn: ConfirmFn | None = None,
+        is_tty: bool | None = None,
+        turn_plan: object = None,
+    ) -> ToolCallingTurnResult:
         seen.append(text)
         return ToolCallingTurnResult(
             planned_count=1,
