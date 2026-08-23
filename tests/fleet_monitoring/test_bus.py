@@ -16,16 +16,36 @@ import pytest
 
 _POSIX_FCNTL_AVAILABLE = importlib.util.find_spec("fcntl") is not None
 
-from tools.system.fleet_monitoring import bus as bus_module
 from tools.system.fleet_monitoring.bus import (
     BUS_SCHEMA_VERSION,
     BusMessage,
     BusServer,
+    publish,
+    subscribe,
+)
+from tools.system.fleet_monitoring.bus import (
+    election as election_module,
+)
+from tools.system.fleet_monitoring.bus import (
+    liveness as liveness_module,
+)
+from tools.system.fleet_monitoring.bus import (
+    publisher_pool as publisher_pool_module,
+)
+from tools.system.fleet_monitoring.bus import (
+    server as server_module,
+)
+from tools.system.fleet_monitoring.bus.election import (
+    _election_lock_path,
+    _ensure_broker,
+)
+from tools.system.fleet_monitoring.bus.liveness import (
     _pid_file_for,
     _read_broker_pid,
     _socket_is_live,
-    publish,
-    subscribe,
+)
+from tools.system.fleet_monitoring.bus.publisher_pool import (
+    _CachedPublisher,
 )
 
 
@@ -46,8 +66,8 @@ def isolated_brokers(monkeypatch: pytest.MonkeyPatch) -> None:
     a now-stopped broker's socket path, and the first ``publish()`` of the
     next test would silently sendall onto a dead fd.
     """
-    monkeypatch.setattr(bus_module, "_brokers", {})
-    monkeypatch.setattr(bus_module, "_publishers", {})
+    monkeypatch.setattr(election_module, "_brokers", {})
+    monkeypatch.setattr(publisher_pool_module, "_publishers", {})
 
 
 def _drain_subscriber(
@@ -73,7 +93,7 @@ def _drain_subscriber(
 
     # Snapshot the pre-attach subscriber count so we don't race against
     # subscribers spawned by other helpers in the same test.
-    broker_before = bus_module._brokers.get(sock_path)
+    broker_before = election_module._brokers.get(sock_path)
     before = len(broker_before._subscribers) if broker_before is not None else 0
 
     thread = threading.Thread(target=_loop, daemon=True)
@@ -81,7 +101,7 @@ def _drain_subscriber(
 
     deadline = time.monotonic() + attach_timeout
     while time.monotonic() < deadline:
-        broker = bus_module._brokers.get(sock_path)
+        broker = election_module._brokers.get(sock_path)
         if broker is not None:
             with broker._lock:
                 if len(broker._subscribers) > before:
@@ -199,7 +219,7 @@ class TestBusServerLifecycle:
             del args
             raise OSError(28, "No space left on device")
 
-        monkeypatch.setattr(bus_module, "_write_pid_file_atomic", _boom_enospc)
+        monkeypatch.setattr(liveness_module, "_write_pid_file_atomic", _boom_enospc)
 
         server = BusServer(sock_path)
         with pytest.raises(OSError):
@@ -218,9 +238,9 @@ class TestBusServerLifecycle:
             del args
             raise OSError(13, "Permission denied")
 
-        monkeypatch.setattr(bus_module, "_write_pid_file_atomic", _boom_eacces)
+        monkeypatch.setattr(liveness_module, "_write_pid_file_atomic", _boom_eacces)
         with pytest.raises(OSError):
-            bus_module._ensure_broker(sock_path)
+            _ensure_broker(sock_path)
 
 
 class TestLivenessProbe:
@@ -271,8 +291,8 @@ class TestPublisherCache:
             assert msg.summary == f"n{i}"
 
         # Exactly one cached publisher socket for our process.
-        assert len(bus_module._publishers) == 1
-        cached = next(iter(bus_module._publishers.values()))
+        assert len(publisher_pool_module._publishers) == 1
+        cached = next(iter(publisher_pool_module._publishers.values()))
         assert cached.sock.fileno() >= 0
 
         # Broker side: at most one publisher-origin connection (plus the one
@@ -280,12 +300,12 @@ class TestPublisherCache:
         # broker only sees what we sent it; if reuse is working, every publish
         # came from the same socket and the broker registered exactly one
         # publisher connection for the burst.
-        broker = bus_module._brokers[sock_path]
+        broker = election_module._brokers[sock_path]
         with broker._lock:
             # 1 subscriber (the drain thread above) + 1 cached publisher = 2.
             # If the cache were broken we'd see many transient connections,
             # but most would have closed by now — so this is a weak check;
-            # the strong check is len(bus_module._publishers) == 1 above.
+            # the strong check is len(publisher_pool_module._publishers) == 1 above.
             assert len(broker._subscribers) <= 2
 
     def test_reconnects_after_cached_socket_breaks(self, sock_path: Path) -> None:
@@ -297,7 +317,7 @@ class TestPublisherCache:
         assert msg1.summary == "first"
 
         # Forcibly break the cached publisher connection.
-        broken_cached = next(iter(bus_module._publishers.values()))
+        broken_cached = next(iter(publisher_pool_module._publishers.values()))
         broken_sock = broken_cached.sock
         broken_sock.close()
 
@@ -308,7 +328,7 @@ class TestPublisherCache:
 
         # The cache now holds a fresh socket object (the OS may recycle the
         # underlying fd number, so compare object identity, not fileno()).
-        new_cached = next(iter(bus_module._publishers.values()))
+        new_cached = next(iter(publisher_pool_module._publishers.values()))
         assert new_cached.sock is not broken_sock
 
     def test_publish_retries_on_initial_connect_failure(
@@ -317,16 +337,16 @@ class TestPublisherCache:
         # The first ``_get_or_open_publisher`` raises (e.g. broker exited
         # between liveness check and connect). ``publish`` must run
         # ``_ensure_broker`` and retry once instead of failing immediately.
-        real_get = bus_module._get_or_open_publisher
+        real_get = publisher_pool_module._get_or_open_publisher
         calls = {"n": 0}
 
-        def _flaky(target: Path, *, connect_timeout: float) -> bus_module._CachedPublisher:
+        def _flaky(target: Path, *, connect_timeout: float) -> _CachedPublisher:
             calls["n"] += 1
             if calls["n"] == 1:
                 raise ConnectionRefusedError(111, "Connection refused")
             return real_get(target, connect_timeout=connect_timeout)
 
-        monkeypatch.setattr(bus_module, "_get_or_open_publisher", _flaky)
+        monkeypatch.setattr(publisher_pool_module, "_get_or_open_publisher", _flaky)
 
         received: queue.Queue[BusMessage] = queue.Queue()
         _drain_subscriber(sock_path, received, stop_after=1)
@@ -341,7 +361,7 @@ class TestPublisherCache:
     ) -> None:
         # ``subscribe`` previously raised on the first connect failure;
         # symmetric with ``publish``, it now retries once.
-        real_connect = bus_module._connect_client
+        real_connect = publisher_pool_module._connect_client
         calls = {"n": 0}
 
         def _flaky(target: Path, timeout: float) -> socket.socket:
@@ -350,7 +370,7 @@ class TestPublisherCache:
                 raise ConnectionRefusedError(111, "Connection refused")
             return real_connect(target, timeout=timeout)
 
-        monkeypatch.setattr(bus_module, "_connect_client", _flaky)
+        monkeypatch.setattr(publisher_pool_module, "_connect_client", _flaky)
 
         # Just calling subscribe() and pulling the first batch is enough —
         # if the retry didn't happen, the call would raise.
@@ -367,13 +387,13 @@ class TestPublisherCache:
         # Wait for subscribe() to attach, give up to 2s.
         deadline = time.monotonic() + 2.0
         while time.monotonic() < deadline:
-            broker = bus_module._brokers.get(sock_path)
+            broker = election_module._brokers.get(sock_path)
             if broker is not None:
                 with broker._lock:
                     if broker._subscribers:
                         break
             time.sleep(0.005)
-        broker = bus_module._brokers.get(sock_path)
+        broker = election_module._brokers.get(sock_path)
         assert broker is not None and broker._subscribers, "subscriber never attached after retry"
         assert calls["n"] >= 2, "subscribe() did not retry on initial connect failure"
 
@@ -508,7 +528,7 @@ class TestPublishSubscribe:
         # Self-elect a broker so we can attach as a single client that
         # both publishes and subscribes — and verify the broadcaster
         # does not echo the frame back to its origin.
-        bus_module._ensure_broker(sock_path)
+        _ensure_broker(sock_path)
         client = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
         client.connect(str(sock_path))
         client.settimeout(0.5)
@@ -524,7 +544,7 @@ class TestPublishSubscribe:
         _drain_subscriber(sock_path, received)
 
         # Connect a raw publisher and inject a malformed frame followed by a valid one.
-        bus_module._ensure_broker(sock_path)
+        _ensure_broker(sock_path)
         raw = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
         raw.connect(str(sock_path))
         try:
@@ -545,7 +565,7 @@ class TestPublishSubscribe:
         # would wedge indefinitely with no exception, freezing fan-out for
         # every publisher. Verify the write-readiness gate evicts the slow
         # subscriber and lets healthy ones keep receiving.
-        monkeypatch.setattr(bus_module, "_BROADCAST_WRITE_TIMEOUT_SECONDS", 0.05)
+        monkeypatch.setattr(server_module, "_BROADCAST_WRITE_TIMEOUT_SECONDS", 0.05)
 
         server = BusServer(sock_path)
         server.start()
@@ -634,7 +654,7 @@ class TestPublishSubscribe:
         # Simulate a hostile broker that wins the bind race and streams unlimited
         # bytes without newlines. The subscriber must cap its buffer and bail
         # rather than grow memory unboundedly.
-        from tools.system.fleet_monitoring.bus import _MAX_FRAME_BYTES, BusServer, subscribe
+        from tools.system.fleet_monitoring.bus.server import _MAX_FRAME_BYTES, BusServer
 
         # Stand up a fake "hostile" broker that pushes garbage to every client.
         server = BusServer(sock_path)
@@ -699,7 +719,7 @@ class TestBrokerElectionRace:
         # subprocess we'll spawn) sees it via the PID-file side channel and
         # backs off. The flock only matters during the check-unlink-bind
         # window, which closes after ``server.start()`` returns.
-        server = bus_module.BusServer(sock_path)
+        server = BusServer(sock_path)
         server.start()
         try:
             assert sock_path.exists()
@@ -719,9 +739,9 @@ class TestBrokerElectionRace:
                     textwrap.dedent(
                         f"""
                         from pathlib import Path
-                        from tools.system.fleet_monitoring import bus
+                        from tools.system.fleet_monitoring.bus.election import _ensure_broker
 
-                        result = bus._ensure_broker(Path({str(sock_path)!r}))
+                        result = _ensure_broker(Path({str(sock_path)!r}))
                         print("OWNER" if result is not None else "PEER")
                         """
                     ),
@@ -751,7 +771,7 @@ class TestBrokerElectionRace:
     def test_election_lock_path_lives_next_to_socket(self, sock_path: Path) -> None:
         # Sanity-check the sidecar location so future refactors don't
         # silently move it (which would re-open the cross-process race).
-        lock_path = bus_module._election_lock_path(sock_path)
+        lock_path = _election_lock_path(sock_path)
         assert lock_path.parent == sock_path.parent
         assert lock_path.name == sock_path.name + ".lock"
 
@@ -785,12 +805,15 @@ class TestBrokerElectionRace:
                     f"""
                     import os, fcntl, sys, time
                     from pathlib import Path
-                    from tools.system.fleet_monitoring import bus
+                    from tools.system.fleet_monitoring.bus.election import (
+                        _acquire_election_flock,
+                        _release_election_flock,
+                    )
 
-                    fd = bus._acquire_election_flock(Path({str(sock_path)!r}))
+                    fd = _acquire_election_flock(Path({str(sock_path)!r}))
                     print("READY", flush=True)
                     time.sleep(0.5)
-                    bus._release_election_flock(fd)
+                    _release_election_flock(fd)
                     """
                 ),
             ],
@@ -808,7 +831,7 @@ class TestBrokerElectionRace:
             # Now ``_ensure_broker`` here must wait on the flock. Time
             # the call: it should take roughly the remaining sleep time.
             t0 = time.monotonic()
-            server = bus_module._ensure_broker(sock_path)
+            server = _ensure_broker(sock_path)
             elapsed = time.monotonic() - t0
             try:
                 assert server is not None, "we should have elected after child released"
@@ -833,7 +856,7 @@ class TestBrokerSelfElection:
         sock_path.touch()  # stale: no listener
         assert sock_path.exists() and not _socket_is_live(sock_path)
 
-        server = bus_module._ensure_broker(sock_path)
+        server = _ensure_broker(sock_path)
         try:
             assert server is not None
             assert server.is_running
@@ -849,15 +872,15 @@ class TestBrokerSelfElection:
         other.start()
         try:
             # Pretend our process has not yet elected: empty the registry.
-            bus_module._brokers.clear()
-            result = bus_module._ensure_broker(sock_path)
+            election_module._brokers.clear()
+            result = _ensure_broker(sock_path)
             assert result is None
         finally:
             other.stop()
 
     def test_ensure_broker_idempotent_for_same_process(self, sock_path: Path) -> None:
-        first = bus_module._ensure_broker(sock_path)
-        second = bus_module._ensure_broker(sock_path)
+        first = _ensure_broker(sock_path)
+        second = _ensure_broker(sock_path)
         try:
             assert first is not None
             assert first is second
