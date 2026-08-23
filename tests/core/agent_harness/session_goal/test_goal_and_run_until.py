@@ -2,7 +2,10 @@
 
 from __future__ import annotations
 
+from typing import Any
+
 from core.agent_harness.accounting.turn_accounting import DefaultTurnAccounting
+from core.agent_harness.ports import GatheredEvidence
 from core.agent_harness.session.pending_offer import first_pending_offer
 from core.agent_harness.session.session_core import SessionCore
 from core.agent_harness.session_goal.goal import (
@@ -17,12 +20,28 @@ from core.agent_harness.session_goal.run_until import run_until_session_goal
 from core.agent_harness.turns.assistant_handoff import AssistantHandoff
 from core.agent_harness.turns.orchestrator import run_turn
 from core.agent_harness.turns.turn_results import ToolCallingTurnResult, TurnResult
+from tests.shared.harness_turn_driver import answer_with_text
 
 _FIVE_STEP_ASK = (
     "Do this 5-step sequential process without asking whether to continue: "
     "(1) list the goal, (2) name step one, (3) name step two, "
     "(4) name step three, (5) confirm all five are done."
 )
+
+
+def _gather_evidence(text: str, *, turn_plan: Any = None) -> str | GatheredEvidence | None:
+    """An EvidenceGatherer that always finds evidence."""
+    return "evidence"
+
+
+def _gather_schema_only(text: str, *, turn_plan: Any = None) -> str | GatheredEvidence | None:
+    """An EvidenceGatherer that finds the schema but no metric value."""
+    return "schema only"
+
+
+def _stays_active(goal: SessionGoal, result: Any, *, session: Any | None = None) -> str:
+    """An EvaluateFn that never marks the goal terminal."""
+    return SessionGoalStatus.ACTIVE
 
 
 def test_session_goal_from_structured_handoff_not_user_prose() -> None:
@@ -87,12 +106,8 @@ def test_want_me_to_suppressed_while_session_goal_active() -> None:
         _FIVE_STEP_ASK,
         session,
         execute_actions=_execute,
-        gather=lambda *_a, **_k: "evidence",
-        answer=lambda *_a, **_k: type(
-            "Run",
-            (),
-            {"response_text": "Step 1 done."},
-        )(),
+        gather=_gather_evidence,
+        answer=answer_with_text("Step 1 done."),
         accounting=DefaultTurnAccounting(session, _FIVE_STEP_ASK),
     )
 
@@ -117,8 +132,8 @@ def test_action_handoff_attaches_session_goal() -> None:
         _FIVE_STEP_ASK,
         session,
         execute_actions=_execute,
-        gather=lambda *_a, **_k: "evidence",
-        answer=lambda *_a, **_k: type("Run", (), {"response_text": "Step 1."})(),
+        gather=_gather_evidence,
+        answer=answer_with_text("Step 1."),
         accounting=DefaultTurnAccounting(session, _FIVE_STEP_ASK),
     )
 
@@ -164,8 +179,8 @@ def test_typed_assistant_handoff_attaches_session_goal_without_content_tags() ->
         _FIVE_STEP_ASK,
         session,
         execute_actions=_execute,
-        gather=lambda *_a, **_k: "evidence",
-        answer=lambda *_a, **_k: type("Run", (), {"response_text": "Step 1."})(),
+        gather=_gather_evidence,
+        answer=answer_with_text("Step 1."),
         accounting=DefaultTurnAccounting(session, _FIVE_STEP_ASK),
     )
 
@@ -246,7 +261,7 @@ def test_outer_loop_disabled_fails_five_step_probe() -> None:
             condition="complete all five steps",
             max_outer_turns=1,
         ),
-        evaluate=lambda *_a, **_k: SessionGoalStatus.ACTIVE,
+        evaluate=_stays_active,
     )
 
     assert len(turns) == 1
@@ -302,12 +317,8 @@ def test_metric_read_handoff_without_session_goal_flag_continues_outer_loop() ->
         ask,
         session,
         execute_actions=_execute,
-        gather=lambda *_a, **_k: "schema only",
-        answer=lambda *_a, **_k: type(
-            "Run",
-            (),
-            {"response_text": "Schema found; no count yet."},
-        )(),
+        gather=_gather_schema_only,
+        answer=answer_with_text("Schema found; no count yet."),
         accounting=DefaultTurnAccounting(session, ask),
     )
     assert session_goal_is_active(session)
