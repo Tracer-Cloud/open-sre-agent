@@ -5,6 +5,7 @@ import json
 import socket
 import stat
 from pathlib import Path
+from typing import Any
 
 import httpx
 import pytest
@@ -44,6 +45,10 @@ def _free_port() -> int:
         return int(sock.getsockname()[1])
 
 
+def _callback_get(url: str, **kwargs: Any) -> httpx.Response:
+    return httpx.get(url, trust_env=False, **kwargs)
+
+
 def test_build_codex_oauth_request_uses_pkce_and_localhost_callback() -> None:
     request = codex_oauth.build_codex_oauth_request()
 
@@ -67,7 +72,7 @@ def test_wait_for_codex_oauth_callback_writes_tokens_and_redirects_success(
     request = codex_oauth.build_codex_oauth_request()
 
     def _open_browser(_url: str) -> bool:
-        response = httpx.get(
+        response = _callback_get(
             f"http://localhost:{port}/auth/callback",
             params={"code": "auth-code", "state": request.state},
             follow_redirects=False,
@@ -117,7 +122,7 @@ def test_wait_for_codex_oauth_callback_rejects_invalid_callbacks(
     params = {**params, "state": params.get("state", request.state)}
 
     def _open_browser(_url: str) -> bool:
-        response = httpx.get(
+        response = _callback_get(
             f"http://localhost:{port}/auth/callback",
             params=params,
             timeout=5.0,
@@ -150,7 +155,7 @@ def test_wait_for_codex_oauth_callback_stores_success_id_token_callback(
     )
 
     def _open_browser(_url: str) -> bool:
-        response = httpx.get(
+        response = _callback_get(
             f"http://localhost:{port}/success",
             params={"id_token": id_token},
             timeout=5.0,
