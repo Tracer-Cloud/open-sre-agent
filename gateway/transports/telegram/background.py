@@ -74,7 +74,10 @@ async def _poll_telegram_until_stopped(
     """
     poller = TelegramPoller(settings.bot_token)
     turn_semaphore = asyncio.Semaphore(settings.max_concurrent_turns)
-    pending_tasks: set[asyncio.Task[None]] = set()
+    pending_turns: dict[asyncio.Task[None], threading.Event] = {}
+
+    def _forget(task: asyncio.Task[None]) -> None:
+        pending_turns.pop(task, None)
 
     resources.client.delete_webhook()
 
@@ -114,14 +117,14 @@ async def _poll_telegram_until_stopped(
                         handle_callback_to_gateway_agent=handle_callback_to_gateway_agent,
                     )
                 )
-                pending_tasks.add(task)
-                task.add_done_callback(pending_tasks.discard)
+                pending_turns[task] = turn_cancel
+                task.add_done_callback(_forget)
 
         except Exception:
             logger.error("Error while polling Telegram updates", exc_info=True)
             await asyncio.to_thread(stop_event.wait, 2)
 
-    await _drain_active_turns(pending_tasks, settings=settings, logger=logger)
+    await _drain_active_turns(pending_turns, settings=settings, logger=logger)
 
 
 async def _dispatch_turn(
@@ -167,7 +170,7 @@ async def _dispatch_turn(
 
 
 async def _drain_active_turns(
-    pending_tasks: set[asyncio.Task[None]],
+    pending_turns: dict[asyncio.Task[None], threading.Event],
     *,
     settings: GatewaySettings,
     logger: logging.Logger,
@@ -175,15 +178,21 @@ async def _drain_active_turns(
     """Let in-flight turns finish before ``asyncio.run`` closes the loop.
 
     Bounded: polling has stopped, so no click can resolve an approval wait any
-    more. Whatever misses ``shutdown_drain_seconds`` is cancelled.
+    more. Whatever misses ``shutdown_drain_seconds`` has its cancel Event set
+    before its task is cancelled — the turn body runs on the executor, which
+    cancelling the awaiting task does not reach, so only the Event stops it in
+    time for ``executor.shutdown(wait=True)``.
     """
-    if not pending_tasks:
+    if not pending_turns:
         return
 
     _done, still_running = await asyncio.wait(
-        pending_tasks, timeout=settings.shutdown_drain_seconds
+        set(pending_turns), timeout=settings.shutdown_drain_seconds
     )
     for task in still_running:
+        turn_cancel = pending_turns.get(task)
+        if turn_cancel is not None:
+            turn_cancel.set()
         task.cancel()
     if still_running:
         logger.warning(

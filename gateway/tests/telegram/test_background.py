@@ -80,10 +80,13 @@ def _run_loop(
     *,
     resources: TelegramPollingRuntime,
     stop_event: threading.Event,
+    shutdown_drain_seconds: float = 2.0,
 ) -> asyncio.Task[None]:
     return asyncio.create_task(
         background._poll_telegram_until_stopped(
-            settings=GatewaySettings(bot_token="tok", shutdown_drain_seconds=2.0),
+            settings=GatewaySettings(
+                bot_token="tok", shutdown_drain_seconds=shutdown_drain_seconds
+            ),
             stop_event=stop_event,
             logger=LOGGER,
             resources=resources,
@@ -173,26 +176,35 @@ async def test_a_failing_turn_does_not_stop_polling() -> None:
 
 
 @pytest.mark.asyncio
-async def test_in_flight_turns_finish_before_shutdown_returns() -> None:
-    """Detached turns are drained, not cancelled mid-flight by ``asyncio.run``."""
+async def test_shutdown_cancels_the_turn_body_not_only_its_await() -> None:
+    """A turn that outlives the drain budget gets its cancel Event set.
+
+    Cancelling the task only unwinds the ``await``; the turn body runs on the
+    executor and never sees that. It stops when its ``turn_cancel`` Event is
+    set, and only then does ``executor.shutdown(wait=True)`` return inside the
+    shutdown budget instead of blocking to the turn timeout.
+    """
     # Arrange
     poller = _FakePoller([TelegramPollResult(messages=[_message()])])
     turn_started = asyncio.Event()
-    turn_finished = False
+    seen: list[threading.Event] = []
 
-    async def _slow_turn(_event, **_kwargs) -> None:
-        nonlocal turn_finished
+    async def _turn_outliving_the_budget(_event, *, turn_cancel=None, **_kwargs) -> None:
+        seen.append(turn_cancel)
         turn_started.set()
-        await asyncio.sleep(0.05)
-        turn_finished = True
+        await asyncio.sleep(30)
 
     stop_event = threading.Event()
 
     with (
         patch.object(background, "TelegramPoller", lambda _token: poller),
-        patch.object(background, "handle_polled_inbound_telegram_message", _slow_turn),
+        patch.object(
+            background, "handle_polled_inbound_telegram_message", _turn_outliving_the_budget
+        ),
     ):
-        loop_task = _run_loop(resources=_resources(), stop_event=stop_event)
+        loop_task = _run_loop(
+            resources=_resources(), stop_event=stop_event, shutdown_drain_seconds=0.05
+        )
         await asyncio.wait_for(turn_started.wait(), timeout=2.0)
 
         # Act — shut down while the turn is still running.
@@ -200,7 +212,8 @@ async def test_in_flight_turns_finish_before_shutdown_returns() -> None:
         await asyncio.wait_for(loop_task, timeout=3.0)
 
     # Assert
-    assert turn_finished is True
+    assert seen and seen[0] is not None
+    assert seen[0].is_set(), "drain cancelled the await but left the turn body running"
 
 
 @pytest.mark.asyncio
