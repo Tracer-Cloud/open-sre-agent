@@ -5,7 +5,7 @@ Create the session, attach an agent, run turns::
     session = AgentSession.start(config)  # builds the default agent
     result = session.chat("…")            # turn 1
     follow = session.chat("…")            # turn 2 — same attached agent
-    report = session.investigate({…})     # needs no attached chat agent
+    report = session.investigate({…}, runner=run)  # needs no attached chat agent
 
 Embedded scripts that need local adapters use
 ``bootstrap.embedded.start_embedded_session``. Scheduled one-shots may use
@@ -33,7 +33,11 @@ from typing import TYPE_CHECKING, Any, Protocol, runtime_checkable
 from core.agent_harness.session import SessionManager
 
 if TYPE_CHECKING:
-    from core.agent_harness.investigation_api import AlertInput, InvestigationResult
+    from core.agent_harness.investigation_api import (
+        AlertInput,
+        InvestigationPayloadRunner,
+        InvestigationResult,
+    )
     from core.agent_harness.ports import (
         OutputSink,
         PromptContextProvider,
@@ -322,22 +326,25 @@ class AgentSession:
         self,
         alert: AlertInput,
         *,
+        runner: InvestigationPayloadRunner,
         opensre_evaluate: bool = False,
         investigation_metadata: tuple[str, str] | None = None,
     ) -> InvestigationResult:
-        """Run an investigation and return a typed result.
+        """Run an investigation through ``runner`` and return a typed result.
 
-        Uses the payload runner installed at process boot
-        (:func:`core.agent_harness.investigation_api.install_investigation_payload_runner`).
-        Does not require an attached chat agent.
+        ``agent_harness`` must not import ``tools``, so the caller (a surface or
+        the gateway) supplies the payload callable — normally
+        :func:`tools.investigation.capability.run_investigation_payload`. Does
+        not require an attached chat agent.
         """
-        from core.agent_harness.investigation_api import run_installed_investigation_payload
+        from core.agent_harness.investigation_api import InvestigationResult
 
-        return run_installed_investigation_payload(
+        payload = runner(
             raw_alert=alert,
             opensre_evaluate=opensre_evaluate,
             investigation_metadata=investigation_metadata,
         )
+        return InvestigationResult.from_payload(payload)
 
     def resolve_integrations(self, session: SessionCore) -> dict[str, Any]:
         """Return resolved integration configs for ``session``."""

@@ -18,24 +18,11 @@ if TYPE_CHECKING:
     from infrastructure.scheduling.scheduler.runners import SchedulerRunners
 
 
-def install_investigation_api() -> None:
-    """Wire :meth:`AgentSession.investigate` to the canonical payload runner.
-
-    ``agent_harness`` must not import ``tools``; this composition-root step
-    installs the callable the session API dispatches through.
-    """
-    from core.agent_harness.investigation_api import install_investigation_payload_runner
-    from tools.investigation.capability import run_investigation_payload
-
-    install_investigation_payload_runner(run_investigation_payload)
-
-
 def install_harness_adapters() -> None:
     """Register the integration and tool adapters the harness resolves through.
 
     Without this a harness starts but no tool is available — the ports report
-    nothing until both registries have been installed. Also installs the
-    investigation payload runner used by :meth:`AgentSession.investigate`.
+    nothing until both registries have been installed.
     """
     import infrastructure.harness_providers as harness_providers
     from integrations.harness_adapters import (
@@ -53,7 +40,6 @@ def install_harness_adapters() -> None:
     harness_providers.IntegrationSetupCommand(
         lambda service_id: f"/integrations setup {service_id}"
     ).install()
-    install_investigation_api()
 
 
 def install_notification_adapters() -> tuple[str, ...]:
@@ -159,7 +145,6 @@ def install_cli_auth_checker() -> None:
 
 __all__ = [
     "install_harness_adapters",
-    "install_investigation_api",
     "install_notification_adapters",
     "scheduler_runners",
     "scheduled_delivery_adapters",

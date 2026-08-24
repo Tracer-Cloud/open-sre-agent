@@ -1,9 +1,9 @@
-"""Public investigation result + installable payload runner port.
+"""Public investigation result + payload runner type.
 
-``agent_harness`` must not import ``tools`` (import-boundary tests). Process
-boot installs the canonical runner via :func:`install_investigation_payload_runner`
-from :mod:`bootstrap.adapters`. Surfaces and embedders call
-:meth:`AgentSession.investigate`, which uses the installed runner.
+``agent_harness`` must not import ``tools`` (import-boundary tests), so callers
+supply the payload callable when they invoke :meth:`AgentSession.investigate`
+rather than the harness reaching for it. The canonical callable is
+:func:`tools.investigation.capability.run_investigation_payload`.
 """
 
 from __future__ import annotations
@@ -14,8 +14,6 @@ from typing import Any
 
 AlertInput = str | dict[str, Any]
 InvestigationPayloadRunner = Callable[..., dict[str, Any]]
-
-_payload_runner: InvestigationPayloadRunner | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -77,52 +75,8 @@ class InvestigationResult:
         return out
 
 
-def install_investigation_payload_runner(runner: InvestigationPayloadRunner) -> None:
-    """Bind the payload investigation callable used by :meth:`AgentSession.investigate`."""
-    global _payload_runner
-    _payload_runner = runner
-
-
-def reset_investigation_payload_runner_for_tests() -> None:
-    """Clear the installed runner (tests only)."""
-    global _payload_runner
-    _payload_runner = None
-
-
-def get_investigation_payload_runner() -> InvestigationPayloadRunner | None:
-    """Return the installed runner, or ``None`` if process boot has not wired it."""
-    return _payload_runner
-
-
-def run_installed_investigation_payload(
-    *,
-    raw_alert: AlertInput,
-    opensre_evaluate: bool = False,
-    investigation_metadata: tuple[str, str] | None = None,
-) -> InvestigationResult:
-    """Run investigation through the installed payload runner."""
-    runner = _payload_runner
-    if runner is None:
-        raise RuntimeError(
-            "Investigation payload runner is not installed. Call "
-            "configure_process(...) (harness adapters) or "
-            "bootstrap.adapters.install_investigation_api() before "
-            "AgentSession.investigate."
-        )
-    payload = runner(
-        raw_alert=raw_alert,
-        opensre_evaluate=opensre_evaluate,
-        investigation_metadata=investigation_metadata,
-    )
-    return InvestigationResult.from_payload(payload)
-
-
 __all__ = [
     "AlertInput",
     "InvestigationPayloadRunner",
     "InvestigationResult",
-    "get_investigation_payload_runner",
-    "install_investigation_payload_runner",
-    "reset_investigation_payload_runner_for_tests",
-    "run_installed_investigation_payload",
 ]

@@ -33,7 +33,7 @@ from infrastructure.alert_intake import (
 from infrastructure.alert_intake import router as alert_router
 from infrastructure.observability.errors.sentry import capture_exception
 from infrastructure.process.turn_capacity import turn_slot
-from tools.investigation.capability import resolve_investigation_context
+from tools.investigation.capability import resolve_investigation_context, run_investigation_payload
 
 # Standalone uvicorn and in-process gateway both need adapters for /investigate.
 configure_process(WEB_PROFILE)  # env → sentry → adapters
@@ -142,6 +142,7 @@ def _run_investigation(req: InvestigateRequest) -> InvestigateResponse | JSONRes
     try:
         result = AgentSession().investigate(
             req.raw_alert,
+            runner=run_investigation_payload,
             investigation_metadata=investigation_metadata,
         )
         return InvestigateResponse(**result.as_dict())
