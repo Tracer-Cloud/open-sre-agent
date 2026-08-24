@@ -322,12 +322,17 @@ a headless agent on every message for the same logical session.
 
 ```python
 from bootstrap.embedded import start_embedded_session
+from tools.investigation.capability import run_investigation_payload
 
 session = start_embedded_session()    # EMBEDDED_PROFILE + default agent
 result = session.chat("…")            # turn 1
 result = session.chat("…")            # turn 2 — same attached agent
-report = session.investigate({…})     # investigation pipeline (separate stage machine)
+report = session.investigate({…}, runner=run_investigation_payload)  # investigation pipeline
 ```
+
+``investigate`` takes its payload runner as an argument because ``core`` may not
+import ``tools``; the caller (a surface, the gateway, or an embedder) supplies
+``run_investigation_payload``.
 
 ``AgentSession.start`` must not import ``bootstrap`` (layer contract). Surfaces
 that already ran another process profile call ``startup()`` (or pass an
