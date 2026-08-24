@@ -206,9 +206,9 @@ def get_sync_status() -> SyncStatus:
     Makes network calls only when sync is on: the exposure check (if the
     provider registered a checker; see
     :func:`~infrastructure.filestorage.providers.check_bucket_exposure`) and the
-    encryption gate — one listing, plus a read of the smallest mirrored object
-    when there is no manifest and only its bytes can say whether the store is
-    sealed.
+    encryption gate — one listing, plus reads of the mirrored objects when there
+    is no manifest and only their bytes can say whether the store is sealed
+    (stopping at the first sealed one).
     """
     _refuse_org_scoped_turn()
     config = load_remote_sync_config()

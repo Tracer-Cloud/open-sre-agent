@@ -64,21 +64,20 @@ _MANIFEST_GONE = (
 
 
 def _holds_sealed_objects(store: ObjectStore, listing: list[RemoteObject]) -> bool:
-    """Whether the mirrored objects are actually sealed.
+    """Whether any mirrored object is actually sealed.
 
-    Costs one ``get_object`` — the smallest mirrored object, so the read stays
-    cheap — and only runs when there is no manifest to trust. Without it a
-    deleted manifest makes an encrypted store indistinguishable from a plaintext
-    one, and the engine writes ciphertext straight over local history.
-
-    One object answers for the store: a mixed prefix can only come from an
-    interrupted migration, and either answer routes to the same refusal.
+    Runs only when there is no manifest to trust: without it a deleted manifest
+    makes an encrypted store look plaintext, and the engine writes ciphertext
+    over local history. Stops at the first sealed object, so a half-migrated
+    prefix counts as encrypted; a plaintext store pays one read per mirrored
+    object, since nothing but an object's bytes can answer.
     """
-    mirrored = [obj for obj in listing if obj.key.partition("/")[0] in _ROOT_HEADS]
-    if not mirrored:
-        return False
-    smallest = min(mirrored, key=lambda obj: obj.size)
-    return envelope.is_sealed(store.get_object(smallest.key))
+    for obj in listing:
+        if obj.key.partition("/")[0] not in _ROOT_HEADS:
+            continue
+        if envelope.is_sealed(store.get_object(obj.key)):
+            return True
+    return False
 
 
 def resolve_cipher(store: ObjectStore, *, encrypted: bool, dry_run: bool = False) -> ResolvedCipher:
