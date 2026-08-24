@@ -59,7 +59,7 @@ def _split_argv(command: str, *, is_windows: bool) -> list[str] | None:
             return None
 
 
-def _has_unquoted_shell_operator(command: str) -> bool:
+def _has_unquoted_shell_operator(command: str, *, is_windows: bool) -> bool:
     """Return True when shell metacharacters appear outside quotes.
 
     The parser needs to notice glued operators like ``>out.txt`` or ``2>&1``,
@@ -75,7 +75,7 @@ def _has_unquoted_shell_operator(command: str) -> bool:
             escaped = False
             continue
 
-        if ch == "\\" and not in_single_quote:
+        if ch == "\\" and not is_windows and not in_single_quote:
             escaped = True
             continue
 
@@ -122,7 +122,9 @@ def parse_shell_command(command: str, *, is_windows: bool) -> ParsedShellCommand
             use_shell=True,
         )
 
-    if _INLINE_SUBSHELL_RE.search(stripped) is not None or _has_unquoted_shell_operator(stripped):
+    if _INLINE_SUBSHELL_RE.search(stripped) is not None or _has_unquoted_shell_operator(
+        stripped, is_windows=is_windows
+    ):
         # Operators / substitution need a real shell; alpha mode runs them.
         return ParsedShellCommand(
             command=stripped,

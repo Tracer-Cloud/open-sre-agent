@@ -83,6 +83,22 @@ def test_background_operator_runs_through_shell() -> None:
     assert parsed.parse_error is None
 
 
+def test_windows_backslash_does_not_escape_operator() -> None:
+    parsed = parse_shell_command(r"echo C:\tmp\& echo done", is_windows=True)
+
+    assert parsed.use_shell is True
+    assert parsed.argv is None
+    assert parsed.parse_error is None
+
+
+def test_posix_backslash_escapes_literal_operator() -> None:
+    parsed = parse_shell_command(r"echo dir\&name", is_windows=False)
+
+    assert parsed.use_shell is False
+    assert parsed.argv == ["echo", "dir&name"]
+    assert parsed.parse_error is None
+
+
 def test_command_substitution_runs_through_shell() -> None:
     parsed = parse_shell_command("echo $(date)", is_windows=False)
 
