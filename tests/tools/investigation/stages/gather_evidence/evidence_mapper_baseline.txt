@@ -3,6 +3,16 @@
 # catalog evidence. This is a RATCHET baseline: it may only shrink.
 # Adding a tool here is acknowledging a known gap; the goal is to
 # remove entries by giving the tool an EVIDENCE_MAPPERS entry.
+CheckNodeServiceStatus
+CheckServiceConnectivity
+DescribeResource
+GetAlerts
+GetAppYAML
+GetClusterConfiguration
+GetErrorLogs
+GetRecentLogs
+GetResources
+GetServiceDependencies
 alertmanager_alerts
 alertmanager_silences
 argocd_application_diff
