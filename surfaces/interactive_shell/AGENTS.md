@@ -24,10 +24,11 @@ should be predictable, interruptible, explainable, and safe by default.
 | `runtime/` | background task workers, lifecycle/`ReplState`, runtime context assembly, semantic shell-turn execution, and core harness adapters | prompt text, reusable session persistence, or compatibility shims |
 | `tools/interactive_shell/shell/` | shell command parsing, shell execution policy, subprocess execution, and the `run_shell_command`/`run_cd`/`run_pwd` runner (next to the `shell_run` tool in `tools/interactive_shell/actions/shell.py`) | slash-command execution |
 | `grounding/` | CLI/docs/source/AGENTS reference loading, caching, and cache diagnostics for grounded help answers (`grounding/cli_reference.py`) | network calls or generated model prose |
-| `session/` | per-REPL session state: `Session` composed over `core.agent_harness.SessionCore`, terminal UI/background facets (`session/terminal_session.py`), the bounded received-alert inbox, background-investigation records and notification preferences, JSONL trace-store binding | alert listener lifecycle or network I/O (owned by `core.domain.alerts.inbox`) |
+| `session/` | per-REPL session state: `Session` composed over `core.agent_harness.SessionCore`, terminal UI/background facets (`session/terminal_session.py`), the bounded received-alert inbox, background-investigation records and notification preferences, JSONL trace-store binding | alert listener lifecycle (`controller._alert_listener`) or HTTP intake transport (`infrastructure.alert_intake`) |
 | `prompt_history/` | persistent prompt-command history storage plus redaction and retention policy (`RedactingFileHistory`, entry caps) | console/UI interaction |
 | `utils/` | shell turn telemetry: `PromptRecorder`, sink routing (`utils/telemetry/sinks/`), investigation analytics and LLM-usage events | turn-flow control or UI rendering |
-| `ui/` | Rich/prompt-toolkit rendering, theme, menus, streaming output, and domain views such as `ui/alerts/` formatting (receiver/queue/listener lifecycle lives in `core.domain.alerts.inbox`) | business logic or network calls |
+| `ui/` | Rich/prompt-toolkit rendering, theme, menus, streaming output, and domain views such as `ui/alerts/` formatting (formatting only — the inbox queue
+lives in `core.domain.alerts.inbox` and the listener lifecycle in `controller.py`) | business logic or network calls |
 
 When a change crosses these boundaries, prefer extracting a small helper in the
 owning area rather than adding more logic to the caller.
@@ -52,17 +53,18 @@ owning area rather than adding more logic to the caller.
   module. Keep handlers small: parse args, call focused helpers, render result.
 - **REPL + CLI parity (required):** Every command in `SLASH_COMMANDS` must have a
   matching `MCP_BY_COMMAND` entry in
-  `command_registry/slash_catalog.py`. That catalog feeds the LLM planner (`slash_invoke`),
+  `tools/interactive_shell/shared/slash_catalog.py` (the
+  `command_registry/slash_catalog.py` copy only re-exports it). That catalog feeds the LLM planner (`slash_invoke`),
   planner tool specs, and compact help text. Without it, CI fails
   (`test_slash_catalog_covers_all_registered_commands`).
   - **New REPL-only slash command:** add `SlashCommand` in the owning
     `command_registry/*` module **and** `_mcp(...)` in
-    `command_registry/slash_catalog.py` (keep
+    `tools/interactive_shell/shared/slash_catalog.py` (keep
     keys sorted alphabetically in `MCP_BY_COMMAND`).
   - **New CLI with REPL parity:** add the Click command under `surfaces/cli/commands/`,
     register a `SlashCommand` in `command_registry/cli_parity.py` (subprocess to
     `opensre …`), **and** add `MCP_BY_COMMAND` in
-    `command_registry/slash_catalog.py` with
+    `tools/interactive_shell/shared/slash_catalog.py` with
     `llm_description`, `use_cases`, and `anti_examples` aligned to the command’s
     `usage` tuple.
   - **Verify before push:**
