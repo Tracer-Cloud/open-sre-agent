@@ -61,8 +61,6 @@ _ALLOWED: dict[str, frozenset[str]] = {
             "integrations.github.client",
             "integrations.github.helpers",
             "integrations.github.pull_requests",
-            "integrations.gitlab.build_gitlab_config",
-            "integrations.gitlab.post_gitlab_mr_note",
             "integrations.grafana.reporting_adapter",
             "integrations.llm_cli.claude_code",
             "integrations.llm_cli.subprocess_env",

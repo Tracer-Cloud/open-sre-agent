@@ -270,3 +270,20 @@ def classify(credentials: dict[str, Any], record_id: str) -> tuple[GitlabConfig 
         report_classify_failure(exc, logger=logger, integration="gitlab", record_id=record_id)
         return None, None
     return cfg, "gitlab"
+
+
+__all__ = [
+    "DEFAULT_GITLAB_BASE_URL",
+    "GitlabConfig",
+    "GitlabValidationResult",
+    "build_gitlab_config",
+    "classify",
+    "get_gitlab_commits",
+    "get_gitlab_file",
+    "get_gitlab_mrs",
+    "get_gitlab_pipelines",
+    "gitlab_config_from_env",
+    "post_gitlab_mr_note",
+    "validate_gitlab_config",
+    "validate_gitlab_connection",
+]
