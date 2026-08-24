@@ -219,14 +219,11 @@ def resolve_passphrase() -> str:
 def save_passphrase(passphrase: str) -> None:
     """Persist the passphrase and confirm this machine reads back exactly it.
 
-    Storing is not the same as resolving, and callers depend on the stronger
-    guarantee: a rotation wraps the store under the value passed here, so
-    anything that resolves differently afterwards locks this machine out. Two
-    tiers can diverge — a write the machine refuses
-    (``OPENSRE_DISABLE_KEYRING``), and a stale export that outranks the file
-    that was just written — and both raise
-    :class:`PassphraseNotResolvableError` rather than surfacing at the next
-    command as an unexplained wrong-passphrase error.
+    A rotation wraps the store under the value passed here, so any read-back
+    that is not exactly it locks this machine out and raises
+    :class:`PassphraseNotResolvableError` — said now, while the operator still
+    has the passphrase, rather than at the next command as an unexplained
+    wrong-passphrase error.
     """
     try:
         save_secret(REMOTE_SYNC_PASSPHRASE_ENV, passphrase)
@@ -252,6 +249,13 @@ def save_passphrase(passphrase: str) -> None:
             f"  export {REMOTE_SYNC_PASSPHRASE_ENV}=...   # the new passphrase\n"
             f"  unset {REMOTE_SYNC_PASSPHRASE_ENV}        # or fall back to stored credentials"
         )
+    raise PassphraseNotResolvableError(
+        f"The passphrase was stored, but this machine reads back "
+        f"{'nothing' if resolved.tier == SecretTier.NONE else 'a different value'}, so the\n"
+        f"next command would not open the store. Export it in every shell that syncs:\n"
+        f"\n"
+        f"  export {REMOTE_SYNC_PASSPHRASE_ENV}=..."
+    )
 
 
 def forget_cached_kek() -> None:

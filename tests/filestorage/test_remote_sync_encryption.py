@@ -17,8 +17,10 @@ from pathlib import Path
 import pytest
 
 from config.constants.filestorage import REMOTE_SYNC_KEY_CACHE_ENV, REMOTE_SYNC_PASSPHRASE_ENV
+from config.secrets.backend import SecretTier
+from config.secrets.store import SecretLookup
 from infrastructure.filestorage.contracts import RemoteObject
-from infrastructure.filestorage.encryption import envelope
+from infrastructure.filestorage.encryption import envelope, keys
 from infrastructure.filestorage.encryption.cipher import ManifestCipher
 from infrastructure.filestorage.encryption.keys import (
     ScryptParams,
@@ -38,6 +40,7 @@ from infrastructure.filestorage.errors import (
     EncryptedStoreError,
     ManifestMissingError,
     MissingPassphraseError,
+    PassphraseNotResolvableError,
     PlaintextStoreError,
     RemoteSyncConfigError,
     RemoteSyncEncryptionError,
@@ -733,3 +736,35 @@ def test_no_cipher_stores_the_file_verbatim(home: Path, roots: tuple[SyncRoot, .
 
     # Assert
     assert store.objects["sessions/abc.jsonl"] == (home / "sessions" / "abc.jsonl").read_bytes()
+
+
+# ── Persisting the passphrase fails closed on any read-back but the exact one ──
+
+
+@pytest.mark.parametrize(
+    "resolved",
+    [
+        pytest.param(SecretLookup("", SecretTier.NONE), id="nothing-resolves"),
+        pytest.param(SecretLookup("stale-stored", SecretTier.FALLBACK), id="stored-differs"),
+        pytest.param(SecretLookup("stale-export", SecretTier.ENV), id="export-outranks"),
+    ],
+)
+def test_save_passphrase_refuses_a_read_back_that_is_not_the_stored_value(
+    monkeypatch: pytest.MonkeyPatch, resolved: SecretLookup
+) -> None:
+    """Anything but an exact read-back strands this machine, so say so now.
+
+    A rotation has already re-wrapped the remote manifest by the time this
+    runs: a mismatch that returned success would surface a command later as an
+    unexplained wrong-passphrase error, with the new passphrase no longer to
+    hand. The ENV tier is only one of the ways the tiers can diverge — a
+    contended credential file resolves nothing, and a stored value can come
+    back different — and each one is equally terminal.
+    """
+    # Arrange
+    monkeypatch.setattr(keys, "save_secret", lambda *_args, **_kwargs: None)
+    monkeypatch.setattr(keys, "lookup", lambda *_args, **_kwargs: resolved)
+
+    # Act / Assert
+    with pytest.raises(PassphraseNotResolvableError):
+        keys.save_passphrase(PASSPHRASE)
