@@ -2,7 +2,9 @@
 
 from typing import Any
 
+from core.domain.types.evidence import record_evidence_entry
 from core.domain.types.tools import ToolSurface
+from core.tool import EvidenceType
 from core.tool_framework import tool
 from integrations.supabase import (
     get_service_health,
@@ -10,6 +12,26 @@ from integrations.supabase import (
     supabase_extract_params,
     supabase_is_available,
 )
+
+
+def _map_get_supabase_service_health(
+    evidence: dict[str, Any], output: dict[str, Any], _input: dict[str, Any]
+) -> None:
+    services = output.get("services", {})
+    if not services:
+        return
+    degraded = output.get("degraded_services", [])
+    summary = f"{len(services)} services checked"
+    if degraded:
+        summary += f", degraded: {', '.join(degraded)}"
+    else:
+        summary += ", all healthy"
+    record_evidence_entry(
+        evidence,
+        source="get_supabase_service_health",
+        label="Supabase Service Health",
+        summary=summary,
+    )
 
 
 @tool(
@@ -25,6 +47,8 @@ from integrations.supabase import (
     is_available=supabase_is_available,
     injected_params=("project_url",),
     extract_params=supabase_extract_params,
+    evidence_type=EvidenceType.OTHER,
+    evidence_mapper=_map_get_supabase_service_health,
 )
 def get_supabase_service_health(
     project_url: str,
