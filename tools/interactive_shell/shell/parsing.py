@@ -24,12 +24,10 @@ The only non-execution outcome is a ``parse_error`` for genuinely empty input
 
 from __future__ import annotations
 
-import re
 import shlex
 from dataclasses import dataclass
 
 _EXPLICIT_SHELL_PREFIX = "!"
-_INLINE_SUBSHELL_RE = re.compile(r"`|\$\(")
 
 
 @dataclass(frozen=True)
@@ -59,8 +57,8 @@ def _split_argv(command: str, *, is_windows: bool) -> list[str] | None:
             return None
 
 
-def _has_unquoted_shell_operator(command: str, *, is_windows: bool) -> bool:
-    """Return True when shell metacharacters appear outside quotes.
+def _requires_shell_routing(command: str, *, is_windows: bool) -> bool:
+    """Return True when command syntax needs the platform shell.
 
     The parser needs to notice glued operators like ``>out.txt`` or ``2>&1``,
     but a literal ``&`` inside ``cd "dir&name"`` must stay an argument so the
@@ -70,7 +68,7 @@ def _has_unquoted_shell_operator(command: str, *, is_windows: bool) -> bool:
     in_double_quote = False
     escaped = False
 
-    for ch in command:
+    for index, ch in enumerate(command):
         if escaped:
             escaped = False
             continue
@@ -87,14 +85,18 @@ def _has_unquoted_shell_operator(command: str, *, is_windows: bool) -> bool:
         if in_double_quote:
             if ch == '"':
                 in_double_quote = False
+            elif not is_windows and (ch == "`" or command.startswith("$(", index)):
+                return True
             continue
 
-        if ch == "'":
+        if ch == "'" and not is_windows:
             in_single_quote = True
             continue
         if ch == '"':
             in_double_quote = True
             continue
+        if not is_windows and (ch == "`" or command.startswith("$(", index)):
+            return True
         if ch in "|;&<>":
             return True
 
@@ -122,9 +124,7 @@ def parse_shell_command(command: str, *, is_windows: bool) -> ParsedShellCommand
             use_shell=True,
         )
 
-    if _INLINE_SUBSHELL_RE.search(stripped) is not None or _has_unquoted_shell_operator(
-        stripped, is_windows=is_windows
-    ):
+    if _requires_shell_routing(stripped, is_windows=is_windows):
         # Operators / substitution need a real shell; alpha mode runs them.
         return ParsedShellCommand(
             command=stripped,

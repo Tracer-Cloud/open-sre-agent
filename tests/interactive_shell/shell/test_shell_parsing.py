@@ -59,6 +59,22 @@ def test_quoted_operator_stays_in_argv_mode() -> None:
     assert parsed.parse_error is None
 
 
+def test_single_quoted_substitution_stays_in_argv_mode() -> None:
+    parsed = parse_shell_command("cd 'dir$(name)'", is_windows=False)
+
+    assert parsed.use_shell is False
+    assert parsed.argv == ["cd", "dir$(name)"]
+    assert parsed.parse_error is None
+
+
+def test_double_quoted_substitution_runs_through_shell() -> None:
+    parsed = parse_shell_command('echo "$(date)"', is_windows=False)
+
+    assert parsed.use_shell is True
+    assert parsed.argv is None
+    assert parsed.parse_error is None
+
+
 def test_glued_redirection_runs_through_shell() -> None:
     parsed = parse_shell_command("echo hello >out.txt 2>&1", is_windows=False)
 
@@ -85,6 +101,14 @@ def test_background_operator_runs_through_shell() -> None:
 
 def test_windows_backslash_does_not_escape_operator() -> None:
     parsed = parse_shell_command(r"echo C:\tmp\& echo done", is_windows=True)
+
+    assert parsed.use_shell is True
+    assert parsed.argv is None
+    assert parsed.parse_error is None
+
+
+def test_windows_apostrophe_does_not_quote_operator() -> None:
+    parsed = parse_shell_command("echo '&'", is_windows=True)
 
     assert parsed.use_shell is True
     assert parsed.argv is None
