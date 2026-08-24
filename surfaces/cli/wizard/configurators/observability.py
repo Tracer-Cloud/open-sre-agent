@@ -5,8 +5,8 @@ from __future__ import annotations
 from config.env_file import sync_env_values
 from infrastructure.terminal.theme import ERROR, HIGHLIGHT, SECONDARY
 from integrations.coralogix import CORALOGIX_SETUP
-from integrations.datadog.setup import DATADOG_SETUP
-from integrations.grafana.setup import GRAFANA_SETUP
+from integrations.datadog import DATADOG_SETUP
+from integrations.grafana import GRAFANA_SETUP
 from integrations.honeycomb import HONEYCOMB_SETUP
 from integrations.new_relic import NEW_RELIC_SETUP
 from integrations.opensearch import OPENSEARCH_SETUP

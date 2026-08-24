@@ -24,7 +24,7 @@ from gateway.transports.buzz.settings import BuzzInboundMessage, GatewaySettings
 from gateway.transports.buzz.turn_output import BuzzTurnOutput
 from infrastructure.analytics.usage_context import UsageSurface, bound_usage_context
 from infrastructure.turn_host.turn_callback import TurnCallback
-from integrations.buzz.client import BuzzClient
+from integrations.buzz import BuzzClient
 
 logger = logging.getLogger(__name__)
 

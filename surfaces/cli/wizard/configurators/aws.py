@@ -8,7 +8,8 @@ wizard's way of asking.
 from __future__ import annotations
 
 from infrastructure.terminal.theme import SECONDARY, WARNING
-from integrations.aws.role_mode_gate import (
+from integrations.aws import (
+    AWS_SETUP,
     CONFIGURE_FIRST_INSTRUCTION,
     GATE_OPTIONS,
     GATE_QUESTION,
@@ -17,7 +18,6 @@ from integrations.aws.role_mode_gate import (
     RoleGateChoice,
     gate_role_mode,
 )
-from integrations.aws.setup import AWS_SETUP
 from surfaces.cli.wizard._ui import Choice, WizardBack, _choose, _console
 from surfaces.cli.wizard.configurators.spec_configurator import configure_from_spec
 

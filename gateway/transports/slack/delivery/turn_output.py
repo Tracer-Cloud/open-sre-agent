@@ -34,7 +34,7 @@ from infrastructure.turn_host.status_messages import (
     status_from_response_label,
     user_facing_error_message,
 )
-from integrations.slack.formatting import markdown_to_slack_mrkdwn
+from integrations.slack import markdown_to_slack_mrkdwn
 
 logger = logging.getLogger("gateway")
 

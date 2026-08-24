@@ -15,12 +15,12 @@ import click
 
 from infrastructure.process.exit_codes import ERROR, SUCCESS
 from infrastructure.scheduling.scheduler.types import Provider
-from integrations.buzz.alarms import BuzzAlarmDispatcher
-from integrations.buzz.credentials import (
+from integrations.buzz import BuzzAlarmDispatcher
+from integrations.buzz import (
     load_credentials_from_env as load_buzz_credentials_from_env,
 )
-from integrations.rocketchat.alarms import RocketChatAlarmDispatcher
-from integrations.rocketchat.credentials import (
+from integrations.rocketchat import RocketChatAlarmDispatcher
+from integrations.rocketchat import (
     load_credentials_from_env as load_rocketchat_credentials_from_env,
 )
 from integrations.telegram.alarms import AlarmDispatcher

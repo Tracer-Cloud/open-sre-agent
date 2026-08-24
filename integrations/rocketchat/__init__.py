@@ -7,6 +7,11 @@ from typing import Any
 
 from integrations._validation_helpers import report_classify_failure
 from integrations.config_models import RocketChatConfig
+from integrations.rocketchat.alarms import RocketChatAlarmDispatcher
+from integrations.rocketchat.background_adapter import rocketchat_background_adapter
+from integrations.rocketchat.credentials import load_credentials_from_env
+from integrations.rocketchat.scheduled_delivery import RocketChatScheduledDelivery
+from integrations.rocketchat.setup import ROCKETCHAT_SETUP
 
 logger = logging.getLogger(__name__)
 
@@ -33,3 +38,13 @@ def classify(
         report_classify_failure(exc, logger=logger, integration="rocketchat", record_id=record_id)
         return None, None
     return cfg, "rocketchat"
+
+
+__all__ = [
+    "ROCKETCHAT_SETUP",
+    "RocketChatAlarmDispatcher",
+    "RocketChatScheduledDelivery",
+    "classify",
+    "load_credentials_from_env",
+    "rocketchat_background_adapter",
+]

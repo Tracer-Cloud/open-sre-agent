@@ -6,6 +6,11 @@ import logging
 from typing import Any
 
 from integrations._validation_helpers import report_classify_failure
+from integrations.buzz.alarms import BuzzAlarmDispatcher
+from integrations.buzz.background_adapter import buzz_background_adapter
+from integrations.buzz.client import BuzzClient, resolve_buzz_binary
+from integrations.buzz.credentials import load_credentials_from_env
+from integrations.buzz.setup import BUZZ_SETUP
 from integrations.config_models import BuzzConfig
 
 logger = logging.getLogger(__name__)
@@ -30,3 +35,14 @@ def classify(credentials: dict[str, Any], record_id: str) -> tuple[BuzzConfig | 
         report_classify_failure(exc, logger=logger, integration="buzz", record_id=record_id)
         return None, None
     return cfg, "buzz"
+
+
+__all__ = [
+    "BUZZ_SETUP",
+    "BuzzAlarmDispatcher",
+    "BuzzClient",
+    "buzz_background_adapter",
+    "classify",
+    "load_credentials_from_env",
+    "resolve_buzz_binary",
+]

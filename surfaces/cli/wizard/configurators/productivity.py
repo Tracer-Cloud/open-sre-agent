@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from config.env_file import sync_env_values
 from infrastructure.terminal.theme import SECONDARY
-from integrations.servicenow.setup import SERVICENOW_SETUP
+from integrations.servicenow import SERVICENOW_SETUP
 from integrations.store import upsert_integration
 from surfaces.cli.wizard._ui import (
     _console,

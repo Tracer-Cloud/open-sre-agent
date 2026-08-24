@@ -7,6 +7,7 @@ from typing import Any
 
 from integrations._validation_helpers import report_classify_failure
 from integrations.config_models import SMTPIntegrationConfig
+from integrations.smtp.background_adapter import email_background_adapter
 
 logger = logging.getLogger(__name__)
 
@@ -30,3 +31,6 @@ def classify(
         report_classify_failure(exc, logger=logger, integration="smtp", record_id=record_id)
         return None, None
     return cfg, "smtp"
+
+
+__all__ = ["classify", "email_background_adapter"]
