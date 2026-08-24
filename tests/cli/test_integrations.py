@@ -289,8 +289,21 @@ def test_integrations_setup_accepts_smtp() -> None:
     mock_verify.assert_called_once_with("smtp")
 
 
-def test_integrations_setup_skips_auto_verify_for_unverifiable_service() -> None:
+def test_integrations_setup_skips_auto_verify_for_unverifiable_service(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     runner = CliRunner()
+
+    # Every SETUP_SERVICES entry now also has a verifier (rds was the last gap,
+    # closed by #5093 — this test's own history: opensearch played this role
+    # until PR #1143 gave it a verifier too), so the "registered for setup but
+    # not verify" case this test exercises no longer occurs naturally. Force it
+    # by excluding "rds" from VERIFY_SERVICES for this test only, rather than
+    # coupling to whichever real integration happens to lack a verifier today.
+    import surfaces.cli.constants as cli_constants
+
+    real_verify_services = tuple(s for s in VERIFY_SERVICES if s != "rds")
+    monkeypatch.setattr(cli_constants, "VERIFY_SERVICES", real_verify_services)
 
     with (
         patch("surfaces.cli.commands.integrations.capture_integration_setup_started"),
@@ -299,10 +312,6 @@ def test_integrations_setup_skips_auto_verify_for_unverifiable_service() -> None
         patch("integrations.cli.cmd_setup") as mock_setup,
         patch("integrations.cli.cmd_verify") as mock_verify,
     ):
-        # rds is registered in SETUP_SERVICES but intentionally absent from
-        # VERIFY_SERVICES, so it exercises the auto-verify-skip path.
-        # (opensearch was used here previously but moved into VERIFY_SERVICES
-        # by PR #1143, which is why this assertion was updated.)
         mock_setup.return_value = "rds"
         result = runner.invoke(cli, ["integrations", "setup", "rds"])
 
