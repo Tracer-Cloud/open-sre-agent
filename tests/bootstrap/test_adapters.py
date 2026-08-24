@@ -19,10 +19,8 @@ from bootstrap import adapters
 _REGISTRARS = {
     "integrations.harness_adapters.register_harness_adapters": "integrations",
     "tools.harness_adapters.register_harness_adapters": "tools",
-    "infrastructure.scheduling.scheduler.runners.register_investigation_runner": "investigation",
-    "infrastructure.scheduling.scheduler.runners.register_agent_runner": "scheduled",
 }
-_STEPS = ("install_harness_adapters", "install_scheduler_runners")
+_STEPS = ("install_harness_adapters",)
 
 
 @pytest.fixture
@@ -56,31 +54,6 @@ def test_harness_adapters_registers_both_registries(registration_calls: list[str
     assert registration_calls == ["integrations", "tools", "investigation_api"]
 
 
-def test_scheduler_runners_registers_investigation_first(registration_calls: list[str]) -> None:
-    # Arrange / Act
-    adapters.install_scheduler_runners()
-
-    # Assert: the scheduled-agent runner resolves against the investigation one,
-    # so the order is load-bearing, not cosmetic.
-    assert registration_calls == ["investigation", "scheduled"]
-
-
-def test_steps_compose_without_a_flag_argument(registration_calls: list[str]) -> None:
-    # Arrange / Act: a host needing both calls both — there is no mode
-    # parameter to get wrong.
-    adapters.install_harness_adapters()
-    adapters.install_scheduler_runners()
-
-    # Assert
-    assert registration_calls == [
-        "integrations",
-        "tools",
-        "investigation_api",
-        "investigation",
-        "scheduled",
-    ]
-
-
 def test_only_the_composition_root_defines_the_steps() -> None:
     # Arrange: a second copy is what this refactor removed. surfaces and gateway
     # cannot import each other, so pressure to re-add one is permanent — and a
@@ -108,5 +81,4 @@ def test_only_the_composition_root_defines_the_steps() -> None:
     # Assert
     assert definers == [
         "bootstrap/adapters.py::install_harness_adapters",
-        "bootstrap/adapters.py::install_scheduler_runners",
     ], definers

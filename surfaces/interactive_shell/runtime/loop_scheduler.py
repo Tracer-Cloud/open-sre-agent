@@ -59,8 +59,12 @@ def shutdown_loop_scheduler() -> None:
 def _start_locked() -> int:
     global _scheduler, _task_count
 
+    from bootstrap.adapters import scheduler_runners
+
     configure_process(SCHEDULED_COMMAND_PROFILE)
-    scheduler, task_count = start_background_scheduler(task_filter=_is_prompt_loop_task)
+    scheduler, task_count = start_background_scheduler(
+        scheduler_runners(), task_filter=_is_prompt_loop_task
+    )
     _scheduler = scheduler
     _task_count = task_count
     if scheduler is None:

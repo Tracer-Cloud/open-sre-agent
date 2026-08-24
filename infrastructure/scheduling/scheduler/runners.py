@@ -19,16 +19,11 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 from infrastructure.process.turn_capacity import TurnGate, queued_turn_slot
-from infrastructure.scheduling.scheduler.agent_runner import (
-    AgentPayload,
-    AgentRunner,
-    register_agent_runner,
-)
+from infrastructure.scheduling.scheduler.agent_runner import AgentPayload, AgentRunner
 from infrastructure.scheduling.scheduler.investigation_runner import (
     AlertPayload,
     InvestigationResult,
     InvestigationRunner,
-    register_investigation_runner,
 )
 
 
@@ -64,15 +59,6 @@ class SchedulerRunners:
             agent=_gated_agent(self.agent, gate),
             investigation=_gated_investigation(self.investigation, gate),
         )
-
-    def install(self) -> None:
-        """Bind both runners for the scheduler to dispatch through.
-
-        Investigation first: the scheduled-agent runner resolves against it,
-        so the order is load-bearing rather than cosmetic.
-        """
-        register_investigation_runner(self.investigation)
-        register_agent_runner(self.agent)
 
 
 __all__ = ["SchedulerRunners", "TurnGate"]

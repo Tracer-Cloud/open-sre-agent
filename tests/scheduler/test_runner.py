@@ -19,6 +19,7 @@ from infrastructure.scheduling.scheduler.runner import (
     run_task_now,
 )
 from infrastructure.scheduling.scheduler.types import Provider, ScheduledTask, TaskKind
+from tests.scheduler._bundle import real_runners
 
 
 class TestMakeTrigger:
@@ -172,6 +173,7 @@ class TestRegisterJobs:
         scheduler = _FakeScheduler()
         count = _register_jobs(
             scheduler,
+            real_runners(),
             task_filter=lambda task: bool(task.params.get(LOOP_PROMPT_PARAM)),
         )
 
@@ -221,7 +223,7 @@ class TestRegisterJobs:
         )
 
         scheduler = _FakeScheduler()
-        count = resync_scheduler_jobs(scheduler)
+        count = resync_scheduler_jobs(scheduler, real_runners())
 
         assert count == 1
         assert set(scheduler.jobs) == {"keep"}
@@ -232,7 +234,7 @@ class TestRegisterJobs:
     ) -> None:
         sentinel = object()
 
-        def _start_background_scheduler(*, task_filter=None):
+        def _start_background_scheduler(_runners, *, task_filter=None):
             _ = task_filter
             return sentinel, 2
 
@@ -240,7 +242,7 @@ class TestRegisterJobs:
             "infrastructure.scheduling.scheduler.runner.start_background_scheduler",
             _start_background_scheduler,
         )
-        scheduler, count = refresh_background_scheduler(None)
+        scheduler, count = refresh_background_scheduler(None, real_runners())
         assert scheduler is sentinel
         assert count == 2
 
@@ -251,7 +253,7 @@ class TestRunTaskNow:
             "infrastructure.scheduling.scheduler.runner.get_task",
             lambda _task_id: None,
         )
-        assert run_task_now("nonexistent") is False
+        assert run_task_now("nonexistent", real_runners()) is False
 
     def test_runs_existing_task(self, monkeypatch: pytest.MonkeyPatch) -> None:
         task = ScheduledTask(
@@ -267,7 +269,7 @@ class TestRunTaskNow:
 
         with patch("infrastructure.scheduling.scheduler.runner.execute_task") as mock_exec:
             mock_exec.return_value = True
-            result = run_task_now("run_now_test")
+            result = run_task_now("run_now_test", real_runners())
 
         assert result is True
         mock_exec.assert_called_once()
@@ -286,10 +288,10 @@ class TestStartSchedulerIdle:
     def test_empty_exits_by_default(self, monkeypatch: pytest.MonkeyPatch) -> None:
         from infrastructure.scheduling.scheduler import runner
 
-        monkeypatch.setattr(runner, "_register_jobs", lambda _scheduler, **_kw: 0)
+        monkeypatch.setattr(runner, "_register_jobs", lambda _scheduler, _runners, **_kw: 0)
         monkeypatch.setattr(runner, "record_scheduler_service_operation", lambda *_a, **_k: None)
         with pytest.raises(SystemExit):
-            runner.start_scheduler()
+            runner.start_scheduler(real_runners())
 
     def test_empty_idles_when_service(self, monkeypatch: pytest.MonkeyPatch) -> None:
         import apscheduler.schedulers.blocking as blocking
@@ -306,10 +308,10 @@ class TestStartSchedulerIdle:
                 pass
 
         monkeypatch.setattr(blocking, "BlockingScheduler", _FakeScheduler)
-        monkeypatch.setattr(runner, "_register_jobs", lambda _scheduler, **_kw: 0)
+        monkeypatch.setattr(runner, "_register_jobs", lambda _scheduler, _runners, **_kw: 0)
         monkeypatch.setattr(runner, "record_scheduler_service_operation", lambda *_a, **_k: None)
         monkeypatch.setattr(runner.signal, "signal", lambda *_a, **_k: None)
 
         # Must not raise the "no tasks" SystemExit; reaches the (mocked) start.
-        runner.start_scheduler(idle_when_empty=True)
+        runner.start_scheduler(real_runners(), idle_when_empty=True)
         assert started == [True]

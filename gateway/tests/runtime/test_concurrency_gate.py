@@ -13,10 +13,6 @@ from gateway.tests.runtime.concurrency_limited_handler import (
     ConcurrencyLimitedTurnHandler,
 )
 from infrastructure.deployment.contracts.models import SizeProfile
-from infrastructure.scheduling.scheduler.agent_runner import (
-    invoke_agent_runner,
-    register_agent_runner,
-)
 from infrastructure.scheduling.scheduler.runners import SchedulerRunners
 from infrastructure.turn_host.concurrency import TurnConcurrencyGate
 
@@ -222,9 +218,9 @@ def test_scheduler_runner_waits_for_the_same_chat_capacity() -> None:
         entered.set()
         return "done"
 
-    SchedulerRunners(agent=scheduled_runner, investigation=_unused_runner).gated(gate).install()
+    bundle = SchedulerRunners(agent=scheduled_runner, investigation=_unused_runner).gated(gate)
     thread = threading.Thread(
-        target=lambda: result.append(invoke_agent_runner({})),
+        target=lambda: result.append(bundle.agent({})),
     )
     thread.start()
     assert not entered.wait(0.05)
@@ -232,7 +228,6 @@ def test_scheduler_runner_waits_for_the_same_chat_capacity() -> None:
     gate.release()
     assert entered.wait(1)
     thread.join(1)
-    register_agent_runner(None)
 
     assert result == ["done"]
 

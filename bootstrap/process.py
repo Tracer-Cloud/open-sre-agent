@@ -25,7 +25,6 @@ from bootstrap.adapters import (
     install_cli_auth_checker,
     install_harness_adapters,
     install_scheduled_delivery_adapters,
-    install_scheduler_runners,
 )
 from config.local_env import bootstrap_opensre_env_once
 
@@ -149,7 +148,8 @@ def _run_harness_adapters(_profile: ProcessProfile, _log: logging.Logger) -> Non
 
 
 def _run_scheduler_runners(_profile: ProcessProfile, _log: logging.Logger) -> None:
-    install_scheduler_runners()
+    # The agent/investigation runners are now built at the scheduler-start call
+    # site and passed in (no global); this step only installs delivery adapters.
     install_scheduled_delivery_adapters()
 
 

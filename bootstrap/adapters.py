@@ -109,11 +109,6 @@ def scheduler_runners() -> SchedulerRunners:
     )
 
 
-def install_scheduler_runners() -> None:
-    """Bind the scheduled runners ungated (worker and CLI hosts)."""
-    scheduler_runners().install()
-
-
 def scheduled_delivery_adapters() -> ScheduledDeliveryAdapters:
     """Assemble the per-provider adapters scheduled delivery dispatches through.
 
@@ -167,7 +162,6 @@ __all__ = [
     "install_investigation_api",
     "install_notification_adapters",
     "scheduler_runners",
-    "install_scheduler_runners",
     "scheduled_delivery_adapters",
     "install_scheduled_delivery_adapters",
     "install_cli_auth_checker",

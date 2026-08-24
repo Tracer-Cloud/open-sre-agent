@@ -75,6 +75,7 @@ class GatewayController:
         self.logger: logging.Logger | None = None
         self.surfaces: gateway_startup.StartedGateway | None = None
         self.scheduler: Any = None
+        self._scheduler_runners: Any = None
         self._scheduler_reload_thread: threading.Thread | None = None
         self.components: dict[str, str] = {}
         self._slash_ports_factory = slash_ports_factory
@@ -153,12 +154,12 @@ class GatewayController:
 
         # Investigation + multiplexed scheduled-agent runners (Sentry digest, etc.).
         # A scheduled run costs a turn, so both take the same capacity gate chat
-        # turns take — stated here, once, rather than rewritten in afterwards.
-        scheduler_runners().gated(self.turn_gate).install()
+        # turns take — stated here, once, and passed into the scheduler.
+        self._scheduler_runners = scheduler_runners().gated(self.turn_gate)
         install_scheduled_delivery_adapters()
         # Drop any reload request queued before this process owned the scheduler.
         consume_scheduler_reload_request()
-        scheduler, task_count = start_background_scheduler()
+        scheduler, task_count = start_background_scheduler(self._scheduler_runners)
         if scheduler is None:
             self.components["scheduler"] = "idle (no scheduled tasks)"
         else:
@@ -239,7 +240,9 @@ class GatewayController:
         """Resync the live scheduler (or start one) from the current task store."""
         from infrastructure.scheduling.scheduler.runner import refresh_background_scheduler
 
-        scheduler, task_count = refresh_background_scheduler(self.scheduler)
+        scheduler, task_count = refresh_background_scheduler(
+            self.scheduler, self._scheduler_runners
+        )
         self.scheduler = scheduler
         if scheduler is None:
             self.components["scheduler"] = "idle (no scheduled tasks)"

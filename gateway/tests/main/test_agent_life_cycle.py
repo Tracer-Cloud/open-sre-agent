@@ -73,7 +73,6 @@ def _patch_process_boot(monkeypatch) -> None:
         lambda **_kwargs: None,
     )
     monkeypatch.setattr("bootstrap.process.install_harness_adapters", lambda: None)
-    monkeypatch.setattr("bootstrap.process.install_scheduler_runners", lambda: None)
     monkeypatch.setattr(
         "infrastructure.observability.errors.sentry.init_sentry",
         lambda **_kwargs: None,

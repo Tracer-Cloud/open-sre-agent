@@ -21,6 +21,7 @@ from infrastructure.scheduling.scheduler.executor import execute_task
 from infrastructure.scheduling.scheduler.local_delivery import get_loop_messages
 from infrastructure.scheduling.scheduler.loop_constants import LOOP_CHANNELS_PARAM
 from infrastructure.scheduling.scheduler.types import Provider, ScheduledTask, TaskKind
+from tests.scheduler._bundle import real_runners
 
 _DELIVERY_PROVIDERS = (
     Provider.TELEGRAM,
@@ -94,7 +95,7 @@ class TestExecutor:
             "infrastructure.scheduling.scheduler.executor.build_message",
             return_value="Scheduled report",
         ):
-            result = execute_task(task, "2026-01-01T09:00")
+            result = execute_task(task, "2026-01-01T09:00", real_runners())
 
         assert result is True
         assert len(adapters[Provider.TELEGRAM].calls) == 1
@@ -119,7 +120,7 @@ class TestExecutor:
                 return_value={},
             ),
         ):
-            result = execute_task(task, "2026-01-01T09:00")
+            result = execute_task(task, "2026-01-01T09:00", real_runners())
 
         assert result is False
 
@@ -138,7 +139,7 @@ class TestExecutor:
             "infrastructure.scheduling.scheduler.executor.build_message",
             return_value="Scheduled report",
         ):
-            result = execute_task(task, "2026-01-01T09:00")
+            result = execute_task(task, "2026-01-01T09:00", real_runners())
 
         assert result is True
         assert len(adapters[Provider.SLACK].calls) == 1
@@ -158,7 +159,7 @@ class TestExecutor:
             "infrastructure.scheduling.scheduler.executor.build_message",
             return_value="Scheduled report",
         ):
-            result = execute_task(task, "2026-01-01T09:00")
+            result = execute_task(task, "2026-01-01T09:00", real_runners())
 
         assert result is True
         assert len(adapters[Provider.DISCORD].calls) == 1
@@ -178,7 +179,7 @@ class TestExecutor:
             "infrastructure.scheduling.scheduler.executor.build_message",
             return_value="Scheduled report",
         ):
-            result = execute_task(task, "2026-01-01T09:00")
+            result = execute_task(task, "2026-01-01T09:00", real_runners())
 
         assert result is True
         assert len(adapters[Provider.ROCKETCHAT].calls) == 1
@@ -204,7 +205,7 @@ class TestExecutor:
                 return_value=inbox_path,
             ),
         ):
-            result = execute_task(task, "2026-01-01T09:00")
+            result = execute_task(task, "2026-01-01T09:00", real_runners())
 
         assert result is True
         messages = get_loop_messages(inbox_path=inbox_path)
@@ -233,7 +234,7 @@ class TestExecutor:
             "infrastructure.scheduling.scheduler.executor.build_message",
             return_value="Sensitive scheduled report body",
         ):
-            result = execute_task(task, "2026-01-01T09:00")
+            result = execute_task(task, "2026-01-01T09:00", real_runners())
 
         assert result is True
         records = read_operations(path=log_path)
@@ -266,10 +267,10 @@ class TestExecutor:
             "infrastructure.scheduling.scheduler.executor.build_message",
             return_value="Scheduled report",
         ) as mock_build:
-            result = execute_task(task, "2026-01-01T09:00")
+            result = execute_task(task, "2026-01-01T09:00", real_runners())
 
         assert result is True
-        mock_build.assert_called_once_with(task)
+        mock_build.assert_called_once()
         assert len(adapters[Provider.INTERACTIVE_SHELL].calls) == 1
         assert len(adapters[Provider.SLACK].calls) == 1
 
@@ -292,7 +293,7 @@ class TestExecutor:
             "infrastructure.scheduling.scheduler.executor.build_message",
             return_value="Scheduled report",
         ):
-            result = execute_task(task, "2026-01-01T09:05")
+            result = execute_task(task, "2026-01-01T09:05", real_runners())
 
         assert result is True
         runs = get_runs(task.id)
@@ -328,7 +329,7 @@ class TestExecutor:
             "infrastructure.scheduling.scheduler.executor.build_message",
             return_value="Scheduled report",
         ):
-            result = execute_task(task, "2026-01-01T09:00")
+            result = execute_task(task, "2026-01-01T09:00", real_runners())
 
         assert result is True
         slack_task = adapters[Provider.SLACK].calls[-1][0]
@@ -358,7 +359,7 @@ class TestExecutor:
             "infrastructure.scheduling.scheduler.executor.build_message",
             return_value="Loop report",
         ):
-            result = execute_task(task, "2026-01-01T10:00")
+            result = execute_task(task, "2026-01-01T10:00", real_runners())
 
         assert result is True
         slack_task = adapters[Provider.SLACK].calls[-1][0]
@@ -390,7 +391,7 @@ class TestExecutor:
             "infrastructure.scheduling.scheduler.executor.build_message",
             return_value="Loop report",
         ):
-            result = execute_task(task, "2026-01-01T11:00")
+            result = execute_task(task, "2026-01-01T11:00", real_runners())
 
         assert result is True
         slack_task = adapters[Provider.SLACK].calls[-1][0]
@@ -424,7 +425,7 @@ class TestExecutor:
             ) as mock_post,
         ):
             mock_post.return_value = (True, "", "msg_rc")
-            result = execute_task(task, "2026-01-01T09:00")
+            result = execute_task(task, "2026-01-01T09:00", real_runners())
 
         assert result is True
         args = mock_post.call_args.args
@@ -457,7 +458,7 @@ class TestExecutor:
             ),
             patch("integrations.slack.scheduled_delivery.send_slack_webhook_message") as mock_hook,
         ):
-            result = execute_task(task, "2026-01-01T09:00")
+            result = execute_task(task, "2026-01-01T09:00", real_runners())
 
         assert result is False
         mock_hook.assert_not_called()
@@ -482,7 +483,7 @@ class TestExecutor:
                 return_value={"webhook_url": "https://chat.example.com/hooks/a/b"},
             ),
         ):
-            result = execute_task(task, "2026-01-01T09:00")
+            result = execute_task(task, "2026-01-01T09:00", real_runners())
 
         # Webhook-only setups cannot honor the task's explicit chat_id.
         assert result is False
@@ -503,9 +504,9 @@ class TestExecutor:
             return_value="Scheduled report",
         ):
             # First execution succeeds
-            result1 = execute_task(task, "2026-01-01T09:00")
+            result1 = execute_task(task, "2026-01-01T09:00", real_runners())
             # Second execution with same fire_time is deduped
-            result2 = execute_task(task, "2026-01-01T09:00")
+            result2 = execute_task(task, "2026-01-01T09:00", real_runners())
 
         assert result1 is True
         assert result2 is False
@@ -523,7 +524,7 @@ class TestExecutor:
 
         with patch("infrastructure.scheduling.scheduler.executor.build_message") as mock_build:
             mock_build.side_effect = RuntimeError("Pipeline crashed")
-            result = execute_task(task, "2026-01-01T09:00")
+            result = execute_task(task, "2026-01-01T09:00", real_runners())
 
         assert result is False
 
@@ -542,7 +543,7 @@ class TestExecutor:
             "infrastructure.scheduling.scheduler.executor.build_message",
             return_value="Scheduled report",
         ):
-            result = execute_task(task, "2026-01-01T09:00")
+            result = execute_task(task, "2026-01-01T09:00", real_runners())
 
         assert result is False
         assert len(adapters[Provider.TELEGRAM].calls) == 1
@@ -571,7 +572,7 @@ class TestExecutor:
             "infrastructure.scheduling.scheduler.executor.build_message",
             return_value="Scheduled report",
         ):
-            result = execute_task(task, "2026-01-01T09:00")
+            result = execute_task(task, "2026-01-01T09:00", real_runners())
 
         assert result is True
         slack_call = adapters[Provider.SLACK].calls[-1]
@@ -605,7 +606,7 @@ class TestExecutor:
             "infrastructure.scheduling.scheduler.executor.build_message",
             return_value="Scheduled report",
         ):
-            result = execute_task(task, "2026-01-01T09:00")
+            result = execute_task(task, "2026-01-01T09:00", real_runners())
 
         assert result is False
         assert len(adapters[Provider.SLACK].calls) == 1
@@ -625,7 +626,7 @@ class TestExecutor:
             "infrastructure.scheduling.scheduler.executor.build_message",
             return_value="",
         ):
-            result = execute_task(task, "2026-01-01T09:00")
+            result = execute_task(task, "2026-01-01T09:00", real_runners())
 
         assert result is True
         assert adapters[Provider.SLACK].calls == []

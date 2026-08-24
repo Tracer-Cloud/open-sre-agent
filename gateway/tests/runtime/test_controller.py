@@ -106,8 +106,8 @@ def test_manager_reload_scheduler_refreshes_component_status(
     """Loop/cron mutations must resync the long-lived gateway scheduler."""
     publishes: list[dict[str, str]] = []
 
-    def _refresh(scheduler: object | None, *, task_filter=None):
-        _ = task_filter
+    def _refresh(scheduler: object | None, runners: object, *, task_filter=None):
+        _ = (task_filter, runners)
         assert scheduler is None
         return object(), 3
 

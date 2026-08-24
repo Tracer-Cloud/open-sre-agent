@@ -36,7 +36,7 @@ def test_configure_process_gateway_order(monkeypatch: pytest.MonkeyPatch) -> Non
         lambda: order.append("adapters"),
     )
     monkeypatch.setattr(
-        "bootstrap.process.install_scheduler_runners",
+        "bootstrap.process.install_scheduled_delivery_adapters",
         lambda: order.append("runners"),
     )
     monkeypatch.setattr(
@@ -69,7 +69,7 @@ def test_configure_process_cli_only_boots_env(monkeypatch: pytest.MonkeyPatch) -
         lambda: order.append("adapters"),
     )
     monkeypatch.setattr(
-        "bootstrap.process.install_scheduler_runners",
+        "bootstrap.process.install_scheduled_delivery_adapters",
         lambda: order.append("runners"),
     )
 
@@ -93,7 +93,7 @@ def test_configure_process_web_skips_llm_preload(monkeypatch: pytest.MonkeyPatch
         lambda: order.append("adapters"),
     )
     monkeypatch.setattr(
-        "bootstrap.process.install_scheduler_runners",
+        "bootstrap.process.install_scheduled_delivery_adapters",
         lambda: order.append("runners"),
     )
     monkeypatch.setattr(
@@ -119,7 +119,7 @@ def test_configure_process_is_idempotent_per_profile(monkeypatch: pytest.MonkeyP
         lambda **_kw: None,
     )
     monkeypatch.setattr("bootstrap.process.install_harness_adapters", lambda: None)
-    monkeypatch.setattr("bootstrap.process.install_scheduler_runners", lambda: None)
+    monkeypatch.setattr("bootstrap.process.install_scheduled_delivery_adapters", lambda: None)
 
     configure_process(WEB_PROFILE)
     configure_process(WEB_PROFILE)
@@ -143,7 +143,7 @@ class TestEmbeddedProfile:
             return _step
 
         monkeypatch.setattr(process, "install_harness_adapters", _record("adapters"))
-        monkeypatch.setattr(process, "install_scheduler_runners", _record("runners"))
+        monkeypatch.setattr(process, "install_scheduled_delivery_adapters", _record("runners"))
         monkeypatch.setattr(process, "bootstrap_opensre_env_once", lambda **_kw: None)
 
         # Act
@@ -209,7 +209,7 @@ def test_scheduler_worker_profile_boots_runners_with_scheduler_sentry(
 
     monkeypatch.setattr(process, "bootstrap_opensre_env_once", lambda **_kw: ran.append("env"))
     monkeypatch.setattr(process, "install_harness_adapters", _record("adapters"))
-    monkeypatch.setattr(process, "install_scheduler_runners", _record("runners"))
+    monkeypatch.setattr(process, "install_scheduled_delivery_adapters", _record("runners"))
     monkeypatch.setattr(
         "infrastructure.observability.errors.sentry.init_sentry",
         lambda **_kw: ran.append(f"sentry:{_kw.get('entrypoint')}"),
@@ -236,7 +236,7 @@ def test_scheduled_command_profile_dispatches_without_touching_sentry(monkeypatc
 
     monkeypatch.setattr(process, "bootstrap_opensre_env_once", lambda **_kw: ran.append("env"))
     monkeypatch.setattr(process, "install_harness_adapters", _record("adapters"))
-    monkeypatch.setattr(process, "install_scheduler_runners", _record("runners"))
+    monkeypatch.setattr(process, "install_scheduled_delivery_adapters", _record("runners"))
     monkeypatch.setattr(
         "infrastructure.observability.errors.sentry.init_sentry",
         lambda **_kw: ran.append("sentry"),
