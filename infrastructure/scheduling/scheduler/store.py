@@ -31,6 +31,18 @@ def _lock_path(store_path: Path) -> Path:
     return store_path.with_suffix(".lock")
 
 
+def _fsync_parent_dir(path: Path) -> None:
+    """Sync the directory entry after a replacement on Unix."""
+    if os.name == "nt":
+        return
+    with contextlib.suppress(OSError):
+        directory_fd = os.open(path.parent, os.O_RDONLY)
+        try:
+            os.fsync(directory_fd)
+        finally:
+            os.close(directory_fd)
+
+
 def _read_rows(store_path: Path) -> list[dict[str, object]] | None:
     """Read task rows, or ``None`` when an existing store is not trustworthy."""
     try:
@@ -66,6 +78,7 @@ def _quarantine_unreadable(store_path: Path) -> None:
         os.close(descriptor)
         descriptor = None
         os.replace(store_path, backup_path)
+        _fsync_parent_dir(store_path)
         replaced = True
     except OSError:
         logger.error(
@@ -116,6 +129,7 @@ def _save_raw(store_path: Path, data: list[dict[str, object]]) -> None:
             handle.flush()
             os.fsync(handle.fileno())
         os.replace(temp_path, store_path)
+        _fsync_parent_dir(store_path)
         replaced = True
     finally:
         if descriptor is not None:
