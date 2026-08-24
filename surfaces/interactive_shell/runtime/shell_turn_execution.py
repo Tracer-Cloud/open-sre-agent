@@ -27,7 +27,7 @@ from surfaces.interactive_shell.runtime.agent_harness_adapters import ShellOutpu
 from surfaces.interactive_shell.runtime.core.turn_accounting import ShellTurnAccounting
 from surfaces.interactive_shell.runtime.shell_agent import shell_agent_build_config
 from surfaces.interactive_shell.session import Session
-from surfaces.interactive_shell.utils.telemetry import PromptRecorder
+from surfaces.interactive_shell.telemetry import PromptRecorder
 
 
 def execute_shell_turn(

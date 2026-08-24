@@ -48,12 +48,12 @@ from surfaces.interactive_shell.runtime.input.actions import (
     ShellInputSnapshot,
     decide_input_action,
 )
-from surfaces.interactive_shell.runtime.utils.input_policy import (
+from surfaces.interactive_shell.runtime.input_policy import (
     turn_needs_exclusive_stdin,
 )
 from surfaces.interactive_shell.session import Session
+from surfaces.interactive_shell.telemetry import PromptRecorder
 from surfaces.interactive_shell.ui.streaming.console import StreamingConsole
-from surfaces.interactive_shell.utils.telemetry import PromptRecorder
 from surfaces.shared.error_handling.exception_reporting import report_exception
 from surfaces.shared.terminal.output.console_state import set_investigation_spinner
 from surfaces.shared.terminal.output.repl_progress import repl_safe_progress_scope

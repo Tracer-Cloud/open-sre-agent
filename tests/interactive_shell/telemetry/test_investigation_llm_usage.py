@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from core.llm.shared.usage import emit_usage, set_usage_hook
-from surfaces.interactive_shell.utils.telemetry.investigation_llm_usage import (
+from surfaces.interactive_shell.telemetry.investigation_llm_usage import (
     observe_investigation_llm_usage,
 )
 

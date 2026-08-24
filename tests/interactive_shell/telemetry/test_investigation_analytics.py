@@ -4,21 +4,21 @@ from __future__ import annotations
 
 import pytest
 
-from surfaces.interactive_shell.ui.investigation_outcome import InvestigationOutcome
-from surfaces.interactive_shell.utils.telemetry.investigation_analytics import (
+from surfaces.interactive_shell.telemetry.investigation_analytics import (
     publish_investigation_outcome_analytics,
 )
+from surfaces.interactive_shell.ui.investigation_outcome import InvestigationOutcome
 
 
 def _capture_outcome_calls(monkeypatch: pytest.MonkeyPatch) -> list[dict[str, object]]:
     calls: list[dict[str, object]] = []
     monkeypatch.setattr(
-        "surfaces.interactive_shell.utils.telemetry.investigation_analytics."
+        "surfaces.interactive_shell.telemetry.investigation_analytics."
         "capture_investigation_outcome",
         lambda **kwargs: calls.append(kwargs),
     )
     monkeypatch.setattr(
-        "surfaces.interactive_shell.utils.telemetry.investigation_analytics."
+        "surfaces.interactive_shell.telemetry.investigation_analytics."
         "capture_investigation_cancelled",
         lambda **_kwargs: None,
     )

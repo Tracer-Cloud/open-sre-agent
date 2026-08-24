@@ -16,7 +16,7 @@ from core.agent_harness import ToolCallingTurnResult, TurnResult
 from core.agent_harness.spi.accounting import ToolCallingAccountingStatus
 from infrastructure.analytics.cli import capture_terminal_turn_summarized
 from surfaces.interactive_shell.session import Session
-from surfaces.interactive_shell.utils.telemetry import PromptRecorder
+from surfaces.interactive_shell.telemetry import PromptRecorder
 
 
 @dataclass

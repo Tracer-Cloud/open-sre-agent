@@ -3,8 +3,8 @@ from __future__ import annotations
 from pathlib import Path
 
 from surfaces.interactive_shell.session import Session
-from surfaces.interactive_shell.utils.telemetry.config import PromptLogConfig
-from surfaces.interactive_shell.utils.telemetry.recorder import LlmRunInfo, PromptRecorder
+from surfaces.interactive_shell.telemetry.config import PromptLogConfig
+from surfaces.interactive_shell.telemetry.recorder import LlmRunInfo, PromptRecorder
 
 
 def test_prompt_recorder_start_respects_supported_turns(monkeypatch, tmp_path: Path) -> None:
@@ -17,7 +17,7 @@ def test_prompt_recorder_start_respects_supported_turns(monkeypatch, tmp_path: P
         log_path=tmp_path / "prompt_log.jsonl",
     )
     monkeypatch.setattr(
-        "surfaces.interactive_shell.utils.telemetry.recorder.PromptLogConfig.load", lambda: cfg
+        "surfaces.interactive_shell.telemetry.recorder.PromptLogConfig.load", lambda: cfg
     )
     session = Session()
     assert PromptRecorder.start(session=session, text="hello", turn_kind="slash") is None
@@ -37,10 +37,10 @@ def test_prompt_recorder_for_background_task_uses_task_id_as_trace(
         log_path=tmp_path / "prompt_log.jsonl",
     )
     monkeypatch.setattr(
-        "surfaces.interactive_shell.utils.telemetry.recorder.PromptLogConfig.load", lambda: cfg
+        "surfaces.interactive_shell.telemetry.recorder.PromptLogConfig.load", lambda: cfg
     )
     monkeypatch.setattr(
-        "surfaces.interactive_shell.utils.telemetry.recorder.capture_ai_generation",
+        "surfaces.interactive_shell.telemetry.recorder.capture_ai_generation",
         lambda payload: captured.append(payload),
     )
     session = Session()
@@ -60,7 +60,7 @@ def test_prompt_recorder_for_background_task_uses_task_id_as_trace(
 def test_prompt_recorder_for_background_task_disabled_returns_none(monkeypatch) -> None:
     cfg = PromptLogConfig(enabled=False)
     monkeypatch.setattr(
-        "surfaces.interactive_shell.utils.telemetry.recorder.PromptLogConfig.load", lambda: cfg
+        "surfaces.interactive_shell.telemetry.recorder.PromptLogConfig.load", lambda: cfg
     )
     session = Session()
     assert PromptRecorder.for_background_task(session=session, command="x", task_id="t") is None
@@ -77,7 +77,7 @@ def test_prompt_recorder_flush_writes_and_redacts(monkeypatch, tmp_path: Path) -
         log_path=log_path,
     )
     monkeypatch.setattr(
-        "surfaces.interactive_shell.utils.telemetry.recorder.PromptLogConfig.load", lambda: cfg
+        "surfaces.interactive_shell.telemetry.recorder.PromptLogConfig.load", lambda: cfg
     )
     session = Session()
     recorder = PromptRecorder.start(
@@ -107,10 +107,10 @@ def test_prompt_recorder_sends_ai_generation(monkeypatch, tmp_path: Path) -> Non
         log_path=tmp_path / "prompt_log.jsonl",
     )
     monkeypatch.setattr(
-        "surfaces.interactive_shell.utils.telemetry.recorder.PromptLogConfig.load", lambda: cfg
+        "surfaces.interactive_shell.telemetry.recorder.PromptLogConfig.load", lambda: cfg
     )
     monkeypatch.setattr(
-        "surfaces.interactive_shell.utils.telemetry.recorder.build_turn_integration_snapshot",
+        "surfaces.interactive_shell.telemetry.recorder.build_turn_integration_snapshot",
         lambda _session: {
             "connected_integrations": [],
             "connected_integrations_count": 0,
@@ -119,7 +119,7 @@ def test_prompt_recorder_sends_ai_generation(monkeypatch, tmp_path: Path) -> Non
         },
     )
     monkeypatch.setattr(
-        "surfaces.interactive_shell.utils.telemetry.recorder.capture_ai_generation",
+        "surfaces.interactive_shell.telemetry.recorder.capture_ai_generation",
         lambda payload: captured.append(payload),
     )
     session = Session()
@@ -151,14 +151,14 @@ def test_prompt_recorder_sends_connected_integrations(monkeypatch, tmp_path: Pat
         log_path=tmp_path / "prompt_log.jsonl",
     )
     monkeypatch.setattr(
-        "surfaces.interactive_shell.utils.telemetry.recorder.PromptLogConfig.load", lambda: cfg
+        "surfaces.interactive_shell.telemetry.recorder.PromptLogConfig.load", lambda: cfg
     )
     monkeypatch.setattr(
-        "surfaces.interactive_shell.utils.telemetry.recorder.capture_ai_generation",
+        "surfaces.interactive_shell.telemetry.recorder.capture_ai_generation",
         lambda payload: captured.append(payload),
     )
     monkeypatch.setattr(
-        "surfaces.interactive_shell.utils.telemetry.recorder.build_turn_integration_snapshot",
+        "surfaces.interactive_shell.telemetry.recorder.build_turn_integration_snapshot",
         lambda _session: {
             "connected_integrations": ["github"],
             "connected_integrations_count": 1,
@@ -192,10 +192,10 @@ def test_prompt_recorder_still_captures_when_tool_resolution_fails(
         log_path=tmp_path / "prompt_log.jsonl",
     )
     monkeypatch.setattr(
-        "surfaces.interactive_shell.utils.telemetry.recorder.PromptLogConfig.load", lambda: cfg
+        "surfaces.interactive_shell.telemetry.recorder.PromptLogConfig.load", lambda: cfg
     )
     monkeypatch.setattr(
-        "surfaces.interactive_shell.utils.telemetry.recorder.capture_ai_generation",
+        "surfaces.interactive_shell.telemetry.recorder.capture_ai_generation",
         lambda payload: captured.append(payload),
     )
 
@@ -203,7 +203,7 @@ def test_prompt_recorder_still_captures_when_tool_resolution_fails(
         raise RuntimeError("tool registry blew up")
 
     monkeypatch.setattr(
-        "surfaces.interactive_shell.utils.telemetry.integration_snapshot.get_available_tools",
+        "surfaces.interactive_shell.telemetry.integration_snapshot.get_available_tools",
         _boom,
     )
 
@@ -238,14 +238,14 @@ def test_prompt_recorder_uses_no_conversational_agent_without_llm_run(
         log_path=tmp_path / "prompt_log.jsonl",
     )
     monkeypatch.setattr(
-        "surfaces.interactive_shell.utils.telemetry.recorder.PromptLogConfig.load", lambda: cfg
+        "surfaces.interactive_shell.telemetry.recorder.PromptLogConfig.load", lambda: cfg
     )
     monkeypatch.setattr(
-        "surfaces.interactive_shell.utils.telemetry.recorder.build_turn_integration_snapshot",
+        "surfaces.interactive_shell.telemetry.recorder.build_turn_integration_snapshot",
         lambda _session: {},
     )
     monkeypatch.setattr(
-        "surfaces.interactive_shell.utils.telemetry.recorder.capture_ai_generation",
+        "surfaces.interactive_shell.telemetry.recorder.capture_ai_generation",
         lambda payload: captured.append(payload),
     )
     session = Session()
@@ -272,14 +272,14 @@ def test_prompt_recorder_includes_investigation_id(monkeypatch, tmp_path: Path) 
         log_path=tmp_path / "prompt_log.jsonl",
     )
     monkeypatch.setattr(
-        "surfaces.interactive_shell.utils.telemetry.recorder.PromptLogConfig.load", lambda: cfg
+        "surfaces.interactive_shell.telemetry.recorder.PromptLogConfig.load", lambda: cfg
     )
     monkeypatch.setattr(
-        "surfaces.interactive_shell.utils.telemetry.recorder.build_turn_integration_snapshot",
+        "surfaces.interactive_shell.telemetry.recorder.build_turn_integration_snapshot",
         lambda _session: {},
     )
     monkeypatch.setattr(
-        "surfaces.interactive_shell.utils.telemetry.recorder.capture_ai_generation",
+        "surfaces.interactive_shell.telemetry.recorder.capture_ai_generation",
         lambda payload: captured.append(payload),
     )
     session = Session()
@@ -310,14 +310,14 @@ def test_prompt_recorder_omits_investigation_id_for_unrelated_turns(
         log_path=tmp_path / "prompt_log.jsonl",
     )
     monkeypatch.setattr(
-        "surfaces.interactive_shell.utils.telemetry.recorder.PromptLogConfig.load", lambda: cfg
+        "surfaces.interactive_shell.telemetry.recorder.PromptLogConfig.load", lambda: cfg
     )
     monkeypatch.setattr(
-        "surfaces.interactive_shell.utils.telemetry.recorder.build_turn_integration_snapshot",
+        "surfaces.interactive_shell.telemetry.recorder.build_turn_integration_snapshot",
         lambda _session: {},
     )
     monkeypatch.setattr(
-        "surfaces.interactive_shell.utils.telemetry.recorder.capture_ai_generation",
+        "surfaces.interactive_shell.telemetry.recorder.capture_ai_generation",
         lambda payload: captured.append(payload),
     )
     session = Session()
@@ -345,15 +345,15 @@ def test_prompt_recorder_uses_prompt_fallback_when_response_empty(
         log_path=tmp_path / "prompt_log.jsonl",
     )
     monkeypatch.setattr(
-        "surfaces.interactive_shell.utils.telemetry.recorder.PromptLogConfig.load", lambda: cfg
+        "surfaces.interactive_shell.telemetry.recorder.PromptLogConfig.load", lambda: cfg
     )
     monkeypatch.setattr(
-        "surfaces.interactive_shell.utils.telemetry.recorder.build_turn_integration_snapshot",
+        "surfaces.interactive_shell.telemetry.recorder.build_turn_integration_snapshot",
         lambda _session: {},
     )
     captured: list[dict[str, object]] = []
     monkeypatch.setattr(
-        "surfaces.interactive_shell.utils.telemetry.recorder.capture_ai_generation",
+        "surfaces.interactive_shell.telemetry.recorder.capture_ai_generation",
         lambda payload: captured.append(payload),
     )
     session = Session()
@@ -378,14 +378,14 @@ def test_prompt_recorder_background_task_uses_bound_investigation_id(
         log_path=tmp_path / "prompt_log.jsonl",
     )
     monkeypatch.setattr(
-        "surfaces.interactive_shell.utils.telemetry.recorder.PromptLogConfig.load", lambda: cfg
+        "surfaces.interactive_shell.telemetry.recorder.PromptLogConfig.load", lambda: cfg
     )
     monkeypatch.setattr(
-        "surfaces.interactive_shell.utils.telemetry.recorder.build_turn_integration_snapshot",
+        "surfaces.interactive_shell.telemetry.recorder.build_turn_integration_snapshot",
         lambda _session: {},
     )
     monkeypatch.setattr(
-        "surfaces.interactive_shell.utils.telemetry.recorder.capture_ai_generation",
+        "surfaces.interactive_shell.telemetry.recorder.capture_ai_generation",
         lambda payload: captured.append(payload),
     )
     session = Session()
@@ -415,14 +415,14 @@ def test_prompt_recorder_set_error_adds_structured_properties(monkeypatch, tmp_p
         log_path=tmp_path / "prompt_log.jsonl",
     )
     monkeypatch.setattr(
-        "surfaces.interactive_shell.utils.telemetry.recorder.PromptLogConfig.load", lambda: cfg
+        "surfaces.interactive_shell.telemetry.recorder.PromptLogConfig.load", lambda: cfg
     )
     monkeypatch.setattr(
-        "surfaces.interactive_shell.utils.telemetry.recorder.build_turn_integration_snapshot",
+        "surfaces.interactive_shell.telemetry.recorder.build_turn_integration_snapshot",
         lambda _session: {},
     )
     monkeypatch.setattr(
-        "surfaces.interactive_shell.utils.telemetry.recorder.capture_ai_generation",
+        "surfaces.interactive_shell.telemetry.recorder.capture_ai_generation",
         lambda payload: captured.append(payload),
     )
     session = Session()
@@ -454,14 +454,14 @@ def test_prompt_recorder_omits_error_properties_by_default(monkeypatch, tmp_path
         log_path=tmp_path / "prompt_log.jsonl",
     )
     monkeypatch.setattr(
-        "surfaces.interactive_shell.utils.telemetry.recorder.PromptLogConfig.load", lambda: cfg
+        "surfaces.interactive_shell.telemetry.recorder.PromptLogConfig.load", lambda: cfg
     )
     monkeypatch.setattr(
-        "surfaces.interactive_shell.utils.telemetry.recorder.build_turn_integration_snapshot",
+        "surfaces.interactive_shell.telemetry.recorder.build_turn_integration_snapshot",
         lambda _session: {},
     )
     monkeypatch.setattr(
-        "surfaces.interactive_shell.utils.telemetry.recorder.capture_ai_generation",
+        "surfaces.interactive_shell.telemetry.recorder.capture_ai_generation",
         lambda payload: captured.append(payload),
     )
     session = Session()
@@ -490,14 +490,14 @@ def _posthog_recorder(
         log_path=tmp_path / "prompt_log.jsonl",
     )
     monkeypatch.setattr(
-        "surfaces.interactive_shell.utils.telemetry.recorder.PromptLogConfig.load", lambda: cfg
+        "surfaces.interactive_shell.telemetry.recorder.PromptLogConfig.load", lambda: cfg
     )
     monkeypatch.setattr(
-        "surfaces.interactive_shell.utils.telemetry.recorder.build_turn_integration_snapshot",
+        "surfaces.interactive_shell.telemetry.recorder.build_turn_integration_snapshot",
         lambda _session: {},
     )
     monkeypatch.setattr(
-        "surfaces.interactive_shell.utils.telemetry.recorder.capture_ai_generation",
+        "surfaces.interactive_shell.telemetry.recorder.capture_ai_generation",
         lambda payload: captured.append(payload),
     )
     recorder = PromptRecorder.start(session=Session(), text=text, turn_kind="agent")
@@ -579,14 +579,14 @@ def test_prompt_recorder_uses_only_latest_slash_outcome(monkeypatch, tmp_path: P
         log_path=tmp_path / "prompt_log.jsonl",
     )
     monkeypatch.setattr(
-        "surfaces.interactive_shell.utils.telemetry.recorder.PromptLogConfig.load", lambda: cfg
+        "surfaces.interactive_shell.telemetry.recorder.PromptLogConfig.load", lambda: cfg
     )
     monkeypatch.setattr(
-        "surfaces.interactive_shell.utils.telemetry.recorder.build_turn_integration_snapshot",
+        "surfaces.interactive_shell.telemetry.recorder.build_turn_integration_snapshot",
         lambda _session: {},
     )
     monkeypatch.setattr(
-        "surfaces.interactive_shell.utils.telemetry.recorder.capture_ai_generation",
+        "surfaces.interactive_shell.telemetry.recorder.capture_ai_generation",
         lambda payload: captured.append(payload),
     )
     session = Session()

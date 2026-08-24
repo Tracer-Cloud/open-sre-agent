@@ -13,14 +13,14 @@ from core.agent_harness.spi.accounting import LlmRunInfo
 from core.llm_invoke_errors import LLM_PROVIDER_FAILURE_KINDS, classify_provider_error_kind
 from infrastructure.analytics.provider import JsonValue
 from surfaces.interactive_shell.prompt_history.policy import redact_text
-from surfaces.interactive_shell.utils.telemetry.config import PromptLogConfig
-from surfaces.interactive_shell.utils.telemetry.integration_snapshot import (
+from surfaces.interactive_shell.telemetry.config import PromptLogConfig
+from surfaces.interactive_shell.telemetry.integration_snapshot import (
     build_turn_integration_snapshot,
 )
-from surfaces.interactive_shell.utils.telemetry.sinks.local_jsonl import (
+from surfaces.interactive_shell.telemetry.sinks.local_jsonl import (
     append_prompt_log_record,
 )
-from surfaces.interactive_shell.utils.telemetry.sinks.posthog_ai import capture_ai_generation
+from surfaces.interactive_shell.telemetry.sinks.posthog_ai import capture_ai_generation
 
 _SUPPORTED_TURN_KINDS = frozenset({"agent", "follow_up", "new_alert", "background_task"})
 

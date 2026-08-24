@@ -1,7 +1,7 @@
 """Interactive-shell telemetry helpers."""
 
-from surfaces.interactive_shell.utils.telemetry.config import PromptLogConfig
-from surfaces.interactive_shell.utils.telemetry.recorder import (
+from surfaces.interactive_shell.telemetry.config import PromptLogConfig
+from surfaces.interactive_shell.telemetry.recorder import (
     NO_CONVERSATIONAL_AGENT,
     LlmRunInfo,
     PromptRecorder,

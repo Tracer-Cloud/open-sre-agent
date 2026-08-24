@@ -22,8 +22,8 @@ from surfaces.interactive_shell.runtime.subprocess_runner import (
     build_opensre_cli_argv,
     start_background_cli_task,
 )
+from surfaces.interactive_shell.telemetry.turn_outcome import format_wizard_cli_outcome
 from surfaces.interactive_shell.ui import DIM, ERROR, print_command_output
-from surfaces.interactive_shell.utils.telemetry.turn_outcome import format_wizard_cli_outcome
 from surfaces.shared.terminal.components.choice_menu import prepare_repl_output_line
 
 _UPDATE_SUBPROCESS_TIMEOUT_SECONDS = 300
@@ -205,7 +205,7 @@ def _cmd_onboard(session: Session, console: Console, args: list[str]) -> bool:  
         publish_headless_slash_response(session, message=message)
         return True
     # The REPL loop treats ``/onboard`` as exclusive-stdin in
-    # ``runtime.utils.input_policy`` so the prompt_toolkit Application is torn down before
+    # ``runtime.input_policy`` so the prompt_toolkit Application is torn down before
     # this handler runs — the wizard subprocess therefore gets exclusive
     # stdin and can drive its own interactive prompts without conflicting
     # with the shell's UI.

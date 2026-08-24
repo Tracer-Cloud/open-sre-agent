@@ -6,7 +6,7 @@ from typing import Any
 from unittest.mock import MagicMock
 
 from surfaces.interactive_shell.session import Session
-from surfaces.interactive_shell.utils.telemetry.integration_snapshot import (
+from surfaces.interactive_shell.telemetry.integration_snapshot import (
     build_turn_integration_snapshot,
 )
 
@@ -38,7 +38,7 @@ def test_build_turn_integration_snapshot_uses_session_configured_slugs(
     }
 
     monkeypatch.setattr(
-        "surfaces.interactive_shell.utils.telemetry.integration_snapshot.get_available_tools",
+        "surfaces.interactive_shell.telemetry.integration_snapshot.get_available_tools",
         lambda _resolved: [
             MagicMock(source="datadog"),
             MagicMock(source="github"),
@@ -64,7 +64,7 @@ def test_build_turn_integration_snapshot_excludes_unavailable_tools(
     }
 
     monkeypatch.setattr(
-        "surfaces.interactive_shell.utils.telemetry.integration_snapshot.get_available_tools",
+        "surfaces.interactive_shell.telemetry.integration_snapshot.get_available_tools",
         lambda _resolved: [MagicMock(source="datadog")],
     )
 
@@ -87,7 +87,7 @@ def test_build_turn_integration_snapshot_survives_tool_resolution_failure(
         raise RuntimeError("tool registry blew up")
 
     monkeypatch.setattr(
-        "surfaces.interactive_shell.utils.telemetry.integration_snapshot.get_available_tools",
+        "surfaces.interactive_shell.telemetry.integration_snapshot.get_available_tools",
         _boom,
     )
 
@@ -107,7 +107,7 @@ def test_build_turn_integration_snapshot_survives_family_key_failure(
     session.resolved_integrations_cache = {"datadog": {"api_key": "x", "app_key": "y"}}
 
     monkeypatch.setattr(
-        "surfaces.interactive_shell.utils.telemetry.integration_snapshot.get_available_tools",
+        "surfaces.interactive_shell.telemetry.integration_snapshot.get_available_tools",
         lambda _resolved: [MagicMock(source="datadog")],
     )
 
@@ -115,7 +115,7 @@ def test_build_turn_integration_snapshot_survives_family_key_failure(
         raise RuntimeError("family key blew up")
 
     monkeypatch.setattr(
-        "surfaces.interactive_shell.utils.telemetry.integration_snapshot.family_key",
+        "surfaces.interactive_shell.telemetry.integration_snapshot.family_key",
         _boom,
     )
 

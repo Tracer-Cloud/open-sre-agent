@@ -13,11 +13,11 @@ from surfaces.interactive_shell.command_registry.slash_catalog import (
     slash_invoke_tool_description,
 )
 from surfaces.interactive_shell.session import Session
-from surfaces.interactive_shell.ui import repl_tty_interactive
-from surfaces.interactive_shell.ui.execution_confirm import execution_allowed
-from surfaces.interactive_shell.utils.telemetry.turn_outcome import (
+from surfaces.interactive_shell.telemetry.turn_outcome import (
     format_terminal_turn_outcome,
 )
+from surfaces.interactive_shell.ui import repl_tty_interactive
+from surfaces.interactive_shell.ui.execution_confirm import execution_allowed
 from tools.interactive_shell.shared.execution_policy import ExecutionPolicyResult
 from tools.interactive_shell.shared.host_contracts import ExecutionGate
 

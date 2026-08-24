@@ -23,7 +23,7 @@ from surfaces.interactive_shell.runtime.agent_harness_adapters import (
 )
 from surfaces.interactive_shell.runtime.integration_tool_gathering import shell_gather_phase
 from surfaces.interactive_shell.session import Session
-from surfaces.interactive_shell.utils.telemetry import LlmRunInfo
+from surfaces.interactive_shell.telemetry import LlmRunInfo
 
 
 def stream_shell_answer(

@@ -24,7 +24,7 @@ import tools.interactive_shell.actions.task_cancel as task_cancel_tool
 from infrastructure.analytics.repl_context import bound_repl_turn_context
 from surfaces.interactive_shell.runtime.shell_turn_execution import execute_shell_turn
 from surfaces.interactive_shell.session import Session
-from surfaces.interactive_shell.utils.telemetry import PromptRecorder
+from surfaces.interactive_shell.telemetry import PromptRecorder
 from tests.core.agent._oracle_normalize import (
     normalize_history_entry,
     normalize_response_text,

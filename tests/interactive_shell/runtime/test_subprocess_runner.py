@@ -848,7 +848,7 @@ def test_start_background_cli_task_logs_failure_outcome_to_posthog(
     monkeypatch.setenv("OPENSRE_PROMPT_LOG_REDACT", "0")
     monkeypatch.setenv("OPENSRE_PROMPT_LOG_LOCAL_DISABLED", "1")
     monkeypatch.setattr(
-        "surfaces.interactive_shell.utils.telemetry.recorder.capture_ai_generation",
+        "surfaces.interactive_shell.telemetry.recorder.capture_ai_generation",
         lambda properties: captured.append(properties),
     )
 
@@ -906,7 +906,7 @@ def test_start_background_cli_task_logs_success_outcome_to_posthog(
     monkeypatch.setenv("OPENSRE_PROMPT_LOG_REDACT", "0")
     monkeypatch.setenv("OPENSRE_PROMPT_LOG_LOCAL_DISABLED", "1")
     monkeypatch.setattr(
-        "surfaces.interactive_shell.utils.telemetry.recorder.capture_ai_generation",
+        "surfaces.interactive_shell.telemetry.recorder.capture_ai_generation",
         lambda properties: captured.append(properties),
     )
 

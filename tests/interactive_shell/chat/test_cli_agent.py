@@ -29,7 +29,7 @@ from core.agent_harness.prompts.assistant import (
 from core.agent_harness.prompts.grounding import DefaultPromptContextProvider
 from core.agent_harness.prompts.grounding import provider as default_prompt_context
 from surfaces.interactive_shell.session import Session
-from surfaces.interactive_shell.utils.telemetry import LlmRunInfo
+from surfaces.interactive_shell.telemetry import LlmRunInfo
 from tests.interactive_shell.shell_answer_gather import stream_shell_answer
 
 

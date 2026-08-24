@@ -19,7 +19,7 @@ from core.agent_harness.ports import AnswerRequest, GatheredEvidence
 from core.agent_harness.runtime import HeadlessAgent, TurnPlan
 from core.tool import ToolExecutionHooks
 from surfaces.interactive_shell.session import Session
-from surfaces.interactive_shell.utils.telemetry import LlmRunInfo
+from surfaces.interactive_shell.telemetry import LlmRunInfo
 
 
 class RunActionToolTurn(Protocol):

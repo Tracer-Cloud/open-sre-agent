@@ -14,7 +14,7 @@ from surfaces.interactive_shell.runtime.core.turn_accounting import (
     ToolCallingTurnResult,
 )
 from surfaces.interactive_shell.session import Session
-from surfaces.interactive_shell.utils.telemetry.recorder import LlmRunInfo
+from surfaces.interactive_shell.telemetry.recorder import LlmRunInfo
 from tests.shared.harness_turn_driver import run_harness_turn
 
 
