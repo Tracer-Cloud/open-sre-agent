@@ -16,10 +16,10 @@ from integrations.s3.tools.s3_marker_tool import check_s3_marker
 FIXTURE_PATH = Path(__file__).parent.parent / "fixtures" / "sibling_pairs.json"
 
 TOOL_REGISTRY: dict[str, Any] = {
-    "get_s3_object": getattr(get_s3_object, "__opensre_registered_tool__"),
-    "inspect_s3_object": getattr(inspect_s3_object, "__opensre_registered_tool__"),
-    "list_s3_objects": getattr(list_s3_objects, "__opensre_registered_tool__"),
-    "check_s3_marker": getattr(check_s3_marker, "__opensre_registered_tool__"),
+    "get_s3_object": get_s3_object.__opensre_registered_tool__,  # type: ignore[attr-defined]
+    "inspect_s3_object": inspect_s3_object.__opensre_registered_tool__,  # type: ignore[attr-defined]
+    "list_s3_objects": list_s3_objects.__opensre_registered_tool__,  # type: ignore[attr-defined]
+    "check_s3_marker": check_s3_marker.__opensre_registered_tool__,  # type: ignore[attr-defined]
 }
 
 
