@@ -107,9 +107,9 @@ def _map_get_sqs_queue_attributes(
     for q in [*(existing if isinstance(existing, list) else []), *queues]:
         if isinstance(q, dict):
             merged[str(q.get("url") or q.get("name") or id(q))] = q
-    evidence["sqs_queues"] = list(merged.values())
     if not merged:
         return
+    evidence["sqs_queues"] = list(merged.values())
     summary = _sqs_summary(list(merged.values()))
     entries = evidence.get(CATALOG_ENTRIES_KEY)
     if isinstance(entries, list):

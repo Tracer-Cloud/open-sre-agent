@@ -37,8 +37,7 @@ def test_no_entry_when_no_queues() -> None:
     _map_get_sqs_queue_attributes(evidence, {"queues": "not-a-list"}, {})
     _map_get_sqs_queue_attributes(evidence, {}, {})
 
-    assert evidence["sqs_queues"] == []
-    assert "catalog_entries" not in evidence
+    assert evidence == {}
 
 
 def test_tool_carries_mapper() -> None:
