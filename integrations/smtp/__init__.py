@@ -32,4 +32,4 @@ def classify(
     return cfg, "smtp"
 
 
-__all__ = ["classify", "email_background_adapter"]
+__all__ = ["classify"]

@@ -32,4 +32,4 @@ def classify(
     return cfg, "discord"
 
 
-__all__ = ["DISCORD_SETUP", "DiscordScheduledDelivery", "classify"]
+__all__ = ["DISCORD_SETUP", "classify"]

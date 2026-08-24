@@ -26,7 +26,6 @@ from integrations.slack.web_client import (
 __all__ = [
     "SLACK_SETUP",
     "SlackBotTarget",
-    "SlackScheduledDelivery",
     "add_reaction",
     "bot_token_configured",
     "classify",

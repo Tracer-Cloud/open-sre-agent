@@ -26,7 +26,6 @@ __all__ = [
     "materialize_opensre_telemetry_from_hub",
     "merge_opensre_seed_into_state",
     "resolve_opensre_telemetry_dir",
-    "run_opensre_llm_judge",
     "stream_opensre_query_alerts",
     "strip_scoring_points_from_alert",
 ]

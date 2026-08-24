@@ -37,9 +37,7 @@ def classify(credentials: dict[str, Any], record_id: str) -> tuple[BuzzConfig | 
 
 __all__ = [
     "BUZZ_SETUP",
-    "BuzzAlarmDispatcher",
     "BuzzClient",
-    "buzz_background_adapter",
     "classify",
     "load_credentials_from_env",
     "resolve_buzz_binary",
