@@ -355,3 +355,24 @@ def test_resolve_effective_integrations_publishes_store_configured_prefect() -> 
     assert "prefect" in resolved
     assert resolved["prefect"]["source"] == "local store"
     assert resolved["prefect"]["config"]["api_url"] == "http://localhost:4200/api"
+
+
+def test_resolve_effective_integrations_publishes_store_configured_rds() -> None:
+    """Regression, same class as the prefect gap above: rds's IntegrationSpec
+    was missing direct_effective=True and EffectiveIntegrations had no rds
+    field, so classify_integrations() resolved a store-saved rds config
+    correctly but resolve_effective_integrations() silently dropped it. This
+    broke `opensre integrations verify rds` ("missing" even with valid store
+    credentials) and would have broken any rds verifier before it ever ran."""
+    from integrations.catalog import resolve_effective_integrations
+
+    store_record = {
+        "id": "rds-1",
+        "service": "rds",
+        "status": "active",
+        "credentials": {"db_instance_identifier": "checkout-prod", "region": "us-east-1"},
+    }
+    resolved = resolve_effective_integrations(store_integrations=[store_record])
+    assert "rds" in resolved
+    assert resolved["rds"]["source"] == "local store"
+    assert resolved["rds"]["config"]["db_instance_identifier"] == "checkout-prod"

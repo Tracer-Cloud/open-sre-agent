@@ -25,6 +25,7 @@ from integrations.datadog.verifier import verify_datadog as _verify_datadog
 from integrations.github.verifier import verify_github as _verify_github
 from integrations.grafana.verifier import verify_grafana as _verify_grafana
 from integrations.honeycomb.verifier import verify_honeycomb as _verify_honeycomb
+from integrations.rds.verifier import verify_rds as _verify_rds
 from integrations.sentry.verifier import verify_sentry as _verify_sentry
 from integrations.snowflake.verifier import verify_snowflake as _verify_snowflake
 from integrations.telegram.verifier import verify_telegram as _verify_telegram
@@ -609,6 +610,62 @@ def test_verify_aws_role_without_base_credentials_explains_the_prerequisite(
     assert result["detail"] == ROLE_NEEDS_BASE_CREDENTIALS_MESSAGE
     assert "sts:AssumeRole" in result["detail"]
     assert "Access Key + Secret" in result["detail"]
+
+
+def test_verify_rds_passes_with_a_real_probe_result(monkeypatch: pytest.MonkeyPatch) -> None:
+    """The RDS verifier calls describe_db_instances — an instance-specific
+    probe, not just a generic AWS credentials check — so a user who only
+    configured RDS gets a direct, instance-level answer."""
+    probe_result = {
+        "success": True,
+        "data": {"DBInstances": [{"DBInstanceStatus": "available", "Engine": "postgres"}]},
+    }
+    monkeypatch.setattr(
+        "integrations.rds.verifier.execute_aws_sdk_call", lambda **_kwargs: probe_result
+    )
+
+    result = _verify_rds(
+        "local env", {"db_instance_identifier": "checkout-prod", "region": "us-east-1"}
+    )
+
+    assert result["status"] == "passed"
+    assert "checkout-prod" in result["detail"]
+    assert "postgres" in result["detail"]
+    assert "available" in result["detail"]
+
+
+def test_verify_rds_fails_when_instance_not_found(monkeypatch: pytest.MonkeyPatch) -> None:
+    probe_result = {"success": True, "data": {"DBInstances": []}}
+    monkeypatch.setattr(
+        "integrations.rds.verifier.execute_aws_sdk_call", lambda **_kwargs: probe_result
+    )
+
+    result = _verify_rds(
+        "local env", {"db_instance_identifier": "does-not-exist", "region": "us-east-1"}
+    )
+
+    assert result["status"] == "failed"
+    assert "does-not-exist" in result["detail"]
+
+
+def test_verify_rds_fails_when_aws_call_fails(monkeypatch: pytest.MonkeyPatch) -> None:
+    probe_result = {"success": False, "error": "AWS credentials not configured"}
+    monkeypatch.setattr(
+        "integrations.rds.verifier.execute_aws_sdk_call", lambda **_kwargs: probe_result
+    )
+
+    result = _verify_rds(
+        "local env", {"db_instance_identifier": "checkout-prod", "region": "us-east-1"}
+    )
+
+    assert result["status"] == "failed"
+    assert result["detail"] == "AWS credentials not configured"
+
+
+def test_verify_rds_missing_without_db_instance_identifier() -> None:
+    result = _verify_rds("local env", {"region": "us-east-1"})
+
+    assert result["status"] == "missing"
 
 
 def test_verify_tracer_passes_with_env_jwt(monkeypatch: pytest.MonkeyPatch) -> None:

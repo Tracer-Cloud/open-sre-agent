@@ -61,6 +61,7 @@ class EffectiveIntegrations(StrictConfigModel):
     clickhouse: EffectiveIntegrationEntry | None = None
     postgresql: EffectiveIntegrationEntry | None = None
     azure_sql: EffectiveIntegrationEntry | None = None
+    rds: EffectiveIntegrationEntry | None = None
     bitbucket: EffectiveIntegrationEntry | None = None
     trello: EffectiveIntegrationEntry | None = None
     discord: EffectiveIntegrationEntry | None = None
