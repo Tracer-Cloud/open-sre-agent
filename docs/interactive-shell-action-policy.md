@@ -35,7 +35,7 @@ recurring source of precedence drift.
    literal-`/slash` dispatch" addendum below). This is an explicit-command
    bypass, not natural-language intent inference: free-form text is still
    selected entirely by the action agent. The runtime's literal-`/slash`
-   detection in `runtime/utils/input_policy._literal_slash_command_text` remains
+   detection in `runtime/input_policy._literal_slash_command_text` remains
    terminal-UI policy (spinner suppression and exclusive-stdin gating); the
    execution-side deterministic dispatch lives in
    `core/agent_harness/turns/action_driver.py`.

@@ -28,7 +28,7 @@ owner module instead of broadening module responsibilities.
   pending prompt defaults, autosubmit handling only.
 - `input/` — prompt input event conversion only: EOF, Ctrl-C, CPR cleanup,
   session resume hints.
-- `utils/input_policy.py` — prompt stdin/spinner gating decisions for turns
+- `input_policy.py` — prompt stdin/spinner gating decisions for turns
   only.
 - `background/workers.py` — alert watcher lifecycle, spinner ticker lifecycle,
   sampler startup, turn-start background-output drains only.

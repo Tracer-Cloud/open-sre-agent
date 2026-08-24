@@ -5,7 +5,7 @@ The ``ask_user_choice`` action tool stores a
 session and queues this command via ``set_auto_command``, so it runs as a
 literal slash turn with exclusive stdin — the only place a raw-stdin arrow-key
 picker is safe (see ``_EXCLUSIVE_STDIN_MENU_COMMANDS`` in
-``runtime/utils/input_policy.py``). The selected option label is auto-submitted
+``runtime/input_policy.py``). The selected option label is auto-submitted
 as the next user message so the agent receives the decision verbatim.
 """
 
