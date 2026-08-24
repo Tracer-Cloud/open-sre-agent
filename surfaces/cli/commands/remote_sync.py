@@ -164,7 +164,11 @@ def setup_command(
         # --disabled with no new settings just switches the stored section off.
         try:
             _reject_disabled_with_setup_flags(
-                provider=provider, prefix=prefix, region=region, profile=profile
+                provider=provider,
+                prefix=prefix,
+                region=region,
+                profile=profile,
+                encrypt=encrypt,
             )
             disable_remote_sync()
         except RemoteSyncError as exc:
@@ -204,6 +208,7 @@ def _reject_disabled_with_setup_flags(
     prefix: str | None,
     region: str | None,
     profile: str | None,
+    encrypt: bool | None,
 ) -> None:
     """``--disabled`` only flips the switch; explicit setup values need a bucket."""
     given = [
@@ -216,6 +221,9 @@ def _reject_disabled_with_setup_flags(
         )
         if value is not None and value.strip() != ""
     ]
+    if encrypt is not None:
+        # One option, two spellings: name back the one that was actually typed.
+        given.append("encrypt" if encrypt else "no-encrypt")
     if given:
         flags = ", ".join(f"--{name}" for name in given)
         raise RemoteSyncConfigError(

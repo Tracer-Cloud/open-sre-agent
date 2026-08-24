@@ -575,6 +575,34 @@ def test_setup_disabled_with_explicit_flags_is_rejected_not_dropped(
     assert "Pass --bucket" in result.output
 
 
+@pytest.mark.parametrize("flag", ["--encrypt", "--no-encrypt"])
+def test_setup_disabled_with_an_encryption_flag_is_rejected_not_dropped(
+    runner: CliRunner, monkeypatch: pytest.MonkeyPatch, flag: str
+) -> None:
+    """Both spellings are refused: this path writes ``enabled: false`` and nothing else.
+
+    Regression: the flag was dropped on the floor and the command exited 0, so a
+    run that asked for an encryption change was told it had succeeded while the
+    stored setting stayed as it was.
+    """
+    calls: dict[str, bool] = {}
+    monkeypatch.setattr(
+        "surfaces.cli.commands.remote_sync.disable_remote_sync",
+        lambda: calls.setdefault("disabled", True),
+    )
+    monkeypatch.setattr(
+        "surfaces.cli.commands.remote_sync.save_remote_sync_settings",
+        lambda _request: calls.setdefault("saved", True),
+    )
+
+    result = runner.invoke(remote_sync_command, ["setup", "--disabled", flag])
+
+    assert result.exit_code == ERROR
+    assert calls == {}
+    assert f"cannot also set {flag}" in result.output
+    assert "Pass --bucket" in result.output
+
+
 def test_setup_disabled_with_bucket_saves_enabled_false(
     runner: CliRunner, monkeypatch: pytest.MonkeyPatch
 ) -> None:
