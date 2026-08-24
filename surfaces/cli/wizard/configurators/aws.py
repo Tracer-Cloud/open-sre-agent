@@ -18,13 +18,13 @@ from integrations.aws import (
     RoleGateChoice,
     gate_role_mode,
 )
-from surfaces.cli.wizard._ui import Choice, WizardBack, _choose, _console
+from surfaces.cli.wizard.components import Choice, WizardBack, choose, console
 from surfaces.cli.wizard.configurators.spec_configurator import configure_from_spec
 
 
 def _ask_gate() -> RoleGateChoice | None:
-    _console.print(f"[{WARNING}]{NO_AMBIENT_CREDENTIALS_NOTICE}[/]")
-    picked = _choose(
+    console.print(f"[{WARNING}]{NO_AMBIENT_CREDENTIALS_NOTICE}[/]")
+    picked = choose(
         GATE_QUESTION,
         [Choice(value=str(o.value), label=o.label, hint=o.hint) for o in GATE_OPTIONS],
         default=str(RoleGateChoice.USE_KEYS),
@@ -36,7 +36,7 @@ def _gate_aws_mode(mode: str) -> str:
     try:
         return gate_role_mode(mode, ask=_ask_gate)
     except ConfigureCredentialsFirst:
-        _console.print(f"[{SECONDARY}]{CONFIGURE_FIRST_INSTRUCTION}[/]")
+        console.print(f"[{SECONDARY}]{CONFIGURE_FIRST_INSTRUCTION}[/]")
         # The wizard reports the service as skipped and moves on.
         raise WizardBack from None
 

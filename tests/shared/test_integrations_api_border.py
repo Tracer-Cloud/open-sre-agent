@@ -35,18 +35,26 @@ _ALLOWED: dict[str, frozenset[str]] = {
     ),
     "gateway": frozenset(
         {
+            "integrations.telegram.delivery",
             "integrations.telegram.formatting",
         }
     ),
     "bootstrap": frozenset(
         {
+            "integrations.buzz.background_adapter",
+            "integrations.discord.scheduled_delivery",
             "integrations.llm_cli.auth_check",
+            "integrations.rocketchat.background_adapter",
+            "integrations.rocketchat.scheduled_delivery",
+            "integrations.slack.scheduled_delivery",
+            "integrations.smtp.background_adapter",
             "integrations.telegram.background_adapter",
             "integrations.telegram.scheduled_delivery",
         }
     ),
     "tools": frozenset(
         {
+            "integrations.buzz.alarms",
             "integrations.buzz.reporting_adapter",
             "integrations.datadog.correlation.registration",
             "integrations.discord.reporting_adapter",
@@ -59,6 +67,8 @@ _ALLOWED: dict[str, frozenset[str]] = {
             "integrations.llm_cli.claude_code",
             "integrations.llm_cli.subprocess_env",
             "integrations.openclaw.reporting_adapter",
+            "integrations.opensre.llm_eval_judge",
+            "integrations.rocketchat.alarms",
             "integrations.rocketchat.reporting_adapter",
             "integrations.sentry.SentryConfig",
             "integrations.sentry.get_sentry_issue",
@@ -76,6 +86,7 @@ _ALLOWED: dict[str, frozenset[str]] = {
     "surfaces": frozenset(
         {
             "integrations.betterstack.setup",
+            "integrations.buzz.alarms",
             "integrations.dagster.setup",
             "integrations.github.identity",
             "integrations.github.login",
@@ -106,6 +117,7 @@ _ALLOWED: dict[str, frozenset[str]] = {
             "integrations.posthog_mcp.build_posthog_mcp_config",
             "integrations.posthog_mcp.setup",
             "integrations.posthog_mcp.validate_posthog_mcp_config",
+            "integrations.rocketchat.alarms",
             "integrations.sentry.digest_prerequisites",
             "integrations.sentry.get_sentry_auth_recommendations",
             "integrations.sentry.setup",

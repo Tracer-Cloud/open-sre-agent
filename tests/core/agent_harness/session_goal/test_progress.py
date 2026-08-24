@@ -226,8 +226,8 @@ def test_outer_loop_achieves_via_checklist_without_achieved_tag() -> None:
     assert outcome.goal.completed == frozenset({0, 1, 2})
 
 
-def test_nudge_lists_unfinished_checklist_items() -> None:
-    from core.agent_harness.session_goal.continuation import continuation_nudge
+def test_prompt_lists_unfinished_checklist_items() -> None:
+    from core.agent_harness.session_goal.continuation import continuation_prompt
 
     goal = SessionGoal(
         condition="x",
@@ -235,14 +235,14 @@ def test_nudge_lists_unfinished_checklist_items() -> None:
         completed=frozenset({0}),
         last_reason="checklist 1/3 done — next: B",
     )
-    nudge = continuation_nudge(goal)
+    prompt = continuation_prompt(goal)
 
-    assert "B" in nudge and "C" in nudge
-    assert "session_goal:done=" in nudge
-    assert "Last progress: checklist 1/3 done — next: B" in nudge
+    assert "B" in prompt and "C" in prompt
+    assert "session_goal:done=" in prompt
+    assert "Last progress: checklist 1/3 done — next: B" in prompt
 
 
-def test_outer_loop_nudge_carries_reason_after_partial_progress() -> None:
+def test_outer_loop_prompt_carries_reason_after_partial_progress() -> None:
     session = SessionCore()
     turns: list[str] = []
     goal = SessionGoal(

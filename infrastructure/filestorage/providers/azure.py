@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import base64
+import binascii
 import json
 import os
 import subprocess
@@ -164,9 +166,26 @@ def _parse_last_modified(props: ET.Element | None) -> datetime:
 
 
 def _parse_etag(props: ET.Element | None) -> str:
+    """Extracts a valid MD5 hex hash, or an empty string if unavailable."""
     if props is None:
         return ""
-    return (props.findtext("Etag") or "").strip('"')
+
+    md5_b64 = props.findtext("Content-MD5")
+    if md5_b64:
+        try:
+            digest = base64.b64decode(md5_b64, validate=True)
+            if len(digest) == 16:
+                return digest.hex()
+        except (ValueError, binascii.Error):
+            # Malformed Base64 or non-MD5 content degrades to an unavailable
+            # fingerprint instead of crashing the listing.
+            pass
+
+    # Missing or invalid Content-MD5 degrades to an unavailable fingerprint ("").
+    # Returning Azure's opaque Etag here would place unchanged blobs on an
+    # incompatible fingerprint path, because the sync engine compares remote
+    # tags with a local MD5 hex.
+    return ""
 
 
 def _get_azure_access_token() -> str:

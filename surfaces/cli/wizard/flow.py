@@ -38,22 +38,19 @@ from infrastructure.terminal.theme import (
 )
 from integrations.llm_cli.binary_resolver import diagnose_binary_path
 from integrations.llm_cli.codex_oauth import CodexOAuthError, run_codex_oauth_login
-from surfaces.cli.wizard._ui import (
-    Choice,
-    WizardBack,
-    _choose,
-    _confirm,
-    _console,
-    _local_defaults,
-    _prompt_value,
-    _render_header,
-    _render_next_steps,
-    _render_saved_summary,
-    _select_target_for_advanced,
-    _step_header,
-)
 from surfaces.cli.wizard.azure_openai import (
     choose_provider_model,
+)
+from surfaces.cli.wizard.components import (
+    Choice,
+    WizardBack,
+    choose,
+    confirm,
+    console,
+    local_defaults,
+    prompt_value,
+    select_target_for_advanced,
+    step_header,
 )
 from surfaces.cli.wizard.configurators.github import (
     DEFAULT_GITHUB_MCP_MODE,
@@ -82,6 +79,11 @@ from surfaces.cli.wizard.llm_credential import (
     _provider_choice_label,
 )
 from surfaces.cli.wizard.probes import ProbeResult, probe_local_target, probe_remote_target
+from surfaces.cli.wizard.summaries import (
+    render_header,
+    render_next_steps,
+    render_saved_summary,
+)
 from surfaces.shared.llm_setup.catalog import (
     PROVIDER_BY_VALUE,
     SUPPORTED_PROVIDERS,
@@ -188,7 +190,7 @@ def _choose_auth_method(
         return OAUTH_AUTH_METHOD
     if not supports_oauth_auth_method(provider.value):
         return API_KEY_AUTH_METHOD
-    method = _choose(
+    method = choose(
         f"Choose {provider.label.removesuffix(' API key')} auth method",
         [
             Choice(
@@ -394,14 +396,14 @@ def _run_subscription_login(
 ) -> _SubscriptionLoginResult:
     """Launch the provider CLI login flow and report whether it exited cleanly."""
     if provider.value == "codex":
-        _console.print(
+        console.print(
             f"[{SECONDARY}]Starting OpenSRE Codex OAuth server on http://localhost:1455[/]"
         )
         try:
             oauth_result = run_codex_oauth_login()
         except CodexOAuthError as exc:
             detail = str(exc)
-            _console.print(f"[{WARNING}]  {GLYPH_WARNING}  {detail}[/]")
+            console.print(f"[{WARNING}]  {GLYPH_WARNING}  {detail}[/]")
             return _SubscriptionLoginResult(ok=False, detail=detail)
         save_provider_auth_record(
             provider="codex",
@@ -410,14 +412,14 @@ def _run_subscription_login(
             source="codex-oauth",
             detail=oauth_result.detail,
         )
-        _console.print(f"[{SECONDARY}]{oauth_result.detail}[/]")
+        console.print(f"[{SECONDARY}]{oauth_result.detail}[/]")
         return _SubscriptionLoginResult(ok=True, detail=oauth_result.detail)
 
     command = _subscription_login_command(provider, binary_path)
     if command is None:
         auth_hint = provider.adapter_factory().auth_hint if provider.adapter_factory else ""
         detail = f"No browser login command is registered for {provider.label}. {auth_hint}"
-        _console.print(f"[{WARNING}]  {GLYPH_WARNING}  {detail}[/]")
+        console.print(f"[{WARNING}]  {GLYPH_WARNING}  {detail}[/]")
         return _SubscriptionLoginResult(ok=False, detail=detail)
 
     preflight_command = _subscription_login_preflight_command(provider, binary_path)
@@ -426,26 +428,26 @@ def _run_subscription_login(
             preflight_result = _run_login_preflight_process(preflight_command)
         except OSError as exc:
             detail = f"Could not check login config: {exc}"
-            _console.print(f"[{WARNING}]  {GLYPH_WARNING}  {detail}[/]")
+            console.print(f"[{WARNING}]  {GLYPH_WARNING}  {detail}[/]")
             return _SubscriptionLoginResult(ok=False, detail=detail)
         if preflight_result.returncode != 0:
             login_result = _subscription_login_error(provider, preflight_result)
-            _console.print(f"[{WARNING}]  {GLYPH_WARNING}  {login_result.detail}[/]")
+            console.print(f"[{WARNING}]  {GLYPH_WARNING}  {login_result.detail}[/]")
             return login_result
 
-    _console.print(f"[{SECONDARY}]Launching {shlex.join(command)} for browser login…[/]")
+    console.print(f"[{SECONDARY}]Launching {shlex.join(command)} for browser login…[/]")
     try:
         result = _run_interactive_login_process(command)
     except KeyboardInterrupt:
-        _console.print(f"[{WARNING}]  {GLYPH_WARNING}  Login cancelled.[/]")
+        console.print(f"[{WARNING}]  {GLYPH_WARNING}  Login cancelled.[/]")
         return _SubscriptionLoginResult(ok=False, detail="Login cancelled.")
     except OSError as exc:
         detail = f"Could not launch login: {exc}"
-        _console.print(f"[{WARNING}]  {GLYPH_WARNING}  {detail}[/]")
+        console.print(f"[{WARNING}]  {GLYPH_WARNING}  {detail}[/]")
         return _SubscriptionLoginResult(ok=False, detail=detail)
     if result.returncode != 0:
         login_result = _subscription_login_error(provider, result)
-        _console.print(f"[{WARNING}]  {GLYPH_WARNING}  {login_result.detail}[/]")
+        console.print(f"[{WARNING}]  {GLYPH_WARNING}  {login_result.detail}[/]")
         return login_result
     return _SubscriptionLoginResult(ok=True)
 
@@ -487,7 +489,7 @@ def _recover_subscription_config_error(
             ),
         ]
     )
-    recovery = _choose(
+    recovery = choose(
         f"{provider_label} OAuth could not start. What next?",
         choices,
         default="repair" if repair_hint is not None else "retry",
@@ -502,10 +504,10 @@ def _recover_subscription_config_error(
         detail=login_result.config_error_detail,
     )
     if not repair_result.ok:
-        _console.print(f"[{WARNING}]  {GLYPH_WARNING}  {repair_result.detail}[/]")
+        console.print(f"[{WARNING}]  {GLYPH_WARNING}  {repair_result.detail}[/]")
         return "continue"
 
-    _console.print(f"[{SECONDARY}]  Updated Codex config: {repair_result.detail}.[/]")
+    console.print(f"[{SECONDARY}]  Updated Codex config: {repair_result.detail}.[/]")
     retry_result = _run_subscription_login(provider, binary_path)
     if retry_result.ok:
         return "ok"
@@ -518,7 +520,7 @@ def _run_cli_llm_onboarding(
     """Probe CLI binary + auth; recovery menu when missing. ``repick`` = choose another LLM."""
     factory = provider.adapter_factory
     if factory is None:
-        _console.print(
+        console.print(
             f"[{ERROR}]  {GLYPH_ERROR}  Internal error: CLI provider missing adapter factory.[/]"
         )
         return "abort"
@@ -531,10 +533,10 @@ def _run_cli_llm_onboarding(
     for _attempt in range(10):
         probe = adapter.detect()
         if probe.installed and probe.logged_in is True:
-            _console.print(f"[{SECONDARY}]{probe.detail}[/]")
+            console.print(f"[{SECONDARY}]{probe.detail}[/]")
             return "ok"
         if probe.installed and probe.logged_in is not True:
-            _console.print(f"[{WARNING}]  {GLYPH_WARNING}  {probe.detail}[/]")
+            console.print(f"[{WARNING}]  {GLYPH_WARNING}  {probe.detail}[/]")
             status_prompt = (
                 f"{provider_label} requires login. What next?"
                 if probe.logged_in is False
@@ -563,7 +565,7 @@ def _run_cli_llm_onboarding(
                     ),
                 ]
             )
-            action = _choose(
+            action = choose(
                 status_prompt,
                 choices,
                 default="login" if choices and choices[0].value == "login" else "retry",
@@ -587,8 +589,8 @@ def _run_cli_llm_onboarding(
                         return "repick"
                 continue
             continue
-        _console.print(f"[{WARNING}]  {GLYPH_WARNING}  {probe.detail}[/]")
-        action = _choose(
+        console.print(f"[{WARNING}]  {GLYPH_WARNING}  {probe.detail}[/]")
+        action = choose(
             f"{provider_label} not found. What next?",
             [
                 Choice(
@@ -612,23 +614,23 @@ def _run_cli_llm_onboarding(
         if action == "repick":
             return "repick"
         if action == "path":
-            path = _prompt_value(f"Full path to {name} binary")
+            path = prompt_value(f"Full path to {name} binary")
             reason = diagnose_binary_path(path)
             if reason:
-                _console.print(f"[{WARNING}]{reason} Try again.[/]")
+                console.print(f"[{WARNING}]{reason} Try again.[/]")
                 continue
             sync_env_values({env_key: path})
             os.environ[env_key] = path
             continue
-        _console.print(f"[{SECONDARY}]    Hint: {install_hint}[/]")
-    _console.print(f"[{WARNING}]  {GLYPH_WARNING}  Too many retry attempts. Aborting setup.[/]")
+        console.print(f"[{SECONDARY}]    Hint: {install_hint}[/]")
+    console.print(f"[{WARNING}]  {GLYPH_WARNING}  Too many retry attempts. Aborting setup.[/]")
     return "abort"
 
 
 def run_wizard(_argv: list[str] | None = None) -> int:
     """Run the interactive wizard."""
-    _render_header()
-    defaults = _local_defaults()
+    render_header()
+    defaults = local_defaults()
     saved_provider_value = defaults["provider"] if isinstance(defaults["provider"], str) else None
     saved_model_value = defaults["model"] if isinstance(defaults["model"], str) else ""
     default_wizard_mode = (
@@ -648,8 +650,8 @@ def run_wizard(_argv: list[str] | None = None) -> int:
         else provider_options[0].value
     )
 
-    _step_header(1, WIZARD_TOTAL_STEPS, "Setup Mode")
-    wizard_mode = _choose(
+    step_header(1, WIZARD_TOTAL_STEPS, "Setup Mode")
+    wizard_mode = choose(
         "How do you want to get started?",
         [
             Choice(
@@ -676,7 +678,7 @@ def run_wizard(_argv: list[str] | None = None) -> int:
 
     if wizard_mode == "advanced":
         remote_probe = probe_remote_target()
-        target = _select_target_for_advanced(local_probe, remote_probe)
+        target = select_target_for_advanced(local_probe, remote_probe)
         if target is None:
             return 1
     else:
@@ -699,7 +701,7 @@ def run_wizard(_argv: list[str] | None = None) -> int:
     while True:
         credential_state = OK
         session_env_sink = {}
-        _step_header(2, WIZARD_TOTAL_STEPS, "LLM Provider")
+        step_header(2, WIZARD_TOTAL_STEPS, "LLM Provider")
         saved_provider = (
             PROVIDER_BY_VALUE.get(saved_provider_value) if saved_provider_value else None
         )
@@ -711,17 +713,17 @@ def run_wizard(_argv: list[str] | None = None) -> int:
                 if supports_oauth_auth_method(saved_provider.value)
                 else ""
             )
-            _console.print(
+            console.print(
                 f"[{SECONDARY}]current provider  {_provider_choice_label(saved_provider)}{auth_segment}  ·  {current_model}[/]"
             )
-            change_provider = _confirm("Change provider?", default=False)
+            change_provider = confirm("Change provider?", default=False)
         else:
             change_provider = True
         force_repick = False
 
         if change_provider:
             try:
-                provider_selection = _choose(
+                provider_selection = choose(
                     "Choose your LLM provider",
                     onboarding_provider_choices(
                         [
@@ -783,8 +785,8 @@ def run_wizard(_argv: list[str] | None = None) -> int:
                     continue
         elif model_provider.models:
             current_display = model or "CLI default"
-            _console.print(f"[{SECONDARY}]current model  {current_display}[/]")
-            if _confirm("Change model?", default=False):
+            console.print(f"[{SECONDARY}]current model  {current_display}[/]")
+            if confirm("Change model?", default=False):
                 model = choose_provider_model(
                     provider,
                     model_provider,
@@ -936,7 +938,7 @@ def run_wizard(_argv: list[str] | None = None) -> int:
         # saving", where re-applying it to os.environ is exactly what is wanted.
         os.environ.update(session_env_sink)
 
-    _step_header(3, WIZARD_TOTAL_STEPS, "Integrations")
+    step_header(3, WIZARD_TOTAL_STEPS, "Integrations")
     try:
         configured_integrations, integration_env_path = (
             _integration_configurators_module._configure_selected_integrations()
@@ -945,15 +947,15 @@ def run_wizard(_argv: list[str] | None = None) -> int:
         cancelled = Text()
         cancelled.append(f"\n  {GLYPH_WARNING}  ", style=f"bold {WARNING}")
         cancelled.append("Integration setup cancelled. AI config was kept.", style=TEXT)
-        _console.print(cancelled)
+        console.print(cancelled)
         configured_integrations = []
         integration_env_path = None
 
     summary_env_path = integration_env_path or str(env_path)
     _seed_onboarding_loops()
 
-    _step_header(4, WIZARD_TOTAL_STEPS, "Summary")
-    _render_saved_summary(
+    step_header(4, WIZARD_TOTAL_STEPS, "Summary")
+    render_saved_summary(
         provider_label=_provider_label_for_saved_summary(provider, persisted_auth_method),
         model=model,
         saved_path=str(saved_path),
@@ -963,5 +965,5 @@ def run_wizard(_argv: list[str] | None = None) -> int:
             provider, persisted_auth_method, credential_state=credential_state
         ),
     )
-    _render_next_steps()
+    render_next_steps()
     return 0

@@ -36,10 +36,10 @@ from integrations.hermes import (
     TelegramSink,
     run_incident_investigation,
 )
-from integrations.rocketchat import RocketChatAlarmDispatcher
 from integrations.rocketchat import (
     load_credentials_from_env as load_rocketchat_credentials_from_env,
 )
+from integrations.rocketchat.alarms import RocketChatAlarmDispatcher
 from integrations.telegram.alarms import AlarmDispatcher
 from integrations.telegram.credentials import load_credentials_from_env
 from tools.investigation.capability import run_investigation

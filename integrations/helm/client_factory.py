@@ -1,5 +1,4 @@
-"""Build a ``HelmClient`` from raw tool params, or a standard unavailable
-response when Helm can't run for this call.
+"""Build a ``HelmClient`` from raw tool params for one Helm tool call.
 
 Helm tools call ``helm_client_for_run`` first; if it returns ``None`` they
 return ``helm_base_unavailable(...)`` instead of invoking the client.
@@ -8,11 +7,9 @@ return ``helm_base_unavailable(...)`` instead of invoking the client.
 from __future__ import annotations
 
 import logging
-from typing import Any
 
 from pydantic import ValidationError
 
-from core.tool_framework.utils import tool_unavailable
 from integrations.config_models import HelmIntegrationConfig
 from integrations.helm.client import HelmClient
 
@@ -64,18 +61,3 @@ def helm_client_for_run(
         logger.debug("helm_client_for_run failed unexpectedly", exc_info=True)
         return None
     return HelmClient(cfg)
-
-
-def helm_base_unavailable(error: str) -> dict[str, Any]:
-    """Build the standard Helm "unavailable" tool response.
-
-    Args:
-        error: Human-readable reason the Helm tool can't run right now
-            (e.g. why ``helm_client_for_run`` returned ``None``).
-
-    Returns:
-        ``{"source": "helm", "available": False, "error": error}``, the
-        envelope Helm tools return directly as their result instead of
-        calling into a ``HelmClient``.
-    """
-    return tool_unavailable("helm", error)
