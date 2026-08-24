@@ -17,6 +17,7 @@ from infrastructure.filestorage import (
     OrgScopeNotSupportedError,
     RemoteSyncEncryptionError,
     RemoteSyncError,
+    external_encryption_message,
 )
 from infrastructure.filestorage.encryption.keys import resolve_passphrase
 from infrastructure.filestorage.engine import SyncProgress
@@ -237,11 +238,12 @@ def _cmd_remote_sync(_session: Session, console: Console, args: list[str]) -> bo
         console.print(f"[{DIM}]{exc}[/]")
         return True
     except RemoteSyncEncryptionError as exc:
-        # Also our own wording, and it names the command that fixes the
-        # problem. Falling through to the generic handler below would tell a
-        # chat user only that something failed, when the actual answer is
-        # "your passphrase is missing" or "run reencrypt first".
-        console.print(f"[{ERROR}]{escape(str(exc))}[/]")
+        # Ours, but not printable: these interpolate the failing object key,
+        # the store's key settings, or a wrapped keyring error, and this
+        # handler also answers gateway chat (CWE-209). ``escape`` guards
+        # markup, not information; the static copy still names the fix.
+        logger.warning("[remote-sync] encryption refused the command", exc_info=True)
+        console.print(f"[{ERROR}]{escape(external_encryption_message(exc))}[/]")
         return True
     except RemoteSyncError:
         # This handler also serves gateway chat, an external surface, so the

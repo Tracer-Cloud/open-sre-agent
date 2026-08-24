@@ -13,6 +13,11 @@ from dataclasses import dataclass
 from infrastructure.filestorage.contracts import ObjectStore, RemoteObject
 from infrastructure.filestorage.encryption import envelope
 from infrastructure.filestorage.encryption.contracts import Cipher
+from infrastructure.filestorage.encryption.error_messages import (
+    ENCRYPTED_STORE_MISMATCH,
+    MANIFEST_GONE,
+    PLAINTEXT_STORE,
+)
 from infrastructure.filestorage.encryption.keys import resolve_passphrase
 from infrastructure.filestorage.encryption.manifest import (
     load_manifest,
@@ -53,16 +58,6 @@ def holds_mirrored_objects(listing: list[RemoteObject]) -> bool:
     return any(obj.key.partition("/")[0] in _ROOT_HEADS for obj in listing)
 
 
-_MANIFEST_GONE = (
-    "This store holds encrypted objects but no manifest to open them.\n"
-    "The manifest carried the only copy of the keys, so those objects cannot be\n"
-    "recovered — and syncing either way now would make things worse.\n"
-    "\n"
-    "  If the manifest was deleted by mistake, restore it from a bucket version.\n"
-    "  Otherwise start the remote over: empty the prefix, then sync again."
-)
-
-
 def _holds_sealed_objects(store: ObjectStore, listing: list[RemoteObject]) -> bool:
     """Whether any mirrored object is actually sealed.
 
@@ -92,15 +87,9 @@ def resolve_cipher(store: ObjectStore, *, encrypted: bool, dry_run: bool = False
 
     if not encrypted:
         if has_manifest:
-            raise EncryptedStoreError(
-                "This store is encrypted, but encryption is switched off on this machine.\n"
-                "Syncing now would upload readable history into an encrypted store.\n"
-                "\n"
-                "  Turn encryption back on:  `opensre remote-sync setup`\n"
-                "  Or, to go back to plaintext, empty the prefix and sync again."
-            )
+            raise EncryptedStoreError(ENCRYPTED_STORE_MISMATCH)
         if _holds_sealed_objects(store, listing):
-            raise ManifestMissingError(_MANIFEST_GONE)
+            raise ManifestMissingError(MANIFEST_GONE)
         return ResolvedCipher(cipher=None, listing=listing)
 
     passphrase = resolve_passphrase()
@@ -112,13 +101,8 @@ def resolve_cipher(store: ObjectStore, *, encrypted: bool, dry_run: bool = False
 
     if holds_mirrored_objects(listing):
         if _holds_sealed_objects(store, listing):
-            raise ManifestMissingError(_MANIFEST_GONE)
-        raise PlaintextStoreError(
-            "This store already holds unencrypted sessions or memory.\n"
-            "Encrypting only new writes would leave those readable.\n"
-            "\n"
-            "  Seal what is already there:  `opensre remote-sync reencrypt`"
-        )
+            raise ManifestMissingError(MANIFEST_GONE)
+        raise PlaintextStoreError(PLAINTEXT_STORE)
 
     manifest, cipher = new_manifest(passphrase)
     if not dry_run:

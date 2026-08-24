@@ -24,6 +24,11 @@ from pathlib import Path
 
 from config.scope_context import current_scope
 from infrastructure.filestorage.config import RemoteSyncConfig, load_remote_sync_config
+from infrastructure.filestorage.encryption.error_messages import (
+    ENCRYPTION_DISABLED,
+    SYNC_DISABLED,
+    external_encryption_message,
+)
 from infrastructure.filestorage.encryption.manifest import manifest_in_listing
 from infrastructure.filestorage.encryption.resolver import resolve_cipher
 from infrastructure.filestorage.encryption.rotation import (
@@ -40,7 +45,12 @@ from infrastructure.filestorage.engine import (
     run_sync,
 )
 from infrastructure.filestorage.enums import SyncDirection, SyncRootName
-from infrastructure.filestorage.errors import OrgScopeNotSupportedError, RemoteSyncEncryptionError
+from infrastructure.filestorage.errors import (
+    EncryptionDisabledError,
+    OrgScopeNotSupportedError,
+    RemoteSyncEncryptionError,
+    SyncDisabledError,
+)
 from infrastructure.filestorage.exclusions import NO_EXCLUSIONS, ExclusionRules
 from infrastructure.filestorage.exposure import PublicAccessStatus
 from infrastructure.filestorage.providers import (
@@ -75,6 +85,12 @@ class EncryptionStatus:
     ``problem`` carries the reason a sync would be refused, so ``status``
     reports a missing passphrase or a plaintext/encrypted mismatch *before* the
     operator discovers it mid-sync. Empty when nothing is wrong.
+
+    Safe for any surface by construction: it is never an exception's own text,
+    only static copy (see
+    :func:`~infrastructure.filestorage.error_messages.external_encryption_message`)
+    or a failure's type name, because ``status`` output is rendered into chat
+    replies as well as a terminal.
     """
 
     configured: bool
@@ -184,12 +200,17 @@ def _encryption_status(config: RemoteSyncConfig) -> EncryptionStatus:
             key_available=config.encrypted,
         )
     except RemoteSyncEncryptionError as exc:
-        # Our own wording, written for an operator to act on, so it is shown.
-        return EncryptionStatus(configured=config.encrypted, store_encrypted=True, problem=str(exc))
+        # It can name the object key that failed, the store's key settings, or a wrapped
+        # keyring error, and this line is rendered into chat replies.
+        # Static copy chosen by class instead; the detail goes to the log.
+        logger.warning("[remote-sync] encryption gate refused this store", exc_info=True)
+        return EncryptionStatus(
+            configured=config.encrypted,
+            store_encrypted=True,
+            problem=external_encryption_message(exc),
+        )
     except Exception as exc:
-        # Status exists to describe problems; one that ends in a traceback
-        # describes nothing. Broad on purpose — an unreachable store, a
-        # rejected credential, or a registered provider that returns something
+        # an unreachable store, a rejected credential, or a registered provider that returns something
         # unusable all end here, and none of them may take the command down.
         # Only the exception's type is reported: this line reaches chat sinks.
         logger.warning("[remote-sync] encryption status check failed", exc_info=True)
@@ -301,17 +322,9 @@ def _encrypted_config() -> RemoteSyncConfig:
     """Loaded config for a key operation, refusing when sync or encryption is off."""
     config = load_remote_sync_config()
     if config is None:
-        raise RemoteSyncEncryptionError(
-            "Remote sync is off on this machine.\n"
-            "\n"
-            "  Set it up first:  `opensre remote-sync setup` or `export OPENSRE_REMOTE_SYNC=1`"
-        )
+        raise SyncDisabledError(SYNC_DISABLED)
     if not config.encrypted:
-        raise RemoteSyncEncryptionError(
-            "Encryption is off on this machine, so there is no key to change.\n"
-            "\n"
-            "  Turn it on first:  opensre remote-sync setup"
-        )
+        raise EncryptionDisabledError(ENCRYPTION_DISABLED)
     return config
 
 

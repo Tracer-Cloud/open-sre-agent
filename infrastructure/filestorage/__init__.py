@@ -24,6 +24,7 @@ from infrastructure.filestorage.config import (
     remote_sync_enabled,
 )
 from infrastructure.filestorage.contracts import ObjectStore, RemoteObject
+from infrastructure.filestorage.encryption.error_messages import external_encryption_message
 from infrastructure.filestorage.engine import (
     SyncReport,
     local_files,
@@ -121,6 +122,7 @@ __all__ = [
     "UnsyncablePathError",
     "build_object_store",
     "check_bucket_exposure",
+    "external_encryption_message",
     "get_sync_status",
     "is_syncable",
     "load_remote_sync_config",

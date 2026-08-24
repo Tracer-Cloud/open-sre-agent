@@ -90,6 +90,23 @@ class ManifestMissingError(RemoteSyncEncryptionError):
     """
 
 
+class SyncDisabledError(RemoteSyncEncryptionError):
+    """A key operation was asked for on a machine where remote sync is off.
+
+    There is no store to hold a key, so this is a setup problem rather than a
+    key problem — kept apart from the mismatch errors, which describe a store
+    that exists and disagrees with this machine.
+    """
+
+
+class EncryptionDisabledError(RemoteSyncEncryptionError):
+    """A key operation was asked for while encryption is off on this machine.
+
+    Distinct from :class:`EncryptedStoreError`: nothing about the store is
+    wrong, this machine simply has no key to rotate or reseal under.
+    """
+
+
 class EncryptedStoreError(RemoteSyncEncryptionError):
     """The store is encrypted but this machine has encryption switched off.
 
@@ -100,6 +117,7 @@ class EncryptedStoreError(RemoteSyncEncryptionError):
 
 __all__ = [
     "EncryptedStoreError",
+    "EncryptionDisabledError",
     "ManifestMissingError",
     "MissingPassphraseError",
     "OrgScopeNotSupportedError",
@@ -109,6 +127,7 @@ __all__ = [
     "RemoteSyncEncryptionError",
     "RemoteSyncError",
     "RemoteSyncUnavailableError",
+    "SyncDisabledError",
     "UndecryptableObjectError",
     "UnsyncablePathError",
     "WrongPassphraseError",

@@ -12,6 +12,7 @@ from rich.console import Console
 from core.agent_harness.session import SessionCore
 from core.agent_harness.session.persistence.memory import InMemorySessionStore
 from core.agent_harness.tools.action_tools import get_action_tool
+from infrastructure.filestorage.errors import UndecryptableObjectError
 from infrastructure.turn_host.turn_runner import TurnRunner
 from tests.core.agent.orchestration.cross_surface_parity_harness import (
     RecordingTurnOutput,
@@ -373,3 +374,42 @@ def test_gateway_background_list_stays_under_the_cap_on_worst_case_records() -> 
     assert len(sink.finalized) <= 4096, len(sink.finalized)
     assert sink.finalized.endswith("Use /background show <task_id> for the full RCA.")
     assert "more" in sink.finalized
+
+
+def test_gateway_reply_never_carries_an_encryption_failure_detail(
+    monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
+) -> None:
+    """CWE-209 on a real gateway turn: the store's object key must not be replied.
+
+    ``/remote-sync`` runs the same handler the REPL uses, but here the reply
+    leaves the machine — a chat user in the channel would have read the remote
+    key of one of the operator's private sessions. ``reencrypt`` is the command
+    driven because resealing opens every stored object, which is where
+    ``UndecryptableObjectError`` names one; the assertion is on the delivered
+    reply rather than the handler, since delivery is what leaks.
+    """
+    planted = "sessions/2026-08-24-standup/PLANTED-KEY.jsonl"
+
+    def _boom(**_kwargs: object) -> object:
+        raise UndecryptableObjectError(f"{planted} failed authentication.")
+
+    monkeypatch.setattr(
+        "surfaces.interactive_shell.command_registry.remote_sync_cmds.resolve_passphrase",
+        lambda: "correct horse battery staple",
+    )
+    monkeypatch.setattr(
+        "surfaces.interactive_shell.command_registry.remote_sync_cmds.reencrypt_remote_store",
+        _boom,
+    )
+
+    with caplog.at_level(logging.WARNING):
+        sink = _run_gateway_slash("/remote-sync reencrypt")
+
+    # Everything the sink was handed, flattened: a key wrapped across two lines
+    # is still a leaked key, and it must be absent from the streamed reply, the
+    # finalized message, and any rendered error alike.
+    delivered = "".join(
+        "".join(part.split()) for part in (*sink.lines, *sink.streamed, sink.finalized or "")
+    )
+    assert "PLANTED-KEY" not in delivered, delivered
+    assert planted in caplog.text, "detail must survive server-side"
