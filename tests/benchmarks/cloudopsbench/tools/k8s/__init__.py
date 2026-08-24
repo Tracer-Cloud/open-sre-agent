@@ -311,7 +311,9 @@ def _map_get_resources(
 ) -> None:
     action_input = _cloudopsbench_action_input(output, tool_input)
     resource_type = str(
-        action_input.get("resource_type") or tool_input.get("resource_type") or _DEFAULT_RESOURCE_TYPE
+        action_input.get("resource_type")
+        or tool_input.get("resource_type")
+        or _DEFAULT_RESOURCE_TYPE
     )
     namespace = action_input.get("namespace") or tool_input.get("namespace") or _DEFAULT_NAMESPACE
     _record_cloudopsbench_evidence(
@@ -333,9 +335,7 @@ def _map_describe_resource(
         or tool_input.get("resource_type")
         or _DEFAULT_DESCRIBE_RESOURCE_TYPE
     )
-    name = str(
-        action_input.get("name") or tool_input.get("name") or _DEFAULT_SERVICE
-    )
+    name = str(action_input.get("name") or tool_input.get("name") or _DEFAULT_SERVICE)
     namespace = action_input.get("namespace") or tool_input.get("namespace")
     summary = f"{resource_type} {name}"
     if namespace:
@@ -465,9 +465,7 @@ def _map_check_node_service_status(
 ) -> None:
     action_input = _cloudopsbench_action_input(output, tool_input)
     node_name = str(
-        action_input.get("node_name")
-        or tool_input.get("node_name")
-        or _DEFAULT_CONTROL_PLANE_NODE
+        action_input.get("node_name") or tool_input.get("node_name") or _DEFAULT_CONTROL_PLANE_NODE
     )
     service_name = str(
         action_input.get("service_name")

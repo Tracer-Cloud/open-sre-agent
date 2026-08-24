@@ -122,9 +122,7 @@ def parse_shell_command(command: str, *, is_windows: bool) -> ParsedShellCommand
             use_shell=True,
         )
 
-    if _INLINE_SUBSHELL_RE.search(stripped) is not None or _has_unquoted_shell_operator(
-        stripped
-    ):
+    if _INLINE_SUBSHELL_RE.search(stripped) is not None or _has_unquoted_shell_operator(stripped):
         # Operators / substitution need a real shell; alpha mode runs them.
         return ParsedShellCommand(
             command=stripped,
