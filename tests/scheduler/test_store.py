@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+import os
 from pathlib import Path
 
 import pytest
@@ -276,6 +277,47 @@ class TestStoreDurability:
         assert [task.name for task in list_tasks(store_path)] == ["digest-7"]
         assert list(store_path.parent.glob(f"{store_path.name}.tmp*")) == []
 
+    def test_parent_directory_sync_failure_is_not_reported_as_success(
+        self, store_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        add_task(self._task(7), store_path)
+        fsync_calls = 0
+        real_fsync = os.fsync
+
+        def fail_directory_fsync(file_descriptor: int) -> None:
+            nonlocal fsync_calls
+            fsync_calls += 1
+            if fsync_calls == 2:
+                raise OSError("directory sync failed")
+            real_fsync(file_descriptor)
+
+        monkeypatch.setattr("os.fsync", fail_directory_fsync)
+
+        with pytest.raises(OSError, match="directory sync failed"):
+            add_task(self._task(8), store_path)
+
+        assert fsync_calls == 2
+        assert [task.name for task in list_tasks(store_path)] == ["digest-7", "digest-8"]
+        assert list(store_path.parent.glob(f"{store_path.name}.tmp*")) == []
+
+    def test_temporary_file_sync_failure_preserves_the_previous_store(
+        self, store_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        add_task(self._task(7), store_path)
+        before = store_path.read_bytes()
+
+        def fail_temporary_fsync(_file_descriptor: int) -> None:
+            raise OSError("temporary file sync failed")
+
+        monkeypatch.setattr("os.fsync", fail_temporary_fsync)
+
+        with pytest.raises(OSError, match="temporary file sync failed"):
+            add_task(self._task(8), store_path)
+
+        assert store_path.read_bytes() == before
+        assert [task.name for task in list_tasks(store_path)] == ["digest-7"]
+        assert list(store_path.parent.glob(f"{store_path.name}.tmp*")) == []
+
     def test_add_quarantines_an_unreadable_store(
         self, store_path: Path, caplog: pytest.LogCaptureFixture
     ) -> None:
@@ -321,6 +363,26 @@ class TestStoreDurability:
 
         assert store_path.read_bytes() == corrupt_bytes
         assert list(store_path.parent.glob(f"{store_path.name}.corrupt-*")) == []
+
+    def test_quarantine_sync_failure_keeps_the_recovery_copy(
+        self, store_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        corrupt_bytes = b"truncated task store"
+        store_path.write_bytes(corrupt_bytes)
+
+        def fail_directory_fsync(_file_descriptor: int) -> None:
+            raise OSError("directory sync failed")
+
+        monkeypatch.setattr("os.fsync", fail_directory_fsync)
+
+        with pytest.raises(OSError, match="directory sync failed"):
+            add_task(self._task(7), store_path)
+
+        recovery_files = list(store_path.parent.glob(f"{store_path.name}.corrupt-*"))
+        assert len(recovery_files) == 1
+        assert recovery_files[0].read_bytes() == corrupt_bytes
+        assert not store_path.exists()
+        assert list(store_path.parent.glob(f"{store_path.name}.tmp*")) == []
 
     def test_repeated_quarantines_keep_distinct_recovery_copies(self, store_path: Path) -> None:
         first_corrupt_bytes = b"first torn write"

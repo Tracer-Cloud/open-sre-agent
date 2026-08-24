@@ -35,12 +35,11 @@ def _fsync_parent_dir(path: Path) -> None:
     """Sync the directory entry after a replacement on Unix."""
     if os.name == "nt":
         return
-    with contextlib.suppress(OSError):
-        directory_fd = os.open(path.parent, os.O_RDONLY)
-        try:
-            os.fsync(directory_fd)
-        finally:
-            os.close(directory_fd)
+    directory_fd = os.open(path.parent, os.O_RDONLY)
+    try:
+        os.fsync(directory_fd)
+    finally:
+        os.close(directory_fd)
 
 
 def _read_rows(store_path: Path) -> list[dict[str, object]] | None:
@@ -78,8 +77,8 @@ def _quarantine_unreadable(store_path: Path) -> None:
         os.close(descriptor)
         descriptor = None
         os.replace(store_path, backup_path)
-        _fsync_parent_dir(store_path)
         replaced = True
+        _fsync_parent_dir(store_path)
     except OSError:
         logger.error(
             "Could not preserve unreadable scheduler store at %s; refusing to overwrite it",
@@ -129,8 +128,8 @@ def _save_raw(store_path: Path, data: list[dict[str, object]]) -> None:
             handle.flush()
             os.fsync(handle.fileno())
         os.replace(temp_path, store_path)
-        _fsync_parent_dir(store_path)
         replaced = True
+        _fsync_parent_dir(store_path)
     finally:
         if descriptor is not None:
             with contextlib.suppress(OSError):
