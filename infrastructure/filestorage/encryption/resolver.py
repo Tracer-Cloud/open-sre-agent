@@ -26,7 +26,7 @@ from infrastructure.filestorage.encryption.manifest import (
     open_manifest,
     save_manifest,
 )
-from infrastructure.filestorage.enums import SyncRootName
+from infrastructure.filestorage.enums import SyncDirection, SyncRootName
 from infrastructure.filestorage.errors import (
     EncryptedStoreError,
     ManifestMissingError,
@@ -75,12 +75,18 @@ def _holds_sealed_objects(store: ObjectStore, listing: list[RemoteObject]) -> bo
     return False
 
 
-def resolve_cipher(store: ObjectStore, *, encrypted: bool, dry_run: bool = False) -> ResolvedCipher:
+def resolve_cipher(
+    store: ObjectStore,
+    *,
+    encrypted: bool,
+    direction: SyncDirection = SyncDirection.BOTH,
+    dry_run: bool = False,
+) -> ResolvedCipher:
     """Check the store against this machine's setting and build the cipher.
 
-    Creates the manifest when encryption is switched on for an empty store,
-    except under ``dry_run`` — a preview writes nothing anywhere, so it plans
-    against a throwaway key instead.
+    Creates the manifest when encryption is switched on for an empty store, but
+    only for a run that writes to the store anyway. A ``dry_run`` preview and a
+    :attr:`SyncDirection.PULL` run must not write to the store.
     """
     listing = store.list_objects("")
     has_manifest = manifest_in_listing(listing)
@@ -105,7 +111,7 @@ def resolve_cipher(store: ObjectStore, *, encrypted: bool, dry_run: bool = False
         raise PlaintextStoreError(PLAINTEXT_STORE)
 
     manifest, cipher = new_manifest(passphrase)
-    if not dry_run:
+    if not dry_run and direction is not SyncDirection.PULL:
         save_manifest(store, manifest)
     return ResolvedCipher(cipher=cipher, listing=listing)
 

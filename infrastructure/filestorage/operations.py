@@ -259,7 +259,8 @@ def run_remote_sync(
     re-derives it. See :class:`infrastructure.filestorage.engine.SyncProgress`.
 
     Encryption is settled before anything moves: a store and a machine that
-    disagree about it fail here, with nothing uploaded or written.
+    disagree about it fail here, with nothing uploaded or written. A pull-only
+    run writes nothing remote at all.
     """
     _refuse_org_scoped_turn()
     resolved = (
@@ -273,8 +274,9 @@ def run_remote_sync(
     roots = syncable_roots()
     store = build_object_store(config)
     # Fails closed on any mismatch, and hands back the listing it had to fetch
-    # to decide, so the sync below does not list the store a second time.
-    gate = resolve_cipher(store, encrypted=config.encrypted, dry_run=dry_run)
+    # to decide, so the sync below does not list the store a second time. The
+    # direction goes with it: a pull-only run must not write a manifest.
+    gate = resolve_cipher(store, encrypted=config.encrypted, direction=resolved, dry_run=dry_run)
     return _owned_report(
         run_sync(
             store,

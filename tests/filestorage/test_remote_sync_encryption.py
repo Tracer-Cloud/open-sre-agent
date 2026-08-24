@@ -475,6 +475,42 @@ def test_a_dry_run_writes_no_manifest() -> None:
     assert store.objects == {}
 
 
+def test_pull_only_writes_nothing_to_an_empty_store(
+    monkeypatch: pytest.MonkeyPatch, home: Path
+) -> None:
+    """``--pull-only`` says "send nothing", and the gate is part of that.
+
+    Adopting encryption used to save the new manifest before the direction was
+    applied, so a pull-only run wrote to the store — and failed outright on the
+    read-only credentials such a run is entitled to use.
+    """
+    # Arrange: encryption on, a brand-new store that rejects every write.
+    from config.constants import paths
+    from config.constants.filestorage import (
+        REMOTE_SYNC_BUCKET_ENV,
+        REMOTE_SYNC_ENCRYPT_ENV,
+        REMOTE_SYNC_ENV,
+    )
+    from infrastructure.filestorage import operations
+
+    store = CrashingStore()
+    store.remaining_writes = 0
+    monkeypatch.setattr(paths, "OPENSRE_HOME_DIR", home)
+    monkeypatch.setenv(REMOTE_SYNC_ENV, "1")
+    monkeypatch.setenv(REMOTE_SYNC_BUCKET_ENV, "b")
+    monkeypatch.setenv(REMOTE_SYNC_ENCRYPT_ENV, "1")
+    monkeypatch.setattr(operations, "build_object_store", lambda _config: store)
+
+    # Act
+    report = operations.run_remote_sync(pull_only=True)
+
+    # Assert: nothing left the machine, and the empty store had nothing to give.
+    assert store.objects == {}
+    assert report is not None
+    assert report.uploaded == []
+    assert report.downloaded == []
+
+
 # ── Rotation ────────────────────────────────────────────────────────────────
 
 
