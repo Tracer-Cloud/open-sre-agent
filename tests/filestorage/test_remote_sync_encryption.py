@@ -15,6 +15,7 @@ from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 import pytest
+from cryptography.hazmat.primitives.kdf.scrypt import Scrypt
 
 from config.constants.filestorage import REMOTE_SYNC_KEY_CACHE_ENV, REMOTE_SYNC_PASSPHRASE_ENV
 from config.secrets.backend import SecretTier
@@ -23,6 +24,7 @@ from infrastructure.filestorage.contracts import RemoteObject
 from infrastructure.filestorage.encryption import envelope, keys
 from infrastructure.filestorage.encryption.cipher import ManifestCipher
 from infrastructure.filestorage.encryption.keys import (
+    MIN_SCRYPT_N,
     ScryptParams,
     derive_root_key,
     generate_root_secret,
@@ -332,6 +334,44 @@ def test_a_warm_cache_cannot_answer_for_a_different_passphrase(
     monkeypatch.setenv(REMOTE_SYNC_PASSPHRASE_ENV, "not the right one")
     with pytest.raises(WrongPassphraseError):
         resolve_cipher(store, encrypted=True)
+
+
+def _fresh_kek(salt: bytes, params: ScryptParams) -> bytes:
+    """The KEK ``derive_kek`` must produce when no cache entry applies."""
+    return Scrypt(salt=salt, length=keys.KEK_LEN, n=params.n, r=params.r, p=params.p).derive(
+        PASSPHRASE.encode("utf-8")
+    )
+
+
+def test_a_non_mapping_cache_entry_reads_as_a_miss(monkeypatch: pytest.MonkeyPatch) -> None:
+    """JSON that is not a mapping must cost a derivation, not blow up on ``.get``."""
+    # Arrange: the smallest cost this machine will honour, so the miss is cheap.
+    salt = b"salt-of-sixteen!"
+    params = ScryptParams(n=MIN_SCRYPT_N, r=8, p=1)
+    monkeypatch.setenv(REMOTE_SYNC_KEY_CACHE_ENV, "[]")
+
+    # Act / Assert
+    assert keys.derive_kek(PASSPHRASE, salt, params) == _fresh_kek(salt, params)
+
+
+def test_a_truncated_cached_key_reads_as_a_miss(monkeypatch: pytest.MonkeyPatch) -> None:
+    """A short key must not ride a matching fingerprint into AES-GCM.
+
+    The fingerprint says the entry is for this passphrase, so nothing later
+    re-checks it; the key went straight to the unwrap and failed there as a raw
+    ``ValueError`` that re-deriving could not clear.
+    """
+    # Arrange: a well-formed entry for this passphrase holding one byte of key.
+    salt = b"salt-of-sixteen!"
+    params = ScryptParams(n=MIN_SCRYPT_N, r=8, p=1)
+    entry = {
+        "fingerprint": keys._cache_fingerprint(PASSPHRASE, salt, params),
+        "kek": base64.b64encode(b"\x00").decode(),
+    }
+    monkeypatch.setenv(REMOTE_SYNC_KEY_CACHE_ENV, json.dumps(entry))
+
+    # Act / Assert
+    assert keys.derive_kek(PASSPHRASE, salt, params) == _fresh_kek(salt, params)
 
 
 def test_wrong_passphrase_stops_the_run(

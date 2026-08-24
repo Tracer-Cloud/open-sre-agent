@@ -280,12 +280,20 @@ def _cached_kek(passphrase: str, salt: bytes, params: ScryptParams) -> bytes | N
         return None
     try:
         entry = json.loads(raw)
-        if entry.get("fingerprint") != _cache_fingerprint(passphrase, salt, params):
-            return None
-        return base64.b64decode(entry["kek"])
-    except (ValueError, KeyError, TypeError):
-        # A damaged cache is a slow sync, not a failed one.
+    except ValueError:
         return None
+    if not isinstance(entry, dict):
+        return None
+    if entry.get("fingerprint") != _cache_fingerprint(passphrase, salt, params):
+        return None
+    encoded = entry.get("kek")
+    if not isinstance(encoded, str):
+        return None
+    try:
+        kek = base64.b64decode(encoded, validate=True)
+    except ValueError:
+        return None
+    return kek if len(kek) == KEK_LEN else None
 
 
 def _cache_kek(passphrase: str, salt: bytes, params: ScryptParams, kek: bytes) -> None:
