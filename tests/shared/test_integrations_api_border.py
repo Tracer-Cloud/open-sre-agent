@@ -90,8 +90,6 @@ _ALLOWED: dict[str, frozenset[str]] = {
     ),
     "surfaces": frozenset(
         {
-            "integrations.alertmanager.client",
-            "integrations.alertmanager.setup",
             "integrations.aws.role_mode_gate",
             "integrations.aws.setup",
             "integrations.betterstack.setup",
@@ -99,7 +97,6 @@ _ALLOWED: dict[str, frozenset[str]] = {
             "integrations.buzz.client",
             "integrations.buzz.credentials",
             "integrations.buzz.setup",
-            "integrations.coralogix.setup",
             "integrations.dagster.setup",
             "integrations.datadog.setup",
             "integrations.discord.setup",
@@ -116,8 +113,6 @@ _ALLOWED: dict[str, frozenset[str]] = {
             "integrations.hermes.correlator",
             "integrations.hermes.investigation",
             "integrations.hermes.sinks",
-            "integrations.honeycomb.setup",
-            "integrations.incident_io.setup",
             "integrations.jenkins.setup",
             "integrations.llm_cli.antigravity_cli",
             "integrations.llm_cli.base",
@@ -133,12 +128,9 @@ _ALLOWED: dict[str, frozenset[str]] = {
             "integrations.llm_cli.kimi",
             "integrations.llm_cli.opencode",
             "integrations.llm_cli.pi_cli",
-            "integrations.new_relic.setup",
             "integrations.openclaw.build_openclaw_config",
             "integrations.openclaw.setup",
             "integrations.openclaw.validate_openclaw_config",
-            "integrations.opensearch.setup",
-            "integrations.pagerduty.setup",
             "integrations.posthog.report_prerequisites",
             "integrations.posthog.setup",
             "integrations.posthog_mcp.build_posthog_mcp_config",
@@ -162,7 +154,6 @@ _ALLOWED: dict[str, frozenset[str]] = {
             "integrations.telegram.setup",
             "integrations.tempo.setup",
             "integrations.tracer.integrations_adapter",
-            "integrations.vercel.setup",
         }
     ),
 }
