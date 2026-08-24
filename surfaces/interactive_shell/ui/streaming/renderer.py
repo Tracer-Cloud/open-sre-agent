@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import re
+import sys
 from typing import TYPE_CHECKING
 
 from rich.console import Console
@@ -31,15 +32,18 @@ def _escape_markdown_dunder_filenames(text: str) -> str:
 def _build_markdown_block(text: str) -> Markdown:
     """Build a Markdown renderable with the shared escaping and code theme.
 
-    Constructs through the package façade (``surfaces.interactive_shell.ui.streaming.Markdown``)
-    rather than a plain ``from rich.markdown import Markdown`` here — tests substitute the
-    class by patching that package attribute, and a local import would bind a copy the
-    patch never reaches.
+    Reads the ``Markdown`` class off the already-loaded package module via
+    ``sys.modules`` rather than importing it here (directly, or by importing
+    the package back) — tests substitute the class by patching
+    ``surfaces.interactive_shell.ui.streaming.Markdown``, and any import
+    binding in this module would bind a copy that patch never reaches. A
+    ``sys.modules`` lookup carries no static import edge back to the package,
+    so it does not create the back-edge an ``import`` statement here would.
     """
-    import surfaces.interactive_shell.ui.streaming as _streaming_pkg
-
+    assert __package__  # always set for a package submodule
+    package = sys.modules[__package__]
     spaced = normalize_three_tier_spacing(text)
-    return _streaming_pkg.Markdown(
+    return package.Markdown(  # type: ignore[no-any-return]
         _escape_markdown_dunder_filenames(spaced.rstrip()),
         code_theme=ui_theme.MARKDOWN_CODE_THEME,
     )
