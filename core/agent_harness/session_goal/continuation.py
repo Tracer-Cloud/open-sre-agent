@@ -13,7 +13,7 @@ from core.agent_harness.session_goal.goal import (
 )
 
 
-def continuation_nudge(goal: SessionGoal) -> str:
+def continuation_prompt(goal: SessionGoal) -> str:
     """User-visible follow-up message for the next session-goal turn."""
     reason = goal.last_reason.strip() or derive_session_goal_reason(goal)
     reason_block = f"Last progress: {reason}\n\n"
@@ -64,5 +64,5 @@ def continuation_nudge(goal: SessionGoal) -> str:
 
 
 __all__ = [
-    "continuation_nudge",
+    "continuation_prompt",
 ]
