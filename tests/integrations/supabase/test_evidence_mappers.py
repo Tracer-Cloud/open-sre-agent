@@ -1,5 +1,7 @@
 """Evidence mapper tests for the Supabase tools."""
 
+from http import HTTPStatus
+
 from integrations.supabase.tools.supabase_health_tool import (
     _map_get_supabase_service_health,
 )
@@ -12,9 +14,9 @@ def test_service_health_mapper_records_entry_when_all_healthy() -> None:
     evidence: dict[str, object] = {}
     output = {
         "services": {
-            "postgrest": {"healthy": True, "status_code": 200},
-            "auth": {"healthy": True, "status_code": 200},
-            "storage": {"healthy": True, "status_code": 200},
+            "postgrest": {"healthy": True, "status_code": HTTPStatus.OK},
+            "auth": {"healthy": True, "status_code": HTTPStatus.OK},
+            "storage": {"healthy": True, "status_code": HTTPStatus.OK},
         },
         "degraded_services": [],
         "overall_healthy": True,
@@ -40,7 +42,7 @@ def test_service_health_mapper_names_the_degraded_services() -> None:
     output = {
         "services": {
             "postgrest": {"healthy": True},
-            "auth": {"healthy": False, "status_code": 503},
+            "auth": {"healthy": False, "status_code": HTTPStatus.SERVICE_UNAVAILABLE},
             "storage": {"healthy": False, "error": "timeout"},
         },
         "degraded_services": ["auth", "storage"],
