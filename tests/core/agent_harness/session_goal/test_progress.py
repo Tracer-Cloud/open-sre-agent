@@ -330,18 +330,18 @@ def test_attach_session_goal_strips_prompt_chrome_from_condition() -> None:
     assert attached.condition == ("what windows users number did open opensre during last 7 days?")
 
 
-def test_is_session_goal_progress_paint_uses_paint_constants() -> None:
+def test_is_session_goal_progress_text_uses_progress_constants() -> None:
     from core.agent_harness.session_goal.goal import SessionGoalReason
     from core.agent_harness.session_goal.progress import (
-        SESSION_GOAL_PAINT_MARK,
+        SESSION_GOAL_PROGRESS_MARK,
         SESSION_GOAL_USER_WORD,
-        is_session_goal_progress_paint,
+        is_session_goal_progress_text,
     )
 
-    paint = (
-        f"{SESSION_GOAL_PAINT_MARK} {SESSION_GOAL_USER_WORD} active · 0s · turn 0/4\n"
+    progress_text = (
+        f"{SESSION_GOAL_PROGRESS_MARK} {SESSION_GOAL_USER_WORD} active · 0s · turn 0/4\n"
         f"  reason: {SessionGoalReason.WAITING_HOST_SIGNAL}"
     )
-    assert is_session_goal_progress_paint(paint) is True
-    assert is_session_goal_progress_paint(SessionGoalReason.WAITING_HOST_SIGNAL) is True
-    assert is_session_goal_progress_paint("272 Windows users last 7 days.") is False
+    assert is_session_goal_progress_text(progress_text) is True
+    assert is_session_goal_progress_text(SessionGoalReason.WAITING_HOST_SIGNAL) is True
+    assert is_session_goal_progress_text("272 Windows users last 7 days.") is False
