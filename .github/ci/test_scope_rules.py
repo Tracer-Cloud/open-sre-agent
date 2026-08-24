@@ -47,6 +47,7 @@ RULES: tuple[PathRule, ...] = (
     ),
     # Shared core (always escalate)
     PathRule("core/domain/", (), always_escalate=True),
+    PathRule("core/agent_harness/session/", ("tests/core/agent_harness/session/",)),
     PathRule("core/", ("tests/core/",)),
     PathRule("tools/investigation/reporting/", ("tests/delivery/",)),
     PathRule("tools/investigation/", (), always_escalate=True),

@@ -105,6 +105,22 @@ runs the repository test suite in parallel shards.
 List the focused tests you ran in the PR description. CI is the authoritative
 repository-wide test result.
 
+## 4) Session-store locked test suite (`session-store-locked`)
+
+The `session-store-locked` CI job runs `tests/core/agent_harness/session/` with
+`OPENSRE_SESSION_FILE_LOCK=1` and an explicit per-test timeout (`--timeout=120`).
+
+- **Coverage**: Exercises cross-process write lock serialization across session
+  files (used in scale-out multi-task deployments per `docs/deployment.mdx`).
+- **Why the locked run is separate**: The file-locked path is a distinct code path
+  from the default unlocked single-process path. Testing it in a dedicated CI lane
+  with an explicit per-test timeout ensures cross-process concurrency bugs or hung
+  process-spawning tests fail fast within minutes rather than silently hanging and
+  blocking the PR queue.
+- **Gating**: In `ci-gate`, this check is required for pull requests touching
+  `core/agent_harness/session/persistence/`, and non-blocking for changes elsewhere.
+  The existing unlocked same-process tests continue to run in the default test shard.
+
 ## 8) Post-PR follow-through
 
 Opening a pull request does not end the validation cycle. Follow it through until

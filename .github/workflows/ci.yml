@@ -48,6 +48,7 @@ jobs:
     runs-on: ubuntu-latest
     outputs:
       source: ${{ steps.filter.outputs.source }}
+      session_persistence: ${{ steps.filter.outputs.session_persistence }}
     steps:
       - uses: actions/checkout@v5
       # Pin to immutable SHA (dorny/paths-filter@v4.0.2). A movable tag here
@@ -77,6 +78,8 @@ jobs:
               - ".github/ci/**"
               - ".github/workflows/ci.yml"
               - ".github/workflows/release.yml"
+            session_persistence:
+              - "core/agent_harness/session/persistence/**"
 
   quality:
     needs: [changes]
@@ -507,9 +510,45 @@ jobs:
         run: uv run ${{ matrix.command }}
         timeout-minutes: 30
 
+  session-store-locked:
+    needs: [changes]
+    if: needs.changes.outputs.source == 'true'
+    name: session-store-locked
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v10.0.1
+        with:
+          version: "latest-known"  # avoid live ndjson "latest" fetch flakes
+          enable-cache: true
+          cache-dependency-glob: |
+            pyproject.toml
+            uv.lock
+
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.13"
+
+      - name: Install dependencies
+        run: uv sync --frozen --extra dev
+
+      - name: Run session-store tests with file lock enabled
+        env:
+          OPENSRE_SESSION_FILE_LOCK: "1"
+        run: >
+          uv run python -m pytest
+          tests/core/agent_harness/session/
+          -v
+          --timeout=120
+
   ci-gate:
     name: CI Gate
-    needs: [changes, quality, test, coverage-report]
+    needs: [changes, quality, test, coverage-report, session-store-locked]
     if: always()
     runs-on: ubuntu-latest
     steps:
@@ -524,7 +563,9 @@ jobs:
           quality='${{ needs.quality.result }}'
           test_result='${{ needs.test.result }}'
           coverage='${{ needs.coverage-report.result }}'
-          echo "changes=$changes quality=$quality test=$test_result coverage-report=$coverage"
+          session_locked='${{ needs.session-store-locked.result }}'
+          session_persistence_changed='${{ needs.changes.outputs.session_persistence }}'
+          echo "changes=$changes quality=$quality test=$test_result coverage-report=$coverage session-store-locked=$session_locked session_persistence=$session_persistence_changed"
 
           # If the decision job itself failed we cannot tell whether the suite
           # was needed, so refuse rather than pass a PR nothing checked.
@@ -548,4 +589,19 @@ jobs:
           case "$coverage" in
             success|skipped) ;;
             *) echo "::error::coverage-report is $coverage"; exit 1 ;;
+          esac
+
+          # session-store-locked is required for session/persistence/ changes,
+          # and non-blocking elsewhere.
+          case "$session_locked" in
+            success) ;;
+            skipped) echo "session-store-locked skipped: no source paths changed" ;;
+            *)
+              if [ "$session_persistence_changed" = "true" ]; then
+                echo "::error::session-store-locked is $session_locked (required for session/persistence/ changes)"
+                exit 1
+              else
+                echo "session-store-locked is $session_locked (non-blocking for changes outside session/persistence/)"
+              fi
+              ;;
           esac
