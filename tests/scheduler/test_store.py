@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 from pathlib import Path
 
 import pytest
@@ -242,6 +243,110 @@ class TestAddTaskDeduplicates:
 
         # Assert
         assert len(list_tasks(store_path)) == 2
+
+
+class TestStoreDurability:
+    """Task-store failures preserve recoverable data and avoid torn writes."""
+
+    @staticmethod
+    def _task(hour: int) -> ScheduledTask:
+        return ScheduledTask(
+            name=f"digest-{hour}",
+            kind=TaskKind.DAILY_SUMMARY,
+            cron=f"0 {hour} * * *",
+            provider=Provider.TELEGRAM,
+            chat_id="-100",
+        )
+
+    def test_failed_replacement_preserves_the_previous_store(
+        self, store_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        add_task(self._task(7), store_path)
+        before = store_path.read_bytes()
+
+        def fail_replace(_source: str, _destination: Path) -> None:
+            raise OSError("replacement failed")
+
+        monkeypatch.setattr("os.replace", fail_replace)
+
+        with pytest.raises(OSError, match="replacement failed"):
+            add_task(self._task(8), store_path)
+
+        assert store_path.read_bytes() == before
+        assert [task.name for task in list_tasks(store_path)] == ["digest-7"]
+        assert list(store_path.parent.glob(f"{store_path.name}.tmp*")) == []
+
+    def test_add_quarantines_an_unreadable_store(
+        self, store_path: Path, caplog: pytest.LogCaptureFixture
+    ) -> None:
+        corrupt_bytes = b'[{"id": "lost-before-crash"}'
+        store_path.write_bytes(corrupt_bytes)
+
+        with caplog.at_level(logging.ERROR):
+            add_task(self._task(7), store_path)
+
+        recovery_files = list(store_path.parent.glob(f"{store_path.name}.corrupt-*"))
+        assert len(recovery_files) == 1
+        assert recovery_files[0].read_bytes() == corrupt_bytes
+        assert [task.name for task in list_tasks(store_path)] == ["digest-7"]
+        assert any(
+            record.levelno == logging.ERROR and str(recovery_files[0]) in record.message
+            for record in caplog.records
+        )
+
+    def test_wrong_top_level_shape_is_quarantined(self, store_path: Path) -> None:
+        corrupt_bytes = b'{"tasks": []}'
+        store_path.write_bytes(corrupt_bytes)
+
+        add_task(self._task(7), store_path)
+
+        recovery_files = list(store_path.parent.glob(f"{store_path.name}.corrupt-*"))
+        assert len(recovery_files) == 1
+        assert recovery_files[0].read_bytes() == corrupt_bytes
+        assert [task.name for task in list_tasks(store_path)] == ["digest-7"]
+
+    def test_quarantine_failure_leaves_the_corrupt_store_untouched(
+        self, store_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        corrupt_bytes = b"truncated task store"
+        store_path.write_bytes(corrupt_bytes)
+
+        def fail_replace(_source: str, _destination: Path) -> None:
+            raise OSError("quarantine failed")
+
+        monkeypatch.setattr("os.replace", fail_replace)
+
+        with pytest.raises(OSError, match="quarantine failed"):
+            add_task(self._task(7), store_path)
+
+        assert store_path.read_bytes() == corrupt_bytes
+        assert list(store_path.parent.glob(f"{store_path.name}.corrupt-*")) == []
+
+    def test_repeated_quarantines_keep_distinct_recovery_copies(self, store_path: Path) -> None:
+        first_corrupt_bytes = b"first torn write"
+        second_corrupt_bytes = b"second torn write"
+
+        store_path.write_bytes(first_corrupt_bytes)
+        add_task(self._task(7), store_path)
+        store_path.write_bytes(second_corrupt_bytes)
+        add_task(self._task(8), store_path)
+
+        recovery_files = sorted(store_path.parent.glob(f"{store_path.name}.corrupt-*"))
+        assert len(recovery_files) == 2
+        assert {path.read_bytes() for path in recovery_files} == {
+            first_corrupt_bytes,
+            second_corrupt_bytes,
+        }
+
+    def test_remove_and_update_do_not_rewrite_an_unreadable_store(self, store_path: Path) -> None:
+        corrupt_bytes = b"not valid json"
+        store_path.write_bytes(corrupt_bytes)
+        task = self._task(7)
+
+        assert remove_task(task.id, store_path) is False
+        assert update_task(task, store_path) is False
+        assert store_path.read_bytes() == corrupt_bytes
+        assert list(store_path.parent.glob(f"{store_path.name}.corrupt-*")) == []
 
 
 class TestReloadSignal:
