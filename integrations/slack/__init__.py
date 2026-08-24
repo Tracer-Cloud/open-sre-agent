@@ -7,7 +7,6 @@ from __future__ import annotations
 
 from integrations.slack.classify import classify
 from integrations.slack.formatting import markdown_to_slack_mrkdwn
-from integrations.slack.scheduled_delivery import SlackScheduledDelivery
 from integrations.slack.setup import SLACK_SETUP
 from integrations.slack.web_client import (
     SlackBotTarget,

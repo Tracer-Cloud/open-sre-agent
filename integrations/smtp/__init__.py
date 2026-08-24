@@ -7,7 +7,6 @@ from typing import Any
 
 from integrations._validation_helpers import report_classify_failure
 from integrations.config_models import SMTPIntegrationConfig
-from integrations.smtp.background_adapter import email_background_adapter
 
 logger = logging.getLogger(__name__)
 

@@ -78,9 +78,9 @@ def install_notification_adapters() -> tuple[str, ...]:
         register_outbound_adapter,
         registered_outbound_adapter_names,
     )
-    from integrations.buzz import buzz_background_adapter
-    from integrations.rocketchat import rocketchat_background_adapter
-    from integrations.smtp import email_background_adapter
+    from integrations.buzz.background_adapter import buzz_background_adapter
+    from integrations.rocketchat.background_adapter import rocketchat_background_adapter
+    from integrations.smtp.background_adapter import email_background_adapter
     from integrations.telegram.background_adapter import telegram_background_adapter
 
     for adapter in (
@@ -125,9 +125,9 @@ def scheduled_delivery_adapters() -> ScheduledDeliveryAdapters:
         InteractiveShellScheduledDelivery,
     )
     from infrastructure.scheduling.scheduler.types import Provider
-    from integrations.discord import DiscordScheduledDelivery
-    from integrations.rocketchat import RocketChatScheduledDelivery
-    from integrations.slack import SlackScheduledDelivery
+    from integrations.discord.scheduled_delivery import DiscordScheduledDelivery
+    from integrations.rocketchat.scheduled_delivery import RocketChatScheduledDelivery
+    from integrations.slack.scheduled_delivery import SlackScheduledDelivery
     from integrations.telegram.scheduled_delivery import TelegramScheduledDelivery
 
     return ScheduledDeliveryAdapters(

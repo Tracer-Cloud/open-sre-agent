@@ -15,7 +15,6 @@ from integrations.opensre.inject import (
     inject_opensre_into_resolved_integrations,
     resolve_opensre_telemetry_dir,
 )
-from integrations.opensre.llm_eval_judge import run_opensre_llm_judge
 from integrations.opensre.seed_evidence import merge_opensre_seed_into_state
 
 __all__ = [

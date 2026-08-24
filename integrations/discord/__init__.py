@@ -7,7 +7,6 @@ from typing import Any
 
 from integrations._validation_helpers import report_classify_failure
 from integrations.config_models import DiscordBotConfig
-from integrations.discord.scheduled_delivery import DiscordScheduledDelivery
 from integrations.discord.setup import DISCORD_SETUP
 
 logger = logging.getLogger(__name__)

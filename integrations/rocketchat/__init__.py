@@ -8,9 +8,7 @@ from typing import Any
 from integrations._validation_helpers import report_classify_failure
 from integrations.config_models import RocketChatConfig
 from integrations.rocketchat.alarms import RocketChatAlarmDispatcher
-from integrations.rocketchat.background_adapter import rocketchat_background_adapter
 from integrations.rocketchat.credentials import load_credentials_from_env
-from integrations.rocketchat.scheduled_delivery import RocketChatScheduledDelivery
 from integrations.rocketchat.setup import ROCKETCHAT_SETUP
 
 logger = logging.getLogger(__name__)
