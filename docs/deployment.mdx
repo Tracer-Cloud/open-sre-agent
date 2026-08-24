@@ -133,6 +133,14 @@ OPENSRE_MAX_CONCURRENT_TURNS=2
 Read the `gateway_turn_memory` debug lines (`delta_mb`, `peak_mb`) from a real run
 to size this against the task's memory limit before raising it.
 
+Queued investigations (from `POST /investigate`) run in a separate background pool
+that defaults to one at a time. Raise it to process more concurrently, still
+bounded by the turn limit above:
+
+```bash
+OPENSRE_INVESTIGATION_WORKERS=2
+```
+
 ### Dedicated scheduler service
 
 By default the gateway process also runs the cron/loop scheduler. With more than

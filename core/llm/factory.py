@@ -114,7 +114,8 @@ def get_llm(role: LLMRole) -> Any:
 
 def get_llm(role: LLMRole) -> Any:
     """Return the cached LLM client for *role*, building it once per config."""
-    cached = _cache.get(role, current_llm_client_cache_key())
+    config_key = current_llm_client_cache_key()
+    cached = _cache.get(role, config_key)
     if cached is not None:
         return cached
 
@@ -123,7 +124,7 @@ def get_llm(role: LLMRole) -> Any:
         client = client_builders.build_agent_client(route)
     else:
         client = client_builders.build_reasoning_client(route, _MODEL_TYPE_BY_ROLE[role])
-    _cache.store(role, client)
+    _cache.store(role, client, config_key)
     return client
 
 
