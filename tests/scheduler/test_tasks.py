@@ -113,13 +113,13 @@ class TestMessageBuilders:
             chat_id="-100",
         )
 
-        def _mock_build_replay(_t: ScheduledTask) -> str:
+        def _mock_build_replay(_t: ScheduledTask, _runners: SchedulerRunners) -> str:
             raise RuntimeError("Pipeline failed")
 
         monkeypatch.setattr(tasks_mod, "_build_incident_window_replay", _mock_build_replay)
 
         with pytest.raises(RuntimeError, match="Pipeline failed"):
-            tasks_mod._build_incident_window_replay(task)
+            tasks_mod._build_incident_window_replay(task, real_runners())
 
     def test_custom_investigation_pipeline_failure(self, monkeypatch: pytest.MonkeyPatch) -> None:
         task = ScheduledTask(
@@ -129,13 +129,13 @@ class TestMessageBuilders:
             chat_id="-100",
         )
 
-        def _mock_build_custom(_t: ScheduledTask) -> str:
+        def _mock_build_custom(_t: ScheduledTask, _runners: SchedulerRunners) -> str:
             raise RuntimeError("Custom investigation failed")
 
         monkeypatch.setattr(tasks_mod, "_build_custom_investigation", _mock_build_custom)
 
         with pytest.raises(RuntimeError, match="Custom investigation failed"):
-            tasks_mod._build_custom_investigation(task)
+            tasks_mod._build_custom_investigation(task, real_runners())
 
     def test_daily_summary_pipeline_failure_raises(self, monkeypatch: pytest.MonkeyPatch) -> None:
         task = ScheduledTask(
