@@ -289,6 +289,24 @@ def test_integrations_setup_accepts_smtp() -> None:
     mock_verify.assert_called_once_with("smtp")
 
 
+def test_integrations_setup_accepts_rds() -> None:
+    runner = CliRunner()
+
+    with (
+        patch("surfaces.cli.commands.integrations.capture_integration_setup_started"),
+        patch("surfaces.cli.commands.integrations.capture_integration_setup_completed"),
+        patch("surfaces.cli.commands.integrations.capture_integration_verified"),
+        patch("integrations.cli.cmd_setup") as mock_setup,
+        patch("integrations.cli.cmd_verify", return_value=0) as mock_verify,
+    ):
+        mock_setup.return_value = "rds"
+        result = runner.invoke(cli, ["integrations", "setup", "rds"])
+
+    assert result.exit_code == 0
+    mock_setup.assert_called_once_with("rds")
+    mock_verify.assert_called_once_with("rds")
+
+
 def test_integrations_setup_skips_auto_verify_for_unverifiable_service() -> None:
     runner = CliRunner()
 
@@ -298,11 +316,15 @@ def test_integrations_setup_skips_auto_verify_for_unverifiable_service() -> None
         patch("surfaces.cli.commands.integrations.capture_integration_verified"),
         patch("integrations.cli.cmd_setup") as mock_setup,
         patch("integrations.cli.cmd_verify") as mock_verify,
+        # No shipped setup service is currently unverifiable. Pin the skip
+        # path by excluding the chosen service from VERIFY_SERVICES rather
+        # than depending on a shrinking real-world leftover (opensearch, then
+        # rds, each broke this test when they gained a verifier).
+        patch(
+            "surfaces.cli.commands.integrations.constants.VERIFY_SERVICES",
+            ("github", "datadog"),
+        ),
     ):
-        # rds is registered in SETUP_SERVICES but intentionally absent from
-        # VERIFY_SERVICES, so it exercises the auto-verify-skip path.
-        # (opensearch was used here previously but moved into VERIFY_SERVICES
-        # by PR #1143, which is why this assertion was updated.)
         mock_setup.return_value = "rds"
         result = runner.invoke(cli, ["integrations", "setup", "rds"])
 
