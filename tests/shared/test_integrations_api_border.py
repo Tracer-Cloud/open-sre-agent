@@ -29,7 +29,6 @@ _ALLOWED: dict[str, frozenset[str]] = {
     "config": frozenset(),
     "infrastructure": frozenset(
         {
-            "integrations.github.identity",
             "integrations.llm_cli.errors",
         }
     ),
@@ -58,9 +57,6 @@ _ALLOWED: dict[str, frozenset[str]] = {
             "integrations.buzz.reporting_adapter",
             "integrations.datadog.correlation.registration",
             "integrations.discord.reporting_adapter",
-            "integrations.github.client",
-            "integrations.github.helpers",
-            "integrations.github.pull_requests",
             "integrations.grafana.reporting_adapter",
             "integrations.llm_cli.claude_code",
             "integrations.llm_cli.subprocess_env",
@@ -83,8 +79,6 @@ _ALLOWED: dict[str, frozenset[str]] = {
             "integrations.betterstack.setup",
             "integrations.buzz.alarms",
             "integrations.dagster.setup",
-            "integrations.github.identity",
-            "integrations.github.login",
             "integrations.github.mcp",
             "integrations.github.mcp_oauth",
             "integrations.github.setup",
