@@ -17,7 +17,7 @@ from core.agent_harness.spi.session_goal import strip_session_goal_progress_tags
 from core.llm.shared.llm_retry import CREDIT_EXHAUSTED_MARKER
 from surfaces.interactive_shell.ui import DIM
 from surfaces.interactive_shell.ui.streaming import (
-    StreamPaintResult,
+    StreamRenderResult,
     finish_deferred_closer,
     publish_full_response,
     render_response_header,
@@ -37,7 +37,7 @@ class ShellOutputSink:
 
     def __init__(self, console: Console) -> None:
         self._console = console
-        self._paint: StreamPaintResult | None = None
+        self._stream_result: StreamRenderResult | None = None
         self._defer_want_me_to_closer = False
 
     def bind_console(self, console: Console) -> None:
@@ -52,7 +52,7 @@ class ShellOutputSink:
         reads to Rich as an unbalanced markup tag and raised ``MarkupError``,
         which took the whole turn down. Styled output goes through the
         ``render_*`` methods instead. Session-goal progress tags are scrubbed
-        so a non-stream paint path cannot leak ``session_goal:done=`` /
+        so a non-stream render path cannot leak ``session_goal:done=`` /
         ``achieved`` into the TTY.
         """
         if message and "session_goal:" in message:
@@ -103,16 +103,16 @@ class ShellOutputSink:
     ) -> str:
         self._defer_want_me_to_closer = defer_want_me_to_closer
         if defer_want_me_to_closer:
-            paint = stream_to_console_state(
+            stream_result = stream_to_console_state(
                 self._console,
                 label=label,
                 chunks=iter(chunks),
                 suppress_if_starts_with=suppress_if_starts_with,
                 defer_want_me_to_closer=True,
             )
-            self._paint = paint
-            return paint.text
-        self._paint = None
+            self._stream_result = stream_result
+            return stream_result.text
+        self._stream_result = None
         return stream_to_console(
             self._console,
             label=label,
@@ -122,23 +122,23 @@ class ShellOutputSink:
 
     def finish_streamed_response(self, answer: str) -> None:
         """Flush a deferred / rewritten Want-me-to closer after gather normalize."""
-        paint = self._paint
+        stream_result = self._stream_result
         defer = self._defer_want_me_to_closer
-        self._paint = None
+        self._stream_result = None
         self._defer_want_me_to_closer = False
-        if not defer or paint is None:
+        if not defer or stream_result is None:
             return
-        if not paint.deferred_closer and answer == paint.text:
+        if not stream_result.deferred_closer and answer == stream_result.text:
             return
         # Non-TTY deferred holds the entire answer until normalize.
-        if not self._console.is_terminal and paint.deferred_closer:
+        if not self._console.is_terminal and stream_result.deferred_closer:
             publish_full_response(self._console, answer)
             return
         finish_deferred_closer(
             self._console,
             answer,
-            footer_elapsed_s=paint.footer_elapsed_s,
-            footer_total_bytes=paint.footer_total_bytes,
+            footer_elapsed_s=stream_result.footer_elapsed_s,
+            footer_total_bytes=stream_result.footer_total_bytes,
         )
 
 
