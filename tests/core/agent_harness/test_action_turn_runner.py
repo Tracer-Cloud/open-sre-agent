@@ -9,11 +9,14 @@ from __future__ import annotations
 
 import inspect
 from types import SimpleNamespace
-from typing import Any
+from typing import Any, get_type_hints
 from unittest.mock import MagicMock
 
 import pytest
+from rich.console import Console
 
+from core.agent_harness.accounting.token_accounting import LlmRunInfo
+from core.agent_harness.ports import AnswerRequest, OutputSink
 from core.agent_harness.runtime import ActionTurnRunner, TurnBinding, default_llm_factory
 from core.agent_harness.turns.headless_adapters import BufferOutputSink, NullToolProvider
 from core.agent_harness.turns.headless_agent import HeadlessAgent
@@ -22,13 +25,43 @@ from core.agent_harness.turns.turn_results import ToolCallingTurnResult
 from core.llm_invoke_errors import ProviderFailureKind, classify_llm_provider_failure
 from core.tool.execution import ToolExecutionHooks
 from infrastructure.turn_host.cancel_console import CancelConsole
-from surfaces.interactive_shell.runtime.turn_seams import bind_injected_stages
+from surfaces.interactive_shell.runtime.turn_seams import AnswerShellQuestion, bind_injected_stages
 from surfaces.interactive_shell.session import Session
 
 
 def _handled_action(text: str, **_kwargs: Any) -> ToolCallingTurnResult:
     _ = text
     return ToolCallingTurnResult(0, 0, 0, False, True)
+
+
+def _no_answer_agent(
+    message: str,
+    session: Session,
+    console: Console,
+    *,
+    request: AnswerRequest,
+    output: OutputSink | None = None,
+) -> LlmRunInfo | None:
+    """An answer stage that deliberately produces no answer."""
+    return None
+
+
+def _accept_answer_agent(agent: AnswerShellQuestion) -> AnswerShellQuestion:
+    """Static type-checking boundary for answer-stage test doubles."""
+    return agent
+
+
+def test_no_answer_agent_matches_answer_shell_question_contract() -> None:
+    """Keep the no-op seam synchronized with the production answer protocol."""
+    assert _accept_answer_agent(_no_answer_agent) is _no_answer_agent
+    expected = inspect.signature(AnswerShellQuestion.__call__)
+    actual = inspect.signature(_no_answer_agent)
+    expected_parameters = tuple(expected.parameters.values())[1:]
+    assert actual == expected.replace(parameters=expected_parameters)
+    assert get_type_hints(_no_answer_agent) == {
+        **get_type_hints(AnswerShellQuestion.__call__),
+        "return": LlmRunInfo | None,
+    }
 
 
 def test_action_turn_runner_requires_llm_factory_at_construction() -> None:
@@ -301,7 +334,7 @@ def test_long_lived_shell_agent_receives_each_turns_confirm_fn_and_tty() -> None
         is_tty=True,
         agent=agent,
         execute_actions=_spy_execute,
-        answer_agent=lambda *_a, **_k: None,
+        answer_agent=_no_answer_agent,
     )
 
     # Assert — the action stage saw the turn's callback, not the construction-time None.
@@ -370,7 +403,7 @@ def test_a_stage_injected_on_one_turn_does_not_carry_into_the_next() -> None:
         recorder=None,
         agent=agent,
         execute_actions=_fake_execute,
-        answer_agent=lambda *_a, **_k: None,
+        answer_agent=_no_answer_agent,
     )
     assert agent._execute_actions_override is not None  # noqa: SLF001
 
