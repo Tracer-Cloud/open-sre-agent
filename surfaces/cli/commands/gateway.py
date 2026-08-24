@@ -69,10 +69,15 @@ def gateway_stop_command() -> None:
 @gateway_command.command("status")
 def gateway_status_command() -> None:
     """Show the gateway daemon and its components (web, telegram, scheduler)."""
-    pid = gateway_daemon_pid()
-    click.echo(f"OpenSRE gateway: {f'running (pid {pid})' if pid else 'stopped'}")
-    _echo_components()
-    click.echo(f"Logs: {GATEWAY_LOG_FILE}")
+    from surfaces.shared import build_gateway_status_lines
+
+    lines = build_gateway_status_lines(
+        pid=gateway_daemon_pid(),
+        component_status=read_component_status(),
+        markup=False,
+    )
+    for line in lines:
+        click.echo(line)
 
 
 @gateway_command.command("logs")

@@ -10,7 +10,10 @@ helpers let the turn host log that cost from a real run instead of guessing it.
 from __future__ import annotations
 
 import logging
-import resource
+try:
+    import resource
+except ImportError:
+    resource = None
 import sys
 
 _BYTES_PER_MB = 1_048_576
@@ -23,6 +26,8 @@ def resident_memory_bytes() -> int | None:
     runtime); returns ``None`` where that file is absent so callers skip the
     measurement rather than report a wrong number.
     """
+    if resource is None:
+        return None
     try:
         with open("/proc/self/statm", encoding="ascii") as statm:
             resident_pages = int(statm.read().split()[1])
@@ -33,6 +38,8 @@ def resident_memory_bytes() -> int | None:
 
 def peak_resident_memory_bytes() -> int | None:
     """This process's peak resident memory in bytes, or ``None`` if unknown."""
+    if resource is None:
+        return None
     try:
         peak = resource.getrusage(resource.RUSAGE_SELF).ru_maxrss
     except (OSError, ValueError):

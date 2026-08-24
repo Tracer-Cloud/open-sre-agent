@@ -34,12 +34,15 @@ def _cmd_gateway(_session: Session, console: Console, args: list[str]) -> bool:
     elif sub == "stop":
         _print_outcome(console, *stop_gateway_daemon())
     elif sub == "status":
-        pid = gateway_daemon_pid()
-        state = f"[{HIGHLIGHT}]running (pid {pid})[/]" if pid else f"[{DIM}]stopped[/]"
-        console.print(f"OpenSRE gateway: {state}")
-        for name, detail in read_component_status().items():
-            console.print(f"  {escape(name)}: {escape(detail)}")
-        console.print(f"[{DIM}]logs: {GATEWAY_LOG_FILE}[/]")
+        from surfaces.shared import build_gateway_status_lines
+
+        lines = build_gateway_status_lines(
+            pid=gateway_daemon_pid(),
+            component_status=read_component_status(),
+            markup=True,
+        )
+        for line in lines:
+            console.print(line)
     elif sub == "logs":
         lines = int(args[1]) if len(args) > 1 and args[1].isdigit() else 30
         if tail := read_gateway_log_tail(lines):

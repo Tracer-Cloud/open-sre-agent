@@ -8,3 +8,7 @@ doctor checks and the bundled demo alert — or in a lower layer. Prefer ``core`
 """
 
 from __future__ import annotations
+
+from surfaces.shared.gateway_status import build_gateway_status_lines
+
+__all__ = ["build_gateway_status_lines"]
