@@ -33,6 +33,7 @@ from infrastructure.filestorage.errors import RemoteSyncConfigError
 from infrastructure.filestorage.exclusions import NO_EXCLUSIONS, ExclusionRules, parse_exclusions
 
 _TRUTHY = frozenset({"1", "true", "yes", "on"})
+_FALSEY = frozenset({"0", "false", "no", "off"})
 
 
 @dataclass(frozen=True)
@@ -106,6 +107,20 @@ def _truthy(value: object) -> bool:
     if isinstance(value, str):
         return value.strip().lower() in _TRUTHY
     return False
+
+
+def _strict_bool(value: object, source: str) -> bool:
+    """A Value that must valid, resolve to either true or false"""
+    if isinstance(value, bool):
+        return value
+    text = str(value).strip().lower()
+    if text in _TRUTHY:
+        return True
+    if text in _FALSEY:
+        return False
+    raise RemoteSyncConfigError(
+        f"{source} must be true or false (also 1/0, yes/no, on/off), not {value!r}"
+    )
 
 
 def _validated_scalar(value: Any, key: str) -> Any:
@@ -220,14 +235,18 @@ def _enabled(stored: Callable[[], dict[str, Any] | None]) -> bool:
 def _encrypted(stored: Callable[[], dict[str, Any] | None]) -> bool:
     """Whether contents are sealed before upload.
 
-    An unreadable stored section reads as "off" here, matching every other
+    A value that is neither true nor false fails the run instead of reading as
+    "off": this switch decides whether history leaves the machine readable, so
+    a typo has to stop the sync rather than quietly disable encryption.
+
+    An unreadable stored section still reads as "off", matching every other
     optional setting. That is safe in only one direction, and the direction it
     is safe in is this one: the run then meets an encrypted store with
     encryption off and is refused, rather than uploading readable history.
     """
     env = os.getenv(REMOTE_SYNC_ENCRYPT_ENV)
     if env is not None and env.strip() != "":
-        return env.strip().lower() in _TRUTHY
+        return _strict_bool(env.strip(), REMOTE_SYNC_ENCRYPT_ENV)
     section = stored()
     if section is None:
         return False

@@ -39,6 +39,7 @@ from infrastructure.filestorage.errors import (
     ManifestMissingError,
     MissingPassphraseError,
     PlaintextStoreError,
+    RemoteSyncConfigError,
     RemoteSyncEncryptionError,
     UndecryptableObjectError,
     WrongPassphraseError,
@@ -401,6 +402,40 @@ def test_status_reports_the_deleted_manifest_that_sync_refuses(
     assert "manifest" in status.encryption.problem
     with pytest.raises(ManifestMissingError):
         operations.run_remote_sync()
+
+
+def test_a_typo_in_the_encryption_switch_uploads_nothing(
+    monkeypatch: pytest.MonkeyPatch, home: Path
+) -> None:
+    """A misspelled switch fails the run instead of mirroring readable history.
+
+    ``OPENSRE_REMOTE_SYNC_ENCRYPT=treu`` used to read as "off", so an operator
+    who meant to seal the store pushed plaintext sessions into an empty one
+    instead — the store is new, so no gate could catch the disagreement later.
+    """
+    # Arrange: sync on, encryption switch misspelled, a brand-new empty store.
+    from config.constants import paths
+    from config.constants.filestorage import (
+        REMOTE_SYNC_BUCKET_ENV,
+        REMOTE_SYNC_ENCRYPT_ENV,
+        REMOTE_SYNC_ENV,
+    )
+    from infrastructure.filestorage import operations
+
+    store = FakeObjectStore()
+    monkeypatch.setattr(paths, "OPENSRE_HOME_DIR", home)
+    monkeypatch.setenv(REMOTE_SYNC_ENV, "1")
+    monkeypatch.setenv(REMOTE_SYNC_BUCKET_ENV, "b")
+    monkeypatch.setenv(REMOTE_SYNC_ENCRYPT_ENV, "treu")
+    monkeypatch.setattr(operations, "build_object_store", lambda _config: store)
+
+    # Act / Assert: the run stops, naming the variable that has to be fixed.
+    with pytest.raises(RemoteSyncConfigError, match=REMOTE_SYNC_ENCRYPT_ENV):
+        operations.run_remote_sync()
+    assert store.objects == {}
+    # Status is the other entry point that would have to guess the same switch.
+    with pytest.raises(RemoteSyncConfigError, match=REMOTE_SYNC_ENCRYPT_ENV):
+        operations.get_sync_status()
 
 
 def test_a_genuinely_plaintext_store_still_syncs_unencrypted() -> None:

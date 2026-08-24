@@ -62,7 +62,7 @@ A bucket name alone does nothing — you must also set `OPENSRE_REMOTE_SYNC=1` (
 | `BLOB_READ_WRITE_TOKEN` | Vercel Blob token (Vercel only) |
 | `OPENSRE_REMOTE_SYNC_EXCLUDE` | Comma-separated paths to skip (see below) |
 | `OPENSRE_REMOTE_SYNC_EXCLUDE_OFF` | `1` ignores exclusions for one run |
-| `OPENSRE_REMOTE_SYNC_ENCRYPT` | `1` seals contents before upload (see [Encryption](#encryption)) |
+| `OPENSRE_REMOTE_SYNC_ENCRYPT` | `1` / `true` / 'on' / 'yes' seals contents before upload.
 | `OPENSRE_REMOTE_SYNC_PASSPHRASE` | Passphrase the contents are sealed under |
 
 Env vars override `~/.opensre/config.yml` for that run. `--region` / `--profile` only work with AWS and Azure (profile = storage account); setup rejects them for other providers.
