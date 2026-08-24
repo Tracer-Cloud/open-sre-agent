@@ -21,7 +21,12 @@ def _extract_list_s3_params(sources: dict[str, dict]) -> dict:
 @tool(
     name="list_s3_objects",
     source="storage",
-    description="List objects in an S3 bucket with optional prefix filter.",
+    description=(
+        "List objects in an S3 bucket with optional prefix filter. "
+        "Use this when exploring bucket hierarchy or enumerating keys under a prefix. "
+        "Use check_s3_marker instead when verifying if a pipeline run completed by "
+        "checking for a _SUCCESS marker file."
+    ),
     use_cases=[
         "Exploring S3 bucket contents and finding relevant data files",
         "Verifying which files are present in a pipeline output location",

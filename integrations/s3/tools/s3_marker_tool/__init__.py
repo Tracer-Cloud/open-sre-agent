@@ -28,7 +28,12 @@ def _extract_check_s3_marker_params(sources: dict[str, dict]) -> dict:
 @tool(
     name="check_s3_marker",
     source="storage",
-    description="Check if a _SUCCESS marker exists in S3 storage to verify pipeline completion.",
+    description=(
+        "Check if a _SUCCESS marker exists in S3 storage to verify pipeline completion. "
+        "Use this when checking pipeline completion status or marker presence. "
+        "Use list_s3_objects instead when exploring, searching, or enumerating general files "
+        "and keys under a prefix."
+    ),
     use_cases=[
         "Verifying if a data pipeline run completed successfully",
         "Checking for presence of a _SUCCESS marker file",

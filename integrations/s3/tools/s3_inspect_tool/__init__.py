@@ -22,7 +22,12 @@ def _extract_inspect_s3_params(sources: dict[str, dict]) -> dict:
     name="inspect_s3_object",
     display_name="S3",
     source="storage",
-    description="Inspect an S3 object's metadata and sample content.",
+    description=(
+        "Inspect S3 object metadata (size, content type, etag) and sample preview content. "
+        "Use this when diagnosing schemas, lineage, or checking object headers without loading "
+        "large payloads. Use get_s3_object instead when you need the complete file content "
+        "(such as full configs, manifests, or audit payloads up to 1MB)."
+    ),
     use_cases=[
         "Tracing data lineage upstream to find root cause",
         "Identifying schema changes in input data",
@@ -42,7 +47,7 @@ def _extract_inspect_s3_params(sources: dict[str, dict]) -> dict:
     extract_params=_extract_inspect_s3_params,
 )
 def inspect_s3_object(bucket: str, key: str) -> dict:
-    """Inspect an S3 object's metadata and sample content."""
+    """Inspect S3 object metadata and sample preview content."""
     if not bucket or not key:
         return {"error": "bucket and key are required"}
 

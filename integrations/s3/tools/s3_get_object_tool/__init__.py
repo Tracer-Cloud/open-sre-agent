@@ -29,7 +29,12 @@ def _extract_get_s3_object_params(sources: dict[str, dict]) -> dict:
     name="get_s3_object",
     display_name="S3 audit",
     source="storage",
-    description="Get full S3 object content — audit payloads, configs, lineage data.",
+    description=(
+        "Get full S3 object content (audit payloads, configs, lineage data up to 1MB). "
+        "Use this when you need complete file contents for inspection or analysis. "
+        "Use inspect_s3_object instead when you only need metadata, headers, or a small "
+        "content preview."
+    ),
     use_cases=[
         "Retrieving audit payloads when audit_key found in S3 metadata",
         "Tracing external vendor interactions that caused failures",

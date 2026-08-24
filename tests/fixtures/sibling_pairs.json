@@ -1,0 +1,51 @@
+{
+  "integration": "s3",
+  "pairs": [
+    {
+      "tool_a": "inspect_s3_object",
+      "tool_b": "get_s3_object",
+      "confusion_reason": "Both tools operate on a specific S3 object (bucket and key). inspect_s3_object retrieves metadata, headers, and a preview sample without full download, whereas get_s3_object retrieves full object contents up to 1MB.",
+      "tool_a_disambiguation": {
+        "use_when": "diagnosing schemas, lineage, or checking object headers without loading large payloads",
+        "use_sibling_instead_when": "you need the complete file content (such as full configs, manifests, or audit payloads up to 1MB)"
+      },
+      "tool_b_disambiguation": {
+        "use_when": "you need complete file contents for inspection or analysis",
+        "use_sibling_instead_when": "you only need metadata, headers, or a small content preview"
+      },
+      "required_in_a": [
+        "get_s3_object",
+        "Use this when",
+        "instead"
+      ],
+      "required_in_b": [
+        "inspect_s3_object",
+        "Use this when",
+        "instead"
+      ]
+    },
+    {
+      "tool_a": "list_s3_objects",
+      "tool_b": "check_s3_marker",
+      "confusion_reason": "Both tools operate on a bucket and prefix. list_s3_objects general-purpose enumerates objects matching a prefix filter, whereas check_s3_marker specifically tests for pipeline completion via _SUCCESS marker file existence.",
+      "tool_a_disambiguation": {
+        "use_when": "exploring bucket hierarchy or enumerating keys under a prefix",
+        "use_sibling_instead_when": "verifying if a pipeline run completed by checking for a _SUCCESS marker file"
+      },
+      "tool_b_disambiguation": {
+        "use_when": "checking pipeline completion status or marker presence",
+        "use_sibling_instead_when": "exploring, searching, or enumerating general files and keys under a prefix"
+      },
+      "required_in_a": [
+        "check_s3_marker",
+        "Use this when",
+        "instead"
+      ],
+      "required_in_b": [
+        "list_s3_objects",
+        "Use this when",
+        "instead"
+      ]
+    }
+  ]
+}
