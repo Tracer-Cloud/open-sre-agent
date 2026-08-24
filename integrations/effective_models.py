@@ -93,3 +93,4 @@ class EffectiveIntegrations(StrictConfigModel):
     kubernetes: EffectiveIntegrationEntry | None = None
     new_relic: EffectiveIntegrationEntry | None = None
     yandex_cloud: EffectiveIntegrationEntry | None = None
+    rds: EffectiveIntegrationEntry | None = None

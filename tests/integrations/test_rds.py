@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import os
+from typing import Any
 from unittest.mock import patch
 
 from integrations.rds import (
@@ -13,6 +14,10 @@ from integrations.rds import (
     rds_extract_params,
     rds_is_available,
 )
+from integrations.rds.client import RDSClient
+from integrations.rds.verifier import verify_rds
+from integrations.registry import DIRECT_CLASSIFIED_EFFECTIVE_SERVICES, INTEGRATION_SPECS
+from integrations.verification import list_verifiers
 
 
 def test_build_rds_config_with_data() -> None:
@@ -170,3 +175,125 @@ def test_classify_service_instance_rds_skips_when_db_id_missing() -> None:
     )
 
     assert flat is None and resolved_key is None
+
+
+def _rds_client(identifier: str = "prod-orders-db", region: str = "us-east-1") -> RDSClient:
+    return RDSClient(RDSConfig(db_instance_identifier=identifier, region=region))
+
+
+def test_rds_spec_is_a_directly_effective_verified_integration() -> None:
+    spec = next(item for item in INTEGRATION_SPECS if item.service == "rds")
+    assert spec.has_verifier is True
+    assert spec.direct_effective is True
+    assert "rds" in DIRECT_CLASSIFIED_EFFECTIVE_SERVICES
+    assert "rds" in list_verifiers()
+
+
+def test_resolve_effective_integrations_publishes_store_configured_rds() -> None:
+    from integrations.catalog import resolve_effective_integrations
+
+    store_record = {
+        "id": "rds-1",
+        "service": "rds",
+        "status": "active",
+        "credentials": {
+            "db_instance_identifier": "prod-orders-db",
+            "region": "us-east-1",
+        },
+    }
+    resolved = resolve_effective_integrations(store_integrations=[store_record])
+    assert "rds" in resolved
+    assert resolved["rds"]["source"] == "local store"
+    assert resolved["rds"]["config"]["db_instance_identifier"] == "prod-orders-db"
+
+
+def test_probe_access_missing_identifier() -> None:
+    result = RDSClient(RDSConfig(db_instance_identifier="", region="us-east-1")).probe_access()
+    assert result.status == "missing"
+    assert "identifier" in result.detail.lower()
+
+
+def test_probe_access_success() -> None:
+    payload = {
+        "success": True,
+        "data": {
+            "DBInstances": [
+                {
+                    "DBInstanceIdentifier": "prod-orders-db",
+                    "DBInstanceStatus": "available",
+                    "Engine": "postgres",
+                }
+            ]
+        },
+        "error": None,
+    }
+    with patch(
+        "integrations.rds.client.execute_aws_sdk_call",
+        return_value=payload,
+    ) as mocked:
+        result = _rds_client().probe_access()
+
+    assert result.status == "passed"
+    assert "prod-orders-db" in result.detail
+    assert "available" in result.detail
+    mocked.assert_called_once_with(
+        service_name="rds",
+        operation_name="describe_db_instances",
+        parameters={"DBInstanceIdentifier": "prod-orders-db"},
+        region="us-east-1",
+    )
+
+
+def test_probe_access_reports_api_error() -> None:
+    with patch(
+        "integrations.rds.client.execute_aws_sdk_call",
+        return_value={
+            "success": False,
+            "error": "AWS API error (AccessDenied): not allowed",
+            "data": None,
+        },
+    ):
+        result = _rds_client().probe_access()
+
+    assert result.status == "failed"
+    assert "AccessDenied" in result.detail
+
+
+def test_probe_access_reports_missing_instance() -> None:
+    with patch(
+        "integrations.rds.client.execute_aws_sdk_call",
+        return_value={"success": True, "data": {"DBInstances": []}, "error": None},
+    ):
+        result = _rds_client().probe_access()
+
+    assert result.status == "failed"
+    assert "No RDS instance" in result.detail
+
+
+def test_verify_rds_passed_on_describe_success() -> None:
+    payload: dict[str, Any] = {
+        "success": True,
+        "data": {
+            "DBInstances": [
+                {"DBInstanceStatus": "available", "Engine": "postgres"},
+            ]
+        },
+        "error": None,
+    }
+    with patch(
+        "integrations.rds.client.execute_aws_sdk_call",
+        return_value=payload,
+    ):
+        result = verify_rds(
+            "local env",
+            {"db_instance_identifier": "prod-orders-db", "region": "eu-west-1"},
+        )
+
+    assert result["service"] == "rds"
+    assert result["status"] == "passed"
+    assert "eu-west-1" in result["detail"]
+
+
+def test_verify_rds_missing_when_identifier_blank() -> None:
+    result = verify_rds("local store", {"db_instance_identifier": "", "region": "us-east-1"})
+    assert result["status"] == "missing"

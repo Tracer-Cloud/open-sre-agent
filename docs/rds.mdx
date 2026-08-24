@@ -112,7 +112,21 @@ opensre investigate
 
 ## Verify
 
-There is no dedicated `opensre integrations verify rds` target today. Confirm AWS credentials work (see [AWS](/aws)) and that tools can describe your instance during an investigation.
+RDS has its own verifier. It calls `DescribeDBInstances` for the configured identifier — a passing AWS STS check does not prove RDS access.
+
+```bash
+opensre integrations verify rds
+```
+
+Expected output:
+
+```
+Service: rds
+Status: passed
+Detail: Reached RDS instance prod-orders-db in us-east-1; status=available engine=postgres.
+```
+
+CloudWatch, CloudTrail, EC2, EKS, ELB, S3, SQS, and Lambda have no separate setup identity and keep verifying through [`opensre integrations verify aws`](/aws).
 
 ## Troubleshooting
 

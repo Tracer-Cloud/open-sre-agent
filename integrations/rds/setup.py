@@ -9,6 +9,7 @@ from __future__ import annotations
 
 from config.constants.rds import RDS_DB_INSTANCE_IDENTIFIER_ENV, RDS_REGION_ENV
 from integrations.rds import DEFAULT_RDS_REGION
+from integrations.rds.verifier import verify_rds
 from integrations.setup_flow import IntegrationSetupSpec, SetupField
 
 DB_INSTANCE_IDENTIFIER_FIELD = "db_instance_identifier"
@@ -31,7 +32,7 @@ RDS_SETUP = IntegrationSetupSpec(
             default=DEFAULT_RDS_REGION,
         ),
     ),
-    verify=None,
+    verify=verify_rds,
 )
 
 __all__ = [

@@ -169,7 +169,7 @@ Status: passed
 Detail: Connected to AWS STS via static-creds in us-east-1; caller identity account=123456789012 arn=arn:aws:iam::123456789012:user/opensre.
 ```
 
-Inside the REPL: `/integrations verify aws` or `/verify aws`. Aliases such as `eks` also map to this check.
+Inside the REPL: `/integrations verify aws` or `/verify aws`. Aliases such as `eks` also map to this check. CloudWatch, CloudTrail, EC2, ELB, S3, SQS, and Lambda have no separate verify target; they share this AWS check. RDS has its own verifier — see [RDS](/rds).
 
 ## Troubleshooting
 
