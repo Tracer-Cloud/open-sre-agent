@@ -375,3 +375,21 @@ def classify(credentials: dict[str, Any], record_id: str) -> tuple[SentryConfig 
     if cfg.organization_slug and cfg.auth_token:
         return cfg, "sentry"
     return None, None
+
+
+__all__ = [
+    "DEFAULT_SENTRY_ISSUE_LIMIT",
+    "DEFAULT_SENTRY_STATS_PERIOD",
+    "DEFAULT_SENTRY_URL",
+    "SentryConfig",
+    "SentryValidationResult",
+    "build_sentry_config",
+    "classify",
+    "describe_sentry_api_error",
+    "get_sentry_auth_recommendations",
+    "get_sentry_issue",
+    "list_sentry_issue_events",
+    "list_sentry_issues",
+    "sentry_config_from_env",
+    "validate_sentry_config",
+]
