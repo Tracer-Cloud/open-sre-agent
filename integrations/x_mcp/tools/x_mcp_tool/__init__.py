@@ -62,7 +62,18 @@ def _has_evidence_payload(value: object) -> bool:
     if isinstance(value, (int, float)):
         return True
     if isinstance(value, dict):
-        return any(_has_evidence_payload(item) for item in value.values())
+        # MCP TextContent envelopes carry a type marker even when their visible
+        # text is empty. Only the text field determines whether that envelope
+        # should create a report entry.
+        if value.get("type") == "text" and "text" in value:
+            return _has_evidence_payload(value["text"])
+
+        # Structured boolean fields such as {"exists": false} are meaningful
+        # tool results. Preserve both answers rather than treating false as an
+        # absent payload while still ignoring a standalone boolean value.
+        return any(_has_evidence_payload(item) for item in value.values()) or any(
+            isinstance(item, bool) for item in value.values()
+        )
     if isinstance(value, (list, tuple, set)):
         return any(_has_evidence_payload(item) for item in value)
     return False

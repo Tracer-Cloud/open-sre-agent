@@ -89,6 +89,47 @@ def test_call_x_tool_records_numeric_structured_content() -> None:
     assert evidence["catalog_entries"]
 
 
+@pytest.mark.parametrize("exists", [False, True])
+def test_call_x_tool_records_boolean_structured_content(exists: bool) -> None:
+    """Boolean structured responses remain citeable for both truth values."""
+    evidence: dict[str, object] = {}
+
+    merge_tool_evidence(
+        evidence,
+        "call_x_tool",
+        {
+            "available": True,
+            "tool": "tweet-exists",
+            "structured_content": {"exists": exists},
+        },
+        {},
+    )
+
+    assert evidence["x_mcp_results"] == [
+        {"tool": "tweet-exists", "structured_content": {"exists": exists}}
+    ]
+    assert evidence["catalog_entries"]
+
+
+def test_call_x_tool_ignores_empty_text_content_envelope() -> None:
+    """A TextContent type marker alone must not create empty report evidence."""
+    evidence: dict[str, object] = {}
+
+    merge_tool_evidence(
+        evidence,
+        "call_x_tool",
+        {
+            "available": True,
+            "tool": "search-tweets",
+            "content": [{"type": "text", "text": ""}],
+        },
+        {},
+    )
+
+    assert "catalog_entries" not in evidence
+    assert "x_mcp_results" not in evidence
+
+
 def test_repeated_x_calls_accumulate_without_duplicate_catalog_rows() -> None:
     """Repeated listings and calls retain evidence behind one catalog source each."""
     evidence: dict[str, object] = {}
