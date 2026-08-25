@@ -5,6 +5,7 @@ from __future__ import annotations
 import logging
 from typing import Any, cast
 
+from core.domain.types.evidence import record_evidence_entry
 from core.tool_framework import tool
 from core.tool_framework.utils import tool_unavailable
 from integrations.aws.aws_sdk_client import execute_aws_sdk_call
@@ -17,6 +18,22 @@ from integrations.rds import (
 logger = logging.getLogger(__name__)
 
 DEFAULT_DURATION_MINUTES = 60
+
+
+def _map_describe_rds_events(
+    evidence: dict[str, Any], output: dict[str, Any], _tool_input: dict[str, Any]
+) -> None:
+    """Cite recent RDS events (failovers, maintenance, backups) as report evidence."""
+    if not output.get("available"):
+        return
+    events = output.get("events") or []
+    if events:
+        record_evidence_entry(
+            evidence,
+            source="describe_rds_events",
+            label="RDS Events",
+            summary=f"{len(events)} event(s) in the lookback window",
+        )
 
 
 @tool(
@@ -48,6 +65,7 @@ DEFAULT_DURATION_MINUTES = 60
     },
     is_available=rds_is_available,
     extract_params=rds_extract_params,
+    evidence_mapper=_map_describe_rds_events,
 )
 def describe_rds_events(
     db_instance_identifier: str,

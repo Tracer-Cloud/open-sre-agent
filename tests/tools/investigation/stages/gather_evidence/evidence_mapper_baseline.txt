@@ -26,8 +26,6 @@ check_s3_marker
 create_google_docs_incident_report
 describe_eks_addon
 describe_eks_cluster
-describe_rds_events
-describe_rds_instance
 ec2_instances_by_tag
 execute_python_code
 execute_yc_operation
