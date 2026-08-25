@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from typing import Any
 
+from core.domain.types.evidence import record_evidence_entry
 from core.domain.types.tools import ToolSurface
 from core.tool_framework import tool
 from core.tool_framework.utils import code_host_unavailable_payload
@@ -35,6 +36,21 @@ def _search_github_code_available(sources: dict[str, dict]) -> bool:
     return bool(github_source_available(sources) and gh.get("owner") and gh.get("repo"))
 
 
+def _map_search_github_code(
+    evidence: dict[str, Any], output: dict[str, Any], _input: dict[str, Any]
+) -> None:
+    matches = output.get("matches")
+    if not isinstance(matches, list) or not matches:
+        return
+    query = output.get("query", "")
+    record_evidence_entry(
+        evidence,
+        source="search_github_code",
+        label="GitHub Code Search",
+        summary=f"{len(matches)} matches: {query}" if query else f"{len(matches)} matches",
+    )
+
+
 @tool(
     name="search_github_code",
     source="github",
@@ -46,6 +62,7 @@ def _search_github_code_available(sources: dict[str, dict]) -> bool:
     ],
     requires=["owner", "repo", "query"],
     surfaces=(ToolSurface.INVESTIGATION, ToolSurface.CHAT),
+    evidence_mapper=_map_search_github_code,
     input_schema={
         "type": "object",
         "properties": {

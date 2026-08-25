@@ -5,6 +5,7 @@ from __future__ import annotations
 import math
 from typing import Any, Literal, cast
 
+from core.domain.types.evidence import record_evidence_entry
 from core.domain.types.tools import ToolSurface
 from core.tool import SideEffectLevel
 from core.tool_framework import tool
@@ -101,6 +102,44 @@ def _count_work_items(items: list[dict[str, Any]]) -> dict[str, int]:
     }
 
 
+def _map_list_github_work_items(
+    evidence: dict[str, Any], output: dict[str, Any], _input: dict[str, Any]
+) -> None:
+    items = output.get("items")
+    if not isinstance(items, list) or not items:
+        return
+    counts = output.get("counts") or {}
+    record_evidence_entry(
+        evidence,
+        source="list_github_work_items",
+        label="GitHub Work Items",
+        summary=(
+            f"{len(items)} items: {counts.get('taken', 0)} taken, "
+            f"{counts.get('up_for_grabs', 0)} up for grabs, "
+            f"{counts.get('unassigned', 0)} unassigned"
+        ),
+    )
+
+
+def _map_summarize_github_pr_status(
+    evidence: dict[str, Any], output: dict[str, Any], _input: dict[str, Any]
+) -> None:
+    prs = output.get("pull_requests")
+    if not isinstance(prs, list) or not prs:
+        return
+    counts = output.get("counts") or {}
+    record_evidence_entry(
+        evidence,
+        source="summarize_github_pr_status",
+        label="GitHub PR Status",
+        summary=(
+            f"{len(prs)} PRs: {counts.get('mergeable', 0)} mergeable, "
+            f"{counts.get('blocked', 0)} blocked, "
+            f"{counts.get('unknown', 0)} unknown"
+        ),
+    )
+
+
 @tool(
     name="list_github_work_items",
     source="github",
@@ -114,6 +153,7 @@ def _count_work_items(items: list[dict[str, Any]]) -> dict[str, int]:
     requires=["owner", "repo"],
     surfaces=(ToolSurface.INVESTIGATION, ToolSurface.CHAT),
     side_effect_level=SideEffectLevel.READ_ONLY,
+    evidence_mapper=_map_list_github_work_items,
     input_schema={
         "type": "object",
         "properties": {
@@ -254,6 +294,7 @@ def _count_prs(prs: list[dict[str, Any]]) -> dict[str, int]:
     requires=["owner", "repo"],
     surfaces=(ToolSurface.INVESTIGATION, ToolSurface.CHAT),
     side_effect_level=SideEffectLevel.READ_ONLY,
+    evidence_mapper=_map_summarize_github_pr_status,
     input_schema={
         "type": "object",
         "properties": {

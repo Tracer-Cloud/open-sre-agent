@@ -173,7 +173,6 @@ list_github_actions_run_jobs
 list_github_actions_workflow_runs
 list_github_commits
 list_github_security_alerts
-list_github_work_items
 list_gitlab_commits
 list_gitlab_mrs
 list_gitlab_pipelines
@@ -229,8 +228,6 @@ replay_slack_thread_locally
 rocketchat_send_message
 scan_redis_keys
 search_bitbucket_code
-search_github_code
-search_github_issues
 search_openclaw_conversations
 search_sentry_issues
 send_openclaw_message
@@ -242,8 +239,6 @@ slack_read_messages
 slack_reply_message
 slack_search_messages
 slack_send_message
-summarize_community_followups
-summarize_github_pr_status
 telegram_send_message
 temporal_namespace_info
 temporal_task_queue
