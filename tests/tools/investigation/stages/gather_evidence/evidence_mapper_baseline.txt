@@ -89,8 +89,6 @@ get_hermes_workflow_run
 get_host_metrics
 get_jenkins_build_log
 get_jenkins_pipeline_stages
-get_kafka_consumer_group_lag
-get_kafka_topic_health
 get_lambda_configuration
 get_lambda_errors
 get_lambda_invocation_logs
