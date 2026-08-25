@@ -150,7 +150,6 @@ def test_model_question_answered_when_handed_off(
         session,
         console,
         recorder=None,
-        gather_evidence=lambda *_a, **_k: None,
         answer_agent=_spy_answer,
     )
 
@@ -212,7 +211,6 @@ def test_model_question_handoff_answers_from_active_llm_context(
         session,
         console,
         recorder=None,
-        gather_evidence=lambda *_a, **_k: None,
     )
 
     assert result.action_result.handled is False

@@ -24,12 +24,6 @@ class PromptBlockId(StrEnum):
     ACTION_SKILLS = "action-agent-skills"
     ACTION_SETUP_STATE = "action-agent-setup-state"
 
-    # Gather envelope.
-    GATHER_SYSTEM_BASE = "gather-system-base"
-    GATHER_VENDOR_FRAGMENTS = "gather-vendor-fragments"
-    GATHER_CONNECTED_INTEGRATIONS = "gather-connected-integrations"
-    GATHER_PRIOR_INVESTIGATION = "gather-prior-investigation"
-
     # Shared across envelopes.
     CONNECTED_INTEGRATIONS = "connected-integrations"
     LONG_TERM_MEMORY = "long-term-memory"

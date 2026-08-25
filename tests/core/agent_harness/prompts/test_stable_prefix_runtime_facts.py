@@ -109,9 +109,6 @@ def test_full_prompt_places_live_facts_immediately_before_user_message() -> None
         def setup_state(self) -> str:
             return ""
 
-        def suggested_synthetic_prompt(self) -> str:
-            return "try again"
-
         def log_diagnostics(self, reason: str) -> None:  # noqa: ARG002 - stub
             return None
 
@@ -187,9 +184,6 @@ def test_render_captures_runtime_facts_once_and_shares_it() -> None:
             return ""
 
         def setup_state(self) -> str:
-            return ""
-
-        def suggested_synthetic_prompt(self) -> str:
             return ""
 
         def log_diagnostics(self, reason: str) -> None:  # noqa: ARG002 - stub

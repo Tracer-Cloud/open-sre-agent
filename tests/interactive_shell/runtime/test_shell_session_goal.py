@@ -53,9 +53,6 @@ def test_run_harness_turn_continues_when_action_emits_session_goal() -> None:
             handoff_contents=handoffs,
         )
 
-    def _gather(*_a: object, **_k: object) -> str:
-        return "no live evidence"
-
     def _answer(text: str, *_a: object, **_k: object) -> MagicMock:
         answer_calls.append(text)
         n = len(answer_calls)
@@ -68,7 +65,6 @@ def test_run_harness_turn_continues_when_action_emits_session_goal() -> None:
         recorder=None,
         is_tty=False,
         execute_actions=_execute,
-        gather_evidence=_gather,
         answer_agent=_answer,
     )
 
@@ -109,7 +105,6 @@ def test_run_harness_turn_prints_checklist_progress(capsys: Any) -> None:
         recorder=None,
         is_tty=False,
         execute_actions=_execute,
-        gather_evidence=lambda *_a, **_k: "e",
         answer_agent=_answer,
     )
 
@@ -151,7 +146,6 @@ def test_run_harness_turn_does_not_loop_on_user_prose_alone() -> None:
         recorder=None,
         is_tty=False,
         execute_actions=_execute,
-        gather_evidence=lambda *_a, **_k: "e",
         answer_agent=_answer,
     )
 
@@ -206,7 +200,6 @@ def test_run_harness_turn_continues_from_typed_assistant_handoff() -> None:
         recorder=None,
         is_tty=False,
         execute_actions=_execute,
-        gather_evidence=lambda *_a, **_k: "e",
         answer_agent=_answer,
     )
 

@@ -4,7 +4,7 @@
 session + output in memory (scripts, tests, a turn with zero configuration).
 :class:`DefaultHeadlessBuild` is session + output + console + logger +
 error reporter (gateway ``SessionAgentPool``, the REPL, ``AgentSession.start``).
-Both build through ``.agent(tools=…, prompts=…, gather=…)``; hosts never
+Both build through ``.agent(tools=…, prompts=…)``; hosts never
 construct :class:`HeadlessAgent` directly.
 
 Per-message values are bound on the agent with :meth:`HeadlessAgent.handle`
@@ -44,7 +44,6 @@ from core.agent_harness.prompts.grounding import (
 )
 from core.agent_harness.tools.tool_provider import DefaultToolProvider
 from core.agent_harness.turns.default_reasoning_client import DefaultReasoningClientProvider
-from core.agent_harness.turns.gather_phase import GATHER_DISABLED, GatherPhase
 from core.agent_harness.turns.headless_adapters import (
     BufferOutputSink,
     EmptyPromptContextProvider,
@@ -93,7 +92,6 @@ class InMemoryHeadlessBuild:
         *,
         tools: ToolProvider,
         prompts: PromptContextProvider | None = None,
-        gather: GatherPhase | None = None,
         llm_factory: LlmFactory | None = None,
     ) -> HeadlessAgent:
         return HeadlessAgent(
@@ -106,7 +104,6 @@ class InMemoryHeadlessBuild:
             ),
             run_factory=SimpleRunRecordFactory(),
             error_reporter=NoopErrorReporter(),
-            gather=gather if gather is not None else GATHER_DISABLED,
             llm_factory=llm_factory if llm_factory is not None else default_llm_factory,
         )
 
@@ -184,14 +181,12 @@ class DefaultHeadlessBuild:
         *,
         tools: ToolProvider | None = None,
         prompts: PromptContextProvider | None = None,
-        gather: GatherPhase | None = None,
         llm_factory: LlmFactory | None = None,
     ) -> HeadlessAgent:
         """The agent on this family; each port a host passes replaces that default.
 
-        ``gather`` defaults to disabled because the evidence pass reaches live
-        integrations. ``is not None`` rather than ``or``: a provider defining
-        ``__bool__`` must not be silently replaced.
+        ``is not None`` rather than ``or``: a provider defining ``__bool__``
+        must not be silently replaced.
         """
         return HeadlessAgent(
             session=self.session,
@@ -201,7 +196,6 @@ class DefaultHeadlessBuild:
             reasoning=self.reasoning(),
             run_factory=self.run_factory(),
             error_reporter=self._error_reporter,
-            gather=gather if gather is not None else GATHER_DISABLED,
             llm_factory=llm_factory if llm_factory is not None else default_llm_factory,
         )
 
@@ -214,15 +208,13 @@ def resolve_agent_ports(
     logger: logging.Logger,
     observer: ToolEventObserver | None = None,
     default_tools: Callable[[], ToolProvider] | None = None,
-    default_gather: GatherPhase | None = None,
-) -> tuple[ToolProvider | None, PromptContextProvider | None, GatherPhase | None]:
-    """Resolve ``(tools, prompts, gather)`` from a host's :class:`AgentBuildConfig`.
+) -> tuple[ToolProvider | None, PromptContextProvider | None]:
+    """Resolve ``(tools, prompts)`` from a host's :class:`AgentBuildConfig`.
 
-    The single expansion of ``build_tools`` / ``build_prompts`` / ``build_gather``,
-    each falling back to ``default_tools`` / ``None`` / ``default_gather`` when
-    the hook is omitted. Callers pass the result to
-    ``DefaultHeadlessBuild(...).agent(...)``. The gateway pool and the shell
-    builder share this so both expand a config the same way.
+    The single expansion of ``build_tools`` / ``build_prompts``, each falling
+    back to ``default_tools`` / ``None`` when the hook is omitted. Callers
+    pass the result to ``DefaultHeadlessBuild(...).agent(...)``. The gateway
+    pool and the shell builder share this so both expand a config the same way.
 
     ``config.apply_capability_policy`` is the caller's to run, not this
     function's: the pool applies it every turn (the session is re-resolved even
@@ -235,10 +227,7 @@ def resolve_agent_ports(
     else:
         tools = None
     prompts = config.build_prompts(session) if config.build_prompts is not None else None
-    gather = (
-        config.build_gather(session, console) if config.build_gather is not None else default_gather
-    )
-    return tools, prompts, gather
+    return tools, prompts
 
 
 __all__ = ["DefaultHeadlessBuild", "InMemoryHeadlessBuild", "resolve_agent_ports"]

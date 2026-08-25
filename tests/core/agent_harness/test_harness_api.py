@@ -42,7 +42,6 @@ PORTS = frozenset(
         "ConfirmFn",
         "ConsoleBindable",
         "ErrorReporter",
-        "EvidenceGatherer",
         "ExecuteActions",
         "GatheredEvidence",
         "InvestigationPortsFactory",
@@ -158,7 +157,6 @@ SPI_ROLE_NAMES: dict[str, frozenset[str]] = {
 
 RUNTIME = frozenset(
     {
-        "MAX_REPORT_GATHER_ITERATIONS",
         "ActionTurnRunner",
         "AgentBuildConfig",
         "AgentBusyError",
@@ -166,7 +164,6 @@ RUNTIME = frozenset(
         "DefaultHeadlessBuild",
         "DescribeTool",
         "DefaultToolProvider",
-        "GatherPhase",
         "HeadlessAgent",
         "InMemoryHeadlessBuild",
         "TurnBinding",

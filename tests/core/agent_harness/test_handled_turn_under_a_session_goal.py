@@ -46,12 +46,7 @@ def test_an_active_goal_does_not_send_a_handled_turn_through_gather() -> None:
     attach_session_goal(
         session, SessionGoal(condition="report the github error rate", max_outer_turns=5)
     )
-    gather_calls: list[str] = []
     answer_calls: list[str] = []
-
-    def _gather(text: str, *_a: object, **_k: object) -> str:
-        gather_calls.append(text)
-        return "workflow runs over the last 24 hours"
 
     def _answer(text: str, _request: AnswerRequest, **_k: Any) -> Any:
         answer_calls.append(text)
@@ -62,13 +57,11 @@ def test_an_active_goal_does_not_send_a_handled_turn_through_gather() -> None:
         "what's the current error rate on github?",
         session,
         execute_actions=_handled_by_the_action_phase,
-        gather=_gather,
         answer=_answer,
         accounting=DefaultTurnAccounting(session, "what's the current error rate on github?"),
     )
 
-    # Assert: one answer, the action's — no second number from gather.
-    assert gather_calls == []
+    # Assert: one answer, the action's — no second streamed number.
     assert answer_calls == []
     assert result.final_intent == "cli_agent_handled"
     assert "5.14%" not in (result.assistant_response_text or "")

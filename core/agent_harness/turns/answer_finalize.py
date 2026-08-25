@@ -176,7 +176,7 @@ def finalize_routed_answer(
         and not suppress_investigate
     ):
         if (
-            route_intent == "gather_and_answer"
+            route_intent == "answer"
             and not is_prior_investigation_follow_up_handoff(handoff_contents)
             and not is_non_investigation_handoff(handoff_contents)
         ):
@@ -194,9 +194,9 @@ def finalize_routed_answer(
                 assistant_text=text,
                 observation=evidence_for_offer,
             )
-            if route_intent == "gather_and_answer":
+            if route_intent == "answer":
                 finish_stream = True
-    elif route_intent == "gather_and_answer" and (
+    elif route_intent == "answer" and (
         text_changed_after_streaming or suppress_for_goal
     ):
         # Flush deferred Want-me-to (or drop it) when a session goal owns

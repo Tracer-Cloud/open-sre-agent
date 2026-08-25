@@ -10,29 +10,48 @@ from __future__ import annotations
 from collections.abc import Callable, Sequence
 
 from core.agent_harness.prompts.assistant.parts import AssistantPromptParts
-from core.agent_harness.prompts.assistant.text import (
-    CLI_PREAMBLE,
-    DOCS_PREAMBLE,
-    GATEWAY_PREAMBLE,
-    INTERACTION_RULES,
-    LONG_TERM_MEMORY_PREAMBLE,
-    MARKDOWN_RULE,
-    PRIOR_ACTION_FACTS_PREAMBLE,
-    PRIOR_INVESTIGATION_FOLLOW_UP_RULE,
-    RESPONSE_SHAPE_RULE,
-    SETUP_GUIDANCE_RULE,
-    SOURCE_SCOPED_INVESTIGATION_RULE,
-    TERMINOLOGY_RULE,
-)
 from core.agent_harness.prompts.kernel.envelope import (
     PromptBlock,
     PromptBlockKind,
     PromptTier,
 )
 from core.agent_harness.prompts.kernel.surfaces import SurfaceProfile
+from core.agent_harness.prompts.rules import (
+    AGENT_RESPONSE_THREE_TIER_RULE,
+    CLI_ASSISTANT_MARKDOWN_RULE,
+    INTERACTIVE_SHELL_TERMINOLOGY_RULE,
+)
+from core.agent_harness.prompts.system_prompt import OPENSRE_SYSTEM_PROMPT
 from infrastructure.harness_providers import (
     assistant_prompt_vendor_fragments,
     gateway_persona_fragments,
+)
+
+DOCS_PREAMBLE = (
+    "--- Documentation reference (docs/) ---\n"
+    "Relevant OpenSRE documentation pages for this question. When answering "
+    "how to configure or set up something, use these to give the complete "
+    "procedure — including steps that happen outside OpenSRE (creating "
+    "accounts, API keys, bots, OAuth apps, finding IDs) — not just the "
+    "in-tool command. Do not invent steps beyond what these pages state.\n"
+)
+
+PRIOR_ACTION_FACTS_PREAMBLE = (
+    "--- Prior action facts in this session ---\n"
+    "These are extracted from earlier persisted assistant/tool outputs. Use "
+    "them for follow-up questions and comparisons; do not ask the user to "
+    "paste values that are already listed here.\n"
+)
+
+LONG_TERM_MEMORY_PREAMBLE = (
+    "--- Long-term memory ---\n"
+    "Durable knowledge stored locally in ~/.opensre/memory (view/edit with "
+    "/memory). Facts below are injected into every chat turn — use them to "
+    "personalize answers and never re-ask for information already listed. "
+    "Treat listed bodies as ground truth; do not invent details beyond them. "
+    "The action planner may save, recall, or delete memories before this "
+    "assistant runs; do not claim a memory was saved, updated, or forgotten "
+    "unless the current tool results confirm it.\n"
 )
 
 _HERE = "core.agent_harness.prompts.assistant.blocks"
@@ -52,68 +71,14 @@ def _block(
 
 
 def contribute_preamble(parts: AssistantPromptParts, profile: SurfaceProfile) -> list[PromptBlock]:
-    _ = parts
+    _ = parts, profile
     return [
         _block(
             "assistant-preamble",
-            CLI_PREAMBLE if profile.cli_rules else GATEWAY_PREAMBLE,
+            "".join((OPENSRE_SYSTEM_PROMPT.rstrip("\n"), "\n\n")),
             kind=PromptBlockKind.SYSTEM,
             tier=PromptTier.STABLE,
-            provenance=_HERE,
-        )
-    ]
-
-
-def contribute_interaction_rules(
-    parts: AssistantPromptParts, profile: SurfaceProfile
-) -> list[PromptBlock]:
-    _ = parts, profile
-    return [
-        _block(
-            "assistant-interaction-rules",
-            INTERACTION_RULES,
-            kind=PromptBlockKind.RULE,
-            tier=PromptTier.STABLE,
-            provenance=_HERE,
-        ),
-        _block(
-            "assistant-prior-investigation-rule",
-            f"{PRIOR_INVESTIGATION_FOLLOW_UP_RULE}\n\n",
-            kind=PromptBlockKind.RULE,
-            tier=PromptTier.STABLE,
-            provenance=_HERE,
-        ),
-    ]
-
-
-def contribute_cli_setup_guidance(
-    parts: AssistantPromptParts, profile: SurfaceProfile
-) -> list[PromptBlock]:
-    _ = parts
-    if not profile.cli_rules:
-        return []
-    return [
-        _block(
-            "assistant-setup-guidance",
-            f"{SETUP_GUIDANCE_RULE}\n\n",
-            kind=PromptBlockKind.RULE,
-            tier=PromptTier.STABLE,
-            provenance=_HERE,
-        )
-    ]
-
-
-def contribute_source_scoped_rule(
-    parts: AssistantPromptParts, profile: SurfaceProfile
-) -> list[PromptBlock]:
-    _ = parts, profile
-    return [
-        _block(
-            "assistant-source-scoped-rule",
-            f"{SOURCE_SCOPED_INVESTIGATION_RULE}\n\n",
-            kind=PromptBlockKind.RULE,
-            tier=PromptTier.STABLE,
-            provenance=_HERE,
+            provenance="core.agent_harness.prompts.action.opensre_system_prompt.md",
         )
     ]
 
@@ -145,7 +110,7 @@ def contribute_cli_response_shape(
     return [
         _block(
             "assistant-response-shape",
-            f"{RESPONSE_SHAPE_RULE}\n\n",
+            f"{AGENT_RESPONSE_THREE_TIER_RULE}\n\n",
             kind=PromptBlockKind.RULE,
             tier=PromptTier.STABLE,
             provenance=_HERE,
@@ -182,7 +147,7 @@ def contribute_cli_terminology(
     return [
         _block(
             "assistant-terminology",
-            f"{TERMINOLOGY_RULE}\n",
+            f"{INTERACTIVE_SHELL_TERMINOLOGY_RULE}\n",
             kind=PromptBlockKind.RULE,
             tier=PromptTier.STABLE,
             provenance=_HERE,
@@ -201,7 +166,7 @@ def contribute_markdown_rule(
     return [
         _block(
             "assistant-markdown-rule",
-            f"{MARKDOWN_RULE}\n\n",
+            f"{CLI_ASSISTANT_MARKDOWN_RULE}\n\n",
             kind=PromptBlockKind.RULE,
             tier=PromptTier.STABLE,
             provenance=_HERE,
@@ -374,9 +339,6 @@ def contribute_recent_conversation(
 #: contributor decides from parts + profile whether to emit blocks.
 ASSISTANT_BLOCK_CONTRIBUTORS: tuple[Contributor, ...] = (
     contribute_preamble,
-    contribute_interaction_rules,
-    contribute_cli_setup_guidance,
-    contribute_source_scoped_rule,
     contribute_vendor_fragments,
     contribute_cli_response_shape,
     contribute_gateway_persona,

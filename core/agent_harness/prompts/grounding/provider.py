@@ -5,7 +5,6 @@ from __future__ import annotations
 from collections.abc import Mapping
 from typing import Any
 
-from config.constants.prompts import SUGGESTED_PROMPT_AFTER_FAILED_SYNTHETIC_TEST
 from core.agent_harness.grounding.investigation_flow_reference import (
     build_investigation_flow_reference_text,
 )
@@ -152,9 +151,6 @@ class DefaultPromptContextProvider:
         if not profile.setup_state:
             return ""
         return cached_setup_state(self._visible_integrations())
-
-    def suggested_synthetic_prompt(self) -> str:
-        return SUGGESTED_PROMPT_AFTER_FAILED_SYNTHETIC_TEST
 
     def log_diagnostics(self, reason: str) -> None:
         self._session.grounding.log_cache_diagnostics(reason)

@@ -29,7 +29,6 @@ from typing import Any
 
 import pytest
 
-from config.constants.prompts import SUGGESTED_PROMPT_AFTER_FAILED_SYNTHETIC_TEST
 from core.agent_harness.grounding.investigation_flow_reference import (
     build_investigation_flow_reference_text,
 )
@@ -126,9 +125,6 @@ class _StubPromptContextProvider:
     def setup_state(self) -> str:
         return ""
 
-    def suggested_synthetic_prompt(self) -> str:
-        return SUGGESTED_PROMPT_AFTER_FAILED_SYNTHETIC_TEST
-
     def log_diagnostics(self, reason: str) -> None:  # noqa: ARG002 - stub
         return None
 
@@ -166,7 +162,7 @@ def _prompts(
     )
 
 
-def _build_cases(tmp_path: Path) -> dict[str, str]:
+def _build_cases() -> dict[str, str]:
     """Render every prompt variant. Keys are stable snapshot identifiers."""
     cases: dict[str, str] = {}
 
@@ -286,34 +282,14 @@ def _build_cases(tmp_path: Path) -> dict[str, str]:
         runtime=_FROZEN_RUNTIME,
     )
 
-    obs_path = tmp_path / "synthetic_observation.json"
-    obs_path.write_text(
-        json.dumps({"scenario": "005-failover", "passed": False, "score": 0.4}),
-        encoding="utf-8",
-    )
-    synthetic_prompt = build_cli_agent_prompt_from_provider(
-        message="why did it fail?",
-        prompts=_prompts(),
-        tool_observation=None,
-        tool_observation_on_screen=True,
-        turn_snapshot=_agent_ctx(
-            text="why did it fail?",
-            last_synthetic_observation_path=str(obs_path),
-        ),
-        runtime=_FROZEN_RUNTIME,
-    )
-    # The observation path is the per-run tmp dir; normalize it so the snapshot
-    # stays deterministic while every other byte of the block is still pinned.
-    cases["cli_agent_synthetic_failure"] = synthetic_prompt.replace(str(obs_path), "<OBS_PATH>")
-
     return cases
 
 
-def test_prompt_assembly_is_byte_identical(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+def test_prompt_assembly_is_byte_identical(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(
         "config.runtime_metadata.capture_runtime_facts", lambda **_kw: dict(_FROZEN_STATIC)
     )
-    cases = _build_cases(tmp_path)
+    cases = _build_cases()
 
     if os.environ.get("UPDATE_PROMPT_SNAPSHOT") == "1":
         _SNAPSHOT_PATH.write_text(

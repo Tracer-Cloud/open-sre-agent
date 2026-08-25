@@ -45,4 +45,4 @@ runs: 3
 tool_actions:
 - surface: gather
   tool: search_github_issues
-  expect: called
+  expect: not_called

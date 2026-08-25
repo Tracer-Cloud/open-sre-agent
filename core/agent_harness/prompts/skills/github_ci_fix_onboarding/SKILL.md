@@ -70,7 +70,7 @@ own reply:
 
 - Never emit `assistant_handoff` for any part of this flow — not to report
   progress, not to explain a blocker, and not after the checks pass. A handoff
-  routes the turn into the generic evidence-gather pass, which does not know
+  routes the turn into a generic assistant answer, which does not know
   this workflow and will answer with unrelated GitHub status reads.
 - Never call engineering-status gather tools (`generate_work_status_report`,
   `list_github_work_items`, `summarize_github_pr_status`) here. Onboarding is

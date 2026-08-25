@@ -288,7 +288,6 @@ def test_run_turn_dogfood_dual_menu_yes_still_starts_investigation() -> None:
         session,
         execute_actions=execute_actions,
         answer=lambda *_a, **_k: _Run(),
-        gather=lambda *_a, **_k: "connection refused",
         accounting=NoopTurnAccounting(),
     )
 
@@ -303,7 +302,6 @@ def test_run_turn_dogfood_dual_menu_yes_still_starts_investigation() -> None:
         session,
         execute_actions=execute_actions,
         answer=lambda *_a, **_k: None,
-        gather=lambda *_a, **_k: None,
         accounting=NoopTurnAccounting(),
     )
     assert len(seen) == 1
@@ -336,7 +334,6 @@ def test_run_turn_does_not_arm_investigation_when_capability_disabled() -> None:
         session,
         execute_actions=execute_actions,
         answer=lambda *_a, **_k: _Run(),
-        gather=lambda *_a, **_k: "connection refused",
         accounting=NoopTurnAccounting(),
     )
 
@@ -352,7 +349,7 @@ def test_run_turn_arms_then_yes_dispatches_investigation() -> None:
 
     def execute_actions(text: str, **_kwargs: object) -> ToolCallingTurnResult:
         seen.append(text)
-        # Diagnostic turn: hand off so gather+answer runs.
+        # Diagnostic turn: hand off so the assistant answers.
         if not text.startswith("/investigate "):
             return ToolCallingTurnResult(
                 planned_count=1,
@@ -382,22 +379,16 @@ def test_run_turn_arms_then_yes_dispatches_investigation() -> None:
         _ = text, request
         return _Run()
 
-    def gather(text: str, *, turn_plan: object = None) -> str:
-        _ = text, turn_plan
-        return "p95 latency 2.1s on checkout-db"
-
     run_turn(
         "why is the database slow?",
         session,
         execute_actions=execute_actions,
         answer=answer,
-        gather=gather,
         accounting=NoopTurnAccounting(),
     )
 
     assert session.pending_investigation_offer is not None
     assert "why is the database slow?" in session.pending_investigation_offer.alert_text
-    assert "p95 latency" in session.pending_investigation_offer.alert_text
 
     seen.clear()
     run_turn(
@@ -405,7 +396,6 @@ def test_run_turn_arms_then_yes_dispatches_investigation() -> None:
         session,
         execute_actions=execute_actions,
         answer=lambda *_a, **_k: None,
-        gather=lambda *_a, **_k: None,
         accounting=NoopTurnAccounting(),
     )
 
@@ -438,7 +428,6 @@ def test_failed_investigation_keeps_pending_offer() -> None:
         session,
         execute_actions=execute_actions,
         answer=lambda *_a, **_k: None,
-        gather=lambda *_a, **_k: None,
         accounting=NoopTurnAccounting(),
     )
     assert session.pending_investigation_offer is not None

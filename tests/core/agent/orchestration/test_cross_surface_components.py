@@ -54,8 +54,7 @@ def test_gateway_turn_runner_delegates_to_agent_dispatch(monkeypatch: pytest.Mon
     assert ctor.kwargs["session"] is session
     assert isinstance(ctor.kwargs["output"], BindableOutput)
     assert ctor.kwargs["output"].bound is sink
-    # Gateway turns gather live evidence; the ports object carries that now.
-    assert ctor.kwargs["gather"].enabled is True
+    assert "gather" not in ctor.kwargs
     assert ctor.kwargs["surface"] == "gateway"
     tool_provider = DefaultToolProvider(
         ctor.kwargs["session"],
@@ -103,9 +102,6 @@ def test_run_turn_routes_unhandled_action_to_answer_callback() -> None:
         answer_calls.append(text)
         return type("Run", (), {"response_text": "answered"})()
 
-    def gather(_text: str, **_kwargs: object) -> None:
-        return None
-
     class _Accounting:
         def record_action_result(self, _result: ToolCallingTurnResult) -> None:
             return None
@@ -119,7 +115,6 @@ def test_run_turn_routes_unhandled_action_to_answer_callback() -> None:
         session,
         execute_actions=execute_actions,
         answer=answer,
-        gather=gather,
         accounting=_Accounting(),
     )
 
@@ -148,9 +143,6 @@ def test_run_turn_builds_turn_plan_for_action_path(
     def answer(_text: str, _request: object = None, **_kwargs: object) -> object:
         return type("Run", (), {"response_text": "answered"})()
 
-    def gather(_text: str, **_kwargs: object) -> None:
-        return None
-
     class _Accounting:
         def record_action_result(self, _result: ToolCallingTurnResult) -> None:
             return None
@@ -164,53 +156,11 @@ def test_run_turn_builds_turn_plan_for_action_path(
         session,
         execute_actions=execute_actions,
         answer=answer,
-        gather=gather,
         accounting=_Accounting(),
     )
 
     assert captured, "execute_actions was never called"
     assert captured[0].resolved_integrations == resolved
-
-
-def test_run_turn_passes_turn_plan_to_gather(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    """run_turn hands the gather phase the turn_plan carrying resolved integrations (no re-resolve)."""
-    resolved = {"github": {"configured": True}}
-    monkeypatch.setattr(
-        "core.agent_harness.turns.turn_plan.resolve_and_cache_integrations",
-        lambda _session: resolved,
-    )
-    gather_calls: list[Any] = []
-
-    def execute_actions(_text: str, **_kwargs: object) -> ToolCallingTurnResult:
-        return ToolCallingTurnResult(0, 0, 0, False, False)
-
-    def answer(_text: str, _request: object = None, **_kwargs: object) -> object:
-        return type("Run", (), {"response_text": "answered"})()
-
-    def gather(_text: str, *, turn_plan: Any = None, **_kwargs: object) -> None:
-        gather_calls.append(turn_plan.resolved_integrations if turn_plan is not None else None)
-        return None
-
-    class _Accounting:
-        def record_action_result(self, _result: ToolCallingTurnResult) -> None:
-            return None
-
-        def finalize(self, result: TurnResult) -> TurnResult:
-            return result
-
-    session = Session(store=InMemorySessionStore())
-    run_turn(
-        "hi",
-        session,
-        execute_actions=execute_actions,
-        answer=answer,
-        gather=gather,
-        accounting=_Accounting(),
-    )
-
-    assert gather_calls == [resolved]
 
 
 def test_run_turn_passes_turn_plan_to_answer(
@@ -231,9 +181,6 @@ def test_run_turn_passes_turn_plan_to_answer(
         answer_plans.append(getattr(request, "turn_plan", None))
         return type("Run", (), {"response_text": "answered"})()
 
-    def gather(_text: str, **_kwargs: object) -> None:
-        return None
-
     class _Accounting:
         def record_action_result(self, _result: ToolCallingTurnResult) -> None:
             return None
@@ -247,7 +194,6 @@ def test_run_turn_passes_turn_plan_to_answer(
         session,
         execute_actions=execute_actions,
         answer=answer,
-        gather=gather,
         accounting=_Accounting(),
     )
 

@@ -14,7 +14,6 @@ from dataclasses import dataclass
 
 from core.agent_harness.ports import (
     ConfirmFn,
-    EvidenceGatherer,
     ExecuteActions,
     OutputSink,
     SessionState,
@@ -35,7 +34,6 @@ class ChatTurnBindings:
 
     execute_actions: ExecuteActions
     answer: StreamAnswerFn
-    gather: EvidenceGatherer
     accounting: TurnAccounting
     confirm_fn: ConfirmFn | None = None
     is_tty: bool | None = None
@@ -58,7 +56,6 @@ def dispatch_chat_turn(
         session,
         execute_actions=bindings.execute_actions,
         answer=bindings.answer,
-        gather=bindings.gather,
         accounting=bindings.accounting,
         confirm_fn=bindings.confirm_fn,
         is_tty=bindings.is_tty,

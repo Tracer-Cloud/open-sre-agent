@@ -223,9 +223,6 @@ class PromptContextProvider(Protocol):
     def setup_state(self) -> str:
         """The operator's connected integrations and schedules, as a fact block."""
 
-    def suggested_synthetic_prompt(self) -> str:
-        raise NotImplementedError
-
     def log_diagnostics(self, reason: str) -> None:
         raise NotImplementedError
 
@@ -281,18 +278,6 @@ class StreamAnswerFn(Protocol):
         """Stream one grounded answer; return the LLM-run record or None."""
 
 
-class EvidenceGatherer(Protocol):
-    """Bound evidence-gather callable handed to ``run_turn``."""
-
-    def __call__(self, text: str, *, turn_plan: Any = None) -> str | GatheredEvidence | None:
-        """Gather read-only evidence for ``text``, or return None.
-
-        Prefer :class:`~core.agent_harness.turns.gather_observation.GatheredEvidence`
-        (observation text + structured tool payloads). Legacy ``str`` return
-        values are still accepted by the orchestrator.
-        """
-
-
 class ExecuteActions(Protocol):
     """Bound action tool-calling driver handed to ``run_turn``."""
 
@@ -346,7 +331,6 @@ __all__ = [
     "ConfirmFn",
     "ConsoleBindable",
     "ErrorReporter",
-    "EvidenceGatherer",
     "ExecuteActions",
     "GatheredEvidence",
     "InvestigationPortsFactory",

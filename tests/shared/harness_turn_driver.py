@@ -20,7 +20,6 @@ from rich.console import Console
 from core.agent_harness import OutputSink, TurnResult
 from core.agent_harness.ports import (
     AnswerRequest,
-    GatheredEvidence,
     StreamAnswerFn,
     ToolExecutionHooks,
     TurnBinding,
@@ -35,7 +34,6 @@ from surfaces.interactive_shell.runtime.core.turn_accounting import ShellTurnAcc
 from surfaces.interactive_shell.runtime.shell_agent import build_shell_agent
 from surfaces.interactive_shell.runtime.turn_seams import (
     AnswerShellQuestion,
-    GatherEvidence,
     RunActionToolTurn,
     bind_injected_stages,
 )
@@ -53,7 +51,6 @@ def run_harness_turn(
     request_exit: Callable[[], None] | None = None,
     agent: HeadlessAgent | None = None,
     execute_actions: RunActionToolTurn | None = None,
-    gather_evidence: GatherEvidence | None = None,
     answer_agent: AnswerShellQuestion | None = None,
     output: OutputSink | None = None,
     tool_hooks: ToolExecutionHooks | None = None,
@@ -77,7 +74,6 @@ def run_harness_turn(
         resolved_output,
         execute_actions=execute_actions,
         answer_agent=answer_agent,
-        gather_evidence=gather_evidence,
         request_exit=request_exit,
         tool_hooks=tool_hooks,
     )
@@ -107,11 +103,6 @@ def run_harness_turn(
     )
 
 
-def no_evidence(text: str, *, turn_plan: Any = None) -> GatheredEvidence | None:
-    """An EvidenceGatherer that finds nothing."""
-    return None
-
-
 def fake_llm_run(*, response_text: str = "") -> LlmRunInfo:
     """A real LlmRunInfo for turn tests; fill whatever the type requires."""
     return LlmRunInfo(response_text=response_text)
@@ -126,4 +117,4 @@ def answer_with_text(response_text: str) -> StreamAnswerFn:
     return _answer
 
 
-__all__ = ["answer_with_text", "fake_llm_run", "no_evidence", "run_harness_turn"]
+__all__ = ["answer_with_text", "fake_llm_run", "run_harness_turn"]

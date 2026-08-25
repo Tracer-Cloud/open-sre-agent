@@ -87,7 +87,6 @@ def test_want_me_to_suppressed_while_session_goal_active() -> None:
         _FIVE_STEP_ASK,
         session,
         execute_actions=_execute,
-        gather=lambda *_a, **_k: "evidence",
         answer=lambda *_a, **_k: type(
             "Run",
             (),
@@ -117,7 +116,6 @@ def test_action_handoff_attaches_session_goal() -> None:
         _FIVE_STEP_ASK,
         session,
         execute_actions=_execute,
-        gather=lambda *_a, **_k: "evidence",
         answer=lambda *_a, **_k: type("Run", (), {"response_text": "Step 1."})(),
         accounting=DefaultTurnAccounting(session, _FIVE_STEP_ASK),
     )
@@ -164,7 +162,6 @@ def test_typed_assistant_handoff_attaches_session_goal_without_content_tags() ->
         _FIVE_STEP_ASK,
         session,
         execute_actions=_execute,
-        gather=lambda *_a, **_k: "evidence",
         answer=lambda *_a, **_k: type("Run", (), {"response_text": "Step 1."})(),
         accounting=DefaultTurnAccounting(session, _FIVE_STEP_ASK),
     )
@@ -302,7 +299,6 @@ def test_metric_read_handoff_without_session_goal_flag_continues_outer_loop() ->
         ask,
         session,
         execute_actions=_execute,
-        gather=lambda *_a, **_k: "schema only",
         answer=lambda *_a, **_k: type(
             "Run",
             (),

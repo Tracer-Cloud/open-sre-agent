@@ -50,4 +50,4 @@ runs: 3
 tool_actions:
 - surface: gather
   tool: search_sentry_issues
-  expect: valid_data
+  expect: not_called

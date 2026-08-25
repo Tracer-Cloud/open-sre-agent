@@ -57,7 +57,6 @@ def test_recorder_flushes_once_for_chat_fallback() -> None:
         _console(),
         recorder=recorder,  # type: ignore[arg-type]
         execute_actions=_unhandled_turn,
-        gather_evidence=lambda *_a, **_k: None,
         answer_agent=_answer,
     )
 
@@ -87,7 +86,6 @@ def test_recorder_flushes_once_for_silent_handled_turn() -> None:
         _console(),
         recorder=recorder,  # type: ignore[arg-type]
         execute_actions=_handled,
-        gather_evidence=lambda *_a, **_k: None,
         answer_agent=lambda *_a, **_k: None,
     )
 
@@ -120,7 +118,6 @@ def test_default_turn_accounting_persists_action_only_context() -> None:
         "weather in Hawaii",
         session,
         execute_actions=_handled,
-        gather=lambda *_args, **_kwargs: None,
         answer=lambda *_args, **_kwargs: None,
         accounting=DefaultTurnAccounting(session, "weather in Hawaii"),
     )

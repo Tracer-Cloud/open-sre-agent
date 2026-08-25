@@ -885,7 +885,7 @@ def _compose_response(
         or bool(counts.handoff_contents)
     )
     final_text_chunk = "" if suppress_final else final_text
-    # Unhandled turns fall through to ``gather_and_answer`` / ``stream_answer``.
+    # Unhandled turns fall through to ``stream_answer``.
     # Painting the closing here produced two ``● assistant`` bubbles (e.g. a
     # wrong weekday from the action agent, then the grounded day from live
     # runtime facts). Keep ``response_text``; blank only the console chunk.

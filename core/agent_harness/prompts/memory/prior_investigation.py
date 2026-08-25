@@ -21,7 +21,7 @@ _logger = logging.getLogger(__name__)
 # incidental prior-RCA context (stale note on the answer prompt; gather prompt
 # prefers fresh tools). Explicit ``follow_up:`` handoffs skip gather and keep
 # the RCA as the answer regardless of this window — see
-# ``is_prior_investigation_follow_up`` and ``orchestrator._gather_and_answer``.
+# ``is_prior_investigation_follow_up`` and the conversational answer path.
 PRIOR_INVESTIGATION_RECALL_SECONDS = 30 * 60
 
 # Handoff-content prefix the action planner emits for a retrospective question

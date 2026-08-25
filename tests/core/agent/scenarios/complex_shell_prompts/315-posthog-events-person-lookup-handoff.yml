@@ -56,4 +56,4 @@ runs: 3
 tool_actions:
 - surface: gather
   tool: list_posthog_tools
-  expect: called
+  expect: not_called

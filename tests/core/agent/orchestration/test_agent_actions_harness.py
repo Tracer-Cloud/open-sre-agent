@@ -1484,7 +1484,7 @@ def test_route_handoff_skips_handled_without_llm() -> None:
         has_observation=False,
     )
     route = _route_turn(routing, handoff_contents=("provider:local_llama_connect",))
-    assert route.intent == "gather_and_answer"
+    assert route.intent == "answer"
 
 
 def test_route_handled_without_handoff_stays_action_only() -> None:
@@ -1560,7 +1560,6 @@ def test_run_turn_passes_handoff_contents_to_assistant() -> None:
         "please connect to local llama",
         Session(),
         execute_actions=_execute,
-        gather=lambda *_args, **_kwargs: None,
         answer=_answer,
         accounting=DefaultTurnAccounting(Session(), "please connect to local llama"),
     )
@@ -1612,7 +1611,6 @@ def test_run_turn_mixed_action_and_handoff_routes_to_assistant() -> None:
         "check health and connect local llama",
         Session(),
         execute_actions=_execute,
-        gather=lambda *_args, **_kwargs: None,
         answer=_answer,
         accounting=DefaultTurnAccounting(Session(), "check health and connect local llama"),
     )
@@ -1628,7 +1626,6 @@ def test_run_turn_skips_gather_for_follow_up_handoff_with_prior_state() -> None:
         "root_cause": "disk full on orders-api",
         "investigation_started_at": time.monotonic(),
     }
-    gather_calls: list[str] = []
     answer_kwargs: list[dict[str, Any]] = []
 
     def _execute(*_args: object, **_kwargs: object) -> ToolCallingTurnResult:
@@ -1640,10 +1637,6 @@ def test_run_turn_skips_gather_for_follow_up_handoff_with_prior_state() -> None:
             handled=True,
             handoff_contents=("follow_up:prior_investigation",),
         )
-
-    def _gather(text: str, *_args: object, **_kwargs: object) -> str:
-        gather_calls.append(text)
-        return "Tool: search_sentry_issues\nArguments: {}\nResult: should-not-run"
 
     def _answer(_text: str, request: AnswerRequest, **_kwargs: Any) -> None:
         answer_kwargs.append(
@@ -1659,12 +1652,10 @@ def test_run_turn_skips_gather_for_follow_up_handoff_with_prior_state() -> None:
         "what happened?",
         session,
         execute_actions=_execute,
-        gather=_gather,
         answer=_answer,
         accounting=DefaultTurnAccounting(session, "what happened?"),
     )
 
-    assert gather_calls == []
     assert answer_kwargs
     assert answer_kwargs[0].get("tool_observation") is None
     assert answer_kwargs[0].get("handoff_contents") == ("follow_up:prior_investigation",)
@@ -1708,7 +1699,6 @@ def test_database_query_handoff_keeps_connect_want_me_to_closer() -> None:
         prompt,
         session,
         execute_actions=_execute,
-        gather=lambda *_a, **_k: "",
         answer=_answer,
         accounting=DefaultTurnAccounting(session, prompt),
     )
@@ -1765,7 +1755,6 @@ def test_follow_up_answer_with_want_me_to_paints_on_non_tty_console() -> None:
         "why did it fail?",
         session,
         execute_actions=_execute,
-        gather=lambda *_a, **_k: "should-not-gather",
         answer=_answer,
         accounting=DefaultTurnAccounting(session, "why did it fail?"),
         output=sink,
@@ -1777,14 +1766,13 @@ def test_follow_up_answer_with_want_me_to_paints_on_non_tty_console() -> None:
     assert "disk was full" in result.assistant_response_text
 
 
-def test_run_turn_still_gathers_for_non_follow_up_handoff_with_prior_state() -> None:
-    """Non-follow-up handoffs keep the gather path even when last_state exists."""
+def test_run_turn_still_answers_for_non_follow_up_handoff_with_prior_state() -> None:
+    """Non-follow-up handoffs still stream an answer even when last_state exists."""
     session = Session()
     session.last_state = {
         "root_cause": "disk full on orders-api",
         "investigation_started_at": time.monotonic(),
     }
-    gather_calls: list[str] = []
     answer_kwargs: list[dict[str, Any]] = []
 
     def _execute(*_args: object, **_kwargs: object) -> ToolCallingTurnResult:
@@ -1797,26 +1785,20 @@ def test_run_turn_still_gathers_for_non_follow_up_handoff_with_prior_state() -> 
             handoff_contents=("provider:local_llama_connect",),
         )
 
-    def _gather(text: str, *_args: object, **_kwargs: object) -> str:
-        gather_calls.append(text)
-        return "Tool: x\nArguments: {}\nResult: y"
-
     def _answer(_text: str, request: AnswerRequest, **_kwargs: Any) -> None:
-        answer_kwargs.append({"defer_want_me_to_closer": request.defer_want_me_to_closer})
+        answer_kwargs.append({"handoff_contents": request.handoff_contents})
         return None
 
     run_turn(
         "connect local llama",
         session,
         execute_actions=_execute,
-        gather=_gather,
         answer=_answer,
         accounting=DefaultTurnAccounting(session, "connect local llama"),
     )
 
-    assert gather_calls == ["connect local llama"]
     assert answer_kwargs
-    assert answer_kwargs[0].get("defer_want_me_to_closer") is True
+    assert answer_kwargs[0]["handoff_contents"] == ("provider:local_llama_connect",)
 
 
 def test_execute_with_harness_handles_llm_unavailable() -> None:
@@ -2226,7 +2208,7 @@ def test_run_turn_skips_gather_for_follow_up_even_when_investigation_is_old() ->
         "root_cause": "disk full on orders-api",
         "investigation_started_at": time.monotonic() - PRIOR_INVESTIGATION_RECALL_SECONDS - 1,
     }
-    gather_calls: list[str] = []
+    answer_calls: list[str] = []
 
     def _execute(*_args: object, **_kwargs: object) -> ToolCallingTurnResult:
         return ToolCallingTurnResult(
@@ -2238,20 +2220,19 @@ def test_run_turn_skips_gather_for_follow_up_even_when_investigation_is_old() ->
             handoff_contents=("follow_up:prior_investigation",),
         )
 
-    def _gather(text: str, *_args: object, **_kwargs: object) -> str:
-        gather_calls.append(text)
-        return "Tool: search_sentry_issues\nArguments: {}\nResult: should-not-run"
+    def _answer(text: str, *_a: object, **_k: object) -> None:
+        answer_calls.append(text)
+        return None
 
     run_turn(
         "what happened?",
         session,
         execute_actions=_execute,
-        gather=_gather,
-        answer=lambda *_a, **_k: None,
+        answer=_answer,
         accounting=DefaultTurnAccounting(session, "what happened?"),
     )
 
-    assert gather_calls == []
+    assert answer_calls == ["what happened?"]
 
 
 def test_run_turn_does_not_gather_after_the_action_turn_already_did_the_work() -> None:
@@ -2268,7 +2249,6 @@ def test_run_turn_does_not_gather_after_the_action_turn_already_did_the_work() -
     Datadog, Kubernetes and Grafana afresh.
     """
     session = Session()
-    gather_calls: list[str] = []
     answer_kwargs: list[dict[str, Any]] = []
 
     def _execute(*_args: object, **_kwargs: object) -> ToolCallingTurnResult:
@@ -2282,10 +2262,6 @@ def test_run_turn_does_not_gather_after_the_action_turn_already_did_the_work() -
             handoff_requires_gather=False,
         )
 
-    def _gather(text: str, *_args: object, **_kwargs: object) -> str:
-        gather_calls.append(text)
-        return "Tool: kubernetes_list_pods\nResult: should-not-run"
-
     def _answer(_text: str, request: AnswerRequest, **_kwargs: Any) -> None:
         answer_kwargs.append({"handoff_contents": request.handoff_contents})
         return None
@@ -2294,12 +2270,10 @@ def test_run_turn_does_not_gather_after_the_action_turn_already_did_the_work() -
         "give me a morning report",
         session,
         execute_actions=_execute,
-        gather=_gather,
         answer=_answer,
         accounting=DefaultTurnAccounting(session, "give me a morning report"),
     )
 
-    assert gather_calls == [], "swept integrations after the turn already answered"
     assert answer_kwargs, "the assistant must still explain the handoff"
     assert answer_kwargs[0]["handoff_contents"]
 
@@ -2313,7 +2287,6 @@ def test_run_turn_skips_gather_for_stream_only_conversational_handoff() -> None:
     keywords.
     """
     session = Session()
-    gather_calls: list[str] = []
     answer_calls: list[dict[str, Any]] = []
 
     def _execute(*_args: object, **_kwargs: object) -> ToolCallingTurnResult:
@@ -2327,10 +2300,6 @@ def test_run_turn_skips_gather_for_stream_only_conversational_handoff() -> None:
             handoff_requires_gather=False,
         )
 
-    def _gather(text: str, *_args: object, **_kwargs: object) -> str:
-        gather_calls.append(text)
-        return "Tool: should_not_run\nResult: unused"
-
     def _answer(_text: str, request: AnswerRequest, **_kwargs: Any) -> None:
         answer_calls.append({"handoff_contents": request.handoff_contents})
         return None
@@ -2339,25 +2308,17 @@ def test_run_turn_skips_gather_for_stream_only_conversational_handoff() -> None:
         "hi",
         session,
         execute_actions=_execute,
-        gather=_gather,
         answer=_answer,
         accounting=DefaultTurnAccounting(session, "hi"),
     )
 
-    assert gather_calls == []
     assert answer_calls == [{"handoff_contents": ("chat:greeting",)}]
 
 
-def test_run_turn_still_gathers_after_actions_when_the_handoff_did_not_opt_out() -> None:
-    """Completed actions alone do not skip the gather — only an explicit opt-out does.
-
-    Mirror of the answer-only case above: a turn that ran a tool and handed
-    off with the default ``requires_gather`` still needs the live gather pass
-    (the handoff may be asking the assistant to look something up the action
-    tools could not).
-    """
+def test_run_turn_still_answers_after_actions_when_the_handoff_did_not_opt_out() -> None:
+    """A handoff after tools still streams the assistant answer."""
     session = Session()
-    gather_calls: list[str] = []
+    answer_calls: list[str] = []
 
     def _execute(*_args: object, **_kwargs: object) -> ToolCallingTurnResult:
         return ToolCallingTurnResult(
@@ -2369,26 +2330,25 @@ def test_run_turn_still_gathers_after_actions_when_the_handoff_did_not_opt_out()
             handoff_contents=("provider:local_llama_connect",),
         )
 
-    def _gather(text: str, *_args: object, **_kwargs: object) -> str:
-        gather_calls.append(text)
-        return "Tool: x\nArguments: {}\nResult: y"
+    def _answer(text: str, *_a: object, **_k: object) -> None:
+        answer_calls.append(text)
+        return None
 
     run_turn(
         "connect local llama",
         session,
         execute_actions=_execute,
-        gather=_gather,
-        answer=lambda *_a, **_k: None,
+        answer=_answer,
         accounting=DefaultTurnAccounting(session, "connect local llama"),
     )
 
-    assert gather_calls == ["connect local llama"]
+    assert answer_calls == ["connect local llama"]
 
 
-def test_run_turn_still_gathers_when_the_action_turn_executed_nothing() -> None:
-    """A handoff with no work behind it is exactly what gathering is for."""
+def test_run_turn_still_answers_when_the_action_turn_executed_nothing() -> None:
+    """A handoff with no action work still streams the assistant answer."""
     session = Session()
-    gather_calls: list[str] = []
+    answer_calls: list[str] = []
 
     def _execute(*_args: object, **_kwargs: object) -> ToolCallingTurnResult:
         return ToolCallingTurnResult(
@@ -2400,20 +2360,19 @@ def test_run_turn_still_gathers_when_the_action_turn_executed_nothing() -> None:
             handoff_contents=("why is the orders-api slow?",),
         )
 
-    def _gather(text: str, *_args: object, **_kwargs: object) -> str:
-        gather_calls.append(text)
-        return "Tool: search_sentry_issues\nResult: 3 issues"
+    def _answer(text: str, *_a: object, **_k: object) -> None:
+        answer_calls.append(text)
+        return None
 
     run_turn(
         "why is the orders-api slow?",
         session,
         execute_actions=_execute,
-        gather=_gather,
-        answer=lambda *_a, **_k: None,
+        answer=_answer,
         accounting=DefaultTurnAccounting(session, "why is the orders-api slow?"),
     )
 
-    assert gather_calls, "a question with no prior work still needs evidence"
+    assert answer_calls == ["why is the orders-api slow?"]
 
 
 def test_action_turn_suppresses_partial_replay_of_a_succeeded_batch() -> None:
@@ -2497,18 +2456,16 @@ def test_action_turn_suppresses_partial_replay_of_a_succeeded_batch() -> None:
     assert runs == ["/health", "/integrations list"]
 
 
-def test_run_turn_skips_gather_and_answer_when_the_action_turn_was_cancelled() -> None:
-    """A cancelled action turn must not fall through to gather or answer.
+def test_run_turn_skips_answer_when_the_action_turn_was_cancelled() -> None:
+    """A cancelled action turn must not fall through to answer.
 
     The host already owns the terminal message (soft-timeout notice, or the
-    user's stop), so sweeping integrations and composing an answer would both
-    cost time nobody is waiting for and overwrite that message. This used to be
-    enforced by forcing ``handled=True`` on cancel; the turn result now carries
-    ``cancelled`` explicitly and the router short-circuits on it.
+    user's stop), so composing an answer would cost time nobody is waiting for
+    and overwrite that message. The turn result carries ``cancelled``
+    explicitly and the router short-circuits on it.
     """
     # Arrange: an action turn that ran one action, then was cancelled.
     session = Session()
-    gather_calls: list[str] = []
     answer_calls: list[str] = []
 
     def _execute(*_args: object, **_kwargs: object) -> ToolCallingTurnResult:
@@ -2521,10 +2478,6 @@ def test_run_turn_skips_gather_and_answer_when_the_action_turn_was_cancelled() -
             cancelled=True,
         )
 
-    def _gather(text: str, *_args: object, **_kwargs: object) -> str:
-        gather_calls.append(text)
-        return "Tool: kubernetes_list_pods\nResult: should-not-run"
-
     def _answer(text: str, _request: AnswerRequest, **_kwargs: Any) -> None:
         answer_calls.append(text)
         return None
@@ -2534,13 +2487,11 @@ def test_run_turn_skips_gather_and_answer_when_the_action_turn_was_cancelled() -
         "check health and then list integrations",
         session,
         execute_actions=_execute,
-        gather=_gather,
         answer=_answer,
         accounting=DefaultTurnAccounting(session, "check health and then list integrations"),
     )
 
-    # Assert: neither stage ran, and the turn reports the cancel.
-    assert gather_calls == [], "swept integrations after the user cancelled"
+    # Assert: answer did not run, and the turn reports the cancel.
     assert answer_calls == [], "composed an answer after the user cancelled"
     assert result.action_result is not None
     assert result.action_result.cancelled is True

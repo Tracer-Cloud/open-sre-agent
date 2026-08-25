@@ -53,7 +53,6 @@ def test_run_harness_turn_cli_agent_empty_response_is_recorded_empty() -> None:
         confirm_fn=None,
         is_tty=None,
         execute_actions=fake_execute,
-        gather_evidence=lambda *_args, **_kwargs: None,
         answer_agent=fake_answer,
     )
 

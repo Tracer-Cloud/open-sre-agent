@@ -7,8 +7,7 @@ interactive shell. It owns:
   conversational assistant (guidance only; no investigation run). A single
   streaming LLM call with no ReAct loop and no tool use. Records the exchange.
 * ``run_turn`` — the three-path routing (summarize-observation / handled /
-  gather+answer) that sequences the action driver, the gather pass, and the
-  answer path.
+  answer) that sequences the action driver and the answer path.
 
 All terminal/session/grounding/telemetry concerns are reached through the
 Protocols in :mod:`core.agent_harness.ports`. Nothing here imports ``interactive_shell``.
@@ -26,7 +25,6 @@ from core.agent_harness.ports import (
     AnswerRequest,
     ConfirmFn,
     ErrorReporter,
-    EvidenceGatherer,
     ExecuteActions,
     OutputSink,
     PromptContextProvider,
@@ -57,25 +55,11 @@ from core.agent_harness.turns.answer_finalize import (
     finish_streamed_response,
 )
 from core.agent_harness.turns.conversation_recording import record_conversation_turn
-from core.agent_harness.turns.evidence_kind import EvidenceKind
 from core.agent_harness.turns.evidence_need import (
-    EvidenceNeed,
     classify_evidence_need,
     handoff_tag_for,
-    reclassify_evidence_need_after_gather,
-    should_skip_gather,
 )
-from core.agent_harness.turns.gather_observation import (
-    coerce_gathered_evidence,
-    count_gather_tool_successes,
-)
-from core.agent_harness.turns.handoff_keys import HandoffTag
-from core.agent_harness.turns.handoff_policy import is_prior_investigation_follow_up_handoff
 from core.agent_harness.turns.host_cancel import host_cancel_requested
-from core.agent_harness.turns.metric_query_floor import (
-    METRIC_UNFORMED_HANDOFF,
-    gather_formed_live_metric_query,
-)
 from core.agent_harness.turns.transcript_compaction import auto_compact_if_needed
 from core.agent_harness.turns.turn_plan import TurnPlan, build_turn_plan
 from core.agent_harness.turns.turn_results import (
@@ -321,121 +305,29 @@ def _abort_if_cancelled(
     return None
 
 
-def _gather_and_answer(
+def _stream_fallback_answer(
     *,
     text: str,
     answer: StreamAnswerFn,
-    gather: EvidenceGatherer,
     handoff_contents: tuple[str, ...],
     turn_plan: TurnPlan,
-    handoff_requires_gather: bool = True,
     output: OutputSink | None = None,
-    evidence_need: EvidenceNeed | None = None,
-) -> tuple[Any | None, str | None, EvidenceNeed | None, int] | None:
-    """Run gather+answer, or ``None`` when the host cancelled mid-path.
-
-    Returns ``(run, observation, evidence_need, gather_success_count)``.
-    ``evidence_need`` may flip from L1 to L0_degraded after gather when
-    preferred-source auth/config fails.
-    """
-    # Three cases skip the live gather loop:
-    # 1. Answer-only / stream-only handoffs (``requires_gather=false``): either
-    #    (a) pure conversational/docs/greeting chat that needs no live evidence,
-    #    so the host streams the reply without a gather tool loop, or (b) the
-    #    action turn's own tool work already produced what the reply needs and
-    #    a fresh sweep would answer a different question (observed live: a
-    #    completed CI onboarding turn re-read GitHub issues/PRs as a status
-    #    report). The action planner sets this flag — never user-text keywords.
-    # 2. Retrospective follow-ups, which already have grounding in
-    #    ``last_state`` (injected into the assistant prompt). Running the live
-    #    gather loop for those turns is wasteful and often violates "do not
-    #    call integration tools" contracts by probing Datadog/Sentry for a
-    #    question the prior RCA already answered. Not age-gated: the planner
-    #    emitting the tag *is* the judgement that the user means that incident,
-    #    so a clock must not override it and answer with current conditions
-    #    instead of what happened.
-    # 3. Metric/read asks whose authoritative source is missing
-    #    (``L0_degraded`` missing_source): gather would only thrash empty MCP
-    #    discovery. Config-failure L0 is decided *after* gather.
+) -> Any | None:
+    """Stream the conversational answer, or ``None`` when the host cancelled."""
     if host_cancel_requested(output):
         return None
-    skip_for_evidence = evidence_need is not None and should_skip_gather(evidence_need)
-    skip_gather = (
-        not handoff_requires_gather
-        or (
-            is_prior_investigation_follow_up_handoff(handoff_contents)
-            and turn_plan.snapshot.last_state is not None
-        )
-        or skip_for_evidence
-    )
-    gathered_raw = None if skip_gather else gather(text, turn_plan=turn_plan)
-    if host_cancel_requested(output):
-        return None
-    if skip_gather:
-        if skip_for_evidence:
-            reason = "L0_degraded — authoritative integration missing"
-        elif not handoff_requires_gather:
-            reason = "answer-only handoff (requires_gather=false)"
-        else:
-            reason = "follow_up handoff with prior investigation state"
-        log.debug("gather skipped: %s", reason)
-
-    gathered = coerce_gathered_evidence(gathered_raw)
-
-    # L1 → L0_degraded when gather shows preferred-source config/auth failure
-    # (typed tool_unavailable envelopes; not empty-query / empty-result noise).
-    # Refresh the handoff tag so the answer path gets reconnect guidance.
-    answer_handoffs = handoff_contents
-    if evidence_need is not None and not skip_gather:
-        prior = evidence_need
-        evidence_need = reclassify_evidence_need_after_gather(evidence_need, gathered)
-        if evidence_need is not prior:
-            tier_tag = handoff_tag_for(evidence_need)
-            if tier_tag is not None and tier_tag not in answer_handoffs:
-                # Drop a stale L1-era absence of L0 tag; replace any prior
-                # evidence_tier:L0_degraded:* with the config-failure tag.
-                answer_handoffs = tuple(
-                    tag
-                    for tag in answer_handoffs
-                    if not str(tag).startswith(f"{HandoffTag.EVIDENCE_TIER}:")
-                )
-                answer_handoffs = (*answer_handoffs, tier_tag)
-                log.debug("evidence reclassified after gather: %s", tier_tag)
-
-    if (
-        evidence_need is not None
-        and evidence_need.kind is EvidenceKind.METRIC_READ
-        and not gather_formed_live_metric_query(
-            gathered,
-            metric_source_ids=(
-                *evidence_need.preferred_sources,
-                *evidence_need.connected,
-            ),
-        )
-        and METRIC_UNFORMED_HANDOFF not in answer_handoffs
-        and not any(str(tag).startswith("evidence_tier:L0_degraded") for tag in answer_handoffs)
-    ):
-        answer_handoffs = (*answer_handoffs, METRIC_UNFORMED_HANDOFF)
-
-    # Off-screen when we have evidence text so the prompt builder injects it;
-    # on-screen (plain path) when there is nothing to inject.
-    # Defer Want-me-to paint only when the gather closer rewrite will flush it.
-    # Follow-ups skip that rewrite; deferring on non-TTY would hold the whole
-    # answer forever (oracle / CI consoles use force_terminal=False).
-    observation = gathered.observation if gathered is not None else None
     run = answer(
         text,
         AnswerRequest(
-            tool_observation=observation,
-            tool_observation_on_screen=observation is None,
-            handoff_contents=answer_handoffs,
+            tool_observation=None,
+            tool_observation_on_screen=True,
+            handoff_contents=handoff_contents,
             turn_plan=turn_plan,
-            defer_want_me_to_closer=not skip_gather,
         ),
     )
     if host_cancel_requested(output):
         return None
-    return run, observation, evidence_need, count_gather_tool_successes(gathered)
+    return run
 
 
 def run_turn(
@@ -444,7 +336,6 @@ def run_turn(
     *,
     execute_actions: ExecuteActions,
     answer: StreamAnswerFn,
-    gather: EvidenceGatherer,
     accounting: TurnAccounting,
     confirm_fn: ConfirmFn | None = None,
     is_tty: bool | None = None,
@@ -456,11 +347,11 @@ def run_turn(
     1. ``summarize_observation`` — a successful action left discovery output, so
        summarize it into a direct answer.
     2. ``handled_without_llm`` — the action fully handled the turn; stop without the LLM.
-    3. ``gather_and_answer`` — nothing was handled; gather evidence and answer.
+    3. ``answer`` — nothing was handled; stream a conversational answer.
 
     The path choice is the pure ``_route_turn``; this function performs the
-    chosen path's effects. ``execute_actions``, ``answer``, and ``gather`` are
-    already bound to the surface (session/output/tools) by the caller.
+    chosen path's effects. ``execute_actions`` and ``answer`` are already bound
+    to the surface (session/output/tools) by the caller.
 
     ``surface`` selects the prompt :class:`~core.agent_harness.prompts.kernel.surfaces.SurfaceProfile`
     (e.g. gateway omits setup-state facts).
@@ -498,7 +389,7 @@ def run_turn(
     turn_snapshot = TurnSnapshot.from_session(text, session, surface=surface)
 
     # Assemble the turn plan once: it resolves integrations and composes the
-    # snapshot into the single object the action, gather, and answer phases read,
+    # snapshot into the single object the action and answer phases read,
     # so they cannot disagree about what this turn knows.
     turn_plan = build_turn_plan(turn_snapshot, session)
     turn_snapshot = turn_plan.snapshot
@@ -520,7 +411,7 @@ def run_turn(
 
     aborted = _abort_if_cancelled(accounting, action_result, output)
     if aborted is not None:
-        log.debug("turn cancelled after action; skipping gather/answer")
+        log.debug("turn cancelled after action; skipping answer")
         return aborted
 
     # Policy from typed AssistantHandoff fields (schema decode); tag strings
@@ -619,29 +510,21 @@ def run_turn(
                 final_intent="cli_agent_handled",
                 response_text=action_result.response_text,
             )
-        elif route.intent == "gather_and_answer":
+        elif route.intent == "answer":
             with apply_reasoning_effort(turn_snapshot.reasoning_effort):
-                gathered_outcome = _gather_and_answer(
+                run = _stream_fallback_answer(
                     text=text,
                     answer=answer,
-                    gather=gather,
                     handoff_contents=handoff_contents,
                     turn_plan=turn_plan,
-                    handoff_requires_gather=action_result.handoff_requires_gather,
                     output=output,
-                    evidence_need=evidence_need,
                 )
-            if gathered_outcome is None:
+            if run is None and host_cancel_requested(output):
                 return _cancelled_turn_result(accounting, action_result)
-            run, gathered, updated_need, gather_success_count = gathered_outcome
-            if updated_need is not None:
-                evidence_need = updated_need
             outcome = _RouteOutcome(
                 final_intent="cli_agent_fallback",
                 response_text=_response_text(run),
                 llm_run=run,
-                evidence_for_offer=gathered,
-                gather_success_count=gather_success_count,
             )
         else:
             raise AssertionError(f"Unknown route intent: {route.intent!r}")

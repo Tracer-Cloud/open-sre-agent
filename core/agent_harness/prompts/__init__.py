@@ -9,12 +9,12 @@ Subpackages (by agent path):
 * ``assistant/`` — conversational answer path (parts → contributors →
   envelope → turn)
 * ``action/`` — tool-calling / slash action-agent system + user prompts
-* ``gather/`` — evidence-gather system prompts
 * ``memory/`` — conversation window + prior-investigation recall fragments
 * ``runtime_facts/`` — runtime-metadata fact lines for prompt assembly
 * ``skills/`` — progressive skill index (thin) + markdown bodies on demand
 
-Root modules: ``rules.py`` (shared rule fragments), ``synthetic_failure.py``.
+Root modules: ``rules.py`` (shared rule fragments), ``system_prompt.py``
+(the shared ``opensre_system_prompt.md`` loader).
 """
 
 from __future__ import annotations
@@ -42,11 +42,6 @@ from core.agent_harness.prompts.assistant import (
     build_cli_agent_turn_prompt,
     build_environment_block,
     build_observation_block,
-)
-from core.agent_harness.prompts.gather import (
-    build_gather_system_prompt,
-    build_gather_system_prompt_envelope,
-    build_gather_system_prompt_from_turn_snapshot,
 )
 from core.agent_harness.prompts.kernel import (
     PromptBlock,
@@ -89,9 +84,6 @@ __all__ = [
     "build_action_user_message",
     "build_assistant_system_prompt",
     "build_assistant_system_prompt_envelope",
-    "build_gather_system_prompt",
-    "build_gather_system_prompt_envelope",
-    "build_gather_system_prompt_from_turn_snapshot",
     "build_cli_agent_prompt_from_provider",
     "build_cli_agent_turn_prompt",
     "build_environment_block",

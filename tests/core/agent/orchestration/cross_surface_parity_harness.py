@@ -21,7 +21,6 @@ from core.agent_harness.runtime import TurnBinding
 from core.agent_harness.session import InMemorySessionStore
 from core.agent_harness.tools.tool_provider import DefaultToolProvider
 from core.agent_harness.turns.default_reasoning_client import DefaultReasoningClientProvider
-from core.agent_harness.turns.gather_phase import GatherPhase
 from core.agent_harness.turns.headless_adapters import BufferOutputSink, NoopTurnAccounting
 from core.agent_harness.turns.headless_agent import HeadlessAgent
 from core.agent_harness.turns.headless_build import InMemoryHeadlessBuild
@@ -305,8 +304,6 @@ def wire_llms(
 def _dispatch_turn(
     message: str,
     session: Session,
-    *,
-    gather_enabled: bool = True,
 ) -> TurnResult:
     output = BufferOutputSink()
     agent = InMemoryHeadlessBuild(
@@ -322,7 +319,6 @@ def _dispatch_turn(
             slash_ports_factory=headless_slash_ports,
         ),
         prompts=DefaultPromptContextProvider(session),
-        gather=GatherPhase(enabled=gather_enabled),
     )
     agent.bind_turn(TurnBinding(accounting=NoopTurnAccounting()))
     return agent.dispatch(message)
@@ -344,7 +340,7 @@ def snapshot_shell(message: str, *, integrations: dict[str, Any] | None = None) 
 def snapshot_headless(message: str, *, integrations: dict[str, Any] | None = None) -> TurnSnapshot:
     session = fresh_session(integrations=integrations)
     before = probe_run_count()
-    result = _dispatch_turn(message, session, gather_enabled=True)
+    result = _dispatch_turn(message, session)
     return TurnSnapshot.from_result(result, probe_ran=probe_run_count() > before)
 
 

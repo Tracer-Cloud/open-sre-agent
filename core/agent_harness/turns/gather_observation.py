@@ -110,7 +110,7 @@ def count_gather_tool_successes(evidence: GatheredEvidence | None) -> int:
 def iter_tool_result_blocks(observation: str) -> Iterator[tuple[str, str]]:
     """Yield ``(tool_line, result_text)`` for each Tool/Result paragraph.
 
-    Matches the gather formatter in ``evidence_driver._format_observation``:
+    Matches rendered ``Tool:`` / ``Arguments:`` / ``Result:`` paragraphs:
     blocks separated by a blank line, each starting with ``Tool: ``, result
     after ``\\nResult: `` (``Arguments:`` may sit between).
     """

@@ -16,7 +16,6 @@ from typing import Any
 import pytest
 
 from core.agent_harness.harness import AgentSession, SessionConfig
-from core.agent_harness.turns.gather_phase import GATHER_DISABLED
 from core.agent_harness.turns.headless_adapters import (
     BufferOutputSink,
     EmptyPromptContextProvider,
@@ -115,7 +114,6 @@ def _controlled_agent(
     ).agent(
         tools=NullToolProvider(),
         prompts=prompts if prompts is not None else EmptyPromptContextProvider(),
-        gather=GATHER_DISABLED,
     )
     return agent, sink
 
@@ -165,7 +163,6 @@ def test_documented_custom_sink_path_captures_streamed_answer(
     agent = DefaultHeadlessBuild(session=startup.session, output=sink).agent()
     agent._tools = NullToolProvider()  # noqa: SLF001
     agent._reasoning = StaticReasoningClientProvider(client=_EchoClient())  # noqa: SLF001
-    agent._gather_phase = GATHER_DISABLED  # noqa: SLF001
     harness.attach_agent(agent)
 
     # Act
@@ -185,7 +182,6 @@ def test_start_honours_caller_grounding_provider(stub_action_planner: None) -> N
     assert harness.agent is not None
     harness.agent._tools = NullToolProvider()  # noqa: SLF001
     harness.agent._reasoning = StaticReasoningClientProvider(client=_EchoClient())  # noqa: SLF001
-    harness.agent._gather_phase = GATHER_DISABLED  # noqa: SLF001
 
     # Act
     result = harness.chat("what is our on-call policy?")

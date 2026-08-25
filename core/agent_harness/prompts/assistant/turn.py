@@ -6,8 +6,6 @@ from collections.abc import Mapping
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any, Protocol
 
-import core.agent_harness.prompts.synthetic_failure as synthetic_failure
-from config.constants.prompts import SUGGESTED_PROMPT_AFTER_FAILED_SYNTHETIC_TEST
 from core.agent_harness.prompts.assistant.assemble import assemble_assistant_envelope
 from core.agent_harness.prompts.assistant.observation import (
     build_handoff_guidance_block,
@@ -61,9 +59,6 @@ class AssistantPromptContextProvider(Protocol):
     def setup_state(self) -> str:
         """The operator's connected integrations and schedules, as a fact block."""
 
-    def suggested_synthetic_prompt(self) -> str:
-        """Suggested follow-up after a failed synthetic observation."""
-
     def log_diagnostics(self, reason: str) -> None:
         """Emit grounding-cache diagnostics for ``reason``."""
 
@@ -78,7 +73,6 @@ def _assistant_context_blocks(
     handoff_contents: tuple[str, ...],
     tool_observation: str | None,
     tool_observation_on_screen: bool,
-    suggested_prompt: str = SUGGESTED_PROMPT_AFTER_FAILED_SYNTHETIC_TEST,
 ) -> str:
     omit_want_me_to = _handoff_has_session_goal(handoff_contents)
     return "".join(
@@ -90,7 +84,6 @@ def _assistant_context_blocks(
                 on_screen=tool_observation_on_screen,
                 omit_want_me_to=omit_want_me_to,
             ),
-            synthetic_failure.build_block(turn_snapshot, suggested_prompt=suggested_prompt),
         )
     )
 
@@ -238,7 +231,6 @@ def build_cli_agent_turn_prompt(
                     handoff_contents=handoff_contents,
                     tool_observation=tool_observation,
                     tool_observation_on_screen=tool_observation_on_screen,
-                    suggested_prompt=prompts.suggested_synthetic_prompt(),
                 ),
                 live_block,
                 "--- User message ---\n",

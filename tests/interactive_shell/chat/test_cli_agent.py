@@ -13,7 +13,6 @@ from __future__ import annotations
 
 import io
 from collections.abc import Iterator
-from pathlib import Path
 from typing import Any
 
 from rich.console import Console
@@ -129,8 +128,6 @@ class TestSystemPromptTerminology:
     def test_conversational_prompt_uses_interactive_shell_not_repl(self) -> None:
         prompt = _build_system_prompt(reference="(ref)", history="(hist)")
         assert "interactive shell" in prompt
-        assert "argv" in prompt
-        assert "!" in prompt
         # The prompt must explicitly forbid the "REPL" jargon so the model
         # does not echo it back in answers (#604).
         assert TERMINOLOGY_RULE in prompt
@@ -151,9 +148,8 @@ class TestSystemPromptTerminology:
     def test_prompt_gives_generic_integration_setup_guidance(self) -> None:
         """If a setup request reaches the assistant, it gives guidance only."""
         prompt = _build_system_prompt(reference="(ref)", history="(hist)")
-        assert "/integrations setup <service>" in prompt
-        assert "/mcp connect <server>" in prompt
-        assert "Do not emit JSON" in prompt
+        assert "/integrations setup" in prompt
+        assert "/mcp connect" in prompt
 
 
 class TestSystemPromptAgentsMdGrounding:
@@ -189,7 +185,6 @@ class TestSystemPromptInvestigationFlowGrounding:
 
         assert "--- Investigation flow reference ---" in prompt
         assert "resolve → extract → investigate → deliver" in prompt
-        assert "do not claim the pipeline definition is unavailable" in prompt
 
     def test_investigation_flow_section_omitted_when_reference_empty(self) -> None:
         prompt = _build_system_prompt(reference="(ref)", history="(hist)", investigation_flow="")
@@ -476,40 +471,6 @@ class TestStreamingMigration:
             "assistant",
             '{"actions":[{"action":"switch_llm_provider","provider":"anthropic"}]}',
         )
-
-
-def test_shell_answer_injects_synthetic_observation_on_why_failed(
-    tmp_path: Path,
-    monkeypatch: Any,
-) -> None:
-    obs = tmp_path / "latest.json"
-    obs.write_text(
-        '{"scenario_id": "008-storage-full-missing-metric", "score": {"passed": false}}',
-        encoding="utf-8",
-    )
-    session = Session()
-    session.last_synthetic_observation_path = str(obs.resolve())
-    console, _buf = _capture()
-    client = _patch_llm(monkeypatch, "The synthetic run failed the scoring gate.")
-    _answer("why did it fail?", session, console)
-    assert client.last_prompt is not None
-    assert "observation_json" in client.last_prompt
-    assert "008-storage-full-missing-metric" in client.last_prompt
-
-
-def test_shell_answer_skips_observation_without_failure_question(
-    tmp_path: Path,
-    monkeypatch: Any,
-) -> None:
-    obs = tmp_path / "latest.json"
-    obs.write_text("{}", encoding="utf-8")
-    session = Session()
-    session.last_synthetic_observation_path = str(obs.resolve())
-    console, _buf = _capture()
-    client = _patch_llm(monkeypatch, "hi")
-    _answer("hello", session, console)
-    assert client.last_prompt is not None
-    assert "observation_json" not in client.last_prompt
 
 
 # ---------------------------------------------------------------------------

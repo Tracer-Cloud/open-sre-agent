@@ -1,7 +1,7 @@
 """Build the interactive shell's agent with DefaultHeadlessBuild.
 
 The shell is a host: it supplies :class:`AgentBuildConfig` (tools, prompts,
-gather, error reporter) and omits capability policy so gateway-chat withholds
+error reporter) and omits capability policy so gateway-chat withholds
 do not run. Construction still goes through :class:`DefaultHeadlessBuild` — the same
 family the gateway pool uses — so the shell keeps investigation / llm_provider
 / task_cancel and REPL slash / TTY paint.
@@ -30,7 +30,6 @@ from surfaces.interactive_shell.runtime.agent_harness_adapters import (
     resolve_output_sink,
 )
 from surfaces.interactive_shell.runtime.background import runner as background_runner
-from surfaces.interactive_shell.runtime.integration_tool_gathering import shell_gather_phase
 from surfaces.interactive_shell.runtime.investigation_adapter import (
     repl_investigation_launch_ports,
 )
@@ -79,7 +78,7 @@ def shell_agent_build_config(
     *,
     request_exit: Callable[[], None] | None = None,
 ) -> AgentBuildConfig:
-    """REPL wiring: shell tools, CLI grounding, console gather; no withholds."""
+    """REPL wiring: shell tools and CLI grounding; no withholds."""
 
     def build_tools(
         session: SessionState,
@@ -95,7 +94,6 @@ def shell_agent_build_config(
     return AgentBuildConfig(
         build_tools=build_tools,
         build_prompts=shell_prompt_context_provider,
-        build_gather=shell_gather_phase,
         error_reporter=ShellErrorReporter(),
     )
 
@@ -131,7 +129,7 @@ def build_shell_agent(
     config = shell_agent_build_config(request_exit=request_exit)
     if config.apply_capability_policy is not None:
         config.apply_capability_policy(session)
-    tools, prompts, gather = resolve_agent_ports(
+    tools, prompts = resolve_agent_ports(
         config,
         session=session,
         console=console,
@@ -143,7 +141,7 @@ def build_shell_agent(
         console=console,
         surface="interactive_shell",
         error_reporter=config.error_reporter,
-    ).agent(tools=tools, prompts=prompts, gather=gather)
+    ).agent(tools=tools, prompts=prompts)
 
 
 __all__ = [

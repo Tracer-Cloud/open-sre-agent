@@ -25,7 +25,7 @@ Process boot (`configure_process`) and headless construction
 | Custom host | **`DefaultHeadlessBuild(...).agent(...)`** (or `InMemoryHeadlessBuild` in-memory; the only construction seam) → `agent.handle(text, TurnBinding(...))` per message |
 | Gateway + interactive shell | `TurnRunner` → `SessionAgentPool` → `DefaultHeadlessBuild.agent` once / session → `agent.handle(...)` per message (SessionGoal loop lives in `run_goal`, which `handle` wraps) |
 | CLI `ask` (one-shot) | `AgentSession.start(..., tool_hooks=…)` → `.chat(prompt)` — uses `dispatch`, not the SessionGoal turn loop |
-| Host-specific construction | Optional `AgentBuildConfig` (`agent_build_config.py`) — tools / prompts / gather / capability policy. Expand with `resolve_agent_ports` (shared by the pool and `build_shell_agent`). `None` on a field keeps the host default; `apply_capability_policy=None` means do not mutate the session |
+| Host-specific construction | Optional `AgentBuildConfig` (`agent_build_config.py`) — tools / prompts / capability policy. Expand with `resolve_agent_ports` (shared by the pool and `build_shell_agent`). `None` on a field keeps the host default; `apply_capability_policy=None` means do not mutate the session |
 | Scheduled one-shot | `AgentSession.run_headless_turn(...)` (not the multi-turn pattern) |
 
 `SessionGoal` (`session_goal/` component — `goal` + `run_until`) is
@@ -57,24 +57,14 @@ extending the enum and registering its policy row — do **not** grow
 `EVIDENCE_KIND_VALUES` (derived), not a parallel hard-coded list. Preferred
 integration ids stay opt-in via `infrastructure.harness_providers.register_preferred_evidence_source`.
 
-**Evidence tiers / degradation:** `classify_evidence_need` is connectivity-first
-(`L0_degraded` + skip gather when a preferred authoritative source is missing).
-After an L1 gather, `reclassify_evidence_need_after_gather` may flip to
-`L0_degraded` with `EvidenceDegradeCause.CONFIG_FAILURE` only for a typed
-`tool_unavailable` envelope (`{"source", "available": False, "error"}`).
-Prefer `GatheredEvidence.tool_results` from the gather loop; fall back to
-`split`/`partition` on the rendered `Tool:`/`Result:` observation (see
-`gather_observation.iter_tool_result_blocks`) — never regex or phrase lists.
-Empty SQL / vendor-query failures stay L1 (no L0 CTA). A metric gather that never
-ran a live query still gets a vendor-registered draft query block (via
-`infrastructure.harness_providers.register_metric_query_draft`) and one
-`/integrations setup …` line, then stops — the **unformed-metric floor**
-(`turns/metric_query_floor.py`). Product cohort / signup-retention identity
-is core policy (`turns/cohort_identity.py`); vendors supply dialect drafts and
-optional observation parsers (`register_metric_cohort_resolver`).
+**Evidence kinds:** vocabulary + per-kind policy still live in
+`turns/evidence_kind.py`. `classify_evidence_need` is connectivity-first
+(`L0_degraded` when a preferred authoritative source is missing) so the
+assistant can emit a setup CTA. There is no second gather ReAct loop on the
+chat path — the action agent owns tools.
 
 **No keyword intent routing around the action agent.** Do not scan user text
-with regex/keywords to skip gather, attach goals, or bypass `execute_actions`.
+with regex/keywords to attach goals or bypass `execute_actions`.
 Policy keys off typed `AssistantHandoff` (`turns/assistant_handoff.py`) —
 schema fields first; content tags are decode fallback only. Legacy tag tuples
 (`evidence_kind:…`, `session_goal:…`, `session_goal_item:…`, `database_query:…`)
@@ -83,7 +73,7 @@ and explicit host APIs remain for older readers. Checklist progress uses
 
 Do **not** duplicate the default port stack outside `DefaultHeadlessBuild`.
 Expand `AgentBuildConfig` through `resolve_agent_ports` — do not re-copy the
-`build_tools` / `build_prompts` / `build_gather` branch in each host. Gateway
+`build_tools` / `build_prompts` branch in each host. Gateway
 chat and the interactive shell share `TurnRunner` + `SessionAgentPool`
 (`build_shell_agent` remains for tests / direct construction). Do not
 reintroduce peer `bootstrap.adapters` copies under surfaces or gateway.
@@ -99,7 +89,7 @@ headless impl `InMemorySessionState`) — not `SessionStore`. Durable JSONL is
 
 **Host cancel:** one `threading.Event` on the output sink
 (`ensure_turn_cancel` / `host_cancel_requested` in `turns/host_cancel.py`) —
-tools (console `cancel_requested`), orchestrator/gather, and stream guards all
+tools (console `cancel_requested`), orchestrator, and stream guards all
 read that same Event. Do not invent a second cancel channel.
 
 **Cloud scale-out:** more Fargate tasks (fleet), not unbound in-process
@@ -128,14 +118,14 @@ subpackage. Default port implementations live with the concern they serve, not i
 
 - `ports.py` — Protocols the engine talks to (output, confirmation, session
   store, tool provider, prompt-context provider, telemetry, error reporter,
-  evidence gatherer). Kept top-level as the central seam imported everywhere.
+  telemetry). Kept top-level as the central seam imported everywhere.
 - `agent_builder.py` — `AgentConfig` dataclass + `build_agent(config)`. The
   single instantiation site for `core.agent.Agent` across all surfaces
   (action, evidence, gateway). See "Agent construction pattern" below.
 - `turns/` — the turn drivers that orchestrate `core.agent.Agent`:
   - `orchestrator.py` — `run_turn` sequences three seams (do not merge them):
     1. **route decide** — pure `turn_route.route_turn` (no I/O, no stream flags)
-    2. **route execute** — summarize / handled / gather+answer effects
+    2. **route execute** — summarize / handled / answer effects
     3. **answer finalize** — `answer_finalize.finalize_routed_answer` (CTA,
        Want-me-to, stream flush). Stream rewrite locals
        (`text_changed_after_streaming`) stay inside finalize and must **never**
@@ -152,9 +142,6 @@ subpackage. Default port implementations live with the concern they serve, not i
   - `action_driver.py` — `ActionTurnRunner`: one action tool-calling turn
     over the ports, via a `_build_action_agent` factory that returns an
     `ActionTurnPlan`.
-  - `evidence_driver.py` — bounded evidence-gather loop, via a
-    `_build_evidence_agent` factory that returns an `AgentConfig` handed to
-    `build_agent`.
   - `headless_agent.py` — headless programmatic entry point
     (`HeadlessAgent`, built by a port family; `.handle(text, binding)` per message, `.dispatch` underneath)
     plus in-memory port adapters for
@@ -174,7 +161,7 @@ subpackage. Default port implementations live with the concern they serve, not i
   (`run_record.py`).
 - `prompts/` — prompt builders by agent path (pure string assembly; grounding
   via `PromptContextProvider`). Layout: `kernel/`
-  (envelope + surface Strategy), `assistant/` / `action/` / `gather/` (peer
+  (envelope + surface Strategy), `assistant/` / `action/` (peer
   assemblers), `grounding/` (prompt providers), plus leaves `memory/` /
   `runtime_facts/` / `skills/`.
 - `grounding/` — reusable grounding cache and rendering contracts; surfaces
@@ -252,9 +239,8 @@ config = AgentConfig(
 agent = build_agent(config)
 ```
 
-Action (`turns/action_driver.py::_build_action_agent`) and evidence
-(`turns/evidence_driver.py::_build_evidence_agent`) assemble an
-``AgentConfig`` and call ``build_agent``. The gateway turn path does not
+Action (`turns/action_driver.py::_build_action_agent`) assembles an
+``AgentConfig`` and calls ``build_agent``. The gateway turn path does not
 construct a persistent ``core.agent.Agent`` — gateway chat reuses one
 ``HeadlessAgent`` per logical session via ``SessionAgentPool`` (each turn
 ``bind_turn`` + live ``DefaultToolProvider`` from the chat session). When
@@ -276,14 +262,12 @@ configuration on `self`, which diverged routing across surfaces.
 
 - **Tool-calling agent** — `core.agent.Agent`, the ReAct loop (think → call
   tools → observe) driven by `llm.invoke`. Built via `AgentConfig` +
-  `build_agent`. Used by the action, evidence/gather, and investigation agents.
+  `build_agent`. Used by the action agent and the investigation agent.
 - **Direct answer (no tools)** — `orchestrator.stream_answer`, one grounded
   text answer streamed via `client.invoke_stream` (the `StreamAnswerFn` seam).
-  It does **not** use `Agent`: no tool loop, no observe step. The host reaches
-  this path after action when `assistant_handoff` sets `requires_gather=false`
-  (pure docs/how-to/greeting chat, or action tools already answered) — gather
-  is skipped. Default `requires_gather=true` still runs the evidence gatherer
-  before `stream_answer` for live-data asks.
+  It does **not** use `Agent`: no tool loop, no observe step. After action,
+  unhandled / handed-off turns take this path. There is no second gather
+  ReAct loop on the chat path — the action agent owns tools.
 
 A new agent is one shape or the other: if it calls tools it is the tool-calling
 shape; if it answers directly without tools it is the direct-answer shape.
@@ -294,7 +278,7 @@ shape; if it answers directly without tools it is the direct-answer shape.
    docstring (three lines max).
 2. Update this file when harness rules change.
 3. Inject through `ports.py` callables (`StreamAnswerFn`, `ExecuteActions`,
-   `EvidenceGatherer`); do not import surface code into `agent_harness/`.
+   `ExecuteActions`); do not import surface code into `agent_harness/`.
 4. Add or extend shape-guard tests when you introduce a new entrypoint or
    rename a shape seam.
 5. Public host API is `AgentSession.chat` / `AgentSession.investigate`.
@@ -357,8 +341,8 @@ per-session lock). Different sessions stay concurrent under the capacity gate.
 | **`HeadlessAgent`** + **`run_goal`** | The one SessionGoal loop driver; `AgentSession.chat_until_goal` delegates here |
 | **`HeadlessAgent`** + **`dispatch`** | One engine turn; what `AgentSession.chat` calls |
 | **`SessionAgentPool`** | One headless agent per logical session across turns (gateway + shell) |
-| **`DefaultHeadlessBuild`** | The default port family for one session; `.agent(tools=…, prompts=…, gather=…)` builds the agent on it |
-| **`resolve_agent_ports`** | Expand `AgentBuildConfig` → `(tools, prompts, gather)` — shared by the pool and `build_shell_agent` |
+| **`DefaultHeadlessBuild`** | The default port family for one session; `.agent(tools=…, prompts=…)` builds the agent on it |
+| **`resolve_agent_ports`** | Expand `AgentBuildConfig` → `(tools, prompts)` — shared by the pool and `build_shell_agent` |
 | **`run_headless_turn`** | One-shot convenience for scheduler digests — not the multi-turn pattern |
 | **`dispatch_chat_turn`** | **Internal** seam over `run_turn` — adapters only |
 

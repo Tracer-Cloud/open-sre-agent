@@ -65,4 +65,4 @@ tool_actions:
   tools:
   - query_datadog_monitors
   - query_datadog_all
-  expect: valid_data_any
+  expect: not_called

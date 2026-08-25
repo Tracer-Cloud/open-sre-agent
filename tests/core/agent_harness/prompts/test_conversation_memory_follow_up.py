@@ -129,7 +129,6 @@ def test_run_turn_expands_yes_before_execute_actions() -> None:
         session,
         execute_actions=execute_actions,
         answer=lambda *_a, **_k: None,
-        gather=lambda *_a, **_k: None,
         accounting=NoopTurnAccounting(),
     )
 

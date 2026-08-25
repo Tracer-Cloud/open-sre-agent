@@ -46,8 +46,9 @@ def test_cli_prompt_omits_slack_layout_guidance() -> None:
 
 def test_gateway_preamble_is_slack_teammate_not_terminal() -> None:
     prompt = build_assistant_system_prompt("ref", "hist", surface="gateway")
-    # The opening framing (highest salience) must not call it a terminal assistant.
-    assert prompt.startswith("You are OpenSRE, an AI production engineer teammate")
+    # Shared system base, then Slack persona overlays CLI/terminal framing.
+    assert prompt.startswith("You plan actions for the OpenSRE interactive shell.")
+    assert "AI production engineer on this team" in prompt
     assert "terminal assistant" not in prompt
     assert "full-shell semantics" not in prompt
 
@@ -58,12 +59,11 @@ def test_gateway_prompt_omits_terminal_markdown_rule() -> None:
     assert "Write **bold** tight" in prompt
 
 
-def test_cli_and_gateway_prompts_use_senior_on_call_working_style() -> None:
+def test_cli_and_gateway_prompts_use_the_shared_system_prompt() -> None:
     shell = build_assistant_system_prompt("ref", "hist", surface="interactive_shell")
     gateway = build_assistant_system_prompt("ref", "hist", surface="gateway")
-    assert "senior on-call engineer" in shell
-    assert "senior on-call engineer" in gateway
-    assert "The user's goal is the finish line" in shell
+    assert "senior production engineer mapping intent to tools" in shell
+    assert "senior production engineer mapping intent to tools" in gateway
     assert "guides people through" in gateway
 
 

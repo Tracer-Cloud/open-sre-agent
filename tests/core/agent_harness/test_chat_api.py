@@ -35,7 +35,6 @@ def test_dispatch_chat_turn_forwards_bindings_to_run_turn(monkeypatch: Any) -> N
         *,
         execute_actions: Any,
         answer: Any,
-        gather: Any,
         accounting: Any,
         confirm_fn: Any = None,
         is_tty: bool | None = None,
@@ -48,7 +47,6 @@ def test_dispatch_chat_turn_forwards_bindings_to_run_turn(monkeypatch: Any) -> N
                 "session": session,
                 "execute_actions": execute_actions,
                 "answer": answer,
-                "gather": gather,
                 "accounting": accounting,
                 "confirm_fn": confirm_fn,
                 "is_tty": is_tty,
@@ -63,14 +61,12 @@ def test_dispatch_chat_turn_forwards_bindings_to_run_turn(monkeypatch: Any) -> N
     session = object()
     execute = object()
     answer = object()
-    gather = object()
     accounting = object()
     confirm = object()
     output = object()
     bindings = ChatTurnBindings(
         execute_actions=execute,  # type: ignore[arg-type]
         answer=answer,  # type: ignore[arg-type]
-        gather=gather,  # type: ignore[arg-type]
         accounting=accounting,  # type: ignore[arg-type]
         confirm_fn=confirm,  # type: ignore[arg-type]
         is_tty=False,
@@ -86,7 +82,6 @@ def test_dispatch_chat_turn_forwards_bindings_to_run_turn(monkeypatch: Any) -> N
         "session": session,
         "execute_actions": execute,
         "answer": answer,
-        "gather": gather,
         "accounting": accounting,
         "confirm_fn": confirm,
         "is_tty": False,

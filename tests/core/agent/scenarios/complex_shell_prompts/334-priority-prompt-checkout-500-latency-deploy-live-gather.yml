@@ -51,4 +51,4 @@ tool_actions:
   tools:
   - query_datadog_logs
   - query_datadog_all
-  expect: valid_data_any
+  expect: not_called

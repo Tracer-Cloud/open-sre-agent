@@ -15,18 +15,17 @@ github.com/owner/repo URLs and follow-ups like "from this info create an issue o
 call github_cli directly. Do NOT emit assistant_handoff for these — they are NOT
 docs questions and are NOT covered by the DATA-RETRIEVAL handoff rule. Prefer
 github_cli over shell_run / !gh / raw gh. github_cli is action-only and will not
-run in gather.
+run in a later gather pass.
 Exception: GitHub issue/PR/repo create/list/view/merge/comment as a *standalone*
 request via `gh` is NOT the DATA-RETRIEVAL handoff — call github_cli, as above.
 Do NOT use github_cli when the user is diagnosing a crash/failure/outage and
 names GitHub among other sources to query (e.g. sentry + github issues +
-posthog) — emit a single assistant_handoff instead; the gather pass queries
-every named source. github_cli is for GitHub-only product operations, not
-multi-source diagnosis.
+posthog) — emit a single assistant_handoff instead. github_cli is for
+GitHub-only product operations, not multi-source diagnosis.
 Do NOT use github_cli (or shell_run / gh api stargazers) for star history,
-day-by-day stars, stars gained, or star velocity — emit
-assistant_handoff(requires_gather=true) so gather can call
-get_github_star_history (paginated gh scans routinely undercount). GitHub stars
+day-by-day stars, stars gained, or star velocity — emit assistant_handoff
+so the reply can use get_github_star_history (paginated gh scans routinely
+undercount). GitHub stars
 are repository data, not a product-analytics metric_read: omit evidence_kind,
 session_goal, and session_goal_items for these one-turn lookups.
 Pass args after the `gh` binary; optional repo as owner/name for -R.

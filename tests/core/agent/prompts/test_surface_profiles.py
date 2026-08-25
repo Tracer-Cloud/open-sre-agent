@@ -67,6 +67,7 @@ def test_cli_rules_reach_the_shell_prompt_and_not_the_gateway_one() -> None:
     shell = build(PromptSurface.INTERACTIVE_SHELL.value)
     gateway = build(PromptSurface.GATEWAY.value)
 
-    # Assert
-    assert len(shell) > len(gateway)
+    # Assert: both surfaces share the markdown base; cli_rules still change the rest.
     assert shell != gateway
+    assert "always call this surface the" in shell
+    assert "always call this surface the" not in gateway

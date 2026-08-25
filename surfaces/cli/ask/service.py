@@ -21,7 +21,6 @@ from core.agent_harness import (
     SessionManager,
     TurnResult,
 )
-from core.agent_harness.runtime import GatherPhase
 from core.agent_harness.spi.cancel import ensure_turn_cancel
 from core.tool import ToolExecutionHooks
 from infrastructure.errors import OpenSREError
@@ -170,7 +169,6 @@ def _run_agent_turn(prompt: str, hooks: ToolExecutionHooks) -> TurnResult:
                 ),
                 output=output,
                 prepare_session=_restrict_ask_capabilities,
-                gather=GatherPhase(),
                 console=console,
                 is_tty=False,
                 tool_hooks=hooks,

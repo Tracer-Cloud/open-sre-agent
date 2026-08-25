@@ -146,9 +146,6 @@ class EmptyPromptContextProvider:
     def setup_state(self) -> str:
         return ""
 
-    def suggested_synthetic_prompt(self) -> str:
-        return ""
-
     def log_diagnostics(self, reason: str) -> None:
         _ = reason
 

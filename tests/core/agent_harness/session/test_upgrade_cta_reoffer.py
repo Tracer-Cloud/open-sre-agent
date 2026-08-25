@@ -31,7 +31,6 @@ def _run_metric_ask(session: Session, text: str = "how many windows users") -> s
         text,
         session,
         execute_actions=_metric_execute,
-        gather=lambda *_a, **_k: "should-not-run",
         answer=lambda *_a, **_k: type("Run", (), {"response_text": "Draft outline."})(),
         accounting=DefaultTurnAccounting(session, text),
     )
@@ -75,7 +74,6 @@ def test_cta_reoffers_after_user_moves_on_without_accepting() -> None:
             handled=False,
             handoff_contents=("chat:other",),
         ),
-        gather=lambda *_a, **_k: "",
         answer=lambda *_a, **_k: type("Run", (), {"response_text": "Sure."})(),
         accounting=DefaultTurnAccounting(session, "other"),
     )

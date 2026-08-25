@@ -11,7 +11,7 @@ from core.agent_harness.session.pending_offer import (
 from core.agent_harness.turns.orchestrator import run_turn
 from core.agent_harness.turns.turn_results import ToolCallingTurnResult
 from surfaces.interactive_shell.session import Session
-from tests.shared.harness_turn_driver import answer_with_text, no_evidence
+from tests.shared.harness_turn_driver import answer_with_text
 
 
 def test_l0_cta_arms_integration_setup_offer_and_yes_expands() -> None:
@@ -35,7 +35,6 @@ def test_l0_cta_arms_integration_setup_offer_and_yes_expands() -> None:
         "how many windows users last 7 days",
         session,
         execute_actions=_execute,
-        gather=no_evidence,
         answer=answer_with_text("Draft outline."),
         accounting=DefaultTurnAccounting(session, "ask"),
     )

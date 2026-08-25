@@ -13,7 +13,7 @@ from typing import Literal
 
 from core.agent_harness.turns.turn_results import ToolCallingTurnResult
 
-RouteIntent = Literal["summarize_observation", "handled_without_llm", "gather_and_answer"]
+RouteIntent = Literal["summarize_observation", "handled_without_llm", "answer"]
 
 
 @dataclass(frozen=True)
@@ -75,11 +75,10 @@ def route_turn(
         return TurnRoute(intent="handled_without_llm")
     # ``/goal set`` attaches a host-owned goal mid-turn and the orchestrator
     # injects ``session_goal:continue`` for Want-me-to suppression. That tag
-    # must not force gather on the slash attach turn itself — autosubmit owns
-    # the first real metric work turn.
+    # must not force a second answer on the slash attach turn itself.
     if routing.action_handled and is_literal_slash_command(user_text):
         return TurnRoute(intent="handled_without_llm")
-    return TurnRoute(intent="gather_and_answer")
+    return TurnRoute(intent="answer")
 
 
 __all__ = [

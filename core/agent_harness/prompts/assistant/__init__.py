@@ -6,7 +6,7 @@ Package layout (read top-down):
 * ``blocks`` — ordered contributors (surface policy via ``SurfaceProfile``)
 * ``assemble`` — deep seam: parts → :class:`PromptEnvelope`
 * ``turn`` — provider → cache-split system/user messages
-* ``environment`` / ``observation`` / ``text`` — leaf producers and constants
+* ``environment`` / ``observation`` — leaf producers and per-turn handoff copy
 """
 
 from __future__ import annotations
@@ -24,15 +24,15 @@ from core.agent_harness.prompts.assistant.observation import (
     build_observation_block,
 )
 from core.agent_harness.prompts.assistant.parts import AssistantPromptParts
-from core.agent_harness.prompts.assistant.text import (
-    MARKDOWN_RULE,
-    TERMINOLOGY_RULE,
-)
 from core.agent_harness.prompts.assistant.turn import (
     AssistantPromptContextProvider,
     AssistantTurnPrompt,
     build_cli_agent_prompt_from_provider,
     build_cli_agent_turn_prompt,
+)
+from core.agent_harness.prompts.rules import CLI_ASSISTANT_MARKDOWN_RULE as MARKDOWN_RULE
+from core.agent_harness.prompts.rules import (
+    INTERACTIVE_SHELL_TERMINOLOGY_RULE as TERMINOLOGY_RULE,
 )
 
 __all__ = [

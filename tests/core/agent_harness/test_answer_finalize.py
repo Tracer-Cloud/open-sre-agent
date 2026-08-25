@@ -34,7 +34,7 @@ def test_finalize_appends_cta_and_requests_stream_finish_when_text_changes() -> 
 
     result = finalize_routed_answer(
         session=session,
-        route_intent="gather_and_answer",
+        route_intent="answer",
         response_text="Outline only.",
         evidence_for_offer=None,
         evidence_need=need,
@@ -61,7 +61,7 @@ def test_finalize_suppresses_investigate_when_session_goal_active() -> None:
 
     result = finalize_routed_answer(
         session=session,
-        route_intent="gather_and_answer",
+        route_intent="answer",
         response_text="Step 1 done.\n\nWant me to: dig further?",
         evidence_for_offer="evidence",
         evidence_need=need,
@@ -91,7 +91,7 @@ def test_finalize_flushes_gather_when_goal_active_even_without_closer() -> None:
 
     result = finalize_routed_answer(
         session=session,
-        route_intent="gather_and_answer",
+        route_intent="answer",
         response_text="Highest priority: Sentry. First step: nvm use 22.",
         evidence_for_offer="evidence",
         evidence_need=need,

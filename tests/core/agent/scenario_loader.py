@@ -139,12 +139,9 @@ class AnswerPolicy:
     conversational turns that answer in chat without executing a terminal
     action.
 
-    This flag does NOT describe the conversational data-gathering path
-    (``gather_tool_evidence``), where the assistant may query configured
-    integrations (Sentry, GitHub, PostHog, ...) while composing a chat answer.
-    That path is not modeled as planned/executed actions; it is asserted via
-    ``response_contract`` text and by execution-layer tests. See the ``Answer``
-    docstring for the full two-path model.
+    This flag does not describe investigation-pipeline tool use. Chat turns
+    stream an assistant answer after the action agent; there is no second
+    gather ReAct loop. See the ``Answer`` docstring.
     """
 
     executes_terminal_action: bool
@@ -152,12 +149,11 @@ class AnswerPolicy:
 
 @dataclass(frozen=True)
 class GatheredToolsContract:
-    """Assertions on which registered tools fire during the conversational
-    ``gather_tool_evidence`` loop for a turn.
+    """Assertions on which registered tools fire outside the action-agent surface.
 
-    A turn's conversational data-gathering pass runs the same registered tools
-    the investigation uses. This contract lets a scenario assert that the right
-    tools were (or were not) invoked when grounding a chat answer:
+    Chat turns no longer run a gather ReAct loop, so these contracts typically
+    assert ``not_called``. Investigation / leftover Agent.run tools still
+    record here:
 
     * ``must_call_any`` — at least one of these tool names must be invoked.
     * ``must_call_all`` — every one of these tool names must be invoked.
@@ -199,10 +195,10 @@ class Answer:
        the conversational assistant (an ``assistant_handoff``), i.e. no terminal
        action runs.
 
-    2. Conversational answer + ``gather_tool_evidence`` tool loop (the "chat"
-       path). Assert gather behaviour via ``tool_actions`` entries with
-       ``surface: gather`` and an ``expect`` mode (``not_called``, ``called``,
-       ``valid_data``, etc.). ``response_contract`` still covers reply text.
+    2. Conversational answer (the "chat" path). ``tool_actions`` entries with
+       ``surface: gather`` are leftover contracts; chat no longer runs that
+       loop, so they should expect ``not_called``. ``response_contract``
+       still covers reply text.
     """
 
     turn: AnswerTurn
