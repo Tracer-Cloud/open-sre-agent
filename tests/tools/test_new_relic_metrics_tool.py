@@ -241,7 +241,7 @@ def test_run_api_error_is_reported_as_unavailable() -> None:
 
 class TestMapQueryNewRelicMetrics:
     def test_records_entry_with_row_count(self) -> None:
-        evidence: dict = {}
+        evidence: dict[str, Any] = {}
 
         _map_query_new_relic_metrics(
             evidence,
@@ -255,7 +255,7 @@ class TestMapQueryNewRelicMetrics:
         assert entries[0]["summary"] == "3 row(s)"
 
     def test_records_entry_with_truncated_note(self) -> None:
-        evidence: dict = {}
+        evidence: dict[str, Any] = {}
 
         _map_query_new_relic_metrics(
             evidence, {"available": True, "results": [{"x": 1}], "truncated": True}, {}
@@ -264,7 +264,7 @@ class TestMapQueryNewRelicMetrics:
         assert evidence["catalog_entries"][0]["summary"] == "1 row(s) (truncated)"
 
     def test_records_nothing_when_no_results(self) -> None:
-        evidence: dict = {}
+        evidence: dict[str, Any] = {}
 
         _map_query_new_relic_metrics(
             evidence, {"available": True, "results": [], "total": 0, "truncated": False}, {}
@@ -273,7 +273,7 @@ class TestMapQueryNewRelicMetrics:
         assert "catalog_entries" not in evidence
 
     def test_records_nothing_on_unavailable_result(self) -> None:
-        evidence: dict = {}
+        evidence: dict[str, Any] = {}
 
         _map_query_new_relic_metrics(
             evidence, {"available": False, "error": "New Relic integration is not configured."}, {}

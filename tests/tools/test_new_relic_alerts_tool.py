@@ -215,7 +215,7 @@ def test_run_api_error_is_reported_as_unavailable() -> None:
 
 class TestMapQueryNewRelicAlerts:
     def test_records_entry_with_open_count(self) -> None:
-        evidence: dict = {}
+        evidence: dict[str, Any] = {}
 
         _map_query_new_relic_alerts(
             evidence,
@@ -236,8 +236,29 @@ class TestMapQueryNewRelicAlerts:
         assert entries[0]["source"] == "query_new_relic_alerts"
         assert entries[0]["summary"] == "2 incident(s), 1 open"
 
+    def test_records_entry_for_all_closed_incidents_states_zero_open(self) -> None:
+        """An all-closed result is a real, distinct finding ("nothing is still
+        firing") -- the summary must state "0 open" explicitly, not omit the
+        clause and leave it ambiguous whether open-ness was even checked."""
+        evidence: dict[str, Any] = {}
+
+        _map_query_new_relic_alerts(
+            evidence,
+            {
+                "available": True,
+                "incidents": [
+                    {"incident_id": "1", "status": "closed"},
+                    {"incident_id": "2", "status": "closed"},
+                ],
+                "truncated": False,
+            },
+            {},
+        )
+
+        assert evidence["catalog_entries"][0]["summary"] == "2 incident(s), 0 open"
+
     def test_records_entry_with_truncated_note(self) -> None:
-        evidence: dict = {}
+        evidence: dict[str, Any] = {}
 
         _map_query_new_relic_alerts(
             evidence,
@@ -249,10 +270,10 @@ class TestMapQueryNewRelicAlerts:
             {},
         )
 
-        assert evidence["catalog_entries"][0]["summary"] == "1 incident(s) (truncated)"
+        assert evidence["catalog_entries"][0]["summary"] == "1 incident(s), 0 open (truncated)"
 
     def test_records_nothing_when_no_incidents(self) -> None:
-        evidence: dict = {}
+        evidence: dict[str, Any] = {}
 
         _map_query_new_relic_alerts(
             evidence, {"available": True, "incidents": [], "total": 0, "truncated": False}, {}
@@ -261,7 +282,7 @@ class TestMapQueryNewRelicAlerts:
         assert "catalog_entries" not in evidence
 
     def test_records_nothing_on_unavailable_result(self) -> None:
-        evidence: dict = {}
+        evidence: dict[str, Any] = {}
 
         _map_query_new_relic_alerts(
             evidence, {"available": False, "error": "New Relic integration is not configured."}, {}

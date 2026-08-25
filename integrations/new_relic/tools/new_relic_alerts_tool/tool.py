@@ -67,9 +67,10 @@ def _map_query_new_relic_alerts(
         for incident in incidents
         if isinstance(incident, dict) and incident.get("status") == STATUS_OPEN
     )
-    summary = f"{len(incidents)} incident(s)"
-    if open_count:
-        summary += f", {open_count} open"
+    # Always state the open count, even at 0 — an all-closed result is a real,
+    # distinct finding ("nothing is still firing") from an ambiguous summary
+    # that just omits the clause when there happens to be nothing open.
+    summary = f"{len(incidents)} incident(s), {open_count} open"
     if output.get("truncated"):
         summary += " (truncated)"
     record_evidence_entry(
