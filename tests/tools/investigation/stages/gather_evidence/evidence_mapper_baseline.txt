@@ -49,7 +49,6 @@ get_clickhouse_query_activity
 get_clickhouse_system_health
 get_cloudwatch_batch_metrics
 get_cloudwatch_logs
-get_dagster_run_logs
 get_eks_deployment_status
 get_eks_events
 get_eks_node_health
@@ -166,10 +165,6 @@ kubernetes_list_pods
 kubernetes_list_services
 kubernetes_list_statefulsets
 list_bitbucket_commits
-list_dagster_assets
-list_dagster_runs
-list_dagster_schedule_ticks
-list_dagster_sensor_ticks
 list_eks_clusters
 list_eks_deployments
 list_eks_namespaces

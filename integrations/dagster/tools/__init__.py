@@ -4,6 +4,7 @@
 
 from typing import Any
 
+from core.domain.types.evidence import record_evidence_entry
 from core.domain.types.tools import ToolSurface
 from core.tool_framework import tool
 from integrations.dagster import (
@@ -14,10 +15,38 @@ from integrations.dagster import (
 )
 
 
+def _items_at(output: dict[str, Any], *keys: str) -> list[Any]:
+    value: Any = output
+    for key in keys:
+        if not isinstance(value, dict):
+            return []
+        value = value.get(key)
+    return value if isinstance(value, list) else []
+
+
+def _count_phrase(count: int, noun: str) -> str:
+    suffix = "" if count == 1 else "s"
+    return f"{count} {noun}{suffix}"
+
+
+def _map_dagster_assets(
+    evidence: dict[str, Any], output: dict[str, Any], _input: dict[str, Any]
+) -> None:
+    assets = _items_at(output, "data", "assetsOrError", "nodes")
+    if assets:
+        record_evidence_entry(
+            evidence,
+            source="list_dagster_assets",
+            label="Dagster Assets",
+            summary=_count_phrase(len(assets), "asset"),
+        )
+
+
 @tool(
     name="list_dagster_assets",
     description="List Dagster assets and their latest materialization status.",
     source="dagster",
+    evidence_mapper=_map_dagster_assets,
     surfaces=(ToolSurface.INVESTIGATION, ToolSurface.CHAT),
     is_available=dagster_is_available,
     injected_params=("api_token", "endpoint"),
@@ -47,6 +76,30 @@ from integrations.dagster import (
 )
 
 
+def _map_dagster_run_logs(
+    evidence: dict[str, Any], output: dict[str, Any], _input: dict[str, Any]
+) -> None:
+    events = _items_at(output, "data", "logsForRun", "events")
+    if not events:
+        return
+    summary = output.get("summary")
+    failure_count = summary.get("failure_count", 0) if isinstance(summary, dict) else 0
+    failure_count = failure_count if isinstance(failure_count, int) else 0
+    summary_text = (
+        f"{_count_phrase(len(events), 'event')}, {_count_phrase(failure_count, 'step failure')}"
+    )
+    if isinstance(summary, dict) and (
+        summary.get("truncated") is True or summary.get("fetch_error")
+    ):
+        summary_text += " (partial results; failure count is a lower bound)"
+    record_evidence_entry(
+        evidence,
+        source="get_dagster_run_logs",
+        label="Dagster Run Logs",
+        summary=summary_text,
+    )
+
+
 @tool(
     name="get_dagster_run_logs",
     description=(
@@ -67,6 +120,7 @@ from integrations.dagster import (
         "the fetch early; the failures shown are a partial set."
     ),
     source="dagster",
+    evidence_mapper=_map_dagster_run_logs,
     surfaces=(ToolSurface.INVESTIGATION, ToolSurface.CHAT),
     is_available=dagster_is_available,
     injected_params=("api_token", "endpoint"),
@@ -97,6 +151,19 @@ from integrations.dagster import (
 )
 
 
+def _map_dagster_runs(
+    evidence: dict[str, Any], output: dict[str, Any], _input: dict[str, Any]
+) -> None:
+    runs = _items_at(output, "data", "runsOrError", "results")
+    if runs:
+        record_evidence_entry(
+            evidence,
+            source="list_dagster_runs",
+            label="Dagster Runs",
+            summary=_count_phrase(len(runs), "run"),
+        )
+
+
 @tool(
     name="list_dagster_runs",
     description=(
@@ -111,6 +178,7 @@ from integrations.dagster import (
         "incident investigations."
     ),
     source="dagster",
+    evidence_mapper=_map_dagster_runs,
     surfaces=(ToolSurface.INVESTIGATION, ToolSurface.CHAT),
     is_available=dagster_is_available,
     injected_params=("api_token", "endpoint"),
@@ -142,6 +210,19 @@ from integrations.dagster import (
 )
 
 
+def _map_dagster_schedule_ticks(
+    evidence: dict[str, Any], output: dict[str, Any], _input: dict[str, Any]
+) -> None:
+    ticks = _items_at(output, "data", "scheduleOrError", "scheduleState", "ticks")
+    if ticks:
+        record_evidence_entry(
+            evidence,
+            source="list_dagster_schedule_ticks",
+            label="Dagster Schedule Ticks",
+            summary=_count_phrase(len(ticks), "schedule tick"),
+        )
+
+
 @tool(
     name="list_dagster_schedule_ticks",
     description=(
@@ -150,6 +231,7 @@ from integrations.dagster import (
         "location name, repository name, and schedule name."
     ),
     source="dagster",
+    evidence_mapper=_map_dagster_schedule_ticks,
     surfaces=(ToolSurface.INVESTIGATION, ToolSurface.CHAT),
     is_available=dagster_is_available,
     injected_params=("api_token", "endpoint"),
@@ -189,6 +271,19 @@ from integrations.dagster import (
 )
 
 
+def _map_dagster_sensor_ticks(
+    evidence: dict[str, Any], output: dict[str, Any], _input: dict[str, Any]
+) -> None:
+    ticks = _items_at(output, "data", "sensorOrError", "sensorState", "ticks")
+    if ticks:
+        record_evidence_entry(
+            evidence,
+            source="list_dagster_sensor_ticks",
+            label="Dagster Sensor Ticks",
+            summary=_count_phrase(len(ticks), "sensor tick"),
+        )
+
+
 @tool(
     name="list_dagster_sensor_ticks",
     description=(
@@ -197,6 +292,7 @@ from integrations.dagster import (
         "location name, repository name, and sensor name."
     ),
     source="dagster",
+    evidence_mapper=_map_dagster_sensor_ticks,
     surfaces=(ToolSurface.INVESTIGATION, ToolSurface.CHAT),
     is_available=dagster_is_available,
     injected_params=("api_token", "endpoint"),
