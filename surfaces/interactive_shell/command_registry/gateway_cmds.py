@@ -17,6 +17,7 @@ from surfaces.interactive_shell.command_registry.types import SlashCommand
 from surfaces.interactive_shell.runtime import Session
 from surfaces.interactive_shell.ui import DIM, ERROR, HIGHLIGHT
 from surfaces.shared.gateway_entrypoint import gateway_entry_argv
+from surfaces.shared.gateway_status import gateway_status_lines
 
 _USAGE = "/gateway [start|stop|status|logs [lines]]"
 
@@ -35,11 +36,14 @@ def _cmd_gateway(_session: Session, console: Console, args: list[str]) -> bool:
         _print_outcome(console, *stop_gateway_daemon())
     elif sub == "status":
         pid = gateway_daemon_pid()
-        state = f"[{HIGHLIGHT}]running (pid {pid})[/]" if pid else f"[{DIM}]stopped[/]"
-        console.print(f"OpenSRE gateway: {state}")
-        for name, detail in read_component_status().items():
+        status_lines = gateway_status_lines(pid=pid, components=read_component_status())
+        daemon_label, daemon_state = status_lines.daemon
+        styled_state = f"[{HIGHLIGHT}]{daemon_state}[/]" if pid else f"[{DIM}]{daemon_state}[/]"
+        console.print(f"{daemon_label}: {styled_state}")
+        for name, detail in status_lines.components:
             console.print(f"  {escape(name)}: {escape(detail)}")
-        console.print(f"[{DIM}]logs: {GATEWAY_LOG_FILE}[/]")
+        logs_label, logs_path = status_lines.logs
+        console.print(f"[{DIM}]{logs_label}: {logs_path}[/]")
     elif sub == "logs":
         lines = int(args[1]) if len(args) > 1 and args[1].isdigit() else 30
         if tail := read_gateway_log_tail(lines):

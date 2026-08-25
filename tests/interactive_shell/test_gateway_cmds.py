@@ -37,6 +37,19 @@ def test_status_shows_running_daemon_and_components(
     assert "running (pid 4242)" in out
     assert "web: serving :8000" in out
     assert "telegram: polling for messages" in out
+    assert "Logs:" in out
+
+
+def test_status_escapes_component_markup(monkeypatch: pytest.MonkeyPatch, console: Console) -> None:
+    monkeypatch.setattr(f"{_MODULE}.gateway_daemon_pid", lambda: 4242)
+    monkeypatch.setattr(
+        f"{_MODULE}.read_component_status",
+        lambda: {"web": "[bold red]not really bold[/bold red]"},
+    )
+
+    assert _cmd_gateway(MagicMock(), console, ["status"]) is True
+
+    assert "[bold red]not really bold[/bold red]" in _output(console)
 
 
 def test_bare_gateway_defaults_to_status(monkeypatch: pytest.MonkeyPatch, console: Console) -> None:

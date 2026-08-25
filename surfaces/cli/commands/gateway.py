@@ -16,6 +16,7 @@ from gateway.core.process import (
 )
 from surfaces.cli.host import cli_host
 from surfaces.shared.gateway_entrypoint import gateway_entry_argv
+from surfaces.shared.gateway_status import gateway_status_lines
 
 
 def _echo_components() -> None:
@@ -69,10 +70,13 @@ def gateway_stop_command() -> None:
 @gateway_command.command("status")
 def gateway_status_command() -> None:
     """Show the gateway daemon and its components (web, telegram, scheduler)."""
-    pid = gateway_daemon_pid()
-    click.echo(f"OpenSRE gateway: {f'running (pid {pid})' if pid else 'stopped'}")
-    _echo_components()
-    click.echo(f"Logs: {GATEWAY_LOG_FILE}")
+    lines = gateway_status_lines(pid=gateway_daemon_pid(), components=read_component_status())
+    daemon_label, daemon_state = lines.daemon
+    click.echo(f"{daemon_label}: {daemon_state}")
+    for name, detail in lines.components:
+        click.echo(f"  {name}: {detail}")
+    logs_label, logs_path = lines.logs
+    click.echo(f"{logs_label}: {logs_path}")
 
 
 @gateway_command.command("logs")
