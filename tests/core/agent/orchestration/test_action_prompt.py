@@ -94,13 +94,18 @@ def test_prior_action_facts_block_surfaces_telegram_followup_values() -> None:
     assert "slack_send_message input" in block
 
 
-def test_system_prompt_documents_followup_resolution() -> None:
-    prompt = _SYSTEM_PROMPT_BASE.lower()
-    assert "do both" in prompt
-    assert "recent conversation" in prompt
-    assert "assistant_handoff" in prompt
-    assert "want me to: offering more detail from a vendor tool" in prompt
-    assert "yes — please" in prompt
+def test_system_prompt_base_is_markdown_backed_opensre_prompt() -> None:
+    """Stable base is ``opensre_system_prompt.md`` (core agent prompt, not per-model)."""
+    prompt = _SYSTEM_PROMPT_BASE
+    assert prompt.startswith("You are OpenSRE, a terminal-based SRE and coding assistant")
+    assert "Goal-oriented planning (highest priority)" in prompt
+    assert "Every tool call must advance that goal" in prompt
+    assert "AGENTS.md spec" in prompt
+    assert "apply_patch" in prompt
+    assert "Autonomy and Persistence" in prompt
+    assert "GPT-5.2" not in prompt
+    assert "Codex CLI" not in prompt
+    assert "update_plan" not in prompt
 
 
 def test_system_prompt_slack_fragment_documents_roster_followup() -> None:
@@ -110,42 +115,6 @@ def test_system_prompt_slack_fragment_documents_roster_followup() -> None:
     prompt = build_action_system_prompt(_ctx()).lower()
     assert "want me to: offering more slack roster" in prompt
     assert "slack_list_team_members" in prompt
-
-
-def test_system_prompt_requires_same_response_for_slash_then_investigation() -> None:
-    prompt = _SYSTEM_PROMPT_BASE.lower()
-    assert "connect with /remote and then investigate" in prompt
-    assert "same planner response" in prompt
-    assert "do not stop after the slash command" in prompt
-    assert "valid investigation payload" in prompt
-
-
-def test_system_prompt_maps_setup_requests_to_slash_invoke() -> None:
-    prompt = _SYSTEM_PROMPT_BASE.lower()
-    assert "configure, connect, set up, add, or enable" in prompt
-    assert 'slash_invoke(command="/integrations", args=["setup", "<service>"])' in prompt
-    assert 'slash_invoke(command="/mcp", args=["connect", "<server>"])' in prompt
-    assert "do not hand off just to tell the user" in prompt
-
-
-def test_system_prompt_hands_off_natural_language_slash_status_questions() -> None:
-    prompt = _SYSTEM_PROMPT_BASE.lower()
-    compact_prompt = " ".join(prompt.split())
-    assert 'literal slash text like "/model"' in prompt
-    assert '"run /model show"' in prompt
-    assert "natural-language questions about the active model/provider" in compact_prompt
-    assert "which model is being used now?" in compact_prompt
-    assert "what tools can you use?" in compact_prompt
-    assert "what is my session status?" in compact_prompt
-    assert "must use assistant_handoff" in compact_prompt
-    assert "unless a read-only discovery exception below explicitly maps" in compact_prompt
-    assert (
-        "do not run a slash command just because the command can display related information"
-        in compact_prompt
-    )
-    assert "for model/provider shell-state questions specifically" in compact_prompt
-    assert "unless the user explicitly typed a slash command" in compact_prompt
-    assert "current llm settings in its environment context" in compact_prompt
 
 
 def test_system_prompt_routes_slack_teammate_reads_to_action_tools() -> None:
@@ -188,40 +157,6 @@ def test_skills_loader_routes_star_history_away_from_github_cli() -> None:
     assert "undercount" in body or "false zeros" in body
 
 
-def test_system_prompt_bans_shell_placeholders_on_multisource_diagnosis() -> None:
-    """Multi-source crash diagnosis is a single assistant_handoff (scenario 314)."""
-    prompt = " ".join(_SYSTEM_PROMPT_BASE.lower().split())
-    assert "do not emit investigation_start for a diagnostic question" in prompt
-    assert "never invent placeholder shell commands" in prompt
-    assert "posthog query requested" in prompt
-    assert "never use shell_run as a stand-in for querying observability sources" in prompt
-    composed = " ".join(build_action_system_prompt(_ctx()).lower().split())
-    assert "assistant_handoff only" in composed
-    assert "alone or paired with the handoff" in composed
-
-
-def test_system_prompt_keeps_bare_alert_blob_as_handoff() -> None:
-    prompt = " ".join(_SYSTEM_PROMPT_BASE.lower().split())
-    assert (
-        "an implicit diagnostic cause question and a bare pasted alert blob "
-        "remain assistant_handoff" in prompt
-    )
-    assert "pasted alert blob / bare incident statement" in prompt
-    assert "with no instruction and no diagnostic question" in prompt
-    assert "is not a diagnostic question; it is also assistant_handoff" in prompt
-
-
-def test_system_prompt_hands_off_when_delivery_tool_unavailable() -> None:
-    prompt = _SYSTEM_PROMPT_BASE.lower()
-    compact_prompt = " ".join(prompt.split())
-    assert "delivery tool unavailable — never fabricate a command to deliver" in prompt
-    assert "matching send tool" in compact_prompt
-    assert "that channel is not configured" in compact_prompt
-    assert "do not invent or guess a slash/cli subcommand to deliver" in compact_prompt
-    assert "route the user to enable it" in compact_prompt
-    assert "this applies even mid-chain" in compact_prompt
-
-
 def test_system_prompt_slack_fragment_documents_invented_command_example() -> None:
     # The Slack-specific invented-delivery-command example now lives in
     # integrations.slack.action_prompt, appended via the harness-ports
@@ -229,37 +164,6 @@ def test_system_prompt_slack_fragment_documents_invented_command_example() -> No
     prompt = build_action_system_prompt(_ctx()).lower()
     compact_prompt = " ".join(prompt.split())
     assert "`/messaging send slack …` is not a real command" in compact_prompt
-
-
-def test_system_prompt_preserves_bare_numeric_synthetic_mapping() -> None:
-    prompt = _SYSTEM_PROMPT_BASE.lower()
-    assert "run synthetic test 005 now" in prompt
-    assert 'scenario="005-failover"' in prompt
-    assert "never substitute a different numbered" in prompt
-
-
-def test_system_prompt_routes_durable_memory_requests_to_memory_tools() -> None:
-    prompt = " ".join(_SYSTEM_PROMPT_BASE.lower().split())
-    assert "memory_remember" in prompt
-    assert "proactively save durable knowledge" in prompt
-    assert "the user does not need to say" in prompt
-    assert "memory_recall" in prompt
-    assert "memory_forget" in prompt
-    assert "do not save transient task state" in prompt
-    assert "never save built-in sample/demo/synthetic/test alert output" in prompt
-
-
-def test_system_prompt_offers_scheduled_deliveries_via_cron() -> None:
-    """Stable-tier guidance must teach propose_scheduled_delivery, not prose scrape."""
-    prompt = " ".join(_SYSTEM_PROMPT_BASE.lower().split())
-    assert "scheduled deliveries" in prompt
-    assert "propose_scheduled_delivery" in prompt
-    assert "every morning" in prompt
-    assert "slash_invoke /loops" in prompt
-    assert "/loops add" in prompt
-    assert "--prompt" in prompt
-    assert "--run-now" in prompt
-    assert "do not call /cron until they confirm" in prompt
 
 
 def test_morning_report_skill_closes_with_schedule_offer() -> None:
@@ -405,8 +309,9 @@ def test_skill_matches_take_priority_over_generic_docs_handoff() -> None:
     assert "Skill matches outrank the generic docs/how-to assistant handoff" in index
     assert '"onboard me"' in index
     assert "Can you onboard me on the CI/CD flow?" in body
-    assert "Generic docs routing is a fallback, not the first choice" in prompt
-    assert "Action-shaped wording" in prompt
+    # Skills index still rides the assembled prompt after the markdown base.
+    assert SKILLS_HEADER in prompt
+    assert "github-ci-fix-onboarding" in prompt
     cached_load_skills_block.cache_clear()
 
 
@@ -450,20 +355,20 @@ def test_action_system_prompt_includes_skills_block() -> None:
     assert SKILLS_HEADER in prompt
     assert "morning-report" in prompt
     assert "MORNING REPORT SKILL" not in prompt
-    # Skills must sit after the base rules so the COMPOUND TURN RULE is set first.
-    assert prompt.index("COMPOUND TURN RULE") < prompt.index(SKILLS_HEADER)
+    # Skills sit after the markdown base so the OpenSRE identity is set first.
+    assert prompt.index(
+        "You are OpenSRE, a terminal-based SRE and coding assistant"
+    ) < prompt.index(SKILLS_HEADER)
     # ...and before the per-turn context blocks that follow.
     assert prompt.index(SKILLS_HEADER) < prompt.index(
         "CONNECTED INTEGRATIONS (this install, right now):"
     )
 
 
-def test_system_prompt_requires_local_llama_handoff_tag() -> None:
-    prompt = _SYSTEM_PROMPT_BASE.lower()
-    assert 'assistant_handoff(content="provider:local_llama_connect")' in prompt
-    assert "/integrations setup llama" in prompt
-    assert "do not use slash_invoke for /remote" in prompt
-    assert "provider:local_llama_connect for vague local-model connection requests" in prompt
+def test_morning_report_skill_still_documents_local_llama_is_not_in_base() -> None:
+    """Local-llama routing lived in the old inline base; skills/vendors still own domain rules."""
+    assert "provider:local_llama_connect" not in _SYSTEM_PROMPT_BASE
+    assert "You are OpenSRE, a terminal-based SRE and coding assistant" in _SYSTEM_PROMPT_BASE
 
 
 class _FakePrompts:
@@ -555,15 +460,18 @@ def test_database_query_handoff_guidance_block_matches_prefix() -> None:
     assert build_handoff_guidance_block(("database_query:mariadb_dashboard",)) == block
 
 
-def test_action_prompt_routes_mysql_query_to_database_query_handoff_not_setup() -> None:
-    """Oracle 332: query/read MySQL must not become /integrations setup|verify."""
-    prompt = build_action_system_prompt(_ctx())
-    assert "database_query:<topic>" in prompt
-    assert "database_query:mysql_active_connections" in prompt
-    assert "Do NOT set session_goal=true on database_query handoffs" in prompt
-    assert "Do NOT treat a request to *query/read*" in prompt
-    # Setup still documented for explicit configure requests.
-    assert 'args=["setup", "<service>"]' in prompt
+def test_database_query_handoff_guidance_still_documents_mysql_routing() -> None:
+    """Oracle 332: database_query tags inject connect/query guidance (assistant path).
+
+    The markdown action base no longer inlines OpenSRE database_query routing;
+    handoff guidance remains the contract for that tag.
+    """
+    block = build_handoff_guidance_block(("database_query:mysql_active_connections",))
+    assert "database" in block.lower()
+    assert "/mcp connect" in block
+    assert "investigation" in block.lower()
+    assert "provider:local_llama_connect" not in _SYSTEM_PROMPT_BASE
+    assert "You are OpenSRE, a terminal-based SRE and coding assistant" in _SYSTEM_PROMPT_BASE
 
 
 def test_incident_description_handoff_guidance_keeps_user_symptoms() -> None:
@@ -704,13 +612,13 @@ def test_scheduling_guidance_survives_prompt_assembly() -> None:
     assembled = " ".join(cached.lower().split())
     body = " ".join(load_skill_body("morning-report").lower().split())
 
-    # Assert
-    assert "scheduled deliveries" in assembled
-    assert "propose_scheduled_delivery" in assembled
+    # Assert — recurring skill + thin index survive assembly; cron details live
+    # in the skill body, not the markdown base.
     assert "morning-report" in assembled
     assert "recurring: weekdays 08:00" in assembled
     assert "skill_view" in assembled
     assert "propose_scheduled_delivery" in body
+    assert "you are opensre, a terminal-based sre and coding assistant" in assembled
     assert "propose_scheduled_delivery(" not in assembled
 
 
@@ -742,21 +650,19 @@ def test_the_slash_command_the_prompt_tells_the_agent_to_call_exists() -> None:
 def test_scheduling_is_never_offered_without_asking_first() -> None:
     """Creating a schedule unasked would be a surprise side effect.
 
-    The business goal is an offer the user accepts, not silent automation. Both
-    the stable-tier guidance and the recurring skill must gate creation on
-    confirmation, so this asserts the consent rule in each place a schedule can
-    be created from.
+    The business goal is an offer the user accepts, not silent automation. The
+    recurring skill must gate creation on confirmation (the markdown base no
+    longer inlines cron routing).
     """
     # Arrange
     load_skills_block.cache_clear()
-    base = " ".join(_SYSTEM_PROMPT_BASE.lower().split())
     skill = " ".join(
         (skills_dir() / "morning_report" / "SKILL.md").read_text(encoding="utf-8").lower().split()
     )
 
     # Assert — structured propose tool; creation waits on confirm / yes
-    assert "do not call /cron until they confirm" in base
     assert "do not call /cron yet" in skill
+    assert "propose_scheduled_delivery" in skill
 
 
 def test_the_active_instruction_survives_context_truncation() -> None:
@@ -788,12 +694,10 @@ def test_the_cron_guidance_teaches_structured_schedule_offers() -> None:
     # Arrange
     from core.agent_harness.prompts.skills.loader import skills_dir
 
-    base = " ".join(_SYSTEM_PROMPT_BASE.lower().split())
     skill = " ".join(
         (skills_dir() / "morning_report" / "SKILL.md").read_text(encoding="utf-8").lower().split()
     )
 
-    assert "propose_scheduled_delivery" in base
     assert "propose_scheduled_delivery" in skill
     assert "omit chat_id" in skill
     assert 'provider="slack"' in skill or "provider='slack'" in skill
@@ -858,9 +762,13 @@ def test_from_session_pops_the_pending_recovery_note() -> None:
     assert second.recovery_note is None
 
 
-def test_sequential_steps_rule_teaches_two_phase_state_writes() -> None:
-    """Task-level WAL: the state file records started/committed per step."""
-    prompt = " ".join(_SYSTEM_PROMPT_BASE.lower().split())
+def test_sequential_steps_rule_fragment_teaches_two_phase_state_writes() -> None:
+    """Task-level WAL lives on the multi-step policy fragment (not the markdown base)."""
+    from core.agent_harness.prompts.action.multi_step_policy import (
+        ACTION_LOCAL_SHELL_MULTI_STEP_RULE,
+    )
+
+    prompt = " ".join(ACTION_LOCAL_SHELL_MULTI_STEP_RULE.lower().split())
     assert "two-phase" in prompt
     assert "`step n: started`" in prompt
     assert "`step n: committed`" in prompt

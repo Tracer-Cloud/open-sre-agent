@@ -39,9 +39,9 @@ complete via `done=` indices; condition-only handoff goals need
 `session_goal:achieved` **with tool evidence** (bare `achieved` ignored);
 **host-owned** (`/goal set`) condition-only goals may achieve on the tag alone
 (explicit slash-path rule). Host reason strings live in `SessionGoalReason` —
-never embed `session_goal:…` tag grammar in painted reasons. Reason derive:
-`session_goal.goal.derive_session_goal_reason`. Paint (presentation only):
-`session_goal/progress.py` (`SESSION_GOAL_PAINT_MARK`). Continuation prompts:
+never embed `session_goal:…` tag grammar in progress reasons. Reason derive:
+`session_goal.goal.derive_session_goal_reason`. Progress (presentation only):
+`session_goal/progress.py` (`SESSION_GOAL_PROGRESS_MARK`). Continuation prompts:
 `session_goal/continuation.py`. Flush/restore: `session_goal/persist.py`. Optional LLM
 confirm for the tool-evidence path: `build_session_goal_llm_evaluator` in
 `session_goal/confirm.py` (pass as `evaluate=` to the session-goal loop) —

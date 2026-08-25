@@ -18,6 +18,7 @@ class PromptBlockId(StrEnum):
 
     # Action envelope.
     ACTION_SYSTEM_BASE = "action-agent-system-base"
+    ACTION_GOAL_POLICY = "action-agent-goal-policy"
     ACTION_VENDOR_FRAGMENTS = "action-agent-vendor-fragments"
     ACTION_RUNTIME_FACTS = "action-agent-runtime-facts"
     ACTION_SKILLS = "action-agent-skills"
