@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from typing import Any
 from unittest.mock import patch
 
 from integrations.clickhouse.tools.clickhouse_system_health_tool import (
@@ -181,7 +182,7 @@ def test_run_error_path() -> None:
 
 class TestMapGetClickhouseSystemHealth:
     def test_records_entry_with_version_uptime_and_table_count(self) -> None:
-        evidence: dict = {}
+        evidence: dict[str, Any] = {}
 
         _map_get_clickhouse_system_health(
             evidence,
@@ -202,7 +203,7 @@ class TestMapGetClickhouseSystemHealth:
 
     def test_records_entry_without_table_count_when_table_stats_empty(self) -> None:
         """A failed table_stats sub-call (falls back to []) must not add a "0 tables" clause."""
-        evidence: dict = {}
+        evidence: dict[str, Any] = {}
 
         _map_get_clickhouse_system_health(
             evidence,
@@ -213,7 +214,7 @@ class TestMapGetClickhouseSystemHealth:
         assert evidence["catalog_entries"][0]["summary"] == "version 23.8.1, uptime 3600s"
 
     def test_records_nothing_on_unavailable_result(self) -> None:
-        evidence: dict = {}
+        evidence: dict[str, Any] = {}
 
         _map_get_clickhouse_system_health(
             evidence, {"available": False, "error": "connection refused"}, {}
@@ -222,7 +223,7 @@ class TestMapGetClickhouseSystemHealth:
         assert "catalog_entries" not in evidence
 
     def test_records_nothing_when_version_and_uptime_both_missing(self) -> None:
-        evidence: dict = {}
+        evidence: dict[str, Any] = {}
 
         _map_get_clickhouse_system_health(evidence, {"available": True, "metrics": {}}, {})
 

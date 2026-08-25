@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from typing import Any
 from unittest.mock import patch
 
 from integrations.clickhouse.tools.clickhouse_query_activity_tool import (
@@ -103,7 +104,7 @@ def test_run_error_path() -> None:
 
 class TestMapGetClickhouseQueryActivity:
     def test_records_entry_with_failed_count(self) -> None:
-        evidence: dict = {}
+        evidence: dict[str, Any] = {}
 
         _map_get_clickhouse_query_activity(
             evidence,
@@ -125,7 +126,7 @@ class TestMapGetClickhouseQueryActivity:
         assert entries[0]["summary"] == "3 queries, 1 failed"
 
     def test_records_entry_without_failed_suffix_when_all_succeeded(self) -> None:
-        evidence: dict = {}
+        evidence: dict[str, Any] = {}
 
         _map_get_clickhouse_query_activity(
             evidence,
@@ -136,7 +137,7 @@ class TestMapGetClickhouseQueryActivity:
         assert evidence["catalog_entries"][0]["summary"] == "1 query"
 
     def test_records_nothing_when_no_queries(self) -> None:
-        evidence: dict = {}
+        evidence: dict[str, Any] = {}
 
         _map_get_clickhouse_query_activity(
             evidence, {"available": True, "total_returned": 0, "queries": []}, {}
@@ -145,7 +146,7 @@ class TestMapGetClickhouseQueryActivity:
         assert "catalog_entries" not in evidence
 
     def test_records_nothing_on_unavailable_result(self) -> None:
-        evidence: dict = {}
+        evidence: dict[str, Any] = {}
 
         _map_get_clickhouse_query_activity(
             evidence, {"available": False, "error": "Not configured."}, {}
