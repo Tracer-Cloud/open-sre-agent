@@ -2,6 +2,7 @@
 
 from typing import Any
 
+from core.domain.types.evidence import record_evidence_entry
 from core.domain.types.tools import ToolSurface
 from core.tool_framework import tool
 from integrations.redis import (
@@ -10,6 +11,21 @@ from integrations.redis import (
     redis_extract_params,
     redis_is_available,
 )
+
+
+def _map_get_redis_list_depth(
+    evidence: dict[str, Any], output: dict[str, Any], _input: dict[str, Any]
+) -> None:
+    exists = output.get("exists", False)
+    depth = output.get("depth")
+    key = output.get("key", "")
+    if exists and depth is not None:
+        record_evidence_entry(
+            evidence,
+            source="get_redis_list_depth",
+            label="Redis List Depth",
+            summary=f"Key '{key}': {depth} item(s) in queue",
+        )
 
 
 @tool(
@@ -21,6 +37,7 @@ from integrations.redis import (
     ),
     source="redis",
     surfaces=(ToolSurface.INVESTIGATION, ToolSurface.CHAT),
+    evidence_mapper=_map_get_redis_list_depth,
     use_cases=[
         "Check a job-queue backlog when workers fall behind (growing list length).",
         "Inspect the head/tail of a queue to spot stuck, malformed, or poison jobs.",

@@ -2,6 +2,7 @@
 
 from typing import Any
 
+from core.domain.types.evidence import record_evidence_entry
 from core.domain.types.tools import ToolSurface
 from core.tool_framework import tool
 from integrations.redis import (
@@ -10,6 +11,22 @@ from integrations.redis import (
     redis_extract_params,
     redis_is_available,
 )
+
+
+def _map_get_redis_latency_doctor(
+    evidence: dict[str, Any], output: dict[str, Any], _input: dict[str, Any]
+) -> None:
+    latest = output.get("latest", [])
+    report = output.get("report", "")
+    if latest or report:
+        count = len(latest)
+        summary = f"{count} latency event(s) detected" if count else "No latency events; see report"
+        record_evidence_entry(
+            evidence,
+            source="get_redis_latency_doctor",
+            label="Redis Latency Doctor",
+            summary=summary,
+        )
 
 
 @tool(
@@ -22,6 +39,7 @@ from integrations.redis import (
     ),
     source="redis",
     surfaces=(ToolSurface.INVESTIGATION, ToolSurface.CHAT),
+    evidence_mapper=_map_get_redis_latency_doctor,
     use_cases=[
         "Find the root cause of a Redis latency spike during an incident.",
         "Check whether RDB/AOF persistence or fork is stalling command processing.",

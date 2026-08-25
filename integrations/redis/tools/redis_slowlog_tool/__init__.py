@@ -2,6 +2,7 @@
 
 from typing import Any
 
+from core.domain.types.evidence import record_evidence_entry
 from core.domain.types.tools import ToolSurface
 from core.tool_framework import tool
 from integrations.redis import (
@@ -12,6 +13,20 @@ from integrations.redis import (
 )
 
 
+def _map_get_redis_slowlog(
+    evidence: dict[str, Any], output: dict[str, Any], _input: dict[str, Any]
+) -> None:
+    entries = output.get("entries", [])
+    if entries:
+        count = output.get("returned_entries", len(entries))
+        record_evidence_entry(
+            evidence,
+            source="get_redis_slowlog",
+            label="Redis Slow Log",
+            summary=f"{count} slow log entry(s) found",
+        )
+
+
 @tool(
     name="get_redis_slowlog",
     description=(
@@ -20,6 +35,7 @@ from integrations.redis import (
     ),
     source="redis",
     surfaces=(ToolSurface.INVESTIGATION, ToolSurface.CHAT),
+    evidence_mapper=_map_get_redis_slowlog,
     use_cases=[
         "Identify slow Redis commands when latency or timeouts are reported.",
         "Correlate a latency spike with specific expensive commands and their callers.",

@@ -2,6 +2,7 @@
 
 from typing import Any
 
+from core.domain.types.evidence import record_evidence_entry
 from core.domain.types.tools import ToolSurface
 from core.tool_framework import tool
 from integrations.redis import (
@@ -10,6 +11,21 @@ from integrations.redis import (
     redis_extract_params,
     redis_is_available,
 )
+
+
+def _map_get_redis_client_list(
+    evidence: dict[str, Any], output: dict[str, Any], _input: dict[str, Any]
+) -> None:
+    clients = output.get("clients", [])
+    if clients:
+        total = output.get("total_clients", len(clients))
+        blocked = output.get("blocked_clients", 0)
+        record_evidence_entry(
+            evidence,
+            source="get_redis_client_list",
+            label="Redis Client List",
+            summary=f"{total} clients, {blocked} blocked",
+        )
 
 
 @tool(
@@ -22,6 +38,7 @@ from integrations.redis import (
     ),
     source="redis",
     surfaces=(ToolSurface.INVESTIGATION, ToolSurface.CHAT),
+    evidence_mapper=_map_get_redis_client_list,
     use_cases=[
         "Diagnose connection-pool exhaustion when connected_clients is high or rising.",
         "Find clients blocked on BLPOP/BRPOP/XREAD during a stall or deadlock.",

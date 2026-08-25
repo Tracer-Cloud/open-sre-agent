@@ -2,6 +2,7 @@
 
 from typing import Any
 
+from core.domain.types.evidence import record_evidence_entry
 from core.domain.types.tools import ToolSurface
 from core.tool_framework import tool
 from integrations.redis import (
@@ -12,6 +13,32 @@ from integrations.redis import (
 )
 
 
+def _map_get_redis_server_info(
+    evidence: dict[str, Any], output: dict[str, Any], _input: dict[str, Any]
+) -> None:
+    memory = output.get("memory", {})
+    clients = output.get("clients", {})
+    if not memory and not clients:
+        return
+    used_memory = memory.get("used_memory_human", "")
+    connected = clients.get("connected_clients", 0)
+    evicted = output.get("stats", {}).get("evicted_keys", 0)
+    parts = []
+    if used_memory:
+        parts.append(f"memory {used_memory}")
+    if connected:
+        parts.append(f"{connected} connected client(s)")
+    if evicted:
+        parts.append(f"{evicted} evicted key(s)")
+    summary = ", ".join(parts) if parts else "server info retrieved"
+    record_evidence_entry(
+        evidence,
+        source="get_redis_server_info",
+        label="Redis Server Info",
+        summary=summary,
+    )
+
+
 @tool(
     name="get_redis_server_info",
     description=(
@@ -20,6 +47,7 @@ from integrations.redis import (
     ),
     source="redis",
     surfaces=(ToolSurface.INVESTIGATION, ToolSurface.CHAT),
+    evidence_mapper=_map_get_redis_server_info,
     use_cases=[
         "Assess Redis health during an incident: memory pressure, eviction, and client load.",
         "Check used vs. max memory and the maxmemory-policy when investigating OOM or latency.",
