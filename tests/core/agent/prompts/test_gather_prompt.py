@@ -97,8 +97,9 @@ def test_gather_prompt_without_prior_state_omits_prior_block() -> None:
     # Assert
     assert "Configured integrations in this session: datadog, sentry." in prompt
     assert "Prior investigation in this session" not in prompt
-    assert "Each tool call must change what you know" in prompt
-    assert "extra calls that do not change the answer are waste" in prompt
+    assert "Name that question as the goal of this pass" in prompt
+    assert "every tool call must change what you know about it" in prompt.lower()
+    assert "extra calls that do not change the answer are waste" in prompt.lower()
 
 
 def test_gather_prompt_with_recent_state_instructs_no_tools_for_retrospectives() -> None:

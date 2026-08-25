@@ -71,10 +71,29 @@ def test_multi_step_prompt_fragments_are_both_present_and_distinct() -> None:
     assert "NOT\nshell_run" in ACTION_CONVERSATIONAL_SESSION_GOAL_RULE or (
         "NOT shell_run" in ACTION_CONVERSATIONAL_SESSION_GOAL_RULE.replace("\n", " ")
     )
-    # Assembled prompt includes both contracts in order.
-    shell_at = _SYSTEM_PROMPT_BASE.index("LOCAL SEQUENTIAL STEPS")
-    goal_at = _SYSTEM_PROMPT_BASE.index("Conversational keep-going checklists")
+    # Fragments stay out of the markdown base, but assemble wires them into STABLE.
+    assert ACTION_LOCAL_SHELL_MULTI_STEP_RULE not in _SYSTEM_PROMPT_BASE
+    assert ACTION_CONVERSATIONAL_SESSION_GOAL_RULE not in _SYSTEM_PROMPT_BASE
+    assert "You are OpenSRE, a terminal-based SRE and coding assistant" in _SYSTEM_PROMPT_BASE
+    assert "Goal-oriented planning (highest priority)" in _SYSTEM_PROMPT_BASE
+    from core.agent_harness.prompts.action.assemble import build_action_system_prompt_envelope
+    from core.agent_harness.turns.turn_snapshot import TurnSnapshot
+
+    assembled = build_action_system_prompt_envelope(
+        TurnSnapshot(
+            text="",
+            conversation_messages=(),
+            configured_integrations=(),
+            configured_integrations_known=False,
+            last_state=None,
+            last_synthetic_observation_path=None,
+            reasoning_effort=None,
+        )
+    ).render()
+    shell_at = assembled.index("LOCAL SEQUENTIAL STEPS")
+    goal_at = assembled.index("Conversational keep-going checklists")
     assert shell_at < goal_at
+    assert assembled.index("Goal-oriented planning (highest priority)") < shell_at
 
 
 def test_seam_modules_exist() -> None:

@@ -49,12 +49,13 @@ def _compact_prior_investigation(state: dict[str, Any] | None) -> str:
 _GATHER_BASE = (
     "You are the data-gathering step of the OpenSRE terminal assistant — a "
     "senior engineer collecting the evidence needed to answer one question. "
+    "Name that question as the goal of this pass: every tool call must change "
+    "what you know about it, and you stop as soon as you have enough to answer.\n"
     "The user asked something that may be answerable with live data from the "
     "connected integrations. You have access to the same tools the "
     "investigation pipeline uses (logs, metrics, VCS, error trackers, "
     "cloud APIs, etc.).\n"
-    "Each tool call must change what you know about that question. Derive "
-    "arguments (such as owner/repo, service names, time "
+    "Derive arguments (such as owner/repo, service names, time "
     "ranges, or search queries) from the user's message. Make tool calls "
     "ONLY when they will help answer the question; if no tool is relevant, "
     "respond with a short plain-text note and call nothing. Prefer one "
@@ -70,9 +71,8 @@ _GATHER_BASE = (
     "query cannot be formed, stop so the assistant can draft the query and a "
     "setup CTA.\n"
     "Do NOT write the final user-facing answer here — a later step composes "
-    "that from the tool results you collect. Stop calling tools as soon as "
-    "you have enough data — extra calls that do not change the answer are "
-    "waste.\n"
+    "that from the tool results you collect. Extra calls that do not change "
+    "the answer are waste.\n"
 )
 
 

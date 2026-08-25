@@ -61,12 +61,14 @@ def test_preambles_carry_senior_on_call_working_style() -> None:
         "senior production engineer",
         "senior on-call engineer",
         "finish line",
+        "plan the shortest path",
     )
     _mentions(
         GATEWAY_PREAMBLE,
         "senior on-call engineer",
         "finish line",
         "do not flatter",
+        "plan the shortest path",
     )
 
 
@@ -94,13 +96,16 @@ def test_action_capacity_rule_ties_facts_to_propose_not_skip() -> None:
 def test_action_system_prompt_requires_goal_oriented_tool_calls() -> None:
     _mentions(
         _SYSTEM_PROMPT_BASE,
-        "advance the user's stated goal",
-        "no sightseeing",
-        "genuinely blocked",
+        "Goal-oriented planning",
+        "Every tool call must advance that goal",
+        "Persist until the task is fully handled",
+        "keep going until the query or task is completely resolved",
+        "Do NOT guess or make up an answer",
+        "session_goal=true",
     )
 
 
-def test_action_capacity_rule_is_wired_into_stable_system_prompt() -> None:
+def test_action_capacity_rule_is_exported_and_setup_state_stays_context() -> None:
     # Arrange / Act
     envelope = build_action_system_prompt_envelope(
         TurnSnapshot(
@@ -120,15 +125,20 @@ def test_action_capacity_rule_is_wired_into_stable_system_prompt() -> None:
         )
     )
 
-    # Assert
-    assert ACTION_SETUP_CAPACITY_SCHEDULE_RULE in _SYSTEM_PROMPT_BASE
-    assert ACTION_SETUP_CAPACITY_SCHEDULE_RULE in envelope.render_cached()
-    stable = "".join(b.content for b in envelope.blocks if b.tier is PromptTier.STABLE)
-    assert "propose_scheduled_delivery" in stable
-    # Facts stay CONTEXT; guidance stays STABLE.
+    # Assert: capacity + multi-step goal contracts ride the STABLE goal-policy block.
+    assert ACTION_SETUP_CAPACITY_SCHEDULE_RULE
+    assert "propose_scheduled_delivery" in ACTION_SETUP_CAPACITY_SCHEDULE_RULE
     context = "".join(b.content for b in envelope.blocks if b.tier is PromptTier.CONTEXT)
     assert "Scheduled tasks: 0 configured, 0 able to deliver" in context
     assert ACTION_SETUP_CAPACITY_SCHEDULE_RULE not in context
+    assert ACTION_SETUP_CAPACITY_SCHEDULE_RULE not in _SYSTEM_PROMPT_BASE
+    stable = "".join(b.content for b in envelope.blocks if b.tier is PromptTier.STABLE)
+    assert "You are OpenSRE, a terminal-based SRE and coding assistant" in stable
+    assert "Goal-oriented planning (highest priority)" in stable
+    assert ACTION_SETUP_CAPACITY_SCHEDULE_RULE in stable
+    assert "propose_scheduled_delivery" in stable
+    assert "LOCAL SEQUENTIAL STEPS" in stable
+    assert "session_goal=true" in stable
 
 
 def test_goal_contract_does_not_belong_in_setup_state_facts() -> None:

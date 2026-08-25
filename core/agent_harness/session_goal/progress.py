@@ -21,8 +21,8 @@ from core.agent_harness.session_goal.goal import (
 from infrastructure.evidence.evidence_compaction import truncate_message
 
 # Leading mark for user-visible ``/goal`` progress lines (REPL + gateway).
-SESSION_GOAL_PAINT_MARK = "◎"
-# User-facing slash name — paint never says ``SessionGoal``.
+SESSION_GOAL_PROGRESS_MARK = "◎"
+# User-facing slash name — progress text never says ``SessionGoal``.
 SESSION_GOAL_USER_WORD = "/goal"
 
 # Status-line condition shares a Slack/Telegram timeline row with status,
@@ -79,7 +79,7 @@ def _progress_headline_active_or_paused(
         output_tokens=output_tokens,
     )
     token_text = format_token_count_compact(tokens)
-    mark = SESSION_GOAL_PAINT_MARK
+    mark = SESSION_GOAL_PROGRESS_MARK
     word = SESSION_GOAL_USER_WORD
     if label == "active" and SessionGoalReason.is_working(reason):
         return (
@@ -100,7 +100,7 @@ def format_session_goal_progress(
     input_tokens: int | None = None,
     output_tokens: int | None = None,
 ) -> str:
-    """Multi-line progress paint for REPL mid-loop updates and ``/goal show``."""
+    """Multi-line progress text for REPL mid-loop updates and ``/goal show``."""
     reason = goal.last_reason.strip() or derive_session_goal_reason(goal)
     status = goal.status
     if status == SessionGoalStatus.ACTIVE:
@@ -125,7 +125,7 @@ def format_session_goal_progress(
         )
     else:
         headline = (
-            f"{SESSION_GOAL_PAINT_MARK} {SESSION_GOAL_USER_WORD} {status} · "
+            f"{SESSION_GOAL_PROGRESS_MARK} {SESSION_GOAL_USER_WORD} {status} · "
             f"turn {goal.turns_used}/{goal.max_outer_turns}"
         )
     lines = [
@@ -156,7 +156,7 @@ def format_session_goal_status_line(
     reason = goal.last_reason.strip() or derive_session_goal_reason(goal)
     condition = goal.condition.strip()
     condition = truncate_message(condition, _MAX_STATUS_LINE_CONDITION_CHARS)
-    mark = SESSION_GOAL_PAINT_MARK
+    mark = SESSION_GOAL_PROGRESS_MARK
     word = SESSION_GOAL_USER_WORD
     if goal.status == SessionGoalStatus.ACTIVE:
         elapsed = session_goal_elapsed_seconds(goal, now=now)
@@ -180,11 +180,11 @@ def format_session_goal_status_line(
     )
 
 
-def is_session_goal_progress_paint(text: str) -> bool:
+def is_session_goal_progress_text(text: str) -> bool:
     """True when ``text`` is ``/goal`` status chrome, not an assistant answer.
 
     The ``/goal set`` attach turn may run ``slash_invoke`` (counts as tool
-    evidence) and capture the painted status block as the turn "reply". Host
+    evidence) and capture the progress status block as the turn "reply". Host
     evaluate must not treat that as a completed answer.
     """
     stripped = text.strip()
@@ -192,16 +192,16 @@ def is_session_goal_progress_paint(text: str) -> bool:
         return False
     if SessionGoalReason.WAITING_HOST_SIGNAL in stripped:
         return True
-    paint_lead = f"{SESSION_GOAL_PAINT_MARK} {SESSION_GOAL_USER_WORD}"
-    return paint_lead in stripped
+    progress_lead = f"{SESSION_GOAL_PROGRESS_MARK} {SESSION_GOAL_USER_WORD}"
+    return progress_lead in stripped
 
 
 __all__ = [
-    "SESSION_GOAL_PAINT_MARK",
+    "SESSION_GOAL_PROGRESS_MARK",
     "SESSION_GOAL_USER_WORD",
     "format_duration_compact",
     "format_session_goal_progress",
     "format_session_goal_status_line",
     "format_token_count_compact",
-    "is_session_goal_progress_paint",
+    "is_session_goal_progress_text",
 ]

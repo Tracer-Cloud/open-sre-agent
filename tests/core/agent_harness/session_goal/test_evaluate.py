@@ -72,7 +72,7 @@ def test_waiting_for_reason_is_not_an_achieved_claim() -> None:
         )
         is False
     )
-    # Legacy painted reasons that embedded the tag literal.
+    # Legacy progress reasons that embedded the tag literal.
     assert reply_claims_session_goal_achieved("waiting for session_goal:achieved") is False
     assert (
         reply_claims_session_goal_achieved(
@@ -85,7 +85,7 @@ def test_waiting_for_reason_is_not_an_achieved_claim() -> None:
 def test_slash_capture_waiting_reason_does_not_achieve_host_goal() -> None:
     """Regression: /goal set turn captured status text and falsely achieved."""
     from core.agent_harness.session_goal.progress import (
-        SESSION_GOAL_PAINT_MARK,
+        SESSION_GOAL_PROGRESS_MARK,
         SESSION_GOAL_USER_WORD,
     )
 
@@ -96,14 +96,14 @@ def test_slash_capture_waiting_reason_does_not_achieve_host_goal() -> None:
         host_owned=True,
     )
     attach_session_goal(session, goal)
-    paint = (
-        f"{SESSION_GOAL_PAINT_MARK} {SESSION_GOAL_USER_WORD} active · 0s · turn 0/4 · +0 tokens\n"
+    progress_text = (
+        f"{SESSION_GOAL_PROGRESS_MARK} {SESSION_GOAL_USER_WORD} active · 0s · turn 0/4 · +0 tokens\n"
         "  condition: How many Windows users?\n"
         f"  reason: {SessionGoalReason.WAITING_HOST_SIGNAL}"
     )
     verdict = evaluate_session_goal(
         goal,
-        _result(paint, executed=1, success=1),
+        _result(progress_text, executed=1, success=1),
         session=session,
     )
     assert verdict.status == SessionGoalStatus.ACTIVE
@@ -723,7 +723,7 @@ def test_llm_reject_survives_outer_loop_session_reread() -> None:
             return []
 
     session = SessionCore()
-    paints: list[str] = []
+    progress_updates: list[str] = []
 
     def _chat(message: str) -> TurnResult:
         _ = message
@@ -735,18 +735,18 @@ def test_llm_reject_survives_outer_loop_session_reread() -> None:
         "go",
         goal=SessionGoal(condition="finish migration", max_outer_turns=2),
         evaluate=build_session_goal_llm_evaluator(_LLM()),  # type: ignore[arg-type]
-        on_progress=lambda g: paints.append(g.status),
+        on_progress=lambda g: progress_updates.append(g.status),
     )
 
     assert outcome.goal.status == SessionGoalStatus.BUDGET_EXHAUSTED
-    assert SessionGoalStatus.ACHIEVED not in paints
+    assert SessionGoalStatus.ACHIEVED not in progress_updates
     assert session.session_goal is not None
     assert session.session_goal.status == SessionGoalStatus.BUDGET_EXHAUSTED
 
 
-def test_budget_exhaustion_paints_once() -> None:
+def test_budget_exhaustion_reports_progress_once() -> None:
     session = SessionCore()
-    paints: list[str] = []
+    progress_updates: list[str] = []
 
     def _chat(message: str) -> TurnResult:
         _ = message
@@ -757,12 +757,14 @@ def test_budget_exhaustion_paints_once() -> None:
         session,
         "go",
         goal=SessionGoal(condition="never done", max_outer_turns=1, host_owned=True),
-        on_progress=lambda g: paints.append(f"{g.status}:{g.last_reason}"),
+        on_progress=lambda g: progress_updates.append(f"{g.status}:{g.last_reason}"),
     )
 
     assert outcome.goal.status == SessionGoalStatus.BUDGET_EXHAUSTED
-    budget_paints = [p for p in paints if p.startswith(SessionGoalStatus.BUDGET_EXHAUSTED)]
-    assert len(budget_paints) == 1
+    budget_updates = [
+        p for p in progress_updates if p.startswith(SessionGoalStatus.BUDGET_EXHAUSTED)
+    ]
+    assert len(budget_updates) == 1
 
 
 def test_llm_evaluator_confirms_soft_achieve() -> None:
