@@ -55,7 +55,14 @@ def test_prompt_envelope_renders_ordered_blocks_with_optional_titles() -> None:
         envelope.require_block("missing")
 
 
-def test_action_system_prompt_envelope_matches_legacy_rendering() -> None:
+def test_action_system_prompt_envelope_matches_legacy_rendering(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    # Goal/routing policy live inside the markdown base now; the envelope no
+    # longer carries separate ACTION_GOAL_POLICY / ACTION_ROUTING_POLICY blocks.
+    from config.constants import OPENSRE_MEMORY_DISABLED_ENV
+
+    monkeypatch.setenv(OPENSRE_MEMORY_DISABLED_ENV, "1")
     ctx = _ctx()
     envelope = build_action_system_prompt_envelope(ctx)
 
@@ -66,8 +73,6 @@ def test_action_system_prompt_envelope_matches_legacy_rendering() -> None:
     # this id list) when no fragments are registered.
     assert [block.id for block in envelope.blocks] == [
         PromptBlockId.ACTION_SYSTEM_BASE,
-        PromptBlockId.ACTION_GOAL_POLICY,
-        PromptBlockId.ACTION_ROUTING_POLICY,
         PromptBlockId.ACTION_VENDOR_FRAGMENTS,
         PromptBlockId.ACTION_RUNTIME_FACTS,
         PromptBlockId.ACTION_SKILLS,
@@ -164,19 +169,23 @@ def test_the_split_halves_reassemble_into_the_unchanged_render() -> None:
     assert rejoined == envelope.render()
 
 
-def test_every_block_declares_which_tier_it_belongs_to() -> None:
+def test_every_block_declares_which_tier_it_belongs_to(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     """A block with no tier would silently land in the cached prefix."""
+    from config.constants import OPENSRE_MEMORY_DISABLED_ENV
+
+    monkeypatch.setenv(OPENSRE_MEMORY_DISABLED_ENV, "1")
     # Arrange
     envelope = build_action_system_prompt_envelope(_turn([("user", "hello")]))
 
     # Act
     tiers = {block.id: block.tier for block in envelope.blocks}
 
-    # Assert
+    # Assert — goal/routing text is inside ACTION_SYSTEM_BASE (markdown), not
+    # separate STABLE blocks.
     assert tiers == {
         PromptBlockId.ACTION_SYSTEM_BASE: PromptTier.STABLE,
-        PromptBlockId.ACTION_GOAL_POLICY: PromptTier.STABLE,
-        PromptBlockId.ACTION_ROUTING_POLICY: PromptTier.STABLE,
         PromptBlockId.ACTION_VENDOR_FRAGMENTS: PromptTier.STABLE,
         PromptBlockId.ACTION_RUNTIME_FACTS: PromptTier.STABLE,
         PromptBlockId.ACTION_SKILLS: PromptTier.STABLE,
