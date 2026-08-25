@@ -23,16 +23,24 @@ DEFAULT_DURATION_MINUTES = 60
 def _map_describe_rds_events(
     evidence: dict[str, Any], output: dict[str, Any], _tool_input: dict[str, Any]
 ) -> None:
-    """Cite recent RDS events (failovers, maintenance, backups) as report evidence."""
+    """Cite recent RDS events (failovers, maintenance, backups) as report evidence.
+
+    ``execute_aws_sdk_call`` makes one unpaginated ``describe_events`` call, so
+    ``events`` can be a partial page on a busy instance with a long lookback
+    window. The summary says how many were *reported*, not how many occurred,
+    so it never implies a completeness the underlying call doesn't guarantee.
+    """
     if not output.get("available"):
         return
     events = output.get("events") or []
+    duration_minutes = output.get("duration_minutes")
     if events:
+        window = f" in the last {duration_minutes} min" if duration_minutes else ""
         record_evidence_entry(
             evidence,
             source="describe_rds_events",
             label="RDS Events",
-            summary=f"{len(events)} event(s) in the lookback window",
+            summary=f"{len(events)} event(s) reported{window}",
         )
 
 

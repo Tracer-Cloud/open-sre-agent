@@ -32,6 +32,22 @@ class TestMapDescribeRdsEvents:
         assert entries[0]["source"] == "describe_rds_events"
         assert "1" in entries[0]["summary"]
 
+    def test_summary_says_reported_not_total_since_the_aws_call_is_unpaginated(self) -> None:
+        """execute_aws_sdk_call makes one unpaginated call, so events can be a
+        partial page — the summary must not imply it counted every event in
+        the window."""
+        evidence: dict = {}
+
+        _map_describe_rds_events(
+            evidence,
+            {"available": True, "events": [{"message": "e"}] * 3, "duration_minutes": 60},
+            {},
+        )
+
+        summary = evidence["catalog_entries"][0]["summary"]
+        assert summary == "3 event(s) reported in the last 60 min"
+        assert "lookback window" not in summary
+
     def test_records_nothing_when_no_events(self) -> None:
         evidence: dict = {}
 
