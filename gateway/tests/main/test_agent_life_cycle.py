@@ -25,6 +25,7 @@ from core.agent_harness.session import SessionCore
 from core.agent_harness.session.persistence.memory import InMemorySessionStore
 from core.agent_harness.tools.tool_provider import DefaultToolProvider
 from core.agent_harness.turns.turn_results import ToolCallingTurnResult, TurnResult
+from gateway.core.billing.turn_metering import bound_turn_metering
 from gateway.core.lifecycle.controller import GatewayController, start_gateway
 from gateway.core.lifecycle.errors import GatewayConfigurationError
 from gateway.transports.names import TransportName
@@ -148,7 +149,12 @@ def test_gateway_start_returns_running_gateway_handle(monkeypatch) -> None:
         llm_run=None,
     )
     callback = background_kwargs["handle_callback_to_gateway_agent"]
-    callback("hello", session, sink, logger)
+    with bound_turn_metering(
+        organization_id="org_lifecycle",
+        reason="telegram_turn",
+        on_denied=MagicMock(),
+    ):
+        callback("hello", session, sink, logger)
     agent_cls.return_value.dispatch.assert_called_once()
     sink.finalize.assert_called_once_with("Hawaii: +25C")
     assert agent_cls.return_value.dispatch.call_args.args == ("hello",)

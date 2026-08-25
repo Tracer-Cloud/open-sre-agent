@@ -49,8 +49,8 @@ _REQUIRED_CONCERNS: dict[str, str | tuple[str, ...]] = {
     "turn timeout setting": "turn_timeout_seconds",
     # A user can stop a running turn.
     "stop command handling": "is_stop_command",
-    # Turns are metered.
-    "credit metering": "consume_credits",
+    # Turns bind their charge for the shared runner to apply after capacity.
+    "credit metering": "bound_turn_metering",
     # Turn output cooperates with host-side cancellation instead of relying
     # on the harness patching the attribute on — declared directly, or inherited
     # from the shared ``SingleMessageTurnOutput`` base.
@@ -60,14 +60,15 @@ _REQUIRED_CONCERNS: dict[str, str | tuple[str, ...]] = {
 #: Concerns each existing transport is known to lack. Ledger, not allowlist:
 #: the assertion below is exact equality, so closing a gap requires deleting
 #: its entry here, and nothing can be added for a new transport unnoticed.
-_KNOWN_GAPS: dict[str, frozenset[str]] = {
-    "buzz": frozenset({"credit metering"}),
-    "telegram": frozenset({"credit metering"}),
-}
+#: Empty: every transport implements every concern. Scoped to transports —
+#: scheduled runs reach the agent through ``scheduler_runners`` rather than a
+#: transport, and this file says nothing about them.
+_KNOWN_GAPS: dict[str, frozenset[str]] = {}
 
 #: Local reimplementations of concerns that were hoisted to ``gateway.core``.
 _FORBIDDEN_LOCAL_COPIES: dict[str, str] = {
     "identity-policy store copy": "def _load_policy",
+    "pre-capacity credit consumption": "consume_credits",
     "rotate-session sentinel literal": '"__ROTATE_SESSION__"',
 }
 
@@ -117,6 +118,6 @@ def test_transport_keeps_no_local_copy_of_hoisted_concerns(transport: str) -> No
     copies = sorted(name for name, marker in _FORBIDDEN_LOCAL_COPIES.items() if marker in source)
 
     assert copies == [], (
-        f"transport {transport!r} reintroduced {copies}; use "
-        "gateway.core.identity_policy / config.constants.gateway."
+        f"transport {transport!r} reintroduced {copies}; use the shared "
+        "gateway.core implementation instead."
     )

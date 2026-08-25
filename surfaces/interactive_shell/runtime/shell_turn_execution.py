@@ -82,8 +82,11 @@ def execute_shell_turn(
         on_progress=_on_progress,
     )
     if result is None:
-        # The process gate refused the turn; the host already said so on the
-        # output. Report a turn that ran nothing rather than inventing an answer.
+        # No agent work ran. The shell binds no admission hook and its sink
+        # carries no ``turn_cancel``, so for this caller the capacity gate is
+        # the only reason the host returns ``None`` — and it already said so on
+        # the output. Report a turn that ran nothing rather than inventing an
+        # answer.
         return TurnResult(
             final_intent="cli_agent_at_capacity",
             action_result=ToolCallingTurnResult(

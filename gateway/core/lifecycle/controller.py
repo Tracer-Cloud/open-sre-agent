@@ -29,6 +29,7 @@ from config.constants.gateway import (
 )
 from core.agent_harness.ports import SlashPortsFactory
 from gateway import startup as gateway_startup
+from gateway.core.billing.turn_metering import admit_metered_turn
 from gateway.core.chat_agent_build import chat_agent_build_config
 from gateway.core.config.logging_config import configure_logging
 from gateway.core.lifecycle.credential_hydration import (
@@ -109,6 +110,7 @@ class GatewayController:
             slash_ports_factory=self._slash_ports_factory,
             agent_build=chat_agent_build_config(),
             gate=self.turn_gate,
+            admission_check=admit_metered_turn,
         )
 
         self.start_surfaces(logger=logger, handler=handler)
