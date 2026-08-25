@@ -85,6 +85,17 @@ def test_release_build_uses_checked_in_spec() -> None:
     assert "skill_data_entries(ROOT)" in spec
 
 
+def test_pull_requests_build_release_binaries_without_publishing() -> None:
+    workflow = _RELEASE_WORKFLOW.read_text(encoding="utf-8")
+
+    assert "  pull_request:\n    branches: [main]" in workflow
+    assert 'if [ "$EVENT_NAME" = "pull_request" ]; then' in workflow
+    assert 'echo "channel=pr" >> "$GITHUB_OUTPUT"' in workflow
+    assert workflow.count('ASSET_BASENAME="opensre_pr_${{ matrix.target }}"') == 1
+    assert workflow.count('$assetBaseName = "opensre_pr_${{ matrix.target }}"') == 1
+    assert "if: needs.prepare.outputs.channel == 'release'" in workflow
+
+
 def test_infrastructure_data_excludes_the_cloudflare_worker() -> None:
     """The Cloudflare install-proxy is a JS Worker deployed via ``wrangler``.
 

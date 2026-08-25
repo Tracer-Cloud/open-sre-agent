@@ -337,11 +337,13 @@ from config.constants.servicenow import (
 from config.constants.session_store import OPENSRE_SESSION_FILE_LOCK_ENV
 from config.constants.signoz import SIGNOZ_API_KEY_ENV, SIGNOZ_URL_ENV
 from config.constants.slack import (
+    SLACK_ACCESS_TOKEN_ENV,
     SLACK_APP_TOKEN_ENV,
     SLACK_BOT_TOKEN_ENV,
     SLACK_DEFAULT_CHAT_ID_ENV,
     SLACK_FILE_HOST_SUFFIXES,
     SLACK_HEARTBEAT_STOP_TIMEOUT_SECONDS,
+    SLACK_USER_TOKEN_PREFIXES,
     SLACK_WEBHOOK_URL_ENV,
 )
 from config.constants.slash_commands import (
@@ -673,9 +675,11 @@ __all__ = [
     "SERVICENOW_USERNAME_ENV",
     "SIGNOZ_API_KEY_ENV",
     "SIGNOZ_URL_ENV",
+    "SLACK_ACCESS_TOKEN_ENV",
     "SLACK_APP_TOKEN_ENV",
     "SLACK_BOT_TOKEN_ENV",
     "SLACK_DEFAULT_CHAT_ID_ENV",
+    "SLACK_USER_TOKEN_PREFIXES",
     "SLACK_WEBHOOK_URL_ENV",
     "SLACK_FILE_HOST_SUFFIXES",
     "SLACK_HEARTBEAT_STOP_TIMEOUT_SECONDS",
