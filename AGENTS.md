@@ -125,6 +125,15 @@ branch with different literals.
 - Stand-in tests that restate control-flow intent without exercising the real
   loop or wiring (e.g. “`create_task` does not block the creator”).
 
+### Tool Testing Suites: Static vs Selection Split
+
+Tool testing is split into two named suites with distinct execution loops:
+
+- **static** (deterministic, always on): Lives with `tests/tools/test_registry.py` and `tests/tools/test_*.py`. Validates schema prose, injected parameters, availability rules, and mocked behaviors. Runs unconditionally on every PR in CI and locally via `uv run python -m pytest tests/tools/ -m "not live_llm"` with zero LLM credentials or network calls.
+- **selection** (LLM-backed, opt-in): Lives under `tests/tools/selection/`. Validates that the model selects appropriate tools for incident scenarios given registered tool schemas. Marked with `@pytest.mark.live_llm` (following `pytest.ini`). Runs on an opt-in or nightly schedule (`uv run python -m pytest tests/tools/ -m live_llm`).
+- **Live run model and cost**: Evaluated using `gpt-4o` (or `claude-3-7-sonnet` / configured provider via `LLM_PROVIDER`). Each scenario consumes ~1,500–3,000 prompt tokens and ~50–150 completion tokens (~$0.005–$0.01 per scenario, or ~$0.02–$0.05 per full selection run / ~$1.50 per 100 runs).
+- **Flaky-case quarantine policy**: If a selection scenario fails intermittently due to model drift or prompt sensitivity, quarantine the case with `@pytest.mark.skip(reason="Quarantined: #<ticket> owner: @<user>")` or a quarantine marker referencing a tracking issue and named owner. Never loosen assertions or weaken expected tool sets to paper over intermittent failures.
+
 
 ### Docs under `docs/`
 
