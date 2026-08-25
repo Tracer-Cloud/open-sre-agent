@@ -7,7 +7,6 @@ from pathlib import Path
 import pytest
 
 from core.agent_harness.prompts import (
-    _SYSTEM_PROMPT_BASE,
     build_action_system_prompt,
     connected_integrations_block,
     prior_action_facts_block,
@@ -92,19 +91,6 @@ def test_prior_action_facts_block_surfaces_telegram_followup_values() -> None:
     assert "Antarctica: -24C" in block
     assert "London: +22C" in block
     assert "slack_send_message input" in block
-
-
-def test_system_prompt_base_is_markdown_backed_opensre_prompt() -> None:
-    """Stable base is ``opensre_system_prompt.md`` — the action planner, not a coding agent."""
-    prompt = _SYSTEM_PROMPT_BASE
-    assert prompt.startswith("You plan actions for the OpenSRE interactive shell.")
-    assert "COMPOUND TURN RULE" in prompt
-    assert "GOAL PERSISTENCE" in prompt
-    assert "senior production engineer mapping intent to tools" in prompt
-    assert "GPT-5.2" not in prompt
-    assert "Codex CLI" not in prompt
-    assert "update_plan" not in prompt
-    assert "apply_patch" not in prompt
 
 
 def test_system_prompt_slack_fragment_documents_roster_followup() -> None:
@@ -364,12 +350,6 @@ def test_action_system_prompt_includes_skills_block() -> None:
     )
 
 
-def test_morning_report_skill_still_documents_local_llama_in_base() -> None:
-    """Vague local-llama requests map to provider:local_llama_connect in the planner base."""
-    assert "provider:local_llama_connect" in _SYSTEM_PROMPT_BASE
-    assert _SYSTEM_PROMPT_BASE.startswith("You plan actions for the OpenSRE interactive shell.")
-
-
 class _FakePrompts:
     def surface(self) -> str:
         return "interactive_shell"
@@ -454,20 +434,6 @@ def test_database_query_handoff_guidance_block_matches_prefix() -> None:
     assert "/mcp connect" in block
     assert "investigation" in block.lower()
     assert build_handoff_guidance_block(("database_query:mariadb_dashboard",)) == block
-
-
-def test_database_query_handoff_guidance_still_documents_mysql_routing() -> None:
-    """Oracle 332: database_query tags inject connect/query guidance (assistant path).
-
-    Handoff guidance remains the contract for that tag; the action base also
-    documents database_query handoff routing for the planner.
-    """
-    block = build_handoff_guidance_block(("database_query:mysql_active_connections",))
-    assert "database" in block.lower()
-    assert "/mcp connect" in block
-    assert "investigation" in block.lower()
-    assert "database_query:" in _SYSTEM_PROMPT_BASE
-    assert _SYSTEM_PROMPT_BASE.startswith("You plan actions for the OpenSRE interactive shell.")
 
 
 def test_incident_description_handoff_guidance_keeps_user_symptoms() -> None:

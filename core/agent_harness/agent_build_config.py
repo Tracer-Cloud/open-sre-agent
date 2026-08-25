@@ -18,6 +18,8 @@ from core.agent_harness.ports import (
     ToolEventObserver,
     ToolProvider,
 )
+
+
 class BuildTools(Protocol):
     """``(session, console, logger, observer) -> ToolProvider``.
 

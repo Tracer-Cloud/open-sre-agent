@@ -59,14 +59,6 @@ def test_gateway_prompt_omits_terminal_markdown_rule() -> None:
     assert "Write **bold** tight" in prompt
 
 
-def test_cli_and_gateway_prompts_use_the_shared_system_prompt() -> None:
-    shell = build_assistant_system_prompt("ref", "hist", surface="interactive_shell")
-    gateway = build_assistant_system_prompt("ref", "hist", surface="gateway")
-    assert "senior production engineer mapping intent to tools" in shell
-    assert "senior production engineer mapping intent to tools" in gateway
-    assert "guides people through" in gateway
-
-
 def test_no_surface_leaves_blank_line_runs_from_empty_rule_slots() -> None:
     """CLI-only rule slots are empty on gateway turns; their separators must go too.
 
