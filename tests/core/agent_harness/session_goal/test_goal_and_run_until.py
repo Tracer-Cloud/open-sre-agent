@@ -17,6 +17,7 @@ from core.agent_harness.session_goal.run_until import run_until_session_goal
 from core.agent_harness.turns.assistant_handoff import AssistantHandoff
 from core.agent_harness.turns.orchestrator import run_turn
 from core.agent_harness.turns.turn_results import ToolCallingTurnResult, TurnResult
+from tests.shared.harness_turn_driver import answer_with_text
 
 _FIVE_STEP_ASK = (
     "Do this 5-step sequential process without asking whether to continue: "
@@ -83,16 +84,15 @@ def test_want_me_to_suppressed_while_session_goal_active() -> None:
             handoff_contents=("Continue the multi-step process.",),
         )
 
+    def _gather(text: str, *_a: object, **_k: object) -> str:
+        return "evidence"
+
     result = run_turn(
         _FIVE_STEP_ASK,
         session,
         execute_actions=_execute,
-        gather=lambda *_a, **_k: "evidence",
-        answer=lambda *_a, **_k: type(
-            "Run",
-            (),
-            {"response_text": "Step 1 done."},
-        )(),
+        gather=_gather,
+        answer=answer_with_text("Step 1 done."),
         accounting=DefaultTurnAccounting(session, _FIVE_STEP_ASK),
     )
 
@@ -113,12 +113,15 @@ def test_action_handoff_attaches_session_goal() -> None:
             handoff_contents=("session_goal:max_turns=5;steps=5", "Start the checklist."),
         )
 
+    def _gather(text: str, *_a: object, **_k: object) -> str:
+        return "evidence"
+
     run_turn(
         _FIVE_STEP_ASK,
         session,
         execute_actions=_execute,
-        gather=lambda *_a, **_k: "evidence",
-        answer=lambda *_a, **_k: type("Run", (), {"response_text": "Step 1."})(),
+        gather=_gather,
+        answer=answer_with_text("Step 1."),
         accounting=DefaultTurnAccounting(session, _FIVE_STEP_ASK),
     )
 
@@ -160,12 +163,15 @@ def test_typed_assistant_handoff_attaches_session_goal_without_content_tags() ->
             assistant_handoffs=(typed,),
         )
 
+    def _gather(text: str, *_a: object, **_k: object) -> str:
+        return "evidence"
+
     run_turn(
         _FIVE_STEP_ASK,
         session,
         execute_actions=_execute,
-        gather=lambda *_a, **_k: "evidence",
-        answer=lambda *_a, **_k: type("Run", (), {"response_text": "Step 1."})(),
+        gather=_gather,
+        answer=answer_with_text("Step 1."),
         accounting=DefaultTurnAccounting(session, _FIVE_STEP_ASK),
     )
 
@@ -298,16 +304,15 @@ def test_metric_read_handoff_without_session_goal_flag_continues_outer_loop() ->
             assistant_handoffs=(typed,),
         )
 
+    def _gather(text: str, *_a: object, **_k: object) -> str:
+        return "schema only"
+
     run_turn(
         ask,
         session,
         execute_actions=_execute,
-        gather=lambda *_a, **_k: "schema only",
-        answer=lambda *_a, **_k: type(
-            "Run",
-            (),
-            {"response_text": "Schema found; no count yet."},
-        )(),
+        gather=_gather,
+        answer=answer_with_text("Schema found; no count yet."),
         accounting=DefaultTurnAccounting(session, ask),
     )
     assert session_goal_is_active(session)
