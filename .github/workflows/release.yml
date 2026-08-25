@@ -503,8 +503,10 @@ jobs:
         run: |
           if ($env:RELEASE_CHANNEL -eq "release") {
             $assetBaseName = "opensre_$($env:TAG_NAME.TrimStart('v'))_${{ matrix.target }}"
-          } else {
+          } elseif ($env:RELEASE_CHANNEL -eq "main") {
             $assetBaseName = "opensre_main_${{ matrix.target }}"
+          } else {
+            $assetBaseName = "opensre_pr_${{ matrix.target }}"
           }
           Compress-Archive -Path "dist\${{ matrix.binary_name }}" -DestinationPath "${assetBaseName}.zip"
           $hash = (Get-FileHash -Algorithm SHA256 "${assetBaseName}.zip").Hash.ToLowerInvariant()
