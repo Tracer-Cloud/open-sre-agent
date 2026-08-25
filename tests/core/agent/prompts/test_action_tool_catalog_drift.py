@@ -68,7 +68,7 @@ def test_every_tool_the_action_prompt_describes_still_exists() -> None:
     assert missing == [], (
         "the action prompt describes tools that are not registered on any action "
         f"surface: {missing}. Rename them in "
-        "core/agent_harness/prompts/action/text.py, or add them to "
+        "core/agent_harness/prompts/action/opensre_system_prompt.md, or add them to "
         "_NOT_REGISTRY_TOOLS when the model reaches them another way."
     )
 
