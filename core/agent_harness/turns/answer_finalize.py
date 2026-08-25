@@ -196,9 +196,7 @@ def finalize_routed_answer(
             )
             if route_intent == "answer":
                 finish_stream = True
-    elif route_intent == "answer" and (
-        text_changed_after_streaming or suppress_for_goal
-    ):
+    elif route_intent == "answer" and (text_changed_after_streaming or suppress_for_goal):
         # Flush deferred Want-me-to (or drop it) when a session goal owns
         # continuation — otherwise the TTY keeps a streamed closer.
         finish_stream = True
