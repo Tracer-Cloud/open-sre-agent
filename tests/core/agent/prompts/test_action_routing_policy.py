@@ -11,6 +11,7 @@ def test_bare_incidents_handoff_instead_of_starting_an_investigation() -> None:
     assert "bare alert, incident description, or symptom paste" in prompt
     assert 'assistant_handoff with evidence_kind="incident"' in prompt
     assert "never investigation_start" in prompt
+    assert 'multi-line "Checkout API is returning HTTP 500s" paste' in prompt
 
 
 def test_connected_services_compound_turn_uses_the_list_subcommand() -> None:

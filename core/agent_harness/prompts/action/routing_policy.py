@@ -15,6 +15,9 @@ Action routing (apply before choosing a tool):
   with evidence_kind="incident", never investigation_start. Service, region,
   deployment, log, and error details do not turn a symptom report into an
   instruction to start an investigation.
+  Example: a multi-line "Checkout API is returning HTTP 500s" paste followed
+  by Service, Region, Recent deploy, and Logs fields is still exactly one
+  assistant_handoff(evidence_kind="incident"), never investigation_start.
 * Independent clauses are separate tool calls in one response, in user order.
   "check the health of my OpenSRE and then show all connected services" ->
   slash_invoke(command="/health", args=[]), then
