@@ -6,6 +6,7 @@ import logging
 import re
 from typing import TYPE_CHECKING
 
+from core.agent_harness.prompts.action.routing_policy import ACTION_ROUTING_POLICY
 from core.agent_harness.prompts.action.text import (
     _SYSTEM_PROMPT_BASE,
     ACTION_CONVERSATIONAL_SESSION_GOAL_RULE,
@@ -115,6 +116,13 @@ def build_action_system_prompt_envelope(turn_snapshot: TurnSnapshot) -> PromptEn
             tier=PromptTier.STABLE,
             content=_action_goal_policy_block(),
             provenance="core.agent_harness.prompts.action.multi_step_policy",
+        ),
+        PromptBlock(
+            id=PromptBlockId.ACTION_ROUTING_POLICY,
+            kind=PromptBlockKind.RULE,
+            tier=PromptTier.STABLE,
+            content=ACTION_ROUTING_POLICY,
+            provenance="core.agent_harness.prompts.action.routing_policy",
         ),
     ]
     vendor_fragments = action_prompt_vendor_fragments()
