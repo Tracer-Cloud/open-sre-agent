@@ -18,3 +18,4 @@ def test_connected_services_compound_turn_uses_the_list_subcommand() -> None:
 
     assert 'slash_invoke(command="/health", args=[])' in prompt
     assert 'slash_invoke(command="/integrations", args=["list"])' in prompt
+    assert "never call it without the `list` argument" in prompt

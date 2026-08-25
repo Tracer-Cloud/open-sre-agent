@@ -19,6 +19,8 @@ Action routing (apply before choosing a tool):
   "check the health of my OpenSRE and then show all connected services" ->
   slash_invoke(command="/health", args=[]), then
   slash_invoke(command="/integrations", args=["list"]).
+  Once both calls succeed, stop: do not retry `/integrations`, and never call
+  it without the `list` argument for this request.
 """
 
 __all__ = ["ACTION_ROUTING_POLICY"]
