@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from typing import Any
 
+from core.domain.types.evidence import record_evidence_entry
 from core.domain.types.tools import ToolSurface
 from core.tool_framework import tool
 from core.tool_framework.utils import tool_unavailable
@@ -34,6 +35,19 @@ def _get_github_repository_tree_available(sources: dict[str, dict]) -> bool:
     return bool(github_source_available(sources) and gh.get("owner") and gh.get("repo"))
 
 
+def _map_get_github_repository_tree(
+    evidence: dict[str, Any], output: dict[str, Any], _input: dict[str, Any]
+) -> None:
+    tree = output.get("tree")
+    if isinstance(tree, dict) and isinstance(tree.get("tree"), list):
+        record_evidence_entry(
+            evidence,
+            source="get_github_repository_tree",
+            label="GitHub Repository Tree",
+            summary=f"{len(tree['tree'])} items",
+        )
+
+
 @tool(
     name="get_github_repository_tree",
     source="github",
@@ -62,6 +76,7 @@ def _get_github_repository_tree_available(sources: dict[str, dict]) -> bool:
     is_available=_get_github_repository_tree_available,
     extract_params=_get_github_repository_tree_extract_params,
     injected_params=GITHUB_INJECTED_PARAMS,
+    evidence_mapper=_map_get_github_repository_tree,
 )
 def get_github_repository_tree(
     owner: str,

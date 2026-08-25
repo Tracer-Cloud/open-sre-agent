@@ -40,7 +40,7 @@ from core.agent_harness.session_goal.goal import (
     strip_shell_prompt_chrome,
 )
 from core.agent_harness.session_goal.progress import (
-    SESSION_GOAL_PAINT_MARK,
+    SESSION_GOAL_PROGRESS_MARK,
     SESSION_GOAL_USER_WORD,
     format_session_goal_progress,
     format_session_goal_status_line,
@@ -50,7 +50,7 @@ from core.agent_harness.session_goal.run_until import SessionGoalRunResult, run_
 __all__ = [
     "MAX_GOAL_CONDITION_CHARS",
     "MAX_GOAL_REASON_CHARS",
-    "SESSION_GOAL_PAINT_MARK",
+    "SESSION_GOAL_PROGRESS_MARK",
     "SESSION_GOAL_USER_WORD",
     "SessionGoal",
     "SessionGoalReason",
