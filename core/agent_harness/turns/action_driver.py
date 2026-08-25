@@ -1066,8 +1066,9 @@ def _run_action_turn(
         False,
         False if cancelled else counts.handled,
         response_text="" if cancelled else response_text,
-        response_streamed=bool(use_final_text and not cancelled),
+        response_streamed=bool(use_final_text and not result.hit_iteration_cap and not cancelled),
         investigation_dispatched=(False if cancelled else counts.investigation_dispatched),
+        hit_iteration_cap=bool(result.hit_iteration_cap and not cancelled),
         cancelled=cancelled,
     )
 

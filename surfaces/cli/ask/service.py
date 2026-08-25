@@ -187,10 +187,14 @@ def _successful_turn(result: TurnResult) -> bool:
     action_ok = (
         action.handled
         and not action.has_unhandled_clause
+        and not action.hit_iteration_cap
         and action.accounting_status == "completed"
     )
     return bool(
-        (result.answered or action_ok) and not result.cancelled and result.primary_response_text
+        (result.answered or action_ok)
+        and not action.hit_iteration_cap
+        and not result.cancelled
+        and result.primary_response_text
     )
 
 

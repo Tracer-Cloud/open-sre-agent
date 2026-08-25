@@ -33,6 +33,7 @@ class ToolCallingTurnResult:
     response_streamed: bool = False
     accounting_status: ToolCallingAccountingStatus = "completed"
     investigation_dispatched: bool = False
+    hit_iteration_cap: bool = False
     #: Host soft-timeout / stop asked the action phase to halt (shell/gateway).
     cancelled: bool = False
 

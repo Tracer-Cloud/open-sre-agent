@@ -19,6 +19,7 @@ from tests.core.agent.orchestration.action_execution_test_harness import (
     ActionExecutionHarness,
     FakeActionLLM,
     no_tool_response,
+    tool_response,
 )
 
 
@@ -92,3 +93,18 @@ def test_a_terse_closing_line_is_the_answer_when_nothing_else_ran() -> None:
 
     # Assert
     assert result.response_text == "done"
+
+
+def test_iteration_cap_is_preserved_on_turn_result() -> None:
+    harness = ActionExecutionHarness(
+        llm=FakeActionLLM([tool_response("skill_view", {"name": "missing"}) for _ in range(13)])
+    )
+
+    result = run_action_tool_turn(
+        "keep trying",
+        Session(),
+        harness.console,
+        llm_factory=harness.llm_factory,
+    )
+
+    assert result.hit_iteration_cap is True

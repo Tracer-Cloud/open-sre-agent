@@ -33,6 +33,8 @@ from core.agent_harness.turns.turn_snapshot import TurnSnapshot
 
 log = logging.getLogger(__name__)
 
+_ITERATION_CAP_MESSAGE = "Agent stopped before producing a final answer (iteration limit reached)."
+
 
 def stage_turn_error(session: Any, kind: str, message: str) -> None:
     """Best-effort structured error staging for the turn's telemetry flush."""
@@ -119,11 +121,15 @@ def run_turn(
         return _cancelled_turn_result(accounting, action_result)
 
     response_text = action_result.response_text.strip()
+    if action_result.hit_iteration_cap:
+        response_text = "\n\n".join(filter(None, (response_text, _ITERATION_CAP_MESSAGE)))
     if response_text:
         record_conversation_turn(session, text, response_text)
     return accounting.finalize(
         TurnResult(
-            final_intent="agent_completed",
+            final_intent=(
+                "agent_incomplete" if action_result.hit_iteration_cap else "agent_completed"
+            ),
             action_result=action_result,
             assistant_response_text=response_text,
         )

@@ -129,6 +129,36 @@ def test_run_turn_returns_agent_conclusion_directly() -> None:
     assert result.answered is True
 
 
+def test_run_turn_surfaces_iteration_cap_as_incomplete() -> None:
+    def execute_actions(_text: str, **_kwargs: object) -> ToolCallingTurnResult:
+        return ToolCallingTurnResult(
+            1,
+            1,
+            1,
+            False,
+            True,
+            response_text="intermediate tool output",
+            hit_iteration_cap=True,
+        )
+
+    class _Accounting:
+        def record_action_result(self, _result: ToolCallingTurnResult) -> None:
+            return None
+
+        def finalize(self, result: TurnResult) -> TurnResult:
+            return result
+
+    result = run_turn(
+        "finish the task",
+        Session(store=InMemorySessionStore()),
+        execute_actions=execute_actions,
+        accounting=_Accounting(),
+    )
+
+    assert result.final_intent == "agent_incomplete"
+    assert "iteration limit reached" in result.primary_response_text
+
+
 def test_run_turn_builds_turn_plan_for_action_path(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
