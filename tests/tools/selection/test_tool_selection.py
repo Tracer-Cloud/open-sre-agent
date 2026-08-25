@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from collections.abc import Sequence
 from dataclasses import dataclass
+from typing import Any
 
 import pytest
 from pydantic import ValidationError
@@ -53,12 +54,14 @@ SELECTION_SCENARIOS: Sequence[SelectionScenario] = (
         ),
         candidate_tool_names=(
             "get_postgresql_slow_queries",
-            "get_postgresql_locks",
+            "get_postgresql_lock_status",
             "list_eks_pods",
             "search_sentry_issues",
             "describe_rds_instance",
         ),
-        expected_tool_names=frozenset({"get_postgresql_slow_queries", "get_postgresql_locks"}),
+        expected_tool_names=frozenset(
+            {"get_postgresql_slow_queries", "get_postgresql_lock_status"}
+        ),
     ),
     SelectionScenario(
         scenario_id="sentry_error_spike",
@@ -83,17 +86,18 @@ SELECTION_SCENARIOS: Sequence[SelectionScenario] = (
         ),
         candidate_tool_names=(
             "query_datadog_metrics",
-            "get_datadog_context",
+            "query_datadog_monitors",
             "list_eks_pods",
             "search_sentry_issues",
             "get_postgresql_slow_queries",
         ),
-        expected_tool_names=frozenset({"query_datadog_metrics", "get_datadog_context"}),
+        expected_tool_names=frozenset({"query_datadog_metrics", "query_datadog_monitors"}),
     ),
 )
 
 
 def _require_live_llm_credentials() -> None:
+    settings: Any = None
     try:
         settings = resolve_llm_settings()
     except ValidationError as exc:
@@ -104,6 +108,9 @@ def _require_live_llm_credentials() -> None:
         if env_var is not None:
             hint += f", required key={env_var}"
         pytest.skip(f"Skipping live tool selection; missing LLM configuration:{hint}. {msg}")
+
+    if settings is None:
+        pytest.skip("Skipping live tool selection; LLM settings could not be resolved.")
 
     auth = credential_status(settings.provider)
     if not auth.configured or auth.stale:
@@ -128,8 +135,17 @@ def test_live_tool_selection_matches_target_tool(scenario: SelectionScenario) ->
     _require_live_llm_credentials()
 
     tool_map = get_registered_tool_map("investigation")
+    for name in scenario.candidate_tool_names:
+        assert name in tool_map, (
+            f"Scenario {scenario.scenario_id!r} references unregistered candidate tool {name!r}"
+        )
+    for name in scenario.expected_tool_names:
+        assert name in tool_map, (
+            f"Scenario {scenario.scenario_id!r} references unregistered expected tool {name!r}"
+        )
+
     candidate_tools: list[SchemaDescribedTool] = [
-        tool_map[name] for name in scenario.candidate_tool_names if name in tool_map
+        tool_map[name] for name in scenario.candidate_tool_names
     ]
     assert len(candidate_tools) >= 2, (
         f"Scenario {scenario.scenario_id} must have multiple candidate tools"
