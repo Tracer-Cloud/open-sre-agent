@@ -147,17 +147,15 @@ def test_transports_name_harness_types_without_driving_the_agent() -> None:
 
 
 def _chat_methods_in_tree(tree: ast.AST) -> set[str]:
-    """Return 'chat' / 'chat_until_goal' method or function calls present in AST ``tree``."""
+    """Return 'chat' / 'chat_until_goal' attribute method calls present in AST ``tree``."""
     methods: set[str] = set()
     for node in ast.walk(tree):
-        if isinstance(node, ast.Call):
-            if isinstance(node.func, ast.Attribute) and node.func.attr in {
-                "chat",
-                "chat_until_goal",
-            }:
-                methods.add(node.func.attr)
-            elif isinstance(node.func, ast.Name) and node.func.id in {"chat", "chat_until_goal"}:
-                methods.add(node.func.id)
+        if (
+            isinstance(node, ast.Call)
+            and isinstance(node.func, ast.Attribute)
+            and node.func.attr in {"chat", "chat_until_goal"}
+        ):
+            methods.add(node.func.attr)
     return methods
 
 

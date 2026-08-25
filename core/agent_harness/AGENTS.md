@@ -371,7 +371,7 @@ There are two ways into an agent turn:
 2. **Scripted / Headless API (`AgentSession.chat` / `chat_until_goal`)**:
    - The un-gated single-turn API for programmatic scripts (`main.py`, notebooks), tests, and single-shot CLI (`opensre ask`).
    - Deliberately kept as an unguarded entry point for single-tenant, scripted use.
-   - **Forbidden for concurrent hosts:** Gateway and Shell modules must never call `chat()` or `chat_until_goal()` directly (enforced by `gateway/tests/test_harness_behaviour_border.py`).
+   - **Forbidden for concurrent hosts:** Gateway and Shell modules must never call `chat()` or `chat_until_goal()` directly (enforced by `gateway/tests/test_harness_behaviour_border.py` and `tests/interactive_shell/test_harness_api_border.py`).
 
 **Scaling** is separate from the host API: local concurrency
 (`TurnConcurrencyGate` / transport pools / `OPENSRE_SIZE_PROFILE`) and cloud
