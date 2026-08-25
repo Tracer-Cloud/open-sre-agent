@@ -45,8 +45,6 @@ get_azure_sql_slow_queries
 get_azure_sql_wait_stats
 get_batch_statistics
 get_bitbucket_file_contents
-get_clickhouse_query_activity
-get_clickhouse_system_health
 get_cloudwatch_batch_metrics
 get_cloudwatch_logs
 get_dagster_run_logs
