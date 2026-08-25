@@ -348,3 +348,22 @@ class TestLookupIsTheAllowlist:
 
     def test_a_real_path_on_the_wrong_service_is_none(self) -> None:
         assert lookup("iam", "/compute/v1/instances") is None
+
+
+class TestServiceNamesTheToolsActuallyUse:
+    """A tool naming a service differently from the index bypasses the gate.
+
+    `execute_yc_operation` only refuses a path when it recognises the service.
+    The load-balancer tool says "alb" while the index, built from the protos,
+    says "apploadbalancer" - so without an alias its paths were waved through
+    unchecked instead of being matched against the allowlist.
+    """
+
+    def test_the_tools_alb_name_reaches_the_index(self) -> None:
+        assert lookup("alb", "/apploadbalancer/v1/loadBalancers") is not None
+
+    def test_a_canonical_name_still_works(self) -> None:
+        assert lookup("apploadbalancer", "/apploadbalancer/v1/loadBalancers") is not None
+
+    def test_an_unknown_service_stays_unknown(self) -> None:
+        assert lookup("not-a-service", "/x/v1/y") is None

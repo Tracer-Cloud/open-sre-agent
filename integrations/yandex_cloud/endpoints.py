@@ -248,6 +248,15 @@ def known_endpoints(*, refresh: bool = True) -> dict[str, str]:
     return endpoints
 
 
+#: Where the registry's name for a host differs from the one the index emits.
+#: The index calls the Object Storage control plane "storage", but the registry
+#: gives that name to the S3 data plane, which serves objects and answers no
+#: control-plane read; the control plane is registered as "storage-api". Applied
+#: here rather than in the snapshot because the snapshot is refreshed from
+#: Yandex at runtime and the upstream value would come straight back.
+_HOST_ALIASES: Final[dict[str, str]] = {"storage": "storage-api"}
+
+
 def resolve_endpoint(service: str, *, refresh: bool = True) -> str | None:
     """Return the API host for *service*, or None when it is not a known service.
 
@@ -255,7 +264,8 @@ def resolve_endpoint(service: str, *, refresh: bool = True) -> str | None:
     built from caller input, so a model cannot talk the client into reaching an
     arbitrary address.
     """
-    return known_endpoints(refresh=refresh).get(service.strip().lower())
+    wanted = service.strip().lower()
+    return known_endpoints(refresh=refresh).get(_HOST_ALIASES.get(wanted, wanted))
 
 
 def reset_endpoint_cache() -> None:

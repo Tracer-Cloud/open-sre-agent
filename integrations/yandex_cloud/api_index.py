@@ -249,6 +249,21 @@ def _path_matches(template: str, actual: str) -> bool:
     )
 
 
+#: The tools name a couple of services the way the endpoint registry does, while
+#: the index carries the name the protos use. Without this the gate below sees
+#: an unknown service and waves the path through unchecked.
+#: Where a tool names a service differently from the index. The tools say "alb",
+#: while the protos - and so the index built from them - say "apploadbalancer".
+#: Without this the gate sees an unknown service and waves the path through.
+_SERVICE_ALIASES: Final[dict[str, str]] = {"alb": "apploadbalancer"}
+
+
+def canonical_service(service: str) -> str:
+    """Return the name the index knows this service by."""
+    wanted = service.strip()
+    return _SERVICE_ALIASES.get(wanted, wanted)
+
+
 def lookup(service: str, path: str) -> ApiEndpoint | None:
     """Return the indexed read that *path* is, or ``None`` if it is not one.
 
@@ -257,7 +272,7 @@ def lookup(service: str, path: str) -> ApiEndpoint | None:
     convenience for discovery. A concrete path such as
     ``/compute/v1/instances/abc`` matches ``/compute/v1/instances/{instance_id}``.
     """
-    wanted = service.strip()
+    wanted = canonical_service(service)
     if not wanted or not path:
         return None
     for endpoint in _endpoints():

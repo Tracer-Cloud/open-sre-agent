@@ -146,6 +146,10 @@ class TestEnvironmentLoading:
         monkeypatch.setenv(YC_FOLDER_ID_ENV, FOLDER)
         monkeypatch.delenv(YC_IAM_TOKEN_ENV, raising=False)
         monkeypatch.delenv(YC_SA_KEY_FILE_ENV, raising=False)
+        # setup writes this to .env, so on any machine with the integration
+        # configured it leaks in and the folder does have a credential after
+        # all - green in CI, red for anyone who actually connected it.
+        monkeypatch.delenv(YC_USE_METADATA_ENV, raising=False)
 
         records = [r for r in load_env_integrations() if r.get("service") == "yandex_cloud"]
 
@@ -358,3 +362,29 @@ class TestSetupMetadataFlag:
         resolved = _resolve_metadata_flag({"folder_id": "b1g", "use_metadata": "true"})
 
         assert resolved.credentials["use_metadata"] == "true"
+
+
+class TestObjectStorageResolvesToItsControlPlane:
+    """The index emits "storage" for the control plane; the registry does not.
+
+    The registry gives that name to the S3 data plane, which serves objects and
+    answers no control-plane read, so a bucket listing went to a host that
+    cannot answer it. Aliased at resolve time rather than in the snapshot: the
+    snapshot is refreshed from Yandex and the upstream value would return.
+    """
+
+    def test_storage_reads_go_to_the_control_plane(self) -> None:
+        from integrations.yandex_cloud.endpoints import resolve_endpoint
+
+        assert resolve_endpoint("storage", refresh=False) == "storage.api.cloud.yandex.net"
+
+    def test_the_alias_survives_a_registry_refresh(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """A refresh brings back Yandex's own mapping; the alias must outlive it."""
+        from integrations.yandex_cloud import endpoints
+
+        monkeypatch.setattr(
+            endpoints, "_fetch_endpoints", lambda: {"storage": "storage.yandexcloud.net"}
+        )
+        endpoints.reset_endpoint_cache()
+
+        assert endpoints.resolve_endpoint("storage") == "storage.api.cloud.yandex.net"
