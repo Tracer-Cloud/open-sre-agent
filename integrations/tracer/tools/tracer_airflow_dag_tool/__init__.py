@@ -5,6 +5,7 @@ from __future__ import annotations
 import os
 from typing import Any
 
+from core.domain.types.evidence import record_evidence_entry
 from core.domain.types.tools import ToolSurface
 from core.tool_framework import tool
 from integrations.airflow.config import (
@@ -43,9 +44,23 @@ def _airflow_dag_id(sources: dict[str, Any]) -> str:
     ).strip()
 
 
+def _map_get_recent_airflow_failures(
+    evidence: dict[str, Any], output: dict[str, Any], _input: dict[str, Any]
+) -> None:
+    failures = output.get("failures", [])
+    if failures:
+        record_evidence_entry(
+            evidence,
+            source="get_recent_airflow_failures",
+            label="Airflow Recent Failures",
+            summary=f"{len(failures)} failures",
+        )
+
+
 @tool(
     name="get_recent_airflow_failures",
     source="airflow",
+    evidence_mapper=_map_get_recent_airflow_failures,
     description="Fetch recent failed or retrying Airflow task evidence for a DAG.",
     use_cases=[
         "Investigating Airflow DAG failures",
@@ -89,9 +104,23 @@ def get_recent_airflow_failures(
     }
 
 
+def _map_get_airflow_dag_runs(
+    evidence: dict[str, Any], output: dict[str, Any], _input: dict[str, Any]
+) -> None:
+    dag_runs = output.get("dag_runs", [])
+    if dag_runs:
+        record_evidence_entry(
+            evidence,
+            source="get_airflow_dag_runs",
+            label="Airflow DAG Runs",
+            summary=f"{len(dag_runs)} dag runs",
+        )
+
+
 @tool(
     name="get_airflow_dag_runs",
     source="airflow",
+    evidence_mapper=_map_get_airflow_dag_runs,
     description="Fetch recent Airflow DAG runs for a DAG.",
     use_cases=[
         "Checking recent Airflow DAG run state",
@@ -138,9 +167,23 @@ def get_airflow_dag_runs(
     }
 
 
+def _map_get_airflow_task_instances(
+    evidence: dict[str, Any], output: dict[str, Any], _input: dict[str, Any]
+) -> None:
+    task_instances = output.get("task_instances", [])
+    if task_instances:
+        record_evidence_entry(
+            evidence,
+            source="get_airflow_task_instances",
+            label="Airflow Task Instances",
+            summary=f"{len(task_instances)} task instances",
+        )
+
+
 @tool(
     name="get_airflow_task_instances",
     source="airflow",
+    evidence_mapper=_map_get_airflow_task_instances,
     description="Fetch Airflow task instances for a specific DAG run.",
     use_cases=[
         "Inspecting failed Airflow task instances",
