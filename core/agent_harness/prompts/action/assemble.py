@@ -6,6 +6,7 @@ import logging
 import re
 from typing import TYPE_CHECKING
 
+from core.agent_harness.prompts.action.routing_policy import ACTION_ROUTING_POLICY
 from core.agent_harness.prompts.action.text import _SYSTEM_PROMPT_BASE
 from core.agent_harness.prompts.kernel.envelope import (
     PromptBlock,
@@ -89,6 +90,13 @@ def build_action_system_prompt_envelope(turn_snapshot: TurnSnapshot) -> PromptEn
             # copies the entire stable prompt body on every turn.
             content="".join((_SYSTEM_PROMPT_BASE, "\n\n")),
             provenance="core.agent_harness.prompts.action.opensre_system_prompt.md",
+        ),
+        PromptBlock(
+            id=PromptBlockId.ACTION_ROUTING_POLICY,
+            kind=PromptBlockKind.RULE,
+            tier=PromptTier.STABLE,
+            content=ACTION_ROUTING_POLICY,
+            provenance="core.agent_harness.prompts.action.routing_policy",
         ),
     ]
     vendor_fragments = action_prompt_vendor_fragments()
