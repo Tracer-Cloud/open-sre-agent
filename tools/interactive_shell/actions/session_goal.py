@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from core.agent_harness.session_goal.goal import (
+from core.agent_harness.spi.session_goal import (
     attach_session_goal,
     build_session_goal,
     session_goal_is_attached,

@@ -146,7 +146,6 @@ def test_gateway_start_returns_running_gateway_handle(monkeypatch) -> None:
             response_text="Hawaii: +25C",
         ),
         assistant_response_text="Hawaii: +25C",
-        llm_run=None,
     )
     callback = background_kwargs["handle_callback_to_gateway_agent"]
     with bound_turn_metering(

@@ -74,9 +74,15 @@ def test_gateway_turn_runner_does_not_finalize_answered_turn(
     agent = fake_agent()
     agent.dispatch.return_value = TurnResult(
         final_intent="cli_agent_fallback",
-        action_result=ToolCallingTurnResult(0, 0, 0, False, False),
+        action_result=ToolCallingTurnResult(
+            0,
+            0,
+            0,
+            False,
+            False,
+            response_streamed=True,
+        ),
         assistant_response_text="streamed answer",
-        llm_run=object(),
     )
     monkeypatch.setattr(
         "infrastructure.turn_host.session_agents.DefaultHeadlessBuild",
@@ -91,16 +97,18 @@ def test_gateway_turn_runner_does_not_finalize_answered_turn(
     sink.finalize.assert_not_called()
 
 
-def test_run_turn_routes_unhandled_action_to_answer_callback() -> None:
-    action = ToolCallingTurnResult(0, 0, 0, False, False)
-    answer_calls: list[str] = []
+def test_run_turn_returns_agent_conclusion_directly() -> None:
+    action = ToolCallingTurnResult(
+        0,
+        0,
+        0,
+        False,
+        False,
+        response_text="answered",
+    )
 
     def execute_actions(_text: str, **_kwargs: object) -> ToolCallingTurnResult:
         return action
-
-    def answer(text: str, _request: object = None, **_kwargs: object) -> object:
-        answer_calls.append(text)
-        return type("Run", (), {"response_text": "answered"})()
 
     class _Accounting:
         def record_action_result(self, _result: ToolCallingTurnResult) -> None:
@@ -114,12 +122,10 @@ def test_run_turn_routes_unhandled_action_to_answer_callback() -> None:
         "question?",
         session,
         execute_actions=execute_actions,
-        answer=answer,
         accounting=_Accounting(),
     )
 
-    assert answer_calls == ["question?"]
-    assert result.final_intent == "cli_agent_fallback"
+    assert result.final_intent == "agent_completed"
     assert result.answered is True
 
 
@@ -140,9 +146,6 @@ def test_run_turn_builds_turn_plan_for_action_path(
         captured.append(turn_plan)
         return ToolCallingTurnResult(0, 0, 0, False, False)
 
-    def answer(_text: str, _request: object = None, **_kwargs: object) -> object:
-        return type("Run", (), {"response_text": "answered"})()
-
     class _Accounting:
         def record_action_result(self, _result: ToolCallingTurnResult) -> None:
             return None
@@ -155,52 +158,11 @@ def test_run_turn_builds_turn_plan_for_action_path(
         "hi",
         session,
         execute_actions=execute_actions,
-        answer=answer,
         accounting=_Accounting(),
     )
 
     assert captured, "execute_actions was never called"
     assert captured[0].resolved_integrations == resolved
-
-
-def test_run_turn_passes_turn_plan_to_answer(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    """The answer phase receives the same turn_plan (its snapshot grounds the prompt)."""
-    resolved = {"github": {"configured": True}}
-    monkeypatch.setattr(
-        "core.agent_harness.turns.turn_plan.resolve_and_cache_integrations",
-        lambda _session: resolved,
-    )
-    answer_plans: list[Any] = []
-
-    def execute_actions(_text: str, **_kwargs: object) -> ToolCallingTurnResult:
-        return ToolCallingTurnResult(0, 0, 0, False, False)
-
-    def answer(_text: str, request: Any = None, **_kwargs: object) -> object:
-        answer_plans.append(getattr(request, "turn_plan", None))
-        return type("Run", (), {"response_text": "answered"})()
-
-    class _Accounting:
-        def record_action_result(self, _result: ToolCallingTurnResult) -> None:
-            return None
-
-        def finalize(self, result: TurnResult) -> TurnResult:
-            return result
-
-    session = Session(store=InMemorySessionStore())
-    run_turn(
-        "why is it down?",
-        session,
-        execute_actions=execute_actions,
-        answer=answer,
-        accounting=_Accounting(),
-    )
-
-    assert answer_plans, "answer was never called"
-    assert answer_plans[0] is not None
-    assert answer_plans[0].snapshot.text == "why is it down?"
-    assert answer_plans[0].resolved_integrations == resolved
 
 
 def test_action_tools_uses_passed_resolved_integrations(

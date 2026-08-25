@@ -69,6 +69,7 @@ SPI_ROLE_NAMES: dict[str, frozenset[str]] = {
             "SessionGoalReason",
             "SessionGoalStatus",
             "attach_session_goal",
+            "build_session_goal",
             "clear_session_goal",
             "format_session_goal_progress",
             "format_session_goal_status_line",
