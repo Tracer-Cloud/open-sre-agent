@@ -12,6 +12,7 @@ from integrations.github.tools.ci_fix.verification import (
     DEFAULT_POLL_INTERVAL_SECONDS,
     CheckState,
     _workflow_runs_state,
+    wait_for_branch_checks,
     wait_for_pr_checks,
 )
 
@@ -107,6 +108,78 @@ def test_workflow_runs_state_uses_exact_commit() -> None:
         ) == (True, ("1:completed", "2:completed"))
 
     assert run_gh.call_args_list[0].args[0][:4] == ["run", "list", "--commit", "new-sha"]
+
+
+def _workflow_runs_payload(*runs: dict) -> dict:
+    return {"runs": list(runs)}
+
+
+def _workflow_run(
+    *,
+    name: str,
+    conclusion: str,
+    status: str,
+    database_id: int = 1,
+) -> dict:
+    return {
+        "databaseId": database_id,
+        "workflowName": name,
+        "conclusion": conclusion,
+        "status": status,
+    }
+
+
+def test_wait_for_branch_checks_polls_exact_commit_workflows_to_success() -> None:
+    responses = [
+        _workflow_runs_payload(),
+        _workflow_runs_payload(
+            _workflow_run(name="CI", conclusion="", status="in_progress"),
+        ),
+        _workflow_runs_payload(
+            _workflow_run(name="CI", conclusion="success", status="completed"),
+        ),
+    ]
+    sleeps: list[float] = []
+
+    with patch(
+        "integrations.github.tools.ci_fix.verification.run_gh_json",
+        side_effect=responses,
+    ):
+        result = wait_for_branch_checks(
+            _CONTEXT,
+            github_token="tok",
+            expected_head_sha="new-sha",
+            registration_seconds=0,
+            timeout_seconds=30,
+            poll_interval_seconds=1,
+            settle_seconds=0,
+            sleep=sleeps.append,
+        )
+
+    assert result.state is CheckState.PASSED
+    assert result.check_names == ("CI",)
+    assert sleeps == [1, 1]
+
+
+def test_wait_for_branch_checks_reports_failing_workflow() -> None:
+    payload = _workflow_runs_payload(
+        _workflow_run(name="CI", conclusion="failure", status="completed"),
+    )
+
+    with patch(
+        "integrations.github.tools.ci_fix.verification.run_gh_json",
+        return_value=payload,
+    ):
+        result = wait_for_branch_checks(
+            _CONTEXT,
+            github_token="tok",
+            expected_head_sha="new-sha",
+            registration_seconds=0,
+            settle_seconds=0,
+        )
+
+    assert result.state is CheckState.FAILED
+    assert result.failing_checks == ("CI",)
 
 
 def test_wait_for_pr_checks_ignores_stale_checks_then_waits_for_success() -> None:

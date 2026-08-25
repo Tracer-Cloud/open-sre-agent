@@ -1,7 +1,9 @@
-"""Tests for the GitHub PR CI remediation action tool."""
+"""Tests for the GitHub CI remediation action tool."""
 
 from __future__ import annotations
 
+from dataclasses import replace
+from pathlib import Path
 from types import SimpleNamespace
 from typing import Any
 from unittest.mock import MagicMock, patch
@@ -13,6 +15,7 @@ from core.agent_harness.tools.tool_context import (
 from core.tool.contracts import AgentToolContext, RegisteredTool
 from integrations.coding_agent import CodingResult
 from integrations.github.tools.ci_fix.context import (
+    CI_TARGET_BRANCH,
     CiFixContext,
     FailingCheck,
     gather_ci_fix_context,
@@ -30,6 +33,7 @@ from integrations.github.tools.ci_fix.tool import (
     fix_github_pr_ci,
 )
 from integrations.github.tools.ci_fix.verification import CheckState, CheckVerification
+from integrations.github.tools.ci_fix.worktree import BranchWorktree, create_branch_worktree
 from tests.tools.conftest import BaseToolContract
 from tools.registry import clear_tool_registry_cache, get_registered_tool_map, get_registered_tools
 
@@ -84,6 +88,18 @@ _CTX = CiFixContext(
         ),
     ),
     task="Fix CI.",
+)
+
+_BRANCH_CTX = replace(
+    _CTX,
+    number=None,
+    title="fix(packaging): repair release build",
+    url="https://github.com/Tracer-Cloud/opensre/actions/runs/32866423007",
+    base_branch="main",
+    head_branch="main",
+    head_sha="ea14998",
+    target_kind=CI_TARGET_BRANCH,
+    target_branch="main",
 )
 
 
@@ -142,6 +158,70 @@ def test_gather_ci_fix_context_builds_task_with_failing_logs() -> None:
     assert log_view.call_args.args[0] == ["run", "view", "1", "--log", "--job", "2"]
 
 
+def test_gather_ci_fix_context_builds_branch_task_with_failed_run_logs() -> None:
+    run_payload = {
+        "runs": [
+            {
+                "databaseId": 32866423007,
+                "displayTitle": "fix(packaging): repair release build",
+                "workflowName": "CI",
+                "conclusion": "FAILURE",
+                "status": "completed",
+                "headBranch": "main",
+                "headSha": "ea14998",
+                "url": "https://github.com/Tracer-Cloud/opensre/actions/runs/32866423007",
+            }
+        ]
+    }
+    jobs_payload = {
+        "jobs": [
+            {
+                "databaseId": 97862708940,
+                "name": "test (cli-runtime)",
+                "conclusion": "FAILURE",
+                "status": "completed",
+                "url": "https://github.com/Tracer-Cloud/opensre/actions/runs/32866423007/job/97862708940",
+            }
+        ]
+    }
+
+    with (
+        patch(
+            "integrations.github.tools.ci_fix.context.run_gh_json",
+            side_effect=[run_payload, jobs_payload],
+        ) as gh_json,
+        patch(
+            "integrations.github.tools.ci_fix.context.run_gh_text",
+            return_value="Run tests\nError: pytest failed in cli runtime\n",
+        ) as log_view,
+    ):
+        ctx = gather_ci_fix_context(
+            owner="Tracer-Cloud",
+            repo="opensre",
+            branch="origin/main",
+            github_token="tok",
+        )
+
+    assert ctx.number is None
+    assert ctx.target_kind == CI_TARGET_BRANCH
+    assert ctx.target_branch == "main"
+    assert ctx.base_branch == "main"
+    assert ctx.head_branch == "main"
+    assert ctx.failing_checks[0].name == "test (cli-runtime)"
+    assert "branch main" in ctx.task
+    assert "pytest failed in cli runtime" in ctx.task
+    assert "fresh OpenSRE repair branch" in ctx.task
+    assert gh_json.call_args_list[0].args[0][:4] == ["run", "list", "--branch", "main"]
+    assert gh_json.call_args_list[1].args[0] == [
+        "run",
+        "view",
+        "32866423007",
+        "--json",
+        "jobs",
+    ]
+    log_view.assert_called_once()
+
+
 def test_gather_ci_fix_context_reports_no_failing_checks() -> None:
     payload = {**_PR_PAYLOAD, "statusCheckRollup": []}
 
@@ -160,6 +240,85 @@ def test_gather_ci_fix_context_reports_no_failing_checks() -> None:
             )
         else:
             raise AssertionError("expected no_failing_checks")
+
+
+def test_gather_ci_fix_context_reports_no_failing_branch_runs() -> None:
+    with patch("integrations.github.tools.ci_fix.context.run_gh_json", return_value={"runs": []}):
+        try:
+            gather_ci_fix_context(
+                owner="Tracer-Cloud",
+                repo="opensre",
+                branch="main",
+                github_token="tok",
+            )
+        except GitHubCiFixError as exc:
+            assert exc.kind == ERR_NO_FAILING_CHECKS
+            assert exc.message == (
+                "No failing CI runs found on Tracer-Cloud/opensre branch main; no push was made."
+            )
+        else:
+            raise AssertionError("expected no_failing_checks")
+
+
+def test_gather_ci_fix_context_ignores_stale_branch_failures_after_newer_commit() -> None:
+    payload = {
+        "runs": [
+            {
+                "databaseId": 2,
+                "displayTitle": "newer passing commit",
+                "workflowName": "CI",
+                "conclusion": "SUCCESS",
+                "status": "completed",
+                "headBranch": "main",
+                "headSha": "new-sha",
+            },
+            {
+                "databaseId": 1,
+                "displayTitle": "older failing commit",
+                "workflowName": "CI",
+                "conclusion": "FAILURE",
+                "status": "completed",
+                "headBranch": "main",
+                "headSha": "old-sha",
+            },
+        ]
+    }
+    with patch("integrations.github.tools.ci_fix.context.run_gh_json", return_value=payload):
+        try:
+            gather_ci_fix_context(
+                owner="Tracer-Cloud",
+                repo="opensre",
+                branch="main",
+                github_token="tok",
+            )
+        except GitHubCiFixError as exc:
+            assert exc.kind == ERR_NO_FAILING_CHECKS
+        else:
+            raise AssertionError("expected no_failing_checks")
+
+
+def test_create_branch_worktree_uses_linked_git_worktree(tmp_path: Path) -> None:
+    workspace = tmp_path / "work"
+    workspace.mkdir()
+    commands: list[list[str]] = []
+
+    def run_success(cmd: list[str], **_kwargs: object) -> SimpleNamespace:
+        commands.append(cmd)
+        return SimpleNamespace(returncode=0, stdout="", stderr="")
+
+    with (
+        patch("integrations.github.tools.ci_fix.worktree.ensure_git_repo"),
+        patch("integrations.github.tools.ci_fix.worktree.subprocess.run", side_effect=run_success),
+        patch("integrations.github.tools.ci_fix.worktree.uuid.uuid4") as uuid4,
+    ):
+        uuid4.return_value.hex = "1234567890abcdef"
+        result = create_branch_worktree(str(workspace), _BRANCH_CTX)
+
+    assert result.branch_name.startswith("opensre/ci-fix-main-ea14998-123456")
+    assert Path(result.path).parent == tmp_path
+    assert commands[0] == ["git", "fetch", "origin", "main:refs/remotes/origin/main"]
+    assert commands[1][:5] == ["git", "worktree", "add", "-b", result.branch_name]
+    assert commands[1][-1] == "origin/main"
 
 
 def test_gather_ci_fix_context_ignores_cancelled_sibling_checks() -> None:
@@ -270,6 +429,33 @@ def test_with_push_output_reports_superseded_commit() -> None:
     assert "another commit replaced 0123456789ab" in result["response_text"]
 
 
+def test_with_push_output_reports_branch_success() -> None:
+    output = {
+        "owner": "Tracer-Cloud",
+        "repo": "opensre",
+        "pr_number": None,
+        "target_type": CI_TARGET_BRANCH,
+        "target_branch": "main",
+        "success": True,
+    }
+    push = PushResult(
+        branch_name="opensre/ci-fix-main-ea14998-12345678",
+        head_sha="0123456789abcdef",
+        changed_files=["app.py"],
+    )
+    verification = CheckVerification(
+        state=CheckState.PASSED,
+        check_names=("CI",),
+    )
+
+    result = with_push_output(output, push, verification)
+
+    assert result["response_text"] == (
+        "Fixed failing CI for Tracer-Cloud/opensre branch main, "
+        "pushed opensre/ci-fix-main-ea14998-12345678, and all branch checks passed."
+    )
+
+
 def test_gather_ci_fix_context_refuses_fork_branch() -> None:
     payload = {
         **_PR_PAYLOAD,
@@ -307,6 +493,20 @@ def test_run_fix_without_coding_agent_is_backend_neutral() -> None:
         "but no configured coding agent is ready; no push was made."
     )
     assert "pi missing" not in result.error
+
+
+def test_run_fix_without_coding_agent_names_branch_target() -> None:
+    with patch(
+        "integrations.github.tools.ci_fix.runner.verify_coding_agent",
+        return_value=(False, "pi missing; codex missing"),
+    ):
+        result = run_fix(_BRANCH_CTX, "/workspace", model=None)
+
+    assert result.success is False
+    assert result.error == (
+        "Found failing CI checks on Tracer-Cloud/opensre branch main, "
+        "but no configured coding agent is ready; no push was made."
+    )
 
 
 @patch(
@@ -428,6 +628,81 @@ def test_run_ci_fix_reports_failed_post_push_checks_without_prompting_again(
         "Pushed a CI fix to feat/fix-ci, but PR checks are still failing: tests."
     )
     assert "continue" not in result["response_text"].lower()
+
+
+@patch(
+    "integrations.github.tools.ci_fix.runner.push_ci_fix",
+    return_value=PushResult(
+        branch_name="opensre/ci-fix-main-ea14998-12345678",
+        head_sha="new-sha",
+        changed_files=["app.py"],
+    ),
+)
+@patch(
+    "integrations.github.tools.ci_fix.runner.wait_for_branch_checks",
+    return_value=CheckVerification(
+        state=CheckState.PASSED,
+        check_names=("CI",),
+    ),
+)
+@patch("integrations.github.tools.ci_fix.runner.run_fix")
+@patch("integrations.github.tools.ci_fix.runner.pre_coding_changes", return_value={})
+@patch("integrations.github.tools.ci_fix.runner.cleanup_branch_worktree")
+@patch(
+    "integrations.github.tools.ci_fix.runner.create_branch_worktree",
+    return_value=BranchWorktree(
+        path="/workspace/.opensre-ci-fix-main-12345678",
+        branch_name="opensre/ci-fix-main-ea14998-12345678",
+    ),
+)
+@patch("integrations.github.tools.ci_fix.runner.ensure_push_ready")
+@patch("integrations.github.tools.ci_fix.runner.ensure_workspace_ready")
+@patch("integrations.github.tools.ci_fix.runner.gather_ci_fix_context", return_value=_BRANCH_CTX)
+def test_run_ci_fix_branch_target_uses_worktree_and_branch_verification(
+    _gather: MagicMock,
+    _workspace: MagicMock,
+    _push_ready: MagicMock,
+    mock_worktree: MagicMock,
+    mock_cleanup: MagicMock,
+    _pre: MagicMock,
+    mock_run_fix: MagicMock,
+    mock_wait: MagicMock,
+    mock_push: MagicMock,
+) -> None:
+    prompts: list[str] = []
+    mock_run_fix.return_value = CodingResult(
+        success=True,
+        summary="Fixed failing pytest expectation.",
+        changed_files=["app.py"],
+        diff="diff",
+    )
+
+    result = run_ci_fix(
+        owner="Tracer-Cloud",
+        repo="opensre",
+        branch="main",
+        workspace="/workspace",
+        github_token="tok",
+        confirm_fn=lambda prompt: prompts.append(prompt) or "y",
+    )
+
+    assert result["success"] is True
+    assert result["branch_name"] == "opensre/ci-fix-main-ea14998-12345678"
+    assert result["target_type"] == CI_TARGET_BRANCH
+    assert result["checks_state"] == "passed"
+    assert "separate git worktree" in prompts[0]
+    mock_worktree.assert_called_once_with("/workspace", _BRANCH_CTX)
+    mock_run_fix.assert_called_once()
+    assert mock_run_fix.call_args.args[1] == "/workspace/.opensre-ci-fix-main-12345678"
+    mock_push.assert_called_once()
+    assert mock_push.call_args.kwargs["workspace"] == "/workspace/.opensre-ci-fix-main-12345678"
+    mock_wait.assert_called_once()
+    mock_wait.assert_called_once_with(
+        replace(_BRANCH_CTX, head_branch="opensre/ci-fix-main-ea14998-12345678"),
+        github_token="tok",
+        expected_head_sha="new-sha",
+    )
+    mock_cleanup.assert_called_once()
 
 
 def test_run_ci_fix_no_failing_checks_response_text() -> None:

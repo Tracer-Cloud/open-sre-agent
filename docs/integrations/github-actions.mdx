@@ -7,7 +7,7 @@ description: "Trace incidents back to failing GitHub Actions workflow runs, jobs
 
 OpenSRE’s GitHub Actions tools help you trace incidents back to the workflow run that caused them. They are designed for situations where a failed deploy, a flaky test, or a broken secret rotation explains a production problem.
 
-This is **not** a separate integration id — it uses the same GitHub MCP credentials as [GitHub](/github). For mutating PR CI fixes, see [Fix GitHub PR CI](/github-ci-fix).
+This is **not** a separate integration id — it uses the same GitHub MCP credentials as [GitHub](/github). For mutating CI fixes, see [Fix GitHub CI](/github-ci-fix).
 
 ## Prerequisites
 
@@ -109,5 +109,5 @@ Confirm the verify output mentions Actions tools. Then test from the REPL:
 ## Security
 
 - Prefer a least-privilege token scoped to the repositories you investigate.
-- These tools are read-only; mutating CI fixes go through [GitHub PR CI fix](/github-ci-fix) with explicit confirmation.
+- These tools are read-only; mutating CI fixes go through [GitHub CI fix](/github-ci-fix) with explicit confirmation.
 - Store tokens in `.env`, not in source code.

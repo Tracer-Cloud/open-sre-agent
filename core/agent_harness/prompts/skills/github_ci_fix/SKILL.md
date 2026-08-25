@@ -1,19 +1,21 @@
 ---
 name: github-ci-fix
 description: >-
-  Fix failing GitHub PR CI / Actions checks via fix_github_pr_ci and push to
-  the existing PR head
+  Fix failing GitHub CI / Actions checks via fix_github_pr_ci and push to the
+  existing PR head or a branch repair worktree
 ---
 ══════════════════════════════════════════════════════════
-GITHUB PR CI FIX SKILL — interactive-shell action agent:
+GITHUB CI FIX SKILL — interactive-shell action agent:
 ══════════════════════════════════════════════════════════
 
 WHEN TO USE:
 - The user asks to fix failing CI, broken GitHub Actions checks, failing PR
-  checks, or a red pull request branch.
+  checks, a red pull request branch, or CI on a named branch such as `main`.
 - The user says "fix CI on this PR", "fix the CI of PR 123 and push", "repair
   the failing checks on owner/repo#123", or provides a GitHub pull request URL
   and asks for CI/check fixes.
+- The user says "fix CI on main", "repair the failing Actions run on main", or
+  "fix CI on the default branch and push".
 
 USE THIS TOOL:
 - `fix_github_pr_ci`
@@ -29,6 +31,8 @@ HARD RULES:
   `fix_github_pr_ci(pr_url="<url>")`
 - For `owner/repo#123` or "PR 123 in owner/repo", call:
   `fix_github_pr_ci(owner="owner", repo="repo", pr_number=123)`
+- For a named branch like `main`, call:
+  `fix_github_pr_ci(owner="owner", repo="repo", branch="main")`
 - If no owner/repo is named, omit both and let the tool use the current
   checkout's GitHub origin.
 - Never use `github_cli` or `shell_run` to run raw `gh pr checks`, `gh run view`,
@@ -36,6 +40,9 @@ HARD RULES:
   failing-check log inspection, fix execution, branch safety, commit, and push.
 - The tool pushes to the existing PR head branch after approval. Do not ask the
   user whether to open a new PR.
+- For branch targets such as `main`, the tool creates a separate linked git
+  worktree, commits on a fresh `opensre/ci-fix-*` branch, and pushes that branch.
+  It never pushes directly to protected branches.
 - If the tool returns `response_text`, output exactly that text and stop.
 - If `error_kind` is set, reply in one short line from `error`. Do not say
   "next steps", do not add numbered options, do not list example commands, and
@@ -46,5 +53,7 @@ Compact examples:
    → fix_github_pr_ci(pr_url="https://github.com/Tracer-Cloud/opensre/pull/4597")
 2) "fix failing checks on Tracer-Cloud/opensre#4597"
    → fix_github_pr_ci(owner="Tracer-Cloud", repo="opensre", pr_number=4597)
-3) "the current PR CI is failing, fix and push"
+3) "fix CI on main in Tracer-Cloud/opensre and push"
+   → fix_github_pr_ci(owner="Tracer-Cloud", repo="opensre", branch="main")
+4) "the current PR CI is failing, fix and push"
    → fix_github_pr_ci()

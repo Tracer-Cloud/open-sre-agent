@@ -54,9 +54,16 @@ def run_agentic_cli(
     env: dict[str, str],
     timeout_sec: float,
     agent_name: str,
+    stdin: str | None = None,
 ) -> CodingResult:
     """Run a prepared agent CLI invocation in *workspace* and classify the result."""
-    outcome = poll_agent_process(argv, cwd=workspace, env=env, timeout_sec=timeout_sec)
+    outcome = poll_agent_process(
+        argv,
+        cwd=workspace,
+        env=env,
+        timeout_sec=timeout_sec,
+        stdin=stdin,
+    )
     if outcome.spawn_error:
         return failure(outcome.spawn_error)
 

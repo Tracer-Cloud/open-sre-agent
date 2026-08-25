@@ -2,8 +2,8 @@
 
 Callers depend on this interface — a :class:`CodingResult`, a
 :func:`run_coding_task` entry point, and :func:`verify_coding_agent` readiness —
-rather than on a specific agent. Wired backends: Pi, Claude Code, and Codex;
-``CODING_AGENT=auto`` (the default) picks the first ready one (see
+rather than on a specific agent. Wired backends: Pi, Claude Code, Codex, and
+Cursor; ``CODING_AGENT=auto`` (the default) picks the first ready one (see
 :mod:`integrations.coding_agent.runner`).
 """
 

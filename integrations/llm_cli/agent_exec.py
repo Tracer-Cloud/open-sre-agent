@@ -166,7 +166,12 @@ def _drain(pipe: IO[str] | None, buffer: list[str]) -> None:
 
 
 def poll_agent_process(
-    argv: list[str], *, cwd: str, env: dict[str, str], timeout_sec: float
+    argv: list[str],
+    *,
+    cwd: str,
+    env: dict[str, str],
+    timeout_sec: float,
+    stdin: str | None = None,
 ) -> AgentProcessOutcome:
     """Spawn the agent CLI, drain its pipes, and poll it to completion or *timeout_sec*.
 
@@ -180,6 +185,7 @@ def poll_agent_process(
             argv,
             cwd=cwd,
             env=env,
+            stdin=subprocess.PIPE if stdin is not None else None,
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
             text=True,
@@ -190,6 +196,14 @@ def poll_agent_process(
         )
     except OSError as exc:
         return AgentProcessOutcome("", "", -1, False, spawn_error=f"failed to run {argv[0]}: {exc}")
+
+    stdin_pipe = getattr(proc, "stdin", None)
+    if stdin_pipe is not None and stdin is not None:
+        try:
+            stdin_pipe.write(stdin)
+            stdin_pipe.close()
+        except (OSError, ValueError):
+            pass
 
     out_buf: list[str] = []
     err_buf: list[str] = []

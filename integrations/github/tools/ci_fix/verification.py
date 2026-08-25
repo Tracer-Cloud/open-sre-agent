@@ -18,7 +18,7 @@ DEFAULT_SETTLE_SECONDS = 30
 DEFAULT_HEAD_PROPAGATION_SECONDS = 30
 
 _PR_CHECK_FIELDS = "headRefOid,statusCheckRollup"
-_WORKFLOW_RUN_FIELDS = "databaseId,status"
+_WORKFLOW_RUN_FIELDS = "conclusion,databaseId,name,status,workflowName"
 _WORKFLOW_RUNS_KEY = "runs"
 _WORKFLOW_RUN_COMPLETED = "completed"
 _FAILED_CONCLUSIONS = frozenset(
@@ -48,7 +48,7 @@ class CheckState(StrEnum):
 
 @dataclass(frozen=True)
 class CheckVerification:
-    """Observed post-push PR check outcome."""
+    """Observed post-push PR or branch check outcome."""
 
     state: CheckState
     check_names: tuple[str, ...]
@@ -161,6 +161,69 @@ def wait_for_pr_checks(
         sleep(max(0, poll_interval_seconds))
 
 
+def wait_for_branch_checks(
+    ctx: CiFixContext,
+    *,
+    github_token: str | None,
+    expected_head_sha: str,
+    timeout_seconds: int = DEFAULT_CHECK_WAIT_SECONDS,
+    poll_interval_seconds: int = DEFAULT_POLL_INTERVAL_SECONDS,
+    settle_seconds: int = DEFAULT_SETTLE_SECONDS,
+    registration_seconds: int = DEFAULT_REGISTRATION_SECONDS,
+    sleep: Callable[[float], None] = time.sleep,
+    monotonic: Callable[[], float] = time.monotonic,
+) -> CheckVerification:
+    """Poll until the fix commit's branch workflow runs pass, fail, or time out."""
+    repo = f"{ctx.owner}/{ctx.repo}"
+    started_at = monotonic()
+    deadline = started_at + max(0, timeout_seconds)
+    last_names: tuple[str, ...] = ()
+    terminal_signature: tuple[str, ...] = ()
+    terminal_since: float | None = None
+    runs_seen_at: float | None = None
+
+    while True:
+        runs = _workflow_runs_for_commit(
+            repo=repo,
+            github_token=github_token,
+            expected_head_sha=expected_head_sha,
+        )
+        now = monotonic()
+        if runs and runs_seen_at is None:
+            runs_seen_at = now
+        last_names = tuple(_workflow_run_name(run) for run in runs)
+
+        registration_complete = runs_seen_at is not None and now - runs_seen_at >= max(
+            0, registration_seconds
+        )
+        if runs and registration_complete:
+            pending = [run for run in runs if not _workflow_run_is_terminal(run)]
+            if not pending:
+                signature = _workflow_run_signature(runs)
+                if signature != terminal_signature:
+                    terminal_signature = signature
+                    terminal_since = now
+                if terminal_since is not None and now - terminal_since >= max(0, settle_seconds):
+                    failing = tuple(
+                        _workflow_run_name(run) for run in runs if _workflow_run_failed(run)
+                    )
+                    return CheckVerification(
+                        state=CheckState.FAILED if failing else CheckState.PASSED,
+                        check_names=last_names,
+                        failing_checks=failing,
+                    )
+            else:
+                terminal_signature = ()
+                terminal_since = None
+        else:
+            terminal_signature = ()
+            terminal_since = None
+
+        if now >= deadline:
+            return CheckVerification(state=CheckState.TIMED_OUT, check_names=last_names)
+        sleep(max(0, poll_interval_seconds))
+
+
 def _check_rows(value: Any) -> list[dict[str, Any]]:
     return [item for item in value if isinstance(item, dict)] if isinstance(value, list) else []
 
@@ -176,6 +239,29 @@ def _workflow_runs_state(
     expected_head_sha: str,
     require_run: bool,
 ) -> tuple[bool, tuple[str, ...]]:
+    runs = _workflow_runs_for_commit(
+        repo=repo,
+        github_token=github_token,
+        expected_head_sha=expected_head_sha,
+    )
+    complete = (bool(runs) or not require_run) and all(
+        str(run.get("status") or "").strip().lower() == _WORKFLOW_RUN_COMPLETED for run in runs
+    )
+    signature = tuple(
+        sorted(
+            f"{run.get('databaseId') or 'unknown'}:{str(run.get('status') or '').strip().lower()}"
+            for run in runs
+        )
+    )
+    return complete, signature
+
+
+def _workflow_runs_for_commit(
+    *,
+    repo: str,
+    github_token: str | None,
+    expected_head_sha: str,
+) -> list[dict[str, Any]]:
     payload = run_gh_json(
         [
             "run",
@@ -192,17 +278,7 @@ def _workflow_runs_state(
         repo=repo,
         github_token=github_token,
     )
-    runs = _check_rows(payload.get(_WORKFLOW_RUNS_KEY))
-    complete = (bool(runs) or not require_run) and all(
-        str(run.get("status") or "").strip().lower() == _WORKFLOW_RUN_COMPLETED for run in runs
-    )
-    signature = tuple(
-        sorted(
-            f"{run.get('databaseId') or 'unknown'}:{str(run.get('status') or '').strip().lower()}"
-            for run in runs
-        )
-    )
-    return complete, signature
+    return _check_rows(payload.get(_WORKFLOW_RUNS_KEY))
 
 
 def _verification_signature(
@@ -247,6 +323,36 @@ def _check_is_terminal(check: dict[str, Any]) -> bool:
     )
 
 
+def _workflow_run_name(run: dict[str, Any]) -> str:
+    return str(run.get("workflowName") or run.get("name") or run.get("databaseId") or "workflow")
+
+
+def _workflow_run_signature(runs: list[dict[str, Any]]) -> tuple[str, ...]:
+    return tuple(
+        sorted(
+            "\x1f".join(
+                (
+                    _workflow_run_name(run),
+                    str(run.get("status") or ""),
+                    str(run.get("conclusion") or ""),
+                )
+            )
+            for run in runs
+        )
+    )
+
+
+def _workflow_run_failed(run: dict[str, Any]) -> bool:
+    conclusion = str(run.get("conclusion") or "").strip().upper()
+    return conclusion in _FAILED_CONCLUSIONS
+
+
+def _workflow_run_is_terminal(run: dict[str, Any]) -> bool:
+    status = str(run.get("status") or "").strip().lower()
+    conclusion = str(run.get("conclusion") or "").strip().upper()
+    return status == _WORKFLOW_RUN_COMPLETED or conclusion in _FAILED_CONCLUSIONS
+
+
 __all__ = [
     "CheckState",
     "CheckVerification",
@@ -255,5 +361,6 @@ __all__ = [
     "DEFAULT_POLL_INTERVAL_SECONDS",
     "DEFAULT_REGISTRATION_SECONDS",
     "DEFAULT_SETTLE_SECONDS",
+    "wait_for_branch_checks",
     "wait_for_pr_checks",
 ]

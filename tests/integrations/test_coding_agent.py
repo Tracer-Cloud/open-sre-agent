@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import io
+import subprocess
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
@@ -11,6 +12,7 @@ from integrations.coding_agent import (
     claude_code_backend,
     codex_backend,
     coding_agent_provider,
+    cursor_backend,
     run_coding_task,
     verify_coding_agent,
 )
@@ -24,12 +26,14 @@ def _fake_backends(
     pi: tuple[bool, str] = (False, "pi not installed"),
     claude: tuple[bool, str] = (False, "claude not installed"),
     codex: tuple[bool, str] = (False, "codex not installed"),
+    cursor: tuple[bool, str] = (False, "cursor not installed"),
 ) -> dict[str, tuple[MagicMock, MagicMock]]:
     """Backend table stand-ins keyed like ``_BACKENDS`` (run mock, verify mock)."""
     return {
         "pi": (MagicMock(return_value=_OK), MagicMock(return_value=pi)),
         "claude-code": (MagicMock(return_value=_OK), MagicMock(return_value=claude)),
         "codex": (MagicMock(return_value=_OK), MagicMock(return_value=codex)),
+        "cursor": (MagicMock(return_value=_OK), MagicMock(return_value=cursor)),
     }
 
 
@@ -52,6 +56,7 @@ def test_auto_verify_picks_first_ready_backend() -> None:
     assert detail == "claude-code: claude ready"
     # Selection stops at the first ready backend; codex is never probed.
     table["codex"][1].assert_not_called()
+    table["cursor"][1].assert_not_called()
 
 
 def test_auto_verify_reports_every_backend_when_none_ready() -> None:
@@ -61,6 +66,7 @@ def test_auto_verify_reports_every_backend_when_none_ready() -> None:
     assert "pi: pi not installed" in detail
     assert "claude-code: claude not installed" in detail
     assert "codex: codex not installed" in detail
+    assert "cursor: cursor not installed" in detail
 
 
 def test_auto_run_dispatches_to_first_ready_backend() -> None:
@@ -122,6 +128,7 @@ def _git_run_side_effect(cmd: list[str], **_: object) -> MagicMock:
 
 class _FakePopen:
     def __init__(self, *, stdout: str = "done\n", returncode: int = 0) -> None:
+        self.stdin = io.StringIO()
         self.stdout = io.StringIO(stdout)
         self.stderr = io.StringIO("")
         self.returncode = returncode
@@ -207,6 +214,40 @@ def test_codex_backend_binary_missing(_mock_resolve: MagicMock, tmp_path: Path) 
     assert "Codex CLI not found" in (result.error or "")
 
 
+@patch(_POPEN)
+@patch(_GIT_RUN, side_effect=_git_run_side_effect)
+@patch("integrations.llm_cli.cursor.CursorAdapter._resolve_binary")
+def test_cursor_backend_builds_agentic_argv(
+    mock_resolve: MagicMock, _mock_git: MagicMock, mock_popen: MagicMock, tmp_path: Path
+) -> None:
+    mock_resolve.return_value = "/usr/bin/agent"
+    mock_popen.return_value = _FakePopen()
+
+    result = cursor_backend.run(
+        "fix the bug", workspace=str(tmp_path), model="auto", timeout_sec=60
+    )
+    assert result.success is True
+    argv = mock_popen.call_args.args[0]
+    assert argv[0] == "/usr/bin/agent"
+    assert "--print" in argv
+    assert "--trust" in argv
+    assert "--workspace" in argv
+    assert str(tmp_path) in argv
+    assert "--model" in argv
+    assert "auto" in argv
+    assert mock_popen.call_args.kwargs["stdin"] is subprocess.PIPE
+
+
+@patch(_GIT_RUN, side_effect=_git_run_side_effect)
+@patch("integrations.llm_cli.cursor.CursorAdapter._resolve_binary", return_value=None)
+def test_cursor_backend_binary_missing(
+    _mock_resolve: MagicMock, _mock_git: MagicMock, tmp_path: Path
+) -> None:
+    result = cursor_backend.run("x", workspace=str(tmp_path), model=None, timeout_sec=60)
+    assert result.success is False
+    assert "Cursor Agent CLI not found" in (result.error or "")
+
+
 # --------------------------------------------------------------------------- #
 # backend verify — mirrors the Pi verifier semantics
 # --------------------------------------------------------------------------- #
@@ -226,3 +267,12 @@ def test_codex_verify_not_authed_is_unavailable(mock_cls: MagicMock) -> None:
     )
     available, _ = codex_backend.verify()
     assert available is False
+
+
+@patch("integrations.coding_agent.cursor_backend.CursorAdapter")
+def test_cursor_verify_unclear_auth_counts_as_available(mock_cls: MagicMock) -> None:
+    mock_cls.return_value.detect.return_value = MagicMock(
+        installed=True, logged_in=None, detail="auth unclear"
+    )
+    available, _ = cursor_backend.verify()
+    assert available is True

@@ -15,7 +15,7 @@ This is mutating. OpenSRE asks before editing files, then asks again before comm
 
 - Local checkout whose `origin` matches the finding repository
 - GitHub token with the access listed under Credentials
-- Optional coding-agent CLI (Pi, Claude Code, or Codex) for findings that need broader reasoning
+- Optional coding-agent CLI (Pi, Claude Code, Codex, or Cursor) for findings that need broader reasoning
 
 ## Setup
 
@@ -26,12 +26,12 @@ export CODING_WORKSPACE=/path/to/repo  # optional; defaults to cwd
 export GITHUB_TOKEN=... # repo write access plus security-alert read access
 ```
 
-OpenSRE has built-in local fixers for some Code Quality findings, such as unused imports and unused local variables. For findings that need broader code reasoning, it automatically uses the first coding agent CLI it finds installed and logged in: Pi, Claude Code, or Codex. No configuration is needed when one of those CLIs already works on your machine.
+OpenSRE has built-in local fixers for some Code Quality findings, such as unused imports and unused local variables. For findings that need broader code reasoning, it automatically uses the first coding agent CLI it finds installed and logged in: Pi, Claude Code, Codex, or Cursor. No configuration is needed when one of those CLIs already works on your machine.
 
 To pin a specific agent instead of auto-detection:
 
 ```bash
-export CODING_AGENT=claude-code  # pi | claude-code | codex (default: auto)
+export CODING_AGENT=claude-code  # pi | claude-code | codex | cursor (default: auto)
 export CODING_MODEL=...          # optional model override for that agent
 ```
 
@@ -99,7 +99,7 @@ There is no dedicated `integrations verify` target. Confirm readiness by:
 | **Secret-scanning refused** | Expected — revoke/rotate the secret first; this tool does not auto-fix secret leaks |
 | **Dual confirmation prompts** | Edit confirm, then commit/push/PR confirm when `open_pr` is requested |
 | **Wrong repository** | Ensure checkout `origin` matches the finding repo, or name the repo in the prompt |
-| **No coding agent found** | Install/login Pi, Claude Code, or Codex, or pin `CODING_AGENT` |
+| **No coding agent found** | Install/login Pi, Claude Code, Codex, or Cursor, or pin `CODING_AGENT` |
 
 ## Security
 

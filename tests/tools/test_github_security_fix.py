@@ -540,7 +540,7 @@ def test_run_fix_without_local_support_names_the_coding_agent_requirement() -> N
     assert "No built-in local fixer supports" in result.error
     # The error is actionable: it names the coding agent CLIs that would let
     # OpenSRE fix the finding automatically, in one line.
-    assert "coding agent CLI (Pi, Claude Code, or Codex)" in result.error
+    assert "coding agent CLI (Pi, Claude Code, Codex, or Cursor)" in result.error
     assert "\n" not in result.error
 
 
