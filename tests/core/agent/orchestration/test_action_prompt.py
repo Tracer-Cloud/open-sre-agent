@@ -95,17 +95,16 @@ def test_prior_action_facts_block_surfaces_telegram_followup_values() -> None:
 
 
 def test_system_prompt_base_is_markdown_backed_opensre_prompt() -> None:
-    """Stable base is ``opensre_system_prompt.md`` (core agent prompt, not per-model)."""
+    """Stable base is ``opensre_system_prompt.md`` — the action planner, not a coding agent."""
     prompt = _SYSTEM_PROMPT_BASE
-    assert prompt.startswith("You are OpenSRE, a terminal-based SRE and coding assistant")
-    assert "Goal-oriented planning (highest priority)" in prompt
-    assert "Every tool call must advance that goal" in prompt
-    assert "AGENTS.md spec" in prompt
-    assert "apply_patch" in prompt
-    assert "Autonomy and Persistence" in prompt
+    assert prompt.startswith("You plan actions for the OpenSRE interactive shell.")
+    assert "COMPOUND TURN RULE" in prompt
+    assert "GOAL PERSISTENCE" in prompt
+    assert "senior production engineer mapping intent to tools" in prompt
     assert "GPT-5.2" not in prompt
     assert "Codex CLI" not in prompt
     assert "update_plan" not in prompt
+    assert "apply_patch" not in prompt
 
 
 def test_system_prompt_slack_fragment_documents_roster_followup() -> None:
