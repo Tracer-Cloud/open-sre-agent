@@ -1,8 +1,7 @@
 # agent_harness/ package rules
 
-`agent_harness/` is the **decoupled agent harness** for two agent shapes: the
-tool-calling loop (`core.agent.Agent` via `build_agent`) and the direct-answer
-path (`stream_answer` via the `StreamAnswerFn` seam in `ports.py`, no tools).
+`agent_harness/` is the decoupled host for the single `core.agent.Agent` ReAct
+loop: the same model calls tools, observes results, and writes the final answer.
 It was extracted out of `interactive_shell` so the same harness can run the
 interactive terminal and be invoked headlessly via
 `agent_harness.turns.headless_agent`.
@@ -63,13 +62,10 @@ integration ids stay opt-in via `infrastructure.harness_providers.register_prefe
 assistant can emit a setup CTA. There is no second gather ReAct loop on the
 chat path — the action agent owns tools.
 
-**No keyword intent routing around the action agent.** Do not scan user text
-with regex/keywords to attach goals or bypass `execute_actions`.
-Policy keys off typed `AssistantHandoff` (`turns/assistant_handoff.py`) —
-schema fields first; content tags are decode fallback only. Legacy tag tuples
-(`evidence_kind:…`, `session_goal:…`, `session_goal_item:…`, `database_query:…`)
-and explicit host APIs remain for older readers. Checklist progress uses
-`session_goal:done=<index>` in replies.
+**No keyword intent routing around the agent.** Do not scan user text with
+regex/keywords to attach goals or bypass the ReAct loop. Session goals attach
+through the structured `session_goal_set` tool or explicit host APIs.
+Checklist progress uses `session_goal:done=<index>` in replies.
 
 Do **not** duplicate the default port stack outside `DefaultHeadlessBuild`.
 Expand `AgentBuildConfig` through `resolve_agent_ports` — do not re-copy the
@@ -150,20 +146,13 @@ subpackage. Default port implementations live with the concern they serve, not i
   - `turn_snapshot.py` / `turn_results.py` — the immutable per-turn `TurnSnapshot`
     (built from any object satisfying `TurnSnapshotSource`, not `Session` directly)
     and the neutral turn-result models.
-  - `default_reasoning_client.py` — `DefaultReasoningClientProvider`, kept with the
-    reasoning-client family (`stream_answer`, `StaticReasoningClientProvider`).
-    The client factory is injected at construction; `DefaultHeadlessBuild.reasoning`
-    supplies `default_reasoning_llm_factory`. `get()` swallows factory failures.
 - `tools/` — action-tool wiring over the canonical registry (`action_tools.py`,
   `tool_context.py`) and `tool_provider.py` (`DefaultToolProvider`).
-- `accounting/` — session-scoped token accounting and LLM run metadata, plus the
-  default `TurnAccounting` (`turn_accounting.py`) and `RunRecordFactory`
-  (`run_record.py`).
-- `prompts/` — prompt builders by agent path (pure string assembly; grounding
-  via `PromptContextProvider`). Layout: `kernel/`
-  (envelope + surface Strategy), `assistant/` / `action/` (peer
-  assemblers), `grounding/` (prompt providers), plus leaves `memory/` /
-  `runtime_facts/` / `skills/`.
+- `accounting/` — session-scoped token accounting and the default
+  `TurnAccounting` (`turn_accounting.py`).
+- `prompts/` — the single agent's prompt assembly. Layout: `kernel/`
+  (envelope + surface Strategy), `action/` (assembler), `grounding/`
+  (prompt providers), plus leaves `memory/` / `runtime_facts/` / `skills/`.
 - `grounding/` — reusable grounding cache and rendering contracts; surfaces
   inject surface-owned command registries instead of being imported here.
 - `session/` — reusable agent session state (`SessionCore`), JSONL storage, prompt
@@ -258,30 +247,18 @@ Turn assembly starts in ``turns/orchestrator.py`` with
 hooks. Those hooks were removed because they let each surface hide per-turn
 configuration on `self`, which diverged routing across surfaces.
 
-## Two agent shapes (not one pattern with an exception)
+## One agent shape
 
-- **Tool-calling agent** — `core.agent.Agent`, the ReAct loop (think → call
-  tools → observe) driven by `llm.invoke`. Built via `AgentConfig` +
-  `build_agent`. Used by the action agent and the investigation agent.
-- **Direct answer (no tools)** — `orchestrator.stream_answer`, one grounded
-  text answer streamed via `client.invoke_stream` (the `StreamAnswerFn` seam).
-  It does **not** use `Agent`: no tool loop, no observe step. After action,
-  unhandled / handed-off turns take this path. There is no second gather
-  ReAct loop on the chat path — the action agent owns tools.
-
-A new agent is one shape or the other: if it calls tools it is the tool-calling
-shape; if it answers directly without tools it is the direct-answer shape.
+`core.agent.Agent` owns the ReAct loop (think → call tools → observe → answer).
+A no-tool response is its accepted conclusion; hosts must not start a second
+LLM to rewrite that answer.
 
 ### Contributor checklist (agent changes)
 
-1. State the shape explicitly (tool-calling vs. direct answer) in the entrypoint
-   docstring (three lines max).
-2. Update this file when harness rules change.
-3. Inject through `ports.py` callables (`StreamAnswerFn`, `ExecuteActions`,
-   `ExecuteActions`); do not import surface code into `agent_harness/`.
-4. Add or extend shape-guard tests when you introduce a new entrypoint or
-   rename a shape seam.
-5. Public host API is `AgentSession.chat` / `AgentSession.investigate`.
+1. Update this file when harness rules change.
+2. Inject action execution through the `ExecuteActions` port; do not import
+   surface code into `agent_harness/`.
+3. Public host API is `AgentSession.chat` / `AgentSession.investigate`.
    Adapters build `ChatTurnBindings` and call `dispatch_chat_turn` internally —
    never add a new top-level binder that calls `run_turn` directly.
 

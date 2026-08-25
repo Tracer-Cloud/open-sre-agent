@@ -30,7 +30,6 @@ def _turn(text: str, *, executed: int = 0, success: int = 0) -> TurnResult:
             handled=True,
         ),
         assistant_response_text=text,
-        llm_run=None,
     )
 
 

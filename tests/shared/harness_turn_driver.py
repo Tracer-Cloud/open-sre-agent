@@ -19,13 +19,10 @@ from rich.console import Console
 
 from core.agent_harness import OutputSink, TurnResult
 from core.agent_harness.ports import (
-    AnswerRequest,
-    StreamAnswerFn,
     ToolExecutionHooks,
     TurnBinding,
 )
 from core.agent_harness.runtime import HeadlessAgent
-from core.agent_harness.spi.accounting import LlmRunInfo
 from core.agent_harness.spi.session_goal import SessionGoal, format_session_goal_progress
 from core.agent_harness.turns.host_cancel import ensure_turn_cancel
 from infrastructure.turn_host.cancel_console import CancelConsole
@@ -33,7 +30,6 @@ from surfaces.interactive_shell.runtime.agent_harness_adapters import resolve_ou
 from surfaces.interactive_shell.runtime.core.turn_accounting import ShellTurnAccounting
 from surfaces.interactive_shell.runtime.shell_agent import build_shell_agent
 from surfaces.interactive_shell.runtime.turn_seams import (
-    AnswerShellQuestion,
     RunActionToolTurn,
     bind_injected_stages,
 )
@@ -51,7 +47,6 @@ def run_harness_turn(
     request_exit: Callable[[], None] | None = None,
     agent: HeadlessAgent | None = None,
     execute_actions: RunActionToolTurn | None = None,
-    answer_agent: AnswerShellQuestion | None = None,
     output: OutputSink | None = None,
     tool_hooks: ToolExecutionHooks | None = None,
 ) -> TurnResult:
@@ -73,7 +68,6 @@ def run_harness_turn(
         console,
         resolved_output,
         execute_actions=execute_actions,
-        answer_agent=answer_agent,
         request_exit=request_exit,
         tool_hooks=tool_hooks,
     )
@@ -103,18 +97,4 @@ def run_harness_turn(
     )
 
 
-def fake_llm_run(*, response_text: str = "") -> LlmRunInfo:
-    """A real LlmRunInfo for turn tests; fill whatever the type requires."""
-    return LlmRunInfo(response_text=response_text)
-
-
-def answer_with_text(response_text: str) -> StreamAnswerFn:
-    """An answer stage returning one fixed response."""
-
-    def _answer(text: str, request: AnswerRequest) -> LlmRunInfo:
-        return fake_llm_run(response_text=response_text)
-
-    return _answer
-
-
-__all__ = ["answer_with_text", "fake_llm_run", "run_harness_turn"]
+__all__ = ["run_harness_turn"]

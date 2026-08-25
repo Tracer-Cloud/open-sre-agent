@@ -7,8 +7,6 @@ think -> call-tools -> observe loop. ``Agent`` stays thin: it holds the config
 and provides the callback methods (from the mixins) the loop calls back into —
 it does not contain the loop itself.
 
-The other agent shape — a direct answer with no tools — is not an ``Agent``;
-see ``core/agent_harness/AGENTS.md``.
 """
 
 from __future__ import annotations
@@ -34,11 +32,10 @@ if TYPE_CHECKING:
 
 
 class Agent[RuntimeToolT: RuntimeTool](EventEmitterMixin, ToolFilterMixin, SteeringMixin):
-    """Stateful, configurable ReAct agent — the tool-calling agent shape.
+    """Stateful, configurable ReAct agent.
 
     Wires per-run context into ``run_react_loop`` and exposes hook methods so
     subclasses can customise tool filtering without re-implementing the loop.
-    For the direct-answer shape (no tools), see ``core/agent_harness/AGENTS.md``.
     """
 
     def __init__(

@@ -37,7 +37,6 @@ ROOT_API = frozenset(
 
 PORTS = frozenset(
     {
-        "AnswerRequest",
         "CancelCapableConsole",
         "ConfirmFn",
         "ConsoleBindable",
@@ -50,12 +49,9 @@ PORTS = frozenset(
         "OutputBindable",
         "OutputSink",
         "PromptContextProvider",
-        "ReasoningClientProvider",
-        "RunRecordFactory",
         "SessionBindable",
         "SessionState",
         "SlashPortsFactory",
-        "StreamAnswerFn",
         "SubprocessPresenterFactory",
         "TaskCancelPortsFactory",
         "ToolEventObserver",
@@ -178,9 +174,7 @@ RUNTIME = frozenset(
 
 TOOLS = frozenset(
     {
-        "EVIDENCE_KIND_VALUES",
         "ActionToolScope",
-        "HandoffField",
         "action_context_from_agent_context",
         "action_scope_from_agent_context",
         "capability_available_from_sources",

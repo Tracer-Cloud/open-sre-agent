@@ -177,6 +177,9 @@ async def _run_agent_turn_loop(
         runtime.state.attach_cancel_event(dispatch_cancel)
 
     await emit(AgentEvent(type="turn_start", text=text))
+    # Repaint the prompt now so the spinner shows the turn is in flight
+    # immediately, instead of waiting for the ticker's next 100 ms tick.
+    runtime.invalidate_prompt()
     try:
         # Imported lazily so constructing the controller (and importing this
         # module) does not pull the harness/turn-execution stack

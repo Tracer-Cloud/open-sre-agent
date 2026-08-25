@@ -1,4 +1,4 @@
-"""Session environment facts for the assistant CONTEXT tier."""
+"""Session environment facts for prompt grounding."""
 
 from __future__ import annotations
 
@@ -18,12 +18,7 @@ def build_environment_block(
     llm_settings_available: bool | None = None,
     runtime: Mapping[str, Any] | None = None,
 ) -> str:
-    """Render shell-state facts so the assistant can answer directly.
-
-    Decoupled from any session type: the caller (a ``PromptContextProvider``
-    adapter) supplies integration names, optional LLM settings, and the
-    ``capture_runtime_facts()`` dict as ``runtime``.
-    """
+    """Render current shell-state facts."""
     facts: list[str] = []
     if integrations:
         connected = ", ".join(integrations)
@@ -59,12 +54,9 @@ def build_environment_block(
             "instead of guessing or telling them to run another command."
         )
 
-    # Live keys (now_iso / uptime / disk / memory) stay out of this block so
-    # the system/env prefix remains cache-stable across turns.
     runtime_fact = render_runtime_facts(runtime or {})
     if runtime_fact:
         facts.append(runtime_fact)
-
     if not facts:
         return ""
     return "".join(("--- Environment (current shell state) ---\n", "\n".join(facts), "\n\n"))

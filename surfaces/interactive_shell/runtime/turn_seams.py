@@ -1,10 +1,4 @@
-"""Test-injection seams for the interactive-shell turn.
-
-The two protocols are the shell-shaped callables a test may inject to replace
-a whole stage; the adapters bind one over the agent's ``ExecuteActions`` /
-``StreamAnswerFn`` protocols. In production nothing is injected and the
-agent's own stages run.
-"""
+"""Test-injection seam for the interactive-shell agent turn."""
 
 from __future__ import annotations
 
@@ -15,11 +9,9 @@ from typing import Protocol
 from rich.console import Console
 
 from core.agent_harness import OutputSink, ToolCallingTurnResult
-from core.agent_harness.ports import AnswerRequest
 from core.agent_harness.runtime import HeadlessAgent, TurnPlan
 from core.tool import ToolExecutionHooks
 from surfaces.interactive_shell.session import Session
-from surfaces.interactive_shell.telemetry import LlmRunInfo
 
 
 class RunActionToolTurn(Protocol):
@@ -43,21 +35,6 @@ class RunActionToolTurn(Protocol):
         tool_hooks: ToolExecutionHooks | None = None,
     ) -> ToolCallingTurnResult:
         """Run one action turn and return its facts."""
-
-
-class AnswerShellQuestion(Protocol):
-    """Answer seam: respond via the grounded conversational assistant."""
-
-    def __call__(
-        self,
-        message: str,
-        session: Session,
-        console: Console,
-        *,
-        request: AnswerRequest,
-        output: OutputSink | None = None,
-    ) -> LlmRunInfo | None:
-        """Answer the question, returning the LLM run info or None."""
 
 
 @dataclass(frozen=True)
@@ -92,19 +69,6 @@ class _InjectedActionStage:
         )
 
 
-@dataclass(frozen=True)
-class _InjectedAnswerStage:
-    """Adapts an injected ``AnswerShellQuestion`` seam to the ``StreamAnswerFn`` protocol."""
-
-    seam: AnswerShellQuestion
-    session: Session
-    console: Console
-    output: OutputSink
-
-    def answer(self, text: str, request: AnswerRequest) -> LlmRunInfo | None:
-        return self.seam(text, self.session, self.console, output=self.output, request=request)
-
-
 def bind_injected_stages(
     agent: HeadlessAgent,
     session: Session,
@@ -112,7 +76,6 @@ def bind_injected_stages(
     output: OutputSink,
     *,
     execute_actions: RunActionToolTurn | None,
-    answer_agent: AnswerShellQuestion | None,
     request_exit: Callable[[], None] | None,
     tool_hooks: ToolExecutionHooks | None,
 ) -> None:
@@ -131,16 +94,10 @@ def bind_injected_stages(
             if execute_actions is not None
             else None
         ),
-        answer=(
-            _InjectedAnswerStage(answer_agent, session, console, output).answer
-            if answer_agent is not None
-            else None
-        ),
     )
 
 
 __all__ = [
-    "AnswerShellQuestion",
     "RunActionToolTurn",
     "bind_injected_stages",
 ]

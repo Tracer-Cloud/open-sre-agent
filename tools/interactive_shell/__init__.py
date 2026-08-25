@@ -14,7 +14,6 @@ from __future__ import annotations
 
 TOOL_MODULES = (
     "actions.ask_choice",
-    "actions.assistant_handoff",
     "actions.cli_command",
     "actions.implementation",
     "actions.investigation",
@@ -22,6 +21,7 @@ TOOL_MODULES = (
     "actions.propose_scheduled_delivery",
     "actions.sample_alert",
     "actions.sentry_fix",
+    "actions.session_goal",
     "actions.shell",
     "actions.skill_view",
     "actions.slash",

@@ -105,7 +105,6 @@ def test_headless_agent_uses_bound_methods_not_nested_defs() -> None:
     assert "def answer" not in source
     assert "def gather" not in source
     assert "self._execute_actions" in source
-    assert "self._answer" in source
 
 
 def test_bind_turn_rebuilds_action_runner_when_output_changes() -> None:
@@ -140,12 +139,6 @@ def test_bind_turn_keeps_runner_when_only_accounting_changes() -> None:
 
 
 def test_harness_turn_driver_adds_no_stage_of_its_own() -> None:
-    """The driver runs the agent's own answer/action stages by default.
-
-    Answering is configured by the shell's build config (prompts, output,
-    reporter), not replaced. Only a stage the test names gets an adapter
-    bound over it.
-    """
     import io
 
     from rich.console import Console
@@ -165,12 +158,10 @@ def test_harness_turn_driver_adds_no_stage_of_its_own() -> None:
         Console(file=io.StringIO()),
         BufferOutputSink(),
         execute_actions=None,
-        answer_agent=None,
         request_exit=None,
         tool_hooks=None,
     )
     assert agent._execute_actions_override is None  # noqa: SLF001
-    assert agent._answer_override is None  # noqa: SLF001
 
 
 def test_shell_agent_keeps_core_runner_across_console_rebind() -> None:
@@ -298,7 +289,6 @@ def test_long_lived_shell_agent_receives_each_turns_confirm_fn_and_tty() -> None
         is_tty=True,
         agent=agent,
         execute_actions=_spy_execute,
-        answer_agent=lambda *_a, **_k: None,
     )
 
     # Assert — the action stage saw the turn's callback, not the construction-time None.
@@ -336,7 +326,6 @@ def test_a_stage_injected_on_one_turn_does_not_carry_into_the_next() -> None:
         recorder=None,
         agent=agent,
         execute_actions=_fake_execute,
-        answer_agent=lambda *_a, **_k: None,
     )
     assert agent._execute_actions_override is not None  # noqa: SLF001
 
@@ -348,7 +337,6 @@ def test_a_stage_injected_on_one_turn_does_not_carry_into_the_next() -> None:
         console,
         BufferOutputSink(),
         execute_actions=None,
-        answer_agent=None,
         request_exit=None,
         tool_hooks=None,
     )

@@ -23,17 +23,14 @@ from typing import TYPE_CHECKING, Any
 
 from rich.console import Console
 
-from core.agent_harness.accounting.run_record import DefaultRunRecordFactory
 from core.agent_harness.agent_build_config import AgentBuildConfig
 from core.agent_harness.error_reporting import DefaultErrorReporter
-from core.agent_harness.llm_resolution import default_llm_factory, default_reasoning_llm_factory
+from core.agent_harness.llm_resolution import default_llm_factory
 from core.agent_harness.ports import (
     ErrorReporter,
     LlmFactory,
     OutputSink,
     PromptContextProvider,
-    ReasoningClientProvider,
-    RunRecordFactory,
     SessionState,
     ToolEventObserver,
     ToolProvider,
@@ -43,14 +40,11 @@ from core.agent_harness.prompts.grounding import (
     supports_default_prompt_context,
 )
 from core.agent_harness.tools.tool_provider import DefaultToolProvider
-from core.agent_harness.turns.default_reasoning_client import DefaultReasoningClientProvider
 from core.agent_harness.turns.headless_adapters import (
     BufferOutputSink,
     EmptyPromptContextProvider,
     InMemorySessionState,
     NoopErrorReporter,
-    SimpleRunRecordFactory,
-    StaticReasoningClientProvider,
 )
 from core.agent_harness.turns.headless_agent import HeadlessAgent
 from infrastructure.harness_providers import resolve_subprocess_presenter
@@ -63,16 +57,12 @@ if TYPE_CHECKING:
 class InMemoryHeadlessBuild:
     """The in-memory family: a turn runs with zero configuration.
 
-    ``session`` defaults to an in-memory state, ``output`` to a buffer sink,
-    ``reasoning`` to "no client" (the conversational assistant is skipped) —
-    inject a client to get an answer. ``tools`` is required on ``agent()``: a
-    text-only turn passes :class:`~core.agent_harness.turns.headless_adapters.NullToolProvider`
-    explicitly.
+    ``session`` defaults to an in-memory state and ``output`` to a buffer sink.
+    ``tools`` is required on ``agent()``.
     """
 
     session: SessionState | None = None
     output: OutputSink | None = None
-    reasoning: ReasoningClientProvider | None = None
 
     @cached_property
     def _session(self) -> SessionState:
@@ -99,10 +89,6 @@ class InMemoryHeadlessBuild:
             session=self._session,
             output=self._output,
             prompts=prompts if prompts is not None else self.prompts(),
-            reasoning=(
-                self.reasoning if self.reasoning is not None else StaticReasoningClientProvider()
-            ),
-            run_factory=SimpleRunRecordFactory(),
             error_reporter=NoopErrorReporter(),
             llm_factory=llm_factory if llm_factory is not None else default_llm_factory,
         )
@@ -165,17 +151,6 @@ class DefaultHeadlessBuild:
             return DefaultPromptContextProvider(self.session, surface=self.surface)
         return DefaultPromptContextProvider(self.session)
 
-    def reasoning(self) -> ReasoningClientProvider:
-        return DefaultReasoningClientProvider(
-            client_factory=default_reasoning_llm_factory,
-            output=self.output,
-            error_reporter=self._error_reporter,
-            session=self.session,
-        )
-
-    def run_factory(self) -> RunRecordFactory:
-        return DefaultRunRecordFactory(self.session)
-
     def agent(
         self,
         *,
@@ -193,8 +168,6 @@ class DefaultHeadlessBuild:
             output=self.output,
             tools=tools if tools is not None else self.tools(),
             prompts=prompts if prompts is not None else self.prompts(),
-            reasoning=self.reasoning(),
-            run_factory=self.run_factory(),
             error_reporter=self._error_reporter,
             llm_factory=llm_factory if llm_factory is not None else default_llm_factory,
         )

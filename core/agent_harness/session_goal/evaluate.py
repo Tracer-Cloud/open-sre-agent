@@ -112,11 +112,6 @@ def turn_has_session_goal_evidence(result: Any) -> bool:
     call must not let an ``achieved`` claim through. ``executed_count`` alone
     would say yes to a turn whose only action failed.
 
-    Counts action-phase successes **and** gather-phase successes. A metric_read
-    turn typically executes only ``assistant_handoff`` in the action phase
-    (which does not increment ``executed_success_count``) and the live query
-    in gather — that gather work is the real evidence.
-
     Dispatching ``investigation_start`` is not finishing evidence for a session
     goal — that work lands in later turns / the investigation report.
     """
@@ -129,11 +124,7 @@ def turn_has_session_goal_evidence(result: Any) -> bool:
             action_succeeded = int(getattr(action, "executed_success_count", 0) or 0)
         except (TypeError, ValueError):
             action_succeeded = 0
-    try:
-        gather_succeeded = int(getattr(result, "gather_success_count", 0) or 0)
-    except (TypeError, ValueError):
-        gather_succeeded = 0
-    return action_succeeded > 0 or gather_succeeded > 0
+    return action_succeeded > 0
 
 
 # metric_read-style attach usually emits query + report (2 items). Longer

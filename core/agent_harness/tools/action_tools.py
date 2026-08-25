@@ -50,10 +50,15 @@ def get_action_tools_from_integrations_context(
     *,
     resolved_integrations: dict[str, Any] | None = None,
 ) -> list[RegisteredTool]:
-    """Return canonical registered tools available to the action agent."""
+    """Return action and chat tools available to the single turn agent."""
     sources = _sources_for_context(ctx, resolved_integrations)
     tools: list[RegisteredTool] = []
-    for candidate in resolve_surface_tools(ToolSurface.ACTION):
+    candidates = {
+        candidate.name: candidate
+        for surface in (ToolSurface.ACTION, ToolSurface.CHAT)
+        for candidate in resolve_surface_tools(surface)
+    }
+    for candidate in candidates.values():
         try:
             if not candidate.is_available(sources):
                 continue

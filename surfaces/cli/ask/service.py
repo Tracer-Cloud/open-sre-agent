@@ -174,9 +174,8 @@ def _run_agent_turn(prompt: str, hooks: ToolExecutionHooks) -> TurnResult:
                 tool_hooks=hooks,
             )
             session = agent_session.bound_session
-            # chat_until_goal, not chat: a multi-step ask can attach a session
-            # goal via an assistant_handoff, and it must run to completion rather
-            # than stop after the first turn.
+            # chat_until_goal, not chat: the agent can attach a session goal,
+            # which must run to completion rather than stop after one turn.
             return agent_session.chat_until_goal(prompt).last_result
     finally:
         if session is not None:

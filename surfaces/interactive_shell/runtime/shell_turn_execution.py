@@ -1,8 +1,6 @@
 """One interactive-shell turn: build (or reuse) the shell agent, then ``handle``.
 
-The shell's ports are supplied by ``shell_agent``; the agent's own stages run.
-A test that injects a whole stage (``execute_actions`` / ``answer_agent``)
-goes through the seams in ``turn_seams``.
+The shell's ports are supplied by ``shell_agent``; the agent's own ReAct stage runs.
 """
 
 from __future__ import annotations

@@ -42,7 +42,7 @@ class _ToolStatusObserver:
         if kind != "tool_start":
             return
         tool_name = str(data.get("name") or "").strip()
-        if not tool_name or tool_name == "assistant_handoff":
+        if not tool_name:
             return
         self._output.set_tool_status(
             status_from_tool_start(tool_name, data.get("input"), describe=self._describe)

@@ -20,8 +20,6 @@ import surfaces.interactive_shell.runtime.slash_adapter as slash_adapter
 import surfaces.interactive_shell.runtime.subprocess_runner as subprocess_runner
 import tests.shared.harness_turn_driver as harness_turn_driver
 import tools.interactive_shell.shell.execution as shell_execution
-from core.agent_harness.accounting.token_accounting import LlmRunInfo
-from core.agent_harness.ports import AnswerRequest, OutputSink
 from core.llm.types import AgentLLMResponse, ToolCall
 from infrastructure.scheduling.task_types import TaskKind, TaskStatus
 from surfaces.interactive_shell.session import Session
@@ -62,17 +60,6 @@ run_harness_turn = harness_turn_driver.run_harness_turn
 def _capture() -> tuple[Console, io.StringIO]:
     buf = io.StringIO()
     return Console(file=buf, force_terminal=False, highlight=False), buf
-
-
-def _no_answer_agent(
-    message: str,
-    session: Session,
-    console: Console,
-    *,
-    request: AnswerRequest,
-    output: OutputSink | None = None,
-) -> LlmRunInfo | None:
-    return None
 
 
 def _action(
@@ -1322,7 +1309,6 @@ def test_execute_cli_actions_counts_planned_and_executed(monkeypatch: object) ->
         session,
         console,
         recorder=None,
-        answer_agent=_no_answer_agent,
     )
 
     action_result = result.action_result
@@ -1398,7 +1384,6 @@ def test_execute_cli_actions_executes_matched_clause_ignoring_unhandled(
         session,
         console,
         recorder=None,
-        answer_agent=_no_answer_agent,
     )
 
     # The unhandled flag no longer denies the turn: the matched /health runs.
@@ -1487,43 +1472,3 @@ def test_execute_cli_actions_bang_prefix_single_line_dispatches_to_shell(
     }
     assert calls[0][0] == _expected_shell_argv("echo hello world")
     assert calls[0][1]["shell"] is False
-
-
-def test_execute_cli_actions_handoff_only_plan_falls_through_silently(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    """A pure assistant_handoff LLM plan must not print a 'Requested actions' header.
-
-    Regression: when the planner returned only assistant_handoff, action execution
-    was called and printed '● assistant / Requested actions: 1. assistant handoff [reason]'
-    before the real LLM reply ran.  The user saw two assistant headers and internal
-    planner reasoning that should have been invisible.
-    """
-    _patch_action_llm_factory(
-        monkeypatch,
-        lambda: FakeActionLLM(
-            [
-                _llm_response(
-                    [
-                        PlannedAction(
-                            kind="assistant_handoff",
-                            content="informational question about current model",
-                            position=0,
-                        )
-                    ]
-                )
-            ]
-        ),
-    )
-
-    session = Session()
-    console, buf = _capture()
-    result = action_turn.run_action_tool_turn("what is our current model?", session, console)
-
-    # Must fall through (not handled) so the caller invokes the LLM for the real reply.
-    assert result.handled is False
-    assert result.executed_count == 0
-    # No "Requested actions" block should appear — the handoff plan is internal state.
-    output = buf.getvalue()
-    assert "Requested actions" not in output
-    assert "assistant handoff" not in output.lower()

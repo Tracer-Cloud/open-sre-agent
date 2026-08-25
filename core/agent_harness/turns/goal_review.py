@@ -48,14 +48,11 @@ log = logging.getLogger(__name__)
 _MAX_GOAL_REVIEWS = 1
 
 # Tools whose presence makes the turn's goal unreviewable at conclusion time:
-# investigation dispatches are async (results arrive after the turn, so "not
-# yet reached" is true but must not trigger a nudge), and a handoff means the
-# conversational assistant owns the reply — second-guessing it as an
-# unfinished *action* goal nudged live turns into unrequested investigations.
+# investigation dispatches are async, so "not yet reached" must not trigger a
+# nudge before results arrive.
 _SKIP_REVIEW_TOOL_NAMES = frozenset(
     {
         "alert_sample",
-        "assistant_handoff",
         "investigation_start",
     }
 )

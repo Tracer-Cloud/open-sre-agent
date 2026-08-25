@@ -2,16 +2,14 @@
 
 from __future__ import annotations
 
-from core.agent_harness.prompts.assistant import (
-    build_assistant_system_prompt,
-    build_handoff_guidance_block,
-)
+from core.agent_harness.prompts.action import build_action_system_prompt
 from core.agent_harness.prompts.skills.loader import (
     clear_skills_caches,
     list_action_skills,
     load_skills_demo_block,
     load_skills_index,
 )
+from core.agent_harness.turns.turn_snapshot import TurnSnapshot
 
 
 def test_skills_demo_block_lists_frontmatter_demos_only() -> None:
@@ -31,9 +29,19 @@ def test_skills_demo_block_lists_frontmatter_demos_only() -> None:
         assert prompt in block
 
 
-def test_assistant_prompt_includes_skill_demos() -> None:
+def test_agent_prompt_includes_skill_demos() -> None:
     clear_skills_caches()
-    prompt = build_assistant_system_prompt("ref", "hist")
+    prompt = build_action_system_prompt(
+        TurnSnapshot(
+            text="what can you do?",
+            conversation_messages=(),
+            configured_integrations=(),
+            configured_integrations_known=True,
+            last_state=None,
+            last_synthetic_observation_path=None,
+            reasoning_effort=None,
+        )
+    )
 
     assert "ONLY the skill demos" in prompt
     assert "Audit this repo's architecture and give me a sequenced refactor plan" in prompt
@@ -42,18 +50,9 @@ def test_assistant_prompt_includes_skill_demos() -> None:
     assert "Set up a weekday morning briefing with weather and news" in prompt
 
 
-def test_capability_handoff_guidance_forbids_a_platform_dump() -> None:
-    block = build_handoff_guidance_block(("chat:capabilities",))
-
-    assert "skill-demo rule" in block
-    assert "platform features" in block
-    assert "Want-me-to" in block
-    assert build_handoff_guidance_block(("chat:greeting",)) == ""
-
-
-def test_skills_index_routes_capability_questions_to_handoff() -> None:
+def test_skills_index_routes_capability_questions_to_direct_answer() -> None:
     clear_skills_caches()
     index = load_skills_index()
 
     assert "what can you do" in index
-    assert 'assistant_handoff(content="chat:capabilities", requires_gather=false)' in index
+    assert "Answer them directly" in index

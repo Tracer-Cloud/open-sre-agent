@@ -185,34 +185,6 @@ def _build_actual_action(action: ToolCall) -> ExpectedAction:
         expected["template"] = (
             str(template_value).strip() if isinstance(template_value, str) else content
         )
-    elif typed_kind == "assistant_handoff":
-        # Ontology schema fields on the tool input (not only content tags).
-        evidence_kind = action.input.get("evidence_kind")
-        if isinstance(evidence_kind, str) and evidence_kind.strip():
-            expected["evidence_kind"] = evidence_kind.strip()
-        session_goal = action.input.get("session_goal")
-        if isinstance(session_goal, bool):
-            expected["session_goal"] = session_goal
-        raw_items = action.input.get("session_goal_items")
-        if isinstance(raw_items, list):
-            items = [str(item).strip() for item in raw_items if str(item).strip()]
-            if items:
-                expected["session_goal_items"] = items
-        # Legacy content tags still attach a goal when the boolean was omitted.
-        if "session_goal" not in expected and not expected.get("session_goal_items"):
-            from core.agent_harness.turns.assistant_handoff import AssistantHandoff
-
-            decoded = AssistantHandoff.from_tool_input(
-                {
-                    "content": str(action.input.get("content", "")),
-                    "session_goal": action.input.get("session_goal"),
-                    "session_goal_items": action.input.get("session_goal_items"),
-                }
-            )
-            if decoded.session_goal:
-                expected["session_goal"] = True
-            if decoded.session_goal_items:
-                expected["session_goal_items"] = list(decoded.session_goal_items)
     return expected
 
 
@@ -271,8 +243,6 @@ def _content_from_tool_call(kind: ToolKind, args: dict[str, object]) -> str:
         return str(args.get("payload", "")).strip()
     if kind == "implementation":
         return str(args.get("task", "")).strip()
-    if kind == "assistant_handoff":
-        return str(args.get("content", "")).strip()
     return ""
 
 
@@ -292,43 +262,6 @@ def _assert_planned_actions_match(
     for index, expected in enumerate(expected_actions):
         actual = actual_actions[index]
         expected_kind = str(expected.get("kind", ""))
-        if expected_kind == "assistant_handoff":
-            assert actual.get("kind") == "assistant_handoff"
-            expected_source = str(expected.get("source", "")).strip()
-            if expected_source:
-                assert actual.get("source") == expected_source
-            content = str(actual.get("content", "")).strip()
-            assert content, f"assistant_handoff action {index} must include text content."
-            # Optional ontology fields (AssistantHandoff schema) — assert when pinned.
-            expected_kind_field = expected.get("evidence_kind")
-            if expected_kind_field is not None:
-                assert actual.get("evidence_kind") == expected_kind_field, (
-                    f"assistant_handoff[{index}] evidence_kind "
-                    f"{actual.get('evidence_kind')!r} != {expected_kind_field!r}"
-                )
-            expected_goal = expected.get("session_goal")
-            if expected_goal is True:
-                # ``session_goal_items`` implies attach (see AssistantHandoff),
-                # so a planner may send either and still meet the contract.
-                attached = bool(actual.get("session_goal")) or bool(
-                    actual.get("session_goal_items")
-                )
-                assert attached, (
-                    f"assistant_handoff[{index}] attached no session goal: "
-                    f"session_goal={actual.get('session_goal')!r} "
-                    f"session_goal_items={actual.get('session_goal_items')!r}"
-                )
-            elif expected_goal is not None:
-                assert actual.get("session_goal") == expected_goal, (
-                    f"assistant_handoff[{index}] session_goal "
-                    f"{actual.get('session_goal')!r} != {expected_goal!r}"
-                )
-            expected_items = expected.get("session_goal_items")
-            if expected_items is not None:
-                assert list(actual.get("session_goal_items") or []) == list(expected_items), (
-                    f"assistant_handoff[{index}] session_goal_items mismatch"
-                )
-            continue
         # Investigation alert_text is freeform: a synthesized RCA varies per
         # live run, and a pasted payload may be forwarded verbatim or lightly
         # wrapped (CI 306 prefixed ``this alert: ``). Empty fixture content
@@ -357,14 +290,6 @@ def _assert_planned_actions_match(
         assert _action_match_view(actual) == _action_match_view(expected)
 
 
-def _expected_actions_are_assistant_handoff_only(
-    expected_actions: list[ExpectedAction],
-) -> bool:
-    return bool(expected_actions) and all(
-        str(action.get("kind", "")).strip() == "assistant_handoff" for action in expected_actions
-    )
-
-
 def _strip_redundant_integrations_list_for_investigation_plan(
     actual_actions: list[ExpectedAction],
     expected_actions: list[ExpectedAction],
@@ -385,117 +310,10 @@ def _planning_actions_for_match(
     actual_actions: list[ExpectedAction],
     expected_actions: list[ExpectedAction],
 ) -> list[ExpectedAction]:
-    if _expected_actions_are_assistant_handoff_only(expected_actions) and all(
-        str(action.get("kind", "")).strip() == "assistant_handoff" for action in actual_actions
-    ):
-        return actual_actions[: len(expected_actions)]
-    if any(
-        str(action.get("kind", "")).strip() == "assistant_handoff" for action in expected_actions
-    ):
-        return actual_actions
-    filtered = [
-        action
-        for action in actual_actions
-        if str(action.get("kind", "")).strip() != "assistant_handoff"
-    ]
     return _strip_redundant_integrations_list_for_investigation_plan(
-        filtered,
+        actual_actions,
         expected_actions,
     )
-
-
-def _no_tool_response_is_handoff_equivalent(
-    actual_actions: list[ExpectedAction],
-    expected_actions: list[ExpectedAction],
-) -> bool:
-    # A planner that emits no action tool calls falls through to the conversational
-    # assistant. For live LLM planning tests, that is behaviorally equivalent to
-    # an assistant_handoff-only plan and avoids flaking on harmless provider
-    # differences. Executable expectations still require exact tool calls.
-    return not actual_actions and _expected_actions_are_assistant_handoff_only(expected_actions)
-
-
-def test_no_tool_response_equivalence_is_limited_to_assistant_handoff() -> None:
-    handoff_expected = cast(
-        "list[ExpectedAction]",
-        [{"kind": "assistant_handoff", "content": "answer from chat", "source": "llm"}],
-    )
-    slash_expected = cast(
-        "list[ExpectedAction]",
-        [{"kind": "slash", "content": "/health", "command": "/health", "args": []}],
-    )
-
-    assert _no_tool_response_is_handoff_equivalent([], handoff_expected)
-    assert not _no_tool_response_is_handoff_equivalent([], slash_expected)
-
-
-def test_build_actual_action_keeps_assistant_handoff_ontology_fields() -> None:
-    actual = _build_actual_action(
-        ToolCall(
-            id="h1",
-            name="assistant_handoff",
-            input={
-                "content": "Count Windows users.",
-                "evidence_kind": "metric_read",
-                "session_goal": True,
-                "session_goal_items": ["gather", "analyze", "report"],
-            },
-        )
-    )
-    assert actual["kind"] == "assistant_handoff"
-    assert actual["evidence_kind"] == "metric_read"
-    assert actual["session_goal"] is True
-    assert actual["session_goal_items"] == ["gather", "analyze", "report"]
-
-    expected = cast(
-        "list[ExpectedAction]",
-        [
-            {
-                "kind": "assistant_handoff",
-                "content": "any non-empty handoff body",
-                "source": "llm",
-                "evidence_kind": "metric_read",
-                "session_goal": True,
-                "session_goal_items": ["gather", "analyze", "report"],
-            }
-        ],
-    )
-    _assert_planned_actions_match([actual], expected)
-
-
-def test_planning_match_accepts_checklist_items_as_session_goal_attach() -> None:
-    """Live planners often omit ``session_goal`` when they emit items (CI 347)."""
-    actual = _build_actual_action(
-        ToolCall(
-            id="h1",
-            name="assistant_handoff",
-            input={
-                "content": "session_goal=true\nchat:checklist_walkthrough",
-                "session_goal_items": [
-                    "List the goal in one sentence",
-                    "Name step one",
-                ],
-            },
-        )
-    )
-    assert "session_goal" not in actual
-    assert actual["session_goal_items"] == [
-        "List the goal in one sentence",
-        "Name step one",
-    ]
-
-    expected = cast(
-        "list[ExpectedAction]",
-        [
-            {
-                "kind": "assistant_handoff",
-                "content": "any non-empty handoff body",
-                "source": "llm",
-                "session_goal": True,
-            }
-        ],
-    )
-    _assert_planned_actions_match([actual], expected)
 
 
 def test_planning_match_accepts_wrapped_investigation_payload() -> None:
@@ -521,54 +339,6 @@ def test_planning_match_accepts_wrapped_investigation_payload() -> None:
         ],
     )
     _assert_planned_actions_match(actual, expected)
-
-
-def test_build_actual_action_keeps_boolean_session_goal() -> None:
-    actual = _build_actual_action(
-        ToolCall(
-            id="h1",
-            name="assistant_handoff",
-            input={"content": "Walk the checklist.", "session_goal": True},
-        )
-    )
-    assert actual["session_goal"] is True
-
-
-def test_planning_match_ignores_handoff_after_terminal_action_only() -> None:
-    actual = cast(
-        "list[ExpectedAction]",
-        [
-            {"kind": "slash", "content": "/health", "command": "/health", "args": []},
-            {"kind": "assistant_handoff", "content": "done", "source": "llm"},
-        ],
-    )
-    slash_expected = cast(
-        "list[ExpectedAction]",
-        [{"kind": "slash", "content": "/health", "command": "/health", "args": []}],
-    )
-    handoff_expected = cast(
-        "list[ExpectedAction]",
-        [{"kind": "assistant_handoff", "content": "answer from chat", "source": "llm"}],
-    )
-
-    assert _planning_actions_for_match(actual, slash_expected) == actual[:1]
-    assert _planning_actions_for_match(actual, handoff_expected) == actual
-
-
-def test_planning_match_collapses_handoff_only_retries() -> None:
-    actual = cast(
-        "list[ExpectedAction]",
-        [
-            {"kind": "assistant_handoff", "content": "first", "source": "llm"},
-            {"kind": "assistant_handoff", "content": "second", "source": "llm"},
-        ],
-    )
-    handoff_expected = cast(
-        "list[ExpectedAction]",
-        [{"kind": "assistant_handoff", "content": "answer from chat", "source": "llm"}],
-    )
-
-    assert _planning_actions_for_match(actual, handoff_expected) == actual[:1]
 
 
 def _resolve_selected_cases(config: pytest.Config) -> list[ScenarioCase]:
@@ -696,19 +466,7 @@ def _assert_live_action_planning_once(case: ScenarioCase) -> None:
                 msg = f"Fixture action {action_idx} content must match command+args."
                 raise AssertionError(msg)
 
-    handoff_only = bool(actions) and all(action.name == "assistant_handoff" for action in actions)
-    # When the fixture specifies planned_actions: [] it means "no executable
-    # action expected". A planner response that consists solely of
-    # assistant_handoff actions is semantically equivalent and is accepted
-    # without a mismatch assertion. Any other actual actions (slash, shell …)
-    # with an empty fixture still fall through and fail the match.
-    if (not expected_actions and handoff_only) or _no_tool_response_is_handoff_equivalent(
-        actual_actions_for_match,
-        expected_actions,
-    ):
-        pass
-    else:
-        _assert_planned_actions_match(actual_actions_for_match, expected_actions)
+    _assert_planned_actions_match(actual_actions_for_match, expected_actions)
 
 
 @pytest.mark.integration

@@ -23,7 +23,7 @@ class ToolKind(StrEnum):
     CLI_COMMAND = "cli_command"
     IMPLEMENTATION = "implementation"
     LLM_PROVIDER = "llm_provider"
-    ASSISTANT_HANDOFF = "assistant_handoff"
+    SESSION_GOAL = "session_goal"
 
 
 TOOL_KIND_TO_NAME: dict[ToolKind, str] = {
@@ -37,7 +37,7 @@ TOOL_KIND_TO_NAME: dict[ToolKind, str] = {
     ToolKind.CLI_COMMAND: "cli_exec",
     ToolKind.IMPLEMENTATION: "code_implement",
     ToolKind.LLM_PROVIDER: "llm_set_provider",
-    ToolKind.ASSISTANT_HANDOFF: "assistant_handoff",
+    ToolKind.SESSION_GOAL: "session_goal_set",
 }
 
 __all__ = ["TOOL_KIND_TO_NAME", "ToolKind"]

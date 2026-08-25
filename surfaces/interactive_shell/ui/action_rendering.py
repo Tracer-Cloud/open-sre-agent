@@ -100,7 +100,7 @@ class ActionRenderObserver:
         if kind != "tool_start":
             return
         name = str(data.get("name", "")).strip()
-        if not name or name == "assistant_handoff":
+        if not name:
             return
         if name == "skill_view":
             self._render_skill_start(data)

@@ -2,12 +2,7 @@
 
 from __future__ import annotations
 
-import io
 import time
-from collections.abc import Iterator
-from typing import Any
-
-from rich.console import Console
 
 from core.agent_harness.accounting.token_accounting import (
     build_llm_run_info,
@@ -15,10 +10,8 @@ from core.agent_harness.accounting.token_accounting import (
     format_token_total,
     record_llm_turn,
 )
-from core.agent_harness.ports import AnswerRequest
 from surfaces.interactive_shell.session import Session
 from surfaces.interactive_shell.ui.streaming import _CHARS_PER_TOKEN
-from tests.interactive_shell.shell_answer_gather import stream_shell_answer
 
 
 def test_estimate_tokens_uses_chars_per_token_ratio() -> None:
@@ -123,26 +116,3 @@ def test_record_token_usage_skips_zero_counts() -> None:
     session.tokens.record()
     assert session.tokens.totals == {}
     assert session.tokens.call_count == 0
-
-
-class _FakeLLMClient:
-    def __init__(self, content: str) -> None:
-        self._content = content
-        self.last_prompt: str | None = None
-
-    def invoke_stream(self, prompt: object) -> Iterator[str]:
-        from integrations.llm_cli.text import flatten_messages_to_prompt
-
-        self.last_prompt = flatten_messages_to_prompt(prompt)
-        yield self._content
-
-
-def test_shell_answer_records_session_token_usage(monkeypatch: Any) -> None:
-    client = _FakeLLMClient("assistant reply")
-    monkeypatch.setattr("core.llm.factory.get_llm", lambda _role: client)
-    session = Session()
-    console = Console(file=io.StringIO(), force_terminal=False)
-    stream_shell_answer("hello", session, console, request=AnswerRequest())
-    assert session.tokens.totals["input"] > 0
-    assert session.tokens.totals["output"] == estimate_tokens("assistant reply")
-    assert session.tokens.has_estimates is True

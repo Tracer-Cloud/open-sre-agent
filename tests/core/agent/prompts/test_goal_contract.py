@@ -9,23 +9,14 @@ from __future__ import annotations
 import re
 
 from core.agent_harness.prompts.action.text import (
-    _SYSTEM_PROMPT_BASE,
     ACTION_SETUP_CAPACITY_SCHEDULE_RULE,
 )
-from core.agent_harness.prompts.assistant import build_assistant_system_prompt
 
 
 def _mentions(text: str, *needles: str) -> None:
     lower = text.lower()
     missing = [n for n in needles if n.lower() not in lower]
     assert not missing, f"missing {missing!r} in:\n{text}"
-
-
-def test_assistant_and_action_share_the_opensre_system_prompt() -> None:
-    shell = build_assistant_system_prompt("ref", "hist", surface="interactive_shell")
-    gateway = build_assistant_system_prompt("ref", "hist", surface="gateway")
-    assert _SYSTEM_PROMPT_BASE in shell
-    assert _SYSTEM_PROMPT_BASE in gateway
 
 
 def test_action_capacity_rule_ties_facts_to_propose_not_skip() -> None:

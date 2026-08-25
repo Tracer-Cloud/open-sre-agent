@@ -29,7 +29,6 @@ def _answered(text: str) -> TurnResult:
             response_text=text,
         ),
         assistant_response_text=text,
-        llm_run=object(),
     )
 
 

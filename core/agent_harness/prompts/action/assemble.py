@@ -19,7 +19,7 @@ from core.agent_harness.prompts.memory.conversation import (
     format_recent_conversation,
 )
 from core.agent_harness.prompts.runtime_facts import render_static_runtime_facts
-from core.agent_harness.prompts.skills.loader import load_skills_index
+from core.agent_harness.prompts.skills.loader import load_skills_demo_block, load_skills_index
 from infrastructure.harness_providers import action_prompt_vendor_fragments
 
 if TYPE_CHECKING:
@@ -113,7 +113,7 @@ def build_action_system_prompt_envelope(turn_snapshot: TurnSnapshot) -> PromptEn
             suffix="\n\n",
         )
     )
-    skills_index = load_skills_index()
+    skills_index = "\n\n".join(filter(None, (load_skills_index(), load_skills_demo_block())))
     blocks.extend(
         _optional_block(
             id=PromptBlockId.ACTION_SKILLS,
@@ -203,12 +203,11 @@ def connected_integrations_block(turn_snapshot: TurnSnapshot) -> str:
         listing = "none"
     else:
         listing = "unknown"
-    # Listing does not gate diagnostic→investigation: why/figure-out always
-    # hand off + Want-me-to; explicit investigate always dispatches.
+    # Missing integrations do not turn a cause question into an explicit RCA.
     gate_note = (
         "This listing does NOT gate diagnostic→investigation. Cause/why / "
-        "figure-out questions → assistant_handoff + Want-me-to "
-        "investigate offer. Explicit investigate/RCA/diagnose/analyze/"
+        "figure-out questions → use available chat tools, then answer directly. "
+        "Explicit investigate/RCA/diagnose/analyze/"
         "root-cause verbs → investigation_start ALWAYS (even when this line "
         "is none).\n"
     )

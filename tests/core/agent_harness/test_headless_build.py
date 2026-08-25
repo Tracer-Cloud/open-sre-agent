@@ -94,7 +94,6 @@ def test_primary_response_text_prefers_assistant() -> None:
             response_text="from action",
         ),
         assistant_response_text=" from assistant ",
-        llm_run=object(),
     )
     assert result.primary_response_text == "from assistant"
     empty_assistant = TurnResult(
@@ -108,29 +107,8 @@ def test_primary_response_text_prefers_assistant() -> None:
             response_text=" from action ",
         ),
         assistant_response_text="",
-        llm_run=object(),
     )
     assert empty_assistant.primary_response_text == "from action"
-
-
-def test_default_headless_build_supplies_the_reasoning_client_factory(monkeypatch) -> None:
-    """The default family injects ``default_reasoning_llm_factory`` into the provider."""
-    sentinel = object()
-
-    def _factory() -> object:
-        return sentinel
-
-    monkeypatch.setattr(
-        "core.agent_harness.turns.headless_build.default_reasoning_llm_factory",
-        _factory,
-    )
-    session = SimpleNamespace(
-        configured_integrations=[],
-        resolved_integrations_cache={},
-        session_id="s1",
-    )
-    provider = DefaultHeadlessBuild(session=session, output=BufferOutputSink()).reasoning()
-    assert provider.get() is sentinel
 
 
 def test_default_headless_build_takes_the_hosts_tool_provider_and_forwards_the_llm_factory() -> (
@@ -170,12 +148,7 @@ def test_default_headless_build_takes_the_hosts_tool_provider_and_forwards_the_l
     assert isinstance(bare._tools, DefaultToolProvider)  # noqa: SLF001
 
 
-def test_a_stage_override_replaces_only_that_stage() -> None:
-    """A host or test may swap one stage; the other two keep the port-driven default.
-
-    This is the seam every turn test drives (98 sites inject a single stage);
-    it is part of the host contract, so it lives on the agent explicitly.
-    """
+def test_a_stage_override_replaces_the_agent_stage() -> None:
     calls: list[str] = []
 
     def _fake_execute(text: str, *, confirm_fn=None, is_tty=None, turn_plan=None):  # type: ignore[no-untyped-def]
@@ -195,10 +168,9 @@ def test_a_stage_override_replaces_only_that_stage() -> None:
     agent.bind_stages(execute_actions=_fake_execute)
     result = agent.dispatch("hello")
 
-    # Assert — the override ran and handled the turn; answer default untouched
+    # Assert — the override ran and handled the turn.
     assert calls == ["execute:hello"]
     assert isinstance(result, TurnResult)
-    assert agent._answer_override is None  # noqa: SLF001
 
 
 def test_resolve_agent_ports_uses_hooks_when_present() -> None:

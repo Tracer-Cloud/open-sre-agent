@@ -68,9 +68,8 @@ This flow is action-owned from the first prerequisite check to the completion
 report. Once loaded, drive every step with action tools and conclude with your
 own reply:
 
-- Never emit `assistant_handoff` for any part of this flow — not to report
-  progress, not to explain a blocker, and not after the checks pass. A handoff
-  routes the turn into a generic assistant answer, which does not know
+- Keep this flow in the current agent turn — report progress, explain blockers,
+  and summarize the final checks from the tool results. A generic answer does not know
   this workflow and will answer with unrelated GitHub status reads.
 - Never call engineering-status gather tools (`generate_work_status_report`,
   `list_github_work_items`, `summarize_github_pr_status`) here. Onboarding is

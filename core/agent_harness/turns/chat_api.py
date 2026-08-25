@@ -17,7 +17,6 @@ from core.agent_harness.ports import (
     ExecuteActions,
     OutputSink,
     SessionState,
-    StreamAnswerFn,
     TurnAccounting,
 )
 from core.agent_harness.turns.orchestrator import run_turn
@@ -33,7 +32,6 @@ class ChatTurnBindings:
     """
 
     execute_actions: ExecuteActions
-    answer: StreamAnswerFn
     accounting: TurnAccounting
     confirm_fn: ConfirmFn | None = None
     is_tty: bool | None = None
@@ -55,7 +53,6 @@ def dispatch_chat_turn(
         message,
         session,
         execute_actions=bindings.execute_actions,
-        answer=bindings.answer,
         accounting=bindings.accounting,
         confirm_fn=bindings.confirm_fn,
         is_tty=bindings.is_tty,

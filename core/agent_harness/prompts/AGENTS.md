@@ -1,6 +1,4 @@
-# prompts/ — agent prompt assembly
-
-Packages are split by **agent path**, not by PromptTier folders.
+# prompts/ — single-agent prompt assembly
 
 ## Layout
 
@@ -8,8 +6,7 @@ Packages are split by **agent path**, not by PromptTier folders.
 |---------|------|
 | `kernel/` | `PromptEnvelope` / tiers / `SurfaceProfile` — no agent-path knowledge |
 | `grounding/` | Prompt-side grounding providers (`DefaultPromptContextProvider`) that feed assemblers — distinct from harness `grounding/` caches |
-| `assistant/` | Conversational assistant (parts → contributors → envelope → turn) |
-| `action/` | Tool-calling / slash action-agent prompts (`opensre_system_prompt.md` is the shared system base) |
+| `action/` | Tool-calling agent prompts (`opensre_system_prompt.md` is the system base) |
 | `memory/` | Conversation window + prior-investigation recall |
 | `runtime_facts/` | Runtime-metadata fact lines for prompts |
 | `skills/` | Progressive skill index + markdown bodies (`loader.py` + `*.md`) |
@@ -23,12 +20,11 @@ Root `__init__.py` is a thin facade for common imports.
 ```
 kernel  ←  memory, runtime_facts, skills, rules, grounding, system_prompt
         ↑
-   assistant, action   (peer agent packages — never import each other)
+      action
 ```
 
 - Leaves may import `kernel` (and each other only when a clear owner exists).
-- Agent packages may import leaves + `kernel`.
-- **Do not** add `assistant` ↔ `action` imports.
+- The action package may import leaves + `kernel`.
 
 ## Provenance
 

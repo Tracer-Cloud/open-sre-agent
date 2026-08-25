@@ -21,10 +21,8 @@ from collections.abc import Callable, Iterator
 from contextlib import contextmanager
 from dataclasses import replace
 
-from core.agent_harness.accounting.token_accounting import LlmRunInfo
 from core.agent_harness.accounting.turn_accounting import DefaultTurnAccounting
 from core.agent_harness.ports import (
-    AnswerRequest,
     ConfirmFn,
     ConsoleBindable,
     ErrorReporter,
@@ -33,11 +31,8 @@ from core.agent_harness.ports import (
     OutputBindable,
     OutputSink,
     PromptContextProvider,
-    ReasoningClientProvider,
-    RunRecordFactory,
     SessionBindable,
     SessionState,
-    StreamAnswerFn,
     ToolProvider,
     TurnAccounting,
     TurnBinding,
@@ -47,7 +42,6 @@ from core.agent_harness.session_goal.run_until import SessionGoalRunResult, run_
 from core.agent_harness.turns.action_driver import ActionTurnRunner
 from core.agent_harness.turns.chat_api import ChatTurnBindings, dispatch_chat_turn
 from core.agent_harness.turns.headless_adapters import NoopTurnAccounting
-from core.agent_harness.turns.orchestrator import stream_answer
 from core.agent_harness.turns.turn_plan import TurnPlan
 from core.agent_harness.turns.turn_results import ToolCallingTurnResult, TurnResult
 from core.tool.execution import ToolExecutionHooks
@@ -88,8 +82,6 @@ class HeadlessAgent:
         session: SessionState,
         output: OutputSink,
         prompts: PromptContextProvider,
-        reasoning: ReasoningClientProvider,
-        run_factory: RunRecordFactory,
         error_reporter: ErrorReporter,
         llm_factory: LlmFactory,
     ) -> None:
@@ -98,8 +90,6 @@ class HeadlessAgent:
         self._session: SessionState = session
         self._output: OutputSink = output
         self._prompts: PromptContextProvider = prompts
-        self._reasoning = reasoning
-        self._run_factory = run_factory
         self._error_reporter = error_reporter
         # Turn-scoped state; see bind_turn / bind_stages.
         self._accounting: TurnAccounting | None = None
@@ -107,7 +97,6 @@ class HeadlessAgent:
         self._is_tty: bool | None = None
         self._tool_hooks: ToolExecutionHooks | None = None
         self._execute_actions_override: ExecuteActions | None = None
-        self._answer_override: StreamAnswerFn | None = None
         # Reentrant so handle() may call dispatch() on the same thread; a second
         # thread fails the non-blocking acquire and gets AgentBusyError.
         self._turn_lock = threading.RLock()
@@ -193,7 +182,6 @@ class HeadlessAgent:
                 self._session,
                 ChatTurnBindings(
                     execute_actions=self._execute_actions_override or self._execute_actions,
-                    answer=self._answer_override or self._answer,
                     accounting=self._take_accounting(message),
                     confirm_fn=self._confirm_fn,
                     is_tty=self._is_tty,
@@ -254,7 +242,6 @@ class HeadlessAgent:
         self,
         *,
         execute_actions: ExecuteActions | None = None,
-        answer: StreamAnswerFn | None = None,
     ) -> None:
         """Replace whole stages for the next dispatches; ``None`` restores the port-driven default.
 
@@ -262,7 +249,6 @@ class HeadlessAgent:
         long-lived agent that hosts many turns with different injected seams.
         """
         self._execute_actions_override = execute_actions
-        self._answer_override = answer
 
     @contextmanager
     def _one_turn_at_a_time(self) -> Iterator[None]:
@@ -304,25 +290,11 @@ class HeadlessAgent:
             confirm_fn=confirm_fn,
         )
 
-    def _answer(self, text: str, request: AnswerRequest) -> LlmRunInfo | None:
-        return stream_answer(
-            text,
-            self._session,
-            self._output,
-            prompts=self._prompts,
-            reasoning=self._reasoning,
-            run_factory=self._run_factory,
-            error_reporter=self._error_reporter,
-            request=request,
-        )
-
     def _ports(self) -> tuple[object, ...]:
         """Every port this agent holds; rebinding asks each for the capability it needs."""
         return (
             self._tools,
             self._prompts,
-            self._reasoning,
-            self._run_factory,
             self._error_reporter,
         )
 
