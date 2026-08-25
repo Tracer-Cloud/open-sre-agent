@@ -96,7 +96,7 @@ def _github_login_explicitly_bypassed() -> bool:
 
 
 def _github_already_configured() -> bool:
-    from integrations.github.mcp import github_integration_is_configured
+    from integrations.github import github_integration_is_configured
 
     return github_integration_is_configured()
 
@@ -155,7 +155,7 @@ def _print_intro(console: Console, *, allow_skip: bool) -> None:
 
 
 def _show_device_code(console: Console, code: object, *, allow_skip: bool) -> None:
-    from integrations.github.mcp_oauth import GitHubDeviceCode
+    from integrations.github import GitHubDeviceCode
 
     if not isinstance(code, GitHubDeviceCode):
         return
@@ -283,8 +283,7 @@ def _ask_retry(_console: Console) -> str:
 
 def _attempt_login(console: Console, *, allow_skip: bool, variant: str) -> AttemptOutcome:
     """Run one login attempt."""
-    from integrations.github import authenticate_and_configure_github
-    from integrations.github.mcp_oauth import GitHubDeviceFlowError
+    from integrations.github import GitHubDeviceFlowError, authenticate_and_configure_github
 
     try:
         result = authenticate_and_configure_github(

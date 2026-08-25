@@ -24,6 +24,18 @@ _LAZY_EXPORTS: dict[str, str] = {
     "PullRequest": "integrations.github.pull_requests",
     "open_pull_request": "integrations.github.pull_requests",
     "resolve_repo_scope": "integrations.github.pull_requests",
+    "DEFAULT_GITHUB_MCP_MODE": "integrations.github.mcp",
+    "DEFAULT_GITHUB_MCP_URL": "integrations.github.mcp",
+    "GitHubMCPValidationResult": "integrations.github.mcp",
+    "GitHubMcpDisplayDetailLevel": "integrations.github.mcp",
+    "build_github_mcp_config": "integrations.github.mcp",
+    "format_github_mcp_validation_cli_report": "integrations.github.mcp",
+    "github_integration_is_configured": "integrations.github.mcp",
+    "print_github_mcp_validation_report": "integrations.github.mcp",
+    "validate_github_mcp_config": "integrations.github.mcp",
+    "GitHubDeviceCode": "integrations.github.mcp_oauth",
+    "GitHubDeviceFlowError": "integrations.github.mcp_oauth",
+    "authorize_github_via_device_flow": "integrations.github.mcp_oauth",
 }
 
 
@@ -43,6 +55,22 @@ if TYPE_CHECKING:
     from integrations.github.helpers import github_creds
     from integrations.github.identity import saved_github_username
     from integrations.github.login import GitHubLoginResult, authenticate_and_configure_github
+    from integrations.github.mcp import (
+        DEFAULT_GITHUB_MCP_MODE,
+        DEFAULT_GITHUB_MCP_URL,
+        GitHubMcpDisplayDetailLevel,
+        GitHubMCPValidationResult,
+        build_github_mcp_config,
+        format_github_mcp_validation_cli_report,
+        github_integration_is_configured,
+        print_github_mcp_validation_report,
+        validate_github_mcp_config,
+    )
+    from integrations.github.mcp_oauth import (
+        GitHubDeviceCode,
+        GitHubDeviceFlowError,
+        authorize_github_via_device_flow,
+    )
     from integrations.github.pull_requests import (
         ERR_GITHUB_TOKEN,
         GitHubPullRequestError,
@@ -53,16 +81,28 @@ if TYPE_CHECKING:
 
 
 __all__ = [
+    "DEFAULT_GITHUB_MCP_MODE",
+    "DEFAULT_GITHUB_MCP_URL",
     "ERR_GITHUB_TOKEN",
     "GitHubApiError",
+    "GitHubDeviceCode",
+    "GitHubDeviceFlowError",
     "GitHubLoginResult",
+    "GitHubMCPValidationResult",
+    "GitHubMcpDisplayDetailLevel",
     "GitHubPullRequestError",
     "GitHubRestClient",
     "PullRequest",
     "authenticate_and_configure_github",
+    "authorize_github_via_device_flow",
+    "build_github_mcp_config",
+    "format_github_mcp_validation_cli_report",
     "github_creds",
+    "github_integration_is_configured",
     "open_pull_request",
+    "print_github_mcp_validation_report",
     "resolve_github_token",
     "resolve_repo_scope",
     "saved_github_username",
+    "validate_github_mcp_config",
 ]

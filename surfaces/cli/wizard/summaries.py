@@ -148,7 +148,7 @@ def render_integration_result(
     github_display_level: str | None = None,
 ) -> None:
     if result.github_mcp is not None:
-        from integrations.github.mcp import (
+        from integrations.github import (
             GitHubMcpDisplayDetailLevel,
             print_github_mcp_validation_report,
         )

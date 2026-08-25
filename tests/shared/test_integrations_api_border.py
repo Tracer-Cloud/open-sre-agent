@@ -72,8 +72,6 @@ _ALLOWED: dict[str, frozenset[str]] = {
             "integrations.betterstack.setup",
             "integrations.buzz.alarms",
             "integrations.dagster.setup",
-            "integrations.github.mcp",
-            "integrations.github.mcp_oauth",
             "integrations.github.setup",
             "integrations.jenkins.setup",
             "integrations.openclaw.setup",

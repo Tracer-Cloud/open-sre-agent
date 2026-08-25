@@ -10,7 +10,7 @@ from __future__ import annotations
 import dataclasses
 
 from infrastructure.terminal.theme import DEVICE_CODE, SECONDARY
-from integrations.github.mcp import DEFAULT_GITHUB_MCP_MODE, DEFAULT_GITHUB_MCP_URL
+from integrations.github import DEFAULT_GITHUB_MCP_MODE, DEFAULT_GITHUB_MCP_URL
 from integrations.github.setup import GITHUB_SETUP
 from integrations.setup_flow import apply_setup
 from surfaces.cli.wizard.components import (
@@ -32,7 +32,7 @@ def _github_wizard_browser_authorize() -> str | None:
     """Run GitHub device-flow browser authorization inside the wizard."""
     from rich.markup import escape
 
-    from integrations.github.mcp_oauth import (
+    from integrations.github import (
         GitHubDeviceCode,
         GitHubDeviceFlowError,
         authorize_github_via_device_flow,
