@@ -2,7 +2,7 @@
 
 The terminal UI has four pieces, all composed from this module:
 
-1. splash screen (Braille logo, version, first-run notice)
+1. splash screen (Braille logo, version)
 2. welcome panel (identity column + tips/ambient status)
 3. hint/spinner line above the prompt rule
 4. prompt rule + ``[n] ❯`` input line
@@ -33,7 +33,6 @@ def render_terminal_ui(
     console: Console | None = None,
     *,
     session: object = None,
-    first_run: bool | None = None,
 ) -> None:
     """Render the static terminal chrome: splash screen then welcome panel."""
     console = console or Console(
@@ -42,7 +41,7 @@ def render_terminal_ui(
         color_system="truecolor",
         legacy_windows=False,
     )
-    render_splash(console, first_run=first_run)
+    render_splash(console)
     render_ready_box(console, session=session)
 
 

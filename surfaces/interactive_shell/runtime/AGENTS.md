@@ -15,7 +15,6 @@ owner module instead of broadening module responsibilities.
 - `../main.py` — process/bootstrap boundary only: startup sweep, TTY/non-TTY
   gate, banner display, the async boundary (`asyncio.run`). Do not move
   per-turn dispatch/runtime logic back into startup bootstrap.
-- `startup/first_launch_github.py` — first-launch GitHub sign-in gate only.
 - `startup/initial_input.py` — scripted non-interactive initial-input replay
   only.
 - `../controller.py` — `InteractiveShellController`: prompt lifecycle,

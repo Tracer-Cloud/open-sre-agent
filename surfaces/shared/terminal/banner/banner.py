@@ -2,8 +2,8 @@
 
 Two exported entry points
 -------------------------
-render_splash(console, first_run=False)
-    Branded startup screen with the Braille logomark and optional security gate.
+render_splash(console)
+    Branded startup screen with the Braille logomark.
     Called once when the CLI starts.
 
 render_ready_box(console, session=None)
@@ -27,7 +27,6 @@ from __future__ import annotations
 import getpass
 import math
 import os
-import sys
 
 from rich import box
 from rich.console import Console, Group
@@ -64,7 +63,7 @@ def _is_first_run() -> bool:
 # ── Splash screen ─────────────────────────────────────────────────────────────
 
 
-def render_splash(console: Console | None = None, *, first_run: bool | None = None) -> None:
+def render_splash(console: Console | None = None) -> None:
     """Print the branded startup splash.
 
     Responsive layout (see splash_layout.select_splash_mode):
@@ -75,10 +74,6 @@ def render_splash(console: Console | None = None, *, first_run: bool | None = No
     ┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄ [DIM divider]
     60–89 cols — small Braille logo beside the same condensed content.
     < 60 cols — stacked subtitle + description only, no logo.
-
-    If first_run (or not set and wizard has never run):
-      ⚠  This tool runs AI-powered commands …      [WARNING]
-         Press Enter to continue…                   [SECONDARY]
     """
     console = console or Console(
         highlight=False,
@@ -86,8 +81,6 @@ def render_splash(console: Console | None = None, *, first_run: bool | None = No
         color_system="truecolor",
         legacy_windows=False,
     )
-    if first_run is None:
-        first_run = _is_first_run()
 
     version = get_opensre_version()
 
@@ -97,28 +90,6 @@ def render_splash(console: Console | None = None, *, first_run: bool | None = No
     console.print(build_splash_layout(console.width, version))
     console.print()
     console.print(Rule(style=DIM))
-
-    if first_run:
-        console.print()
-        notice = Text()
-        notice.append("  ")
-        notice.append("⚠  ", style=f"bold {WARNING}")
-        notice.append(
-            "This tool executes AI-powered commands against your infrastructure.\n"
-            "     Review the documentation before connecting production systems.\n"
-            "     Source: https://github.com/opensre-dev/opensre",
-            style=SECONDARY,
-        )
-        console.print(notice)
-        console.print()
-        if sys.stdin.isatty():
-            try:
-                console.print(f"  [{SECONDARY}]Press Enter to continue…[/]", end="")
-                sys.stdin.readline()
-            except (EOFError, KeyboardInterrupt, OSError):
-                # Non-interactive stdin or user abort — skip blocking and continue startup.
-                pass
-        console.print()
 
 
 # ── Agent ready-state box ─────────────────────────────────────────────────────

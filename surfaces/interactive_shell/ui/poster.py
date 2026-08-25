@@ -47,7 +47,7 @@ def repl_render_launch_poster(
             legacy_windows=False,
             width=width,
         )
-        render_terminal_ui(buf_console, session=session, first_run=False)
+        render_terminal_ui(buf_console, session=session)
         prefix = _theme_notice_line(theme_notice) if theme_notice else ""
         _repl_write_buffer(prefix + buf.getvalue())
         _feed_record_buffer(console, Text.from_ansi(buf.getvalue()).plain)
@@ -58,7 +58,7 @@ def repl_render_launch_poster(
             console,
             f"[{ui_theme.HIGHLIGHT}]theme set:[/] {escape(theme_notice)}",
         )
-    render_terminal_ui(console, session=session, first_run=False)
+    render_terminal_ui(console, session=session)
 
 
 def refresh_welcome_poster(

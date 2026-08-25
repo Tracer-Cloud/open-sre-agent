@@ -38,7 +38,7 @@ def _make_console(width: int) -> Console:
 
 def _render_splash(width: int) -> Console:
     console = _make_console(width)
-    banner_module.render_splash(console, first_run=False)
+    banner_module.render_splash(console)
     return console
 
 

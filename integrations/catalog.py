@@ -203,9 +203,8 @@ def configured_integration_services() -> list[str]:
     Single source of truth shared by the welcome banner and the REPL session so
     they never disagree about which integrations are connected. Covers both
     environment-variable configuration and integrations saved to ``~/.opensre``
-    (e.g. via ``opensre integrations setup ...`` or the first-launch GitHub
-    login). Never raises; returns an empty list on any failure so callers can
-    treat it as best-effort.
+    (e.g. via ``opensre integrations setup ...``). Never raises; returns an
+    empty list on any failure so callers can treat it as best-effort.
     """
     try:
         store_records = load_integrations()

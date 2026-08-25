@@ -15,9 +15,6 @@ from infrastructure.logging import install_shell_log_handler, quiet_noisy_third_
 from infrastructure.terminal.theme import set_active_theme
 from surfaces.interactive_shell.controller import InteractiveShellController
 from surfaces.interactive_shell.runtime.context import create_repl_runtime
-from surfaces.interactive_shell.runtime.startup.first_launch_github import (
-    require_startup_github_login,
-)
 from surfaces.interactive_shell.runtime.startup.initial_input import run_initial_input
 from surfaces.interactive_shell.runtime.startup.loop_suggestions import offer_loop_suggestions
 from surfaces.interactive_shell.ui.input_prompt import build_prompt_session
@@ -119,8 +116,6 @@ def run_repl(
     try:
         if not initial_input:
             render_terminal_ui(out)
-            if not require_startup_github_login(out):
-                return 0
 
         return asyncio.run(
             run_repl_async(
