@@ -13,6 +13,12 @@ def _write_config(tmp_path: Path, data: dict) -> Path:
     return path
 
 
+def test_guardrail_action_members_round_trip_from_string() -> None:
+    assert [member.value for member in GuardrailAction] == ["redact", "block", "audit"]
+    assert GuardrailAction("block") is GuardrailAction.BLOCK
+    assert GuardrailAction.BLOCK == "block"
+
+
 class TestLoadRules:
     def test_returns_empty_when_file_missing(self, tmp_path: Path) -> None:
         assert load_rules(tmp_path / "nonexistent.yml") == []
