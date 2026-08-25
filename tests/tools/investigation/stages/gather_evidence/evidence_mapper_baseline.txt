@@ -44,7 +44,6 @@ get_azure_sql_server_status
 get_azure_sql_slow_queries
 get_azure_sql_wait_stats
 get_batch_statistics
-get_bitbucket_file_contents
 get_clickhouse_query_activity
 get_clickhouse_system_health
 get_cloudwatch_batch_metrics
@@ -165,7 +164,6 @@ kubernetes_list_nodes
 kubernetes_list_pods
 kubernetes_list_services
 kubernetes_list_statefulsets
-list_bitbucket_commits
 list_dagster_assets
 list_dagster_runs
 list_dagster_schedule_ticks
@@ -234,7 +232,6 @@ redeploy_railway_service
 replay_slack_thread_locally
 rocketchat_send_message
 scan_redis_keys
-search_bitbucket_code
 search_github_code
 search_github_issues
 search_openclaw_conversations

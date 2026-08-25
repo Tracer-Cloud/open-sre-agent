@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from typing import Any
 
+from core.domain.types.evidence import record_evidence_entry
 from core.domain.types.tools import ToolSurface
 from core.tool_framework import tool
 from core.tool_framework.utils import tool_unavailable
@@ -34,10 +35,27 @@ def _get_bitbucket_file_contents_available(sources: dict[str, dict]) -> bool:
     )
 
 
+def _map_get_bitbucket_file_contents(
+    evidence: dict[str, Any], output: dict[str, Any], _input: dict[str, Any]
+) -> None:
+    content = output.get("content", "")
+    if content:
+        summary = f"{len(content)} chars from {output.get('path', '')}"
+        if output.get("truncated"):
+            summary += " (truncated)"
+        record_evidence_entry(
+            evidence,
+            source="get_bitbucket_file_contents",
+            label="Bitbucket File Contents",
+            summary=summary,
+        )
+
+
 @tool(
     name="get_bitbucket_file_contents",
     description="Retrieve the contents of a file from a Bitbucket repository at a specific revision.",
     source="bitbucket",
+    evidence_mapper=_map_get_bitbucket_file_contents,
     surfaces=(ToolSurface.INVESTIGATION, ToolSurface.CHAT),
     use_cases=[
         "Reading configuration files that may explain a failure",

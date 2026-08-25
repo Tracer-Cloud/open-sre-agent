@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from typing import Any
 
+from core.domain.types.evidence import record_evidence_entry
 from core.domain.types.tools import ToolSurface
 from core.tool_framework import tool
 from core.tool_framework.utils import code_host_unavailable_payload
@@ -65,10 +66,24 @@ def _search_bitbucket_code_available(sources: dict[str, dict]) -> bool:
     return bitbucket_available_or_backend(sources)
 
 
+def _map_search_bitbucket_code(
+    evidence: dict[str, Any], output: dict[str, Any], _input: dict[str, Any]
+) -> None:
+    results = output.get("results", [])
+    if results:
+        record_evidence_entry(
+            evidence,
+            source="search_bitbucket_code",
+            label="Bitbucket Code Search",
+            summary=f"{len(results)} matches",
+        )
+
+
 @tool(
     name="search_bitbucket_code",
     description="Search code across a Bitbucket workspace or specific repository.",
     source="bitbucket",
+    evidence_mapper=_map_search_bitbucket_code,
     surfaces=(ToolSurface.INVESTIGATION, ToolSurface.CHAT),
     use_cases=[
         "Finding where a specific function or configuration is defined",

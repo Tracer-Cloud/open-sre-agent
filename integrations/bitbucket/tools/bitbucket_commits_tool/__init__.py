@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from typing import Any
 
+from core.domain.types.evidence import record_evidence_entry
 from core.domain.types.tools import ToolSurface
 from core.tool_framework import tool
 from core.tool_framework.utils import tool_unavailable
@@ -30,10 +31,24 @@ def _list_bitbucket_commits_available(sources: dict[str, dict]) -> bool:
     return bool(bitbucket_available_or_backend(sources) and bb.get("repo_slug", bb.get("repo")))
 
 
+def _map_list_bitbucket_commits(
+    evidence: dict[str, Any], output: dict[str, Any], _input: dict[str, Any]
+) -> None:
+    commits = output.get("commits", [])
+    if commits:
+        record_evidence_entry(
+            evidence,
+            source="list_bitbucket_commits",
+            label="Bitbucket Commits",
+            summary=f"{len(commits)} commits",
+        )
+
+
 @tool(
     name="list_bitbucket_commits",
     description="List recent commits for a Bitbucket repository, optionally filtered by file path.",
     source="bitbucket",
+    evidence_mapper=_map_list_bitbucket_commits,
     surfaces=(ToolSurface.INVESTIGATION, ToolSurface.CHAT),
     use_cases=[
         "Checking whether a recent change could explain a failure",
