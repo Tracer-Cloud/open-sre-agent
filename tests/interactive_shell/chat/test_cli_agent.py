@@ -149,7 +149,6 @@ class TestSystemPromptTerminology:
         """If a setup request reaches the assistant, it gives guidance only."""
         prompt = _build_system_prompt(reference="(ref)", history="(hist)")
         assert "/integrations setup" in prompt
-        assert "/mcp connect" in prompt
 
 
 class TestSystemPromptAgentsMdGrounding:

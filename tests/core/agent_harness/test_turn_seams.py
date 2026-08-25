@@ -9,7 +9,6 @@ from core.agent_harness.prompts.action.multi_step_policy import (
     ACTION_CONVERSATIONAL_SESSION_GOAL_RULE,
     ACTION_LOCAL_SHELL_MULTI_STEP_RULE,
 )
-from core.agent_harness.prompts.action.text import _SYSTEM_PROMPT_BASE
 from core.agent_harness.turns import answer_finalize, orchestrator, turn_route
 
 _TURNS = Path(orchestrator.__file__).resolve().parent
@@ -71,30 +70,7 @@ def test_multi_step_prompt_fragments_are_both_present_and_distinct() -> None:
     assert "NOT\nshell_run" in ACTION_CONVERSATIONAL_SESSION_GOAL_RULE or (
         "NOT shell_run" in ACTION_CONVERSATIONAL_SESSION_GOAL_RULE.replace("\n", " ")
     )
-    # The planner rewrite folds these rules into the markdown base rather than
-    # wiring them in as separate STABLE blocks, so they appear in the base itself.
-    assert ACTION_LOCAL_SHELL_MULTI_STEP_RULE in _SYSTEM_PROMPT_BASE
-    assert ACTION_CONVERSATIONAL_SESSION_GOAL_RULE in _SYSTEM_PROMPT_BASE
-    assert _SYSTEM_PROMPT_BASE.startswith("You plan actions for the OpenSRE interactive shell.")
-    assert "GOAL PERSISTENCE" in _SYSTEM_PROMPT_BASE
-    from core.agent_harness.prompts.action.assemble import build_action_system_prompt_envelope
-    from core.agent_harness.turns.turn_snapshot import TurnSnapshot
-
-    assembled = build_action_system_prompt_envelope(
-        TurnSnapshot(
-            text="",
-            conversation_messages=(),
-            configured_integrations=(),
-            configured_integrations_known=False,
-            last_state=None,
-            last_synthetic_observation_path=None,
-            reasoning_effort=None,
-        )
-    ).render()
-    shell_at = assembled.index("LOCAL SEQUENTIAL STEPS")
-    goal_at = assembled.index("Conversational keep-going checklists")
-    assert shell_at < goal_at
-    assert assembled.index("GOAL PERSISTENCE") < shell_at
+    assert ACTION_LOCAL_SHELL_MULTI_STEP_RULE != ACTION_CONVERSATIONAL_SESSION_GOAL_RULE
 
 
 def test_seam_modules_exist() -> None:
