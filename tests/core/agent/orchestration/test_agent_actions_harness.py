@@ -16,6 +16,7 @@ from core.agent_harness.prompts.memory.prior_investigation import (
     PRIOR_INVESTIGATION_RECALL_SECONDS,
 )
 from core.agent_harness.session.pending_offer import first_pending_offer
+from core.agent_harness.spi.accounting import LlmRunInfo
 from core.agent_harness.turns.action_driver import (
     ActionTurnPlan,
     ActionTurnRunner,
@@ -34,6 +35,7 @@ from tests.core.agent.orchestration.action_execution_test_harness import (
     no_tool_response,
     tool_response,
 )
+from tests.shared.harness_turn_driver import fake_llm_run, no_evidence
 
 
 class _GenericActionToolProvider:
@@ -72,6 +74,11 @@ class _OutputSink:
         text = "".join(chunks)
         self._console.print(text)
         return text
+
+
+def _no_answer(text: str, request: AnswerRequest) -> LlmRunInfo | None:
+    """A StreamAnswerFn that produces no answer."""
+    return None
 
 
 def test_execute_with_harness_runs_slash_tool_call(monkeypatch) -> None:
@@ -1560,7 +1567,7 @@ def test_run_turn_passes_handoff_contents_to_assistant() -> None:
         "please connect to local llama",
         Session(),
         execute_actions=_execute,
-        gather=lambda *_args, **_kwargs: None,
+        gather=no_evidence,
         answer=_answer,
         accounting=DefaultTurnAccounting(Session(), "please connect to local llama"),
     )
@@ -1612,7 +1619,7 @@ def test_run_turn_mixed_action_and_handoff_routes_to_assistant() -> None:
         "check health and connect local llama",
         Session(),
         execute_actions=_execute,
-        gather=lambda *_args, **_kwargs: None,
+        gather=no_evidence,
         answer=_answer,
         accounting=DefaultTurnAccounting(Session(), "check health and connect local llama"),
     )
@@ -1700,15 +1707,18 @@ def test_database_query_handoff_keeps_connect_want_me_to_closer() -> None:
             handoff_contents=("database_query:mysql_active_connections",),
         )
 
+    def _gather_empty(text: str, *, turn_plan: Any = None) -> str:
+        return ""
+
     def _answer(_text: str, request: AnswerRequest, **_kwargs: Any) -> Any:
         assert request.handoff_contents == ("database_query:mysql_active_connections",)
-        return type("Run", (), {"response_text": model_reply})()
+        return fake_llm_run(response_text=model_reply)
 
     result = run_turn(
         prompt,
         session,
         execute_actions=_execute,
-        gather=lambda *_a, **_k: "",
+        gather=_gather_empty,
         answer=_answer,
         accounting=DefaultTurnAccounting(session, prompt),
     )
@@ -1752,6 +1762,9 @@ def test_follow_up_answer_with_want_me_to_paints_on_non_tty_console() -> None:
             handoff_contents=("follow_up:prior_investigation",),
         )
 
+    def _gather_should_not_gather(text: str, *, turn_plan: Any = None) -> str:
+        return "should-not-gather"
+
     def _answer(_text: str, request: AnswerRequest, **_kwargs: Any) -> Any:
         body = "The disk was full on orders-api.\n\n**Want me to:** run a full investigation"
         painted = sink.stream(
@@ -1765,7 +1778,7 @@ def test_follow_up_answer_with_want_me_to_paints_on_non_tty_console() -> None:
         "why did it fail?",
         session,
         execute_actions=_execute,
-        gather=lambda *_a, **_k: "should-not-gather",
+        gather=_gather_should_not_gather,
         answer=_answer,
         accounting=DefaultTurnAccounting(session, "why did it fail?"),
         output=sink,
@@ -2210,7 +2223,7 @@ def test_run_turn_skips_gather_for_follow_up_even_when_investigation_is_old() ->
         session,
         execute_actions=_execute,
         gather=_gather,
-        answer=lambda *_a, **_k: None,
+        answer=_no_answer,
         accounting=DefaultTurnAccounting(session, "what happened?"),
     )
 
@@ -2341,7 +2354,7 @@ def test_run_turn_still_gathers_after_actions_when_the_handoff_did_not_opt_out()
         session,
         execute_actions=_execute,
         gather=_gather,
-        answer=lambda *_a, **_k: None,
+        answer=_no_answer,
         accounting=DefaultTurnAccounting(session, "connect local llama"),
     )
 
@@ -2372,7 +2385,7 @@ def test_run_turn_still_gathers_when_the_action_turn_executed_nothing() -> None:
         session,
         execute_actions=_execute,
         gather=_gather,
-        answer=lambda *_a, **_k: None,
+        answer=_no_answer,
         accounting=DefaultTurnAccounting(session, "why is the orders-api slow?"),
     )
 
