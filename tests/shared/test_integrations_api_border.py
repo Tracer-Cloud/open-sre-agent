@@ -81,7 +81,6 @@ _ALLOWED: dict[str, frozenset[str]] = {
             "integrations.github.mcp",
             "integrations.github.mcp_oauth",
             "integrations.github.setup",
-            "integrations.gitlab.setup",
             "integrations.jenkins.setup",
             "integrations.llm_cli.binary_resolver",
             "integrations.llm_cli.codex_oauth",
