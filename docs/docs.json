@@ -190,6 +190,7 @@
                   "aws",
                   "aws_lambda",
                   "cloudtrail_events",
+                  "cloudwatch",
                   "ec2",
                   "elb",
                   "helm",

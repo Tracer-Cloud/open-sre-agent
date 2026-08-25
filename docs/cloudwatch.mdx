@@ -1,0 +1,85 @@
+---
+title: "AWS CloudWatch"
+description: "Pull AWS Batch job metrics and CloudWatch Logs events during incidents"
+---
+
+## Overview
+
+OpenSRE uses AWS CloudWatch to pull CPU and memory metrics for AWS Batch jobs and search CloudWatch Logs groups for error events and tracebacks during an investigation.
+
+CloudWatch alarms (via SNS or EventBridge) can also trigger an investigation directly — OpenSRE recognizes the alarm payload and extracts details like the log group from it automatically.
+
+All CloudWatch API calls are read-only.
+
+## Prerequisites
+
+- AWS credentials configured per the [AWS integration](/aws) (role ARN recommended)
+- An AWS Batch job queue and/or a CloudWatch Logs log group you want OpenSRE to investigate
+- IAM permissions for the actions listed below
+
+## Setup
+
+CloudWatch has no setup wizard or environment variables of its own — it reuses the credentials and region configured for the [AWS integration](/aws):
+
+```bash
+opensre integrations setup aws
+```
+
+Region comes from `AWS_REGION` (default `us-east-1`), same as every other AWS tool.
+
+Unlike RDS or Kafka, there's nothing CloudWatch-specific to preset ahead of time: the job queue, log group, and correlation ID each tool needs come from the alert being investigated (or are filled in by the LLM), not from a config file.
+
+## Credentials
+
+The integration only needs four read-only actions on the same IAM role or user used for the [AWS integration](/aws):
+
+```json
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Effect": "Allow",
+      "Action": [
+        "cloudwatch:GetMetricStatistics",
+        "logs:FilterLogEvents",
+        "logs:GetLogEvents",
+        "logs:DescribeLogStreams"
+      ],
+      "Resource": "*"
+    }
+  ]
+}
+```
+
+If you already use the AWS managed `ReadOnlyAccess` policy, all four actions are covered.
+
+## Investigation tools
+
+| Tool | AWS API call | What it returns |
+| --- | --- | --- |
+| `get_cloudwatch_batch_metrics` | `cloudwatch:GetMetricStatistics` | CPU or memory utilization datapoints for one AWS Batch job queue (`AWS/Batch` namespace) |
+| `get_cloudwatch_logs` | `logs:FilterLogEvents` / `logs:GetLogEvents` / `logs:DescribeLogStreams` | Recent log events from one CloudWatch Logs group — by filter pattern/correlation ID, a named stream, or the most-recently-active stream |
+
+`get_cloudwatch_batch_metrics` needs a `job_queue` (from the alert or the investigating LLM) and errors without one. `get_cloudwatch_logs` only becomes available once `log_group` is present in the resolved sources.
+
+### Use cases
+
+- Proving a CPU or memory resource-constraint hypothesis behind a stuck or slow AWS Batch job
+- Pulling error tracebacks from a known CloudWatch Logs group
+- Searching a log group by correlation ID or error pattern to trace a failure
+
+## Verify
+
+There is no dedicated `opensre integrations verify cloudwatch` target. Confirm AWS credentials work (see [AWS](/aws)) — CloudWatch tools activate automatically during an investigation once a job queue or log group shows up in the alert.
+
+## Troubleshooting
+
+| Symptom | Fix |
+| --- | --- |
+| **`get_cloudwatch_logs` with `filter_pattern` finds nothing** | Pattern search only looks back 2 hours from now (hardcoded, not configurable) — for an older incident, call it with an explicit `log_stream` instead, which isn't time-bounded (just capped at `limit` events, default 100) |
+
+## Security
+
+- Use read-only IAM (`Get*`, `Filter*`, `Describe*` only — no `Put*` or `Delete*`).
+- Prefer role ARN / least privilege over long-lived keys, same as the AWS integration.
+- Store log group names and credentials out of source control.
