@@ -17,6 +17,7 @@ from infrastructure.turn_host.turn_runner import TurnRunner
 from surfaces.interactive_shell.session import Session
 from tests.shared.default_headless_build_stub import default_headless_build_stub
 from tests.shared.fake_agent import fake_agent
+from tests.shared.harness_turn_driver import fake_llm_run
 
 
 def test_gateway_turn_runner_delegates_to_agent_dispatch(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -101,7 +102,7 @@ def test_run_turn_routes_unhandled_action_to_answer_callback() -> None:
 
     def answer(text: str, _request: object = None, **_kwargs: object) -> object:
         answer_calls.append(text)
-        return type("Run", (), {"response_text": "answered"})()
+        return fake_llm_run(response_text="answered")
 
     def gather(_text: str, **_kwargs: object) -> None:
         return None
@@ -146,7 +147,7 @@ def test_run_turn_builds_turn_plan_for_action_path(
         return ToolCallingTurnResult(0, 0, 0, False, False)
 
     def answer(_text: str, _request: object = None, **_kwargs: object) -> object:
-        return type("Run", (), {"response_text": "answered"})()
+        return fake_llm_run(response_text="answered")
 
     def gather(_text: str, **_kwargs: object) -> None:
         return None
@@ -187,7 +188,7 @@ def test_run_turn_passes_turn_plan_to_gather(
         return ToolCallingTurnResult(0, 0, 0, False, False)
 
     def answer(_text: str, _request: object = None, **_kwargs: object) -> object:
-        return type("Run", (), {"response_text": "answered"})()
+        return fake_llm_run(response_text="answered")
 
     def gather(_text: str, *, turn_plan: Any = None, **_kwargs: object) -> None:
         gather_calls.append(turn_plan.resolved_integrations if turn_plan is not None else None)
@@ -229,7 +230,7 @@ def test_run_turn_passes_turn_plan_to_answer(
 
     def answer(_text: str, request: Any = None, **_kwargs: object) -> object:
         answer_plans.append(getattr(request, "turn_plan", None))
-        return type("Run", (), {"response_text": "answered"})()
+        return fake_llm_run(response_text="answered")
 
     def gather(_text: str, **_kwargs: object) -> None:
         return None
