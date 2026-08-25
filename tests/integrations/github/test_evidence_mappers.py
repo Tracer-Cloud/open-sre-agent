@@ -67,7 +67,7 @@ def test_map_generate_work_status_report() -> None:
 
 def test_map_get_git_deploy_timeline() -> None:
     evidence: dict[str, Any] = {}
-    output = {"timeline": [{"commit": "abc"}, {"commit": "def"}]}
+    output = {"commits": [{"commit": "abc"}, {"commit": "def"}]}
     _map_get_git_deploy_timeline(evidence, output, {})
 
     entries = evidence.get("catalog_entries", [])
