@@ -329,15 +329,20 @@ def _assert_planned_actions_match(
                     f"assistant_handoff[{index}] session_goal_items mismatch"
                 )
             continue
-        # A synthesized investigation (no pasted/quoted payload) carries freeform
-        # alert_text that varies per live run. When the fixture leaves content
-        # empty, assert kind + non-empty alert_text rather than exact equality;
-        # fixtures that pin a verbatim payload (e.g. a pasted alert) keep the
-        # strict match below.
-        if expected_kind == "investigation" and not str(expected.get("content", "")).strip():
+        # Investigation alert_text is freeform: a synthesized RCA varies per
+        # live run, and a pasted payload may be forwarded verbatim or lightly
+        # wrapped (CI 306 prefixed ``this alert: ``). Empty fixture content
+        # asserts kind + non-empty text; a pinned payload must appear inside it.
+        if expected_kind == "investigation":
             assert actual.get("kind") == "investigation"
-            content = str(actual.get("content", "")).strip()
-            assert content, f"investigation action {index} must include synthesized alert_text."
+            actual_content = str(actual.get("content", "")).strip()
+            expected_content = str(expected.get("content", "")).strip()
+            assert actual_content, f"investigation action {index} must include alert_text."
+            if expected_content:
+                assert expected_content in actual_content, (
+                    f"investigation action {index} content {actual_content!r} "
+                    f"does not contain {expected_content!r}"
+                )
             continue
         if expected_kind == "cli_command":
             assert actual.get("kind") == "cli_command"
@@ -491,6 +496,31 @@ def test_planning_match_accepts_checklist_items_as_session_goal_attach() -> None
         ],
     )
     _assert_planned_actions_match([actual], expected)
+
+
+def test_planning_match_accepts_wrapped_investigation_payload() -> None:
+    """Live planners may prefix a pasted JSON payload (CI 306)."""
+    actual = cast(
+        "list[ExpectedAction]",
+        [
+            {
+                "kind": "investigation",
+                "content": 'this alert: {"alertname": "HighCPU", "severity": "critical"}',
+                "target_surface": "investigation",
+            }
+        ],
+    )
+    expected = cast(
+        "list[ExpectedAction]",
+        [
+            {
+                "kind": "investigation",
+                "content": '{"alertname": "HighCPU", "severity": "critical"}',
+                "target_surface": "investigation",
+            }
+        ],
+    )
+    _assert_planned_actions_match(actual, expected)
 
 
 def test_build_actual_action_keeps_boolean_session_goal() -> None:
