@@ -66,6 +66,8 @@ def test_action_system_prompt_envelope_matches_legacy_rendering() -> None:
     # this id list) when no fragments are registered.
     assert [block.id for block in envelope.blocks] == [
         PromptBlockId.ACTION_SYSTEM_BASE,
+        PromptBlockId.ACTION_GOAL_POLICY,
+        PromptBlockId.ACTION_ROUTING_POLICY,
         PromptBlockId.ACTION_VENDOR_FRAGMENTS,
         PromptBlockId.ACTION_RUNTIME_FACTS,
         PromptBlockId.ACTION_SKILLS,
@@ -173,6 +175,8 @@ def test_every_block_declares_which_tier_it_belongs_to() -> None:
     # Assert
     assert tiers == {
         PromptBlockId.ACTION_SYSTEM_BASE: PromptTier.STABLE,
+        PromptBlockId.ACTION_GOAL_POLICY: PromptTier.STABLE,
+        PromptBlockId.ACTION_ROUTING_POLICY: PromptTier.STABLE,
         PromptBlockId.ACTION_VENDOR_FRAGMENTS: PromptTier.STABLE,
         PromptBlockId.ACTION_RUNTIME_FACTS: PromptTier.STABLE,
         PromptBlockId.ACTION_SKILLS: PromptTier.STABLE,
