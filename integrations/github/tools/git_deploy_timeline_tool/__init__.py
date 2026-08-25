@@ -158,7 +158,7 @@ def _is_available(sources: dict[str, dict]) -> bool:
 def _map_get_git_deploy_timeline(
     evidence: dict[str, Any], output: dict[str, Any], _input: dict[str, Any]
 ) -> None:
-    timeline = output.get("timeline")
+    timeline = output.get("commits")
     if isinstance(timeline, list) and timeline:
         record_evidence_entry(
             evidence,
