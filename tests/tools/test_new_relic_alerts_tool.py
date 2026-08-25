@@ -18,7 +18,10 @@ from typing import Any
 from unittest.mock import MagicMock, patch
 
 from integrations.new_relic.tools.new_relic_alerts_tool.results import parse_incident_rows
-from integrations.new_relic.tools.new_relic_alerts_tool.tool import NewRelicAlertsTool
+from integrations.new_relic.tools.new_relic_alerts_tool.tool import (
+    NewRelicAlertsTool,
+    _map_query_new_relic_alerts,
+)
 from tests.tools.conftest import BaseToolContract, mock_agent_state
 
 _FIXTURE_PATH = (
@@ -208,3 +211,60 @@ def test_run_api_error_is_reported_as_unavailable() -> None:
         result = tool.run(api_key="NRAK-test", account_id="123456")
     assert result["available"] is False
     assert result["error_type"] == "timeout"
+
+
+class TestMapQueryNewRelicAlerts:
+    def test_records_entry_with_open_count(self) -> None:
+        evidence: dict = {}
+
+        _map_query_new_relic_alerts(
+            evidence,
+            {
+                "available": True,
+                "incidents": [
+                    {"incident_id": "1", "status": "open", "priority": "CRITICAL"},
+                    {"incident_id": "2", "status": "closed", "priority": "WARNING"},
+                ],
+                "total": 2,
+                "truncated": False,
+            },
+            {},
+        )
+
+        entries = evidence["catalog_entries"]
+        assert len(entries) == 1
+        assert entries[0]["source"] == "query_new_relic_alerts"
+        assert entries[0]["summary"] == "2 incident(s), 1 open"
+
+    def test_records_entry_with_truncated_note(self) -> None:
+        evidence: dict = {}
+
+        _map_query_new_relic_alerts(
+            evidence,
+            {
+                "available": True,
+                "incidents": [{"incident_id": "1", "status": "closed"}],
+                "truncated": True,
+            },
+            {},
+        )
+
+        assert evidence["catalog_entries"][0]["summary"] == "1 incident(s) (truncated)"
+
+    def test_records_nothing_when_no_incidents(self) -> None:
+        evidence: dict = {}
+
+        _map_query_new_relic_alerts(
+            evidence, {"available": True, "incidents": [], "total": 0, "truncated": False}, {}
+        )
+
+        assert "catalog_entries" not in evidence
+
+    def test_records_nothing_on_unavailable_result(self) -> None:
+        evidence: dict = {}
+
+        _map_query_new_relic_alerts(
+            evidence, {"available": False, "error": "New Relic integration is not configured."}, {}
+        )
+
+        assert "catalog_entries" not in evidence

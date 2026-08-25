@@ -220,8 +220,6 @@ query_grafana_annotations
 query_groundcover_logs
 query_groundcover_traces
 query_honeycomb_traces
-query_new_relic_alerts
-query_new_relic_metrics
 query_openobserve_logs
 query_opensearch_analytics
 query_signoz_logs
