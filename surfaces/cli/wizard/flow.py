@@ -36,8 +36,7 @@ from infrastructure.terminal.theme import (
     TEXT,
     WARNING,
 )
-from integrations.llm_cli.binary_resolver import diagnose_binary_path
-from integrations.llm_cli.codex_oauth import CodexOAuthError, run_codex_oauth_login
+from integrations.llm_cli import CodexOAuthError, diagnose_binary_path, run_codex_oauth_login
 from surfaces.cli.wizard.azure_openai import (
     choose_provider_model,
 )

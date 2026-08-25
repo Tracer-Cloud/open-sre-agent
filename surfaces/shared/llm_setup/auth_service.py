@@ -25,7 +25,7 @@ from config.llm_auth.records import (
     save_provider_auth_record,
 )
 from config.secrets.backend import KeyringUnavailableError
-from integrations.llm_cli.codex_oauth import CodexOAuthError, run_codex_oauth_login
+from integrations.llm_cli import CodexOAuthError, run_codex_oauth_login
 from surfaces.shared.llm_setup.auth_profiles import (
     ProviderAuthProfile,
     provider_for_profile,
