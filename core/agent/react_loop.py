@@ -96,7 +96,8 @@ class ReactLoop[RuntimeToolT: RuntimeTool]:
         self._msg_formatter = MessageMapper(self._llm)
         self._runtime_tools = list(host._filter_tools(run_input.tools))
         self._tool_schemas = self._llm.tool_schemas(self._runtime_tools)
-        self._ceiling = context_budget_ceiling_for_model(getattr(self._llm, "_model", None))
+        model_id = getattr(self._llm, "model_id", None) or getattr(self._llm, "_model", None)
+        self._ceiling = context_budget_ceiling_for_model(model_id)
         # System prompt and tool schemas are fixed for the run; serialize once.
         self._fixed_overhead_tokens = system_and_tools_overhead(self._system, self._tool_schemas)
         self._executed: list[tuple[ToolCall, Any]] = []

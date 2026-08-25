@@ -57,11 +57,13 @@ def estimate_tokens(text: str) -> int:
 def resolve_model_name(client: object) -> str | None:
     """Best-effort read of an LLM client's model name.
 
-    Reads the private ``_model`` attribute off ``client``. Returns the
-    value only if it's a non-empty ``str``; returns ``None`` if the
-    attribute is missing, empty, or not a string (no exceptions raised).
+    Prefers the public ``model_id`` attribute (the litellm transport client
+    exposes only this and has no ``_model``); falls back to the private
+    ``_model`` used by the SDK clients. Returns the value only if it's a
+    non-empty ``str``; returns ``None`` if neither yields a usable string
+    (no exceptions raised).
     """
-    value = getattr(client, "_model", None)
+    value = getattr(client, "model_id", None) or getattr(client, "_model", None)
     return value if isinstance(value, str) and value else None
 
 
