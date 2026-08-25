@@ -11,6 +11,7 @@ Covers:
 
 from __future__ import annotations
 
+from typing import Any
 from unittest.mock import patch
 
 import pytest
@@ -310,7 +311,7 @@ class TestKafkaTopicHealthRun:
 
 class TestMapGetKafkaTopicHealth:
     def test_records_entry_with_under_replicated_count(self) -> None:
-        evidence: dict = {}
+        evidence: dict[str, Any] = {}
 
         _map_get_kafka_topic_health(evidence, _TOPIC_HEALTH_RESPONSE, {})
 
@@ -320,7 +321,7 @@ class TestMapGetKafkaTopicHealth:
         assert entries[0]["summary"] == "2 topic(s) surveyed, 1 under-replicated partition(s)"
 
     def test_records_entry_without_under_replicated_suffix_when_all_healthy(self) -> None:
-        evidence: dict = {}
+        evidence: dict[str, Any] = {}
 
         _map_get_kafka_topic_health(
             evidence,
@@ -340,7 +341,7 @@ class TestMapGetKafkaTopicHealth:
         assert evidence["catalog_entries"][0]["summary"] == "1 topic(s) surveyed"
 
     def test_records_nothing_when_no_topics(self) -> None:
-        evidence: dict = {}
+        evidence: dict[str, Any] = {}
 
         _map_get_kafka_topic_health(
             evidence,
@@ -351,7 +352,7 @@ class TestMapGetKafkaTopicHealth:
         assert "catalog_entries" not in evidence
 
     def test_records_nothing_on_unavailable_result(self) -> None:
-        evidence: dict = {}
+        evidence: dict[str, Any] = {}
 
         _map_get_kafka_topic_health(
             evidence, {"source": "kafka", "available": False, "error": "Not configured."}, {}

@@ -11,6 +11,7 @@ Covers:
 
 from __future__ import annotations
 
+from typing import Any
 from unittest.mock import patch
 
 import pytest
@@ -299,7 +300,7 @@ class TestKafkaConsumerGroupRun:
 
 class TestMapGetKafkaConsumerGroupLag:
     def test_records_entry_with_group_id_and_total_lag(self) -> None:
-        evidence: dict = {}
+        evidence: dict[str, Any] = {}
 
         _map_get_kafka_consumer_group_lag(evidence, _CONSUMER_GROUP_LAG_RESPONSE, {})
 
@@ -311,7 +312,7 @@ class TestMapGetKafkaConsumerGroupLag:
     def test_records_entry_for_zero_lag_healthy_group(self) -> None:
         """Zero lag is still a real result worth citing -- it's the partition
         count and lag figure that matter, not whether lag happens to be 0."""
-        evidence: dict = {}
+        evidence: dict[str, Any] = {}
 
         _map_get_kafka_consumer_group_lag(evidence, _CONSUMER_GROUP_ZERO_LAG_RESPONSE, {})
 
@@ -319,7 +320,7 @@ class TestMapGetKafkaConsumerGroupLag:
         assert entries[0]["summary"] == "events-consumer: 1 partition(s), total lag 0"
 
     def test_records_nothing_when_no_partitions(self) -> None:
-        evidence: dict = {}
+        evidence: dict[str, Any] = {}
 
         _map_get_kafka_consumer_group_lag(
             evidence,
@@ -330,7 +331,7 @@ class TestMapGetKafkaConsumerGroupLag:
         assert "catalog_entries" not in evidence
 
     def test_records_nothing_on_unavailable_result(self) -> None:
-        evidence: dict = {}
+        evidence: dict[str, Any] = {}
 
         _map_get_kafka_consumer_group_lag(
             evidence,
