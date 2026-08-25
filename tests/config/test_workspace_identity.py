@@ -80,6 +80,45 @@ def test_capability_warnings_include_missing_shell(monkeypatch) -> None:
     assert any("no interactive shell" in warning for warning in facts["capability_warnings"])
 
 
+def test_capability_warnings_include_missing_grep(monkeypatch) -> None:
+    # Arrange
+    monkeypatch.delenv(OPENSRE_ALLOW_NETWORK_ENV, raising=False)
+    tools = {
+        "curl": "/usr/bin/curl",
+        "bash": "/bin/bash",
+        "sh": "/bin/sh",
+        "grep": "",
+        "python": "/usr/bin/python",
+    }
+
+    # Act
+    facts = capability_warning_facts(tools)
+
+    # Assert
+    assert any("grep is not on PATH" in warning for warning in facts["capability_warnings"])
+
+
+def test_capability_warnings_include_missing_python(monkeypatch) -> None:
+    # Arrange
+    monkeypatch.delenv(OPENSRE_ALLOW_NETWORK_ENV, raising=False)
+    tools = {
+        "curl": "/usr/bin/curl",
+        "bash": "/bin/bash",
+        "sh": "/bin/sh",
+        "grep": "/usr/bin/grep",
+        "python": "",
+        "python3": "",
+    }
+
+    # Act
+    facts = capability_warning_facts(tools)
+
+    # Assert
+    assert any(
+        "python/python3 is not on PATH" in warning for warning in facts["capability_warnings"]
+    )
+
+
 def test_capability_warnings_include_network_opt_in(monkeypatch) -> None:
     # Arrange
     monkeypatch.setenv(OPENSRE_ALLOW_NETWORK_ENV, "1")
