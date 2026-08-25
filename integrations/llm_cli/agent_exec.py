@@ -197,14 +197,6 @@ def poll_agent_process(
     except OSError as exc:
         return AgentProcessOutcome("", "", -1, False, spawn_error=f"failed to run {argv[0]}: {exc}")
 
-    stdin_pipe = getattr(proc, "stdin", None)
-    if stdin_pipe is not None and stdin is not None:
-        try:
-            stdin_pipe.write(stdin)
-            stdin_pipe.close()
-        except (OSError, ValueError):
-            pass
-
     out_buf: list[str] = []
     err_buf: list[str] = []
     readers = (
@@ -213,6 +205,15 @@ def poll_agent_process(
     )
     for reader in readers:
         reader.start()
+
+    # Start drains before writing stdin so a chatty child cannot fill its output
+    # pipes while the parent is blocked feeding a large prompt.
+    stdin_pipe = getattr(proc, "stdin", None)
+    if stdin_pipe is not None and stdin is not None:
+        # Child may exit or close stdin early; nothing more to feed in that case.
+        with contextlib.suppress(OSError, ValueError):
+            stdin_pipe.write(stdin)
+            stdin_pipe.close()
 
     deadline = time.monotonic() + max(timeout_sec, 0.0)
     timed_out = False

@@ -80,7 +80,7 @@ def create_branch_worktree(workspace: str, ctx: CiFixContext) -> BranchWorktree:
 
 
 def cleanup_branch_worktree(workspace: str, worktree: BranchWorktree) -> None:
-    """Best-effort removal of a temporary branch-fix worktree."""
+    """Best-effort removal of a temporary branch-fix worktree and local branch."""
     with suppress(OSError, subprocess.TimeoutExpired):
         result = subprocess.run(
             ["git", "worktree", "remove", "--force", worktree.path],
@@ -90,9 +90,18 @@ def cleanup_branch_worktree(workspace: str, worktree: BranchWorktree) -> None:
             timeout=_GIT_TIMEOUT_SEC,
             check=False,
         )
-        if result.returncode == 0:
-            return
-    _remove_path(Path(worktree.path))
+        if result.returncode != 0:
+            _remove_path(Path(worktree.path))
+    # Drop the local repair ref so repeated branch fixes do not accumulate names.
+    with suppress(OSError, subprocess.TimeoutExpired):
+        subprocess.run(
+            ["git", "branch", "-D", worktree.branch_name],
+            cwd=workspace,
+            capture_output=True,
+            text=True,
+            timeout=_GIT_TIMEOUT_SEC,
+            check=False,
+        )
 
 
 def _fetch_target_branch(workspace: str, branch: str) -> None:

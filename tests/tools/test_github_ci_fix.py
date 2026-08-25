@@ -211,6 +211,7 @@ def test_gather_ci_fix_context_builds_branch_task_with_failed_run_logs() -> None
     assert "branch main" in ctx.task
     assert "pytest failed in cli runtime" in ctx.task
     assert "fresh OpenSRE repair branch" in ctx.task
+    assert "Repair every failing check" in ctx.task
     assert gh_json.call_args_list[0].args[0][:4] == ["run", "list", "--branch", "main"]
     assert gh_json.call_args_list[1].args[0] == [
         "run",
@@ -220,6 +221,92 @@ def test_gather_ci_fix_context_builds_branch_task_with_failed_run_logs() -> None
         "jobs",
     ]
     log_view.assert_called_once()
+
+
+def test_gather_ci_fix_context_includes_every_failing_workflow_on_latest_commit() -> None:
+    run_payload = {
+        "runs": [
+            {
+                "databaseId": 11,
+                "displayTitle": "CI",
+                "workflowName": "CI",
+                "conclusion": "FAILURE",
+                "status": "completed",
+                "headBranch": "main",
+                "headSha": "abc123",
+                "url": "https://github.com/Tracer-Cloud/opensre/actions/runs/11",
+            },
+            {
+                "databaseId": 12,
+                "displayTitle": "Release",
+                "workflowName": "Release",
+                "conclusion": "FAILURE",
+                "status": "completed",
+                "headBranch": "main",
+                "headSha": "abc123",
+                "url": "https://github.com/Tracer-Cloud/opensre/actions/runs/12",
+            },
+            {
+                "databaseId": 10,
+                "displayTitle": "stale",
+                "workflowName": "CI",
+                "conclusion": "FAILURE",
+                "status": "completed",
+                "headBranch": "main",
+                "headSha": "old-sha",
+            },
+        ]
+    }
+    ci_jobs = {
+        "jobs": [
+            {
+                "databaseId": 101,
+                "name": "test (cli-runtime)",
+                "conclusion": "FAILURE",
+                "status": "completed",
+                "url": "https://github.com/Tracer-Cloud/opensre/actions/runs/11/job/101",
+            }
+        ]
+    }
+    release_jobs = {
+        "jobs": [
+            {
+                "databaseId": 202,
+                "name": "build-binaries",
+                "conclusion": "FAILURE",
+                "status": "completed",
+                "url": "https://github.com/Tracer-Cloud/opensre/actions/runs/12/job/202",
+            }
+        ]
+    }
+
+    with (
+        patch(
+            "integrations.github.tools.ci_fix.context.run_gh_json",
+            side_effect=[run_payload, ci_jobs, release_jobs],
+        ),
+        patch(
+            "integrations.github.tools.ci_fix.context.run_gh_text",
+            return_value="Error: failed\n",
+        ),
+    ):
+        ctx = gather_ci_fix_context(
+            owner="Tracer-Cloud",
+            repo="opensre",
+            branch="main",
+            github_token="tok",
+        )
+
+    assert {check.name for check in ctx.failing_checks} == {
+        "test (cli-runtime)",
+        "build-binaries",
+    }
+    assert {check.workflow_name for check in ctx.failing_checks} == {"CI", "Release"}
+    assert "2 failing workflows on main" in ctx.title
+    assert "CI" in ctx.title and "Release" in ctx.title
+    assert "test (cli-runtime)" in ctx.task
+    assert "build-binaries" in ctx.task
+    assert "Repair every failing check" in ctx.task
 
 
 def test_gather_ci_fix_context_reports_no_failing_checks() -> None:

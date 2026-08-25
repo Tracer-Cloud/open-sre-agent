@@ -240,30 +240,57 @@ def _gather_branch_ci_fix_context(
         github_token=github_token,
     )
     current_runs = _latest_branch_run_group(payload.get("runs"))
-    failing_run = _latest_failing_run(current_runs)
-    if failing_run is None:
+    failing_runs = _failing_runs(current_runs)
+    if not failing_runs:
         raise GitHubCiFixError(
             ERR_NO_FAILING_CHECKS,
             f"No failing CI runs found on {repo_full_name} branch {branch}; no push was made.",
         )
 
-    run_id = str(failing_run.get("databaseId") or "").strip()
-    workflow_name = str(
-        failing_run.get("workflowName") or failing_run.get("name") or "GitHub Actions"
+    checks: list[FailingCheck] = []
+    skipped_names: list[str] = []
+    for failing_run in failing_runs:
+        run_id = str(failing_run.get("databaseId") or "").strip()
+        workflow_name = str(
+            failing_run.get("workflowName") or failing_run.get("name") or "GitHub Actions"
+        ).strip()
+        run_url = str(
+            failing_run.get("url")
+            or (f"https://github.com/{repo_full_name}/actions/runs/{run_id}" if run_id else "")
+        )
+        run_checks, run_skipped = _checks_from_branch_run(
+            repo_full_name,
+            failing_run=failing_run,
+            run_id=run_id,
+            run_url=run_url,
+            workflow_name=workflow_name,
+            github_token=github_token,
+        )
+        checks.extend(run_checks)
+        skipped_names.extend(run_skipped)
+
+    primary = failing_runs[0]
+    primary_id = str(primary.get("databaseId") or "").strip()
+    primary_workflow = str(
+        primary.get("workflowName") or primary.get("name") or "GitHub Actions"
     ).strip()
     url = str(
-        failing_run.get("url")
-        or (f"https://github.com/{repo_full_name}/actions/runs/{run_id}" if run_id else "")
+        primary.get("url")
+        or (f"https://github.com/{repo_full_name}/actions/runs/{primary_id}" if primary_id else "")
     )
-    checks, skipped = _checks_from_branch_run(
-        repo_full_name,
-        failing_run=failing_run,
-        run_id=run_id,
-        run_url=url,
-        workflow_name=workflow_name,
-        github_token=github_token,
-    )
-    title = str(failing_run.get("displayTitle") or workflow_name or f"CI on {branch}").strip()
+    if len(failing_runs) == 1:
+        title = str(primary.get("displayTitle") or primary_workflow or f"CI on {branch}").strip()
+    else:
+        workflow_names = sorted(
+            {
+                str(run.get("workflowName") or run.get("name") or "").strip()
+                for run in failing_runs
+                if str(run.get("workflowName") or run.get("name") or "").strip()
+            }
+        )
+        title = f"{len(failing_runs)} failing workflows on {branch}" + (
+            f" ({', '.join(workflow_names)})" if workflow_names else ""
+        )
     ctx = CiFixContext(
         owner=owner,
         repo=repo,
@@ -272,9 +299,9 @@ def _gather_branch_ci_fix_context(
         url=url or f"https://github.com/{repo_full_name}/tree/{branch}",
         base_branch=branch,
         head_branch=branch,
-        head_sha=str(failing_run.get("headSha") or "").strip(),
-        skipped_check_names=skipped,
-        failing_checks=checks,
+        head_sha=str(primary.get("headSha") or "").strip(),
+        skipped_check_names=tuple(dict.fromkeys(skipped_names)),
+        failing_checks=tuple(checks),
         task="",
         target_kind=CI_TARGET_BRANCH,
         target_branch=branch,
@@ -282,11 +309,9 @@ def _gather_branch_ci_fix_context(
     return replace(ctx, task=_build_task(ctx))
 
 
-def _latest_failing_run(value: Any) -> dict[str, Any] | None:
-    for item in _list_value(value):
-        if _is_failing_check(item):
-            return item
-    return None
+def _failing_runs(value: Any) -> list[dict[str, Any]]:
+    """Return every failing workflow run in the latest-commit group."""
+    return [item for item in _list_value(value) if _is_failing_check(item)]
 
 
 def _latest_branch_run_group(value: Any) -> list[dict[str, Any]]:
@@ -460,10 +485,11 @@ def _build_task(ctx: CiFixContext) -> str:
             f"Fix the failing GitHub Actions CI checks for {ctx.owner}/{ctx.repo} branch {branch}.",
             "",
             f"Branch: {branch}",
-            f"Latest failing run: {ctx.url}",
-            f"Run title: {ctx.title}",
             f"Failing commit SHA: {ctx.head_sha}",
+            f"Primary failing run: {ctx.url}",
+            f"Run summary: {ctx.title}",
             "The workspace is a fresh OpenSRE repair branch based on the target branch.",
+            "Repair every failing check listed below from all failing workflows on that commit.",
             "",
             "Failing checks and log excerpts:",
         ]

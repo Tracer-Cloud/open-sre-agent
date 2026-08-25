@@ -97,3 +97,18 @@ def test_poll_agent_process_drains_large_output_without_deadlock(tmp_path: Path)
     assert outcome.returncode == 0
     assert len(outcome.stdout) == payload
     assert len(outcome.stderr) == payload
+
+
+def test_poll_agent_process_accepts_stdin_after_starting_drains(tmp_path: Path) -> None:
+    """Stdin must be fed after drain threads start so large prompts cannot deadlock."""
+    code = "import sys; data = sys.stdin.read(); sys.stdout.write(data.upper())"
+    outcome = poll_agent_process(
+        [sys.executable, "-c", code],
+        cwd=str(tmp_path),
+        env=dict(os.environ),
+        timeout_sec=10,
+        stdin="hello from opensre",
+    )
+    assert outcome.timed_out is False
+    assert outcome.returncode == 0
+    assert outcome.stdout == "HELLO FROM OPENSRE"
