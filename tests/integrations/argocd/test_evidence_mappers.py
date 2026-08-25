@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from typing import Any
+
 from integrations.argocd.tools import (
     _map_argocd_application_diff,
     _map_argocd_application_status,
@@ -10,7 +12,7 @@ from integrations.argocd.tools import (
 
 class TestMapArgocdApplicationDiff:
     def test_records_entry_when_drift_detected(self) -> None:
-        evidence: dict = {}
+        evidence: dict[str, Any] = {}
 
         _map_argocd_application_diff(
             evidence,
@@ -28,8 +30,26 @@ class TestMapArgocdApplicationDiff:
         assert entries[0]["source"] == "argocd_application_diff"
         assert "3" in entries[0]["summary"]
 
+    def test_records_entry_when_modified_but_no_itemized_diffs(self) -> None:
+        """Argo CD v3.3's {items, modified} response shape can report drift
+        (modified=True) with an empty itemized diff list -- drift_detected is
+        the authoritative signal, not diff_count, and a modified-but-
+        unitemized result must still be cited, not silently dropped."""
+        evidence: dict[str, Any] = {}
+
+        _map_argocd_application_diff(
+            evidence,
+            {"available": True, "drift_detected": True, "diff_count": 0, "diffs": []},
+            {},
+        )
+
+        entries = evidence["catalog_entries"]
+        assert len(entries) == 1
+        assert entries[0]["source"] == "argocd_application_diff"
+        assert "drifted" in entries[0]["summary"]
+
     def test_records_nothing_when_no_drift(self) -> None:
-        evidence: dict = {}
+        evidence: dict[str, Any] = {}
 
         _map_argocd_application_diff(
             evidence,
@@ -40,7 +60,7 @@ class TestMapArgocdApplicationDiff:
         assert "catalog_entries" not in evidence
 
     def test_records_nothing_on_unavailable_result(self) -> None:
-        evidence: dict = {}
+        evidence: dict[str, Any] = {}
 
         _map_argocd_application_diff(
             evidence,
@@ -59,7 +79,7 @@ class TestMapArgocdApplicationDiff:
 
 class TestMapArgocdApplicationStatus:
     def test_records_entry_for_single_application(self) -> None:
-        evidence: dict = {}
+        evidence: dict[str, Any] = {}
 
         _map_argocd_application_status(
             evidence,
@@ -83,7 +103,7 @@ class TestMapArgocdApplicationStatus:
         assert "Degraded" in entries[0]["summary"]
 
     def test_records_entry_for_application_list(self) -> None:
-        evidence: dict = {}
+        evidence: dict[str, Any] = {}
 
         _map_argocd_application_status(
             evidence,
@@ -96,7 +116,7 @@ class TestMapArgocdApplicationStatus:
         assert "2" in entries[0]["summary"]
 
     def test_records_nothing_on_unavailable_result(self) -> None:
-        evidence: dict = {}
+        evidence: dict[str, Any] = {}
 
         _map_argocd_application_status(
             evidence,
@@ -113,7 +133,7 @@ class TestMapArgocdApplicationStatus:
         assert "catalog_entries" not in evidence
 
     def test_records_nothing_when_both_application_and_applications_empty(self) -> None:
-        evidence: dict = {}
+        evidence: dict[str, Any] = {}
 
         _map_argocd_application_status(
             evidence,
