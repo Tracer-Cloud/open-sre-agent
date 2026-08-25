@@ -27,10 +27,13 @@ def reraise_cli_runtime_error(exc: BaseException) -> NoReturn:
             suggestion=f"{exc.auth_hint} ({exc.detail})",
         ) from exc
 
-    # The CLI is a local surface and may show detail, so the cases that surface
-    # the original message run before the shared classifier — which is kept
-    # deliberately generic for external investigation surfaces and would otherwise
-    # strip the model/deployment name the user needs to fix their config.
+    classified = classify_llm_invoke_failure(exc)
+    if classified is not None:
+        suggestion = (
+            "\n".join(classified.remediation_steps) if classified.remediation_steps else None
+        )
+        raise OpenSREError(classified.user_message, suggestion=suggestion) from exc
+
     if isinstance(exc, RuntimeError):
         msg = str(exc).lower()
         if "cli not found" in msg or "not found on path" in msg:
@@ -61,12 +64,5 @@ def reraise_cli_runtime_error(exc: BaseException) -> NoReturn:
                     "and aws-marketplace:Subscribe."
                 ),
             ) from exc
-
-    classified = classify_llm_invoke_failure(exc)
-    if classified is not None:
-        suggestion = (
-            "\n".join(classified.remediation_steps) if classified.remediation_steps else None
-        )
-        raise OpenSREError(classified.user_message, suggestion=suggestion) from exc
 
     raise exc
