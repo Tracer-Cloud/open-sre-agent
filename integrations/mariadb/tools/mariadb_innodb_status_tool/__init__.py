@@ -2,6 +2,7 @@
 
 from typing import Any
 
+from core.domain.types.evidence import record_evidence_entry
 from core.domain.types.tools import ToolSurface
 from core.tool_framework import tool
 from core.tool_framework.utils import call_db_tool_with_default_db_warning
@@ -13,10 +14,24 @@ from integrations.mariadb import (
 )
 
 
+def _map_get_mariadb_innodb_status(
+    evidence: dict[str, Any], output: dict[str, Any], _input: dict[str, Any]
+) -> None:
+    status_text = output.get("innodb_status", "")
+    if status_text:
+        record_evidence_entry(
+            evidence,
+            source="get_mariadb_innodb_status",
+            label="MariaDB InnoDB Status",
+            summary=f"{len(status_text)} chars",
+        )
+
+
 @tool(
     name="get_mariadb_innodb_status",
     description="Retrieve InnoDB engine internals including deadlocks, buffer pool state, and I/O activity from SHOW ENGINE INNODB STATUS.",
     source="mariadb",
+    evidence_mapper=_map_get_mariadb_innodb_status,
     surfaces=(ToolSurface.INVESTIGATION, ToolSurface.CHAT),
     is_available=mariadb_is_available,
     injected_params=("host", "password", "username"),

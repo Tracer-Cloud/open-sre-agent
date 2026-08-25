@@ -2,6 +2,7 @@
 
 from typing import Any
 
+from core.domain.types.evidence import record_evidence_entry
 from core.domain.types.tools import ToolSurface
 from core.tool_framework import tool
 from core.tool_framework.utils import call_db_tool_with_default_db_warning
@@ -13,6 +14,19 @@ from integrations.mariadb import (
 )
 
 
+def _map_get_mariadb_process_list(
+    evidence: dict[str, Any], output: dict[str, Any], _input: dict[str, Any]
+) -> None:
+    processes = output.get("processes", [])
+    if processes:
+        record_evidence_entry(
+            evidence,
+            source="get_mariadb_process_list",
+            label="MariaDB Process List",
+            summary=f"{len(processes)} active processes",
+        )
+
+
 @tool(
     name="get_mariadb_process_list",
     description=(
@@ -20,6 +34,7 @@ from integrations.mariadb import (
         " information_schema.PROCESSLIST, excluding idle connections."
     ),
     source="mariadb",
+    evidence_mapper=_map_get_mariadb_process_list,
     surfaces=(ToolSurface.INVESTIGATION, ToolSurface.CHAT),
     is_available=mariadb_is_available,
     injected_params=("host", "password", "username"),
