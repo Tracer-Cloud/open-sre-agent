@@ -33,3 +33,26 @@ def test_send_message_success_with_mapping_proxy_data(mock_post: MagicMock) -> N
     assert ok is True
     assert error == ""
     assert message_id == "42"
+
+
+@patch("gateway.transports.telegram.poller.client.post_json")
+def test_send_message_redacts_bot_token_from_transport_exception(
+    mock_post: MagicMock, caplog: object
+) -> None:
+    import logging
+
+    caplog.set_level(logging.WARNING, logger="gateway.transports.telegram.poller.client")
+    mock_post.return_value = DeliveryResponse(
+        ok=False,
+        error="Connection refused for url: https://api.telegram.org/botSECRET/sendMessage",
+        exc_type="ConnectError",
+    )
+    client = TelegramBotClient("SECRET")
+    ok, error, message_id = client.send_message("123", "hello")
+    assert ok is False
+    assert message_id == ""
+    assert "/botSECRET/" not in error
+    assert "SECRET" not in error
+    assert "ConnectError" in error
+    log_messages = [record.message for record in caplog.records]
+    assert not any("/botSECRET/" in message or "SECRET" in message for message in log_messages)

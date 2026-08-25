@@ -8,6 +8,7 @@ from http import HTTPStatus
 from typing import Any
 
 from infrastructure.delivery.notifications.delivery_transport import post_json
+from infrastructure.delivery.notifications.redaction import redact_token
 
 logger = logging.getLogger(__name__)
 
@@ -26,7 +27,8 @@ class TelegramBotClient:
             payload=payload,
         )
         if not response.ok:
-            return False, {}, response.error
+            safe_error = redact_token(response.error, self._token)
+            return False, {}, f"{response.exc_type}: {safe_error}"
         if response.status_code != HTTPStatus.OK or not isinstance(response.data, Mapping):
             return False, {}, response.text or f"HTTP {response.status_code}"
         if not response.data.get("ok"):

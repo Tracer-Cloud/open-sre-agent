@@ -53,6 +53,27 @@ def test_poll_once_conflict_is_debug_not_warning(
 
 @patch("gateway.transports.telegram.poller.poller.time.sleep")
 @patch("gateway.transports.telegram.poller.poller.httpx.get")
+def test_poll_once_redacts_bot_token_from_exception_log(
+    mock_get: MagicMock,
+    mock_sleep: MagicMock,
+    caplog: object,
+) -> None:
+    import logging
+
+    caplog.set_level(logging.DEBUG, logger="gateway.transports.telegram.poller.poller")
+    mock_get.side_effect = httpx.ConnectError(
+        "Connection refused for url: https://api.telegram.org/botSECRET/getUpdates"
+    )
+    poller = TelegramPoller("SECRET")
+    assert poller.poll_once() == TelegramPollResult()
+    mock_sleep.assert_called_once_with(2.0)
+    messages = [record.message for record in caplog.records]
+    assert not any("/botSECRET/" in message or "SECRET" in message for message in messages)
+    assert any("ConnectError" in message for message in messages)
+
+
+@patch("gateway.transports.telegram.poller.poller.time.sleep")
+@patch("gateway.transports.telegram.poller.poller.httpx.get")
 def test_poll_once_success_resets_conflict_backoff(
     mock_get: MagicMock, _mock_sleep: MagicMock
 ) -> None:
