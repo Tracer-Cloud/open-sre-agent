@@ -2,6 +2,9 @@
 
 from __future__ import annotations
 
+from typing import Any
+
+from core.agent_harness.ports import AnswerRequest
 from core.agent_harness.prompts.memory.conversation import expand_affirmative_follow_up
 from core.agent_harness.session.pending_offer import (
     DispatchablePendingOffer,
@@ -19,10 +22,22 @@ from core.agent_harness.session.pending_offer import (
     synthesize_investigation_alert_text,
 )
 from core.agent_harness.session.want_me_to import offer_from_assistant_content
+from core.agent_harness.spi.accounting import LlmRunInfo
 from core.agent_harness.turns.action_driver import _literal_slash_tool_call
 from core.agent_harness.turns.headless_adapters import InMemorySessionState, NoopTurnAccounting
 from core.agent_harness.turns.orchestrator import run_turn
 from core.agent_harness.turns.turn_results import ToolCallingTurnResult
+from tests.shared.harness_turn_driver import answer_with_text, no_evidence
+
+
+def _no_answer(text: str, request: AnswerRequest) -> LlmRunInfo | None:
+    """A StreamAnswerFn that produces no answer."""
+    return None
+
+
+def _gather_connection_refused(text: str, *, turn_plan: Any = None) -> str:
+    """An EvidenceGatherer that fails to reach the source."""
+    return "connection refused"
 
 
 def test_dispatch_message_quotes_alert_text() -> None:
@@ -274,21 +289,18 @@ def test_run_turn_dogfood_dual_menu_yes_still_starts_investigation() -> None:
             investigation_dispatched=True,
         )
 
-    class _Run:
-        # Intentionally broken closer from live dogfood.
-        response_text = (
-            "Checkout 502; Grafana unreachable.\n\n"
-            "**Want me to:**\n"
-            "1. run a full investigation once you paste the alert, or\n"
-            "2. walk you through `/integrations setup grafana`?"
-        )
-
     first = run_turn(
         "why is checkout 502?",
         session,
         execute_actions=execute_actions,
-        answer=lambda *_a, **_k: _Run(),
-        gather=lambda *_a, **_k: "connection refused",
+        # Intentionally broken closer from live dogfood.
+        answer=answer_with_text(
+            "Checkout 502; Grafana unreachable.\n\n"
+            "**Want me to:**\n"
+            "1. run a full investigation once you paste the alert, or\n"
+            "2. walk you through `/integrations setup grafana`?"
+        ),
+        gather=_gather_connection_refused,
         accounting=NoopTurnAccounting(),
     )
 
@@ -302,8 +314,8 @@ def test_run_turn_dogfood_dual_menu_yes_still_starts_investigation() -> None:
         "yes",
         session,
         execute_actions=execute_actions,
-        answer=lambda *_a, **_k: None,
-        gather=lambda *_a, **_k: None,
+        answer=_no_answer,
+        gather=no_evidence,
         accounting=NoopTurnAccounting(),
     )
     assert len(seen) == 1
@@ -328,15 +340,12 @@ def test_run_turn_does_not_arm_investigation_when_capability_disabled() -> None:
             handoff_contents=("diagnostic:checkout_502",),
         )
 
-    class _Run:
-        response_text = "Empty evidence.\n\n**Want me to:** run a full investigation."
-
     first = run_turn(
         "why is checkout 502?",
         session,
         execute_actions=execute_actions,
-        answer=lambda *_a, **_k: _Run(),
-        gather=lambda *_a, **_k: "connection refused",
+        answer=answer_with_text("Empty evidence.\n\n**Want me to:** run a full investigation."),
+        gather=_gather_connection_refused,
         accounting=NoopTurnAccounting(),
     )
 
@@ -373,15 +382,6 @@ def test_run_turn_arms_then_yes_dispatches_investigation() -> None:
             investigation_dispatched=True,
         )
 
-    class _Run:
-        response_text = (
-            "Datadog shows elevated DB latency.\n\n**Want me to:** run a full investigation."
-        )
-
-    def answer(text: str, request: object = None) -> _Run:
-        _ = text, request
-        return _Run()
-
     def gather(text: str, *, turn_plan: object = None) -> str:
         _ = text, turn_plan
         return "p95 latency 2.1s on checkout-db"
@@ -390,7 +390,9 @@ def test_run_turn_arms_then_yes_dispatches_investigation() -> None:
         "why is the database slow?",
         session,
         execute_actions=execute_actions,
-        answer=answer,
+        answer=answer_with_text(
+            "Datadog shows elevated DB latency.\n\n**Want me to:** run a full investigation."
+        ),
         gather=gather,
         accounting=NoopTurnAccounting(),
     )
@@ -404,8 +406,8 @@ def test_run_turn_arms_then_yes_dispatches_investigation() -> None:
         "yes",
         session,
         execute_actions=execute_actions,
-        answer=lambda *_a, **_k: None,
-        gather=lambda *_a, **_k: None,
+        answer=_no_answer,
+        gather=no_evidence,
         accounting=NoopTurnAccounting(),
     )
 
@@ -437,8 +439,8 @@ def test_failed_investigation_keeps_pending_offer() -> None:
         "yes",
         session,
         execute_actions=execute_actions,
-        answer=lambda *_a, **_k: None,
-        gather=lambda *_a, **_k: None,
+        answer=_no_answer,
+        gather=no_evidence,
         accounting=NoopTurnAccounting(),
     )
     assert session.pending_investigation_offer is not None
