@@ -2,17 +2,32 @@
 
 from __future__ import annotations
 
+from typing import Any
+
 import pytest
 
+from core.agent_harness.ports import AnswerRequest
 from core.agent_harness.prompts.memory.conversation import expand_affirmative_follow_up
 from core.agent_harness.session.pending_offer import PendingScheduleOffer
+from core.agent_harness.spi.accounting import LlmRunInfo
 from core.agent_harness.tools.tool_context import ActionToolScope
 from core.agent_harness.turns.headless_adapters import InMemorySessionState, NoopTurnAccounting
 from core.agent_harness.turns.orchestrator import run_turn
 from core.agent_harness.turns.turn_results import ToolCallingTurnResult
+from tests.shared.harness_turn_driver import no_evidence
 from tools.interactive_shell.actions.propose_scheduled_delivery import (
     execute_propose_scheduled_delivery_tool,
 )
+
+
+def _no_answer(text: str, request: AnswerRequest) -> LlmRunInfo | None:
+    """A StreamAnswerFn that produces no answer."""
+    return None
+
+
+def _empty_evidence(text: str, *, turn_plan: Any = None) -> str:
+    """An EvidenceGatherer that gathers an empty observation string."""
+    return ""
 
 
 def test_pending_offer_to_slash_omits_slack_chat_id() -> None:
@@ -138,8 +153,8 @@ def test_run_turn_consumes_pending_schedule_on_yes() -> None:
         "yes",
         session,
         execute_actions=execute_actions,
-        answer=lambda *_a, **_k: None,
-        gather=lambda *_a, **_k: None,
+        answer=_no_answer,
+        gather=no_evidence,
         accounting=NoopTurnAccounting(),
     )
 
@@ -343,8 +358,8 @@ def test_a_failed_schedule_keeps_the_offer_for_a_second_try() -> None:
         "yes",
         session,
         execute_actions=_execute_failing,
-        answer=lambda *_a, **_k: None,
-        gather=lambda *_a, **_k: "",
+        answer=_no_answer,
+        gather=_empty_evidence,
         accounting=NoopTurnAccounting(),
     )
 
@@ -382,8 +397,8 @@ def test_a_successful_schedule_consumes_the_offer() -> None:
         "yes",
         session,
         execute_actions=_execute_ok,
-        answer=lambda *_a, **_k: None,
-        gather=lambda *_a, **_k: "",
+        answer=_no_answer,
+        gather=_empty_evidence,
         accounting=NoopTurnAccounting(),
     )
 
