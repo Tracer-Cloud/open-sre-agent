@@ -72,7 +72,18 @@ Still assistant_handoff (no execution requested):
 * how-to questions — "how would I script 5 sequential steps?"
 """
 
+ACTION_PRIOR_INVESTIGATION_FOLLOW_UP_RULE = """\
+Prior investigation follow-ups: when this session already completed an
+investigation and the USER MESSAGE asks a retrospective question about it
+(e.g. "what happened?", "what was the root cause?", "what caused the spike?",
+"why did it fail?"), emit
+assistant_handoff(content="follow_up:prior_investigation") so the turn
+answers from that RCA instead of re-querying integrations. Do NOT start a
+new investigation for that retrospective.
+"""
+
 __all__ = [
     "ACTION_CONVERSATIONAL_SESSION_GOAL_RULE",
     "ACTION_LOCAL_SHELL_MULTI_STEP_RULE",
+    "ACTION_PRIOR_INVESTIGATION_FOLLOW_UP_RULE",
 ]

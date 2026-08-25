@@ -48,10 +48,10 @@ class SessionGoalStatus:
 
 
 class SessionGoalReason:
-    """Stable host reason strings for evaluate, paint, and LLM confirm.
+    """Stable host reason strings for evaluate and LLM confirm.
 
     Call sites compare with ``==`` / helpers — do not invent parallel phrases.
-    Never embed ``session_goal:…`` tag grammar here: painted reasons can land in
+    Never embed ``session_goal:…`` tag grammar here: progress reasons can land in
     captured reply text and must not look like progress claims.
     """
 
@@ -138,7 +138,7 @@ class SessionGoal:
     step_count: int | None = None
     checklist: tuple[str, ...] = ()
     completed: frozenset[int] = frozenset()
-    # Last host/evaluator reason shown in progress paint and continuation nudges.
+    # Last host/evaluator reason shown in progress output and continuation nudges.
     last_reason: str = ""
     # What earlier turns established, oldest first. Continuations are fresh
     # ``chat`` calls and history carries prose only, so without this a later
@@ -151,7 +151,7 @@ class SessionGoal:
     # the number by another route and reported a different one with no mention
     # of the first.
     last_answer: str = ""
-    # Wall-clock start for ``/goal`` duration paint (``time.time()``).
+    # Wall-clock start for ``/goal`` duration progress (``time.time()``).
     started_at: float | None = None
     # Session token totals when the goal was attached — delta is goal spend.
     token_baseline_input: int = 0
@@ -518,7 +518,7 @@ def strip_shell_prompt_chrome(text: str) -> str:
 def derive_session_goal_reason(goal: SessionGoal) -> str:
     """Structured reason from goal state (no LLM).
 
-    Used by evaluate/paint/nudge so hosts stay honest and cheap. Returns a
+    Used by evaluate/progress/nudge so hosts stay honest and cheap. Returns a
     :class:`SessionGoalReason` string — never tag grammar.
     """
     if goal.status == SessionGoalStatus.ACHIEVED:
