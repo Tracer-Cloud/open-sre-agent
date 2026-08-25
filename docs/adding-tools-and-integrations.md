@@ -157,25 +157,25 @@ The channel becomes selectable as soon as it is registered — `/background noti
 
 ### Credential resolution
 
-Keyring-eligible secrets and non-keyring config follow different write/read paths.
+Secret env names and non-secret config follow different write/read paths.
 Keep this contract when adding or changing an integration.
 
 | Surface | Write (wizard / setup) | Read (runtime) |
 | --- | --- | --- |
 | Integration store (`~/.opensre/integrations.json`) | Always on setup | First (preferred) |
-| OS keyring | Keyring-eligible secrets via `sync_env_secret` | Via `resolve_env_credential` when env is unset |
-| `.env` / process env | Non-keyring config (`*_URL`, user ids, channels, …) | Plain `os.getenv` for that tier |
+| Local credentials file (`~/.opensre/credentials.json`) | Secrets via `sync_env_secret` | Via `resolve_env_credential` when env is unset |
+| `.env` / process env | Public config and secrets (`sync_env_values` / `sync_env_secret`) | Plain `os.getenv` for that tier; `resolve_env_credential` reads env first |
 
 **Hard rules for new code**
 
-- Never use bare `os.getenv` for a keyring-eligible secret env name (`*_TOKEN`, `*_KEY`, `*_PASSWORD`, `*_SECRET`, connection strings, and similar). Use `resolve_env_credential` from `config.llm_credentials` (env first, then keyring).
-- Webhook / `*_URL` values are **never** keyring-backed (wizard routes them to store/`.env`, not `sync_env_secret`). Read with store → plain `os.getenv` only. Webhook URLs often **embed** a secret token — treat them like passwords for logging/masking, even though they are not keyring-eligible.
-- Leave `load_env_integration_services` plain-env-only (startup-safe; no keyring at boot).
-- Store still wins in `resolve_effective` / merge — env/keyring is the fallback tier only.
+- Never use bare `os.getenv` for a secret env name (`*_TOKEN`, `*_KEY`, `*_PASSWORD`, `*_SECRET`, connection strings, and similar). Use `resolve_env_credential` from `config.llm_credentials` (env first, then the credentials file).
+- Webhook / `*_URL` values are **never** written to the credentials file (wizard routes them to store/`.env`, not `sync_env_secret`). Read with store → plain `os.getenv` only. Webhook URLs often **embed** a secret token — treat them like passwords for logging/masking.
+- Leave `load_env_integration_services` plain-env-only (startup-safe; no credentials-file read at boot).
+- Store still wins in `resolve_effective` / merge — env/credentials-file is the fallback tier only.
 - Tools receive credentials through `extract_params` (resolved integration state), never their own env reads. At execution, keys listed in the tool's `injected_params` override model-supplied values, so the verified source wins even when the model passes a token. A tool's resolver may read env only as the final fallback when nothing was injected — `integrations/github/tools/github_cli/credentials.py` is the reference: explicit/injected token first, then `GITHUB_MCP_AUTH_TOKEN`, then `GITHUB_TOKEN`/`GH_TOKEN`.
-- Set `OPENSRE_DISABLE_KEYRING=1` to skip keyring reads/writes (env and store still work).
+- Set `OPENSRE_DISABLE_KEYRING=1` to skip local-file reads/writes (env and store still work).
 
-Canonical helpers: `resolve_env_credential` (env → keyring), `sync_env_secret` / `save_keyring_secret` (keyring-eligible writes), `sync_env_values` (non-keyring `.env` keys only).
+Canonical helpers: `resolve_env_credential` (env → credentials file), `sync_env_secret` / `save_credential` (secret writes to the credentials file and `.env`), `sync_env_values` (`.env` keys, including secrets).
 
 ## 3. Investigation wiring
 

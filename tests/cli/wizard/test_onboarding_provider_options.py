@@ -3,8 +3,8 @@ from __future__ import annotations
 from surfaces.cli.wizard.flow import _onboarding_provider_options
 
 
-def test_onboarding_provider_options_hide_openai_anthropic_oauth_backends() -> None:
-    """Onboarding presents OpenAI/Anthropic auth methods under the provider."""
+def test_onboarding_provider_options_hide_subscription_cli_backends() -> None:
+    """Onboarding no longer offers Codex / Claude Code as first-class providers."""
     values = [provider.value for provider in _onboarding_provider_options()]
 
     assert "anthropic" in values

@@ -1387,7 +1387,7 @@ def test_literal_slash_command_dispatches_deterministically_without_llm(
 
 
 def test_literal_slash_command_forwards_args_without_llm(monkeypatch) -> None:
-    """``/login chatgpt`` dispatches with its positional args and no LLM call."""
+    """``/login deepseek`` dispatches with its positional args and no LLM call."""
     dispatched: list[str] = []
 
     def _fake_dispatch(
@@ -1404,14 +1404,14 @@ def test_literal_slash_command_forwards_args_without_llm(monkeypatch) -> None:
     harness = ActionExecutionHarness(llm=FakeActionLLM([no_tool_response()]))
 
     result = run_action_tool_turn(
-        "/login chatgpt",
+        "/login deepseek",
         Session(),
         harness.console,
         llm_factory=harness.llm_factory,
     )
 
     assert result.handled is True
-    assert dispatched == ["/login chatgpt"]
+    assert dispatched == ["/login deepseek"]
     assert harness.llm.invocations == 0
 
 
@@ -1920,6 +1920,8 @@ def test_missing_key_invoke_failure_answers_with_login_guidance() -> None:
     # Assert: the user sees the remediation; telemetry keeps the raw error.
     assert "`/auth login openai`" in result.response_text
     assert "No API key is set for openai" in result.response_text
+    assert session.terminal.pending_prompt_default == "/onboard"
+    assert session.terminal.pending_prompt_autosubmit is True
     assert session.terminal.pop_pending_turn_error() == ("action_agent_error", error)
 
 
@@ -2029,6 +2031,7 @@ def test_stream_failure_stages_llm_error_and_identity() -> None:
     )
 
     assert run is None
+    assert session.terminal.pending_prompt_default is None
     assert session.terminal.pop_pending_turn_error() == (
         "assistant_error",
         "Anthropic authentication failed.",
@@ -2037,6 +2040,40 @@ def test_stream_failure_stages_llm_error_and_identity() -> None:
     assert staged is not None
     assert staged.model == "claude-sonnet-4-6"
     assert staged.provider == "anthropic"
+
+
+def test_stream_missing_key_queues_onboard() -> None:
+    """A key-less assistant stream must auto-submit ``/onboard`` on the next turn."""
+    from core.agent_harness.prompts.assistant import AssistantTurnPrompt
+    from core.agent_harness.turns.orchestrator import _stream_response
+
+    error = (
+        "Missing credentials. Please pass an `api_key`, `workload_identity`, "
+        "`admin_api_key`, or set the `OPENAI_API_KEY` or `OPENAI_ADMIN_KEY` "
+        "environment variable."
+    )
+
+    class _MissingKeyStreamClient:
+        _model = "auto"
+        _provider_label = "OpenRouter"
+
+        def invoke_stream(self, _prompt: Any) -> Any:
+            raise RuntimeError(error)
+
+    session = Session()
+    run = _stream_response(
+        client=_MissingKeyStreamClient(),
+        turn_prompt=AssistantTurnPrompt(system="", user="hi"),
+        output=_OutputSink(Console(force_terminal=False)),
+        run_factory=object(),
+        error_reporter=None,
+        session=session,
+    )
+
+    assert run is None
+    assert session.terminal.pending_prompt_default == "/onboard"
+    assert session.terminal.pending_prompt_autosubmit is True
+    assert session.terminal.pop_pending_turn_error() == ("assistant_error", error)
 
 
 def test_build_action_agent_returns_action_turn_plan() -> None:

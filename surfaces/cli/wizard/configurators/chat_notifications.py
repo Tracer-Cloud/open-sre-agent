@@ -59,7 +59,7 @@ def _configure_buzz() -> tuple[str, str]:
             "\n[bold]Buzz Integration[/bold]\n"
             f"[{SECONDARY}]Buzz (block/buzz) is a self-hostable, Nostr-based workspace. "
             "Generate an agent identity with `buzz-admin generate-key`, then paste its "
-            "private key here (kept out of plain .env — stored in the system keyring). "
+            "private key here (kept out of plain .env — stored in ~/.opensre/credentials.json). "
             "Channels are UUIDs — run `buzz channels list` to find one.\n"
             "Requires the `buzz` CLI on PATH (`cargo install --path crates/buzz-cli` from "
             "https://github.com/block/buzz). Press Ctrl+C to skip and continue onboarding; "

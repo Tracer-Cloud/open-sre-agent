@@ -21,7 +21,7 @@ from integrations.llm_cli.errors import (
 from integrations.llm_cli.runner import CLIBackedLLMClient
 
 #: Public name -> the submodule that defines it, imported on first access. Covers
-#: the provider adapters and the heavier utility helpers (auth check, oauth login,
+#: the provider adapters and the heavier utility helpers (auth check,
 #: subprocess env, binary resolution) so importing the package stays cheap.
 _LAZY_EXPORTS: dict[str, str] = {
     "AntigravityCLIAdapter": "integrations.llm_cli.antigravity_cli",
@@ -34,8 +34,6 @@ _LAZY_EXPORTS: dict[str, str] = {
     "KimiAdapter": "integrations.llm_cli.kimi",
     "OpenCodeAdapter": "integrations.llm_cli.opencode",
     "PiAdapter": "integrations.llm_cli.pi_cli",
-    "CodexOAuthError": "integrations.llm_cli.codex_oauth",
-    "run_codex_oauth_login": "integrations.llm_cli.codex_oauth",
     "check_cli_auth": "integrations.llm_cli.auth_check",
     "build_cli_subprocess_env": "integrations.llm_cli.subprocess_env",
     "diagnose_binary_path": "integrations.llm_cli.binary_resolver",
@@ -60,7 +58,6 @@ if TYPE_CHECKING:
     from integrations.llm_cli.binary_resolver import diagnose_binary_path
     from integrations.llm_cli.claude_code import ClaudeCodeAdapter
     from integrations.llm_cli.codex import CodexAdapter
-    from integrations.llm_cli.codex_oauth import CodexOAuthError, run_codex_oauth_login
     from integrations.llm_cli.copilot import CopilotAdapter
     from integrations.llm_cli.cursor import CursorAdapter
     from integrations.llm_cli.gemini_cli import GeminiCLIAdapter
@@ -82,7 +79,6 @@ __all__ = [
     "CLITransientError",
     "ClaudeCodeAdapter",
     "CodexAdapter",
-    "CodexOAuthError",
     "CopilotAdapter",
     "CursorAdapter",
     "GeminiCLIAdapter",
@@ -94,5 +90,4 @@ __all__ = [
     "build_cli_subprocess_env",
     "check_cli_auth",
     "diagnose_binary_path",
-    "run_codex_oauth_login",
 ]
