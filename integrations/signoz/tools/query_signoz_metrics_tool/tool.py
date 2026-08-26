@@ -4,11 +4,39 @@ from __future__ import annotations
 
 from typing import Any, cast
 
+from core.domain.types.evidence import record_evidence_entry
 from core.tool_framework import tool
 from core.tool_framework.utils import tool_unavailable
-from integrations.signoz import SigNozConfig, signoz_extract_params
+from integrations.signoz import (
+    SigNozConfig,
+    signoz_count_label,
+    signoz_effective_limit,
+    signoz_extract_params,
+)
 from integrations.signoz.availability import signoz_available_or_backend
 from integrations.signoz.client import SigNozClient
+
+
+def _map_query_signoz_metrics(
+    evidence: dict[str, Any], output: dict[str, Any], tool_input: dict[str, Any]
+) -> None:
+    """Cite the metric, aggregation, and number of data points retrieved."""
+    if not output.get("available"):
+        return
+    metrics = output.get("metrics") or []
+    if not metrics:
+        return
+    label = signoz_count_label(
+        output.get("total", len(metrics)), signoz_effective_limit(output, tool_input)
+    )
+    metric_name = output.get("resolved_metric") or output.get("metric_name", "unknown")
+    aggregation = output.get("aggregation", "avg")
+    record_evidence_entry(
+        evidence,
+        source="query_signoz_metrics",
+        label="SigNoz Metrics",
+        summary=f"{metric_name} ({aggregation}): {label} data point(s)",
+    )
 
 
 def _metrics_is_available(sources: dict[str, dict]) -> bool:
@@ -66,6 +94,7 @@ def _metrics_extract_params(sources: dict[str, dict]) -> dict[str, Any]:
     },
     is_available=_metrics_is_available,
     extract_params=_metrics_extract_params,
+    evidence_mapper=_map_query_signoz_metrics,
 )
 def query_signoz_metrics(
     metric_name: str,

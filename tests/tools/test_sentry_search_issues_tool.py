@@ -18,7 +18,10 @@ from integrations.sentry import (
     describe_sentry_api_error,
     list_sentry_issues,
 )
-from integrations.sentry.tools.sentry_search_issues_tool import search_sentry_issues
+from integrations.sentry.tools.sentry_search_issues_tool import (
+    _map_search_sentry_issues,
+    search_sentry_issues,
+)
 from tests.tools.conftest import BaseToolContract, mock_agent_state
 
 
@@ -441,3 +444,74 @@ def test_search_tool_forwards_limit_and_period_to_client() -> None:
 
     assert captured["limit"] == 50
     assert captured["stats_period"] == "14d"
+
+
+class TestMapSearchSentryIssues:
+    def test_records_plain_count_when_under_limit(self) -> None:
+        from integrations.sentry import DEFAULT_SENTRY_ISSUE_LIMIT
+
+        evidence: dict[str, Any] = {}
+
+        _map_search_sentry_issues(
+            evidence,
+            {
+                "available": True,
+                "query": "TypeError",
+                "issues_total": 3,
+                "issues": [{"id": "1"}, {"id": "2"}, {"id": "3"}],
+            },
+            {"limit": DEFAULT_SENTRY_ISSUE_LIMIT},
+        )
+
+        entries = evidence["catalog_entries"]
+        assert len(entries) == 1
+        assert entries[0]["source"] == "search_sentry_issues"
+        assert entries[0]["summary"] == "3 issue(s) for query 'TypeError'"
+
+    def test_records_saturated_count_with_plus(self) -> None:
+        evidence: dict[str, Any] = {}
+
+        _map_search_sentry_issues(
+            evidence,
+            {
+                "available": True,
+                "query": "TypeError",
+                "issues_total": 10,
+                "issues": [{"id": str(i)} for i in range(10)],
+            },
+            {"limit": 10},
+        )
+
+        assert evidence["catalog_entries"][0]["summary"] == "10+ issue(s) for query 'TypeError'"
+
+    def test_sanitizes_long_multiline_query(self) -> None:
+        """Regression: the raw query can be a full multi-line stack trace —
+        collapse and cap it so it can't produce a malformed report line."""
+        evidence: dict[str, Any] = {}
+        long_query = "TypeError: boom\n  at foo (bar.ts:1)\n" + "x" * 300
+
+        _map_search_sentry_issues(
+            evidence,
+            {"available": True, "query": long_query, "issues_total": 1, "issues": [{"id": "1"}]},
+            {"limit": 100},
+        )
+
+        summary = evidence["catalog_entries"][0]["summary"]
+        assert "\n" not in summary
+        assert len(summary) < len(long_query)
+
+    def test_records_nothing_when_no_issues(self) -> None:
+        evidence: dict[str, Any] = {}
+
+        _map_search_sentry_issues(
+            evidence, {"available": True, "query": "x", "issues_total": 0, "issues": []}, {}
+        )
+
+        assert "catalog_entries" not in evidence
+
+    def test_records_nothing_on_unavailable_result(self) -> None:
+        evidence: dict[str, Any] = {}
+
+        _map_search_sentry_issues(evidence, {"available": False, "error": "not configured"}, {})
+
+        assert "catalog_entries" not in evidence

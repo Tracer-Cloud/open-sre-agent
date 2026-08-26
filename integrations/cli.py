@@ -772,6 +772,12 @@ def _setup_kubernetes() -> None:
     _run_spec_setup(KUBERNETES_SETUP)
 
 
+def _setup_google_docs() -> None:
+    from integrations.google_docs import GOOGLE_DOCS_SETUP
+
+    _run_spec_setup(GOOGLE_DOCS_SETUP)
+
+
 def _setup_yandex_cloud() -> None:
     from integrations.yandex_cloud.setup import setup_spec_for_this_host
 
@@ -826,6 +832,7 @@ _HANDLERS: dict[str, Any] = {
     "kubernetes": _setup_kubernetes,
     "servicenow": _setup_servicenow,
     "new_relic": _setup_new_relic,
+    "google_docs": _setup_google_docs,
     "yandex_cloud": _setup_yandex_cloud,
 }
 

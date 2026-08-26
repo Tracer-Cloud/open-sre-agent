@@ -20,7 +20,9 @@ Once the folder is connected, an investigation can reach:
 
 The last row matters more than it looks: OpenSRE ships an index of every read
 endpoint the Yandex Cloud API exposes, so a service without a dedicated tool is
-still reachable. Audit trails arrive in a follow-up release.
+still reachable. Audit Trails is in that index, so trails and their settings are
+readable now; the audit *events* are not, because Yandex delivers them to a sink
+rather than through the API.
 
 **Reading log entries needs one extra package.** Cloud Logging is the only
 Yandex Cloud read with no REST endpoint, so it uses Yandex's gRPC stubs:
@@ -111,6 +113,15 @@ metadata mode when running on a VM.
 **Verification fails with a permission error.** The service account has no
 `viewer` on that folder — check that the role was granted on the folder you
 configured, not on a different one.
+
+**"... is not a documented read of ...".** The generic reader only sends paths the
+endpoint index lists, which is what keeps it to reads. A path that is not in the
+index is refused before any request goes out, even when it looks right. Ask for
+the path instead of typing one:
+
+```
+find_yc_api "security groups"
+```
 
 **The key file cannot be read.** `YC_SA_KEY_FILE` must point at the authorized
 key JSON produced by `yc iam key create`, readable by the user running OpenSRE.

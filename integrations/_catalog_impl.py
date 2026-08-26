@@ -84,6 +84,10 @@ from config.constants.github import (
     GITHUB_MCP_URL_ENV,
 )
 from config.constants.gitlab import GITLAB_AUTH_TOKEN_ENV, GITLAB_BASE_URL_ENV
+from config.constants.google_docs import (
+    GOOGLE_CREDENTIALS_FILE_ENV,
+    GOOGLE_DRIVE_FOLDER_ID_ENV,
+)
 from config.constants.grafana import (
     GRAFANA_CA_BUNDLE_ENV,
     GRAFANA_INSTANCE_URL_ENV,
@@ -277,6 +281,7 @@ from integrations.config_models import (
     CoralogixIntegrationConfig,
     DatadogIntegrationConfig,
     DiscordBotConfig,
+    GoogleDocsIntegrationConfig,
     GrafanaIntegrationConfig,
     HelmIntegrationConfig,
     IncidentIoIntegrationConfig,
@@ -1307,6 +1312,29 @@ def load_env_integrations() -> list[dict[str, Any]]:
                 _active_env_record(
                     "jira",
                     jira_config.model_dump(exclude={"integration_id"}),
+                )
+            )
+
+    google_docs_credentials_file = os.getenv(GOOGLE_CREDENTIALS_FILE_ENV, "").strip()
+    google_docs_folder_id = os.getenv(GOOGLE_DRIVE_FOLDER_ID_ENV, "").strip()
+    if google_docs_credentials_file and google_docs_folder_id:
+        try:
+            google_docs_config = GoogleDocsIntegrationConfig.model_validate(
+                {
+                    "credentials_file": google_docs_credentials_file,
+                    "folder_id": google_docs_folder_id,
+                }
+            )
+        except Exception as exc:
+            _report_env_loader_failure(exc, integration="google_docs")
+        else:
+            integrations.append(
+                _active_env_record(
+                    "google_docs",
+                    {
+                        "credentials_file": google_docs_config.credentials_file,
+                        "folder_id": str(google_docs_config.folder_id).strip(),
+                    },
                 )
             )
 
@@ -2382,8 +2410,8 @@ def resolve_effective_integrations(
             },
         )
     else:
-        credentials_file = os.getenv("GOOGLE_CREDENTIALS_FILE", "").strip()
-        folder_id = os.getenv("GOOGLE_DRIVE_FOLDER_ID", "").strip()
+        credentials_file = os.getenv(GOOGLE_CREDENTIALS_FILE_ENV, "").strip()
+        folder_id = os.getenv(GOOGLE_DRIVE_FOLDER_ID_ENV, "").strip()
         if credentials_file and folder_id:
             effective["google_docs"] = _effective_entry(
                 "local env",

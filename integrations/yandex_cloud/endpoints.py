@@ -244,8 +244,36 @@ def known_endpoints(*, refresh: bool = True) -> dict[str, str]:
             cached = _cache.endpoints
         if cached:
             endpoints.update(cached)
-    endpoints.update(_endpoint_overrides())
+    overrides = _endpoint_overrides()
+    endpoints.update(overrides)
+    _apply_host_aliases(endpoints, overrides)
     return endpoints
+
+
+#: Services the registry names differently from everyone else. The index and the
+#: tools call the Object Storage control plane "storage"; the registry gives that
+#: name to the S3 data plane, which serves objects and answers no control-plane
+#: read, and registers the control plane as "storage-api".
+_HOST_ALIASES: Final[dict[str, str]] = {"storage": "storage-api"}
+
+
+def _apply_host_aliases(endpoints: dict[str, str], overrides: dict[str, str]) -> None:
+    """Re-point each aliased name at the host that answers for it.
+
+    Applied to the resolved registry data rather than the snapshot, because the
+    snapshot is refreshed from Yandex at runtime and the upstream value would
+    come straight back.
+
+    Either name is a fair thing for an operator to override, so both work: an
+    override on the alias itself wins outright, and one on the registry name is
+    what the alias then points at.
+    """
+    for name, registered_as in _HOST_ALIASES.items():
+        if name in overrides:
+            continue
+        host = endpoints.get(registered_as)
+        if host:
+            endpoints[name] = host
 
 
 def resolve_endpoint(service: str, *, refresh: bool = True) -> str | None:
