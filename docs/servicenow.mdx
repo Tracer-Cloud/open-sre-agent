@@ -44,7 +44,7 @@ export SERVICENOW_USERNAME=admin
 export SERVICENOW_PASSWORD=your-password
 ```
 
-`SERVICENOW_PASSWORD` is also resolved from the OS keyring when the environment
+`SERVICENOW_PASSWORD` is also resolved from `~/.opensre/credentials.json` when the environment
 variable is not set (the wizard stores it there).
 
 ### Option 4: Persistent store
@@ -77,7 +77,7 @@ variable is not set (the wizard stores it there).
 
 Use a dedicated ServiceNow user with the minimum roles needed for a one-row read
 of `sys_user` (for example `itil`). Prefer the onboarding wizard so the password
-stays in the OS keyring instead of `.env`.
+stays in `~/.opensre/credentials.json` instead of `.env`.
 
 ## Investigation tools
 
@@ -118,5 +118,5 @@ You can also ask the interactive shell:
 ## Security
 
 - Use a **dedicated ServiceNow user** with minimum read roles.
-- Prefer the onboarding wizard so the password stays in the OS keyring.
+- Prefer the onboarding wizard so the password stays in `~/.opensre/credentials.json`.
 - Rotate the password periodically and remove the integration when it is no longer needed.

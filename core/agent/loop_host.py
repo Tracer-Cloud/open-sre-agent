@@ -1,7 +1,7 @@
 """What the ReAct loop needs from whoever runs it.
 
 The loop calls back out for a handful of things — emitting events, narrowing the
-tool list, deciding when to stop, and the optional provider hooks. ``LoopHost``
+tool list, queued follow-ups, and the optional provider hooks. ``LoopHost``
 is that set of callbacks as a ``Protocol``: ``run_react_loop`` depends only on it
 (plus an ``AgentRunInput``), so it never has to know about ``Agent`` — any object
 with these methods can drive the loop. ``Agent`` is the usual one.
@@ -22,12 +22,12 @@ class LoopHost[RuntimeToolT: RuntimeTool](Protocol):
     """The narrow set of hooks ``run_react_loop`` calls back into.
 
     ``core.agent.Agent`` implements this via ``EventEmitterMixin``,
-    ``ToolFilterMixin``, ``SteeringMixin`` (``core.agent.mixins``), and its own
-    ``_should_accept_conclusion`` override hook plus thin ``ProviderHookDelegate``
-    forwarders (``_transform_messages``/``_convert_to_llm``/``_before_request``/
-    ``_after_response``). The provider-hook delegate's concrete type is
-    deliberately *not* part of this contract — only the method calls are —
-    so a host can wire the four seams however it likes.
+    ``ToolFilterMixin``, ``SteeringMixin`` (``core.agent.mixins``), plus thin
+    ``ProviderHookDelegate`` forwarders (``_transform_messages`` /
+    ``_convert_to_llm`` / ``_before_request`` / ``_after_response``). The
+    provider-hook delegate's concrete type is deliberately *not* part of this
+    contract — only the method calls are — so a host can wire the four seams
+    however it likes.
     """
 
     _tool_hooks: ToolExecutionHooks
@@ -43,15 +43,6 @@ class LoopHost[RuntimeToolT: RuntimeTool](Protocol):
 
     def _pop_follow_up_message(self) -> str | None:
         """The next queued follow-up prompt, or None when there is none."""
-
-    def _should_accept_conclusion(
-        self,
-        *,
-        evidence_count: int,
-        iteration: int,
-        final_text: str = "",
-    ) -> tuple[bool, str | None]:
-        """Whether the loop may conclude now, and why not when it may not."""
 
     def _transform_messages(self, messages: list[RuntimeMessage]) -> list[RuntimeMessage]:
         """Adjust runtime messages before they are converted for the provider."""

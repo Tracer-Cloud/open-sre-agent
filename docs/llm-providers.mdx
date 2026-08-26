@@ -4,8 +4,8 @@ description: "Supported LLM APIs and CLIs, environment variables, and how to swi
 ---
 
 OpenSRE works with many model providers. You choose which one with
-`LLM_PROVIDER`. Where a provider supports both API key and OAuth, use
-`LLM_AUTH_METHOD` to pick the auth method.
+`LLM_PROVIDER`. Hosted providers use an API key stored in
+`~/.opensre/credentials.json` (or the process environment).
 
 Default model IDs are defined in
 [`config/config.py`](https://github.com/Tracer-Cloud/opensre/blob/main/config/config.py).
@@ -25,8 +25,8 @@ Each provider has two model roles:
 
 | Provider | Config | Default models |
 | --- | --- | --- |
-| Anthropic API key | `LLM_PROVIDER=anthropic`<br />`LLM_AUTH_METHOD=api_key`<br />`ANTHROPIC_API_KEY` | Reasoning: `claude-opus-4-7`<br />Toolcall: `claude-haiku-4-5-20251001` |
-| OpenAI API key | `LLM_PROVIDER=openai`<br />`LLM_AUTH_METHOD=api_key`<br />`OPENAI_API_KEY` | Reasoning: `gpt-5.4-mini`<br />Toolcall: `gpt-5.4-mini` |
+| Anthropic API key | `LLM_PROVIDER=anthropic`<br />`ANTHROPIC_API_KEY` | Reasoning: `claude-opus-4-7`<br />Toolcall: `claude-haiku-4-5-20251001` |
+| OpenAI API key | `LLM_PROVIDER=openai`<br />`OPENAI_API_KEY` | Reasoning: `gpt-5.4-mini`<br />Toolcall: `gpt-5.4-mini` |
 | OpenRouter | `LLM_PROVIDER=openrouter`<br />`OPENROUTER_API_KEY` | Reasoning: `openrouter/auto`<br />Toolcall: `openrouter/auto` |
 | TrustedRouter | `LLM_PROVIDER=trustedrouter`<br />`TRUSTEDROUTER_API_KEY` | Reasoning: `trustedrouter/auto`<br />Toolcall: `trustedrouter/auto` |
 | DeepSeek | `LLM_PROVIDER=deepseek`<br />`DEEPSEEK_API_KEY` | Reasoning: `deepseek-v4-pro`<br />Toolcall: `deepseek-v4-flash` |
@@ -48,14 +48,12 @@ Each provider has two model roles:
 | Ollama (local) | `LLM_PROVIDER=ollama`<br />No API key (local daemon) | Reasoning: `llama3.2`<br />Toolcall: `llama3.2` |
 
   </Tab>
-  <Tab title="CLI & OAuth">
+  <Tab title="CLI">
 
 | Provider | Config | Default models |
 | --- | --- | --- |
-| Anthropic OAuth | `LLM_PROVIDER=anthropic`<br />`LLM_AUTH_METHOD=oauth`<br />Onboarding runs `claude auth login` | Claude Code CLI default (both roles) |
-| OpenAI OAuth | `LLM_PROVIDER=openai`<br />`LLM_AUTH_METHOD=oauth`<br />OpenSRE opens `localhost:1455` for Codex-compatible OAuth | Codex CLI default (both roles) |
 | Google Gemini CLI | `LLM_PROVIDER=gemini-cli`<br />`gemini` login or API key env | Gemini CLI default (both roles) |
-| Google Antigravity CLI | `LLM_PROVIDER=antigravity-cli`<br />`agy` browser OAuth / OS keyring | Antigravity CLI configured model (both roles) |
+| Google Antigravity CLI | `LLM_PROVIDER=antigravity-cli`<br />`agy` browser login | Antigravity CLI configured model (both roles) |
 | GitHub Copilot CLI | `LLM_PROVIDER=copilot`<br />`copilot login` or `gh auth login` | Copilot CLI default (both roles) |
 | xAI Grok Build CLI | `LLM_PROVIDER=grok-cli`<br />`grok login` | Grok Build CLI default (both roles) |
 | Cursor Agent CLI | `LLM_PROVIDER=cursor`<br />`agent login` or `CURSOR_API_KEY` | Cursor CLI default (`CURSOR_MODEL` to override) |
@@ -82,14 +80,7 @@ Or use the onboarding wizard, which writes the same values to `.env`:
 opensre onboard
 ```
 
-If a provider supports more than one auth method, onboarding asks for the
-provider first, then the auth method. Example: choose **Anthropic**, then
-**OAuth** for a Claude subscription, or **API key** to paste
-`ANTHROPIC_API_KEY`. The provider value stays `anthropic` or `openai`;
-`LLM_AUTH_METHOD=oauth` selects the OAuth path.
-
-Browser login, token storage, refresh, and logout are handled by the vendor
-CLI. OpenSRE runs the onboarding UI and does not store OAuth tokens itself.
+Onboarding always collects an API key for hosted providers.
 
 In the interactive shell, `/model` lists common models. Some providers also
 accept custom model IDs (OpenAI, OpenRouter, TrustedRouter, Gemini, NVIDIA,
@@ -166,44 +157,30 @@ issue if you need another first-class provider.
 
 ## Login and secret storage
 
-Use `opensre auth` to log in without writing secrets to `.env`:
+Use `opensre auth` to log in and persist an API key:
 
 | Command | What it does |
 | --- | --- |
-| `opensre auth` | Show auth status for subscription and API-key providers |
-| `opensre auth login deepseek` | Guide DeepSeek setup, validate `DEEPSEEK_API_KEY`, store it in the system keychain, and select DeepSeek |
-| `opensre auth login claude` | Set up Claude Code CLI subscription login |
-| `opensre auth login chatgpt` | Run OpenSRE-managed ChatGPT OAuth for the Codex path |
+| `opensre auth` | Show auth status for API-key providers |
+| `opensre auth login deepseek` | Guide DeepSeek setup, validate `DEEPSEEK_API_KEY`, store it in `.env` and `~/.opensre/credentials.json`, and select DeepSeek |
 | `opensre auth verify deepseek` | Check DeepSeek credentials and refresh local metadata |
 | `opensre auth logout deepseek` | Remove OpenSRE-managed DeepSeek credentials and metadata |
 
-`opensre auth login` does not read browser cookies, profiles, local storage, or
-IndexedDB. API-key providers use a hidden paste prompt and keyring storage.
-OpenAI OAuth uses OpenSRE’s local Codex-compatible callback server. Other
-subscription providers use the vendor CLI for browser login.
+`opensre auth login` uses a hidden paste prompt and writes the key to
+`.env` and `~/.opensre/credentials.json`.
 
 `opensre auth` and `/auth status` are safe to show in prompts: they do not read
-API keys from Keychain. For API-key providers they check environment variables
-and non-secret metadata in `~/.opensre/llm-auth.json`. If you delete a key from
-Keychain directly, status may look stale until you run
+stored secrets. For API-key providers they check environment variables and
+non-secret metadata in `~/.opensre/llm-auth.json`. If you delete a key from
+the credentials file directly, status may look stale until you run
 `opensre auth verify <provider>` or make a request. Verification marks the
 provider `stale` when the secret is gone.
-
-For Codex, status checks do not run `codex login status` by default — some Codex
-versions open a browser during that check. To refresh login, run
-`/login chatgpt` or `opensre auth login chatgpt` in an interactive terminal.
-OpenSRE starts a temporary callback server on
-`http://localhost:1455/auth/callback`, exchanges the OAuth code, writes
-Codex-compatible tokens, then redirects to the Codex-style
-`/success?id_token=...` page. If `/success` already includes token material,
-OpenSRE stores that instead of dropping the callback. Use `codex login` only as
-a direct CLI fallback.
 
 In the interactive shell:
 
 ```bash
-/login chatgpt
-/login claude
+/login openai
+/login anthropic
 /login deepseek
 /auth status
 ```
@@ -556,8 +533,8 @@ OpenSRE calls Ollama’s OpenAI-compatible endpoint at `${OLLAMA_HOST}/v1`.
 
 CLI providers run a vendor CLI instead of calling an HTTP API. OpenSRE finds the
 binary on `PATH` (or via an explicit env var) and reuses the existing session.
-OpenAI OAuth tokens are stored by OpenSRE in Codex-compatible format. Other CLI
-providers authenticate with the vendor’s own login command.
+CLI providers authenticate with the vendor’s own login command. OpenSRE does
+not start that login.
 
 **Investigation timeouts:** Each ReAct turn runs one full CLI subprocess with
 the system prompt, tool schemas, and conversation history. The default budget is
@@ -568,50 +545,6 @@ for example `GEMINI_CLI_TIMEOUT_SECONDS`, `CLAUDE_CODE_TIMEOUT_SECONDS`, or
 Open a CLI provider for install, auth, and env overrides.
 
 <AccordionGroup>
-<Accordion title="OpenAI OAuth backend">
-
-```bash
-export LLM_PROVIDER=openai
-export LLM_AUTH_METHOD=oauth
-# Authenticate through onboarding or `/login chatgpt`:
-opensre auth login chatgpt
-# Optional overrides (all blank by default):
-export CODEX_MODEL=
-export CODEX_BIN=
-```
-
-Requires the [OpenAI Codex CLI](https://github.com/openai/codex). If
-`CODEX_MODEL` is unset, OpenSRE omits `-m` so `codex exec` uses the CLI’s
-configured model. If `CODEX_BIN` is unset, the binary is resolved from `PATH`
-and known install locations. Run `opensre onboard`, `/login chatgpt`, or
-`opensre auth login chatgpt` to start OpenSRE-managed Codex browser login on
-`localhost:1455` and save `LLM_PROVIDER=openai` with `LLM_AUTH_METHOD=oauth`.
-Existing `LLM_PROVIDER=codex` configs still work.
-
-</Accordion>
-
-<Accordion title="Anthropic OAuth backend">
-
-```bash
-export LLM_PROVIDER=anthropic
-export LLM_AUTH_METHOD=oauth
-# Authenticate through onboarding, `/login claude`, or the Claude Code CLI:
-claude auth login
-# Optional overrides (all blank by default):
-export CLAUDE_CODE_MODEL=
-export CLAUDE_CODE_BIN=
-```
-
-Requires the [Claude Code CLI](https://github.com/anthropics/claude-code)
-(`npm i -g @anthropic-ai/claude-code`). If `CLAUDE_CODE_MODEL` is unset, OpenSRE
-omits `--model` and the CLI uses its default. If `CLAUDE_CODE_BIN` is unset, the
-binary is resolved from `PATH` and known install locations. Run
-`opensre onboard`, `/login claude`, or `opensre auth login claude` to launch
-Claude browser login when needed and save `LLM_PROVIDER=anthropic` with
-`LLM_AUTH_METHOD=oauth`. Existing `LLM_PROVIDER=claude-code` configs still work.
-
-</Accordion>
-
 <Accordion title="GitHub Copilot">
 
 ```bash

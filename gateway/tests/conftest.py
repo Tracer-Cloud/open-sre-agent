@@ -24,9 +24,7 @@ def _isolate_opensre_home(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> No
     way ``tests/conftest.py`` keeps them.
     """
     from config.constants import paths
-    from config.secrets.os_keyring import reset_keyring_state
 
-    reset_keyring_state()
     monkeypatch.setenv("OPENSRE_DISABLE_KEYRING", "1")
     monkeypatch.setattr(paths, "OPENSRE_HOME_DIR", tmp_path / "opensre-home")
 

@@ -12,10 +12,17 @@ import importlib
 from typing import TYPE_CHECKING
 
 from integrations.llm_cli.base import CLIInvocation, CLIProbe, LLMCLIAdapter
-from integrations.llm_cli.errors import CLIAuthenticationRequired
+from integrations.llm_cli.errors import (
+    CLIAuthenticationRequired,
+    CLIInterruptedError,
+    CLITimeoutError,
+    CLITransientError,
+)
 from integrations.llm_cli.runner import CLIBackedLLMClient
 
-#: Provider adapter name -> the submodule that defines it, imported on first access.
+#: Public name -> the submodule that defines it, imported on first access. Covers
+#: the provider adapters and the heavier utility helpers (auth check,
+#: subprocess env, binary resolution) so importing the package stays cheap.
 _LAZY_EXPORTS: dict[str, str] = {
     "AntigravityCLIAdapter": "integrations.llm_cli.antigravity_cli",
     "ClaudeCodeAdapter": "integrations.llm_cli.claude_code",
@@ -27,6 +34,9 @@ _LAZY_EXPORTS: dict[str, str] = {
     "KimiAdapter": "integrations.llm_cli.kimi",
     "OpenCodeAdapter": "integrations.llm_cli.opencode",
     "PiAdapter": "integrations.llm_cli.pi_cli",
+    "check_cli_auth": "integrations.llm_cli.auth_check",
+    "build_cli_subprocess_env": "integrations.llm_cli.subprocess_env",
+    "diagnose_binary_path": "integrations.llm_cli.binary_resolver",
 }
 
 
@@ -44,6 +54,8 @@ def __getattr__(name: str) -> object:
 
 if TYPE_CHECKING:
     from integrations.llm_cli.antigravity_cli import AntigravityCLIAdapter
+    from integrations.llm_cli.auth_check import check_cli_auth
+    from integrations.llm_cli.binary_resolver import diagnose_binary_path
     from integrations.llm_cli.claude_code import ClaudeCodeAdapter
     from integrations.llm_cli.codex import CodexAdapter
     from integrations.llm_cli.copilot import CopilotAdapter
@@ -53,14 +65,18 @@ if TYPE_CHECKING:
     from integrations.llm_cli.kimi import KimiAdapter
     from integrations.llm_cli.opencode import OpenCodeAdapter
     from integrations.llm_cli.pi_cli import PiAdapter
+    from integrations.llm_cli.subprocess_env import build_cli_subprocess_env
 
 
 __all__ = [
     "AntigravityCLIAdapter",
     "CLIAuthenticationRequired",
     "CLIBackedLLMClient",
+    "CLIInterruptedError",
     "CLIInvocation",
     "CLIProbe",
+    "CLITimeoutError",
+    "CLITransientError",
     "ClaudeCodeAdapter",
     "CodexAdapter",
     "CopilotAdapter",
@@ -71,4 +87,7 @@ __all__ = [
     "LLMCLIAdapter",
     "OpenCodeAdapter",
     "PiAdapter",
+    "build_cli_subprocess_env",
+    "check_cli_auth",
+    "diagnose_binary_path",
 ]

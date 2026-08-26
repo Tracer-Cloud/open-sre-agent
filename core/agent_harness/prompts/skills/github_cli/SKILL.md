@@ -8,7 +8,7 @@ description: >-
 GITHUB CLI SKILL — interactive-shell action agent:
 ══════════════════════════════════════════════════════════
 
-WHEN TO USE (call github_cli; do NOT assistant_handoff):
+WHEN TO USE (call github_cli):
 - Create / list / view / edit / close / comment / assign / label GitHub issues
 - Create / list / view / close / merge / comment / checks on pull requests
 - Repo list/view, releases, labels, workflow runs, search, or gh api
@@ -18,11 +18,11 @@ WHEN TO USE (call github_cli; do NOT assistant_handoff):
 Do NOT use this skill for:
 - Live incident RCA (investigation_start) — including multi-source asks that
   name github issues alongside Sentry/PostHog/Datadog while diagnosing a crash
-- Star history / day-by-day stars / stars gained / star velocity — emit
-  assistant_handoff so gather can call get_github_star_history. Do NOT use
+- Star history / day-by-day stars / stars gained / star velocity — call
+  get_github_star_history. Do NOT use
   github_cli, gh api stargazers, or shell_run for these; paginated stargazer
   scans via gh routinely undercount or report false zeros.
-- Observability lookups (Sentry/Datadog/Grafana/PostHog) — those stay handoffs
+- Observability lookups (Sentry/Datadog/Grafana/PostHog) — use their chat tools
 - Slack → GitHub propose/execute mutations (workflow tools)
 - Architecture audit (architecture_* tools + architecture audit skill)
 - GitHub PR CI remediation / failing checks fixes / "fix CI and push" — use
@@ -32,8 +32,7 @@ Do NOT use this skill for:
 
 HARD RULES:
 - Prefer github_cli over shell_run / !gh / raw gh.
-- Never emit assistant_handoff for these requests just to "let gather create the
-  issue" — github_cli is action-only and will not run in gather.
+- Use github_cli directly for the GitHub operations listed above.
 - Never call github_cli with auth / extension / workflow / run / secret /
   codespace / ssh-key / gpg-key / config — those are blocked (token leakage /
   CI code execution / secret mutation).

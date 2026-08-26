@@ -94,7 +94,6 @@ def test_a_tool_less_turn_still_hands_its_answer_to_the_next_turn() -> None:
                 handled=True,
             ),
             assistant_response_text=body,
-            llm_run=None,
         )
 
     # Act

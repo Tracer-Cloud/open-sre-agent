@@ -238,10 +238,9 @@ class TurnRunner:
                 # Host soft-timeout (or stop) already owns the output terminal
                 # message — do not overwrite it with empty/fallback finalize.
                 cancelled = isinstance(cancel, threading.Event) and cancel.is_set()
-                # A streamed answer (answered=True) already resolved the placeholder status
-                # via the output. Otherwise always finalize so the placeholder never hangs —
-                # even when the turn produced no text.
-                if not turn_result.answered and not cancelled:
+                # A streamed agent conclusion already resolved the placeholder.
+                # Self-rendering tools still need the captured response finalized.
+                if not turn_result.action_result.response_streamed and not cancelled:
                     output.finalize(outbound_text or EMPTY_RESPONSE_MESSAGE)
                 # Resolve rebuilds SessionCore from disk next inbound message —
                 # persist session_goal (attach / progress / /goal pause) now.

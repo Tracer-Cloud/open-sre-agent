@@ -105,8 +105,6 @@ def test_headless_agent_uses_bound_methods_not_nested_defs() -> None:
     assert "def answer" not in source
     assert "def gather" not in source
     assert "self._execute_actions" in source
-    assert "self._answer" in source
-    assert "self._gather" in source
 
 
 def test_bind_turn_rebuilds_action_runner_when_output_changes() -> None:
@@ -141,12 +139,6 @@ def test_bind_turn_keeps_runner_when_only_accounting_changes() -> None:
 
 
 def test_harness_turn_driver_adds_no_stage_of_its_own() -> None:
-    """The driver runs the agent's own answer/gather/action stages by default.
-
-    Answering and gathering are configured by the shell's build config (prompts,
-    output, reporter, gather progress/persist), not replaced. Only a stage the
-    test names gets an adapter bound over it.
-    """
     import io
 
     from rich.console import Console
@@ -166,14 +158,10 @@ def test_harness_turn_driver_adds_no_stage_of_its_own() -> None:
         Console(file=io.StringIO()),
         BufferOutputSink(),
         execute_actions=None,
-        answer_agent=None,
-        gather_evidence=None,
         request_exit=None,
         tool_hooks=None,
     )
     assert agent._execute_actions_override is None  # noqa: SLF001
-    assert agent._answer_override is None  # noqa: SLF001
-    assert agent._gather_override is None  # noqa: SLF001
 
 
 def test_shell_agent_keeps_core_runner_across_console_rebind() -> None:
@@ -301,42 +289,10 @@ def test_long_lived_shell_agent_receives_each_turns_confirm_fn_and_tty() -> None
         is_tty=True,
         agent=agent,
         execute_actions=_spy_execute,
-        answer_agent=lambda *_a, **_k: None,
     )
 
     # Assert — the action stage saw the turn's callback, not the construction-time None.
     assert seen == [(_confirm, True)]
-
-
-def test_shell_gather_progress_follows_the_turn_console_after_rebind() -> None:
-    """The shell's gather progress renderer is a ConsoleBindable port the agent rebinds.
-
-    The REPL streams every turn through a fresh spinner-aware console. Progress
-    lines printed to the build-time console would land on the wrong stream, so
-    ``bind_turn(console=…)`` must retarget the gather progress port too.
-    """
-    import io
-    import threading
-
-    from rich.console import Console
-
-    from surfaces.interactive_shell.runtime.shell_agent import build_shell_agent
-
-    # Arrange — agent built on one console, turn bound to another.
-    build_console = Console(file=io.StringIO(), force_terminal=False)
-    turn_output = Console(file=io.StringIO(), force_terminal=False)
-    turn_console = CancelConsole(turn_output, threading.Event())
-    agent = build_shell_agent(Session(), build_console)
-    agent.bind_turn(TurnBinding(console=turn_console))
-
-    # Act — the gather phase reports a tool start.
-    on_progress = agent._gather_phase.on_progress  # noqa: SLF001
-    assert on_progress is not None
-    on_progress("tool_start", {"name": "query_grafana_metrics", "input": {"query": "up"}})
-
-    # Assert — the line went to the turn console, not the build console.
-    assert "checking" in turn_output.file.getvalue()  # type: ignore[attr-defined]
-    assert build_console.file.getvalue() == ""  # type: ignore[attr-defined]
 
 
 def test_a_stage_injected_on_one_turn_does_not_carry_into_the_next() -> None:
@@ -370,7 +326,6 @@ def test_a_stage_injected_on_one_turn_does_not_carry_into_the_next() -> None:
         recorder=None,
         agent=agent,
         execute_actions=_fake_execute,
-        answer_agent=lambda *_a, **_k: None,
     )
     assert agent._execute_actions_override is not None  # noqa: SLF001
 
@@ -382,8 +337,6 @@ def test_a_stage_injected_on_one_turn_does_not_carry_into_the_next() -> None:
         console,
         BufferOutputSink(),
         execute_actions=None,
-        answer_agent=None,
-        gather_evidence=None,
         request_exit=None,
         tool_hooks=None,
     )

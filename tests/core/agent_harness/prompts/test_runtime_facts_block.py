@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from core.agent_harness.prompts.assistant import build_environment_block
+from core.agent_harness.prompts.grounding import build_environment_block
 
 
 def _env_block(runtime: dict[str, object]) -> str:

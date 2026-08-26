@@ -9,7 +9,7 @@ def reraise_cli_runtime_error(exc: BaseException) -> NoReturn:
     """Convert CLI auth/setup failures to structured CLI UX errors."""
     from core.llm.shared.llm_retry import LLMCreditExhaustedError
     from core.llm_invoke_errors import classify_llm_invoke_failure
-    from integrations.llm_cli.errors import CLIAuthenticationRequired
+    from integrations.llm_cli import CLIAuthenticationRequired
     from surfaces.shared.error_handling.errors import OpenSREError
 
     if isinstance(exc, LLMCreditExhaustedError):

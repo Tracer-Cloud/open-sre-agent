@@ -1,75 +1,22 @@
-"""Goal contract — the STABLE lines must encode the right conditions.
+"""Goal contract — setup-state facts stay guidance-free.
 
-These tests are not live LLM A/Bs. They pin that the contract text still makes
-sense as a policy: capacity from setup_state, offer via propose/cron, no invent,
-no nag, shell-only for the assistant closer bias.
+Schedule-capacity copy lives on the Python constant, not in the shared
+system-prompt markdown.
 """
 
 from __future__ import annotations
 
 import re
 
-from core.agent_harness.prompts.action.assemble import build_action_system_prompt_envelope
 from core.agent_harness.prompts.action.text import (
-    _SYSTEM_PROMPT_BASE,
     ACTION_SETUP_CAPACITY_SCHEDULE_RULE,
 )
-from core.agent_harness.prompts.assistant.text import (
-    CLI_PREAMBLE,
-    GATEWAY_PREAMBLE,
-    SHELL_GOAL_CONTRACT,
-)
-from core.agent_harness.prompts.kernel.envelope import PromptTier
-from core.agent_harness.turns.turn_snapshot import TurnSnapshot
 
 
 def _mentions(text: str, *needles: str) -> None:
     lower = text.lower()
     missing = [n for n in needles if n.lower() not in lower]
     assert not missing, f"missing {missing!r} in:\n{text}"
-
-
-def test_shell_goal_contract_is_capacity_gated_not_a_playbook() -> None:
-    # Arrange / Act
-    contract = SHELL_GOAL_CONTRACT
-
-    # Assert: conditions, not morning_report STEPS
-    _mentions(
-        contract,
-        "setup-state",
-        "connected integration",
-        "schedule",
-        "do not nag",
-        "never invent",
-    )
-    assert "shell_run" not in contract.lower()
-    assert "wttr.in" not in contract.lower()
-    # Keep it short — fat STABLE is the failure mode.
-    assert len(contract) < 500
-
-
-def test_shell_goal_contract_lives_in_cli_preamble_not_gateway() -> None:
-    # Arrange / Act / Assert: gateway has no setup_state; do not push schedule offers there.
-    assert SHELL_GOAL_CONTRACT in CLI_PREAMBLE
-    assert SHELL_GOAL_CONTRACT not in GATEWAY_PREAMBLE
-    assert "setup-state block" not in GATEWAY_PREAMBLE.lower()
-
-
-def test_preambles_carry_senior_on_call_working_style() -> None:
-    _mentions(
-        CLI_PREAMBLE,
-        "senior production engineer",
-        "senior on-call engineer",
-        "finish line",
-        "plan the shortest path",
-    )
-    _mentions(
-        GATEWAY_PREAMBLE,
-        "senior on-call engineer",
-        "finish line",
-        "do not flatter",
-        "plan the shortest path",
-    )
 
 
 def test_action_capacity_rule_ties_facts_to_propose_not_skip() -> None:
@@ -91,54 +38,6 @@ def test_action_capacity_rule_ties_facts_to_propose_not_skip() -> None:
     # Must not tell the planner to skip offers merely because schedules exist.
     assert re.search(r"do not skip the offer only because schedule_count", rule, re.I)
     assert len(rule) < 600
-
-
-def test_action_system_prompt_requires_goal_oriented_tool_calls() -> None:
-    _mentions(
-        _SYSTEM_PROMPT_BASE,
-        "Goal-oriented planning",
-        "Every tool call must advance that goal",
-        "Persist until the task is fully handled",
-        "keep going until the query or task is completely resolved",
-        "Do NOT guess or make up an answer",
-        "session_goal=true",
-    )
-
-
-def test_action_capacity_rule_is_exported_and_setup_state_stays_context() -> None:
-    # Arrange / Act
-    envelope = build_action_system_prompt_envelope(
-        TurnSnapshot(
-            text="morning report",
-            conversation_messages=(),
-            configured_integrations=("slack",),
-            configured_integrations_known=True,
-            last_state=None,
-            last_synthetic_observation_path=None,
-            reasoning_effort=None,
-            setup_state=(
-                "--- Setup state ---\n"
-                "Integrations connected: slack\n"
-                "Scheduled tasks: 0 configured, 0 able to deliver\n"
-                "Last scheduled delivery: never run\n\n"
-            ),
-        )
-    )
-
-    # Assert: capacity + multi-step goal contracts ride the STABLE goal-policy block.
-    assert ACTION_SETUP_CAPACITY_SCHEDULE_RULE
-    assert "propose_scheduled_delivery" in ACTION_SETUP_CAPACITY_SCHEDULE_RULE
-    context = "".join(b.content for b in envelope.blocks if b.tier is PromptTier.CONTEXT)
-    assert "Scheduled tasks: 0 configured, 0 able to deliver" in context
-    assert ACTION_SETUP_CAPACITY_SCHEDULE_RULE not in context
-    assert ACTION_SETUP_CAPACITY_SCHEDULE_RULE not in _SYSTEM_PROMPT_BASE
-    stable = "".join(b.content for b in envelope.blocks if b.tier is PromptTier.STABLE)
-    assert "You are OpenSRE, a terminal-based SRE and coding assistant" in stable
-    assert "Goal-oriented planning (highest priority)" in stable
-    assert ACTION_SETUP_CAPACITY_SCHEDULE_RULE in stable
-    assert "propose_scheduled_delivery" in stable
-    assert "LOCAL SEQUENTIAL STEPS" in stable
-    assert "session_goal=true" in stable
 
 
 def test_goal_contract_does_not_belong_in_setup_state_facts() -> None:

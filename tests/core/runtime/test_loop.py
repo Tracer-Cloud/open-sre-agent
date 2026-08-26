@@ -130,53 +130,34 @@ def _agent(
     )
 
 
-def test_agent_exposes_headless_agent_entrypoint(monkeypatch: pytest.MonkeyPatch) -> None:
-    class EchoReasoningClient:
-        def invoke_stream(self, _prompt: str) -> Iterator[str]:
-            yield "hello from headless"
+def test_agent_exposes_headless_agent_entrypoint() -> None:
+    from core.agent_harness.turns.headless_adapters import NullToolProvider
 
-    monkeypatch.setattr(
-        "core.agent_harness.turns.headless_build.default_llm_factory",
-        lambda: FakeLLM(iter([AgentLLMResponse(content="", tool_calls=[], raw_content=None)])),
+    llm = FakeLLM(iter([_text_response("hello from headless")]))
+    agent = InMemoryHeadlessBuild().agent(
+        tools=NullToolProvider(),
+        llm_factory=lambda: llm,
     )
-
-    from core.agent_harness.turns.headless_adapters import (
-        NullToolProvider,
-        StaticReasoningClientProvider,
-    )
-
-    agent = InMemoryHeadlessBuild(
-        reasoning=StaticReasoningClientProvider(client=EchoReasoningClient())
-    ).agent(tools=NullToolProvider())
     result = agent.dispatch("hello")
 
     assert result.assistant_response_text == "hello from headless"
 
 
-def test_one_headless_agent_dispatches_multiple_messages(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_one_headless_agent_dispatches_multiple_messages() -> None:
     """Configure once, dispatch many: both turns run on the same agent and session."""
 
-    class EchoReasoningClient:
-        def invoke_stream(self, _prompt: str) -> Iterator[str]:
-            yield "hello from headless"
+    from core.agent_harness.turns.headless_adapters import NullToolProvider
 
-    monkeypatch.setattr(
-        "core.agent_harness.turns.headless_build.default_llm_factory",
-        lambda: FakeLLM(iter([AgentLLMResponse(content="", tool_calls=[], raw_content=None)])),
+    llm = FakeLLM(iter([_text_response("hello from headless"), _text_response("hello again")]))
+    agent = InMemoryHeadlessBuild().agent(
+        tools=NullToolProvider(),
+        llm_factory=lambda: llm,
     )
-    from core.agent_harness.turns.headless_adapters import (
-        NullToolProvider,
-        StaticReasoningClientProvider,
-    )
-
-    agent = InMemoryHeadlessBuild(
-        reasoning=StaticReasoningClientProvider(client=EchoReasoningClient())
-    ).agent(tools=NullToolProvider())
     first = agent.dispatch("one")
     second = agent.dispatch("two")
 
     assert first.assistant_response_text == "hello from headless"
-    assert second.assistant_response_text == "hello from headless"
+    assert second.assistant_response_text == "hello again"
     # Both turns landed on the same shared session — reuse, not a fresh store per call.
     assert len(agent._session.cli_agent_messages) == 4
 
@@ -570,30 +551,6 @@ def test_agent_tool_context_update_emits_tool_execution_update() -> None:
     assert updates[0].tool_call_id == "c1"
     assert updates[0].tool_name == "agent_tool"
     assert updates[0].partial_result == {"status": "halfway"}
-
-
-def test_rejecting_conclusion_without_nudge_raises() -> None:
-    class RejectingAgent(Agent[RegisteredTool]):
-        def _should_accept_conclusion(
-            self,
-            *,
-            evidence_count: int,  # noqa: ARG002
-            iteration: int,  # noqa: ARG002
-            final_text: str = "",  # noqa: ARG002
-        ) -> tuple[bool, str | None]:
-            return False, None
-
-    llm = FakeLLM(iter([_text_response("not enough")]))
-    agent = RejectingAgent(
-        llm=llm,
-        system="sys",
-        tools=_tools(FakeTool("query_logs")),
-        resolved_integrations={},
-        max_iterations=3,
-    )
-
-    with pytest.raises(ValueError, match="_should_accept_conclusion returned"):
-        agent.run([{"role": "user", "content": "hello"}])
 
 
 def test_tool_filtering_runs_after_subclass_initialization() -> None:

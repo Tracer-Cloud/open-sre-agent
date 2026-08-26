@@ -22,7 +22,6 @@ from core.agent_harness.runtime import (
     DefaultHeadlessBuild,
     DefaultToolProvider,
     DescribeTool,
-    GatherPhase,
     HeadlessAgent,
     resolve_agent_ports,
 )
@@ -43,7 +42,7 @@ class _ToolStatusObserver:
         if kind != "tool_start":
             return
         tool_name = str(data.get("name") or "").strip()
-        if not tool_name or tool_name == "assistant_handoff":
+        if not tool_name:
             return
         self._output.set_tool_status(
             status_from_tool_start(tool_name, data.get("input"), describe=self._describe)
@@ -170,14 +169,13 @@ class SessionAgentPool:
                 slash_ports_factory=self._slash_ports_factory,
             )
 
-        tools, prompts, gather = resolve_agent_ports(
+        tools, prompts = resolve_agent_ports(
             build,
             session=session,
             console=self._console,
             logger=logger,
             observer=observer,
             default_tools=default_tools,
-            default_gather=GatherPhase(),
         )
         agent = DefaultHeadlessBuild(
             session=session,
@@ -186,7 +184,7 @@ class SessionAgentPool:
             logger=logger,
             surface="gateway",
             error_reporter=build.error_reporter,
-        ).agent(tools=tools, prompts=prompts, gather=gather)
+        ).agent(tools=tools, prompts=prompts)
         if session_id:
             self._agents[session_id] = agent
         return agent

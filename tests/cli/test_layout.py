@@ -78,6 +78,26 @@ def test_render_landing_shows_header_and_examples(monkeypatch, capsys) -> None:
         assert description in output
 
 
+def test_every_row_keeps_a_gap_between_command_and_description() -> None:
+    """A label longer than the fixed column must not collide with its text.
+
+    The landing page is the first screen a new user reads. With a hardcoded
+    column narrower than the longest command, ``f"{label:<44}"`` emits the label
+    unpadded and the description begins immediately after the closing quote.
+    """
+    from rich.console import Console
+
+    from surfaces.cli.layout import _LANDING_EXAMPLES, _render_rows
+
+    console = Console(force_terminal=False, width=200, record=True)
+
+    _render_rows(console, title="Quick start", rows=_LANDING_EXAMPLES, width=42)
+    output = console.export_text()
+
+    for label, description in _LANDING_EXAMPLES:
+        assert f"{label} " in output, f"{label!r} runs straight into {description!r}"
+
+
 def test_rich_group_format_help_delegates_to_render_help(monkeypatch) -> None:
     called_with = []
 

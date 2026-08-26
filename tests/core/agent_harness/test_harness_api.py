@@ -37,12 +37,10 @@ ROOT_API = frozenset(
 
 PORTS = frozenset(
     {
-        "AnswerRequest",
         "CancelCapableConsole",
         "ConfirmFn",
         "ConsoleBindable",
         "ErrorReporter",
-        "EvidenceGatherer",
         "ExecuteActions",
         "GatheredEvidence",
         "InvestigationPortsFactory",
@@ -51,12 +49,9 @@ PORTS = frozenset(
         "OutputBindable",
         "OutputSink",
         "PromptContextProvider",
-        "ReasoningClientProvider",
-        "RunRecordFactory",
         "SessionBindable",
         "SessionState",
         "SlashPortsFactory",
-        "StreamAnswerFn",
         "SubprocessPresenterFactory",
         "TaskCancelPortsFactory",
         "ToolEventObserver",
@@ -74,6 +69,7 @@ SPI_ROLE_NAMES: dict[str, frozenset[str]] = {
             "SessionGoalReason",
             "SessionGoalStatus",
             "attach_session_goal",
+            "build_session_goal",
             "clear_session_goal",
             "format_session_goal_progress",
             "format_session_goal_status_line",
@@ -158,7 +154,6 @@ SPI_ROLE_NAMES: dict[str, frozenset[str]] = {
 
 RUNTIME = frozenset(
     {
-        "MAX_REPORT_GATHER_ITERATIONS",
         "ActionTurnRunner",
         "AgentBuildConfig",
         "AgentBusyError",
@@ -166,7 +161,6 @@ RUNTIME = frozenset(
         "DefaultHeadlessBuild",
         "DescribeTool",
         "DefaultToolProvider",
-        "GatherPhase",
         "HeadlessAgent",
         "InMemoryHeadlessBuild",
         "TurnBinding",
@@ -181,9 +175,7 @@ RUNTIME = frozenset(
 
 TOOLS = frozenset(
     {
-        "EVIDENCE_KIND_VALUES",
         "ActionToolScope",
-        "HandoffField",
         "action_context_from_agent_context",
         "action_scope_from_agent_context",
         "capability_available_from_sources",

@@ -1,9 +1,9 @@
 ---
-title: "Assistant with connected tools"
+title: "Agent with connected tools"
 description: "Ask the interactive shell in plain language — it can pull live data from your integrations before answering."
 ---
 
-In the interactive shell (`opensre`), ask a free-form question. If the answer needs data from a connected integration (GitHub, Datadog, Sentry, Grafana, and others), the assistant calls those tools, gathers results, and answers from that data — not from guesswork alone.
+In the interactive shell (`opensre`), ask a free-form question. If the answer needs data from a connected integration (GitHub, Datadog, Sentry, Grafana, and others), the agent calls those tools and answers from their results.
 
 You do not pick a tool or run a slash command for this. Just ask.
 
@@ -24,33 +24,33 @@ Found 847 error log lines in the last hour for service:payment-service.
 Top pattern: ConnectionTimeout to postgres-primary…
 ```
 
-The dim `· gathering via …` line shows which integration and tool ran. If the same tool runs more than once, you see `(2)`, `(3)`, and a short query hint.
+The dim progress line shows which integration and tool ran.
 
 For GitHub, you can put the repo URL in the question, mention it earlier in the session, set `GITHUB_REPOSITORY`, or let OpenSRE use the current checkout's `origin` remote when GitHub is connected.
 
 ## How it works
 
 1. **You ask** a free-form question (not a `/slash` command).
-2. **OpenSRE decides** whether live data would help. If yes, it starts a short gather pass — the same registered investigation tools your integrations expose (GitHub search, Datadog logs, Sentry issues, Grafana queries, and so on).
-3. **Gathering is bounded** so the shell stays responsive: a few tool-calling rounds, then stop. Large tool results are truncated before they go into the answer prompt.
+2. **OpenSRE decides** whether live data would help and calls the matching chat tools.
+3. **The ReAct loop is bounded** so the shell stays responsive. Tool results are returned to the same model before it answers.
 4. **Tools are read-only data fetches** — they run without a per-call confirmation (same idea as an investigation lookup, not a mutating setup wizard).
 5. **Progress** shows on the dim `· gathering via &lt;source&gt; · &lt;tool&gt; — &lt;hint&gt;…` line while tools run.
-6. **The assistant answers** using that evidence, plus recent chat context when it matters.
+6. **The agent answers** using that evidence and recent chat context.
 
 What happens when something goes wrong:
 
 | Situation | Result |
 | --- | --- |
-| Ctrl+C during gathering | Gather stops; you get a normal text answer without that live data |
-| Tool or integration unavailable | That call is skipped; the assistant still answers with what it has |
-| No usable tools for the question | No gather pass — text/docs answer only |
+| Ctrl+C during tool use | The turn stops |
+| Tool or integration unavailable | The agent reports what is unavailable |
+| No usable tools for the question | The agent answers without a tool call |
 | Full RCA needed | Use `/investigate` — this path is for Q&amp;A with live lookups, not a full multi-stage investigation |
 
-This is **not** the same as the investigation pipeline. Investigations plan, loop longer, diagnose, and deliver a report. The assistant gather is a short lookup so a chat answer can cite real data.
+This is **not** the same as the investigation pipeline. Investigations run a separate multi-stage RCA and deliver a report.
 
 ## Setup
 
-You need an LLM and at least one integration for live gathering.
+You need an LLM and at least one integration for live tool calls.
 
 **1. LLM**
 
@@ -71,17 +71,17 @@ opensre integrations setup github
 /integrations list
 ```
 
-Only **connected and verified** integrations contribute tools. If Datadog is not set up, Datadog log questions will not gather from Datadog.
+Only **connected and verified** integrations contribute tools.
 
 **3. Check that tools are available**
 
 ```text
 /health          # which integrations look healthy
 /verify datadog  # one service
-/tools           # tools the assistant/investigation path can use
+/tools           # registered tools
 ```
 
-If `/health` is red or `/tools` is empty for that source, fix setup before expecting a gather line.
+If `/health` is red or `/tools` is empty for that source, fix setup first.
 
 **4. Ask**
 
@@ -89,7 +89,7 @@ If `/health` is red or `/tools` is empty for that source, fix setup before expec
 what do the datadog logs say about payment-service errors in the last hour?
 ```
 
-You should see `· gathering via …` when a tool runs. If you never see it, the question may not need live data, or that integration is not available — re-check `/health` and `/tools`.
+You should see a tool progress line when a tool runs. If you do not, the question may not need live data or that integration may be unavailable.
 
 With **no** integrations connected, behavior is unchanged: answers come from text and docs only. Connect a source and matching questions start returning live data.
 

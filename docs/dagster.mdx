@@ -30,7 +30,7 @@ You will be prompted for:
 - **Dagster webserver URL** — `http://localhost:3000` for OSS local dev, or `https://<deployment>.dagster.cloud/<env>` for Dagster+ (the client appends `/graphql` itself)
 - **Dagster API token** — required for Dagster+; leave blank for unauthenticated OSS
 
-Setup validates with a GraphQL `version` probe, writes `DAGSTER_ENDPOINT` to `.env`, and persists the API token (when provided) to the system keychain.
+Setup validates with a GraphQL `version` probe, writes `DAGSTER_ENDPOINT` to `.env`, and persists the API token (when provided) to `~/.opensre/credentials.json`.
 
 ### Option 2: Environment variables
 

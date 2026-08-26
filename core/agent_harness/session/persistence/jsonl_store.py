@@ -27,7 +27,7 @@ logger = logging.getLogger(__name__)
 # Seconds to wait for the cross-process session lock before giving up. Generous:
 # same-session turns are already serialized in-process, so real contention here
 # is only two tasks racing one session — rare, and pathological beyond this.
-_SESSION_LOCK_TIMEOUT_SECONDS = 10
+_SESSION_LOCK_TIMEOUT_SECONDS: float = 10
 
 
 def _session_file_lock_enabled() -> bool:

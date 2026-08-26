@@ -29,7 +29,6 @@ class DefaultTurnAccounting:
                 kind="chat",
                 prompt=self._text,
                 response=response,
-                llm_run=result.llm_run,
             )
         with contextlib.suppress(AttributeError):
             self._session.last_assistant_intent = result.final_intent

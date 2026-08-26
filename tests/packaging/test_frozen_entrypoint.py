@@ -58,3 +58,11 @@ def test_frozen_bundle_ships_the_shared_surface_data() -> None:
     # Act / Assert
     assert 'collect_data_files("surfaces.shared")' in spec
     assert (REPO_ROOT / "surfaces/shared/sample_alerts/alert.json").is_file()
+
+
+def test_frozen_bundle_ships_the_action_system_prompt() -> None:
+    """The action prompt loader reads its Markdown file at runtime."""
+    spec = (REPO_ROOT / "opensre.spec").read_text(encoding="utf-8")
+
+    assert 'collect_data_files("core.agent_harness.prompts.action")' in spec
+    assert (REPO_ROOT / "core/agent_harness/prompts/action/opensre_system_prompt.md").is_file()

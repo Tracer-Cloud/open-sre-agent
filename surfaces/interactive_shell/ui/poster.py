@@ -1,4 +1,4 @@
-"""Launch poster for the REPL: splash art plus welcome panel, redrawn on theme change."""
+"""Launch poster for the REPL: welcome panel, redrawn on theme change."""
 
 from __future__ import annotations
 
@@ -33,7 +33,7 @@ def repl_render_launch_poster(
     session: object = None,
     theme_notice: str | None = None,
 ) -> None:
-    """Render splash + welcome panel using REPL-safe CRLF writes."""
+    """Render the welcome panel using REPL-safe CRLF writes."""
     from surfaces.interactive_shell.ui.terminal_ui import render_terminal_ui
 
     if console.file is sys.stdout and sys.stdout.isatty() and not _console_is_capturing(console):
@@ -47,7 +47,7 @@ def repl_render_launch_poster(
             legacy_windows=False,
             width=width,
         )
-        render_terminal_ui(buf_console, session=session, first_run=False)
+        render_terminal_ui(buf_console, session=session)
         prefix = _theme_notice_line(theme_notice) if theme_notice else ""
         _repl_write_buffer(prefix + buf.getvalue())
         _feed_record_buffer(console, Text.from_ansi(buf.getvalue()).plain)
@@ -58,7 +58,7 @@ def repl_render_launch_poster(
             console,
             f"[{ui_theme.HIGHLIGHT}]theme set:[/] {escape(theme_notice)}",
         )
-    render_terminal_ui(console, session=session, first_run=False)
+    render_terminal_ui(console, session=session)
 
 
 def refresh_welcome_poster(
@@ -67,7 +67,7 @@ def refresh_welcome_poster(
     session: object = None,
     theme_notice: str | None = None,
 ) -> None:
-    """Clear scrollback and redraw splash art + welcome panel with the active theme."""
+    """Clear scrollback and redraw the welcome panel with the active theme."""
     from surfaces.shared.terminal.components.cpr_stdin import drain_stale_cpr_bytes
 
     repl_clear_screen()

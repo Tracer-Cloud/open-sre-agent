@@ -54,7 +54,6 @@ def _counts(steps: int) -> _TurnCounts:
         planned_count=steps,
         handled=True,
         investigation_dispatched=False,
-        handoff_contents=(),
     )
 
 

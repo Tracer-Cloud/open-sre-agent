@@ -29,7 +29,7 @@ Steps 1–3 give you **outbound delivery** (investigation reports, watchdog alar
   buzz-admin generate-key
   ```
 
-  This prints a public key (`npub...`) and a private key (`nsec...` or hex). The private key is what OpenSRE needs — treat it like a password; it's routed to the OS keyring, never plain `.env`.
+  This prints a public key (`npub...`) and a private key (`nsec...` or hex). The private key is what OpenSRE needs — treat it like a password; it's routed to `~/.opensre/credentials.json`, never plain `.env`.
 - If your relay has `BUZZ_REQUIRE_RELAY_MEMBERSHIP` enabled, the agent's public key must be registered as a relay member before it can post — ask your Buzz admin to add it, or messages will fail silently.
 
 ## Setup
@@ -55,7 +55,7 @@ opensre integrations setup buzz
 Interactive shell: `/onboard`. Choose **Buzz**. The wizard prompts for:
 
 - **Relay URL** (`BUZZ_RELAY_URL`, defaults to `http://localhost:3000`)
-- **Private key** (OS keyring via `sync_env_secret`, not plain `.env`)
+- **Private key** (`BUZZ_PRIVATE_KEY` in `.env` and `~/.opensre/credentials.json`)
 - **Default channel** — the UUID from above (`BUZZ_DEFAULT_CHANNEL`)
 - **Auth tag** — optional NIP-OA JSON for owner attestation (`BUZZ_AUTH_TAG`)
 - **CLI binary path** — only if `buzz` isn't on `PATH` (`BUZZ_PATH`)
@@ -85,7 +85,7 @@ BUZZ_PATH=buzz
 | `BUZZ_GATEWAY_AUTO_START` | Two-way chat only. Set `false` to keep the gateway from starting Buzz polling. |
 
 <Note>
-**Credential resolution.** `BUZZ_PRIVATE_KEY` resolves via store → env → OS keyring. The rest (relay URL, default channel, auth tag, binary path) stay plain env / store.
+**Credential resolution.** `BUZZ_PRIVATE_KEY` resolves via store → env → `~/.opensre/credentials.json`. The rest (relay URL, default channel, auth tag, binary path) stay plain env / store.
 </Note>
 
 ## Credentials
@@ -222,6 +222,6 @@ This resolves the `buzz` binary, then runs `buzz channels list` against the conf
 
 ## Security
 
-- Treat the Nostr private key like a password; prefer OS keyring storage.
+- Treat the Nostr private key like a password; prefer `~/.opensre/credentials.json`.
 - Use a dedicated agent identity for OpenSRE.
 - Do not commit private keys to source control.
