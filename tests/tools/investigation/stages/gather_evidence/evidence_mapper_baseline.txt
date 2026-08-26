@@ -167,7 +167,6 @@ list_x_tools
 list_yc_instances
 list_yc_log_groups
 list_yc_metrics
-lookup_cloudtrail_events
 memory_recall
 memory_remember
 opsgenie_alert_detail
