@@ -10,8 +10,10 @@ import pytest
 from integrations.azure.tools.azure_monitor_logs_tool import (
     _bounded_limit,
     _ensure_take_clause,
-    _map_query_azure_monitor_logs,
     query_azure_monitor_logs,
+)
+from integrations.azure.tools.azure_monitor_logs_tool._evidence import (
+    map_query_azure_monitor_logs as _map_query_azure_monitor_logs,
 )
 from tests.tools.conftest import BaseToolContract
 
