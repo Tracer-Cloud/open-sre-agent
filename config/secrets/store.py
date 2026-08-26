@@ -50,6 +50,14 @@ class SecretSaveResult:
         return self.tier == SecretTier.FALLBACK
 
 
+def keyring_is_disabled() -> bool:
+    """Whether ``OPENSRE_DISABLE_KEYRING`` takes this machine out of local storage.
+
+    Env vars stay the only source when set; nothing is written to disk.
+    """
+    return os.getenv(OPENSRE_DISABLE_KEYRING_ENV, "").strip().lower() in _DISABLED_VALUES
+
+
 def normalize_secret(value: str) -> str:
     """The exact form a secret takes once it is stored and read back.
 
@@ -59,12 +67,6 @@ def normalize_secret(value: str) -> str:
     a value that differs from this one can be written but never resolved.
     """
     return value.strip()
-def keyring_is_disabled() -> bool:
-    """Whether ``OPENSRE_DISABLE_KEYRING`` takes this machine out of local storage.
-
-    Env vars stay the only source when set; nothing is written to disk.
-    """
-    return os.getenv(OPENSRE_DISABLE_KEYRING_ENV, "").strip().lower() in _DISABLED_VALUES
 
 
 def lookup(env_var: str, *, default: str = "") -> SecretLookup:
