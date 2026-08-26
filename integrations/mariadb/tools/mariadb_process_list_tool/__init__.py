@@ -2,6 +2,7 @@
 
 from typing import Any
 
+from core.domain.types.evidence import record_evidence_entry
 from core.domain.types.tools import ToolSurface
 from core.tool_framework import tool
 from core.tool_framework.utils import call_db_tool_with_default_db_warning
@@ -11,6 +12,27 @@ from integrations.mariadb import (
     mariadb_extract_params,
     mariadb_is_available,
 )
+
+
+def _map_get_mariadb_process_list(
+    evidence: dict[str, Any], output: dict[str, Any], _tool_input: dict[str, Any]
+) -> None:
+    """Cite the active process count and the longest-running query."""
+    if not output.get("available"):
+        return
+    processes = output.get("processes") or []
+    if not processes:
+        return
+    longest = max((p.get("time_secs", 0) for p in processes), default=0)
+    record_evidence_entry(
+        evidence,
+        source="get_mariadb_process_list",
+        label="MariaDB Process List",
+        summary=(
+            f"{output.get('total_processes', len(processes))} active process(es), "
+            f"longest running {longest}s"
+        ),
+    )
 
 
 @tool(
@@ -24,6 +46,7 @@ from integrations.mariadb import (
     is_available=mariadb_is_available,
     injected_params=("host", "password", "username"),
     extract_params=mariadb_extract_params,
+    evidence_mapper=_map_get_mariadb_process_list,
 )
 def get_mariadb_process_list(
     host: str,

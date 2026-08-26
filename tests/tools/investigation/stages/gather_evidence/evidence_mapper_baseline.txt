@@ -88,11 +88,6 @@ get_kafka_topic_health
 get_lambda_configuration
 get_lambda_errors
 get_lambda_invocation_logs
-get_mariadb_global_status
-get_mariadb_innodb_status
-get_mariadb_process_list
-get_mariadb_replication_status
-get_mariadb_slow_queries
 get_mongodb_atlas_alerts
 get_mongodb_atlas_cluster_events
 get_mongodb_atlas_cluster_metrics
