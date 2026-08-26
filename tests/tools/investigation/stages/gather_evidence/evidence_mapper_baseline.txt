@@ -103,11 +103,6 @@ get_mongodb_current_ops
 get_mongodb_profiler_data
 get_mongodb_replica_status
 get_mongodb_server_status
-get_mysql_current_processes
-get_mysql_replication_status
-get_mysql_server_status
-get_mysql_slow_queries
-get_mysql_table_stats
 get_openclaw_conversation
 get_pods_on_node
 get_postgresql_current_queries
