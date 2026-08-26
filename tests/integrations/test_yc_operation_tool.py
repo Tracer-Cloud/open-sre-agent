@@ -275,6 +275,24 @@ class TestTheIndexIsTheAllowlist:
         assert "find_yc_api" in result["error"]
         assert "not a documented read" in result["error"]
 
+    def test_the_gate_holds_for_a_name_only_the_tools_use(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """The load-balancer tool says "alb"; the index says "apploadbalancer"."""
+
+        def _never(*_a: object, **_k: object) -> None:
+            raise AssertionError("no request should be made")
+
+        monkeypatch.setattr("integrations.yandex_cloud.rest_client.send_request", _never)
+        result = execute_yc_operation(
+            service="alb",
+            path="/apploadbalancer/v1/notARealCollection",
+            **_CREDENTIALS,
+        )
+
+        assert result["success"] is False
+        assert "not a documented read" in result["error"]
+
     def test_a_concrete_resource_path_is_sent(self, monkeypatch: pytest.MonkeyPatch) -> None:
         seen: list[str] = []
 

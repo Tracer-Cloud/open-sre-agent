@@ -13,6 +13,7 @@ from typing import Any
 import pytest
 
 from config.constants.yandex_cloud import (
+    YC_ENDPOINT_OVERRIDES_ENV,
     YC_FOLDER_ID_ENV,
     YC_IAM_TOKEN_ENV,
     YC_SA_KEY_FILE_ENV,
@@ -365,12 +366,11 @@ class TestSetupMetadataFlag:
 
 
 class TestObjectStorageResolvesToItsControlPlane:
-    """The index emits "storage" for the control plane; the registry does not.
+    """ "storage" reaches the control plane, and an operator can still redirect it.
 
     The registry gives that name to the S3 data plane, which serves objects and
-    answers no control-plane read, so a bucket listing went to a host that
-    cannot answer it. Aliased at resolve time rather than in the snapshot: the
-    snapshot is refreshed from Yandex and the upstream value would return.
+    answers no control-plane read; the control plane is registered as
+    "storage-api".
     """
 
     def test_storage_reads_go_to_the_control_plane(self) -> None:
@@ -388,3 +388,14 @@ class TestObjectStorageResolvesToItsControlPlane:
         endpoints.reset_endpoint_cache()
 
         assert endpoints.resolve_endpoint("storage") == "storage.api.cloud.yandex.net"
+
+    def test_an_override_on_the_caller_visible_name_wins(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """An operator overrides the name they call, not the one the registry uses."""
+        from integrations.yandex_cloud import endpoints
+
+        monkeypatch.setenv(YC_ENDPOINT_OVERRIDES_ENV, '{"storage": "storage.internal"}')
+        endpoints.reset_endpoint_cache()
+
+        assert endpoints.resolve_endpoint("storage", refresh=False) == "storage.internal"

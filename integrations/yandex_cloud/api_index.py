@@ -249,9 +249,6 @@ def _path_matches(template: str, actual: str) -> bool:
     )
 
 
-#: The tools name a couple of services the way the endpoint registry does, while
-#: the index carries the name the protos use. Without this the gate below sees
-#: an unknown service and waves the path through unchecked.
 #: Where a tool names a service differently from the index. The tools say "alb",
 #: while the protos - and so the index built from them - say "apploadbalancer".
 #: Without this the gate sees an unknown service and waves the path through.

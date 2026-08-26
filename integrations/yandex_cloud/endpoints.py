@@ -244,17 +244,31 @@ def known_endpoints(*, refresh: bool = True) -> dict[str, str]:
             cached = _cache.endpoints
         if cached:
             endpoints.update(cached)
+    _apply_host_aliases(endpoints)
+    # Overrides land last, so an operator pointing a service somewhere else wins
+    # over both the registry and the alias above.
     endpoints.update(_endpoint_overrides())
     return endpoints
 
 
-#: Where the registry's name for a host differs from the one the index emits.
-#: The index calls the Object Storage control plane "storage", but the registry
-#: gives that name to the S3 data plane, which serves objects and answers no
-#: control-plane read; the control plane is registered as "storage-api". Applied
-#: here rather than in the snapshot because the snapshot is refreshed from
-#: Yandex at runtime and the upstream value would come straight back.
+#: Services the registry names differently from everyone else. The index and the
+#: tools call the Object Storage control plane "storage"; the registry gives that
+#: name to the S3 data plane, which serves objects and answers no control-plane
+#: read, and registers the control plane as "storage-api".
 _HOST_ALIASES: Final[dict[str, str]] = {"storage": "storage-api"}
+
+
+def _apply_host_aliases(endpoints: dict[str, str]) -> None:
+    """Re-point each aliased name at the host that answers for it.
+
+    Applied to the resolved registry data rather than the snapshot because the
+    snapshot is refreshed from Yandex at runtime and the upstream value would
+    come straight back.
+    """
+    for name, registered_as in _HOST_ALIASES.items():
+        host = endpoints.get(registered_as)
+        if host:
+            endpoints[name] = host
 
 
 def resolve_endpoint(service: str, *, refresh: bool = True) -> str | None:
@@ -264,8 +278,7 @@ def resolve_endpoint(service: str, *, refresh: bool = True) -> str | None:
     built from caller input, so a model cannot talk the client into reaching an
     arbitrary address.
     """
-    wanted = service.strip().lower()
-    return known_endpoints(refresh=refresh).get(_HOST_ALIASES.get(wanted, wanted))
+    return known_endpoints(refresh=refresh).get(service.strip().lower())
 
 
 def reset_endpoint_cache() -> None:
