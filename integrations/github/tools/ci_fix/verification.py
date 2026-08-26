@@ -161,6 +161,106 @@ def wait_for_pr_checks(
         sleep(max(0, poll_interval_seconds))
 
 
+def wait_for_branch_checks(
+    ctx: CiFixContext,
+    *,
+    github_token: str | None,
+    expected_head_sha: str,
+    timeout_seconds: int = DEFAULT_CHECK_WAIT_SECONDS,
+    poll_interval_seconds: int = DEFAULT_POLL_INTERVAL_SECONDS,
+    settle_seconds: int = DEFAULT_SETTLE_SECONDS,
+    registration_seconds: int = DEFAULT_REGISTRATION_SECONDS,
+    sleep: Callable[[float], None] = time.sleep,
+    monotonic: Callable[[], float] = time.monotonic,
+) -> CheckVerification:
+    """Poll the workflow runs on the pushed branch commit until they pass, fail, or time out.
+
+    Branch pushes have no PR rollup, so the pushed commit's own workflow runs
+    are the verification signal; runs on a later commit never invalidate them,
+    so there is no SUPERSEDED outcome here.
+    """
+    repo = f"{ctx.owner}/{ctx.repo}"
+    started_at = monotonic()
+    deadline = started_at + max(0, timeout_seconds)
+    first_seen_at: float | None = None
+    terminal_signature: tuple[str, ...] = ()
+    terminal_since: float | None = None
+    last_names: tuple[str, ...] = ()
+
+    while True:
+        runs = _commit_runs(repo=repo, github_token=github_token, commit_sha=expected_head_sha)
+        last_names = tuple(_run_name(run) for run in runs)
+        now = monotonic()
+
+        if runs and first_seen_at is None:
+            first_seen_at = now
+        # Give late workflows time to register after the first run appears.
+        registration_complete = first_seen_at is not None and now - first_seen_at >= max(
+            0, registration_seconds
+        )
+        all_completed = bool(runs) and all(
+            str(run.get("status") or "").strip().lower() == _WORKFLOW_RUN_COMPLETED for run in runs
+        )
+        if registration_complete and all_completed:
+            signature = tuple(
+                sorted(
+                    f"{run.get('databaseId') or 'unknown'}:"
+                    f"{str(run.get('conclusion') or '').strip().lower()}"
+                    for run in runs
+                )
+            )
+            if signature != terminal_signature:
+                terminal_signature = signature
+                terminal_since = now
+            if terminal_since is not None and now - terminal_since >= max(0, settle_seconds):
+                failing = tuple(_run_name(run) for run in runs if _run_failed(run))
+                return CheckVerification(
+                    state=CheckState.FAILED if failing else CheckState.PASSED,
+                    check_names=last_names,
+                    failing_checks=failing,
+                )
+        else:
+            terminal_signature = ()
+            terminal_since = None
+
+        if now >= deadline:
+            return CheckVerification(state=CheckState.TIMED_OUT, check_names=last_names)
+        sleep(max(0, poll_interval_seconds))
+
+
+def _commit_runs(
+    *,
+    repo: str,
+    github_token: str | None,
+    commit_sha: str,
+) -> list[dict[str, Any]]:
+    payload = run_gh_json(
+        [
+            "run",
+            "list",
+            "--commit",
+            commit_sha,
+            "--limit",
+            "100",
+            "--json",
+            "databaseId,name,status,conclusion",
+            "--jq",
+            f'{{"{_WORKFLOW_RUNS_KEY}": .}}',
+        ],
+        repo=repo,
+        github_token=github_token,
+    )
+    return _check_rows(payload.get(_WORKFLOW_RUNS_KEY))
+
+
+def _run_name(run: dict[str, Any]) -> str:
+    return str(run.get("name") or "unnamed run")
+
+
+def _run_failed(run: dict[str, Any]) -> bool:
+    return str(run.get("conclusion") or "").strip().upper() in _FAILED_CONCLUSIONS
+
+
 def _check_rows(value: Any) -> list[dict[str, Any]]:
     return [item for item in value if isinstance(item, dict)] if isinstance(value, list) else []
 
@@ -255,5 +355,6 @@ __all__ = [
     "DEFAULT_POLL_INTERVAL_SECONDS",
     "DEFAULT_REGISTRATION_SECONDS",
     "DEFAULT_SETTLE_SECONDS",
+    "wait_for_branch_checks",
     "wait_for_pr_checks",
 ]
