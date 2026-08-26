@@ -464,6 +464,22 @@ class TestMapSearchSentryIssues:
 
         assert evidence["catalog_entries"][0]["summary"] == "10+ issue(s) for query 'TypeError'"
 
+    def test_sanitizes_long_multiline_query(self) -> None:
+        """Regression: the raw query can be a full multi-line stack trace —
+        collapse and cap it so it can't produce a malformed report line."""
+        evidence: dict[str, Any] = {}
+        long_query = "TypeError: boom\n  at foo (bar.ts:1)\n" + "x" * 300
+
+        _map_search_sentry_issues(
+            evidence,
+            {"available": True, "query": long_query, "issues_total": 1, "issues": [{"id": "1"}]},
+            {"limit": 100},
+        )
+
+        summary = evidence["catalog_entries"][0]["summary"]
+        assert "\n" not in summary
+        assert len(summary) < len(long_query)
+
     def test_records_nothing_when_no_issues(self) -> None:
         evidence: dict[str, Any] = {}
 

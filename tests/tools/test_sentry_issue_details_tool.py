@@ -83,6 +83,22 @@ class TestMapGetSentryIssueDetails:
             == "'TypeError: cannot read property', level error, unresolved, 42 event(s)"
         )
 
+    def test_truncates_long_multiline_title(self) -> None:
+        """Regression: a raw exception message can be long and multi-line —
+        collapse and cap it so it can't produce a malformed report line."""
+        evidence: dict[str, Any] = {}
+        long_title = "TypeError: boom\n  at foo (bar.ts:1)\n" + "x" * 200
+
+        _map_get_sentry_issue_details(
+            evidence,
+            {"available": True, "issue": {"title": long_title, "level": "error"}},
+            {},
+        )
+
+        summary = evidence["catalog_entries"][0]["summary"]
+        assert "\n" not in summary
+        assert len(summary) < len(long_title)
+
     def test_records_nothing_when_issue_empty(self) -> None:
         evidence: dict[str, Any] = {}
 

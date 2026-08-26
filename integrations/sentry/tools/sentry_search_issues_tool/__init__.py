@@ -16,6 +16,7 @@ from integrations.sentry import (
     SentryConfig,
     _clamp_issue_limit,
     _resolve_stats_period,
+    _sanitize_sentry_query,
     build_sentry_config,
     describe_sentry_api_error,
     list_sentry_issues,
@@ -81,6 +82,12 @@ def _map_search_sentry_issues(
     show the plain count when it's under the effective limit (Sentry
     returned everything that matched), and "N+" only when the count
     saturates the limit (there may be more).
+
+    ``output["query"]`` is the caller's raw, unsanitized query string (the
+    sanitized/candidate form is only used internally by ``list_sentry_issues``
+    when calling the API) -- run it through the same
+    ``_sanitize_sentry_query`` collapse-and-truncate the client already
+    applies before embedding it in the report summary.
     """
     if not output.get("available"):
         return
@@ -90,7 +97,7 @@ def _map_search_sentry_issues(
     issues_total = output.get("issues_total", len(issues))
     effective_limit = _clamp_issue_limit(tool_input.get("limit", DEFAULT_SENTRY_ISSUE_LIMIT))
     count_label = f"{issues_total}+" if issues_total >= effective_limit else str(issues_total)
-    query = output.get("query") or "*"
+    query = _sanitize_sentry_query(str(output.get("query") or "")) or "*"
     record_evidence_entry(
         evidence,
         source="search_sentry_issues",
