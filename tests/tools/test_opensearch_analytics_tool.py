@@ -385,6 +385,28 @@ class TestMapQueryOpensearchAnalytics:
         assert entries[0]["source"] == "query_opensearch_analytics"
         assert entries[0]["summary"] == "2 log(s) for query 'service:checkout' on 'logs-*'"
 
+    def test_truncates_long_query_and_index_pattern_in_summary(self) -> None:
+        evidence: dict[str, Any] = {}
+        long_query = "service:checkout AND " + "x" * 200
+        long_index_pattern = "logs-" + "y" * 200
+
+        _map_query_opensearch_analytics(
+            evidence,
+            {
+                "available": True,
+                "total_returned": 1,
+                "query": long_query,
+                "index_pattern": long_index_pattern,
+                "logs": [{"message": "error 1"}],
+            },
+            {},
+        )
+
+        summary = evidence["catalog_entries"][0]["summary"]
+        assert len(summary) < len(long_query) + len(long_index_pattern)
+        assert long_query not in summary
+        assert long_index_pattern not in summary
+
     def test_records_nothing_when_no_logs(self) -> None:
         evidence: dict[str, Any] = {}
 
