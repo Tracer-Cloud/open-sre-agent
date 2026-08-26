@@ -15,7 +15,7 @@ _SKILL_DATA_ROOTS = (Path("integrations"), Path("tools"))
 #: entry here a file is absent from both the wheel and the frozen binary, and
 #: the tool that reads it degrades silently rather than failing to import.
 _RUNTIME_DATA_FILES = (Path("integrations/yandex_cloud/api_index.json"),)
-_RUNTIME_DISCOVERY_EXCLUSIONS = frozenset({"investigation_registry", "registry.py"})
+_RUNTIME_DISCOVERY_EXCLUSIONS = frozenset({"registry.py"})
 #: Non-Python trees under ``infrastructure/`` that never run from the frozen
 #: binary (e.g. a Cloudflare Worker deployed separately via ``wrangler``).
 #: Bundling them only adds dead weight to the release artifact.

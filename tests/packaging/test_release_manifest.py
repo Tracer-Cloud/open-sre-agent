@@ -29,8 +29,6 @@ def test_hidden_imports_exclude_non_runtime_discovery_modules() -> None:
     hidden_imports = set(runtime_hidden_imports(_REPO_ROOT))
 
     assert "tools.registry" not in hidden_imports
-    assert "tools.investigation_registry" not in hidden_imports
-    assert "tools.investigation_registry.prioritization" not in hidden_imports
 
 
 def test_hidden_imports_cover_runtime_discovered_integration_verifiers() -> None:

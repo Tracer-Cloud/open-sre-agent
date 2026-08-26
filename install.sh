@@ -1177,71 +1177,6 @@ print_success_screen() {
   fi
   log "$sep"
   log ""
-  log "Next steps:"
-  log "  1. Run  ${BIN_NAME:-opensre} onboard"
-  log "     Set up your LLM provider and add your observability integrations."
-  log ""
-  log "  2. Run  ${BIN_NAME:-opensre}  (no subcommand)"
-  log "     From a normal interactive terminal this starts the interactive shell — type a"
-  log "     prompt or incident description at the prompt to investigate."
-  log ""
-  log "  3. Optional — one-shot RCA from a file:"
-  log "     ${BIN_NAME:-opensre} investigate -i path/to/alert.json"
-  log ""
-  log "Docs: https://www.opensre.com/docs"
-  log ""
-}
-
-auto_launch_disabled() {
-  case "${OPENSRE_AUTO_LAUNCH:-}" in
-    0|false|FALSE|no|NO|off|OFF)
-      return 0
-      ;;
-    *)
-      return 1
-      ;;
-  esac
-}
-
-controlling_tty_usable() {
-  # The onboarding wizard needs a terminal it can actually control: it calls
-  # tcgetattr/tcsetattr on its stdin. `stty -g` performs the same tcgetattr,
-  # so where it fails, launching the wizard would die with a "terminal I/O
-  # error" mid-render (issue #3273). Only offer /dev/tty when it passes.
-  command -v stty >/dev/null 2>&1 || return 1
-  [ -r /dev/tty ] && [ -w /dev/tty ] || return 1
-  stty -g </dev/tty >/dev/null 2>&1
-}
-
-run_onboarding() {
-  # Uses the caller's `installed_binary` (bash dynamic scoping); any redirect
-  # on the call applies to the wizard.
-  log "Launching ${BIN_NAME} onboard..."
-  "$installed_binary" onboard || \
-    warn "Onboarding exited before completion. Run '${BIN_NAME} onboard' to retry."
-}
-
-launch_onboarding_after_install() {
-  local installed_binary="${INSTALL_DIR}/${BIN_NAME}"
-
-  # The full-screen wizard needs a real terminal on stdout to render.
-  if auto_launch_disabled || [ ! -t 1 ]; then
-    return
-  fi
-  if [ ! -x "$installed_binary" ]; then
-    warn "Could not auto-launch onboarding; ${installed_binary} is not executable."
-    return
-  fi
-
-  if [ -t 0 ]; then
-    run_onboarding
-  elif [ "$platform" != "windows" ] && controlling_tty_usable; then
-    # Piped install (the documented `curl … | bash`): stdin is the curl pipe,
-    # so hand the wizard the controlling terminal instead. Git Bash on Windows
-    # emulates /dev/tty in ways the wizard cannot control, so the piped
-    # auto-launch stays darwin/linux-only.
-    run_onboarding </dev/tty
-  fi
 }
 
 cleanup() {
@@ -1467,7 +1402,6 @@ finish_install() {
   ensure_on_path
   ensure_github_cli
   print_success_screen "$installed_version"
-  launch_onboarding_after_install
 }
 
 main() {

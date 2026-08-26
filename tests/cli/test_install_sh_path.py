@@ -157,150 +157,14 @@ def test_install_sh_success_screen_has_visual_structure() -> None:
     assert "--------------------------------------------" in output
     assert "Success: Welcome to OpenSRE" in output
     assert "opensre v2026.4.1 installed successfully" in output
-    assert "Next steps:" in output
+    assert "Next steps:" not in output
 
 
-def test_install_sh_contains_auto_onboarding_launch_hook() -> None:
+def test_install_sh_does_not_auto_launch_onboarding() -> None:
     source = INSTALL_SH.read_text()
 
-    assert "OPENSRE_AUTO_LAUNCH" in source
-    assert "launch_onboarding_after_install" in source
-    assert '"$installed_binary" onboard' in source
-
-
-def test_install_sh_auto_onboarding_piped_installs_reattach_dev_tty() -> None:
-    """Piped ``curl … | bash`` installs auto-launch onboarding via /dev/tty.
-
-    stdin is the curl pipe there, so the wizard's stdin is reattached to the
-    controlling terminal — but only when ``stty -g`` confirms the terminal can
-    actually be controlled. Where that tcgetattr fails, the full-screen wizard
-    would die with a terminal I/O error mid-render (issue #3273), so the
-    launch is skipped instead.
-    """
-    source = INSTALL_SH.read_text()
-
-    assert "controlling_tty_usable" in source
-    assert "stty -g </dev/tty" in source
-    assert "run_onboarding </dev/tty" in source
-    # Only stdin is reattached; redirecting stdout to /dev/tty as well was the
-    # original #3273 failure mode.
-    assert "</dev/tty >/dev/tty 2>&1" not in source
-
-
-def test_install_sh_auto_onboarding_piped_install_launches_via_pty(tmp_path: Path) -> None:
-    """Simulate a piped install inside a real pty: onboarding must launch
-    with its stdin reattached to the terminal."""
-    import os
-    import pty
-
-    bin_dir = tmp_path / "bin"
-    bin_dir.mkdir()
-    fake_binary = bin_dir / "opensre"
-    fake_binary.write_text(
-        "#!/usr/bin/env bash\n"
-        'if [ -t 0 ]; then echo "ONBOARD_STDIN_IS_TTY"; else echo "ONBOARD_STDIN_NOT_TTY"; fi\n'
-    )
-    fake_binary.chmod(0o755)
-
-    script = textwrap.dedent(f"""\
-        eval "$(awk '/^REPO=/{{exit}} {{print}}' {_INSTALL_SH_SHELL})"
-        eval "$(awk '
-            /^[a-z_][a-z_]*\\(\\)/ {{ in_fn=1 }}
-            in_fn {{ print }}
-            in_fn && /^\\}}$/ {{ in_fn=0 }}
-        ' {_INSTALL_SH_SHELL})"
-        INSTALL_DIR={shlex.quote(str(bin_dir))}
-        BIN_NAME="opensre"
-        platform="linux"
-        launch_onboarding_after_install </dev/null
-    """)
-
-    pid, controller_fd = pty.fork()
-    if pid == 0:  # pragma: no cover - child process replaced by bash
-        os.execvp("bash", ["bash", "-c", script])
-
-    chunks = []
-    try:
-        while True:
-            try:
-                chunk = os.read(controller_fd, 4096)
-            except OSError:  # Linux raises EIO once the child side closes
-                break
-            if not chunk:
-                break
-            chunks.append(chunk)
-    finally:
-        os.close(controller_fd)
-        _, wait_status = os.waitpid(pid, 0)
-
-    output = b"".join(chunks).decode(errors="replace")
-    assert os.waitstatus_to_exitcode(wait_status) == 0, output
-    assert "Launching opensre onboard" in output
-    assert "ONBOARD_STDIN_IS_TTY" in output
-
-
-def test_install_sh_auto_onboarding_skips_piped_install_on_windows(tmp_path: Path) -> None:
-    """Git Bash /dev/tty emulation is not trusted: piped installs on the
-    windows platform never auto-launch."""
-    import os
-    import pty
-
-    bin_dir = tmp_path / "bin"
-    bin_dir.mkdir()
-    fake_binary = bin_dir / "opensre"
-    fake_binary.write_text('#!/usr/bin/env bash\necho "ONBOARD_RAN"\n')
-    fake_binary.chmod(0o755)
-
-    script = textwrap.dedent(f"""\
-        eval "$(awk '/^REPO=/{{exit}} {{print}}' {_INSTALL_SH_SHELL})"
-        eval "$(awk '
-            /^[a-z_][a-z_]*\\(\\)/ {{ in_fn=1 }}
-            in_fn {{ print }}
-            in_fn && /^\\}}$/ {{ in_fn=0 }}
-        ' {_INSTALL_SH_SHELL})"
-        INSTALL_DIR={shlex.quote(str(bin_dir))}
-        BIN_NAME="opensre"
-        platform="windows"
-        launch_onboarding_after_install </dev/null
-    """)
-
-    pid, controller_fd = pty.fork()
-    if pid == 0:  # pragma: no cover - child process replaced by bash
-        os.execvp("bash", ["bash", "-c", script])
-
-    chunks = []
-    try:
-        while True:
-            try:
-                chunk = os.read(controller_fd, 4096)
-            except OSError:
-                break
-            if not chunk:
-                break
-            chunks.append(chunk)
-    finally:
-        os.close(controller_fd)
-        _, wait_status = os.waitpid(pid, 0)
-
-    output = b"".join(chunks).decode(errors="replace")
-    assert os.waitstatus_to_exitcode(wait_status) == 0, output
-    assert "ONBOARD_RAN" not in output
-    assert "Launching opensre onboard" not in output
-
-
-def test_install_sh_auto_onboarding_noops_without_tty() -> None:
-    # stdin is redirected from /dev/null so the gate is exercised deterministically
-    # regardless of how the test runner's own stdin is wired.
-    result = _run_logging_snippet(
-        """
-        INSTALL_DIR="/tmp"
-        BIN_NAME="opensre"
-        launch_onboarding_after_install </dev/null
-        """
-    )
-
-    assert result.returncode == 0, result.stderr
-    assert "Launching opensre onboard" not in result.stdout + result.stderr
+    assert "launch_onboarding_after_install" not in source
+    assert "Launching ${BIN_NAME} onboard" not in source
 
 
 def test_install_sh_has_step_for_explicit_version_fetch() -> None:
@@ -641,80 +505,8 @@ def test_readds_export_when_marker_present_but_line_removed(tmp_path: Path) -> N
 
 
 # ---------------------------------------------------------------------------
-# Helpers and tests for the post-install onboarding hint (issue #1153)
+# PowerShell post-install output
 # ---------------------------------------------------------------------------
-
-
-def _run_post_install(
-    tmp_path: Path,
-    shell: str,
-    platform: str = "linux",
-    install_channel: str = "release",
-    installed_version: str = "2026.4.1",
-    dir_already_on_path: bool = False,
-) -> subprocess.CompletedProcess[str]:
-    """Run the real post-install function from install.sh with side-effects stubbed.
-
-    Unlike ``_run()``, which only calls ``configure_path()`` in isolation, this
-    helper calls ``finish_install()`` from install.sh (version print +
-    configure_path + onboarding hint) rather than copying those lines into the
-    test.  That means if the hint is removed from install.sh the assertions will
-    correctly fail — there is no tautology.
-
-    The approach:
-      1. Load all function definitions from install.sh via awk.
-      2. Set every shell variable the post-install function needs.
-      3. Call the real post-install function.
-    """
-    fake_home = tmp_path / "home"
-    fake_home.mkdir(exist_ok=True)
-    idir = str(fake_home / _LOCAL_BIN)
-
-    # When dir_already_on_path=True, configure_path() hits the early return
-    # and prints nothing.  The onboarding hint must still appear.
-    path_value = f"{idir}:/usr/bin:/bin" if dir_already_on_path else "/usr/bin:/bin"
-
-    install_sh = _INSTALL_SH_SHELL
-    idir_shell = shlex.quote(idir)
-    home_shell = shlex.quote(str(fake_home))
-
-    script = textwrap.dedent(f"""\
-        # 1. Load every function definition from install.sh
-        eval "$(awk '
-            /^[a-z_][a-z_]*\\(\\)/ {{ in_fn=1 }}
-            in_fn {{ print }}
-            in_fn && /^\\}}$/ {{ in_fn=0 }}
-        ' {install_sh})"
-
-        # 2. Set every variable the post-install function reads
-        BIN_NAME="opensre"
-        INSTALL_DIR={idir_shell}
-        INSTALL_CHANNEL="{install_channel}"
-        installed_version="{installed_version}"
-        platform="{platform}"
-        HOME={home_shell}
-        SHELL="{shell}"
-        PATH="{path_value}"
-        export HOME SHELL PATH
-
-        # 3. Execute the real post-install function from install.sh.
-        finish_install
-    """)
-    return subprocess.run(["bash", "-c", script], capture_output=True, text=True)
-
-
-def test_install_sh_contains_onboarding_hint() -> None:
-    """Contract test: the hint string must be present in install.sh source.
-
-    This is a direct grep of the script file — independent of any subprocess
-    execution — so it will fail immediately if the hint is removed from
-    install.sh even if the subprocess-based tests are somehow still passing.
-    """
-    source = INSTALL_SH.read_text()
-    assert "${BIN_NAME:-opensre} onboard" in source, (
-        "install.sh does not contain the onboarding hint "
-        "(expected ``${BIN_NAME:-opensre} onboard`` in Next steps output)."
-    )
 
 
 def test_install_ps1_contains_onboarding_hint() -> None:
@@ -725,44 +517,6 @@ def test_install_ps1_contains_onboarding_hint() -> None:
         "install.ps1 does not contain the onboarding step "
         '(expected a line with ``$exe onboard``, e.g. ``Write-Host "  1. Run  $exe onboard"``).'
     )
-
-
-def test_onboarding_hint_shown_when_path_not_set(tmp_path: Path) -> None:
-    """Hint appears on a first install where configure_path writes the rc file."""
-    result = _run_post_install(tmp_path, shell="/bin/zsh", dir_already_on_path=False)
-    assert result.returncode == 0, result.stderr
-    assert "opensre onboard" in result.stdout + result.stderr
-
-
-def test_onboarding_hint_shown_when_path_already_set(tmp_path: Path) -> None:
-    """Hint appears even when configure_path returns early (install dir already on PATH).
-
-    This is the silent-upgrade scenario that the old configure_path-only
-    helper could never cover: configure_path() hits the early return at
-    line 490 and outputs nothing, yet the user must still see the hint.
-    """
-    result = _run_post_install(tmp_path, shell="/bin/zsh", dir_already_on_path=True)
-    assert result.returncode == 0, result.stderr
-    assert "opensre onboard" in result.stdout + result.stderr
-
-
-def test_onboarding_hint_shown_for_bash_linux(tmp_path: Path) -> None:
-    """Hint appears on bash/linux installs."""
-    result = _run_post_install(tmp_path, shell="/bin/bash", platform="linux")
-    assert result.returncode == 0, result.stderr
-    assert "opensre onboard" in result.stdout + result.stderr
-
-
-def test_onboarding_hint_shown_for_main_channel(tmp_path: Path) -> None:
-    """Hint appears when installing the rolling main build (not a versioned release)."""
-    result = _run_post_install(
-        tmp_path,
-        shell="/bin/zsh",
-        install_channel="main",
-        installed_version="main",
-    )
-    assert result.returncode == 0, result.stderr
-    assert "opensre onboard" in result.stdout + result.stderr
 
 
 def _run_ensure_on_path(
@@ -853,20 +607,6 @@ def test_ensure_on_path_skips_python_venv_bin(tmp_path: Path) -> None:
     link = safe_bin / "opensre"
     assert link.is_symlink()
     assert link.resolve() == (install_dir / "opensre").resolve()
-
-
-def test_onboarding_hint_appears_after_version_line(tmp_path: Path) -> None:
-    """The onboarding hint must appear AFTER the 'Installed opensre v...' line."""
-    result = _run_post_install(tmp_path, shell="/bin/zsh", installed_version="2026.4.1")
-    assert result.returncode == 0, result.stderr
-    output = result.stdout + result.stderr
-    installed_pos = output.find("Installed opensre")
-    onboard_pos = output.find("opensre onboard")
-    assert installed_pos != -1, "'Installed opensre' line missing from output"
-    assert onboard_pos != -1, "'opensre onboard' hint missing from output"
-    assert onboard_pos > installed_pos, (
-        "Onboarding hint must come after the install confirmation line"
-    )
 
 
 def _run_ensure_github_cli(
