@@ -8,7 +8,7 @@ from pathlib import Path
 from typing import Any
 
 import core.agent_harness.session.persistence.paths as storage_paths
-from core.agent_harness.session.persistence.contracts import CHAT_KINDS
+from core.agent_harness.session.persistence.contracts import CHAT_KINDS, RestoreContextKey
 from core.agent_harness.session.persistence.wal_recovery import dangling_tool_intents
 from core.state.transcript_window import SESSION_SUMMARY_PREFIX
 
@@ -88,11 +88,11 @@ class JsonlSessionRepo:
                 "leaf_id": _resolve_entry_id(entries, None),
                 "name": storage_paths.derive_name(_records_to_lines([header, *entries])),
                 "started_at": header.get("created_at"),
-                "cli_agent_messages": messages,
-                "accumulated_context": context,
-                "session_goal_state": goal_state,
-                "task_plan_state": plan_state,
-                "history": history,
+                RestoreContextKey.CLI_AGENT_MESSAGES: messages,
+                RestoreContextKey.ACCUMULATED_CONTEXT: context,
+                RestoreContextKey.SESSION_GOAL_STATE: goal_state,
+                RestoreContextKey.TASK_PLAN_STATE: plan_state,
+                RestoreContextKey.HISTORY: history,
                 "turn_details": turn_details,
                 "has_snapshot": False,
                 # WAL sidecars are off-branch, so scan the full entry list:
