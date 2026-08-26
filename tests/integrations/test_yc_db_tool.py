@@ -181,3 +181,104 @@ class TestManagedDatabases:
         assert connect["host"] == "rc1a.mdb"
         assert connect["port"] == 6432
         assert "CA.pem" in connect["tls"]
+
+
+class TestEngineNamesTheCatalogActuallyHas:
+    """The engine table has to match Yandex's service list, not last year's."""
+
+    def test_sharded_postgresql_is_its_own_engine(self) -> None:
+        """SPQR is a separate service with its own API prefix, not a PostgreSQL mode."""
+        engine = resolve_engine("spqr")
+
+        assert engine is not None
+        assert engine.service == "managed-spqr"
+        assert engine.path == "/managed-spqr/v1"
+        assert "ROUTER" in engine.log_service_types
+
+    @pytest.mark.parametrize("name", ["spqr", "sharded postgresql", "sharded-postgresql"])
+    def test_the_names_people_type_for_it_resolve(self, name: str) -> None:
+        engine = resolve_engine(name)
+
+        assert engine is not None
+        assert engine.key == "spqr"
+
+    def test_every_engine_is_listed_once(self) -> None:
+        assert len(ENGINE_KEYS) == len(set(ENGINE_KEYS))
+
+
+class TestHostsLiveWhereTheEngineKeepsThem:
+    """Greenplum has no ``hosts`` collection, and the cost of assuming it does is silent."""
+
+    def _greenplum(self, monkeypatch: pytest.MonkeyPatch) -> dict[str, Any]:
+        monkeypatch.setattr(
+            "integrations.yandex_cloud.rest_client.send_request",
+            _responder(
+                {
+                    "/master-hosts": {
+                        "hosts": [
+                            {
+                                "name": "rc1a-master.mdb",
+                                "role": "MASTER",
+                                "health": "ALIVE",
+                                "zoneId": "ru-central1-a",
+                            }
+                        ]
+                    },
+                    "/segment-hosts": {
+                        "hosts": [
+                            {
+                                "name": "rc1b-seg1.mdb",
+                                "role": "SEGMENT",
+                                "health": "DEAD",
+                                "zoneId": "ru-central1-b",
+                            }
+                        ]
+                    },
+                    "/operations": {"operations": []},
+                    "/managed-greenplum/v1/clusters/c1": {
+                        "id": "c1",
+                        "status": "RUNNING",
+                        "health": "ALIVE",
+                    },
+                }
+            ),
+        )
+        return get_yc_db_cluster(cluster_id="c1", engine="greenplum", **_CREDENTIALS)
+
+    def test_both_host_collections_are_read(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        result = self._greenplum(monkeypatch)
+
+        assert [host["name"] for host in result["hosts"]] == ["rc1a-master.mdb", "rc1b-seg1.mdb"]
+
+    def test_a_sick_segment_is_reported(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """A segment is where the work happens, so a dead one is what hangs a query."""
+        result = self._greenplum(monkeypatch)
+
+        assert [host["name"] for host in result["unhealthy_hosts"]] == ["rc1b-seg1.mdb"]
+
+    def test_the_master_is_what_the_connection_hint_points_at(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        result = self._greenplum(monkeypatch)
+
+        assert result["connect"]["host"] == "rc1a-master.mdb"
+
+    def test_a_failed_host_read_says_so_instead_of_reading_as_no_hosts(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """An empty list and a failed read lead to opposite conclusions."""
+
+        def _hosts_are_down(_method: str, url: str, **_kwargs: Any) -> httpx.Response:
+            if url.endswith("/hosts"):
+                return httpx.Response(
+                    HTTPStatus.SERVICE_UNAVAILABLE, json={"message": "temporarily unavailable"}
+                )
+            if "/operations" in url:
+                return httpx.Response(HTTPStatus.OK, json={"operations": []})
+            return httpx.Response(HTTPStatus.OK, json={"id": "c1", "status": "RUNNING"})
+
+        monkeypatch.setattr("integrations.yandex_cloud.rest_client.send_request", _hosts_are_down)
+        result = get_yc_db_cluster(cluster_id="c1", engine="postgresql", **_CREDENTIALS)
+
+        assert result["hosts"] == []
+        assert "hosts" in result["hosts_error"]

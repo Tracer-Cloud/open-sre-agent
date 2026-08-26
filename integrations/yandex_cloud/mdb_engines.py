@@ -42,6 +42,15 @@ class Engine:
     integration: str
     """OpenSRE integration that queries this engine's data plane."""
 
+    host_collections: tuple[str, ...] = ("hosts",)
+    """Where this engine lists its hosts, relative to the cluster.
+
+    Almost every engine answers on ``hosts``. Greenplum does not have that
+    collection at all: its hosts are split into ``master-hosts`` and
+    ``segment-hosts``, and asking for ``hosts`` returns a 404 that leaves the
+    cluster looking like it has no hosts and no address to connect to.
+    """
+
     log_service_types: tuple[str, ...] = ()
     """``serviceType`` values the ``:logs`` endpoint accepts, first one default.
 
@@ -62,7 +71,7 @@ ENGINES: Final[tuple[Engine, ...]] = (
         "/managed-postgresql/v1",
         6432,
         "postgresql",
-        ("POSTGRESQL", "POOLER", "REPACK"),
+        log_service_types=("POSTGRESQL", "POOLER", "REPACK"),
     ),
     Engine(
         "mysql",
@@ -72,7 +81,7 @@ ENGINES: Final[tuple[Engine, ...]] = (
         3306,
         "mysql",
         # Error log first: it is what explains a cluster that is misbehaving.
-        ("MYSQL_ERROR", "MYSQL_GENERAL", "MYSQL_SLOW_QUERY", "MYSQL_AUDIT"),
+        log_service_types=("MYSQL_ERROR", "MYSQL_GENERAL", "MYSQL_SLOW_QUERY", "MYSQL_AUDIT"),
     ),
     Engine(
         "clickhouse",
@@ -82,7 +91,7 @@ ENGINES: Final[tuple[Engine, ...]] = (
         8443,
         "clickhouse",
         # Required here: without it the endpoint refuses the read.
-        ("CLICKHOUSE", "CLICKHOUSE_KEEPER"),
+        log_service_types=("CLICKHOUSE", "CLICKHOUSE_KEEPER"),
     ),
     Engine(
         "valkey",
@@ -91,7 +100,7 @@ ENGINES: Final[tuple[Engine, ...]] = (
         "/managed-redis/v1",
         6380,
         "redis",
-        ("REDIS",),
+        log_service_types=("REDIS",),
     ),
     Engine(
         "storedoc",
@@ -100,7 +109,7 @@ ENGINES: Final[tuple[Engine, ...]] = (
         "/managed-mongodb/v1",
         27018,
         "mongodb",
-        ("MONGOD", "MONGOS", "MONGOCFG", "AUDIT"),
+        log_service_types=("MONGOD", "MONGOS", "MONGOCFG", "AUDIT"),
     ),
     Engine("kafka", "Apache Kafka", "managed-kafka", "/managed-kafka/v1", 9091, "kafka"),
     Engine(
@@ -110,7 +119,7 @@ ENGINES: Final[tuple[Engine, ...]] = (
         "/managed-opensearch/v1",
         9200,
         "opensearch",
-        ("OPENSEARCH", "DASHBOARDS"),
+        log_service_types=("OPENSEARCH", "DASHBOARDS"),
     ),
     Engine(
         "greenplum",
@@ -119,7 +128,22 @@ ENGINES: Final[tuple[Engine, ...]] = (
         "/managed-greenplum/v1",
         6432,
         "postgresql",
-        ("GREENPLUM", "GREENPLUM_POOLER", "GREENPLUM_PXF"),
+        # The master is what a client connects to; segments are where the work
+        # happens, and a sick segment is what makes a query hang.
+        ("master-hosts", "segment-hosts"),
+        log_service_types=("GREENPLUM", "GREENPLUM_POOLER", "GREENPLUM_PXF"),
+    ),
+    # Sharded PostgreSQL is its own service, not a mode of the one above: its
+    # own API prefix, its own cluster type, and a router in front of the shards.
+    Engine(
+        "spqr",
+        "Sharded PostgreSQL (SPQR)",
+        "managed-spqr",
+        "/managed-spqr/v1",
+        6432,
+        "postgresql",
+        ("hosts",),
+        log_service_types=("POSTGRESQL", "ROUTER", "COORDINATOR", "INFRA"),
     ),
 )
 
@@ -131,6 +155,8 @@ _ALIASES: Final[dict[str, str]] = {
     "mongodb": "storedoc",
     "mongo": "storedoc",
     "mpp": "greenplum",
+    "sharded postgresql": "spqr",
+    "sharded-postgresql": "spqr",
 }
 
 ENGINE_KEYS: Final[tuple[str, ...]] = tuple(engine.key for engine in ENGINES)

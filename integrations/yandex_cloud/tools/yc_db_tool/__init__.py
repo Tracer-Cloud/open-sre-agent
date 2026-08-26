@@ -92,6 +92,31 @@ def _list_clusters(client: YandexCloudClient, engine: Engine, page_token: str) -
     )
 
 
+def _read_hosts(
+    client: YandexCloudClient, engine: Engine, cluster_id: str
+) -> tuple[list[dict[str, Any]], str]:
+    """Return every host of *cluster_id*, and why the list is empty if it is.
+
+    Greenplum splits its hosts into two collections and has no ``hosts`` at all,
+    so a single hardcoded path answers 404 there - and an empty host list reads
+    as "this cluster has no hosts" rather than "the read failed", which is the
+    worse of the two lies.
+    """
+    hosts: list[dict[str, Any]] = []
+    errors: list[str] = []
+    for collection in engine.host_collections:
+        response = client.get(engine.service, f"{engine.path}/clusters/{cluster_id}/{collection}")
+        if not response.get("success"):
+            errors.append(f"{collection}: {response.get('error', '')}")
+            continue
+        data = response.get("data") or {}
+        # Yandex keys the payload by the collection it served, and the two
+        # Greenplum collections come back under "hosts" all the same.
+        listed = data.get("hosts") or data.get(collection) or []
+        hosts.extend(listed)
+    return hosts, "; ".join(errors)
+
+
 def _map_db_clusters(
     evidence: dict[str, Any], output: dict[str, Any], _tool_input: dict[str, Any]
 ) -> None:
@@ -325,8 +350,7 @@ def get_yc_db_cluster(
             "cluster_id": cluster_id,
         }
 
-    hosts_response = client.get(resolved.service, f"{resolved.path}/clusters/{cluster_id}/hosts")
-    raw_hosts = (hosts_response.get("data") or {}).get("hosts") or []
+    raw_hosts, hosts_error = _read_hosts(client, resolved, cluster_id)
     hosts = [_summarize_host(host) for host in raw_hosts]
 
     operations_response = client.get(
@@ -343,6 +367,9 @@ def get_yc_db_cluster(
         "cluster": _summarize_cluster(detail.get("data") or {}, resolved),
         "hosts": hosts,
         "unhealthy_hosts": [host for host in hosts if host["health"] not in {_HEALTHY, ""}],
+        # Said out loud rather than left as an empty list: "no hosts" and "the
+        # host read failed" lead an investigation to opposite conclusions.
+        "hosts_error": hosts_error,
         "recent_operations": operations,
         "connect": _connection_hint(resolved, raw_hosts),
     }
