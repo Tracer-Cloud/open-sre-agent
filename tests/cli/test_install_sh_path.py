@@ -165,7 +165,7 @@ def test_install_sh_contains_auto_onboarding_launch_hook() -> None:
 
     assert "OPENSRE_AUTO_LAUNCH" in source
     assert "launch_onboarding_after_install" in source
-    assert '"$installed_binary" onboard' in source
+    assert '"$installed_binary" setup' in source
 
 
 def test_install_sh_auto_onboarding_piped_installs_reattach_dev_tty() -> None:
@@ -235,7 +235,7 @@ def test_install_sh_auto_onboarding_piped_install_launches_via_pty(tmp_path: Pat
 
     output = b"".join(chunks).decode(errors="replace")
     assert os.waitstatus_to_exitcode(wait_status) == 0, output
-    assert "Launching opensre onboard" in output
+    assert "Launching opensre setup" in output
     assert "ONBOARD_STDIN_IS_TTY" in output
 
 
@@ -285,7 +285,7 @@ def test_install_sh_auto_onboarding_skips_piped_install_on_windows(tmp_path: Pat
     output = b"".join(chunks).decode(errors="replace")
     assert os.waitstatus_to_exitcode(wait_status) == 0, output
     assert "ONBOARD_RAN" not in output
-    assert "Launching opensre onboard" not in output
+    assert "Launching opensre setup" not in output
 
 
 def test_install_sh_auto_onboarding_noops_without_tty() -> None:
@@ -300,7 +300,7 @@ def test_install_sh_auto_onboarding_noops_without_tty() -> None:
     )
 
     assert result.returncode == 0, result.stderr
-    assert "Launching opensre onboard" not in result.stdout + result.stderr
+    assert "Launching opensre setup" not in result.stdout + result.stderr
 
 
 def test_install_sh_has_step_for_explicit_version_fetch() -> None:
@@ -711,9 +711,9 @@ def test_install_sh_contains_onboarding_hint() -> None:
     install.sh even if the subprocess-based tests are somehow still passing.
     """
     source = INSTALL_SH.read_text()
-    assert "${BIN_NAME:-opensre} onboard" in source, (
+    assert "${BIN_NAME:-opensre} setup" in source, (
         "install.sh does not contain the onboarding hint "
-        "(expected ``${BIN_NAME:-opensre} onboard`` in Next steps output)."
+        "(expected ``${BIN_NAME:-opensre} setup`` in Next steps output)."
     )
 
 
@@ -721,9 +721,9 @@ def test_install_ps1_contains_onboarding_hint() -> None:
     """Contract test: the hint string must be present in install.ps1 source."""
     install_ps1 = Path(__file__).parents[2] / "install.ps1"
     source = install_ps1.read_text()
-    assert "$exe onboard" in source, (
+    assert "$exe setup" in source, (
         "install.ps1 does not contain the onboarding step "
-        '(expected a line with ``$exe onboard``, e.g. ``Write-Host "  1. Run  $exe onboard"``).'
+        '(expected a line with ``$exe setup``, e.g. ``Write-Host "  1. Run  $exe setup"``).'
     )
 
 
@@ -731,7 +731,7 @@ def test_onboarding_hint_shown_when_path_not_set(tmp_path: Path) -> None:
     """Hint appears on a first install where configure_path writes the rc file."""
     result = _run_post_install(tmp_path, shell="/bin/zsh", dir_already_on_path=False)
     assert result.returncode == 0, result.stderr
-    assert "opensre onboard" in result.stdout + result.stderr
+    assert "opensre setup" in result.stdout + result.stderr
 
 
 def test_onboarding_hint_shown_when_path_already_set(tmp_path: Path) -> None:
@@ -743,14 +743,14 @@ def test_onboarding_hint_shown_when_path_already_set(tmp_path: Path) -> None:
     """
     result = _run_post_install(tmp_path, shell="/bin/zsh", dir_already_on_path=True)
     assert result.returncode == 0, result.stderr
-    assert "opensre onboard" in result.stdout + result.stderr
+    assert "opensre setup" in result.stdout + result.stderr
 
 
 def test_onboarding_hint_shown_for_bash_linux(tmp_path: Path) -> None:
     """Hint appears on bash/linux installs."""
     result = _run_post_install(tmp_path, shell="/bin/bash", platform="linux")
     assert result.returncode == 0, result.stderr
-    assert "opensre onboard" in result.stdout + result.stderr
+    assert "opensre setup" in result.stdout + result.stderr
 
 
 def test_onboarding_hint_shown_for_main_channel(tmp_path: Path) -> None:
@@ -762,7 +762,7 @@ def test_onboarding_hint_shown_for_main_channel(tmp_path: Path) -> None:
         installed_version="main",
     )
     assert result.returncode == 0, result.stderr
-    assert "opensre onboard" in result.stdout + result.stderr
+    assert "opensre setup" in result.stdout + result.stderr
 
 
 def _run_ensure_on_path(
@@ -861,10 +861,10 @@ def test_onboarding_hint_appears_after_version_line(tmp_path: Path) -> None:
     assert result.returncode == 0, result.stderr
     output = result.stdout + result.stderr
     installed_pos = output.find("Installed opensre")
-    onboard_pos = output.find("opensre onboard")
+    setup_pos = output.find("opensre setup")
     assert installed_pos != -1, "'Installed opensre' line missing from output"
-    assert onboard_pos != -1, "'opensre onboard' hint missing from output"
-    assert onboard_pos > installed_pos, (
+    assert setup_pos != -1, "'opensre setup' hint missing from output"
+    assert setup_pos > installed_pos, (
         "Onboarding hint must come after the install confirmation line"
     )
 

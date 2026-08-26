@@ -45,6 +45,28 @@ def render_header() -> None:
       [1] Select your LLM provider and key        [BRAND number] [SECONDARY body]
       [2] OpenSRE checks the connection           [BRAND number] [SECONDARY body]
     """
+    _render_splash_header(
+        heading="Complete your setup to get started",
+        steps=(
+            "Select your LLM provider and add its API key or CLI login.",
+            "OpenSRE checks the connection and continues.",
+        ),
+    )
+
+
+def render_factory_setup_header() -> None:
+    """Print the first-run setup splash (GitHub → LLM → shell)."""
+    _render_splash_header(
+        heading="A few steps and you are in the terminal",
+        steps=(
+            "Sign in with GitHub (required).",
+            "Choose your LLM provider and add its API key or CLI login.",
+            "OpenSRE opens the interactive shell.",
+        ),
+    )
+
+
+def _render_splash_header(*, heading: str, steps: tuple[str, ...]) -> None:
     from surfaces.shared.terminal.components.banner_art import render_art
 
     art = render_art()
@@ -80,13 +102,13 @@ def render_header() -> None:
     console.print()
 
     setup = Text()
-    setup.append("Complete your setup to get started", style=f"bold {TEXT}")
+    setup.append(heading, style=f"bold {TEXT}")
     setup.append("\n\n")
-    setup.append("[1] ", style=f"bold {BRAND}")
-    setup.append("Select your LLM provider and add its API key or CLI login.", style=SECONDARY)
-    setup.append("\n")
-    setup.append("[2] ", style=f"bold {BRAND}")
-    setup.append("OpenSRE checks the connection and continues.", style=SECONDARY)
+    for index, body in enumerate(steps, start=1):
+        setup.append(f"[{index}] ", style=f"bold {BRAND}")
+        setup.append(body, style=SECONDARY)
+        if index < len(steps):
+            setup.append("\n")
     console.print(
         Panel(
             setup,

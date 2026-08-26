@@ -88,6 +88,8 @@ __all__ = [
     "IntegrationHealthResult",
     "build_demo_action_response",
     "questionary",
+    "run_llm_setup",
+    "run_wizard",
 ]
 
 
@@ -266,9 +268,19 @@ def _run_cli_llm_onboarding(provider: ProviderOption) -> Literal["ok", "abort", 
     return "abort"
 
 
-def run_wizard(_argv: list[str] | None = None) -> int:
-    """Run the interactive wizard."""
-    render_header()
+def run_llm_setup(
+    *,
+    show_header: bool = True,
+    start_step: int = 1,
+    total_steps: int = WIZARD_TOTAL_STEPS,
+) -> int:
+    """Prompt for LLM provider + credential and persist local config.
+
+    ``start_step`` / ``total_steps`` let a surrounding flow (e.g. factory setup)
+    place this block after earlier steps without rewriting step headers.
+    """
+    if show_header:
+        render_header()
     defaults = local_defaults()
     saved_provider_value = defaults["provider"] if isinstance(defaults["provider"], str) else None
     saved_model_value = defaults["model"] if isinstance(defaults["model"], str) else ""
@@ -296,10 +308,12 @@ def run_wizard(_argv: list[str] | None = None) -> int:
     # Records a ``continue_unsaved`` secret export so it can be re-applied
     # before the in-process shell handoff.
     session_env_sink: dict[str, str] = {}
+    llm_step = start_step
+    summary_step = start_step + 1
     while True:
         credential_state = OK
         session_env_sink = {}
-        step_header(1, WIZARD_TOTAL_STEPS, "LLM Provider")
+        step_header(llm_step, total_steps, "LLM Provider")
         saved_provider = (
             PROVIDER_BY_VALUE.get(saved_provider_value) if saved_provider_value else None
         )
@@ -483,7 +497,7 @@ def run_wizard(_argv: list[str] | None = None) -> int:
 
     _seed_onboarding_loops()
 
-    step_header(2, WIZARD_TOTAL_STEPS, "Summary")
+    step_header(summary_step, total_steps, "Summary")
     render_saved_summary(
         provider_label=provider.label,
         model=model,
@@ -495,3 +509,8 @@ def run_wizard(_argv: list[str] | None = None) -> int:
     )
     render_next_steps()
     return 0
+
+
+def run_wizard(_argv: list[str] | None = None) -> int:
+    """Run the interactive LLM-only onboarding wizard."""
+    return run_llm_setup()

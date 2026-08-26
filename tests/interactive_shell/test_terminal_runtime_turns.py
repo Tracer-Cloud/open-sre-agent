@@ -181,6 +181,7 @@ def test_turn_needs_exclusive_stdin_for_onboard(
     session = Session()
 
     assert loop_input_policy.turn_needs_exclusive_stdin("/onboard", session) is True
+    assert loop_input_policy.turn_needs_exclusive_stdin("/setup", session) is True
     # Args don't change the exclusive-stdin requirement.
     assert loop_input_policy.turn_needs_exclusive_stdin("/onboard local_llm", session) is True
     # Bare command words are not recognized under literal-/slash gating.

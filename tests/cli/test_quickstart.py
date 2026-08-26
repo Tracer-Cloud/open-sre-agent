@@ -95,7 +95,7 @@ def test_quickstart_doc_lists_every_user_command() -> None:
         "brew install tracer-cloud/tap/opensre",
         "curl -fsSL https://install.opensre.com | bash",
         "irm https://install.opensre.com | iex",
-        "opensre onboard",
+        "opensre setup",
         "opensre\n",
         f"opensre investigate -i {QUICKSTART_ALERT_DOC_PATH}",
         "opensre update",
@@ -120,9 +120,9 @@ def test_quickstart_install_urls_match_update_lifecycle() -> None:
         "install.sh must reference the documented installer URL"
     )
     # install.ps1 is what ``irm https://install.opensre.com | iex`` downloads;
-    # the script body talks to GitHub releases, but must still hand off to onboard.
+    # the script body talks to GitHub releases, but must still hand off to setup.
     install_ps1 = (REPO_ROOT / "install.ps1").read_text(encoding="utf-8")
-    assert "$exe onboard" in install_ps1 or "onboard" in install_ps1
+    assert "$exe setup" in install_ps1 or "& $BinaryPath setup" in install_ps1
 
 
 # ── Step: landing / interactive shell entry ──────────────────────────────────
@@ -134,7 +134,7 @@ def test_quickstart_bare_opensre_shows_landing_page(cli_sandbox: CliSandbox) -> 
 
     assert result.exit_code == 0
     assert "Quick start:" in result.stdout
-    assert "opensre onboard" in result.stdout or "onboard" in result.stdout
+    assert "opensre setup" in result.stdout or "setup" in result.stdout
     assert "investigate" in result.stdout
 
 
@@ -142,7 +142,7 @@ def test_quickstart_help_lists_documented_commands(cli_sandbox: CliSandbox) -> N
     result = _run_cli(cli_sandbox, "--help")
 
     assert result.exit_code == 0
-    for command in ("onboard", "investigate", "update", "uninstall"):
+    for command in ("setup", "onboard", "investigate", "update", "uninstall"):
         assert command in result.stdout, f"missing `{command}` in opensre --help"
     assert "No COMMAND: start the interactive shell" in result.stdout
 
@@ -153,7 +153,14 @@ def test_quickstart_slash_commands_are_registered() -> None:
         assert name in SLASH_COMMANDS, f"quickstart mentions {name} but it is not registered"
 
 
-# ── Step: onboard ────────────────────────────────────────────────────────────
+# ── Step: setup / onboard ────────────────────────────────────────────────────
+
+
+def test_quickstart_setup_help(cli_sandbox: CliSandbox) -> None:
+    result = _run_cli(cli_sandbox, "setup", "--help")
+
+    assert result.exit_code == 0
+    assert "github" in result.stdout.lower() or "llm" in result.stdout.lower()
 
 
 def test_quickstart_onboard_help(cli_sandbox: CliSandbox) -> None:

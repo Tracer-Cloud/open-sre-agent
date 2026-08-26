@@ -261,7 +261,7 @@ def _run_install_sh(
             (
                 "curl -fsSL https://install.opensre.com | bash",
                 "irm https://install.opensre.com | iex",
-                "opensre onboard",
+                "opensre setup",
             ),
         ),
         (
@@ -346,7 +346,7 @@ def test_install_ps1_source_exposes_all_windows_install_knobs() -> None:
         "Start-OpenSreOnboardingAfterInstall",
         'else { "main" }',
         "main-build",
-        "$exe onboard",
+        "$exe setup",
     ):
         assert needle in source, f"install.ps1 missing {needle!r}"
 
@@ -391,7 +391,7 @@ def test_install_sh_main_channel_end_to_end(tmp_path: Path) -> None:
     assert version.returncode == 0
     assert "opensre" in version.stdout.lower() or "0.1" in version.stdout
     assert "Welcome to OpenSRE" in combined or "installed successfully" in combined
-    assert "opensre onboard" in combined
+    assert "opensre setup" in combined
 
 
 def test_install_sh_version_channel_end_to_end(tmp_path: Path) -> None:

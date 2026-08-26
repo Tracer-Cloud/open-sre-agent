@@ -472,6 +472,7 @@ def test_opensre_help_smoke(cli_sandbox: CliSandbox) -> None:
     assert "Welcome back" not in result.stdout
     # Commands are grouped so the entry point is not buried alphabetically.
     assert "Getting started:" in result.stdout
+    assert "setup" in result.stdout
     assert "onboard" in result.stdout
     assert "integrations" in result.stdout
     assert "--interactive / --no-interactive" in result.stdout

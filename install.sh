@@ -1178,8 +1178,8 @@ print_success_screen() {
   log "$sep"
   log ""
   log "Next steps:"
-  log "  1. Run  ${BIN_NAME:-opensre} onboard"
-  log "     Set up your LLM provider and add your observability integrations."
+  log "  1. Run  ${BIN_NAME:-opensre} setup"
+  log "     Sign in with GitHub, add your LLM key, then open the interactive shell."
   log ""
   log "  2. Run  ${BIN_NAME:-opensre}  (no subcommand)"
   log "     From a normal interactive terminal this starts the interactive shell — type a"
@@ -1216,9 +1216,9 @@ controlling_tty_usable() {
 run_onboarding() {
   # Uses the caller's `installed_binary` (bash dynamic scoping); any redirect
   # on the call applies to the wizard.
-  log "Launching ${BIN_NAME} onboard..."
-  "$installed_binary" onboard || \
-    warn "Onboarding exited before completion. Run '${BIN_NAME} onboard' to retry."
+  log "Launching ${BIN_NAME} setup..."
+  "$installed_binary" setup || \
+    warn "Setup exited before completion. Run '${BIN_NAME} setup' to retry."
 }
 
 launch_onboarding_after_install() {

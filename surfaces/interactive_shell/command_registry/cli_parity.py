@@ -211,6 +211,21 @@ def _cmd_onboard(session: Session, console: Console, args: list[str]) -> bool:  
     return run_cli_command(console, ["onboard", *args], capture_output=False, session=session)
 
 
+def _cmd_setup(session: Session, console: Console, args: list[str]) -> bool:  # noqa: ARG001
+    if session_terminal(session) is None:
+        message = (
+            "Setup is an interactive wizard (GitHub sign-in + LLM key). "
+            "It cannot run inside a Telegram chat.\n\n"
+            "Run on the server:\n  uv run opensre setup\n\n"
+            "Configure integrations separately with `/integrations setup <service>`."
+        )
+        console.print()
+        console.print(message)
+        publish_headless_slash_response(session, message=message)
+        return True
+    return run_cli_command(console, ["setup", *args], capture_output=False, session=session)
+
+
 def _cmd_auth(session: Session, console: Console, args: list[str]) -> bool:  # noqa: ARG001
     # ``login`` (and provider flows) prompt on the real TTY; status/logout print.
     capture_output = not args or args[0].lower() in {"status", "logout"}
@@ -423,6 +438,12 @@ COMMANDS: list[SlashCommand] = [
         "Shortcut for LLM provider login.",
         _cmd_login,
         usage=("/login", "/login chatgpt", "/login claude", "/login deepseek"),
+    ),
+    SlashCommand(
+        "/setup",
+        "First-run setup: GitHub sign-in, LLM key, then the interactive shell.",
+        _cmd_setup,
+        usage=("/setup",),
     ),
     SlashCommand(
         "/onboard",
