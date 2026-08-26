@@ -74,6 +74,21 @@ session_goal_tool = RegisteredTool(
         "the user asked to continue without pausing. Do not use for local shell "
         "work or a single-turn answer."
     ),
+    use_cases=[
+        (
+            "User asks to keep going through a multi-step checklist or walkthrough "
+            "across turns without pausing after each item"
+        ),
+        (
+            "User wants a structured completion condition tracked for the rest of "
+            "the conversation (e.g. finish onboarding steps)"
+        ),
+    ],
+    anti_examples=[
+        "Local shell work or file edits (use shell_run / code_implement)",
+        "A single-turn question that needs one answer and no follow-up checklist",
+        "An active session goal is already attached",
+    ],
     input_schema=object_schema(
         properties={
             "condition": string_property(

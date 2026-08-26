@@ -631,11 +631,15 @@ def test_fanout_three_transports_one_capacity_sentence_and_bindings_survive(
 
     # The barrier opens once the 4 admitted turns are in dispatch plus the main
     # thread — that moment is the peak.
-    peak_barrier.wait(timeout=30)
-    with inflight_lock:
-        peak = inflight["count"]
-    release.set()
-    _join(threads)
+    try:
+        peak_barrier.wait(timeout=30)
+        with inflight_lock:
+            peak = inflight["count"]
+    finally:
+        # Always release admitted workers, even if the barrier times out / breaks;
+        # otherwise they sit in ``release.wait`` and ``_join`` reports hung threads.
+        release.set()
+    _join(threads, timeout=60.0)
 
     assert not errors, [repr(e) for e in errors]
     assert peak == limit, f"expected {limit} turns in flight at the peak, got {peak}"
