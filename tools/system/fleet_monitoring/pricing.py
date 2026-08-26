@@ -18,11 +18,11 @@ have yet). This module is imported unconditionally by the always-on
 dashboard sampler, so pricing lookups must stay a pure, deterministic
 offline dict read regardless of what else the process has imported,
 and must degrade to "no rates" rather than crash the sampler if the
-data file is ever missing. A small local override table covers models
-litellm's snapshot lacks or has drifted from the vendor's published
-rates; those overrides win for both exact ids and family-suffix
-variants. Unknown models return ``None`` so the dashboard renders
-``-`` rather than inventing a rate.
+data file is ever missing. A tiny local override table covers the
+rare model litellm's snapshot hasn't picked up yet (a brand-new
+release, or a routing alias OpenAI/Anthropic don't publish as their
+own price-table row). Unknown models return ``None`` so the dashboard
+renders ``-`` rather than inventing a rate.
 """
 
 from __future__ import annotations
@@ -135,13 +135,17 @@ def _price(
     )
 
 
-# Intentional overrides when litellm's snapshot is missing a model or has
-# drifted from the vendor's published rates. These win over a litellm hit
-# for the same bare id so exact ids and family-suffix variants stay aligned.
+# Models confirmed absent from litellm's bundled price table. This is an
+# escape hatch for the rare model litellm's table hasn't (yet, or ever again)
+# picked up, not a general config surface: entries here are only consulted
+# after a direct litellm lookup misses.
 _LOCAL_MODEL_PRICES: dict[str, ModelPrice] = {
-    # GPT-5.6 — OpenAI published rates (litellm's terra/luna rows diverge).
-    # Per 1M tokens, from https://developers.openai.com/api/docs/pricing:
-    # sol 5/30, terra 2.50/15, luna 1/6. Cached input is 90% off.
+    # GPT-5.6 (GA 2026-07-09). Per 1M tokens, from
+    # https://developers.openai.com/api/docs/pricing: sol 5/30, terra
+    # 2.50/15, luna 1/6. Cached input is 90% off. litellm's snapshot now
+    # carries the family but with rates that diverge from OpenAI's
+    # published table for terra/luna, so these rows stay authoritative
+    # (see the family-fallback preference in _lookup_price).
     "gpt-5.6-sol": _price(5.00, 30.00, cache_read_usd_per_million=0.50),
     "gpt-5.6-terra": _price(2.50, 15.00, cache_read_usd_per_million=0.25),
     "gpt-5.6-luna": _price(1.00, 6.00, cache_read_usd_per_million=0.10),
@@ -361,37 +365,28 @@ def _override_related_rate(
     return effective_input_rate * (base_related_rate / base_input_rate)
 
 
-def _canonical_tier_price(canonical_id: str) -> ModelPrice | None:
-    """Price for a bare tier id — local override first, then litellm.
-
-    Exact ids and family-suffix fallbacks both go through here so
-    ``gpt-5.6-terra`` and ``gpt-5.6-terra-preview`` cannot pick different
-    snapshots when litellm and ``_LOCAL_MODEL_PRICES`` disagree.
-    """
-    local = _LOCAL_MODEL_PRICES.get(canonical_id)
-    if local is not None:
-        return local
-    return _litellm_price(canonical_id)
-
-
 def _lookup_price(model: str) -> ModelPrice | None:
     candidates = _model_candidates(model)
     for candidate in candidates:
+        price = _litellm_price(candidate)
+        if price is not None:
+            # A family-fallback row pins the rate for every id in the family.
+            # litellm may also carry some of those ids (it added gpt-5.6 with
+            # divergent tier rates), so without this preference a bare tier id
+            # and its suffixed siblings would price from different sources.
+            canonical = _local_family_fallback_canonical(candidate)
+            if canonical is not None:
+                local = _LOCAL_MODEL_PRICES.get(canonical)
+                if local is not None:
+                    return local
+            return price
         local = _LOCAL_MODEL_PRICES.get(candidate)
         if local is not None:
             return local
-        price = _litellm_price(candidate)
-        if price is not None:
-            alias = _local_family_alias_canonical(candidate)
-            if alias is not None:
-                aliased = _canonical_tier_price(alias)
-                if aliased is not None:
-                    return aliased
-            return price
     for candidate in candidates:
         fallback = _local_family_fallback_canonical(candidate)
         if fallback is not None:
-            return _canonical_tier_price(fallback)
+            return _LOCAL_MODEL_PRICES.get(fallback)
     for candidate in candidates:
         for provider_prefix in _COMPAT_PROVIDER_PREFIXES:
             price = _litellm_price(f"{provider_prefix}{candidate}")
