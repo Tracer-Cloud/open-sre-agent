@@ -97,7 +97,7 @@ class TestMapQueryHoneycombTraces:
         entries = evidence["catalog_entries"]
         assert len(entries) == 1
         assert entries[0]["source"] == "query_honeycomb_traces"
-        assert entries[0]["summary"] == "3 trace/span group(s) for 'checkout'"
+        assert entries[0]["summary"] == "3 trace/span group(s) for service 'checkout'"
 
     def test_qualifies_count_when_page_is_saturated(self) -> None:
         evidence: dict[str, Any] = {}
@@ -114,7 +114,31 @@ class TestMapQueryHoneycombTraces:
             {"limit": 20},
         )
 
-        assert evidence["catalog_entries"][0]["summary"] == "20+ trace/span group(s) for 'checkout'"
+        assert (
+            evidence["catalog_entries"][0]["summary"]
+            == "20+ trace/span group(s) for service 'checkout'"
+        )
+
+    def test_cites_both_filters_when_service_and_trace_id_are_both_set(self) -> None:
+        """Regression: client.query_traces ANDs service_name and trace_id when
+        both are given -- the summary must cite both, not just one."""
+        evidence: dict[str, Any] = {}
+
+        _map_query_honeycomb_traces(
+            evidence,
+            {
+                "available": True,
+                "total_traces": 1,
+                "traces": [{"traceId": "t1"}],
+                "service_name": "checkout",
+                "trace_id": "abc123",
+            },
+            {"limit": 20},
+        )
+
+        summary = evidence["catalog_entries"][0]["summary"]
+        assert "service 'checkout'" in summary
+        assert "trace 'abc123'" in summary
 
     def test_records_nothing_when_no_traces(self) -> None:
         evidence: dict[str, Any] = {}

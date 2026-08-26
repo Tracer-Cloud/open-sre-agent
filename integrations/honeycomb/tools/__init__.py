@@ -32,10 +32,21 @@ def _map_query_honeycomb_traces(
     requested_limit = tool_input.get("limit", 20)
     count_label = f"{total}+" if total >= max(requested_limit, 1) else str(total)
     summary = f"{count_label} trace/span group(s)"
-    target = output.get("service_name") or output.get("trace_id")
-    if target:
-        safe_target = truncate(str(target).replace("\n", " "), _TARGET_SUMMARY_TRUNCATE_LEN)
-        summary += f" for '{safe_target}'"
+
+    def _safe(value: str) -> str:
+        return truncate(value.replace("\n", " "), _TARGET_SUMMARY_TRUNCATE_LEN)
+
+    # A query can filter by service_name and trace_id together (they AND in
+    # client.query_traces) -- cite both when both were applied, not just one.
+    service_name = output.get("service_name")
+    trace_id = output.get("trace_id")
+    targets = []
+    if service_name:
+        targets.append(f"service '{_safe(str(service_name))}'")
+    if trace_id:
+        targets.append(f"trace '{_safe(str(trace_id))}'")
+    if targets:
+        summary += f" for {', '.join(targets)}"
     record_evidence_entry(
         evidence,
         source="query_honeycomb_traces",
