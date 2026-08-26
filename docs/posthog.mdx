@@ -12,7 +12,7 @@ This REST integration does **not** register investigation tools. For agent tools
 | What you want | Use | Setup |
 | --- | --- | --- |
 | Store PostHog REST credentials for your project | **PostHog** (this page) | `opensre integrations setup posthog` or env vars below |
-| Let the agent explore PostHog during incidents | [PostHog (MCP)](/posthog-mcp) | `opensre integrations setup posthog_mcp` or onboarding wizard |
+| Let the agent explore PostHog during incidents | [PostHog (MCP)](/posthog-mcp) | `opensre integrations setup posthog_mcp` |
 | OpenSRE’s own product usage telemetry | Built-in analytics | Controlled by `OPENSRE_NO_TELEMETRY` — not your PostHog project |
 
 ## Prerequisites
@@ -28,8 +28,6 @@ This REST integration does **not** register investigation tools. For agent tools
 ```bash
 opensre integrations setup posthog
 ```
-
-Or run the onboarding wizard and select **PostHog** under Observability.
 
 You will be prompted for:
 

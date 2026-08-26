@@ -59,6 +59,13 @@ def _fallback_descriptors() -> tuple[ToolDescriptor, ...]:
             "tools.interactive_shell.actions.ask_choice",
         ),
         ToolDescriptor(
+            "update_plan",
+            (ToolSurface.ACTION,),
+            "interactive_shell",
+            None,
+            "tools.interactive_shell.actions.update_plan",
+        ),
+        ToolDescriptor(
             "cli_exec",
             (ToolSurface.ACTION,),
             "interactive_shell",

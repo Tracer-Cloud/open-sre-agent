@@ -43,8 +43,6 @@ PORTS = frozenset(
         "ErrorReporter",
         "ExecuteActions",
         "GatheredEvidence",
-        "HumanInteractionPort",
-        "HumanInteractionPortFactory",
         "InvestigationPortsFactory",
         "LlmFactory",
         "LlmProviderPortsFactory",
@@ -60,8 +58,6 @@ PORTS = frozenset(
         "ToolProvider",
         "TurnAccounting",
         "TurnBinding",
-        "UserChoiceOption",
-        "UserChoiceRequest",
     }
 )
 
@@ -87,6 +83,7 @@ SPI_ROLE_NAMES: dict[str, frozenset[str]] = {
     "session_state": frozenset(
         {
             "PendingScheduleOffer",
+            "PendingUserChoice",
             "background_investigations",
             "background_mode_enabled",
             "background_notification_channels",
@@ -151,6 +148,29 @@ SPI_ROLE_NAMES: dict[str, frozenset[str]] = {
             "default_session_repo",
             "default_session_store",
             "sessions_dir",
+        }
+    ),
+    "handoff": frozenset(
+        {
+            "AskUserQuestion",
+            "format_ask_user_answers",
+            "parse_ask_user_answers",
+        }
+    ),
+    "task_plan": frozenset(
+        {
+            "PLAN_STATUS_GLYPH",
+            "PlanStep",
+            "PlanStepStatus",
+            "TaskPlan",
+            "apply_update_plan_host_policy",
+            "apply_update_plan_session",
+            "format_plan_header",
+            "format_task_plan_plain",
+            "is_plan_diagnosis_prose",
+            "parse_task_plan",
+            "promote_first_pending_step",
+            "task_plan_to_payload",
         }
     ),
 }

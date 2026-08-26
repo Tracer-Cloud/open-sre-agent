@@ -15,11 +15,6 @@ from dataclasses import dataclass
 from typing import Any, Protocol, runtime_checkable
 
 from config.llm_reasoning_effort import ReasoningEffortChoice
-from core.agent_harness.human_interaction import (
-    HumanInteractionPort,
-    UserChoiceOption,
-    UserChoiceRequest,
-)
 from core.agent_harness.turns.gather_observation import GatheredEvidence
 from core.agent_harness.turns.turn_results import ToolCallingTurnResult, TurnResult
 from core.llm.types import AgentLLMClient
@@ -284,8 +279,6 @@ __all__ = [
     "ErrorReporter",
     "ExecuteActions",
     "GatheredEvidence",
-    "HumanInteractionPort",
-    "HumanInteractionPortFactory",
     "InvestigationPortsFactory",
     "LlmFactory",
     "LlmProviderPortsFactory",
@@ -301,8 +294,6 @@ __all__ = [
     "ToolProvider",
     "TurnAccounting",
     "TurnBinding",
-    "UserChoiceOption",
-    "UserChoiceRequest",
 ]
 
 
@@ -312,11 +303,6 @@ __all__ = [
 SubprocessPresenterFactory = Callable[
     [Any, Any, "ConfirmFn | None", bool | None, bool],
     Any,
-]
-
-HumanInteractionPortFactory = Callable[
-    [Any, "ConfirmFn | None", bool | None],
-    HumanInteractionPort | None,
 ]
 
 

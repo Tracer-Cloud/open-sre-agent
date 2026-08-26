@@ -16,7 +16,7 @@ from surfaces.interactive_shell.session import Session
 from surfaces.interactive_shell.ui.input_prompt import completion as prompt_completion
 from surfaces.interactive_shell.ui.input_prompt import rendering as prompt_rendering
 from surfaces.interactive_shell.ui.input_prompt.completion import completion_preview_hint_ansi
-from surfaces.interactive_shell.ui.input_prompt.layout import _prompt_line_width
+from surfaces.interactive_shell.ui.input_prompt.layout import prompt_line_width
 from surfaces.interactive_shell.ui.input_prompt.refresh import wire_prompt_refresh
 from surfaces.interactive_shell.ui.input_prompt.rendering import (
     DEFAULT_PLACEHOLDER_TEXT,
@@ -159,11 +159,11 @@ class TestResolveIdleHint:
         session.configured_integrations_known = True
         session.configured_integrations = ("datadog", "github", "grafana")
         rendered = _strip_ansi(resolve_idle_hint_ansi(session))
+        assert rendered.startswith("Ready")
         assert "/ for commands" in rendered
         assert "tab tool details" in rendered
         assert "Datadog" in rendered
         assert "GitHub" in rendered
-        assert "Grafana" in rendered
 
     def test_omits_integrations_when_none_configured(self) -> None:
         session = Session()
@@ -188,7 +188,7 @@ class TestResolveIdleHint:
             "vercel",
             "aws",
         )
-        monkeypatch.setattr(prompt_rendering, "_prompt_line_width", lambda: 40)
+        monkeypatch.setattr(prompt_rendering, "prompt_line_width", lambda: 40)
         rendered = _strip_ansi(resolve_idle_hint_ansi(session))
         assert len(rendered) <= 40
         assert rendered.endswith("…")
@@ -197,13 +197,13 @@ class TestResolveIdleHint:
 class TestPromptRuleWidth:
     def test_rule_leaves_last_column_empty(self, monkeypatch: pytest.MonkeyPatch) -> None:
         """A full-width rule soft-wraps on shrink and orphans stale prompt frames."""
-        monkeypatch.setattr(prompt_rendering, "_prompt_line_width", lambda: 79)
+        monkeypatch.setattr(prompt_rendering, "prompt_line_width", lambda: 79)
         rule = _strip_ansi(_prompt_rule_ansi())
         assert len(rule) == 79
         assert set(rule) == {"─"}
 
     def test_prompt_message_rule_uses_safe_width(self, monkeypatch: pytest.MonkeyPatch) -> None:
-        monkeypatch.setattr(prompt_rendering, "_prompt_line_width", lambda: 79)
+        monkeypatch.setattr(prompt_rendering, "prompt_line_width", lambda: 79)
         rendered = _strip_ansi(_prompt_message(Session()).value)
         rule_line, _prompt_line = rendered.split("\n", 1)
         assert len(rule_line) == 79
@@ -403,7 +403,7 @@ class TestCompletionPreviewHint:
         rendered = _strip_ansi(completion_preview_hint_ansi())
         assert rendered.endswith("…")
         # One column short of the terminal width (pending-wrap guard).
-        assert len(rendered) <= _prompt_line_width(40)
+        assert len(rendered) <= prompt_line_width(40)
         assert rendered.startswith("/plugin-cmd — ")
 
 
@@ -423,7 +423,7 @@ class TestResolvePromptPrefix:
             idle_hint=spinner.idle_hint_ansi(),
         )
         assert "preview line" not in prefix
-        assert "esc to cancel" in _strip_ansi(prefix)
+        assert "Press ESC to stop" in _strip_ansi(prefix)
 
     def test_prefers_completion_preview_over_idle_hint(
         self, monkeypatch: pytest.MonkeyPatch

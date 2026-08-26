@@ -57,6 +57,9 @@ class SessionGoalReason:
     CHECKLIST_COMPLETE_SAME_TURN = "checklist complete (same-turn answer)"
     WAITING_HOST_SIGNAL = "waiting for an achieved signal"
     WAITING_TOOL_EVIDENCE = "waiting for an achieved signal with tool evidence"
+    WAITING_USER_CHOICE = "waiting for user choice"
+    PAUSED_USER_CHOICE = "paused — waiting for your choice"
+    # Distinct from PAUSED_USER_CHOICE: user ran ``/goal pause`` (status=paused).
     PAUSED_BY_USER = "paused by you"
     BUDGET_EXHAUSTED = "session-goal turn budget exhausted"
     CANCELLED = "goal cancelled"

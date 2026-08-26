@@ -9,12 +9,10 @@ import pytest
 from rich.console import Console
 
 from core.agent_harness.runtime import AgentBuildConfig
-from core.agent_harness.tools.tool_context import ACTION_TOOL_CONTEXT_RESOURCE_KEY
 from infrastructure.turn_host.capability_policy import ensure_gateway_capability_policy
 from surfaces.interactive_shell.runtime.shell_agent import (
     build_shell_agent,
     shell_agent_build_config,
-    shell_tool_provider,
 )
 from surfaces.interactive_shell.session import Session
 
@@ -39,21 +37,6 @@ def test_build_shell_agent_keeps_investigation_capability() -> None:
     session.available_capabilities["investigation"] = ("investigate",)
     build_shell_agent(session, Console(file=io.StringIO(), force_terminal=False))
     assert session.available_capabilities["investigation"] == ("investigate",)
-
-
-def test_shell_tool_provider_wires_blocking_human_interaction() -> None:
-    session = Session()
-    console = Console(file=io.StringIO(), force_terminal=False)
-    provider = shell_tool_provider(session, console)
-
-    provider.action_tools(
-        confirm_fn=lambda _prompt: "1",
-        is_tty=True,
-        resolved_integrations={},
-    )
-
-    scope = provider.tool_resources()[ACTION_TOOL_CONTEXT_RESOURCE_KEY]
-    assert scope.human_interaction is not None
 
 
 def test_build_shell_agent_applies_capability_policy_when_set(

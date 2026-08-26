@@ -468,6 +468,21 @@ class JsonlSessionStore:
                     content=goal_state,
                     display=False,
                 )
+        if hasattr(session, "task_plan"):
+            from core.agent_harness.task_plan.persist import (
+                TASK_PLAN_STATE_CUSTOM_TYPE,
+                should_persist_task_plan_state,
+                task_plan_state_snapshot,
+            )
+
+            plan_state = task_plan_state_snapshot(session)
+            if should_persist_task_plan_state(plan_state, prior_records=records):
+                self.append_custom_message(
+                    session.session_id,
+                    custom_type=TASK_PLAN_STATE_CUSTOM_TYPE,
+                    content=plan_state or {},
+                    display=False,
+                )
         if trailing_leaf:
             return
         if session.agent.messages and not any(rec.get("type") == "message" for rec in records):

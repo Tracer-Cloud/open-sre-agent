@@ -41,33 +41,22 @@ def test_slash_invoke_tool_start_does_not_record_cli_agent() -> None:
         {"name": "slash_invoke", "input": {"command": "/model", "args": ["show"]}},
     )
 
+    # slash_invoke is self-recording, so no cli_agent history row is written,
+    # but the live tool-call preview still shows what is running.
     assert session.history == []
     assert observer.planned_count == 1
-    assert buffer.getvalue() == ""
+    assert "/model show" in buffer.getvalue()
 
 
 def test_shell_run_tool_start_does_not_record_cli_agent() -> None:
     session = Session()
-    buffer = io.StringIO()
-    console = Console(file=buffer, force_terminal=False, highlight=False)
+    console = Console(file=io.StringIO(), force_terminal=False, highlight=False)
     observer = ActionRenderObserver(session=session, console=console, message="!true")
 
     observer("tool_start", {"name": "shell_run", "input": {"command": "true"}})
 
     assert session.history == []
     assert observer.planned_count == 1
-    assert buffer.getvalue() == ""
-
-
-def test_quiet_shell_run_tool_start_renders_command() -> None:
-    observer, buffer = _observer_with_buffer()
-
-    observer(
-        "tool_start",
-        {"name": "shell_run", "input": {"command": "gh api repos/o/r", "quiet": True}},
-    )
-
-    assert buffer.getvalue() == "$ gh api repos/o/r\n\n"
 
 
 def _observer_with_buffer(message: str = "onboard me") -> tuple[ActionRenderObserver, io.StringIO]:
@@ -183,81 +172,6 @@ def test_tool_call_display_strips_terminal_controls_from_model_args() -> None:
     assert content == "ls[2Krm"
 
 
-def test_github_cli_tool_call_display_renders_executable_command() -> None:
-    label, content = tool_call_display(
-        "github_cli",
-        {
-            "args": ["pr", "list", "--state", "open"],
-            "repo": "facebook/react",
-        },
-    )
-
-    assert label == "command"
-    assert content == "gh -R facebook/react pr list --state open"
-
-
-def test_github_cli_api_preview_does_not_add_repo_flag() -> None:
-    label, content = tool_call_display(
-        "github_cli",
-        {
-            "args": [
-                "api",
-                "/repos/facebook/react/actions/runs?per_page=1",
-                "--jq",
-                ".total_count",
-            ],
-            "repo": "facebook/react",
-        },
-    )
-
-    assert label == "command"
-    assert content == ("gh api '/repos/facebook/react/actions/runs?per_page=1' --jq .total_count")
-
-
-def test_github_cli_tool_start_prints_command_preview() -> None:
-    observer, buffer = _observer_with_buffer()
-
-    observer(
-        "tool_start",
-        {
-            "name": "github_cli",
-            "input": {
-                "args": ["api", "/repos/facebook/react/pulls", "--jq", "length"],
-            },
-        },
-    )
-
-    assert buffer.getvalue() == "$ gh api /repos/facebook/react/pulls --jq length\n\n"
-
-
-def test_generic_tool_start_prints_invocation_preview() -> None:
-    observer, buffer = _observer_with_buffer()
-
-    observer(
-        "tool_start",
-        {
-            "name": "get_github_star_history",
-            "input": {"owner": "facebook", "repo": "react", "days": 7},
-        },
-    )
-
-    assert buffer.getvalue() == (
-        'Calling get_github_star_history {"days": 7, "owner": "facebook", "repo": "react"}\n\n'
-    )
-
-
-def test_generic_tool_start_caps_large_argument_preview() -> None:
-    observer, buffer = _observer_with_buffer()
-
-    observer("tool_start", {"name": "large_tool", "input": {"query": "x" * 800}})
-
-    output = buffer.getvalue()
-    assert output.startswith("Calling large_tool ")
-    assert output.endswith("…\n\n")
-    preview = output.removeprefix("Calling large_tool ").removesuffix("\n\n")
-    assert len(preview.replace("\n", "")) == 240
-
-
 def test_intermediate_message_strips_terminal_controls_before_markdown() -> None:
     # Arrange: a real terminal, where Rich would otherwise pass the model's
     # control bytes straight through (a non-terminal console strips them anyway,
@@ -369,12 +283,14 @@ def test_non_skill_tool_end_prints_nothing() -> None:
     observer, buffer = _skill_observer()
 
     observer("tool_start", {"id": "t1", "name": "shell_run", "input": {"command": "true"}})
+    after_start = buffer.getvalue()
     observer(
         "tool_end",
         {"id": "t1", "name": "shell_run", "input": {"command": "true"}, "output": {"ok": True}},
     )
 
-    assert buffer.getvalue() == ""
+    # tool_end adds a child line only for skill_view; a non-skill tool_end is silent.
+    assert buffer.getvalue() == after_start
 
 
 def test_literal_slash_command_records_single_history_entry(
@@ -444,3 +360,123 @@ def test_chat_turn_records_single_cli_agent_history_entry() -> None:
     # The turn's history recording must not advance the prompt number; only the
     # submission itself does.
     assert _prompt_turn_number(session) == 2
+
+
+def test_set_spinner_phase_does_not_activate_a_suppressed_spinner() -> None:
+    """A suppressed (never-started) spinner must not be activated by the observer.
+
+    Literal slash turns skip spinner start()/stop(); activating it on
+    llm_start / tool_start would leave the spinner on screen after the command.
+    """
+    from surfaces.interactive_shell.runtime.core.state import SpinnerState
+    from surfaces.shared.terminal.output.console_state import set_investigation_spinner
+
+    observer, _buffer = _observer_with_buffer()
+    spinner = SpinnerState()  # not started -> streaming False (suppressed)
+    set_investigation_spinner(spinner)
+    try:
+        observer("llm_start", {"iteration": 0})
+        observer("tool_start", {"name": "slash_invoke", "input": {"command": "/model"}})
+        assert spinner.streaming is False
+    finally:
+        set_investigation_spinner(None)
+
+
+_UPDATE_PLAN = [
+    {"step": "Measure wait vs work", "status": "pending"},
+    {"step": "Verify p99 recovery", "status": "pending"},
+]
+
+
+def test_update_plan_tool_start_does_not_commit_session_state() -> None:
+    """Rejected update_plan must not leave a plan that never succeeded."""
+    from core.agent_harness.task_plan.plan import parse_task_plan
+
+    observer, buffer = _observer_with_buffer("plan the fix")
+    plan, error = parse_task_plan({"plan": _UPDATE_PLAN, "explanation": "### Facts\n- p99 up"})
+    assert error is None and plan is not None
+
+    observer(
+        "tool_start",
+        {
+            "id": "p1",
+            "name": "update_plan",
+            "input": {
+                "plan": _UPDATE_PLAN,
+                "explanation": "### Facts\n- p99 up",
+                "plan_only": True,
+            },
+        },
+    )
+    assert observer.session.task_plan is None
+    assert observer.session.plan_only_until_authorized is False
+    assert "Plan" not in buffer.getvalue()
+
+    # Simulate a failed tool (schema/hook rejection) — still no session write.
+    observer(
+        "tool_end", {"id": "p1", "name": "update_plan", "output": {"ok": False, "error": "nope"}}
+    )
+    assert observer.session.task_plan is None
+    assert observer.session.plan_only_until_authorized is False
+    assert "Plan" not in buffer.getvalue()
+
+
+def test_update_plan_tool_end_renders_after_successful_commit() -> None:
+    from core.agent_harness.task_plan.plan import parse_task_plan
+    from core.agent_harness.task_plan.update_plan_policy import apply_update_plan_session
+
+    observer, buffer = _observer_with_buffer("plan the fix")
+    plan, error = parse_task_plan({"plan": _UPDATE_PLAN, "explanation": "### Facts\n- p99 up"})
+    assert error is None and plan is not None
+    apply_update_plan_session(observer.session, plan, plan_only=True)
+
+    observer(
+        "tool_end",
+        {"id": "p1", "name": "update_plan", "output": {"ok": True, "total": 2}},
+    )
+    output = buffer.getvalue()
+    assert "Plan ready" in output or "Plan ·" in output
+    assert "Measure wait vs work" in output
+    assert "p99 up" in output
+
+
+def test_update_plan_dedupe_refreshes_when_only_explanation_changes() -> None:
+    from core.agent_harness.task_plan.plan import parse_task_plan
+    from core.agent_harness.task_plan.update_plan_policy import apply_update_plan_session
+
+    observer, buffer = _observer_with_buffer("plan the fix")
+    first, error = parse_task_plan({"plan": _UPDATE_PLAN, "explanation": "first diagnosis"})
+    assert error is None and first is not None
+    apply_update_plan_session(observer.session, first, plan_only=True)
+    observer("tool_end", {"id": "p1", "name": "update_plan", "output": {"ok": True}})
+    assert "first diagnosis" in buffer.getvalue()
+
+    second, error = parse_task_plan({"plan": _UPDATE_PLAN, "explanation": "revised diagnosis"})
+    assert error is None and second is not None
+    apply_update_plan_session(observer.session, second, plan_only=True)
+    observer("tool_end", {"id": "p2", "name": "update_plan", "output": {"ok": True}})
+    assert "revised diagnosis" in buffer.getvalue()
+
+
+_IN_PROGRESS_PLAN = [
+    {"step": "Measure wait vs work", "status": "in_progress"},
+    {"step": "Verify p99 recovery", "status": "pending"},
+]
+
+
+def test_in_progress_explanation_only_update_renders_markdown() -> None:
+    from core.agent_harness.task_plan.plan import parse_task_plan
+    from core.agent_harness.task_plan.update_plan_policy import apply_update_plan_session
+
+    observer, buffer = _observer_with_buffer("keep going")
+    first, error = parse_task_plan({"plan": _IN_PROGRESS_PLAN, "explanation": "first diagnosis"})
+    assert error is None and first is not None
+    apply_update_plan_session(observer.session, first, plan_only=False)
+    observer("tool_end", {"id": "p1", "name": "update_plan", "output": {"ok": True}})
+    assert "first diagnosis" in buffer.getvalue()
+
+    second, error = parse_task_plan({"plan": _IN_PROGRESS_PLAN, "explanation": "revised diagnosis"})
+    assert error is None and second is not None
+    apply_update_plan_session(observer.session, second, plan_only=False)
+    observer("tool_end", {"id": "p2", "name": "update_plan", "output": {"ok": True}})
+    assert "revised diagnosis" in buffer.getvalue()

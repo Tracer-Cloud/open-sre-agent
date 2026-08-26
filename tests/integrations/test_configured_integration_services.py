@@ -105,6 +105,18 @@ def test_slack_absent_without_slack_env(monkeypatch: Any) -> None:
     assert "slack" not in catalog.load_env_integration_services()
 
 
+def test_google_docs_env_marks_google_docs_configured(monkeypatch: Any) -> None:
+    monkeypatch.setenv("GOOGLE_CREDENTIALS_FILE", "/path/to/sa.json")
+    monkeypatch.setenv("GOOGLE_DRIVE_FOLDER_ID", "folder-1")
+    assert "google_docs" in catalog.load_env_integration_services()
+
+
+def test_google_docs_absent_without_both_env_vars(monkeypatch: Any) -> None:
+    monkeypatch.setenv("GOOGLE_CREDENTIALS_FILE", "/path/to/sa.json")
+    monkeypatch.delenv("GOOGLE_DRIVE_FOLDER_ID", raising=False)
+    assert "google_docs" not in catalog.load_env_integration_services()
+
+
 class TestConfiguredIntegrationHealth:
     """Offline health for the welcome banner: present vs. minimally usable.
 

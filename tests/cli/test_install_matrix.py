@@ -344,7 +344,7 @@ def test_install_ps1_source_exposes_all_windows_install_knobs() -> None:
         "Start-OpenSreOnboardingAfterInstall",
         'else { "main" }',
         "main-build",
-        "$exe onboard",
+        "$exe setup",
     ):
         assert needle in source, f"install.ps1 missing {needle!r}"
 

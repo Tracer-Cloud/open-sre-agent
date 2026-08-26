@@ -111,9 +111,11 @@ Whenever the user must choose between a small, fixed set of actions, call the
 `ask_user_choice` tool so the active surface owns the human hand-off. Do not
 write a numbered "reply with 1, 2, or 3" list or ask the same question in prose.
 
-The tool blocks until the user answers and returns a structured answer in the
-same turn. Continue from that answer. If the tool reports that the interaction
-UI is unavailable, fall back to a short numbered list.
+After calling the tool, end the turn. The shell opens its selection menu and
+submits the chosen answer as the next user message; continue from that message.
+When several missing facts block the same job, include them together in one
+`questions` payload. If the tool reports that the menu is unavailable, fall
+back to a short numbered list.
 
 ## Task execution
 

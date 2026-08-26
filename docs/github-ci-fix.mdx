@@ -7,8 +7,10 @@ description: "Use OpenSRE to inspect failing GitHub Actions checks on a pull req
 
 OpenSRE can inspect failing GitHub Actions checks on a pull request, apply a code fix in your local checkout, commit it, and push it back to the PR's existing head branch.
 
+It can also fix failing CI directly on a branch with no PR — say "fix the CI on main and push straight to main" and OpenSRE inspects the failing workflow runs on that branch's head commit, applies a fix, and pushes directly to the branch.
+
 <Warning>
-This is mutating. OpenSRE asks before checking out the PR branch, editing files, committing, and pushing.
+This is mutating. OpenSRE asks before checking out the branch, editing files, committing, and pushing — and in branch mode the push goes straight to the branch you named (including `main`).
 </Warning>
 
 ## Prerequisites
@@ -44,7 +46,7 @@ OpenSRE uses the configured coding-agent backend through `CODING_AGENT=auto` by 
 
 | Tool | What it does |
 | --- | --- |
-| `fix_github_pr_ci` | Inspect failing Actions checks, apply a fix, commit, and push to the existing PR head branch |
+| `fix_github_pr_ci` | Inspect failing Actions checks, apply a fix, commit, and push to the existing PR head branch — or directly to a named branch in branch mode |
 
 Related skills: `github-ci-fix`, `github-ci-fix-onboarding`.
 
@@ -56,6 +58,7 @@ In the interactive shell:
 fix CI on https://github.com/Tracer-Cloud/opensre/pull/4597 and push
 fix failing checks on Tracer-Cloud/opensre#4597
 the current PR CI is failing, fix and push
+fix the CI on main and push straight to main
 ```
 
 ### What happens
@@ -70,7 +73,9 @@ the current PR CI is failing, fix and push
    waits for applicable workflows, and reports whether they passed, failed, were
    superseded by another push, or did not finish within 15 minutes.
 
-If no checks are failing, OpenSRE says so and does not push. It does **not** open a new PR.
+If no checks are failing, OpenSRE says so and does not push. It does **not** open a new PR. Merged or closed PRs are refused — if the failure already landed on the base branch, ask for the branch itself ("fix the CI on main").
+
+In branch mode the flow is the same, except OpenSRE reads the failing workflow runs on the branch's head commit, fast-forwards your local branch to `origin` before editing, pushes directly to the named branch, and then waits for the pushed commit's own workflow runs.
 
 ## Verify
 
@@ -93,5 +98,5 @@ There is no dedicated `integrations verify` target. Confirm readiness by:
 ## Security
 
 - Requires explicit confirmation before mutating the working tree or pushing.
-- Pushes only to the existing PR head branch in the same repository.
+- Pushes only to the existing PR head branch in the same repository, or — in branch mode — to the exact branch you named.
 - Store tokens in `.env` or your secret manager — not in source control.

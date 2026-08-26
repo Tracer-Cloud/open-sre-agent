@@ -85,8 +85,8 @@ own reply:
 Whenever this flow reaches a point where the user must choose between a small,
 fixed set of actions, call the `ask_user_choice` tool so the interactive shell
 renders and owns the decision. Never write a numbered list with "Reply with 1,
-2, or 3", and never ask the same question in prose. The tool blocks and returns
-the selected or custom answer in the same turn; continue from that answer. If
+2, or 3", and never ask the same question in prose. End the turn after calling
+the tool; the selected or custom answer arrives as the next user message. If
 the tool result says the interaction UI is unavailable, fall back to a short
 numbered list.
 
@@ -97,18 +97,15 @@ interfere with the end-to-end CI fix:
 
 1. State the facts in one short paragraph (prerequisites ready, target PR,
    dirty tree). Do not paste raw tool output into the reply.
-2. Immediately call `ask_user_choice` with one question using these exact
-   values (do not rephrase them):
-
-   - `id`: `uncommitted_changes`
-   - `header`: `Worktree`
-   - `question`: `How should I handle the uncommitted changes?`
-   - options:
-     1. `Stash (Recommended)` — `Temporarily save all local changes.`
-     2. `Commit changes` — `Create a local work-in-progress commit.`
-     3. `Use worktree` — `Keep this checkout untouched.`
-
-3. After the tool returns, execute the corresponding action and continue the
+2. Immediately call `ask_user_choice` with these exact values (do not rephrase
+   them):
+   - `title`: `How should I handle the uncommitted changes?`
+   - `options`:
+     1. `Stash the changes (recommended – quick & safe)`
+     2. `Commit the changes`
+     3. `Use a separate git worktree`
+3. End the turn and wait for the user's selection.
+4. After the answer arrives, execute the corresponding action and continue the
    live fix cycle against the chosen PR:
    - Stash: `git stash push -u -m "pre-ci-fix-onboarding"` (include untracked
      files so the tree is fully clean; remind the user the stash name).

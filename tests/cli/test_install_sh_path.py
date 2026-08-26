@@ -177,6 +177,10 @@ def test_install_sh_defines_progress_helpers() -> None:
         "draw_progress()",
         "finish_progress()",
         "run_with_progress()",
+        "is_interactive_status_terminal()",
+        "animate_dots()",
+        "finish_dots()",
+        "run_with_dots()",
         "binary_app_root()",
         "install_binary_app()",
         "print_binary_diagnostics()",
@@ -244,6 +248,38 @@ def test_install_sh_progress_plain_when_not_tty() -> None:
     assert result.returncode == 0, result.stderr
     assert "Plain progress step" in output
     assert "work complete" in output
+    assert "\x1b[" not in output
+    assert "\r" not in output
+
+
+def test_install_sh_animates_binary_verification_dots() -> None:
+    label = "Found opensre binary, verifying it runs"
+    result = _run_logging_snippet(
+        f"""
+        is_interactive_status_terminal() {{ return 0; }}
+        run_with_dots {shlex.quote(label)} bash -c 'sleep 0.9'
+        """
+    )
+    frames = {
+        _visible_terminal_text(segment)
+        for segment in re.split(r"[\r\n]", result.stdout + result.stderr)
+        if label in _visible_terminal_text(segment)
+    }
+
+    assert result.returncode == 0, result.stderr
+    assert {f"{label}.", f"{label}..", f"{label}..."} <= frames
+
+
+def test_install_sh_verification_dots_are_plain_when_not_tty() -> None:
+    result = _run_logging_snippet(
+        """
+        run_with_dots "Found opensre binary, verifying it runs" true
+        """
+    )
+    output = result.stdout + result.stderr
+
+    assert result.returncode == 0, result.stderr
+    assert output == "Found opensre binary, verifying it runs...\n"
     assert "\x1b[" not in output
     assert "\r" not in output
 
@@ -477,13 +513,13 @@ def test_readds_export_when_marker_present_but_line_removed(tmp_path: Path) -> N
 # ---------------------------------------------------------------------------
 
 
-def test_install_ps1_contains_onboarding_hint() -> None:
-    """Contract test: the hint string must be present in install.ps1 source."""
+def test_install_ps1_contains_setup_hint() -> None:
+    """Contract test: the setup hint must be present in install.ps1 source."""
     install_ps1 = Path(__file__).parents[2] / "install.ps1"
     source = install_ps1.read_text()
-    assert "$exe onboard" in source, (
-        "install.ps1 does not contain the onboarding step "
-        '(expected a line with ``$exe onboard``, e.g. ``Write-Host "  1. Run  $exe onboard"``).'
+    assert "$exe setup" in source, (
+        "install.ps1 does not contain the setup step "
+        '(expected a line with ``$exe setup``, e.g. ``Write-Host "  1. Run  $exe setup"``).'
     )
 
 

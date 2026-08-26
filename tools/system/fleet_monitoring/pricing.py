@@ -140,10 +140,12 @@ def _price(
 # picked up, not a general config surface: entries here are only consulted
 # after a direct litellm lookup misses.
 _LOCAL_MODEL_PRICES: dict[str, ModelPrice] = {
-    # GPT-5.6 (GA 2026-07-09) — too new for litellm's bundled
-    # snapshot. Per 1M tokens, from
+    # GPT-5.6 (GA 2026-07-09). Per 1M tokens, from
     # https://developers.openai.com/api/docs/pricing: sol 5/30, terra
-    # 2.50/15, luna 1/6. Cached input is 90% off.
+    # 2.50/15, luna 1/6. Cached input is 90% off. litellm's snapshot now
+    # carries the family but with rates that diverge from OpenAI's
+    # published table for terra/luna, so these rows stay authoritative
+    # (see the family-fallback preference in _lookup_price).
     "gpt-5.6-sol": _price(5.00, 30.00, cache_read_usd_per_million=0.50),
     "gpt-5.6-terra": _price(2.50, 15.00, cache_read_usd_per_million=0.25),
     "gpt-5.6-luna": _price(1.00, 6.00, cache_read_usd_per_million=0.10),
@@ -368,9 +370,13 @@ def _lookup_price(model: str) -> ModelPrice | None:
     for candidate in candidates:
         price = _litellm_price(candidate)
         if price is not None:
-            alias = _local_family_alias_canonical(candidate)
-            if alias is not None:
-                local = _LOCAL_MODEL_PRICES.get(alias)
+            # A family-fallback row pins the rate for every id in the family.
+            # litellm may also carry some of those ids (it added gpt-5.6 with
+            # divergent tier rates), so without this preference a bare tier id
+            # and its suffixed siblings would price from different sources.
+            canonical = _local_family_fallback_canonical(candidate)
+            if canonical is not None:
+                local = _LOCAL_MODEL_PRICES.get(canonical)
                 if local is not None:
                     return local
             return price

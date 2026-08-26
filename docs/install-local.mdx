@@ -39,7 +39,7 @@ irm https://install.opensre.com | iex
 
 You usually don't need `sudo`. The installer puts `opensre` somewhere already on your PATH when it can. If it can't, it uses `~/.local/bin` and prints how to add that to PATH.
 
-**Auto onboard:** In a normal interactive terminal, install often starts `opensre onboard` when it finishes. In CI or scripts it skips that. To turn auto-onboard off:
+**Auto setup:** In a normal interactive terminal, install often starts `opensre setup` when it finishes. In CI or scripts it skips that. To turn auto-setup off:
 
 ```bash
 curl -fsSL https://install.opensre.com | OPENSRE_AUTO_LAUNCH=0 bash
@@ -63,29 +63,31 @@ opensre
 
 That starts the interactive prompt. You can also run commands as `opensre …` from a normal terminal without entering the shell.
 
-## 3. Run onboarding
+## 3. Run setup
 
 Inside the shell:
 
 ```bash
-onboard
+/setup
 ```
 
 Or from a normal terminal:
 
 ```bash
-opensre onboard
+opensre setup
 ```
 
 You'll set up:
 
+- GitHub sign-in (browser device authorization)
 - Your LLM (so OpenSRE can reason about incidents)
-- Tool credentials (Datadog, Grafana, Slack, and so on)
-- Optional messaging and reporting
+- A model and credential, or a CLI login
+
+Setup then opens the interactive shell. To change only the LLM later, run `opensre onboard`.
 
 #### Where credentials are saved
 
-OpenSRE checks environment variables first. When onboarding saves a credential,
+OpenSRE checks environment variables first. When setup saves an LLM credential,
 it writes to an owner-only file at `~/.opensre/credentials.json` (mode `0600`).
 That keeps first-run setup from writing credentials to disk.
 
@@ -134,6 +136,6 @@ Start at [Integrations overview](/integrations-overview), then open each provide
 
 ## Related
 
-- [Quickstart](/quickstart) — install + onboard + sample run with GIFs
+- [Quickstart](/quickstart) — install + setup + sample run with GIFs
 - [Investigations overview](/investigation-overview) — how investigations work end to end
 - [Deployment](/deployment) — gateway and hosted options beyond a single laptop

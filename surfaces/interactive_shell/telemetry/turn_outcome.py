@@ -8,6 +8,7 @@ _ANALYTICS_OUTPUT_MAX_CHARS = 8_000
 # should record structured success/failure, not full interactive transcripts.
 _INTERACTIVE_WIZARD_SLASH_ROOTS: frozenset[str] = frozenset(
     {
+        "/setup",
         "/onboard",
         "/auth",
         "/login",

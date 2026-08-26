@@ -19,7 +19,6 @@ from surfaces.interactive_shell.runtime.startup.initial_input import run_initial
 from surfaces.interactive_shell.runtime.startup.loop_suggestions import offer_loop_suggestions
 from surfaces.interactive_shell.ui.input_prompt import build_prompt_session
 from surfaces.interactive_shell.ui.terminal_ui import render_terminal_ui
-from tools.system.fleet_monitoring.sweep import run_startup_sweep
 
 # Fallback when a caller does not supply one. Forces a terminal because the
 # shell owns the screen; an embedding caller passes its own instead.
@@ -110,8 +109,6 @@ def run_repl(
         return 0
     if not sys.stdin.isatty() and initial_input is None:
         return 0
-
-    run_startup_sweep()
 
     try:
         if not initial_input:

@@ -684,6 +684,39 @@ def test_achieved_claim_does_not_false_complete_a_long_checklist() -> None:
     assert "checklist 0/5" in verdict.reason
 
 
+def test_pending_user_choice_outranks_an_achieved_claim_with_evidence() -> None:
+    """A queued choice gates the goal before any other rule is consulted.
+
+    The strongest possible achieve signal (claim + successful tool + a complete
+    checklist) must still lose to an unanswered question, or the session closes
+    a goal whose next step is waiting on the user.
+    """
+    from core.agent_harness.session.pending_choice import PendingUserChoice
+
+    # Arrange
+    session = SessionCore()
+    session.pending_user_choice = PendingUserChoice(
+        title="Which environment?", options=("staging", "production")
+    )
+    goal = SessionGoal(
+        condition="restart the service",
+        checklist=("Pick the environment",),
+        completed=frozenset({0}),
+    )
+    attach_session_goal(session, goal)
+
+    # Act
+    verdict = evaluate_session_goal(
+        goal,
+        _result("Restarted. session_goal:achieved", executed=1, success=1),
+        session=session,
+    )
+
+    # Assert
+    assert verdict.status == SessionGoalStatus.ACTIVE
+    assert verdict.reason == SessionGoalReason.WAITING_USER_CHOICE
+
+
 def test_prior_turn_progress_blocks_the_untagged_same_turn_completion() -> None:
     """The untagged shortcut is for a goal answered in one turn, not a resumed one.
 

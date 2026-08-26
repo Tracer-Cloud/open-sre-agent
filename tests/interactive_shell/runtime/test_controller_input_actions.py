@@ -28,7 +28,6 @@ def _decide(
     exit_requested: bool = False,
     dispatch_running: bool = False,
     awaiting_confirmation: bool = False,
-    confirmation_accepts_any_answer: bool = False,
     needs_exclusive_stdin: bool = False,
 ) -> object:
     return decide_input_action(
@@ -37,7 +36,6 @@ def _decide(
             exit_requested=exit_requested,
             dispatch_running=dispatch_running,
             awaiting_confirmation=awaiting_confirmation,
-            confirmation_accepts_any_answer=confirmation_accepts_any_answer,
         ),
         needs_exclusive_stdin=lambda _text: needs_exclusive_stdin,
     )
@@ -81,14 +79,6 @@ def test_decide_submits_non_confirmation_input_while_confirmation_is_pending() -
         text="run /status",
         warning=QUEUE_DURING_CONFIRMATION_WARNING,
     )
-
-
-def test_decide_delivers_arbitrary_answer_for_human_choice() -> None:
-    assert _decide(
-        InputSubmitted("Shadow traffic"),
-        awaiting_confirmation=True,
-        confirmation_accepts_any_answer=True,
-    ) == DeliverConfirmation(text="Shadow traffic")
 
 
 def test_decide_submits_normal_turn_without_wait_by_default() -> None:

@@ -17,17 +17,15 @@ Start the interactive shell with `opensre` (no subcommand). Slash commands below
 
 ## Setup
 
-### Option 1: Onboarding wizard (recommended)
+### Option 1: CLI setup (recommended)
 
 ```bash
-opensre onboard
-# or
 opensre integrations setup telegram
 ```
 
-Interactive shell: `/onboard` or `/integrations setup telegram`.
+Interactive shell: `/integrations setup telegram`.
 
-Choose **Telegram**. The wizard prompts for:
+The setup prompts for:
 
 - **Bot token** (required) — stored as `TELEGRAM_BOT_TOKEN` in `.env` and `~/.opensre/credentials.json`
 - **Default chat ID or `@channelname`** (required) — written to `.env` as `TELEGRAM_DEFAULT_CHAT_ID`

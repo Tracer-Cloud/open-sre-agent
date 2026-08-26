@@ -126,7 +126,7 @@ disable-model-invocation: false   # optional — set true to suppress attachment
 - [ ] Tool layer is wired and stable
 - [ ] CLI setup flow is updated if the integration is user-configurable locally
 - [ ] Background-RCA delivery is wired, or intentionally out of scope (see [Notification channels](#notification-channels))
-- [ ] `opensre onboard` parity is added, or intentionally documented as out of scope
+- [ ] `opensre integrations setup <name>` parity is added, or intentionally documented as out of scope
 - [ ] New required env vars / credentials are added to `.env.example` (never `.env`)
 - [ ] Sensitive credentials follow the [Credential resolution](#credential-resolution) contract below
 - [ ] `make verify-integrations` passes

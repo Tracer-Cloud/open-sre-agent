@@ -1269,6 +1269,9 @@ _TOOLS_WITHOUT_DELIBERATE_CATCH: frozenset[str] = frozenset(
         "summarize_github_pr_status",
         "synthetic_run",
         "task_cancel",
+        # update_plan returns structured invalid-plan dicts; unexpected
+        # exceptions escape to the global wrapper.
+        "update_plan",
         "work_task_add",
         "work_task_complete",
         "work_task_list",

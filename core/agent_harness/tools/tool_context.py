@@ -6,7 +6,6 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from typing import Any
 
-from core.agent_harness.human_interaction import HumanInteractionPort
 from core.tool.contracts import AgentToolContext
 
 ToolExecutionPayload = bool | dict[str, Any]
@@ -24,21 +23,22 @@ class ActionToolScope:
     confirm_fn: Callable[[str], str] | None = None
     is_tty: bool | None = None
     request_exit: Callable[[], None] | None = None
-    # Defaults False to match ``execution_allowed`` and the ``run_*`` helpers.
-    # Generic tool invocations may already be visible, but concrete action tools
-    # announce themselves only after policy approval, so confirmation must still
-    # include the action summary.
+    # Defaults False to match ``execution_allowed`` and the ``run_*`` helpers:
+    # nothing has been listed yet, so the confirmation UX should show the action
+    # summary. The action-agent dispatcher passes True because it has already
+    # rendered the planned action list.
     action_already_listed: bool = False
     #: Length of ``session.history`` when this turn began, so a tool can tell
     #: what THIS turn produced from what the session already contained.
     history_start: int = 0
+    #: User message that started this action turn (Ask User answers, slash, …).
+    turn_user_message: str = ""
     # Surface-injected subprocess presenter (``tools.interactive_shell.subprocess``).
     subprocess_presenter: Any = None
     investigation_ports: Any = None
     llm_provider_ports: Any = None
     task_cancel_ports: Any = None
     slash_ports: Any = None
-    human_interaction: HumanInteractionPort | None = None
 
 
 def action_scope_from_agent_context(context: AgentToolContext) -> ActionToolScope:

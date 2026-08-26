@@ -86,6 +86,10 @@ is_interactive_terminal() {
   [ -t 1 ] && [ "${TERM:-}" != "dumb" ] && ! install_verbose
 }
 
+is_interactive_status_terminal() {
+  [ -t 2 ] && [ "${TERM:-}" != "dumb" ] && ! install_verbose
+}
+
 terminal_supports_unicode() {
   local locale_value="${LC_ALL:-${LC_CTYPE:-${LANG:-}}}"
 
@@ -340,6 +344,64 @@ run_with_progress() {
   fi
 
   rm -f "$log_file"
+}
+
+animate_dots() {
+  local label="$1"
+  local dot_count=1
+  local dots
+
+  while :; do
+    case "$dot_count" in
+      1) dots="." ;;
+      2) dots=".." ;;
+      *) dots="..." ;;
+    esac
+    printf '\r\033[K%s%s%s%s' \
+      "${COLOR_GRAY:-}" "$label" "$dots" "${COLOR_RESET:-}" >&2
+    dot_count=$((dot_count % 3 + 1))
+    sleep 0.4
+  done
+}
+
+finish_dots() {
+  local dots_pid="$1"
+  local label="$2"
+
+  kill "$dots_pid" 2>/dev/null || true
+  wait "$dots_pid" 2>/dev/null || true
+  printf '\r\033[K%s%s...%s\n\033[?25h' \
+    "${COLOR_GRAY:-}" "$label" "${COLOR_RESET:-}" >&2
+}
+
+run_with_dots() {
+  local label="$1"
+  shift
+
+  if ! is_interactive_status_terminal; then
+    printf '%s%s...%s\n' \
+      "${COLOR_GRAY:-}" "$label" "${COLOR_RESET:-}" >&2
+    "$@"
+    return
+  fi
+
+  local dots_pid
+  local status
+
+  printf '\033[?25l' >&2
+  animate_dots "$label" &
+  dots_pid=$!
+  trap 'finish_dots "$dots_pid" "$label"; exit 130' INT TERM
+
+  if "$@"; then
+    status=0
+  else
+    status=$?
+  fi
+
+  finish_dots "$dots_pid" "$label"
+  trap - INT TERM
+  return "$status"
 }
 
 usage() {
@@ -821,6 +883,24 @@ download_and_verify_checksum() {
   verify_checksum "$checksum_path" "$archive_path"
 }
 
+prepare_and_verify_binary() {
+  local binary_path="$1"
+  local extraction_dir="$2"
+  local expected_version="${3:-}"
+
+  # macOS: clear quarantine and re-adhoc-sign onedir libs+binary. Stale or
+  # post-mutation signatures otherwise SIGKILL --version (exit 137,
+  # CODESIGNING / Invalid Page) on consumer Macs.
+  clear_macos_quarantine "$extraction_dir"
+  resign_macos_onedir_adhoc "$binary_path"
+
+  if [ -n "$expected_version" ]; then
+    verify_binary_version "$binary_path" "$expected_version"
+  else
+    verify_binary_version "$binary_path"
+  fi
+}
+
 extract_and_verify_binary() {
   local archive_path="$1"
   local extraction_dir="$2"
@@ -842,18 +922,16 @@ extract_and_verify_binary() {
     "${COLOR_GRAY:-}" "$BIN_NAME" "${COLOR_RESET:-}" >&2
 
   extracted_binary_path="$(get_binary_path_from_archive "$extraction_dir" "$BIN_NAME")"
-  printf '%sFound %s binary, verifying it runs...%s\n' \
-    "${COLOR_GRAY:-}" "$BIN_NAME" "${COLOR_RESET:-}" >&2
-  # macOS: clear quarantine and re-adhoc-sign onedir libs+binary. Stale or
-  # post-mutation signatures otherwise SIGKILL --version (exit 137,
-  # CODESIGNING / Invalid Page) on consumer Macs.
-  clear_macos_quarantine "$extraction_dir"
-  resign_macos_onedir_adhoc "$extracted_binary_path"
-
   if [ "$INSTALL_CHANNEL" = "main" ]; then
-    extracted_version="$(verify_binary_version "$extracted_binary_path")" || return "$?"
+    extracted_version="$(
+      run_with_dots "Found ${BIN_NAME} binary, verifying it runs" \
+        prepare_and_verify_binary "$extracted_binary_path" "$extraction_dir"
+    )" || return "$?"
   else
-    extracted_version="$(verify_binary_version "$extracted_binary_path" "$version")" || return "$?"
+    extracted_version="$(
+      run_with_dots "Found ${BIN_NAME} binary, verifying it runs" \
+        prepare_and_verify_binary "$extracted_binary_path" "$extraction_dir" "$version"
+    )" || return "$?"
   fi
 
   printf '%s\n%s\n' "$extracted_binary_path" "$extracted_version"

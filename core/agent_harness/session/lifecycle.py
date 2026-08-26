@@ -35,7 +35,11 @@ import logging
 from datetime import datetime
 from typing import Any, TypeVar
 
-from core.agent_harness.session.persistence.contracts import SessionRepo, SessionStore
+from core.agent_harness.session.persistence.contracts import (
+    RestoreContextKey,
+    SessionRepo,
+    SessionStore,
+)
 
 # Import from submodules (not the package __init__) so the session package can
 # re-export SessionManager without a circular import.
@@ -255,7 +259,7 @@ class SessionManager:
         """
         if not data:
             return session
-        messages = data.get("cli_agent_messages")
+        messages = data.get(RestoreContextKey.CLI_AGENT_MESSAGES)
         if isinstance(messages, list):
             restored: list[tuple[str, str]] = []
             for item in messages:
@@ -266,17 +270,22 @@ class SessionManager:
                 if role in {"user", "assistant"} and isinstance(content, str) and content:
                     restored.append((role, content))
             session.cli_agent_messages = restored
-        context = data.get("accumulated_context")
+        context = data.get(RestoreContextKey.ACCUMULATED_CONTEXT)
         if isinstance(context, dict):
             session.accumulated_context = dict(context)
-        goal_state = data.get("session_goal_state")
+        goal_state = data.get(RestoreContextKey.SESSION_GOAL_STATE)
         if isinstance(goal_state, dict):
             from core.agent_harness.session_goal.persist import (
                 apply_session_goal_state,
             )
 
             apply_session_goal_state(session, goal_state)
-        history = data.get("history")
+        plan_state = data.get(RestoreContextKey.TASK_PLAN_STATE)
+        if plan_state is not None:
+            from core.agent_harness.task_plan.persist import apply_task_plan_state
+
+            apply_task_plan_state(session, plan_state)
+        history = data.get(RestoreContextKey.HISTORY)
         if isinstance(history, list):
             session.history = [dict(item) for item in history if isinstance(item, dict)]
         return session

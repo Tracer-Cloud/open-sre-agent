@@ -19,6 +19,8 @@ from core.tool import RegisteredTool, SideEffectLevel
 from core.tool_framework.utils import object_schema, string_property
 from tools.cross_vendor.fix_sentry_issue import fix_sentry_issue
 from tools.cross_vendor.fix_sentry_issue.runner import is_issue_fix_enabled
+from tools.interactive_shell.shared import allow_tool
+from tools.interactive_shell.subprocess import require_subprocess_presenter
 
 
 def _render_result(console: Any, out: dict[str, Any]) -> None:
@@ -74,6 +76,15 @@ def execute_sentry_fix_tool(args: dict[str, Any], ctx: ActionToolScope) -> bool:
     if not sentry_url:
         return False
     open_pr = bool(args.get("open_pr", False))
+    presenter = require_subprocess_presenter(ctx)
+    summary = f"fix Sentry issue {sentry_url}"
+    if open_pr:
+        summary += " and open a pull request"
+    if not presenter.execution_allowed(
+        allow_tool("sentry_issue_fix"),
+        action_summary=summary,
+    ):
+        return True
 
     ctx.console.print(
         f"[bold]Fixing Sentry issue[/] {sentry_url}"

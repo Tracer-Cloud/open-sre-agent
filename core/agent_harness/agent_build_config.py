@@ -12,7 +12,6 @@ from typing import Any, Protocol
 
 from core.agent_harness.ports import (
     ErrorReporter,
-    HumanInteractionPortFactory,
     PromptContextProvider,
     SessionState,
     SubprocessPresenterFactory,
@@ -79,11 +78,10 @@ class AgentBuildConfig:
     build_prompts: BuildPrompts | None = None
     error_reporter: ErrorReporter | None = None
     apply_capability_policy: ApplyCapabilityPolicy | None = None
-    #: Surface presentation reaches the tool tier through injected factories;
-    #: the harness never imports terminal or chat UI.
+    #: Live tool-status wording and subprocess rendering. Both reach the tool
+    #: tier, which the host sits below, so a composer supplies them.
     describe_tool: DescribeTool | None = None
     subprocess_presenter_factory: SubprocessPresenterFactory | None = None
-    human_interaction_factory: HumanInteractionPortFactory | None = None
 
 
 __all__ = [

@@ -19,9 +19,10 @@ from rich.console import Console
 from rich.markup import escape
 
 import infrastructure.terminal.theme as ui_theme
+from infrastructure.safety.terminal_output import strip_terminal_controls
 from surfaces.shared.terminal.components.key_reader import read_key_unix, read_key_windows
 
-_HINT = "↑↓/j/k/Tab  Enter/Space  Esc/q"
+_HINT = "↑↓ navigate    Enter select    Esc cancel"
 CRUMB_SEP = "  ›  "
 # Blank line after the submitted slash line before the menu header (all pickers).
 _MENU_LEADING_LINES = 1
@@ -102,6 +103,19 @@ def _pad(sym: str, label: str, width: int) -> str:
     return content + (" " * pad if pad > 0 else "")
 
 
+def _sanitize_menu(
+    title: str,
+    crumb: str,
+    labels: list[str],
+) -> tuple[str, str, list[str]]:
+    """Strip model-supplied controls before raw ANSI write or row counting."""
+    return (
+        strip_terminal_controls(title),
+        strip_terminal_controls(crumb),
+        [strip_terminal_controls(label) for label in labels],
+    )
+
+
 def _menu_height(crumb: str, labels: list[str]) -> int:
     # leading, title, [crumb], rule, blank, choices, blank, hint
     return _MENU_LEADING_LINES + 1 + (1 if crumb else 0) + 1 + 1 + len(labels) + 1 + 1
@@ -147,6 +161,7 @@ def _draw_menu(
 ) -> None:
     out = sys.stdout
     w = _cols()
+    title, crumb, labels = _sanitize_menu(title, crumb, labels)
     if erase_lines:
         _erase_menu_block(erase_lines)
     for _ in range(_MENU_LEADING_LINES):
@@ -162,8 +177,9 @@ def _draw_menu(
     # choices
     for i, label in enumerate(labels):
         here = i == index
+        numbered = f"{i + 1}. {label}"
         sym = ">" if here else " "
-        padded = _pad(sym, label, w)
+        padded = _pad(sym, numbered, w)
         if here:
             write_menu_line(f"{ui_theme.MENU_SELECTION_ROW_ANSI}{padded}{ui_theme.ANSI_RESET}")
         else:
@@ -175,6 +191,7 @@ def _draw_menu(
 
 def _erase_menu(crumb: str, labels: list[str]) -> None:
     """Move cursor up to the start of this menu block and wipe it."""
+    _, crumb, labels = _sanitize_menu("", crumb, labels)
     height = _menu_height(crumb, labels)
     _erase_menu_block(height)
     sys.stdout.flush()
@@ -193,6 +210,7 @@ def _pick(
     """Draw an inline menu, let user navigate, erase on exit. Returns index or None."""
     if not labels:
         return None
+    title, crumb, labels = _sanitize_menu(title, crumb, labels)
     idx = initial_index % len(labels)
     height = _menu_height(crumb, labels)
     first = True
@@ -264,9 +282,11 @@ def print_valid_choice_list(
     """Print one choice per line for scan-friendly fallback/error messaging."""
     if not choices:
         return
+    title = escape(strip_terminal_controls(title))
     console.print(f"[{ui_theme.SECONDARY}]{title}[/]")
-    for choice in choices:
-        console.print(f"[{ui_theme.SECONDARY}]  - {escape(choice)}[/]")
+    for index, choice in enumerate(choices, start=1):
+        safe = escape(strip_terminal_controls(choice))
+        console.print(f"[{ui_theme.SECONDARY}]  {index}. {safe}[/]")
 
 
 __all__ = [
