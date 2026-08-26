@@ -179,6 +179,25 @@ class TestMapPagerdutyServices:
         assert "\n" not in summary
         assert len(summary) < len(long_name)
 
+    def test_strips_carriage_returns_from_service_name(self) -> None:
+        """Regression: a name with bare \\r or \\r\\n line endings must not
+        leave a literal carriage return in the report summary."""
+        evidence: dict[str, Any] = {}
+
+        _map_pagerduty_services(
+            evidence,
+            {
+                "available": True,
+                "services": [],
+                "service": {"name": "Web App\r\nProduction\r", "status": "active"},
+                "total": 1,
+            },
+            {},
+        )
+
+        summary = evidence["catalog_entries"][0]["summary"]
+        assert "\r" not in summary
+
     def test_records_entry_with_service_count_when_listing(self) -> None:
         evidence: dict[str, Any] = {}
 

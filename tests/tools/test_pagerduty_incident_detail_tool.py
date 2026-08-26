@@ -189,6 +189,23 @@ class TestMapPagerdutyIncidentDetail:
         assert "\n" not in summary
         assert len(summary) < len(long_title)
 
+    def test_strips_carriage_returns_from_title(self) -> None:
+        """Regression: a title with bare \\r or \\r\\n line endings must not
+        leave a literal carriage return in the report summary."""
+        evidence: dict[str, Any] = {}
+
+        _map_pagerduty_incident_detail(
+            evidence,
+            {
+                "available": True,
+                "incident": {"title": "CPU spike\r\non host-42\r", "status": "triggered"},
+            },
+            {},
+        )
+
+        summary = evidence["catalog_entries"][0]["summary"]
+        assert "\r" not in summary
+
     def test_records_nothing_when_incident_empty(self) -> None:
         evidence: dict[str, Any] = {}
 

@@ -20,15 +20,16 @@ from integrations.pagerduty.client import make_pagerduty_client
 _PAGERDUTY_MAX_PAGE_SIZE = 100
 
 #: Incident titles and service names are free-form, human-entered PagerDuty
-#: text -- unbounded and can contain newlines. Cap the length used in a
-#: report summary so one long or multi-line value can't produce a malformed
-#: or oversized report line.
+#: text -- unbounded and can contain newlines or carriage returns. Cap the
+#: length used in a report summary so one long or multi-line value can't
+#: produce a malformed or oversized report line.
 _NAME_SUMMARY_TRUNCATE_LEN = 120
 
 
 def _pagerduty_summary_text(value: str) -> str:
     """Collapse and cap free-form PagerDuty text before it goes into a summary."""
-    return truncate(value.replace("\n", " "), _NAME_SUMMARY_TRUNCATE_LEN)
+    collapsed = value.replace("\r\n", " ").replace("\r", " ").replace("\n", " ")
+    return truncate(collapsed, _NAME_SUMMARY_TRUNCATE_LEN)
 
 
 def _pagerduty_count_label(count: int, requested_limit: int) -> str:
