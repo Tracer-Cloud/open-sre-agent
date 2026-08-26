@@ -195,10 +195,6 @@ slack_send_message
 summarize_community_followups
 summarize_github_pr_status
 telegram_send_message
-temporal_namespace_info
-temporal_task_queue
-temporal_workflow_history
-temporal_workflows
 twilio_notify
 vercel_deployment_logs
 vercel_deployment_status
