@@ -190,7 +190,6 @@ query_datadog_monitors
 query_grafana_annotations
 query_groundcover_logs
 query_groundcover_traces
-query_honeycomb_traces
 query_openobserve_logs
 query_signoz_logs
 query_signoz_metrics
