@@ -29,7 +29,7 @@ def _map_get_gitlab_file_contents(
     if not file:
         return
     content = file.get("content") or ""
-    line_count = content.count("\n") + 1 if content else 0
+    line_count = content.count("\n") + (not content.endswith("\n")) if content else 0
     record_evidence_entry(
         evidence,
         source="get_gitlab_file",
