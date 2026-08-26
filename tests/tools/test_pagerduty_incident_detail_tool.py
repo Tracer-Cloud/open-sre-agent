@@ -2,9 +2,10 @@
 
 from __future__ import annotations
 
+from typing import Any
 from unittest.mock import MagicMock, patch
 
-from integrations.pagerduty.tools import PagerDutyIncidentDetailTool
+from integrations.pagerduty.tools import PagerDutyIncidentDetailTool, _map_pagerduty_incident_detail
 
 
 def _tool() -> PagerDutyIncidentDetailTool:
@@ -114,3 +115,75 @@ def test_metadata_requires_incident_id() -> None:
     t = _tool()
     assert t.name == "pagerduty_incident_detail"
     assert "incident_id" in t.input_schema["required"]
+
+
+class TestMapPagerdutyIncidentDetail:
+    def test_records_entry_with_timeline_count(self) -> None:
+        evidence: dict[str, Any] = {}
+
+        _map_pagerduty_incident_detail(
+            evidence,
+            {
+                "available": True,
+                "incident": {"title": "CPU spike", "status": "triggered"},
+                "log_entries": [{"id": "L1"}, {"id": "L2"}],
+                "total_log_entries": 2,
+            },
+            {"log_limit": 25},
+        )
+
+        entries = evidence["catalog_entries"]
+        assert len(entries) == 1
+        assert entries[0]["source"] == "pagerduty_incident_detail"
+        assert entries[0]["summary"] == "'CPU spike', triggered, 2 timeline entries"
+
+    def test_qualifies_timeline_count_when_saturated(self) -> None:
+        evidence: dict[str, Any] = {}
+
+        _map_pagerduty_incident_detail(
+            evidence,
+            {
+                "available": True,
+                "incident": {"title": "CPU spike", "status": "triggered"},
+                "log_entries": [{"id": str(i)} for i in range(25)],
+                "total_log_entries": 25,
+            },
+            {"log_limit": 25},
+        )
+
+        assert (
+            evidence["catalog_entries"][0]["summary"]
+            == "'CPU spike', triggered, 25+ timeline entries"
+        )
+
+    def test_records_entry_without_timeline_clause_when_none_fetched(self) -> None:
+        evidence: dict[str, Any] = {}
+
+        _map_pagerduty_incident_detail(
+            evidence,
+            {
+                "available": True,
+                "incident": {"title": "CPU spike", "status": "resolved"},
+                "log_entries": [],
+                "total_log_entries": 0,
+            },
+            {},
+        )
+
+        assert evidence["catalog_entries"][0]["summary"] == "'CPU spike', resolved"
+
+    def test_records_nothing_when_incident_empty(self) -> None:
+        evidence: dict[str, Any] = {}
+
+        _map_pagerduty_incident_detail(evidence, {"available": True, "incident": {}}, {})
+
+        assert "catalog_entries" not in evidence
+
+    def test_records_nothing_on_unavailable_result(self) -> None:
+        evidence: dict[str, Any] = {}
+
+        _map_pagerduty_incident_detail(
+            evidence, {"available": False, "error": "not configured"}, {}
+        )
+
+        assert "catalog_entries" not in evidence

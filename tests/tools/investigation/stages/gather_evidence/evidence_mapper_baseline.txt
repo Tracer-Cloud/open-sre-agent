@@ -195,10 +195,6 @@ memory_recall
 memory_remember
 opsgenie_alert_detail
 opsgenie_alerts
-pagerduty_incident_detail
-pagerduty_incidents
-pagerduty_oncall
-pagerduty_services
 pi_coding_task
 prefect_flow_runs
 prefect_worker_health

@@ -2,9 +2,10 @@
 
 from __future__ import annotations
 
+from typing import Any
 from unittest.mock import MagicMock, patch
 
-from integrations.pagerduty.tools import PagerDutyServicesTool
+from integrations.pagerduty.tools import PagerDutyServicesTool, _map_pagerduty_services
 
 
 def _tool() -> PagerDutyServicesTool:
@@ -134,3 +135,72 @@ def test_metadata_is_valid() -> None:
     assert t.name == "pagerduty_services"
     assert t.source == "pagerduty"
     assert "api_key" in t.input_schema["required"]
+
+
+class TestMapPagerdutyServices:
+    def test_records_entry_for_single_service_detail(self) -> None:
+        evidence: dict[str, Any] = {}
+
+        _map_pagerduty_services(
+            evidence,
+            {
+                "available": True,
+                "services": [],
+                "service": {"name": "Web App", "status": "active"},
+                "total": 1,
+            },
+            {},
+        )
+
+        entries = evidence["catalog_entries"]
+        assert len(entries) == 1
+        assert entries[0]["source"] == "pagerduty_services"
+        assert entries[0]["summary"] == "'Web App': active"
+
+    def test_records_entry_with_service_count_when_listing(self) -> None:
+        evidence: dict[str, Any] = {}
+
+        _map_pagerduty_services(
+            evidence,
+            {
+                "available": True,
+                "services": [{"name": "Web App"}, {"name": "API"}],
+                "service": {},
+                "total": 2,
+            },
+            {"limit": 25},
+        )
+
+        assert evidence["catalog_entries"][0]["summary"] == "2 service(s)"
+
+    def test_qualifies_count_when_saturated(self) -> None:
+        evidence: dict[str, Any] = {}
+
+        _map_pagerduty_services(
+            evidence,
+            {
+                "available": True,
+                "services": [{"name": str(i)} for i in range(25)],
+                "service": {},
+                "total": 25,
+            },
+            {"limit": 25},
+        )
+
+        assert evidence["catalog_entries"][0]["summary"] == "25+ service(s)"
+
+    def test_records_nothing_when_no_services_and_no_service(self) -> None:
+        evidence: dict[str, Any] = {}
+
+        _map_pagerduty_services(
+            evidence, {"available": True, "services": [], "service": {}, "total": 0}, {}
+        )
+
+        assert "catalog_entries" not in evidence
+
+    def test_records_nothing_on_unavailable_result(self) -> None:
+        evidence: dict[str, Any] = {}
+
+        _map_pagerduty_services(evidence, {"available": False, "error": "HTTP 401"}, {})
+
+        assert "catalog_entries" not in evidence

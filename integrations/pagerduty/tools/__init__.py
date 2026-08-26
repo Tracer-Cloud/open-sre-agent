@@ -6,15 +6,52 @@ from __future__ import annotations
 
 from typing import Any
 
+from core.domain.types.evidence import record_evidence_entry
 from core.tool import BaseTool
 from core.tool_framework.utils import tool_unavailable
 from integrations.pagerduty.client import make_pagerduty_client
+
+#: PagerDuty's REST API v2 caps every list endpoint's page size at 100
+#: (``min(limit, 100)`` in ``integrations/pagerduty/client.py``), and the
+#: client discards the API's own ``more``/pagination metadata -- a returned
+#: page cannot be distinguished from a true total except by comparing it
+#: against the effective page size that was requested.
+_PAGERDUTY_MAX_PAGE_SIZE = 100
+
+
+def _pagerduty_count_label(count: int, requested_limit: int) -> str:
+    """Format a list count, appending "+" when the page may be truncated."""
+    effective_limit = min(max(requested_limit, 1), _PAGERDUTY_MAX_PAGE_SIZE)
+    return f"{count}+" if count >= effective_limit else str(count)
+
+
+def _map_pagerduty_incident_detail(
+    evidence: dict[str, Any], output: dict[str, Any], tool_input: dict[str, Any]
+) -> None:
+    """Cite the incident's title, status, and timeline entry count."""
+    if not output.get("available"):
+        return
+    incident = output.get("incident") or {}
+    if not incident:
+        return
+    parts = [f"'{incident.get('title', 'unknown')}'", incident.get("status", "unknown")]
+    total_log_entries = output.get("total_log_entries", 0)
+    if total_log_entries:
+        label = _pagerduty_count_label(total_log_entries, tool_input.get("log_limit", 25))
+        parts.append(f"{label} timeline entries")
+    record_evidence_entry(
+        evidence,
+        source="pagerduty_incident_detail",
+        label="PagerDuty Incident Detail",
+        summary=", ".join(parts),
+    )
 
 
 class PagerDutyIncidentDetailTool(BaseTool):
     """Fetch full details and activity timeline for a specific PagerDuty incident."""
 
     name = "pagerduty_incident_detail"
+    evidence_mapper = _map_pagerduty_incident_detail
     source = "pagerduty"
     description = (
         "Fetch the full details, assignments, acknowledgements, and activity timeline "
@@ -136,10 +173,33 @@ from core.tool import BaseTool
 _ACTIVE_STATUSES = {"triggered", "acknowledged"}
 
 
+def _map_pagerduty_incidents(
+    evidence: dict[str, Any], output: dict[str, Any], tool_input: dict[str, Any]
+) -> None:
+    """Cite the incident count and how many are currently active."""
+    if not output.get("available"):
+        return
+    incidents = output.get("incidents") or []
+    if not incidents:
+        return
+    label = _pagerduty_count_label(output.get("total", len(incidents)), tool_input.get("limit", 25))
+    active_count = len(output.get("active_incidents") or [])
+    summary = f"{label} incident(s)"
+    if active_count:
+        summary += f", {active_count} active"
+    record_evidence_entry(
+        evidence,
+        source="pagerduty_incidents",
+        label="PagerDuty Incidents",
+        summary=summary,
+    )
+
+
 class PagerDutyIncidentsTool(BaseTool):
     """List and search PagerDuty incidents to surface active pages and their triage state."""
 
     name = "pagerduty_incidents"
+    evidence_mapper = _map_pagerduty_incidents
     source = "pagerduty"
     description = (
         "Search PagerDuty incidents to find active pages, identify unacknowledged triggered "
@@ -283,10 +343,29 @@ pagerduty_incidents = PagerDutyIncidentsTool()
 from core.tool import BaseTool
 
 
+def _map_pagerduty_oncall(
+    evidence: dict[str, Any], output: dict[str, Any], tool_input: dict[str, Any]
+) -> None:
+    """Cite the on-call responder count."""
+    if not output.get("available"):
+        return
+    oncalls = output.get("oncalls") or []
+    if not oncalls:
+        return
+    label = _pagerduty_count_label(output.get("total", len(oncalls)), tool_input.get("limit", 25))
+    record_evidence_entry(
+        evidence,
+        source="pagerduty_oncall",
+        label="PagerDuty On-Call",
+        summary=f"{label} on-call responder(s)",
+    )
+
+
 class PagerDutyOnCallTool(BaseTool):
     """Fetch current on-call responders from PagerDuty escalation policies."""
 
     name = "pagerduty_oncall"
+    evidence_mapper = _map_pagerduty_oncall
     source = "pagerduty"
     description = (
         "Fetch current on-call responders for PagerDuty escalation policies to identify "
@@ -385,10 +464,38 @@ pagerduty_oncall = PagerDutyOnCallTool()
 from core.tool import BaseTool
 
 
+def _map_pagerduty_services(
+    evidence: dict[str, Any], output: dict[str, Any], tool_input: dict[str, Any]
+) -> None:
+    """Cite the fetched service's name, or the service count when listing."""
+    if not output.get("available"):
+        return
+    service = output.get("service") or {}
+    if service:
+        record_evidence_entry(
+            evidence,
+            source="pagerduty_services",
+            label="PagerDuty Services",
+            summary=f"'{service.get('name', 'unknown')}': {service.get('status', 'unknown')}",
+        )
+        return
+    services = output.get("services") or []
+    if not services:
+        return
+    label = _pagerduty_count_label(output.get("total", len(services)), tool_input.get("limit", 25))
+    record_evidence_entry(
+        evidence,
+        source="pagerduty_services",
+        label="PagerDuty Services",
+        summary=f"{label} service(s)",
+    )
+
+
 class PagerDutyServicesTool(BaseTool):
     """Fetch PagerDuty services, escalation policies, and alert routing configuration."""
 
     name = "pagerduty_services"
+    evidence_mapper = _map_pagerduty_services
     source = "pagerduty"
     description = (
         "Fetch PagerDuty services with their escalation policies, integrations, and alert "
