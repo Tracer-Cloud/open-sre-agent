@@ -14,3 +14,10 @@ def test_system_prompt_base_comes_from_markdown_file() -> None:
     assert path.is_file()
     assert path.name == "opensre_system_prompt.md"
     assert path.read_text(encoding="utf-8") == _SYSTEM_PROMPT_BASE
+
+
+def test_system_prompt_runs_explicit_commands_without_repository_probe() -> None:
+    assert "execute it directly with the matching tool" in _SYSTEM_PROMPT_BASE
+    assert "Do not search for AGENTS.md files or inspect the repository first" in (
+        _SYSTEM_PROMPT_BASE
+    )
