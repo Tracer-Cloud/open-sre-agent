@@ -7,8 +7,15 @@ from prompt_toolkit.formatted_text import ANSI
 from rich.console import Console
 from rich.text import Text
 
+from core.agent_harness.spi.handoff import parse_ask_user_answers
 from infrastructure.terminal import theme as ui_theme
 from surfaces.interactive_shell.runtime import Session
+from surfaces.interactive_shell.ui.handoff_questions import (
+    handoff_answer_style,
+    last_assistant_asked_handoff,
+    render_ask_user_qa,
+    render_handoff_answer_marker,
+)
 from surfaces.interactive_shell.ui.input_prompt.completion import completion_preview_hint_ansi
 from surfaces.interactive_shell.ui.input_prompt.layout import (
     _short_meta,
@@ -76,9 +83,29 @@ def render_submitted_prompt(console: Console, session: Session, text: str) -> No
     ``↗ /goal`` marker so the work turn is visually distinct from the slash
     that attached the goal.
     """
+    stripped = text.strip()
+    # Internal exclusive-stdin turn — never echo ``/choose``.
+    if stripped == "/choose" or stripped.startswith("/choose "):
+        return
+    is_handoff_answer = bool(session.terminal.awaiting_handoff_answer)
+    if not is_handoff_answer:
+        is_handoff_answer = last_assistant_asked_handoff(
+            list(getattr(session, "cli_agent_messages", []) or [])
+        )
+    session.terminal.awaiting_handoff_answer = False
+    ask_user_pairs = parse_ask_user_answers(stripped) if is_handoff_answer else []
+    if len(ask_user_pairs) >= 2:
+        # Keep the Ask User block in the transcript (Q white, A brand). Claim the
+        # turn number so the next prompt still advances; do not paint a fake
+        # ``[N] ❯`` — leave this as the Ask User card.
+        session.terminal.claim_turn_number()
+        render_ask_user_qa(console, ask_user_pairs)
+        return
     autosubmitted = bool(session.terminal.last_input_autosubmitted)
     session.terminal.last_input_autosubmitted = False
-    if autosubmitted:
+    if is_handoff_answer:
+        console.print(render_handoff_answer_marker())
+    elif autosubmitted:
         # Keep this shorter than the condition — the ``[N] ❯`` line carries the
         # full text; this only answers "is this still /goal set or real work?".
         console.print(
@@ -93,13 +120,14 @@ def render_submitted_prompt(console: Console, session: Session, text: str) -> No
     rendered = Text()
     # Rich's Style.parse() reads the bare str value of a _LazyRichStyle (""),
     # so resolve to a concrete string at the call site to keep palette colors.
+    body_style = handoff_answer_style() if is_handoff_answer else str(ui_theme.TEXT)
     rendered.append(counter, style=str(ui_theme.DIM))
     rendered.append("❯ ", style=f"bold {ui_theme.HIGHLIGHT}")
-    rendered.append(lines[0], style=str(ui_theme.TEXT))
+    rendered.append(lines[0], style=body_style)
     for line in lines[1:]:
         rendered.append("\n")
         rendered.append(continuation_prefix, style=str(ui_theme.DIM))
-        rendered.append(line, style=str(ui_theme.TEXT))
+        rendered.append(line, style=body_style)
     console.print(rendered)
 
 

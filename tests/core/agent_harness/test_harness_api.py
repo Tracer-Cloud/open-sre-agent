@@ -150,6 +150,13 @@ SPI_ROLE_NAMES: dict[str, frozenset[str]] = {
             "sessions_dir",
         }
     ),
+    "handoff": frozenset(
+        {
+            "AskUserQuestion",
+            "format_ask_user_answers",
+            "parse_ask_user_answers",
+        }
+    ),
 }
 
 RUNTIME = frozenset(

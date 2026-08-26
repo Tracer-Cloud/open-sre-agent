@@ -165,6 +165,10 @@ class SessionCore:
     """Structured multiple-choice question queued for the ``/choose`` selection
     menu — set by the ``ask_user_choice`` action tool, consumed once by the
     ``/choose`` handler."""
+
+    ask_user_rounds: int = 0
+    """Ask-User clarification rounds asked this workload; caps repeated batches.
+    Reset on a genuine user turn."""
     pending_recovery_note: str | None = None
     """WAL recovery note for the next action turn — set on ``/resume`` when the
     resumed session log holds tool intents that never committed (the process
@@ -408,6 +412,7 @@ class SessionCore:
         self.session_goal = None
         self.offered_upgrade_ctas.clear()
         self.pending_user_choice = None
+        self.ask_user_rounds = 0
         self.pending_recovery_note = None
         self.gather_unreachable_tools.clear()
         self.gather_unreachable_sources.clear()

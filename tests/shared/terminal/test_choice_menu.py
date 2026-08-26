@@ -37,7 +37,46 @@ def test_draw_menu_uses_carriage_return_newlines(monkeypatch) -> None:
     assert all(rendered[index - 1] == "\r" for index, char in enumerate(rendered) if char == "\n")
     assert "\rintegrations" in plain
     assert "\r/integrations" in plain
-    assert "\r > /integrations list" in plain
+    assert "\r > 1. /integrations list" in plain
+
+
+def test_draw_menu_strips_control_characters_from_title_and_labels(monkeypatch) -> None:
+    out = io.StringIO()
+    monkeypatch.setattr(sys, "stdout", out)
+    monkeypatch.setattr(choice_menu, "_cols", lambda: 80)
+
+    choice_menu._draw_menu(
+        title="\x1b]0;pwn\x07integrations",
+        crumb="\x1b]/integrations",
+        labels=["\x07/integrations list", "/integrations verify"],
+        index=0,
+        erase_lines=0,
+    )
+
+    rendered = out.getvalue()
+    assert "\x1b]" not in rendered
+    assert "\x07" not in rendered
+    plain = _ANSI_RE.sub("", rendered)
+    assert "integrations" in plain
+    assert "/integrations list" in plain
+
+
+def test_print_valid_choice_list_strips_controls_and_escapes_markup() -> None:
+    from rich.console import Console
+
+    buffer = io.StringIO()
+    console = Console(file=buffer, force_terminal=False, highlight=False, width=80)
+    choice_menu.print_valid_choice_list(
+        console,
+        title="\x1b]0;pwn\x07Pick [one]",
+        choices=["\x07alpha [bold]"],
+    )
+    output = buffer.getvalue()
+    assert "\x1b]" not in output
+    assert "\x07" not in output
+    assert "Pick [one]" in output
+    assert "alpha [bold]" in output
+    assert "[bold]" in output
 
 
 def test_erase_menu_block_resets_to_column_zero(monkeypatch) -> None:
@@ -111,7 +150,7 @@ def test_repl_choose_one_starts_at_initial_value(monkeypatch) -> None:
 
     assert result == "blue"
     plain = _ANSI_RE.sub("", out.getvalue())
-    assert "> blue (current)" in plain
+    assert "> 2. blue (current)" in plain
 
 
 def test_read_action_ignores_left_arrow(monkeypatch) -> None:

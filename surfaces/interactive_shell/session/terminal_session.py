@@ -99,6 +99,12 @@ class TerminalSession:
     so the work turn can show a distinct ``↗ /goal`` marker above ``[N] ❯``.
     """
 
+    awaiting_handoff_answer: bool = False
+    """True when the next submitted line answers a human hand-off question.
+
+    Set by ``ask_user_choice`` (and the ``/choose`` pick). Cleared when the
+    submitted prompt is painted so the answer uses the brand colour."""
+
     exclusive_stdin_active: bool = False
     """True while a turn is running with exclusive stdin reserved (no live prompt).
 
