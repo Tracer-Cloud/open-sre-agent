@@ -2,11 +2,19 @@ from __future__ import annotations
 
 from typing import Any
 
-from integrations.github.tools.actions import _map_get_github_actions_step_log
+from integrations.github.tools.actions import (
+    _map_get_github_actions_step_log,
+    _map_list_github_actions_active_runs,
+    _map_list_github_actions_run_jobs,
+    _map_list_github_actions_workflow_runs,
+)
+from integrations.github.tools.commits import _map_list_github_commits
 from integrations.github.tools.file_contents import _map_get_github_file_contents
 from integrations.github.tools.git_deploy_timeline_tool import _map_get_git_deploy_timeline
 from integrations.github.tools.repository import _map_get_github_repository
 from integrations.github.tools.repository_tree import _map_get_github_repository_tree
+from integrations.github.tools.stargazers import _map_get_github_star_history
+from integrations.github.tools.work_status import _map_list_github_security_alerts
 from integrations.github.tools.work_status_report_tool import _map_generate_work_status_report
 
 
@@ -74,3 +82,63 @@ def test_map_get_git_deploy_timeline() -> None:
     assert len(entries) == 1
     assert entries[0]["source"] == "get_git_deploy_timeline"
     assert entries[0]["summary"] == "2 deploys"
+
+
+def test_map_get_github_star_history() -> None:
+    evidence: dict[str, Any] = {}
+    output = {"daily": [{"date": "2026-08-01", "stars": 5}]}
+    _map_get_github_star_history(evidence, output, {})
+    entries = evidence.get("catalog_entries", [])
+    assert len(entries) == 1
+    assert entries[0]["source"] == "get_github_star_history"
+    assert entries[0]["summary"] == "1 days recorded"
+
+
+def test_map_list_github_actions_active_runs() -> None:
+    evidence: dict[str, Any] = {}
+    output = {"workflow_runs": [{"id": 1}]}
+    _map_list_github_actions_active_runs(evidence, output, {})
+    entries = evidence.get("catalog_entries", [])
+    assert len(entries) == 1
+    assert entries[0]["source"] == "list_github_actions_active_runs"
+    assert entries[0]["summary"] == "1 runs"
+
+
+def test_map_list_github_actions_run_jobs() -> None:
+    evidence: dict[str, Any] = {}
+    output = {"jobs": [{"id": 101}]}
+    _map_list_github_actions_run_jobs(evidence, output, {})
+    entries = evidence.get("catalog_entries", [])
+    assert len(entries) == 1
+    assert entries[0]["source"] == "list_github_actions_run_jobs"
+    assert entries[0]["summary"] == "1 jobs"
+
+
+def test_map_list_github_actions_workflow_runs() -> None:
+    evidence: dict[str, Any] = {}
+    output = {"workflow_runs": [{"id": 42}, {"id": 43}]}
+    _map_list_github_actions_workflow_runs(evidence, output, {})
+    entries = evidence.get("catalog_entries", [])
+    assert len(entries) == 1
+    assert entries[0]["source"] == "list_github_actions_workflow_runs"
+    assert entries[0]["summary"] == "2 runs"
+
+
+def test_map_list_github_commits() -> None:
+    evidence: dict[str, Any] = {}
+    output = {"commits": [{"sha": "abc"}, {"sha": "def"}]}
+    _map_list_github_commits(evidence, output, {})
+    entries = evidence.get("catalog_entries", [])
+    assert len(entries) == 1
+    assert entries[0]["source"] == "list_github_commits"
+    assert entries[0]["summary"] == "2 commits"
+
+
+def test_map_list_github_security_alerts() -> None:
+    evidence: dict[str, Any] = {}
+    output = {"alerts": [{"id": "alert1"}]}
+    _map_list_github_security_alerts(evidence, output, {})
+    entries = evidence.get("catalog_entries", [])
+    assert len(entries) == 1
+    assert entries[0]["source"] == "list_github_security_alerts"
+    assert entries[0]["summary"] == "1 alerts"

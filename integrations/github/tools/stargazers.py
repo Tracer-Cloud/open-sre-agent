@@ -7,6 +7,7 @@ from datetime import UTC, date, datetime, time, timedelta
 from math import ceil
 from typing import Any
 
+from core.domain.types.evidence import record_evidence_entry
 from core.domain.types.tools import ToolSurface
 from core.tool import SideEffectLevel, report_run_error
 from core.tool_framework import tool
@@ -97,6 +98,19 @@ def _github_stargazer_listing_error(exc: GitHubApiError) -> str:
     return message
 
 
+def _map_get_github_star_history(
+    evidence: dict[str, Any], output: dict[str, Any], _input: dict[str, Any]
+) -> None:
+    daily = output.get("daily", [])
+    if daily:
+        record_evidence_entry(
+            evidence,
+            source="get_github_star_history",
+            label="GitHub Star History",
+            summary=f"{len(daily)} days recorded",
+        )
+
+
 @tool(
     name="get_github_star_history",
     source="github",
@@ -146,6 +160,7 @@ def _github_stargazer_listing_error(exc: GitHubApiError) -> str:
         "repo",
         "public_repository",
     ),
+    evidence_mapper=_map_get_github_star_history,
 )
 def get_github_star_history(
     owner: str,

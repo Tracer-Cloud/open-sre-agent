@@ -359,6 +359,19 @@ def _github_actions_run_params(sources: dict[str, dict]) -> dict[str, Any]:
     return params
 
 
+def _map_list_github_actions_workflow_runs(
+    evidence: dict[str, Any], output: dict[str, Any], _input: dict[str, Any]
+) -> None:
+    runs = output.get("workflow_runs", [])
+    if runs:
+        record_evidence_entry(
+            evidence,
+            source="list_github_actions_workflow_runs",
+            label="GitHub Workflow Runs",
+            summary=f"{len(runs)} runs",
+        )
+
+
 @tool(
     name="list_github_actions_workflow_runs",
     source="github",
@@ -401,6 +414,7 @@ def _github_actions_run_params(sources: dict[str, dict]) -> dict[str, Any]:
     is_available=_github_actions_is_available,
     extract_params=_github_actions_repo_params,
     injected_params=GITHUB_INJECTED_PARAMS,
+    evidence_mapper=_map_list_github_actions_workflow_runs,
 )
 def list_github_actions_workflow_runs(
     owner: str,
@@ -478,6 +492,19 @@ def list_github_actions_workflow_runs(
     return payload
 
 
+def _map_list_github_actions_active_runs(
+    evidence: dict[str, Any], output: dict[str, Any], _input: dict[str, Any]
+) -> None:
+    runs = output.get("workflow_runs", [])
+    if runs:
+        record_evidence_entry(
+            evidence,
+            source="list_github_actions_active_runs",
+            label="GitHub Active Runs",
+            summary=f"{len(runs)} runs",
+        )
+
+
 @tool(
     name="list_github_actions_active_runs",
     source="github",
@@ -503,6 +530,7 @@ def list_github_actions_workflow_runs(
     is_available=_github_actions_is_available,
     extract_params=_github_actions_repo_params,
     injected_params=GITHUB_INJECTED_PARAMS,
+    evidence_mapper=_map_list_github_actions_active_runs,
 )
 def list_github_actions_active_runs(
     owner: str,
@@ -591,6 +619,19 @@ def list_github_actions_active_runs(
     }
 
 
+def _map_list_github_actions_run_jobs(
+    evidence: dict[str, Any], output: dict[str, Any], _input: dict[str, Any]
+) -> None:
+    jobs = output.get("jobs", [])
+    if jobs:
+        record_evidence_entry(
+            evidence,
+            source="list_github_actions_run_jobs",
+            label="GitHub Run Jobs",
+            summary=f"{len(jobs)} jobs",
+        )
+
+
 @tool(
     name="list_github_actions_run_jobs",
     source="github",
@@ -616,6 +657,7 @@ def list_github_actions_active_runs(
     is_available=_github_actions_is_available,
     extract_params=_github_actions_run_params,
     injected_params=GITHUB_INJECTED_PARAMS,
+    evidence_mapper=_map_list_github_actions_run_jobs,
 )
 def list_github_actions_run_jobs(
     owner: str,
