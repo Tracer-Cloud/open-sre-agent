@@ -120,7 +120,9 @@ class TestMapOpsgenieAlerts:
         assert entries[0]["source"] == "opsgenie_alerts"
         assert entries[0]["summary"] == "2 alert(s), 1 open"
 
-    def test_records_entry_without_open_clause_when_none_open(self) -> None:
+    def test_records_zero_open_count_as_a_genuine_finding(self) -> None:
+        """Regression: alerts is non-empty here, so "0 open" is a meaningful
+        finding to cite, not noise to suppress."""
         evidence: dict[str, Any] = {}
 
         _map_opsgenie_alerts(
@@ -129,7 +131,7 @@ class TestMapOpsgenieAlerts:
             {"limit": 20},
         )
 
-        assert evidence["catalog_entries"][0]["summary"] == "1 alert(s)"
+        assert evidence["catalog_entries"][0]["summary"] == "1 alert(s), 0 open"
 
     def test_qualifies_both_counts_when_page_is_saturated(self) -> None:
         evidence: dict[str, Any] = {}

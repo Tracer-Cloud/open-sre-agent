@@ -209,10 +209,11 @@ def _map_opsgenie_alerts(
     truncated = _opsgenie_page_is_truncated(total, requested_limit)
     total_label = f"{total}+" if truncated else str(total)
     summary = f"{total_label} alert(s)"
+    # alerts is non-empty here (checked above), so a zero open_count is a
+    # genuine "0 of N open" finding worth citing, not noise to suppress.
     open_count = len(output.get("open_alerts") or [])
-    if open_count:
-        open_label = f"{open_count}+" if truncated else str(open_count)
-        summary += f", {open_label} open"
+    open_label = f"{open_count}+" if open_count and truncated else str(open_count)
+    summary += f", {open_label} open"
     record_evidence_entry(
         evidence,
         source="opsgenie_alerts",
