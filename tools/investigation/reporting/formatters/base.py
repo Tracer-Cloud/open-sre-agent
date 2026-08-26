@@ -57,8 +57,13 @@ def format_slack_link(label: str, url: str | None) -> str:
     if not url:
         return escape_slack_mrkdwn(label)
 
+    # A literal "|" in either half collides with Slack's own <url|label>
+    # delimiter -- percent-encode it in the URL (semantically correct, stays
+    # a valid link) and swap it for a lookalike in the label (consistent with
+    # how escape_slack_mrkdwn neutralizes other structural characters).
+    safe_url = escape_slack_mrkdwn(url).replace("|", "%7C")
     safe_label = escape_slack_mrkdwn(label.replace("|", "¦").strip()) or url
-    return f"<{escape_slack_mrkdwn(url)}|{safe_label}>"
+    return f"<{safe_url}|{safe_label}>"
 
 
 def slack_links_to_plain_text(text: str) -> str:

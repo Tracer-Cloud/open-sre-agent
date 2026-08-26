@@ -13,6 +13,9 @@ not just the three characters Slack's spec calls out.
 
 from __future__ import annotations
 
+from typing import Any
+
+from tools.investigation.reporting.context import ReportContext
 from tools.investigation.reporting.formatters.base import (
     escape_slack_mrkdwn,
     format_slack_link,
@@ -59,10 +62,17 @@ class TestFormatSlackLinkEscaping:
 
         assert result == "<https://example.com/incidents/1?a=1&amp;b=2|［fake］(url)>"
 
+    def test_neutralizes_pipe_in_url(self) -> None:
+        """Regression: a literal "|" in the URL collides with Slack's own
+        <url|label> delimiter and would corrupt the link structure."""
+        result = format_slack_link("Incident", "https://example.com/x|y")
+
+        assert result == "<https://example.com/x%7Cy|Incident>"
+
 
 class TestFormatCitedEvidenceSectionEscaping:
-    def _ctx_with_entry(self, **entry_overrides: object) -> dict:
-        entry = {
+    def _ctx_with_entry(self, **entry_overrides: object) -> ReportContext:
+        entry: dict[str, Any] = {
             "display_id": "E1",
             "label": "Sentry Issue Details",
             "url": None,
@@ -71,7 +81,7 @@ class TestFormatCitedEvidenceSectionEscaping:
             "provenance": None,
         }
         entry.update(entry_overrides)
-        return {"evidence_catalog": {"evidence/mapped/get_sentry_issue_details": entry}}
+        return ReportContext(evidence_catalog={"evidence/mapped/get_sentry_issue_details": entry})
 
     def test_escapes_malicious_title_in_summary(self) -> None:
         ctx = self._ctx_with_entry(
