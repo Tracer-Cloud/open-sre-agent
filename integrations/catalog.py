@@ -5,6 +5,10 @@ from __future__ import annotations
 import os
 from typing import Any
 
+from config.constants.google_docs import (
+    GOOGLE_CREDENTIALS_FILE_ENV,
+    GOOGLE_DRIVE_FOLDER_ID_ENV,
+)
 from config.constants.helm import OSRE_HELM_INTEGRATION_ENV
 from config.constants.new_relic import (
     NEW_RELIC_ACCOUNT_ID_ENV,
@@ -118,6 +122,10 @@ def load_env_integration_services() -> list[str]:
     )
     add("sentry", _all_env("SENTRY_ORG_SLUG", "SENTRY_AUTH_TOKEN"))
     add("gitlab", _env_is_set("GITLAB_ACCESS_TOKEN"))
+    add(
+        "google_docs",
+        _all_env(GOOGLE_CREDENTIALS_FILE_ENV, GOOGLE_DRIVE_FOLDER_ID_ENV),
+    )
     add("mongodb", _env_is_set("MONGODB_CONNECTION_STRING"))
     add(
         "argocd",

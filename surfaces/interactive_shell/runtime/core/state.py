@@ -16,6 +16,7 @@ from surfaces.shared.terminal.components.token_format import (
     _CHARS_PER_TOKEN,
     format_token_count_short,
 )
+from surfaces.shared.terminal.prompt_layout import clip_prompt_text, prompt_line_width
 
 # How often prompt-toolkit refreshes prompt callbacks and confirmation polling.
 PROMPT_REFRESH_INTERVAL_S = 0.25
@@ -302,9 +303,20 @@ class SpinnerState:
         else:
             suffix = f" ({elapsed:.0f}s)"
         label = self.phase or f"{self._verb}…"
+        cancel = "  esc to cancel"
+        # One prompt-region row only: a long investigation phase (or a narrow
+        # terminal) must not soft-wrap — that desyncs row height vs the one-row
+        # confirmation prefix and leaves stale spinner/status lines.
+        width = prompt_line_width()
+        lead = f"{glyph} "
+        reserved = len(lead) + len(suffix) + len(cancel)
+        if reserved >= width:
+            visible = clip_prompt_text(f"{lead}{label}{suffix}{cancel}", width)
+            return f"{ui_theme.PROMPT_ACCENT_ANSI}{visible}{ui_theme.ANSI_RESET}"
+        clipped_label = clip_prompt_text(label, width - reserved)
         return (
-            f"{ui_theme.PROMPT_ACCENT_ANSI}{glyph} {label}{ui_theme.ANSI_RESET}"
-            f"{ui_theme.ANSI_DIM}{suffix}  esc to cancel{ui_theme.ANSI_RESET}"
+            f"{ui_theme.PROMPT_ACCENT_ANSI}{lead}{clipped_label}{ui_theme.ANSI_RESET}"
+            f"{ui_theme.ANSI_DIM}{suffix}{cancel}{ui_theme.ANSI_RESET}"
         )
 
 

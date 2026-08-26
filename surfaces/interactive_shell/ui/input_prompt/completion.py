@@ -13,13 +13,15 @@ from surfaces.interactive_shell.command_registry import SLASH_COMMANDS
 from surfaces.interactive_shell.command_registry.help import QUICK_ACCESS_COMMANDS
 from surfaces.interactive_shell.command_registry.types import SlashCommand
 from surfaces.interactive_shell.ui.input_prompt.layout import (
-    _DEFAULT_TERMINAL_COLUMNS,
-    _clip_text,
-    _prompt_line_width,
     _short_meta,
-    _terminal_columns,
+    clip_prompt_text,
+    prompt_line_width,
 )
 from surfaces.shared.terminal.components.choice_menu import repl_tty_interactive
+from surfaces.shared.terminal.prompt_layout import (
+    DEFAULT_TERMINAL_COLUMNS,
+    terminal_columns,
+)
 
 _COMPLETION_PREVIEW_SEP = " — "
 
@@ -74,12 +76,12 @@ def completion_preview_hint_ansi() -> str:
     try:
         cols = app.output.get_size().columns
     except Exception:
-        cols = _DEFAULT_TERMINAL_COLUMNS
+        cols = DEFAULT_TERMINAL_COLUMNS
     # Leave the last column empty so this context line cannot soft-wrap on
     # shrink-resize and orphan stale prompt frames (same budget as the rule).
-    line = _clip_text(
+    line = clip_prompt_text(
         f"{label}{_COMPLETION_PREVIEW_SEP}{description}",
-        _prompt_line_width(cols),
+        prompt_line_width(cols),
     )
     return f"{ui_theme.ANSI_DIM}{line}{ui_theme.ANSI_RESET}"
 
@@ -116,7 +118,7 @@ class ShellCompleter(Completer):
         trailing_space = text != text.rstrip(" ")
         if len(parts) == 1 and not trailing_space:
             needle = parts[0].lower()
-            cols = _terminal_columns()
+            cols = terminal_columns()
             if needle == "/":
                 # Bare `/`: show most important commands first, then the rest.
                 for name in QUICK_ACCESS_COMMANDS:

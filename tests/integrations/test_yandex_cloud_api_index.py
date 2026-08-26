@@ -16,6 +16,7 @@ import pytest
 
 from integrations.yandex_cloud.api_index import (
     _INDEX_FILE,
+    canonical_service,
     endpoint_count,
     known_services,
     lookup,
@@ -348,3 +349,26 @@ class TestLookupIsTheAllowlist:
 
     def test_a_real_path_on_the_wrong_service_is_none(self) -> None:
         assert lookup("iam", "/compute/v1/instances") is None
+
+
+class TestServiceNamesTheToolsActuallyUse:
+    """The index answers to the names the tools use, not only the proto names."""
+
+    def test_the_tools_alb_name_reaches_the_index(self) -> None:
+        assert lookup("alb", "/apploadbalancer/v1/loadBalancers") is not None
+
+    def test_a_canonical_name_still_works(self) -> None:
+        assert lookup("apploadbalancer", "/apploadbalancer/v1/loadBalancers") is not None
+
+    def test_an_unknown_service_stays_unknown(self) -> None:
+        assert lookup("not-a-service", "/x/v1/y") is None
+
+    @pytest.mark.parametrize("service", ["ALB", "Alb", " alb "])
+    def test_the_index_is_reached_however_the_name_is_typed(self, service: str) -> None:
+        """Host resolution case-folds, so the allowlist has to as well.
+
+        A name that reads as unknown here and as a real host to the client is a
+        way past the gate, not a typo.
+        """
+        assert canonical_service(service) in known_services()
+        assert lookup(service, "/apploadbalancer/v1/loadBalancers") is not None
