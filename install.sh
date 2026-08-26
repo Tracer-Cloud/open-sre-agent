@@ -15,6 +15,7 @@ if [ -t 1 ]; then
   COLOR_GREEN=$'\033[32m'
   COLOR_YELLOW=$'\033[33m'
   COLOR_CYAN=$'\033[36m'
+  COLOR_GRAY=$'\033[90m'
   SUCCESS_MARK="✓"
 else
   COLOR_RESET=""
@@ -24,6 +25,7 @@ else
   COLOR_GREEN=""
   COLOR_YELLOW=""
   COLOR_CYAN=""
+  COLOR_GRAY=""
   SUCCESS_MARK="Success:"
 fi
 
@@ -46,6 +48,10 @@ requested_version="${requested_version#v}"
 
 log() {
   printf '%s\n' "$*"
+}
+
+muted() {
+  printf '%s%s%s\n' "${COLOR_GRAY:-}" "$*" "${COLOR_RESET:-}"
 }
 
 warn() {
@@ -822,7 +828,8 @@ extract_and_verify_binary() {
   local extracted_version
   local extract_status
 
-  printf 'Extracting %s into %s...\n' "$archive_path" "$extraction_dir" >&2
+  printf '%sExtracting OpenSRE...%s\n' \
+    "${COLOR_GRAY:-}" "${COLOR_RESET:-}" >&2
   set +e
   extract_archive "$archive_path" "$extraction_dir"
   extract_status=$?
@@ -831,10 +838,12 @@ extract_and_verify_binary() {
     printf 'Archive extraction failed (exit %s).\n' "$extract_status" >&2
     return "$extract_status"
   fi
-  printf 'Extraction finished, locating %s binary...\n' "$BIN_NAME" >&2
+  printf '%sExtraction finished, locating %s binary...%s\n' \
+    "${COLOR_GRAY:-}" "$BIN_NAME" "${COLOR_RESET:-}" >&2
 
   extracted_binary_path="$(get_binary_path_from_archive "$extraction_dir" "$BIN_NAME")"
-  printf 'Found binary at %s, verifying it runs...\n' "$extracted_binary_path" >&2
+  printf '%sFound %s binary, verifying it runs...%s\n' \
+    "${COLOR_GRAY:-}" "$BIN_NAME" "${COLOR_RESET:-}" >&2
   # macOS: clear quarantine and re-adhoc-sign onedir libs+binary. Stale or
   # post-mutation signatures otherwise SIGKILL --version (exit 137,
   # CODESIGNING / Invalid Page) on consumer Macs.
@@ -1033,24 +1042,24 @@ configure_path() {
   [ "$rc_dir" != "$rc_file" ] && [ ! -d "$rc_dir" ] && mkdir -p "$rc_dir"
 
   if [ -f "$rc_file" ] && grep -qF "${INSTALL_DIR}" "$rc_file"; then
-    log "PATH already configured in ${rc_file}"
+    muted "PATH already configured in ${rc_file}"
     return
   fi
 
   local marker="# Added by opensre installer"
   if [ -f "$rc_file" ] && grep -qF "$marker" "$rc_file" && grep -qF "${INSTALL_DIR}" "$rc_file"; then
-    log "PATH already configured in ${rc_file}"
+    muted "PATH already configured in ${rc_file}"
     return
   fi
 
   printf '\n%s\n%s\n' "$marker" "$path_line" >> "$rc_file"
-  log "PATH configured in ${rc_file}"
+  muted "PATH configured in ${rc_file}"
 }
 
 ensure_on_path() {
-  log "Checking PATH configuration..."
+  muted "Checking PATH configuration..."
   if path_has_dir "$INSTALL_DIR"; then
-    log "PATH already configured"
+    muted "PATH already configured"
     return
   fi
 
@@ -1236,7 +1245,7 @@ verify_release_checksum() {
     run_with_progress "Fetching and verifying checksum" \
       download_and_verify_checksum "$checksum_url" "$checksum_path" "$archive_path" \
       || die "Failed to download or verify checksum '${checksum_asset}'."
-    log "Checksum verification passed"
+    muted "Checksum verification passed"
     return
   fi
 
@@ -1263,9 +1272,9 @@ install_release_binary() {
 
 print_install_confirmation() {
   if [ "$installed_version" = "main" ]; then
-    log "OpenSRE main build installed successfully to ${INSTALL_DIR}/${BIN_NAME}"
+    muted "OpenSRE main build installed successfully to ${INSTALL_DIR}/${BIN_NAME}"
   else
-    log "OpenSRE v${installed_version} installed successfully to ${INSTALL_DIR}/${BIN_NAME}"
+    muted "OpenSRE v${installed_version} installed successfully to ${INSTALL_DIR}/${BIN_NAME}"
   fi
 }
 
@@ -1273,7 +1282,7 @@ finish_install() {
   print_install_confirmation
   ensure_on_path
   ensure_github_cli
-  log "Run '${BIN_NAME}' to get started!"
+  log "${COLOR_YELLOW:-}Run '${BIN_NAME}' to get started!${COLOR_RESET:-}"
 }
 
 main() {

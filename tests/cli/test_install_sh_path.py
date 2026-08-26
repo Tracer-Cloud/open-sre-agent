@@ -59,6 +59,7 @@ def _run(
             exit 1
         fi
         log()  {{ printf '%s\\n' "$*"; }}
+        muted() {{ printf '%s\\n' "$*"; }}
         warn() {{ printf 'Warning: %s\\n' "$*" >&2; }}
         eval "$__fn"
         INSTALL_DIR={idir_shell} platform="{platform}" HOME={home_shell} SHELL="{shell}" configure_path
@@ -111,7 +112,25 @@ def test_install_sh_defines_tty_aware_ansi_formatting() -> None:
     assert "COLOR_GREEN=$'\\033[32m'" in source
     assert "COLOR_YELLOW=$'\\033[33m'" in source
     assert "COLOR_RED=$'\\033[31m'" in source
+    assert "COLOR_GRAY=$'\\033[90m'" in source
     assert "success()" in source
+
+
+def test_install_sh_styles_details_gray_and_get_started_yellow() -> None:
+    result = _run_logging_snippet(
+        """
+        COLOR_RESET=$'\\033[0m'
+        COLOR_GRAY=$'\\033[90m'
+        COLOR_YELLOW=$'\\033[33m'
+        BIN_NAME="opensre"
+        muted "Checksum verification passed"
+        log "${COLOR_YELLOW}Run '${BIN_NAME}' to get started!${COLOR_RESET}"
+        """
+    )
+
+    assert result.returncode == 0, result.stderr
+    assert "\x1b[90mChecksum verification passed\x1b[0m" in result.stdout
+    assert "\x1b[33mRun 'opensre' to get started!\x1b[0m" in result.stdout
 
 
 def test_install_sh_prints_concise_install_confirmation() -> None:
@@ -304,9 +323,11 @@ def test_install_sh_uses_concise_unnumbered_install_messages() -> None:
 
     assert "Downloading OpenSRE main build for ${platform}-${asset_arch}" in source
     assert 'run_with_progress "Fetching and verifying checksum"' in source
-    assert 'log "Checksum verification passed"' in source
+    assert 'muted "Checksum verification passed"' in source
     assert "Run '${BIN_NAME}' to get started!" in source
     assert re.search(r"\[[0-9]+/[0-9]+\]", source) is None
+    assert "Extracting %s into %s" not in source
+    assert "Found binary at %s" not in source
 
 
 def test_install_sh_concise_output_sequence() -> None:
