@@ -2,6 +2,7 @@
 
 from typing import Any
 
+from core.domain.types.evidence import record_evidence_entry
 from core.domain.types.tools import ToolSurface
 from core.tool_framework import tool
 from core.tool_framework.utils import call_db_tool_with_default_db_warning
@@ -11,6 +12,29 @@ from integrations.mysql import (
     mysql_is_available,
     resolve_mysql_config,
 )
+
+
+def _map_get_mysql_table_stats(
+    evidence: dict[str, Any], output: dict[str, Any], _tool_input: dict[str, Any]
+) -> None:
+    """Cite the table count and the single largest table by total size."""
+    if not output.get("available"):
+        return
+    tables = output.get("tables") or []
+    if not tables:
+        return
+    # Rows are pre-sorted by (DATA_LENGTH + INDEX_LENGTH) DESC, so tables[0] is the largest.
+    largest = tables[0]
+    largest_mb = (largest.get("size") or {}).get("total_mb", 0)
+    record_evidence_entry(
+        evidence,
+        source="get_mysql_table_stats",
+        label="MySQL Table Stats",
+        summary=(
+            f"{output.get('total_tables', len(tables))} table(s) in '{output.get('database', '')}', "
+            f"largest '{largest.get('table_name', '')}' at {largest_mb}MB"
+        ),
+    )
 
 
 @tool(
@@ -26,6 +50,7 @@ from integrations.mysql import (
     is_available=mysql_is_available,
     injected_params=("host",),
     extract_params=mysql_extract_params,
+    evidence_mapper=_map_get_mysql_table_stats,
 )
 def get_mysql_table_stats(
     host: str,

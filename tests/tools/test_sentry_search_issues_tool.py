@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import os
+from http import HTTPStatus
 from typing import Any
 from unittest.mock import patch
 
@@ -237,7 +238,7 @@ def test_list_sentry_issues_retries_or_segments_on_400() -> None:
             raise httpx.HTTPStatusError("bad request", request=request, response=response)
         return [{"id": "1", "title": "too many connections"}]
 
-    with patch("integrations.sentry._request_json", side_effect=_fake_request_json):
+    with patch("integrations.sentry.client._request_json", side_effect=_fake_request_json):
         issues = list_sentry_issues(config=config, query=query)
 
     assert calls == ['"database connection"', '"too many connections"']
@@ -382,6 +383,25 @@ def test_validate_sentry_config_saturated_count_uses_plus() -> None:
         result = validate_sentry_config(config)
 
     assert f"{_MAX_SENTRY_PAGE_SIZE}+ issue(s)" in result.detail
+
+
+def test_validate_sentry_config_reports_bad_token() -> None:
+    from integrations.sentry import SentryConfig, validate_sentry_config
+
+    config = SentryConfig(organization_slug="my-org", auth_token="bad-token")
+    request = httpx.Request("GET", "https://sentry.io/api/0/organizations/my-org/issues/")
+    response = httpx.Response(
+        HTTPStatus.UNAUTHORIZED,
+        request=request,
+        text="Invalid token.",
+    )
+    error = httpx.HTTPStatusError("unauthorized", request=request, response=response)
+
+    with patch("integrations.sentry.client._request_json", side_effect=error):
+        result = validate_sentry_config(config)
+
+    assert result.ok is False
+    assert result.detail == "Sentry validation failed: Invalid token."
 
 
 def test_search_tool_default_limit_is_full_page() -> None:
