@@ -170,8 +170,6 @@ list_yc_metrics
 lookup_cloudtrail_events
 memory_recall
 memory_remember
-opsgenie_alert_detail
-opsgenie_alerts
 pagerduty_incident_detail
 pagerduty_incidents
 pagerduty_oncall

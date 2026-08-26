@@ -1,8 +1,9 @@
 from __future__ import annotations
 
+from typing import Any
 from unittest.mock import MagicMock, patch
 
-from integrations.opsgenie.tools import OpsGenieAlertsTool
+from integrations.opsgenie.tools import OpsGenieAlertsTool, _map_opsgenie_alerts
 
 
 def _tool() -> OpsGenieAlertsTool:
@@ -97,3 +98,67 @@ def test_metadata_is_valid() -> None:
     assert t.name == "opsgenie_alerts"
     assert t.source == "opsgenie"
     assert "api_key" in t.input_schema["required"]
+
+
+class TestMapOpsgenieAlerts:
+    def test_records_entry_with_open_count(self) -> None:
+        evidence: dict[str, Any] = {}
+
+        _map_opsgenie_alerts(
+            evidence,
+            {
+                "available": True,
+                "total": 2,
+                "alerts": [{"status": "open"}, {"status": "closed"}],
+                "open_alerts": [{"status": "open"}],
+            },
+            {"limit": 20},
+        )
+
+        entries = evidence["catalog_entries"]
+        assert len(entries) == 1
+        assert entries[0]["source"] == "opsgenie_alerts"
+        assert entries[0]["summary"] == "2 alert(s), 1 open"
+
+    def test_records_entry_without_open_clause_when_none_open(self) -> None:
+        evidence: dict[str, Any] = {}
+
+        _map_opsgenie_alerts(
+            evidence,
+            {"available": True, "total": 1, "alerts": [{"status": "closed"}], "open_alerts": []},
+            {"limit": 20},
+        )
+
+        assert evidence["catalog_entries"][0]["summary"] == "1 alert(s)"
+
+    def test_qualifies_both_counts_when_page_is_saturated(self) -> None:
+        evidence: dict[str, Any] = {}
+
+        _map_opsgenie_alerts(
+            evidence,
+            {
+                "available": True,
+                "total": 100,
+                "alerts": [{"status": "open"}] * 100,
+                "open_alerts": [{"status": "open"}] * 100,
+            },
+            {"limit": 100},
+        )
+
+        assert evidence["catalog_entries"][0]["summary"] == "100+ alert(s), 100+ open"
+
+    def test_records_nothing_when_no_alerts(self) -> None:
+        evidence: dict[str, Any] = {}
+
+        _map_opsgenie_alerts(
+            evidence, {"available": True, "total": 0, "alerts": [], "open_alerts": []}, {}
+        )
+
+        assert "catalog_entries" not in evidence
+
+    def test_records_nothing_on_unavailable_result(self) -> None:
+        evidence: dict[str, Any] = {}
+
+        _map_opsgenie_alerts(evidence, {"available": False, "error": "HTTP 403"}, {})
+
+        assert "catalog_entries" not in evidence
