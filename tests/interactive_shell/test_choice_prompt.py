@@ -152,9 +152,10 @@ def test_batch_answers_are_auto_submitted_as_qa_block(
     )
 
 
-def test_batch_custom_option_leaves_the_prompt_open(
+def test_batch_custom_option_preserves_the_picked_answers(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
+    """A custom slot must not discard the fixed answers already picked."""
     session = Session()
     session.pending_user_choice = _BATCH_CHOICE
     console, buf = _console()
@@ -167,9 +168,13 @@ def test_batch_custom_option_leaves_the_prompt_open(
     )
 
     assert _handler(session, console) is True
+    # Not auto-submitted: the user completes the custom slot then presses Enter.
     assert session.terminal.pending_prompt_autosubmit is False
     assert session.terminal.awaiting_handoff_answer is True
-    assert "type your answers" in buf.getvalue().lower()
+    # The already-chosen answer is prefilled, not dropped.
+    prefill = session.terminal.pending_prompt_default or ""
+    assert "Hypothetical/demo scenario, no real code" in prefill
+    assert "fill in your own answer" in buf.getvalue().lower()
 
 
 def test_non_tty_batch_prints_every_question(monkeypatch: pytest.MonkeyPatch) -> None:

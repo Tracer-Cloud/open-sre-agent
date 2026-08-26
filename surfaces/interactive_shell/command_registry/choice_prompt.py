@@ -51,8 +51,15 @@ def _cmd_choose(session: Session, console: Console, args: list[str]) -> bool:
             session.terminal.awaiting_handoff_answer = False
             return True
         if CUSTOM_OPTION in picked:
-            console.print(f"[{ui_theme.DIM}]Type your answers in the prompt.[/]")
+            # Keep the answers already chosen; only the "type your own" slots
+            # need the user. Prefill the Q→A block with the picked answers filled
+            # and the custom slots blank, and do NOT auto-submit — the user
+            # completes the blanks and presses Enter.
+            partial = tuple("" if answer == CUSTOM_OPTION else answer for answer in picked)
+            console.print(f"[{ui_theme.DIM}]Fill in your own answer, then press Enter.[/]")
+            session.terminal.pending_prompt_default = format_ask_user_answers(items, partial)
             session.terminal.awaiting_handoff_answer = True
+            session.terminal.notify_prompt_changed()
             return True
         session.terminal.set_auto_command(format_ask_user_answers(items, picked))
         session.terminal.awaiting_handoff_answer = True
