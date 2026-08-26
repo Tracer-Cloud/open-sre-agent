@@ -140,11 +140,6 @@ def _finish_outer_turn(
         _clear_host_autosubmit(session)
         return active, _scrub_progress_tags(last), True
 
-    if getattr(session, "pending_user_choice", None) is not None:
-        active = active.with_reason(SessionGoalReason.PAUSED_USER_CHOICE)
-        active = _paint(session, active, on_progress, rederive=False)
-        return active, _scrub_progress_tags(last), True
-
     next_status = evaluate_fn(active, last, session=session)
     stored = getattr(session, "session_goal", None)
     if isinstance(stored, SessionGoal):

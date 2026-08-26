@@ -30,6 +30,9 @@ from surfaces.interactive_shell.runtime.agent_harness_adapters import (
     resolve_output_sink,
 )
 from surfaces.interactive_shell.runtime.background import runner as background_runner
+from surfaces.interactive_shell.runtime.human_interaction_adapter import (
+    repl_human_interaction_factory,
+)
 from surfaces.interactive_shell.runtime.investigation_adapter import (
     repl_investigation_launch_ports,
 )
@@ -111,6 +114,7 @@ def shell_tool_provider(
         request_exit=request_exit,
         observer_factory=_observer_factory(session, console),
         subprocess_presenter_factory=_subprocess_presenter_factory,
+        human_interaction_factory=repl_human_interaction_factory,
         investigation_ports_factory=_investigation_ports_factory,
         llm_provider_ports_factory=repl_llm_provider_ports,
         task_cancel_ports_factory=repl_task_cancel_ports,

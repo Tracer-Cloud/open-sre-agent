@@ -58,6 +58,30 @@ def test_default_and_null_tool_providers_are_session_and_console_bindable() -> N
     assert isinstance(null, ConsoleBindable)
 
 
+def test_default_tool_provider_does_not_claim_actions_were_prelisted() -> None:
+    prelisted_values: list[bool] = []
+
+    def _presenter_factory(
+        _session: Any,
+        _console: Any,
+        _confirm_fn: Any,
+        _is_tty: bool | None,
+        action_already_listed: bool,
+    ) -> object:
+        prelisted_values.append(action_already_listed)
+        return object()
+
+    tools = DefaultToolProvider(
+        InMemorySessionState(),
+        console=object(),
+        subprocess_presenter_factory=_presenter_factory,
+    )
+
+    tools.action_tools(confirm_fn=None, is_tty=True, resolved_integrations={})
+
+    assert prelisted_values == [False]
+
+
 def test_headless_default_ports_are_session_bindable() -> None:
     assert isinstance(EmptyPromptContextProvider(), SessionBindable)
 

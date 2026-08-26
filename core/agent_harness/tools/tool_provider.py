@@ -9,6 +9,7 @@ from typing import Any
 from core.agent_harness.ports import (
     CancelCapableConsole,
     ConfirmFn,
+    HumanInteractionPortFactory,
     InvestigationPortsFactory,
     LlmProviderPortsFactory,
     SlashPortsFactory,
@@ -53,6 +54,7 @@ class DefaultToolProvider:
         llm_provider_ports_factory: LlmProviderPortsFactory | None = None,
         task_cancel_ports_factory: TaskCancelPortsFactory | None = None,
         slash_ports_factory: SlashPortsFactory | None = None,
+        human_interaction_factory: HumanInteractionPortFactory | None = None,
     ) -> None:
         self._session = session
         self._console = console
@@ -65,6 +67,7 @@ class DefaultToolProvider:
         self._llm_provider_ports_factory = llm_provider_ports_factory
         self._task_cancel_ports_factory = task_cancel_ports_factory
         self._slash_ports_factory = slash_ports_factory
+        self._human_interaction_factory = human_interaction_factory
         self._tool_scope: ActionToolScope | None = None
 
     def bind_session(self, session: Any) -> None:
@@ -92,7 +95,7 @@ class DefaultToolProvider:
                 self._console,
                 confirm_fn,
                 is_tty,
-                True,
+                False,
             )
 
         investigation_ports = None
@@ -111,13 +114,24 @@ class DefaultToolProvider:
         if self._slash_ports_factory is not None:
             slash_ports = self._slash_ports_factory()
 
+        human_interaction = None
+        if self._human_interaction_factory is not None:
+            human_interaction = self._human_interaction_factory(
+                self._console,
+                confirm_fn,
+                is_tty,
+            )
+
         ctx = ActionToolScope(
             session=self._session,
             console=self._console,
             confirm_fn=confirm_fn,
             is_tty=is_tty,
             request_exit=self._request_exit,
-            action_already_listed=True,
+            # Generic tool calls are rendered by the observer, but concrete
+            # action tools announce themselves only when execution begins.
+            # Confirmation therefore cannot assume its action was listed.
+            action_already_listed=False,
             # Built once per turn, before any tool runs — so the current
             # history length is this turn's starting boundary.
             history_start=len(getattr(self._session, "history", None) or []),
@@ -126,6 +140,7 @@ class DefaultToolProvider:
             llm_provider_ports=llm_provider_ports,
             task_cancel_ports=task_cancel_ports,
             slash_ports=slash_ports,
+            human_interaction=human_interaction,
         )
         self._tool_scope = ctx
         if self._precomputed_action_tools is not None:

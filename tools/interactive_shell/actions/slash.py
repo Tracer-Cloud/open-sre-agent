@@ -33,9 +33,7 @@ from tools.interactive_shell.shared.slash_catalog import (
 # terminal's cursor-position replies (ESC[row;colR) leak into the input line as
 # literal keystrokes. Defer them through ``set_auto_command`` so the loop
 # re-dispatches the command as a deterministic turn it runs with exclusive stdin.
-_INTERACTIVE_PICKER_MENUS: frozenset[str] = frozenset(
-    {"/auth", "/choose", "/login", "/integrations", "/mcp"}
-)
+_INTERACTIVE_PICKER_MENUS: frozenset[str] = frozenset({"/auth", "/login", "/integrations", "/mcp"})
 _INTERACTIVE_PICKER_SUBCOMMANDS: frozenset[tuple[str, str]] = frozenset(
     {
         ("/auth", "login"),

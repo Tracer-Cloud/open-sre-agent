@@ -227,12 +227,6 @@ def evaluate_session_goal(
     session: Any | None = None,
 ) -> SessionGoalVerdict:
     """Independent structured evaluation of an session goal."""
-    if session is not None and getattr(session, "pending_user_choice", None) is not None:
-        return SessionGoalVerdict(
-            status=SessionGoalStatus.ACTIVE,
-            reason=SessionGoalReason.WAITING_USER_CHOICE,
-        )
-
     text = session_goal_reply_text(result)
     current = goal
     if session is not None:

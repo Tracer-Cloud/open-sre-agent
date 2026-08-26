@@ -25,7 +25,6 @@ else:
 from config.llm_reasoning_effort import ReasoningEffortChoice
 from core.agent_harness.accounting.token_usage import TokenUsage
 from core.agent_harness.session.integration_resolution import IntegrationState
-from core.agent_harness.session.pending_choice import PendingUserChoice
 from core.agent_harness.session.pending_offer import (
     PendingIntegrationSetupOffer,
     PendingInvestigationOffer,
@@ -161,10 +160,6 @@ class SessionCore:
     pending_integration_setup_offer: PendingIntegrationSetupOffer | None = None
     """Structured integrations-setup awaiting bare yes — armed after L0 UpgradeCTA."""
 
-    pending_user_choice: PendingUserChoice | None = None
-    """Structured multiple-choice question queued for the ``/choose`` selection
-    menu — set by the ``ask_user_choice`` action tool, consumed once by the
-    ``/choose`` handler."""
     pending_recovery_note: str | None = None
     """WAL recovery note for the next action turn — set on ``/resume`` when the
     resumed session log holds tool intents that never committed (the process
@@ -407,7 +402,6 @@ class SessionCore:
         self.pending_integration_setup_offer = None
         self.session_goal = None
         self.offered_upgrade_ctas.clear()
-        self.pending_user_choice = None
         self.pending_recovery_note = None
         self.gather_unreachable_tools.clear()
         self.gather_unreachable_sources.clear()

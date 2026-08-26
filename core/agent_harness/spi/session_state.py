@@ -8,7 +8,6 @@ capabilities a host withholds.
 from __future__ import annotations
 
 from core.agent_harness.session.capabilities import withhold_capabilities
-from core.agent_harness.session.pending_choice import PendingUserChoice
 from core.agent_harness.session.pending_offer import (
     PendingScheduleOffer,
     clear_competing_pending_offers,
@@ -30,7 +29,6 @@ from core.agent_harness.turns.transcript_compaction import compact_session_branc
 
 __all__ = [
     "PendingScheduleOffer",
-    "PendingUserChoice",
     "background_investigations",
     "background_mode_enabled",
     "background_notification_channels",

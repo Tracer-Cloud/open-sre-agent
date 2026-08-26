@@ -115,6 +115,8 @@ subpackage. Default port implementations live with the concern they serve, not i
 - `ports.py` — Protocols the engine talks to (output, confirmation, session
   store, tool provider, prompt-context provider, telemetry, error reporter,
   telemetry). Kept top-level as the central seam imported everywhere.
+- `human_interaction.py` — structured blocking hand-off requests and the
+  surface-owned interaction port; terminal/chat UI stays outside the harness.
 - `agent_builder.py` — `AgentConfig` dataclass + `build_agent(config)`. The
   single instantiation site for `core.agent.Agent` across all surfaces
   (action, evidence, gateway). See "Agent construction pattern" below.

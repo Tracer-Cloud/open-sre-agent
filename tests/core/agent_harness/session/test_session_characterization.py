@@ -28,7 +28,6 @@ _CORE_FIELDS = (
     "last_synthetic_observation_path",
     "pending_schedule_offer",
     "pending_investigation_offer",
-    "pending_user_choice",
     "pending_recovery_note",
     # Outer multi-turn goal, plus the evidence-tier upgrade CTA it can offer.
     "session_goal",

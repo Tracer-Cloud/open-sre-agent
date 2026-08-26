@@ -1,9 +1,9 @@
 """Rendering for the shell tool-calling turn.
 
-This module owns the terminal-facing action observer. Planner tool calls are
-internal state by default: the observer records them for history/storage while
-the concrete action executors render user-facing command output. The execution
-orchestration that drives it lives in
+This module owns the terminal-facing action observer. It renders invocations
+that do not have an executor-owned command banner, records planner turns for
+history/storage, and leaves concrete action executors to render their own
+command output. The execution orchestration that drives it lives in
 :func:`interactive_shell.runtime.action_turn.run_action_tool_turn`.
 
 Keeping rendering here means the shell turn-entry adapter stays focused on
@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import contextlib
 import json
+import shlex
 from typing import Any
 
 from rich.console import Console
@@ -32,6 +33,7 @@ from surfaces.shared.terminal.output.console_state import get_investigation_spin
 # in :func:`tool_call_display`.
 # The spinner's thinking verb re-rolls once per this many agent-loop steps.
 _VERB_ROTATION_STEP_INTERVAL = 2
+_TOOL_PREVIEW_MAX_CHARS = 240
 
 _SIMPLE_TOOL_LABELS: dict[str, tuple[str, str]] = {
     "llm_set_provider": ("LLM provider", "target"),
@@ -55,6 +57,15 @@ def tool_call_display(tool_name: str, args: dict[str, Any]) -> tuple[str, str]:
         raw_args = args.get("args")
         parsed_args = [str(item).strip() for item in raw_args] if isinstance(raw_args, list) else []
         label, content = "command", " ".join([command, *parsed_args]).strip()
+    elif tool_name == "github_cli":
+        raw_args = args.get("args")
+        parsed_args = [str(item) for item in raw_args] if isinstance(raw_args, list) else []
+        repo = str(args.get("repo", "")).strip()
+        argv = ["gh"]
+        if repo and (not parsed_args or parsed_args[0] != "api"):
+            argv.extend(["-R", repo])
+        argv.extend(parsed_args)
+        label, content = "command", shlex.join(argv)
     elif tool_name == "synthetic_run":
         suite = str(args.get("suite", "")).strip()
         scenario = str(args.get("scenario", "")).strip()
@@ -70,12 +81,13 @@ def tool_call_display(tool_name: str, args: dict[str, Any]) -> tuple[str, str]:
 
 
 class ActionRenderObserver:
-    """Agent event observer that records planner turns not owned by action tools.
+    """Render live agent events and record planner turns.
 
     Self-recording tools (``slash_invoke``, ``shell_run``, etc.) append their own
-    history row; chat turns are recorded later by turn accounting when the
-    assistant runs. ``skill_view`` gets a dedicated live event: the skill name
-    on ``tool_start`` and an activation/failure child line on ``tool_end``.
+    history row and normally render their own invocation. Generic tools are
+    rendered here because they have no terminal presenter. Quiet shell calls are
+    also rendered here because their executor intentionally withholds its banner
+    and output. ``skill_view`` keeps its dedicated activation display.
     """
 
     def __init__(self, *, session: Session, console: Console, message: str) -> None:
@@ -112,9 +124,41 @@ class ActionRenderObserver:
             return
         if name == "skill_view":
             self._render_skill_start(data)
+        elif self._observer_owns_invocation(name, data):
+            self._render_tool_start(name, data)
         if self.planned_count == 0 and name not in SELF_RECORDING_ACTION_TOOL_NAMES:
             self.session.record("cli_agent", self.message)
         self.planned_count += 1
+
+    @staticmethod
+    def _observer_owns_invocation(name: str, data: dict[str, Any]) -> bool:
+        if name not in SELF_RECORDING_ACTION_TOOL_NAMES:
+            return True
+        if name != "shell_run":
+            return False
+        args = data.get("input")
+        quiet = args.get("quiet", False) if isinstance(args, dict) else False
+        if isinstance(quiet, str):
+            return quiet.strip().lower() in {"1", "true", "yes", "on"}
+        return bool(quiet)
+
+    def _render_tool_start(self, name: str, data: dict[str, Any]) -> None:
+        args = data.get("input")
+        label, content = tool_call_display(name, args if isinstance(args, dict) else {})
+        if len(content) > _TOOL_PREVIEW_MAX_CHARS:
+            content = f"{content[: _TOOL_PREVIEW_MAX_CHARS - 1]}…"
+        line = Text()
+        if label == "command" or name == "shell_run":
+            line.append("$ ", style=DIM)
+            line.append(content)
+        else:
+            line.append("Calling ", style=DIM)
+            line.append(label, style=HIGHLIGHT)
+            if content:
+                line.append(" ")
+                line.append(content)
+        self.console.print(line)
+        self.console.print()
 
     def _advance_spinner_verb(self, data: dict[str, Any]) -> None:
         """Rotate the prompt spinner's thinking verb every two agent steps.

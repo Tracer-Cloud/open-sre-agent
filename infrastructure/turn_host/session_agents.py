@@ -166,6 +166,7 @@ class SessionAgentPool:
                 tool_action_logger=logger,
                 observer_factory=lambda _message: observer,
                 subprocess_presenter_factory=build.subprocess_presenter_factory,
+                human_interaction_factory=build.human_interaction_factory,
                 slash_ports_factory=self._slash_ports_factory,
             )
 

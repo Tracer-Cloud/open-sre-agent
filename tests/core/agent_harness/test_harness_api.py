@@ -43,6 +43,8 @@ PORTS = frozenset(
         "ErrorReporter",
         "ExecuteActions",
         "GatheredEvidence",
+        "HumanInteractionPort",
+        "HumanInteractionPortFactory",
         "InvestigationPortsFactory",
         "LlmFactory",
         "LlmProviderPortsFactory",
@@ -58,6 +60,8 @@ PORTS = frozenset(
         "ToolProvider",
         "TurnAccounting",
         "TurnBinding",
+        "UserChoiceOption",
+        "UserChoiceRequest",
     }
 )
 
@@ -83,7 +87,6 @@ SPI_ROLE_NAMES: dict[str, frozenset[str]] = {
     "session_state": frozenset(
         {
             "PendingScheduleOffer",
-            "PendingUserChoice",
             "background_investigations",
             "background_mode_enabled",
             "background_notification_channels",

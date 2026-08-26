@@ -1,101 +1,183 @@
-"""Queue an interactive selection menu for a decision the user must make.
-
-Raw-stdin pickers cannot run mid-turn: the REPL keeps a ``prompt_async()`` open
-concurrently, so arrow-key reads would race it and terminal CPR replies would
-leak into the input line (same constraint as the deferred pickers in
-``actions/slash.py``). This tool therefore stores the question as a
-:class:`~core.agent_harness.session.pending_choice.PendingUserChoice` and queues
-the literal ``/choose`` command, which the loop dispatches with exclusive stdin.
-The selected option label is auto-submitted as the next user message.
-"""
+"""Block on a surface-owned human choice and return it to the agent."""
 
 from __future__ import annotations
 
+import re
 from typing import Any
 
-from core.agent_harness.spi.session_state import (
-    PendingUserChoice,
-    session_terminal,
-    set_auto_command,
+from core.agent_harness.ports import (
+    UserChoiceOption,
+    UserChoiceRequest,
 )
 from core.agent_harness.tools import ActionToolScope, execute_with_action_context
 from core.domain.types.tools import ToolSurface
 from core.tool import RegisteredTool, SideEffectLevel
-from core.tool_framework.utils import object_schema, string_array_property, string_property
 
 _MIN_OPTIONS = 2
-_MAX_OPTIONS = 8
-_CHOOSE_COMMAND = "/choose"
+_MAX_OPTIONS = 3
+_MAX_ID_CHARS = 64
+_MAX_QUESTION_CHARS = 240
+_MAX_LABEL_CHARS = 80
+_MAX_DESCRIPTION_CHARS = 240
+_QUESTION_ID_RE = re.compile(r"^[a-z][a-z0-9_]*$")
 
 _FALLBACK_INSTRUCTION = (
-    "No interactive selection menu is available on this surface. Present the "
+    "No human-interaction UI is available on this surface. Present the "
     "options as a short numbered list instead and ask the user to reply with "
     "the number or the option text."
 )
-_QUEUED_INSTRUCTION = (
-    "The selection menu opens after this turn ends. End the turn now with at "
-    "most one short sentence of context; do NOT repeat the options as text and "
-    "do NOT ask the user to type a number. The user's selection arrives as the "
-    "next user message (the chosen option label, verbatim)."
-)
+
+_INPUT_SCHEMA: dict[str, Any] = {
+    "type": "object",
+    "properties": {
+        "questions": {
+            "type": "array",
+            "minItems": 1,
+            "maxItems": 1,
+            "description": "Exactly one short question to show the user.",
+            "items": {
+                "type": "object",
+                "properties": {
+                    "id": {
+                        "type": "string",
+                        "maxLength": _MAX_ID_CHARS,
+                        "description": "Stable snake_case identifier for the answer.",
+                    },
+                    "header": {
+                        "type": "string",
+                        "maxLength": 12,
+                        "description": "Short UI header (12 or fewer characters).",
+                    },
+                    "question": {
+                        "type": "string",
+                        "maxLength": _MAX_QUESTION_CHARS,
+                        "description": "Single-sentence prompt shown to the user.",
+                    },
+                    "options": {
+                        "type": "array",
+                        "minItems": _MIN_OPTIONS,
+                        "maxItems": _MAX_OPTIONS,
+                        "description": (
+                            "Two or three mutually exclusive choices. Put the "
+                            "recommended option first and suffix its label with "
+                            "'(Recommended)'. The UI adds an Other choice."
+                        ),
+                        "items": {
+                            "type": "object",
+                            "properties": {
+                                "label": {
+                                    "type": "string",
+                                    "maxLength": _MAX_LABEL_CHARS,
+                                    "description": "User-facing label (1-5 words).",
+                                },
+                                "description": {
+                                    "type": "string",
+                                    "maxLength": _MAX_DESCRIPTION_CHARS,
+                                    "description": (
+                                        "One short sentence explaining the impact or trade-off."
+                                    ),
+                                },
+                            },
+                            "required": ["label", "description"],
+                            "additionalProperties": False,
+                        },
+                    },
+                },
+                "required": ["id", "header", "question", "options"],
+                "additionalProperties": False,
+            },
+        }
+    },
+    "required": ["questions"],
+    "additionalProperties": False,
+}
 
 
-def _menu_available(ctx: ActionToolScope) -> bool:
-    """True when the REPL can render the deferred ``/choose`` picker.
+def _parse_choice_request(args: dict[str, Any]) -> tuple[UserChoiceRequest | None, str | None]:
+    raw_questions = args.get("questions")
+    if not isinstance(raw_questions, list) or len(raw_questions) != 1:
+        return None, "exactly one question is required"
+    raw_question = raw_questions[0]
+    if not isinstance(raw_question, dict):
+        return None, "question must be an object"
 
-    Mirrors ``_slash_drives_interactive_picker``: gateway/headless sessions have
-    no terminal facet, and non-TTY turns must not queue a picker back to a REPL
-    loop that does not exist (e.g. gateway running under tmux with a TTY stdin).
-    """
-    if ctx.is_tty is False or session_terminal(ctx.session) is None:
-        return False
-    ports = ctx.slash_ports
-    return ports is not None and bool(ports.tty_interactive())
+    question_id = str(raw_question.get("id", "")).strip()
+    header = str(raw_question.get("header", "")).strip()
+    question = str(raw_question.get("question", "")).strip()
+    if not _QUESTION_ID_RE.fullmatch(question_id):
+        return None, "question id must be snake_case"
+    if len(question_id) > _MAX_ID_CHARS:
+        return None, f"question id must be {_MAX_ID_CHARS} characters or fewer"
+    if not header:
+        return None, "question header is required"
+    if len(header) > 12:
+        return None, "question header must be 12 characters or fewer"
+    if not question:
+        return None, "question text is required"
+    if len(question) > _MAX_QUESTION_CHARS:
+        return None, f"question text must be {_MAX_QUESTION_CHARS} characters or fewer"
+
+    raw_options = raw_question.get("options")
+    if not isinstance(raw_options, list):
+        return None, "question options must be a list"
+    if not _MIN_OPTIONS <= len(raw_options) <= _MAX_OPTIONS:
+        return None, f"question requires {_MIN_OPTIONS} to {_MAX_OPTIONS} options"
+    options: list[UserChoiceOption] = []
+    seen: set[str] = set()
+    for item in raw_options:
+        if not isinstance(item, dict):
+            continue
+        label = str(item.get("label", "")).strip()
+        description = str(item.get("description", "")).strip()
+        normalized_label = label.casefold()
+        if (
+            label
+            and description
+            and len(label) <= _MAX_LABEL_CHARS
+            and len(description) <= _MAX_DESCRIPTION_CHARS
+            and normalized_label not in seen
+        ):
+            seen.add(normalized_label)
+            options.append(UserChoiceOption(label=label, description=description))
+    if len(options) < _MIN_OPTIONS:
+        return None, f"at least {_MIN_OPTIONS} distinct complete options are required"
+    if len(options) > _MAX_OPTIONS:
+        return None, f"at most {_MAX_OPTIONS} options are supported"
+    return (
+        UserChoiceRequest(
+            id=question_id,
+            header=header,
+            question=question,
+            options=tuple(options),
+        ),
+        None,
+    )
 
 
 def execute_ask_user_choice_tool(args: dict[str, Any], ctx: ActionToolScope) -> dict[str, Any]:
-    title = str(args.get("title", "")).strip()
-    raw_options = args.get("options")
-    options: list[str] = []
-    seen: set[str] = set()
-    if isinstance(raw_options, list):
-        for item in raw_options:
-            text = str(item).strip()
-            if text and text not in seen:
-                seen.add(text)
-                options.append(text)
-
-    if not title:
-        return {"ok": False, "error": "title is required"}
-    if len(options) < _MIN_OPTIONS:
-        return {
-            "ok": False,
-            "error": f"at least {_MIN_OPTIONS} distinct non-empty options are required",
-        }
-    if len(options) > _MAX_OPTIONS:
-        return {"ok": False, "error": f"at most {_MAX_OPTIONS} options are supported"}
-
-    if not _menu_available(ctx):
+    request, error = _parse_choice_request(args)
+    if request is None:
+        return {"ok": False, "error": error or "invalid question"}
+    if ctx.human_interaction is None:
         return {"ok": True, "menu": "unavailable", "instruction": _FALLBACK_INSTRUCTION}
 
-    ctx.session.pending_user_choice = PendingUserChoice(title=title, options=tuple(options))
-    set_auto_command(ctx.session, _CHOOSE_COMMAND)
+    answer = ctx.human_interaction.choose(request)
+    if answer is None:
+        return {"ok": False, "cancelled": True}
     return {
         "ok": True,
-        "menu": "queued",
-        "summary": f"selection menu queued: {title}",
-        "instruction": _QUEUED_INSTRUCTION,
+        "answers": {request.id: {"answers": [answer]}},
+        "summary": f"{request.header}: {answer}",
     }
 
 
 def run_ask_user_choice(
     *,
-    title: str,
-    options: list[str] | None = None,
+    questions: list[dict[str, Any]] | None = None,
     context: Any,
 ) -> dict[str, Any]:
     return execute_with_action_context(
-        {"title": title, "options": options or []},
+        {"questions": questions or []},
         context,
         execute_ask_user_choice_tool,
     )
@@ -104,13 +186,12 @@ def run_ask_user_choice(
 ask_user_choice_tool = RegisteredTool(
     name="ask_user_choice",
     description=(
-        "Ask the user to pick ONE option from a small fixed set via the "
-        "interactive shell's arrow-key selection menu. Use this INSTEAD of "
-        "writing a numbered list ('Reply with 1, 2, or 3') whenever a required "
-        "decision blocks further progress. The menu opens after the turn ends "
-        "and the chosen option label arrives verbatim as the next user "
-        "message, so end the turn right after calling this. If the result "
-        "says the menu is unavailable, fall back to a numbered list."
+        "Ask the user one short multiple-choice question and wait for the "
+        "surface-rendered response. Use this instead of writing a numbered list "
+        "whenever a required decision blocks progress. Provide two or three "
+        "options with concise trade-off descriptions; the UI also accepts a "
+        "custom answer. Continue from the structured answer returned by this "
+        "tool. If the UI is unavailable, fall back to a numbered list."
     ),
     use_cases=[
         (
@@ -124,33 +205,13 @@ ask_user_choice_tool = RegisteredTool(
         "Yes/no confirmations already covered by the execution confirmation flow",
         "Presenting information that requires no decision",
     ],
-    input_schema=object_schema(
-        properties={
-            "title": string_property(
-                description=(
-                    "Short question shown as the menu title, e.g. 'How should "
-                    "I handle the uncommitted changes?'"
-                ),
-                min_length=1,
-            ),
-            "options": string_array_property(
-                description=(
-                    "Two to eight short option labels, recommended option "
-                    "first, e.g. ['Stash the changes (recommended)', 'Commit "
-                    "the changes', 'Use a separate git worktree']. The "
-                    "selected label is echoed back verbatim as the user's "
-                    "reply, so each label must be self-explanatory."
-                ),
-            ),
-        },
-        required=("title", "options"),
-    ),
+    input_schema=_INPUT_SCHEMA,
     source="interactive_shell",
     surfaces=(ToolSurface.ACTION,),
     parallel_safe=False,
     accepts_runtime_context=True,
     run=run_ask_user_choice,
-    tags=("safe", "fast", "no-credentials"),
+    tags=("safe", "human-handoff", "no-credentials"),
     side_effect_level=SideEffectLevel.READ_ONLY,
 )
 

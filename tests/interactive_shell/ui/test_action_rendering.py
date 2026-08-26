@@ -48,13 +48,26 @@ def test_slash_invoke_tool_start_does_not_record_cli_agent() -> None:
 
 def test_shell_run_tool_start_does_not_record_cli_agent() -> None:
     session = Session()
-    console = Console(file=io.StringIO(), force_terminal=False, highlight=False)
+    buffer = io.StringIO()
+    console = Console(file=buffer, force_terminal=False, highlight=False)
     observer = ActionRenderObserver(session=session, console=console, message="!true")
 
     observer("tool_start", {"name": "shell_run", "input": {"command": "true"}})
 
     assert session.history == []
     assert observer.planned_count == 1
+    assert buffer.getvalue() == ""
+
+
+def test_quiet_shell_run_tool_start_renders_command() -> None:
+    observer, buffer = _observer_with_buffer()
+
+    observer(
+        "tool_start",
+        {"name": "shell_run", "input": {"command": "gh api repos/o/r", "quiet": True}},
+    )
+
+    assert buffer.getvalue() == "$ gh api repos/o/r\n\n"
 
 
 def _observer_with_buffer(message: str = "onboard me") -> tuple[ActionRenderObserver, io.StringIO]:
@@ -168,6 +181,81 @@ def test_tool_call_display_strips_terminal_controls_from_model_args() -> None:
     assert "\x1b" not in content
     assert "\x07" not in content
     assert content == "ls[2Krm"
+
+
+def test_github_cli_tool_call_display_renders_executable_command() -> None:
+    label, content = tool_call_display(
+        "github_cli",
+        {
+            "args": ["pr", "list", "--state", "open"],
+            "repo": "facebook/react",
+        },
+    )
+
+    assert label == "command"
+    assert content == "gh -R facebook/react pr list --state open"
+
+
+def test_github_cli_api_preview_does_not_add_repo_flag() -> None:
+    label, content = tool_call_display(
+        "github_cli",
+        {
+            "args": [
+                "api",
+                "/repos/facebook/react/actions/runs?per_page=1",
+                "--jq",
+                ".total_count",
+            ],
+            "repo": "facebook/react",
+        },
+    )
+
+    assert label == "command"
+    assert content == ("gh api '/repos/facebook/react/actions/runs?per_page=1' --jq .total_count")
+
+
+def test_github_cli_tool_start_prints_command_preview() -> None:
+    observer, buffer = _observer_with_buffer()
+
+    observer(
+        "tool_start",
+        {
+            "name": "github_cli",
+            "input": {
+                "args": ["api", "/repos/facebook/react/pulls", "--jq", "length"],
+            },
+        },
+    )
+
+    assert buffer.getvalue() == "$ gh api /repos/facebook/react/pulls --jq length\n\n"
+
+
+def test_generic_tool_start_prints_invocation_preview() -> None:
+    observer, buffer = _observer_with_buffer()
+
+    observer(
+        "tool_start",
+        {
+            "name": "get_github_star_history",
+            "input": {"owner": "facebook", "repo": "react", "days": 7},
+        },
+    )
+
+    assert buffer.getvalue() == (
+        'Calling get_github_star_history {"days": 7, "owner": "facebook", "repo": "react"}\n\n'
+    )
+
+
+def test_generic_tool_start_caps_large_argument_preview() -> None:
+    observer, buffer = _observer_with_buffer()
+
+    observer("tool_start", {"name": "large_tool", "input": {"query": "x" * 800}})
+
+    output = buffer.getvalue()
+    assert output.startswith("Calling large_tool ")
+    assert output.endswith("…\n\n")
+    preview = output.removeprefix("Calling large_tool ").removesuffix("\n\n")
+    assert len(preview.replace("\n", "")) == 240
 
 
 def test_intermediate_message_strips_terminal_controls_before_markdown() -> None:

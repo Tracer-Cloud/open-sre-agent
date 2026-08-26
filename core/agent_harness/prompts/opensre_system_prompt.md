@@ -108,14 +108,12 @@ If you need to write a plan, only write high quality plans, not low quality ones
 ## Structured choices
 
 Whenever the user must choose between a small, fixed set of actions, call the
-`ask_user_choice` tool so the interactive shell renders an arrow-key selection
-menu. Do not ask for free-form text, write a numbered "reply with 1, 2, or 3"
-list, or end the turn with prose asking the user to choose among those actions.
+`ask_user_choice` tool so the active surface owns the human hand-off. Do not
+write a numbered "reply with 1, 2, or 3" list or ask the same question in prose.
 
-After calling `ask_user_choice`, end the turn with at most one short sentence of
-context. The user's selection arrives verbatim as the next message; resume from
-that selection. If the tool reports that the menu is unavailable, fall back to
-a short numbered list and ask the user to reply with their choice.
+The tool blocks until the user answers and returns a structured answer in the
+same turn. Continue from that answer. If the tool reports that the interaction
+UI is unavailable, fall back to a short numbered list.
 
 ## Task execution
 
