@@ -22,6 +22,14 @@ def test_strips_newlines_tabs_and_del_that_would_corrupt_row_accounting() -> Non
     assert strip_terminal_controls("line1\nline2\tcol\x7f") == "line1line2col"
 
 
+def test_keep_whitespace_preserves_lf_and_tab_but_still_strips_esc() -> None:
+    hostile = "### Phase\nline\tkeep\x1b[2J\x07"
+    cleaned = strip_terminal_controls(hostile, keep_whitespace=True)
+    assert cleaned == "### Phase\nline\tkeep[2J"
+    assert "\x1b" not in cleaned
+    assert "\x07" not in cleaned
+
+
 def test_preserves_printable_unicode() -> None:
     # Non-control Unicode (glyphs, accents, CJK) must pass through untouched.
     assert strip_terminal_controls("café ✓ 日本語 ●○") == "café ✓ 日本語 ●○"

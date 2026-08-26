@@ -170,6 +170,27 @@ def test_tool_call_display_strips_terminal_controls_from_model_args() -> None:
     assert content == "ls[2Krm"
 
 
+def test_intermediate_message_strips_terminal_controls_before_markdown() -> None:
+    session = Session()
+    buffer = io.StringIO()
+    console = Console(file=buffer, force_terminal=False, highlight=False)
+    observer = ActionRenderObserver(session=session, console=console, message="x")
+
+    observer(
+        "message_update",
+        {
+            "has_tool_calls": True,
+            "content": "### [1/2] Scope\x1b[2J\nLooking at p99\x07",
+        },
+    )
+
+    output = buffer.getvalue()
+    assert "\x1b" not in output
+    assert "\x07" not in output
+    assert "Scope" in output
+    assert "Looking at p99" in output
+
+
 def test_skill_view_failure_renders_failure_child() -> None:
     observer, buffer = _skill_observer()
 

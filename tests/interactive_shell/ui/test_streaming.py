@@ -1048,6 +1048,22 @@ class TestRenderMarkdownBlock:
 
         assert "__init__.py" in _strip_ansi(buf.getvalue())
 
+    def test_strips_terminal_controls_from_model_prose(self) -> None:
+        """Intermediate/closing model commentary must not inject ESC/BEL."""
+        console, buf = _non_tty_console()
+
+        render_markdown_block(
+            console,
+            "### Phase\x1b[2J\nChecking the token\x07…",
+        )
+
+        output = buf.getvalue()
+        assert "\x1b" not in output
+        assert "\x07" not in output
+        plain = _strip_ansi(output)
+        assert "Phase" in plain
+        assert "Checking the token" in plain
+
 
 class TestDeferWantMeToCloser:
     """Gather path holds drifted Want-me-to until the canonical rewrite paints."""

@@ -11,6 +11,7 @@ from rich.console import Console
 import infrastructure.terminal.theme as ui_theme
 from core.agent_harness.spi.prompt_chrome import normalize_three_tier_spacing
 from core.agent_harness.spi.session_goal import strip_session_goal_progress_tags
+from infrastructure.safety.terminal_output import strip_terminal_controls
 
 if TYPE_CHECKING:
     from rich.markdown import Markdown
@@ -56,7 +57,12 @@ def render_markdown_block(console: Console, text: str) -> None:
     chunk-streamed) — e.g. the action agent's intermediate phase headers —
     so every markdown surface shares one escaping/theme policy.
     """
-    visible = strip_session_goal_progress_tags(text)
+    # Model prose can carry ESC/CR/BEL; strip before Rich Markdown. Keep LF/Tab
+    # so phase headers and lists still parse as multi-line markdown.
+    visible = strip_terminal_controls(
+        strip_session_goal_progress_tags(text),
+        keep_whitespace=True,
+    )
     if not visible.strip():
         return
     with console.use_theme(ui_theme.MARKDOWN_THEME):
