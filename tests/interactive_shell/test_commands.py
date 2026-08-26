@@ -204,6 +204,16 @@ class TestDispatchSlash:
         assert "Auto (Med)" in buf.getvalue()
         assert "allow reversible commands" in buf.getvalue()
 
+    def test_auto_bare_shows_default_and_levels(self) -> None:
+        session = Session()
+        console, buf = _capture()
+        dispatch_slash("/auto", session, console)
+        out = buf.getvalue()
+        assert "Auto (High)" in out
+        assert "default:" in out
+        assert "off" in out and "all actions require approval" in out
+        assert "/trust on skips approval" in out
+
     def test_effort_sets_session_preference(self, monkeypatch: pytest.MonkeyPatch) -> None:
         class _FakeLLM:
             provider = "openai"

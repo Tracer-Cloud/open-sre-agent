@@ -144,10 +144,15 @@ def test_auto_med_asks_mutating_tools_and_allows_read_only() -> None:
     assert read_only.verdict == "allow"
 
 
-def test_auto_low_asks_slash_and_investigation() -> None:
-    for tool_type in ("slash", "investigation", "synthetic_test"):
+def test_auto_low_asks_slash_investigation_and_sample_alert() -> None:
+    for tool_type in ("slash", "investigation", "sample_alert", "synthetic_test"):
         result = apply_auto_level(allow_tool(tool_type), AutoLevel.LOW)
         assert result.verdict == "ask", tool_type
+
+
+def test_auto_med_allows_sample_alert() -> None:
+    # Sample alerts are investigation-shaped; Med still allows them (Low gates).
+    assert apply_auto_level(allow_tool("sample_alert"), AutoLevel.MED).verdict == "allow"
 
 
 def test_auto_off_asks_every_tool_type() -> None:

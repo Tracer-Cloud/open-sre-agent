@@ -19,6 +19,7 @@ from typing import TYPE_CHECKING
 from prompt_toolkit.formatted_text import ANSI
 from rich.console import Console
 
+from surfaces.interactive_shell.ui.auto_status import auto_status_ansi
 from surfaces.interactive_shell.ui.input_prompt import rendering as prompt_rendering
 from surfaces.shared.terminal.banner import render_ready_box
 from surfaces.shared.terminal.components.cpr_stdin import strip_cpr_sequences
@@ -47,7 +48,8 @@ def render_prompt_region(session: Session, state: ReplState, spinner: SpinnerSta
     """Compose the live prompt region: context line plus rule and input prefix.
 
     The top line is the pending confirmation prompt when one is active,
-    otherwise the spinner, completion preview, or idle hint.
+    otherwise the spinner, completion preview, or idle hint, followed by the
+    autonomy status line showing the active ``/auto`` level.
 
     The region always starts with one blank row so the hint/spinner line never
     sits flush against whatever output scrolled above it. The row is constant
@@ -63,7 +65,8 @@ def render_prompt_region(session: Session, state: ReplState, spinner: SpinnerSta
             idle_hint=prompt_rendering.resolve_idle_hint_ansi(session),
         )
     )
-    return ANSI(f"\n{prefix}\n{base}")
+    auto_line = strip_cpr_sequences(auto_status_ansi(session))
+    return ANSI(f"\n{prefix}\n{auto_line}\n{base}")
 
 
 __all__ = ["render_prompt_region", "render_terminal_ui"]

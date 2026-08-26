@@ -45,3 +45,19 @@ def test_all_control_model_falls_back_to_left_only(monkeypatch) -> None:
     assert "\x1b[2J" not in rendered
     assert "\x07" not in rendered
     assert "Auto (" in rendered
+
+
+def test_render_prompt_region_shows_the_auto_status_line() -> None:
+    """The live prompt composition must reach ``auto_status_ansi`` so the level shows."""
+    import re
+
+    from surfaces.interactive_shell.runtime.core.state import ReplState, SpinnerState
+    from surfaces.interactive_shell.ui.terminal_ui import render_prompt_region
+
+    session = Session()
+    session.terminal.auto_level = AutoLevel.MED
+
+    rendered = render_prompt_region(session, ReplState(), SpinnerState()).value
+    plain = re.sub(r"\x1b\[[0-9;]*[A-Za-z]|\x1b\][^\x07]*\x07", "", rendered)
+
+    assert "Auto (Med)" in plain
