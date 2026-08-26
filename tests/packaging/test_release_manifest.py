@@ -4,6 +4,8 @@ from __future__ import annotations
 
 from pathlib import Path
 
+import yaml
+
 from infrastructure.deployment.packaging.release_manifest import (
     infrastructure_data_entries,
     required_skill_files,
@@ -87,8 +89,11 @@ def test_release_build_uses_checked_in_spec() -> None:
 
 def test_release_workflow_does_not_run_on_pull_requests() -> None:
     workflow = _RELEASE_WORKFLOW.read_text(encoding="utf-8")
+    triggers = yaml.load(workflow, Loader=yaml.BaseLoader)["on"]
 
-    assert "  pull_request:" not in workflow
+    assert isinstance(triggers, dict)
+    assert "pull_request" not in triggers
+    assert triggers["push"]["branches"] == ["main"]
     assert 'if [ "$EVENT_NAME" = "pull_request" ]; then' not in workflow
     assert 'echo "channel=pr" >> "$GITHUB_OUTPUT"' not in workflow
     assert "opensre_pr_" not in workflow
