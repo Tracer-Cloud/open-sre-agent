@@ -62,7 +62,6 @@ _MIN_REGISTRY_SIZE = 290
 _DESCRIPTION_CONTRACT_ALLOWLIST: frozenset[str] = frozenset(
     {
         "alert_sample",
-        "assistant_handoff",
         "cli_exec",
         "code_implement",
         "fix_sentry_issue_start",
