@@ -380,7 +380,11 @@ def _lookup_price(model: str) -> ModelPrice | None:
     for candidate in candidates:
         fallback = _local_family_fallback_canonical(candidate)
         if fallback is not None:
-            return _LOCAL_MODEL_PRICES.get(fallback)
+            # Resolve the mapped tier from the same source as its exact id, so a
+            # suffix variant (``gpt-5.6-terra-preview``) never diverges from the
+            # base tier once litellm's snapshot prices that tier. The local table
+            # stays the last resort for a tier litellm still lacks.
+            return _litellm_price(fallback) or _LOCAL_MODEL_PRICES.get(fallback)
     for candidate in candidates:
         for provider_prefix in _COMPAT_PROVIDER_PREFIXES:
             price = _litellm_price(f"{provider_prefix}{candidate}")
