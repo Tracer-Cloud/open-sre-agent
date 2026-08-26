@@ -155,6 +155,44 @@ def test_wait_for_branch_checks_fails_on_external_commit_status() -> None:
     assert result.failing_checks == ("greptile/review",)
 
 
+def test_wait_for_branch_checks_defers_verdict_while_legacy_status_pending() -> None:
+    # A pending commit status is external CI still running: the verdict must
+    # wait for it rather than reporting PASSED from completed workflows alone.
+    completed_runs = {
+        "runs": [{"databaseId": 1, "name": "CI", "status": "completed", "conclusion": "success"}]
+    }
+    completed_check_runs = {
+        "check_runs": [{"name": "CI job", "status": "completed", "conclusion": "success"}]
+    }
+    responses = [
+        completed_runs,
+        completed_check_runs,
+        {"state": "pending", "statuses": [{"context": "external/ci", "state": "pending"}]},
+        completed_runs,
+        completed_check_runs,
+        {"state": "success", "statuses": [{"context": "external/ci", "state": "success"}]},
+    ]
+    sleeps: list[float] = []
+
+    with patch(
+        "integrations.github.tools.ci_fix.verification.run_gh_json",
+        side_effect=responses,
+    ):
+        result = wait_for_branch_checks(
+            _BRANCH_CONTEXT,
+            github_token="tok",
+            expected_head_sha="new-sha",
+            registration_seconds=0,
+            timeout_seconds=30,
+            poll_interval_seconds=1,
+            settle_seconds=0,
+            sleep=sleeps.append,
+        )
+
+    assert result.state is CheckState.PASSED
+    assert sleeps == [1]
+
+
 def test_wait_for_branch_checks_times_out_when_no_runs_register() -> None:
     with patch(
         "integrations.github.tools.ci_fix.verification.run_gh_json",

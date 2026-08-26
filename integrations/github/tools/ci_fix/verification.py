@@ -265,6 +265,7 @@ def _commit_runs(
 
 
 _STATUS_FAILED_STATES = frozenset({"ERROR", "FAILURE"})
+_STATUS_PENDING = "PENDING"
 _CHECK_RUN_COMPLETED = "completed"
 
 
@@ -277,32 +278,53 @@ def _commit_check_state(
     """Terminal-ness and failing names across the commit's check runs and statuses.
 
     Check runs cover both Actions jobs and external check apps; commit statuses
-    cover legacy status integrations. Returns ``(all_terminal, failing_names)``.
+    cover legacy status integrations. Both listings paginate so large CI
+    matrices are fully inspected. A pending individual status defers the
+    verdict, but the combined ``state`` field is deliberately ignored — GitHub
+    reports it as pending for commits with no statuses at all, which would
+    stall verification forever. Returns ``(all_terminal, failing_names)``.
     """
     checks_payload = run_gh_json(
-        ["api", f"repos/{repo}/commits/{commit_sha}/check-runs?per_page=100"],
+        [
+            "api",
+            f"repos/{repo}/commits/{commit_sha}/check-runs?per_page=100",
+            "--paginate",
+            "--slurp",
+            "--jq",
+            '{"check_runs": (map(.check_runs) | add)}',
+        ],
         repo=repo,
         github_token=github_token,
         repo_flag=False,
     )
     check_runs = _check_rows(checks_payload.get("check_runs"))
+    status_payload = run_gh_json(
+        [
+            "api",
+            f"repos/{repo}/commits/{commit_sha}/status?per_page=100",
+            "--paginate",
+            "--slurp",
+            "--jq",
+            '{"statuses": (map(.statuses) | add)}',
+        ],
+        repo=repo,
+        github_token=github_token,
+        repo_flag=False,
+    )
+    statuses = _check_rows(status_payload.get("statuses"))
     all_terminal = all(
         str(run.get("status") or "").strip().lower() == _CHECK_RUN_COMPLETED for run in check_runs
+    ) and all(
+        str(status.get("state") or "").strip().upper() != _STATUS_PENDING for status in statuses
     )
     failing = [
         _run_name(run)
         for run in check_runs
         if str(run.get("conclusion") or "").strip().upper() in _FAILED_CONCLUSIONS
     ]
-    status_payload = run_gh_json(
-        ["api", f"repos/{repo}/commits/{commit_sha}/status"],
-        repo=repo,
-        github_token=github_token,
-        repo_flag=False,
-    )
     failing.extend(
         str(status.get("context") or "unnamed status")
-        for status in _check_rows(status_payload.get("statuses"))
+        for status in statuses
         if str(status.get("state") or "").strip().upper() in _STATUS_FAILED_STATES
     )
     return all_terminal, tuple(dict.fromkeys(failing))
