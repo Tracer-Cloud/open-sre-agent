@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from typing import Any
 
+from core.domain.types.evidence import record_evidence_entry
 from core.domain.types.tools import ToolSurface
 from core.tool_framework import tool
 from core.tool_framework.utils import tool_unavailable
@@ -21,6 +22,26 @@ def _bounded_limit(limit: int, max_results: int) -> int:
 def _opensearch_available(sources: dict[str, dict[str, Any]]) -> bool:
     source = sources.get("opensearch", {})
     return bool(source.get("connection_verified") and source.get("url"))
+
+
+def _map_query_opensearch_analytics(
+    evidence: dict[str, Any], output: dict[str, Any], _tool_input: dict[str, Any]
+) -> None:
+    """Cite the number of log entries retrieved for the query."""
+    if not output.get("available"):
+        return
+    logs = output.get("logs") or []
+    if not logs:
+        return
+    record_evidence_entry(
+        evidence,
+        source="query_opensearch_analytics",
+        label="OpenSearch Analytics",
+        summary=(
+            f"{output.get('total_returned', len(logs))} log(s) for query "
+            f"'{output.get('query', '*')}' on '{output.get('index_pattern', '*')}'"
+        ),
+    )
 
 
 def _opensearch_extract_params(sources: dict[str, dict[str, Any]]) -> dict[str, Any]:
@@ -64,6 +85,7 @@ def _opensearch_extract_params(sources: dict[str, dict[str, Any]]) -> dict[str, 
     is_available=_opensearch_available,
     injected_params=("url",),
     extract_params=_opensearch_extract_params,
+    evidence_mapper=_map_query_opensearch_analytics,
 )
 def query_opensearch_analytics(
     url: str,
