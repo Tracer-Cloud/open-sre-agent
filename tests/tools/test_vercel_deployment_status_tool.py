@@ -5,7 +5,10 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from integrations.vercel.tools import VercelDeploymentStatusTool, _map_vercel_deployment_status
+from integrations.vercel.tools import VercelDeploymentStatusTool
+from integrations.vercel.tools._evidence import (
+    map_vercel_deployment_status as _map_vercel_deployment_status,
+)
 
 
 @pytest.fixture()
