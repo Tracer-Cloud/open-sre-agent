@@ -9,8 +9,10 @@ import pytest
 from integrations.aws.topology_helper import extract_target_health_params
 from integrations.elb.tools.elb_target_health_tool import (
     _is_available,
-    _map_get_elb_target_health,
     get_elb_target_health,
+)
+from integrations.elb.tools.elb_target_health_tool._evidence import (
+    map_get_elb_target_health as _map_get_elb_target_health,
 )
 
 

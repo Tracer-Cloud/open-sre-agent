@@ -11,7 +11,6 @@ from __future__ import annotations
 import logging
 from typing import Any, cast
 
-from core.domain.types.evidence import record_evidence_entry
 from core.tool_framework import tool
 from core.tool_framework.utils import tool_unavailable
 from integrations.aws.availability import ec2_available_or_backend
@@ -20,40 +19,11 @@ from integrations.aws.topology_helper import (
     build_elb_summary,
     extract_target_health_params,
 )
+from integrations.elb.tools.elb_target_health_tool._evidence import (
+    map_get_elb_target_health,
+)
 
 logger = logging.getLogger(__name__)
-
-
-def _map_get_elb_target_health(
-    evidence: dict[str, Any], output: dict[str, Any], _tool_input: dict[str, Any]
-) -> None:
-    """Cite the healthy/unhealthy target counts and target group count.
-
-    ``available`` is already False on partial coverage (a per-target-group
-    API failure) -- the tool sets that itself precisely so a caller never
-    mistakes partial data for full coverage, so no extra check is needed
-    here beyond the standard availability guard.
-    """
-    if not output.get("available"):
-        return
-    healthy = output.get("healthy_targets") or []
-    unhealthy = output.get("unhealthy_targets") or []
-    if not healthy and not unhealthy:
-        return
-    stats = output.get("summary") or {}
-    tg_count = stats.get("target_group_count", len(output.get("target_groups") or []))
-    parts = [
-        f"{len(healthy)} healthy, {len(unhealthy)} unhealthy target(s) across {tg_count} target group(s)"
-    ]
-    unhealthy_states = stats.get("unhealthy_states") or []
-    if unhealthy_states:
-        parts.append(f"states: {', '.join(unhealthy_states)}")
-    record_evidence_entry(
-        evidence,
-        source="get_elb_target_health",
-        label="ELB Target Health",
-        summary=", ".join(parts),
-    )
 
 
 def _is_available(sources: dict[str, dict]) -> bool:
@@ -113,7 +83,7 @@ def _is_available(sources: dict[str, dict]) -> bool:
     },
     is_available=_is_available,
     extract_params=extract_target_health_params,
-    evidence_mapper=_map_get_elb_target_health,
+    evidence_mapper=map_get_elb_target_health,
 )
 def get_elb_target_health(
     target_group_arns: list[str] | None = None,

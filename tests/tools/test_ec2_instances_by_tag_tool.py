@@ -9,8 +9,10 @@ import pytest
 from integrations.aws.topology_helper import extract_ec2_instances_params
 from integrations.ec2.tools.ec2_instances_by_tag_tool import (
     _is_available,
-    _map_ec2_instances_by_tag,
     ec2_instances_by_tag,
+)
+from integrations.ec2.tools.ec2_instances_by_tag_tool._evidence import (
+    map_ec2_instances_by_tag as _map_ec2_instances_by_tag,
 )
 
 

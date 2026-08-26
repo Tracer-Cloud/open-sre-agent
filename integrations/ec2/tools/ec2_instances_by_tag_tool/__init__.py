@@ -10,7 +10,6 @@ from __future__ import annotations
 import logging
 from typing import Any, cast
 
-from core.domain.types.evidence import record_evidence_entry
 from core.tool_framework import tool
 from core.tool_framework.utils import tool_unavailable
 from integrations.aws.availability import ec2_available_or_backend
@@ -19,38 +18,11 @@ from integrations.aws.topology_helper import (
     build_ec2_summary,
     extract_ec2_instances_params,
 )
+from integrations.ec2.tools.ec2_instances_by_tag_tool._evidence import (
+    map_ec2_instances_by_tag,
+)
 
 logger = logging.getLogger(__name__)
-
-
-def _map_ec2_instances_by_tag(
-    evidence: dict[str, Any], output: dict[str, Any], _tool_input: dict[str, Any]
-) -> None:
-    """Cite the active instance count, primary tier, and tier spread.
-
-    ``truncated`` reflects the tool's own 5000-instance safety cap on
-    pagination -- an explicit signal, not an inferred page-size heuristic.
-    """
-    if not output.get("available"):
-        return
-    instances = output.get("instances") or []
-    if not instances:
-        return
-    total = output.get("total_instances", len(instances))
-    count_label = f"{total}+" if output.get("truncated") else str(total)
-    parts = [f"{count_label} active instance(s)"]
-    primary_tier = (output.get("summary") or {}).get("primary_tier")
-    if primary_tier:
-        parts.append(f"primary tier '{primary_tier}'")
-    tiers_detected = output.get("tiers_detected") or []
-    if len(tiers_detected) > 1:
-        parts.append(f"{len(tiers_detected)} tiers")
-    record_evidence_entry(
-        evidence,
-        source="ec2_instances_by_tag",
-        label="EC2 Instances",
-        summary=", ".join(parts),
-    )
 
 
 def _is_available(sources: dict[str, dict]) -> bool:
@@ -119,7 +91,7 @@ def _summarize_instance(raw: dict[str, Any]) -> dict[str, Any]:
     },
     is_available=_is_available,
     extract_params=extract_ec2_instances_params,
-    evidence_mapper=_map_ec2_instances_by_tag,
+    evidence_mapper=map_ec2_instances_by_tag,
 )
 def ec2_instances_by_tag(
     tier: str = "",
