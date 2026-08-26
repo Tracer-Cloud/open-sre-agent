@@ -118,7 +118,6 @@ helm_get_release_values
 helm_list_releases
 helm_release_history
 helm_release_status
-incident_io_incidents
 inspect_lambda_function
 inspect_railway_deployment
 inspect_s3_object
