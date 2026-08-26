@@ -2,6 +2,7 @@
 
 from typing import Any
 
+from core.domain.types.evidence import record_evidence_entry
 from core.domain.types.tools import ToolSurface
 from core.tool_framework import tool
 from integrations.clickhouse import (
@@ -10,6 +11,31 @@ from integrations.clickhouse import (
     clickhouse_is_available,
     get_query_activity,
 )
+
+
+def _map_get_clickhouse_query_activity(
+    evidence: dict[str, Any], output: dict[str, Any], _tool_input: dict[str, Any]
+) -> None:
+    """Cite recent query activity, noting how many of the returned queries failed."""
+    if not output.get("available"):
+        return
+    queries = output.get("queries") or []
+    if not queries:
+        return
+    failed = sum(
+        1
+        for query in queries
+        if isinstance(query, dict) and "Exception" in str(query.get("type", ""))
+    )
+    summary = f"{len(queries)} quer{'y' if len(queries) == 1 else 'ies'}"
+    if failed:
+        summary += f", {failed} failed"
+    record_evidence_entry(
+        evidence,
+        source="get_clickhouse_query_activity",
+        label="ClickHouse Query Activity",
+        summary=summary,
+    )
 
 
 @tool(
@@ -25,6 +51,7 @@ from integrations.clickhouse import (
     is_available=clickhouse_is_available,
     injected_params=("host",),
     extract_params=clickhouse_extract_params,
+    evidence_mapper=_map_get_clickhouse_query_activity,
 )
 def get_clickhouse_query_activity(
     host: str,
