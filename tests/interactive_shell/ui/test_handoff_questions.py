@@ -101,6 +101,9 @@ def test_choose_slash_is_not_echoed() -> None:
     assert session.terminal.awaiting_handoff_answer is True
     assert buffer.getvalue() == ""
     assert session.terminal.submitted_turn_count == 0
+    # The queued /choose must not leave a stale autosubmit flag, or the next
+    # genuine turn is misread as autosubmitted and skips the round-counter reset.
+    assert session.terminal.last_input_autosubmitted is False
 
 
 def test_try_render_rejects_a_single_choice_label() -> None:

@@ -84,8 +84,11 @@ def render_submitted_prompt(console: Console, session: Session, text: str) -> No
     that attached the goal.
     """
     stripped = text.strip()
-    # Internal exclusive-stdin turn — never echo ``/choose``.
+    # Internal exclusive-stdin turn — never echo ``/choose``. Clear the autosubmit
+    # flag the queued ``/choose`` carried so a genuine turn after a cancelled menu
+    # reads as a new workload (which resets the ask-user round counter).
     if stripped == "/choose" or stripped.startswith("/choose "):
+        session.terminal.last_input_autosubmitted = False
         return
     is_handoff_answer = bool(session.terminal.awaiting_handoff_answer)
     if not is_handoff_answer:
