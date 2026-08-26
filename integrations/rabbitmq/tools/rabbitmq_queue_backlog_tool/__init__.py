@@ -2,6 +2,7 @@
 
 from typing import Any
 
+from core.domain.types.evidence import record_evidence_entry
 from core.domain.types.tools import ToolSurface
 from core.tool_framework import tool
 from integrations.rabbitmq import (
@@ -10,6 +11,29 @@ from integrations.rabbitmq import (
     rabbitmq_extract_params,
     rabbitmq_is_available,
 )
+
+
+def _map_get_rabbitmq_queue_backlog(
+    evidence: dict[str, Any], output: dict[str, Any], _tool_input: dict[str, Any]
+) -> None:
+    """Cite the largest backlog and how many queues have zero consumers."""
+    if not output.get("available"):
+        return
+    queues = output.get("queues") or []
+    if not queues:
+        return
+    top = queues[0]
+    top_backlog = top.get("messages_ready", 0) + top.get("messages_unacknowledged", 0)
+    zero_consumer = sum(1 for q in queues if q.get("consumers", 0) == 0)
+    summary = f"{output.get('total_queues', len(queues))} queue(s), top backlog {top_backlog} on '{top.get('name', '')}'"
+    if zero_consumer:
+        summary += f", {zero_consumer} with zero consumers"
+    record_evidence_entry(
+        evidence,
+        source="get_rabbitmq_queue_backlog",
+        label="RabbitMQ Queue Backlog",
+        summary=summary,
+    )
 
 
 @tool(
@@ -25,6 +49,7 @@ from integrations.rabbitmq import (
     is_available=rabbitmq_is_available,
     injected_params=("host", "password", "username"),
     extract_params=rabbitmq_extract_params,
+    evidence_mapper=_map_get_rabbitmq_queue_backlog,
 )
 def get_rabbitmq_queue_backlog(
     host: str,

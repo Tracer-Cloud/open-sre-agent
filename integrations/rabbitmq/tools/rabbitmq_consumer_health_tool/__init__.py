@@ -2,6 +2,7 @@
 
 from typing import Any
 
+from core.domain.types.evidence import record_evidence_entry
 from core.domain.types.tools import ToolSurface
 from core.tool_framework import tool
 from integrations.rabbitmq import (
@@ -10,6 +11,27 @@ from integrations.rabbitmq import (
     rabbitmq_extract_params,
     rabbitmq_is_available,
 )
+
+
+def _map_get_rabbitmq_consumer_health(
+    evidence: dict[str, Any], output: dict[str, Any], _tool_input: dict[str, Any]
+) -> None:
+    """Cite consumer count, flagging any inactive consumers found."""
+    if not output.get("available"):
+        return
+    consumers = output.get("consumers") or []
+    if not consumers:
+        return
+    inactive = sum(1 for c in consumers if not c.get("active", True))
+    summary = f"{output.get('total_consumers', len(consumers))} consumer(s)"
+    if inactive:
+        summary += f", {inactive} inactive"
+    record_evidence_entry(
+        evidence,
+        source="get_rabbitmq_consumer_health",
+        label="RabbitMQ Consumer Health",
+        summary=summary,
+    )
 
 
 @tool(
@@ -25,6 +47,7 @@ from integrations.rabbitmq import (
     is_available=rabbitmq_is_available,
     injected_params=("host", "password", "username"),
     extract_params=rabbitmq_extract_params,
+    evidence_mapper=_map_get_rabbitmq_consumer_health,
 )
 def get_rabbitmq_consumer_health(
     host: str,
