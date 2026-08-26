@@ -1,10 +1,11 @@
 from __future__ import annotations
 
+from typing import Any
 from unittest.mock import MagicMock, patch
 
 import pytest
 
-from integrations.vercel.tools import VercelDeploymentStatusTool
+from integrations.vercel.tools import VercelDeploymentStatusTool, _map_vercel_deployment_status
 
 
 @pytest.fixture()
@@ -119,3 +120,72 @@ def test_metadata_is_valid(tool: VercelDeploymentStatusTool) -> None:
     assert meta.source == "vercel"
     assert "required" in meta.input_schema
     assert "api_token" in meta.input_schema["required"]
+
+
+class TestMapVercelDeploymentStatus:
+    def test_records_entry_with_failed_count(self) -> None:
+        evidence: dict[str, Any] = {}
+
+        _map_vercel_deployment_status(
+            evidence,
+            {
+                "available": True,
+                "total": 3,
+                "deployments": [{"id": "dpl_1"}, {"id": "dpl_2"}, {"id": "dpl_3"}],
+                "failed_deployments": [{"id": "dpl_1"}, {"id": "dpl_3"}],
+            },
+            {"limit": 10},
+        )
+
+        entries = evidence["catalog_entries"]
+        assert len(entries) == 1
+        assert entries[0]["source"] == "vercel_deployment_status"
+        assert entries[0]["summary"] == "3 deployment(s), 2 failed"
+
+    def test_records_zero_failed_as_a_genuine_finding(self) -> None:
+        evidence: dict[str, Any] = {}
+
+        _map_vercel_deployment_status(
+            evidence,
+            {
+                "available": True,
+                "total": 1,
+                "deployments": [{"id": "dpl_1"}],
+                "failed_deployments": [],
+            },
+            {"limit": 10},
+        )
+
+        assert evidence["catalog_entries"][0]["summary"] == "1 deployment(s), 0 failed"
+
+    def test_qualifies_counts_when_page_is_saturated(self) -> None:
+        evidence: dict[str, Any] = {}
+
+        _map_vercel_deployment_status(
+            evidence,
+            {
+                "available": True,
+                "total": 10,
+                "deployments": [{"id": "dpl_1"}],
+                "failed_deployments": [{"id": "dpl_1"}],
+            },
+            {"limit": 10},
+        )
+
+        assert evidence["catalog_entries"][0]["summary"] == "10+ deployment(s), 1+ failed"
+
+    def test_records_nothing_when_no_deployments(self) -> None:
+        evidence: dict[str, Any] = {}
+
+        _map_vercel_deployment_status(
+            evidence, {"available": True, "total": 0, "deployments": []}, {}
+        )
+
+        assert "catalog_entries" not in evidence
+
+    def test_records_nothing_on_unavailable_result(self) -> None:
+        evidence: dict[str, Any] = {}
+
+        _map_vercel_deployment_status(evidence, {"available": False, "error": "HTTP 401"}, {})
+
+        assert "catalog_entries" not in evidence
