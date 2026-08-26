@@ -8,8 +8,10 @@ from unittest.mock import patch
 import pytest
 
 from integrations.bitbucket.tools.bitbucket_commits_tool import (
-    _map_list_bitbucket_commits,
     list_bitbucket_commits,
+)
+from integrations.bitbucket.tools.bitbucket_commits_tool._evidence import (
+    map_list_bitbucket_commits as _map_list_bitbucket_commits,
 )
 from tests.tools.conftest import BaseToolContract
 

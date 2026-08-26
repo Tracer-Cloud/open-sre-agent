@@ -8,8 +8,10 @@ from unittest.mock import patch
 import pytest
 
 from integrations.bitbucket.tools.bitbucket_file_contents_tool import (
-    _map_get_bitbucket_file_contents,
     get_bitbucket_file_contents,
+)
+from integrations.bitbucket.tools.bitbucket_file_contents_tool._evidence import (
+    map_get_bitbucket_file_contents as _map_get_bitbucket_file_contents,
 )
 from tests.tools.conftest import BaseToolContract
 

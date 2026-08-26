@@ -8,8 +8,10 @@ from unittest.mock import patch
 import pytest
 
 from integrations.bitbucket.tools.bitbucket_search_code_tool import (
-    _map_search_bitbucket_code,
     search_bitbucket_code,
+)
+from integrations.bitbucket.tools.bitbucket_search_code_tool._evidence import (
+    map_search_bitbucket_code as _map_search_bitbucket_code,
 )
 from tests.tools.conftest import BaseToolContract
 
