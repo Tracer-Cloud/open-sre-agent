@@ -297,6 +297,15 @@ from config.constants.redis import (
     REDIS_SSL_ENV,
     REDIS_USERNAME_ENV,
 )
+from config.constants.repl_autonomy import (
+    AUTO_LEVEL_ASK_TOOL_TYPES,
+    AUTO_LEVEL_CAPTIONS,
+    AUTO_LEVEL_TITLES,
+    DEFAULT_AUTO_LEVEL,
+    AutoLevel,
+    format_auto_status_plain,
+    parse_auto_level,
+)
 from config.constants.repl_theme import DEFAULT_THEME_NAME, THEME_NAMES, Theme
 from config.constants.reporting import SLACK_LINK_RE
 from config.constants.runtime_metadata import (
@@ -488,6 +497,13 @@ __all__ = [
     "DEFAULT_REMOTE_SYNC_PREFIX",
     "DEFAULT_REMOTE_SYNC_PROVIDER",
     "DEFAULT_THEME_NAME",
+    "AUTO_LEVEL_ASK_TOOL_TYPES",
+    "AUTO_LEVEL_CAPTIONS",
+    "AUTO_LEVEL_TITLES",
+    "AutoLevel",
+    "DEFAULT_AUTO_LEVEL",
+    "format_auto_status_plain",
+    "parse_auto_level",
     "REMOTE_SYNC_BUCKET_ENV",
     "REMOTE_SYNC_ENDPOINT_URL_ENV",
     "REMOTE_SYNC_ENV",

@@ -15,12 +15,14 @@ lives in ``tools.interactive_shell.shell.policy`` and is covered by
 
 from __future__ import annotations
 
+from config.constants.repl_autonomy import AutoLevel
 from tools.interactive_shell.shared import (
     ConfirmationOutcome,
     ExecutionPolicyResult,
     ToolExecutionMode,
     ToolExecutionPlan,
     allow_tool,
+    apply_auto_level,
     plan_foreground_tool,
     resolve_confirmation,
 )
@@ -114,3 +116,40 @@ def test_resolve_ask_tty_needs_confirmation() -> None:
     # The analytics outcome for a prompt is decided by the interaction layer.
     assert plan.analytics_outcome is None
     assert plan.analytics_reason is None
+
+
+def test_auto_high_leaves_default_allow() -> None:
+    result = apply_auto_level(allow_tool("shell"), AutoLevel.HIGH)
+    assert result.verdict == "allow"
+
+
+def test_auto_med_asks_mutating_tools_and_allows_read_only() -> None:
+    # Med "allow reversible commands": mutation-capable tools still require
+    # approval (including agent-selected slash/CLI and synthetic_test); read-only
+    # investigation runs without a prompt.
+    for mutating in (
+        "shell",
+        "code_agent",
+        "slash",
+        "cli_command",
+        "opensre_cli",
+        "switch_llm_provider",
+        "synthetic_test",
+        "sentry_issue_fix",
+    ):
+        result = apply_auto_level(allow_tool(mutating), AutoLevel.MED)
+        assert result.verdict == "ask", mutating
+        assert "Auto (Med)" in (result.reason or "")
+    read_only = apply_auto_level(allow_tool("investigation"), AutoLevel.MED)
+    assert read_only.verdict == "allow"
+
+
+def test_auto_low_asks_slash_and_investigation() -> None:
+    for tool_type in ("slash", "investigation", "synthetic_test"):
+        result = apply_auto_level(allow_tool(tool_type), AutoLevel.LOW)
+        assert result.verdict == "ask", tool_type
+
+
+def test_auto_off_asks_every_tool_type() -> None:
+    result = apply_auto_level(allow_tool("slash"), AutoLevel.OFF)
+    assert result.verdict == "ask"

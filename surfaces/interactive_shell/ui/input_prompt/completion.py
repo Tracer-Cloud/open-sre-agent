@@ -14,10 +14,10 @@ from surfaces.interactive_shell.command_registry.help import QUICK_ACCESS_COMMAN
 from surfaces.interactive_shell.command_registry.types import SlashCommand
 from surfaces.interactive_shell.ui.input_prompt.layout import (
     _DEFAULT_TERMINAL_COLUMNS,
-    _clip_text,
-    _prompt_line_width,
     _short_meta,
     _terminal_columns,
+    clip_prompt_text,
+    prompt_line_width,
 )
 from surfaces.shared.terminal.components.choice_menu import repl_tty_interactive
 
@@ -77,9 +77,9 @@ def completion_preview_hint_ansi() -> str:
         cols = _DEFAULT_TERMINAL_COLUMNS
     # Leave the last column empty so this context line cannot soft-wrap on
     # shrink-resize and orphan stale prompt frames (same budget as the rule).
-    line = _clip_text(
+    line = clip_prompt_text(
         f"{label}{_COMPLETION_PREVIEW_SEP}{description}",
-        _prompt_line_width(cols),
+        prompt_line_width(cols),
     )
     return f"{ui_theme.ANSI_DIM}{line}{ui_theme.ANSI_RESET}"
 

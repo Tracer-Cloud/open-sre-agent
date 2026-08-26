@@ -196,6 +196,14 @@ class TestDispatchSlash:
         dispatch_slash("/trust off", session, console)
         assert session.terminal.trust_mode is False
 
+    def test_auto_sets_med(self) -> None:
+        session = Session()
+        console, buf = _capture()
+        dispatch_slash("/auto med", session, console)
+        assert session.terminal.auto_level == "med"
+        assert "Auto (Med)" in buf.getvalue()
+        assert "allow reversible commands" in buf.getvalue()
+
     def test_effort_sets_session_preference(self, monkeypatch: pytest.MonkeyPatch) -> None:
         class _FakeLLM:
             provider = "openai"

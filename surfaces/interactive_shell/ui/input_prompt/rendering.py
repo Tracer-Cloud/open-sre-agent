@@ -11,9 +11,9 @@ from infrastructure.terminal import theme as ui_theme
 from surfaces.interactive_shell.runtime import Session
 from surfaces.interactive_shell.ui.input_prompt.completion import completion_preview_hint_ansi
 from surfaces.interactive_shell.ui.input_prompt.layout import (
-    _clip_text,
-    _prompt_line_width,
     _short_meta,
+    clip_prompt_text,
+    prompt_line_width,
 )
 from surfaces.shared.terminal.banner.banner_state import integration_display_name
 
@@ -32,9 +32,7 @@ def _prompt_rule_ansi() -> str:
     # One column short of the terminal width so shrink-resize cannot soft-wrap
     # this line and orphan stale prompt frames in scrollback.
     return (
-        f"{ui_theme.PROMPT_FRAME_ANSI}"
-        f"{_prompt_rule_line(_prompt_line_width())}"
-        f"{ui_theme.ANSI_RESET}"
+        f"{ui_theme.PROMPT_FRAME_ANSI}{_prompt_rule_line(prompt_line_width())}{ui_theme.ANSI_RESET}"
     )
 
 
@@ -130,7 +128,7 @@ def resolve_idle_hint_ansi(session: Session) -> str:
         parts.append("esc to clear")
     # Clip to the safe prompt-region width so a long integration list cannot
     # reach the last column and soft-wrap on shrink-resize.
-    hint = _clip_text(" · ".join(parts), _prompt_line_width())
+    hint = clip_prompt_text(" · ".join(parts), prompt_line_width())
     return f"{ui_theme.DIM_ANSI}{hint}{ui_theme.ANSI_RESET}"
 
 

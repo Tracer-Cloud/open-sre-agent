@@ -4,6 +4,8 @@ from __future__ import annotations
 
 from prompt_toolkit.application.current import get_app_or_none
 
+from infrastructure.safety.terminal_output import strip_terminal_controls
+
 _DEFAULT_TERMINAL_COLUMNS = 80
 _COMPLETION_META_PADDING = 6
 _COMPLETION_META_MIN_WIDTH = 24
@@ -19,7 +21,7 @@ def _terminal_columns() -> int:
         return _DEFAULT_TERMINAL_COLUMNS
 
 
-def _prompt_line_width(cols: int | None = None) -> int:
+def prompt_line_width(cols: int | None = None) -> int:
     """Visible width for a live prompt-region line.
 
     Leave the last terminal column empty. A glyph in that column puts the
@@ -31,12 +33,19 @@ def _prompt_line_width(cols: int | None = None) -> int:
     return max(width - 1, 1)
 
 
-def _clip_text(text: str, max_len: int) -> str:
+def clip_prompt_text(text: str, max_len: int) -> str:
+    """Truncate to ``max_len`` visible characters after stripping controls.
+
+    Overlay and menu rows interpolate this into raw ANSI. Control characters
+    (ESC, OSC, CR) would spoof the terminal and break row accounting, so they
+    are removed before width is measured.
+    """
+    visible = strip_terminal_controls(text)
     if max_len <= 0:
         return ""
-    if len(text) <= max_len:
-        return text
-    return text[: max_len - 1] + "…"
+    if len(visible) <= max_len:
+        return visible
+    return visible[: max_len - 1] + "…"
 
 
 def _completion_meta_width(command_name: str, cols: int) -> int:
@@ -55,4 +64,4 @@ def _short_meta(
             max_len = _completion_meta_width(command_name, cols or _terminal_columns())
         else:
             max_len = 54
-    return _clip_text(text, max_len)
+    return clip_prompt_text(text, max_len)
