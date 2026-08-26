@@ -24,6 +24,10 @@ def _map_alertmanager_alerts(
 ) -> None:
     """Record the alert landscape as one citeable entry, or nothing.
 
+    The firing count is always stated, including zero: "3 alerts, 0 firing" is a
+    finding, while omitting it leaves a reader unable to tell nothing-firing from
+    a count the tool never returned.
+
     A failed call returns the unavailable envelope with ``alerts: []``, so the
     emptiness check covers the error shape too — an entry reading "0 alerts"
     would cost context on every later turn and support no claim.
@@ -31,15 +35,12 @@ def _map_alertmanager_alerts(
     alerts = output.get("alerts", [])
     if not alerts:
         return
-    summary = f"{len(alerts)} alerts"
     firing = output.get("firing_alerts", [])
-    if firing:
-        summary += f", {len(firing)} firing"
     record_evidence_entry(
         evidence,
         source="alertmanager_alerts",
         label="Alertmanager Alerts",
-        summary=summary,
+        summary=f"{len(alerts)} alerts, {len(firing)} firing",
     )
 
 
@@ -213,21 +214,19 @@ def _map_alertmanager_silences(
 ) -> None:
     """Record the silence landscape as one citeable entry, or nothing.
 
-    Same contract as the alerts mapper: the unavailable envelope carries
-    ``silences: []``, so a failed call records nothing.
+    Same contract as the alerts mapper: the active count is always stated, and
+    the unavailable envelope carries ``silences: []`` so a failed call records
+    nothing.
     """
     silences = output.get("silences", [])
     if not silences:
         return
-    summary = f"{len(silences)} silences"
     active = output.get("active_silences", [])
-    if active:
-        summary += f", {len(active)} active"
     record_evidence_entry(
         evidence,
         source="alertmanager_silences",
         label="Alertmanager Silences",
-        summary=summary,
+        summary=f"{len(silences)} silences, {len(active)} active",
     )
 
 

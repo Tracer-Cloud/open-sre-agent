@@ -106,3 +106,40 @@ def test_silences_mapper_records_nothing_without_silences(output: dict[str, Any]
     _map_alertmanager_silences(evidence, output, {})
 
     assert evidence == {}
+
+
+def test_alerts_mapper_states_zero_firing_rather_than_omitting_it() -> None:
+    """ "3 alerts, 0 firing" is a finding; a bare count hides whether any fired."""
+    # Arrange
+    evidence: dict[str, Any] = {}
+    output = {
+        "source": "alertmanager",
+        "available": True,
+        "alerts": [{"status": "suppressed"}, {"status": "suppressed"}],
+        "firing_alerts": [],
+        "total": 2,
+    }
+
+    # Act
+    _map_alertmanager_alerts(evidence, output, {})
+
+    # Assert
+    assert evidence["catalog_entries"][0]["summary"] == "2 alerts, 0 firing"
+
+
+def test_silences_mapper_states_zero_active_rather_than_omitting_it() -> None:
+    # Arrange
+    evidence: dict[str, Any] = {}
+    output = {
+        "source": "alertmanager_silences",
+        "available": True,
+        "silences": [{"status": {"state": "expired"}}],
+        "active_silences": [],
+        "total": 1,
+    }
+
+    # Act
+    _map_alertmanager_silences(evidence, output, {})
+
+    # Assert
+    assert evidence["catalog_entries"][0]["summary"] == "1 silences, 0 active"
