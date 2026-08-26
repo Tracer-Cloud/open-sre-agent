@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from typing import Any
 
+from core.domain.types.evidence import record_evidence_entry
 from core.domain.types.tools import ToolSurface
 from core.tool_framework import tool
 from core.tool_framework.utils import tool_unavailable
@@ -13,6 +14,35 @@ from integrations.bitbucket.tools.bitbucket_search_code_tool import (
     _bb_creds,
     _resolve_config,
 )
+
+
+def _map_list_bitbucket_commits(
+    evidence: dict[str, Any], output: dict[str, Any], _tool_input: dict[str, Any]
+) -> None:
+    """Cite the commit count and repo, qualifying page-capped totals.
+
+    ``effective_limit`` is the real ceiling ``list_commits`` applied --
+    ``min(limit, config.max_results)`` -- so a returned count at that ceiling
+    may understate the true number of matching commits.
+    """
+    if not output.get("available"):
+        return
+    commits = output.get("commits") or []
+    if not commits:
+        return
+    total = output.get("total_returned", len(commits))
+    effective_limit = output.get("effective_limit", total)
+    count_label = f"{total}+" if total >= effective_limit else str(total)
+    summary = f"{count_label} commit(s)"
+    repo = output.get("repo")
+    if repo:
+        summary += f" for '{repo}'"
+    record_evidence_entry(
+        evidence,
+        source="list_bitbucket_commits",
+        label="Bitbucket Commits",
+        summary=summary,
+    )
 
 
 def _list_bitbucket_commits_extract_params(sources: dict[str, dict]) -> dict[str, Any]:
@@ -57,6 +87,7 @@ def _list_bitbucket_commits_available(sources: dict[str, dict]) -> bool:
     },
     is_available=_list_bitbucket_commits_available,
     extract_params=_list_bitbucket_commits_extract_params,
+    evidence_mapper=_map_list_bitbucket_commits,
 )
 def list_bitbucket_commits(
     repo_slug: str,

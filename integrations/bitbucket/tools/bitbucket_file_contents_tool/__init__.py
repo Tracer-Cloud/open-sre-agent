@@ -4,15 +4,53 @@ from __future__ import annotations
 
 from typing import Any
 
+from core.domain.types.evidence import record_evidence_entry
 from core.domain.types.tools import ToolSurface
 from core.tool_framework import tool
 from core.tool_framework.utils import tool_unavailable
+from infrastructure.text.truncation import truncate
 from integrations.bitbucket.client import get_file_contents
 from integrations.bitbucket.tools.availability import bitbucket_available_or_backend
 from integrations.bitbucket.tools.bitbucket_search_code_tool import (
     _bb_creds,
     _resolve_config,
 )
+
+#: Bound the path/ref echoed into a report summary -- caller-supplied and not
+#: bounded by the input schema.
+_ID_SUMMARY_TRUNCATE_LEN = 80
+
+
+def _map_get_bitbucket_file_contents(
+    evidence: dict[str, Any], output: dict[str, Any], _tool_input: dict[str, Any]
+) -> None:
+    """Cite the fetched file's path, revision, and content length.
+
+    ``truncated`` reflects the client's own 10000-char cap on file content --
+    an explicit signal, not an inferred heuristic.
+    """
+    if not output.get("available"):
+        return
+    content = output.get("content")
+    if content is None:
+        return
+    length = len(content)
+    count_label = f"{length}+" if output.get("truncated") else str(length)
+    parts = [f"{count_label} char(s)"]
+    path = output.get("path")
+    if path:
+        safe_path = truncate(str(path).replace("\n", " "), _ID_SUMMARY_TRUNCATE_LEN)
+        parts.append(f"from '{safe_path}'")
+    ref = output.get("ref")
+    if ref:
+        safe_ref = truncate(str(ref).replace("\n", " "), _ID_SUMMARY_TRUNCATE_LEN)
+        parts.append(f"at '{safe_ref}'")
+    record_evidence_entry(
+        evidence,
+        source="get_bitbucket_file_contents",
+        label="Bitbucket File Contents",
+        summary=", ".join(parts),
+    )
 
 
 def _get_bitbucket_file_contents_extract_params(sources: dict[str, dict]) -> dict[str, Any]:
@@ -61,6 +99,7 @@ def _get_bitbucket_file_contents_available(sources: dict[str, dict]) -> bool:
     },
     is_available=_get_bitbucket_file_contents_available,
     extract_params=_get_bitbucket_file_contents_extract_params,
+    evidence_mapper=_map_get_bitbucket_file_contents,
 )
 def get_bitbucket_file_contents(
     repo_slug: str,

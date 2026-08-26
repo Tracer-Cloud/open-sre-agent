@@ -4,9 +4,11 @@ from __future__ import annotations
 
 from typing import Any
 
+from core.domain.types.evidence import record_evidence_entry
 from core.domain.types.tools import ToolSurface
 from core.tool_framework import tool
 from core.tool_framework.utils import code_host_unavailable_payload
+from infrastructure.text.truncation import truncate
 from integrations.bitbucket.client import search_code
 from integrations.bitbucket.config import (
     BitbucketConfig,
@@ -14,6 +16,35 @@ from integrations.bitbucket.config import (
     build_bitbucket_config,
 )
 from integrations.bitbucket.tools.availability import bitbucket_available_or_backend
+
+#: Bound the search query text echoed into a report summary -- unbounded and
+#: caller-supplied.
+_QUERY_SUMMARY_TRUNCATE_LEN = 80
+
+
+def _map_search_bitbucket_code(
+    evidence: dict[str, Any], output: dict[str, Any], _tool_input: dict[str, Any]
+) -> None:
+    """Cite the match count and search query, qualifying page-capped totals."""
+    if not output.get("available"):
+        return
+    results = output.get("results") or []
+    if not results:
+        return
+    total = output.get("total_returned", len(results))
+    effective_limit = output.get("effective_limit", total)
+    count_label = f"{total}+" if total >= effective_limit else str(total)
+    summary = f"{count_label} match(es)"
+    query = output.get("query")
+    if query:
+        safe_query = truncate(str(query).replace("\n", " "), _QUERY_SUMMARY_TRUNCATE_LEN)
+        summary += f" for '{safe_query}'"
+    record_evidence_entry(
+        evidence,
+        source="search_bitbucket_code",
+        label="Bitbucket Code Search",
+        summary=summary,
+    )
 
 
 def _resolve_config(
@@ -92,6 +123,7 @@ def _search_bitbucket_code_available(sources: dict[str, dict]) -> bool:
     },
     is_available=_search_bitbucket_code_available,
     extract_params=_search_bitbucket_code_extract_params,
+    evidence_mapper=_map_search_bitbucket_code,
 )
 def search_bitbucket_code(
     query: str,
