@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import re
 from typing import Any
 
 import httpx
@@ -21,6 +22,12 @@ from infrastructure.text.truncation import truncate
 #: Bound the KQL query text echoed into a report summary -- it can be a long
 #: or multi-line query built by the caller, not just the short bounded form.
 _QUERY_SUMMARY_TRUNCATE_LEN = 80
+
+#: _ensure_take_clause leaves a caller-supplied query untouched when it
+#: already contains a ``take`` pipe stage -- ``effective_limit`` is computed
+#: but never actually applied to that query. A caller's own smaller ``take
+#: N`` is therefore the real ceiling, not ``effective_limit``.
+_TAKE_CLAUSE_RE = re.compile(r"\btake\s+(\d+)\b", re.IGNORECASE)
 
 
 def _bounded_limit(limit: int, max_results: int) -> int:
@@ -43,9 +50,13 @@ def _map_query_azure_monitor_logs(
     if not total:
         return
     effective_limit = output.get("effective_limit", total)
+    raw_query = str(output.get("query", ""))
+    take_matches = [int(m) for m in _TAKE_CLAUSE_RE.findall(raw_query)]
+    if take_matches:
+        effective_limit = min(effective_limit, *take_matches)
     count_label = f"{total}+" if total >= effective_limit else str(total)
     query = truncate(
-        str(output.get("query", "")).replace("\r\n", " ").replace("\r", " ").replace("\n", " "),
+        raw_query.replace("\r\n", " ").replace("\r", " ").replace("\n", " "),
         _QUERY_SUMMARY_TRUNCATE_LEN,
     )
     summary = f"{count_label} row(s)"

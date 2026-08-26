@@ -239,6 +239,42 @@ class TestMapQueryAzureMonitorLogs:
 
         assert evidence["catalog_entries"][0]["summary"].startswith("50+ row(s)")
 
+    def test_qualifies_count_when_caller_query_has_a_smaller_take_clause(self) -> None:
+        """Regression: _ensure_take_clause leaves a caller-supplied query
+        untouched when it already has a `take` stage, so effective_limit is
+        never actually applied server-side -- the caller's own smaller
+        `take N` is the real ceiling and must be detected."""
+        evidence: dict[str, Any] = {}
+
+        _map_query_azure_monitor_logs(
+            evidence,
+            {
+                "available": True,
+                "total_returned": 5,
+                "effective_limit": 50,
+                "query": "AppTraces | where Level == 'Error' | take 5",
+            },
+            {},
+        )
+
+        assert evidence["catalog_entries"][0]["summary"].startswith("5+ row(s)")
+
+    def test_does_not_qualify_when_caller_take_clause_was_not_saturated(self) -> None:
+        evidence: dict[str, Any] = {}
+
+        _map_query_azure_monitor_logs(
+            evidence,
+            {
+                "available": True,
+                "total_returned": 3,
+                "effective_limit": 50,
+                "query": "AppTraces | take 5",
+            },
+            {},
+        )
+
+        assert evidence["catalog_entries"][0]["summary"].startswith("3 row(s)")
+
     def test_strips_carriage_returns_from_query(self) -> None:
         """Regression: a query with bare \\r or \\r\\n line endings must not
         leave a literal carriage return in the report summary."""
