@@ -16,7 +16,14 @@ from integrations.mongodb import (
 def _map_get_mongodb_profiler_data(
     evidence: dict[str, Any], output: dict[str, Any], _tool_input: dict[str, Any]
 ) -> None:
-    """Cite the slowest profiled query, or why profiling data is unavailable."""
+    """Cite the slowest profiled query, or why profiling data is unavailable.
+
+    ``get_profiler_data`` applies its ``.limit()`` in the Mongo query itself,
+    so ``total_entries`` is always exactly ``len(entries)`` -- there is no
+    separate unbounded count. Say "shown" rather than implying this is every
+    matching entry in ``system.profile``, since a busy database can have more
+    slow queries than the query's result cap.
+    """
     if not output.get("available"):
         return
     entries = output.get("entries") or []
@@ -37,7 +44,7 @@ def _map_get_mongodb_profiler_data(
         source="get_mongodb_profiler_data",
         label="MongoDB Profiler",
         summary=(
-            f"{output.get('total_entries', len(entries))} slow quer{'y' if len(entries) == 1 else 'ies'} "
+            f"{output.get('total_entries', len(entries))} slow quer{'y' if len(entries) == 1 else 'ies'} shown "
             f"above {output.get('threshold_ms', 0)}ms, slowest {slowest.get('millis', 0)}ms"
         ),
     )

@@ -68,7 +68,7 @@ class TestMapGetMongodbProfilerData:
         entries = evidence["catalog_entries"]
         assert len(entries) == 1
         assert entries[0]["source"] == "get_mongodb_profiler_data"
-        assert entries[0]["summary"] == "2 slow queries above 100ms, slowest 1200ms"
+        assert entries[0]["summary"] == "2 slow queries shown above 100ms, slowest 1200ms"
 
     def test_records_note_when_profiling_disabled(self) -> None:
         evidence: dict[str, Any] = {}
