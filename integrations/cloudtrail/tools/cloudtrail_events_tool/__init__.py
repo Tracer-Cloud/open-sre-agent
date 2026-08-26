@@ -58,21 +58,25 @@ def _map_lookup_cloudtrail_events(
     if not events:
         return
     total = output.get("total_events", len(events))
-    count_label = f"{total}+" if output.get("truncated") else str(total)
+    truncated = bool(output.get("truncated"))
+    count_label = f"{total}+" if truncated else str(total)
     write_count = sum(1 for e in events if e.get("read_only") is False)
     error_count = sum(1 for e in events if e.get("error_code"))
     parts = [f"{count_label} event(s)"]
     if write_count:
-        parts.append(f"{write_count} write")
+        # write_count/error_count are tallied over this page only (bounded by
+        # max_results) -- on a truncated page they are a floor, not a total.
+        write_label = f"{write_count}+" if truncated else str(write_count)
+        parts.append(f"{write_label} write")
     if error_count:
-        parts.append(f"{error_count} with error")
+        error_label = f"{error_count}+" if truncated else str(error_count)
+        parts.append(f"{error_label} with error")
     event_filter = output.get("filter")
     if event_filter:
         filter_key = event_filter.get("AttributeKey")
-        filter_value = truncate(
-            str(event_filter.get("AttributeValue", "")).replace("\n", " "),
-            _FILTER_VALUE_SUMMARY_TRUNCATE_LEN,
-        )
+        raw_value = str(event_filter.get("AttributeValue", ""))
+        collapsed_value = raw_value.replace("\r\n", " ").replace("\r", " ").replace("\n", " ")
+        filter_value = truncate(collapsed_value, _FILTER_VALUE_SUMMARY_TRUNCATE_LEN)
         parts.append(f"filtered by {filter_key}={filter_value!r}")
     record_evidence_entry(
         evidence,

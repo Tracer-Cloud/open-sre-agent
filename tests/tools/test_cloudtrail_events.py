@@ -546,6 +546,48 @@ class TestMapLookupCloudtrailEvents:
 
         assert evidence["catalog_entries"][0]["summary"] == "50+ event(s)"
 
+    def test_qualifies_write_and_error_counts_when_truncated(self) -> None:
+        """Regression: write_count/error_count are tallied over the returned
+        page only -- on a truncated page they must be marked as a floor, not
+        presented as exact totals."""
+        evidence: dict[str, Any] = {}
+
+        _map_lookup_cloudtrail_events(
+            evidence,
+            {
+                "available": True,
+                "total_events": 50,
+                "truncated": True,
+                "events": [
+                    {"read_only": False, "error_code": None},
+                    {"read_only": False, "error_code": "AccessDenied"},
+                ],
+            },
+            {},
+        )
+
+        assert evidence["catalog_entries"][0]["summary"] == "50+ event(s), 2+ write, 1+ with error"
+
+    def test_strips_carriage_returns_from_filter_value(self) -> None:
+        """Regression: a filter value with bare \\r or \\r\\n line endings
+        must not leave a literal carriage return in the report summary."""
+        evidence: dict[str, Any] = {}
+
+        _map_lookup_cloudtrail_events(
+            evidence,
+            {
+                "available": True,
+                "total_events": 1,
+                "truncated": False,
+                "filter": {"AttributeKey": "Username", "AttributeValue": "alice\r\nbob\r"},
+                "events": [{"read_only": True, "error_code": None}],
+            },
+            {},
+        )
+
+        summary = evidence["catalog_entries"][0]["summary"]
+        assert "\r" not in summary
+
     def test_includes_filter_when_applied(self) -> None:
         evidence: dict[str, Any] = {}
 
