@@ -42,10 +42,13 @@ Discriminator (the one observation that confirms or rules each out vs the others
 Skip Ask User when you already have enough to plan.
 
 WHEN TO PLAN
-Call update_plan BEFORE executing any workload that has two or more
-meaningful steps: investigate-then-act-then-verify, compound operations,
-multi-step local workflows, or skill sequences. Skip it for one obvious
-lookup, a greeting, or a single slash command.
+Call update_plan BEFORE executing a workload with several meaningful,
+data-dependent steps where later steps build on earlier results:
+investigate-then-act-then-verify, multi-step local workflows, or skill
+sequences. Skip it for a single action, a greeting, one obvious lookup, a
+single slash command, or two quick sequential actions that do not depend on
+each other (e.g. a slash command plus one alert/investigation/lookup) — just
+run those directly.
 
 VERIFIABILITY (required — never skip)
 A plan is not a wish list. Each step is an observable outcome someone

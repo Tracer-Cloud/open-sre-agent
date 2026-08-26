@@ -16,6 +16,7 @@ from core.agent_harness.tools import ActionToolScope, execute_with_action_contex
 from core.domain.types.tools import ToolSurface
 from core.tool import RegisteredTool, SideEffectLevel
 from core.tool_framework.utils import object_schema, string_property
+from tools.interactive_shell.action_names import ActionToolName
 
 _PLAN_ITEM_SCHEMA = {
     "type": "object",
@@ -78,7 +79,7 @@ def run_update_plan(
 
 
 update_plan_tool = RegisteredTool(
-    name="update_plan",
+    name=ActionToolName.UPDATE_PLAN,
     description=(
         "Create or revise the live execution plan for this workload, and mark "
         "steps pending, in_progress, or completed. Call this BEFORE executing "
