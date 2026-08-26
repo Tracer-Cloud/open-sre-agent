@@ -1,8 +1,8 @@
 {
  "source": "https://github.com/yandex-cloud/cloudapi",
- "generated": "2026-08-09",
- "commit": "2d480830ab8997a6c1a4fe62df1b0f9e05e69fa9",
- "commit_date": "2026-08-06",
+ "generated": "2026-08-26",
+ "commit": "ff267338b6a24ee5dabfda56f28e048e87804eea",
+ "commit_date": "2026-08-24",
  "endpoints": [
   {
    "service": "ai-assistants",
@@ -830,9 +830,9 @@
   },
   {
    "service": "baremetal",
-   "path": "/baremetal/v2/clouds/{cloud_id}/folders/{folder_id}/bootImages/{boot_image_id}:listOperations",
+   "path": "/baremetal/v2/clouds/{cloud_id}/folders/{folder_id}/bootImages/{boot_image_id}/operations",
    "rpc": "BootImageService.ListBootImageOperations",
-   "resource": "bootImages",
+   "resource": "operations",
    "package": "yandex.cloud.baremetal.v2"
   },
   {
@@ -881,9 +881,9 @@
   },
   {
    "service": "baremetal",
-   "path": "/baremetal/v2/clouds/{cloud_id}/folders/{folder_id}/privateSubnets/{private_subnet_id}:listOperations",
+   "path": "/baremetal/v2/clouds/{cloud_id}/folders/{folder_id}/privateSubnets/{private_subnet_id}/operations",
    "rpc": "PrivateSubnetService.ListPrivateSubnetOperations",
-   "resource": "privateSubnets",
+   "resource": "operations",
    "package": "yandex.cloud.baremetal.v2"
   },
   {
@@ -932,9 +932,9 @@
   },
   {
    "service": "baremetal",
-   "path": "/baremetal/v2/clouds/{cloud_id}/folders/{folder_id}/publicSubnets/{public_subnet_id}:listOperations",
+   "path": "/baremetal/v2/clouds/{cloud_id}/folders/{folder_id}/publicSubnets/{public_subnet_id}/operations",
    "rpc": "PublicSubnetService.ListPublicSubnetOperations",
-   "resource": "publicSubnets",
+   "resource": "operations",
    "package": "yandex.cloud.baremetal.v2"
   },
   {
@@ -961,16 +961,16 @@
   },
   {
    "service": "baremetal",
-   "path": "/baremetal/v2/clouds/{cloud_id}/folders/{folder_id}/servers/{server_id}:listOperations",
+   "path": "/baremetal/v2/clouds/{cloud_id}/folders/{folder_id}/servers/{server_id}/operations",
    "rpc": "ServerService.ListServerOperations",
-   "resource": "servers",
+   "resource": "operations",
    "package": "yandex.cloud.baremetal.v2"
   },
   {
    "service": "baremetal",
-   "path": "/baremetal/v2/clouds/{cloud_id}/folders/{folder_id}/vrf/{vrf_id}:listOperations",
+   "path": "/baremetal/v2/clouds/{cloud_id}/folders/{folder_id}/vrf/{vrf_id}/operations",
    "rpc": "VrfService.ListVrfOperations",
-   "resource": "vrf",
+   "resource": "operations",
    "package": "yandex.cloud.baremetal.v2"
   },
   {
@@ -1110,6 +1110,13 @@
    "path": "/v2/clouds/{cloud_id}/folders/{folder_id}/extend/stacklandClusters/{stackland_cluster_id}",
    "rpc": "StacklandClusterService.GetStacklandCluster",
    "resource": "stacklandClusters",
+   "package": "yandex.cloud.baremetal.v2.extend"
+  },
+  {
+   "service": "baremetal",
+   "path": "/v2/clouds/{cloud_id}/folders/{folder_id}/extend/stacklandClusters/{stackland_cluster_id}/operations",
+   "rpc": "StacklandClusterService.ListStacklandClusterOperations",
+   "resource": "operations",
    "package": "yandex.cloud.baremetal.v2.extend"
   },
   {
@@ -5785,6 +5792,34 @@
   },
   {
    "service": "managed-opensearch",
+   "path": "/managed-opensearch/v1/clusters/{cluster_id}/retention_policies",
+   "rpc": "BackupRetentionPolicyService.List",
+   "resource": "retention_policies",
+   "package": "yandex.cloud.mdb.opensearch.v1"
+  },
+  {
+   "service": "managed-opensearch",
+   "path": "/managed-opensearch/v1/clusters/{cluster_id}/retention_policies/{policy_id}",
+   "rpc": "BackupRetentionPolicyService.Get",
+   "resource": "retention_policies",
+   "package": "yandex.cloud.mdb.opensearch.v1"
+  },
+  {
+   "service": "managed-opensearch",
+   "path": "/managed-opensearch/v1/clusters/{cluster_id}/users",
+   "rpc": "UserService.List",
+   "resource": "users",
+   "package": "yandex.cloud.mdb.opensearch.v1"
+  },
+  {
+   "service": "managed-opensearch",
+   "path": "/managed-opensearch/v1/clusters/{cluster_id}/users/{user_name}",
+   "rpc": "UserService.Get",
+   "resource": "users",
+   "package": "yandex.cloud.mdb.opensearch.v1"
+  },
+  {
+   "service": "managed-opensearch",
    "path": "/managed-opensearch/v1/clusters/{cluster_id}:logs",
    "rpc": "ClusterService.ListLogs",
    "resource": "clusters",
@@ -5853,6 +5888,13 @@
    "path": "/managed-opensearch/v1/clusters/{resource_id}:listAccessBindings",
    "rpc": "ClusterService.ListAccessBindings",
    "resource": "clusters",
+   "package": "yandex.cloud.mdb.opensearch.v1"
+  },
+  {
+   "service": "managed-opensearch",
+   "path": "/managed-opensearch/v1/folders/{folder_id}/retention_policies",
+   "rpc": "BackupRetentionPolicyService.ListByFolder",
+   "resource": "retention_policies",
    "package": "yandex.cloud.mdb.opensearch.v1"
   },
   {
@@ -6615,6 +6657,41 @@
    "rpc": "ClusterService.Get",
    "resource": "clusters",
    "package": "yandex.cloud.ytsaurus.v1"
+  },
+  {
+   "service": "managed-zonalshift",
+   "path": "/managed-zonalshift/v1/clusters/{cluster_id}/configs",
+   "rpc": "ZonalShiftService.ListByCluster",
+   "resource": "configs",
+   "package": "yandex.cloud.mdb.zonalshift.v1"
+  },
+  {
+   "service": "managed-zonalshift",
+   "path": "/managed-zonalshift/v1/configs",
+   "rpc": "ZonalShiftService.List",
+   "resource": "configs",
+   "package": "yandex.cloud.mdb.zonalshift.v1"
+  },
+  {
+   "service": "managed-zonalshift",
+   "path": "/managed-zonalshift/v1/configs/{config_id}",
+   "rpc": "ZonalShiftService.Get",
+   "resource": "configs",
+   "package": "yandex.cloud.mdb.zonalshift.v1"
+  },
+  {
+   "service": "managed-zonalshift",
+   "path": "/managed-zonalshift/v1/configs/{config_id}/tasks",
+   "rpc": "ZonalShiftService.ListTasks",
+   "resource": "tasks",
+   "package": "yandex.cloud.mdb.zonalshift.v1"
+  },
+  {
+   "service": "managed-zonalshift",
+   "path": "/managed-zonalshift/v1/drillTypes",
+   "rpc": "ZonalShiftService.ListDrillTypes",
+   "resource": "drillTypes",
+   "package": "yandex.cloud.mdb.zonalshift.v1"
   },
   {
    "service": "marketplace",
@@ -8249,6 +8326,34 @@
    "rpc": "AdvancedRateLimiterProfileService.Get",
    "resource": "advancedRateLimiterProfiles",
    "package": "yandex.cloud.smartwebsecurity.v1.advanced_rate_limiter"
+  },
+  {
+   "service": "smart-web-security",
+   "path": "/smartwebsecurity/v1/loadBalancers",
+   "rpc": "LoadBalancerService.List",
+   "resource": "loadBalancers",
+   "package": "yandex.cloud.smartwebsecurity.v1.load_balancer"
+  },
+  {
+   "service": "smart-web-security",
+   "path": "/smartwebsecurity/v1/loadBalancers/{load_balancer_id}",
+   "rpc": "LoadBalancerService.Get",
+   "resource": "loadBalancers",
+   "package": "yandex.cloud.smartwebsecurity.v1.load_balancer"
+  },
+  {
+   "service": "smart-web-security",
+   "path": "/smartwebsecurity/v1/loadBalancers/{load_balancer_id}/domains",
+   "rpc": "DomainService.List",
+   "resource": "domains",
+   "package": "yandex.cloud.smartwebsecurity.v1.load_balancer"
+  },
+  {
+   "service": "smart-web-security",
+   "path": "/smartwebsecurity/v1/loadBalancers/{load_balancer_id}/domains/{domain_name}",
+   "rpc": "DomainService.Get",
+   "resource": "domains",
+   "package": "yandex.cloud.smartwebsecurity.v1.load_balancer"
   },
   {
    "service": "smart-web-security",
