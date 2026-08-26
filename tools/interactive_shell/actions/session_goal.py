@@ -76,18 +76,18 @@ session_goal_tool = RegisteredTool(
     ),
     use_cases=[
         (
-            "User asks to keep going through a multi-step checklist or walkthrough "
-            "across turns without pausing after each item"
+            "User asks to walk a multi-step checklist or keep going across turns "
+            "until a finish condition is met (e.g. a 5-step sequential process)"
         ),
         (
-            "User wants a structured completion condition tracked for the rest of "
-            "the conversation (e.g. finish onboarding steps)"
+            "Action handoff needs a durable SessionGoal so the host continues "
+            "outer turns until the checklist is done"
         ),
     ],
     anti_examples=[
-        "Local shell work or file edits (use shell_run / code_implement)",
-        "A single-turn question that needs one answer and no follow-up checklist",
-        "An active session goal is already attached",
+        "One-shot Q&A or a single lookup that finishes this turn",
+        "Local shell / code-edit work that should use shell_run or update_plan",
+        "User only wants a written plan with no execution (use update_plan)",
     ],
     input_schema=object_schema(
         properties={
