@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import io
-from dataclasses import dataclass
 from unittest.mock import Mock
 
 import pytest
@@ -266,11 +265,6 @@ def test_literal_slash_command_records_single_history_entry(
     assert _prompt_turn_number(session) == 2
 
 
-@dataclass
-class _FakeLlmRun:
-    response_text: str = "hello back"
-
-
 def test_chat_turn_records_single_cli_agent_history_entry() -> None:
     session = Session()
     console = Console(file=io.StringIO(), force_terminal=False, highlight=False)
@@ -288,16 +282,8 @@ def test_chat_turn_records_single_cli_agent_history_entry() -> None:
             executed_success_count=0,
             has_unhandled_clause=False,
             handled=False,
-            accounting_status="not_run",
+            response_text="hello back",
         )
-
-    def _answer(
-        _text: str,
-        _session: Session,
-        _console: Console,
-        **kwargs: object,
-    ) -> _FakeLlmRun:
-        return _FakeLlmRun()
 
     run_harness_turn(
         "what broke in prod?",
@@ -305,7 +291,6 @@ def test_chat_turn_records_single_cli_agent_history_entry() -> None:
         console,
         recorder=None,
         execute_actions=_no_actions,
-        answer_agent=_answer,
     )
 
     assert session.history == [{"type": "cli_agent", "text": "what broke in prod?", "ok": True}]

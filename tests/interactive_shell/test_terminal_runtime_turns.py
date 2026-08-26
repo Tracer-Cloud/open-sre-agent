@@ -245,7 +245,6 @@ def test_run_harness_turn_nitro_prompt_uses_cli_agent_actions(
         'it an investigation. Can you please deploy the instance and send it "hello world"?'
     )
     action_calls: list[str] = []
-    llm_calls: list[str] = []
 
     def _fake_execute_cli_actions(
         text: str,
@@ -262,14 +261,6 @@ def test_run_harness_turn_nitro_prompt_uses_cli_agent_actions(
             handled=True,
         )
 
-    def _fake_answer_shell_question(
-        text: str,
-        _session: Session,
-        _console: Console,
-        **kwargs: object,
-    ) -> None:
-        llm_calls.append(text)
-
     session = Session()
     console = Console(file=io.StringIO(), force_terminal=False, highlight=False)
     run_harness_turn(
@@ -280,11 +271,9 @@ def test_run_harness_turn_nitro_prompt_uses_cli_agent_actions(
         confirm_fn=None,
         is_tty=None,
         execute_actions=_fake_execute_cli_actions,
-        answer_agent=_fake_answer_shell_question,
     )
 
     assert action_calls == [nitro_prompt]
-    assert llm_calls == []
 
 
 def test_run_harness_turn_nitro_prompt_executes_remote_then_investigation(
