@@ -129,7 +129,6 @@ get_redis_replication
 get_redis_server_info
 get_redis_slowlog
 get_s3_object
-get_sentry_issue_details
 get_sqs_queue_attributes
 get_sre_guidance
 get_tracer_run
@@ -183,9 +182,7 @@ list_jenkins_running_builds
 list_openclaw_tools
 list_posthog_tools
 list_s3_objects
-list_sentry_issue_events
 list_sentry_tools
-list_sentry_uptime_alerts
 list_x_tools
 list_yc_instances
 list_yc_log_groups
@@ -232,7 +229,6 @@ search_bitbucket_code
 search_github_code
 search_github_issues
 search_openclaw_conversations
-search_sentry_issues
 send_openclaw_message
 slack_add_reaction
 slack_join_channel

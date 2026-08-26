@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from typing import Any
 
+from core.domain.types.evidence import record_evidence_entry
 from core.domain.types.tools import ToolSurface
 from core.tool_framework import tool
 from core.tool_framework.utils import tool_unavailable
@@ -13,6 +14,30 @@ from integrations.sentry.tools.sentry_search_issues_tool import (
     _sentry_available,
     _sentry_creds,
 )
+
+
+def _map_get_sentry_issue_details(
+    evidence: dict[str, Any], output: dict[str, Any], _tool_input: dict[str, Any]
+) -> None:
+    """Cite the issue's title, level/status, and event count."""
+    if not output.get("available"):
+        return
+    issue = output.get("issue") or {}
+    if not issue:
+        return
+    parts = [f"'{issue.get('title', 'unknown')}'"]
+    if issue.get("level"):
+        parts.append(f"level {issue['level']}")
+    if issue.get("status"):
+        parts.append(issue["status"])
+    if issue.get("count") is not None:
+        parts.append(f"{issue['count']} event(s)")
+    record_evidence_entry(
+        evidence,
+        source="get_sentry_issue_details",
+        label="Sentry Issue Details",
+        summary=", ".join(parts),
+    )
 
 
 def _issue_details_available(sources: dict[str, dict]) -> bool:
@@ -52,6 +77,7 @@ def _issue_details_extract_params(sources: dict[str, dict]) -> dict[str, Any]:
     is_available=_issue_details_available,
     extract_params=_issue_details_extract_params,
     surfaces=(ToolSurface.INVESTIGATION, ToolSurface.CHAT),
+    evidence_mapper=_map_get_sentry_issue_details,
 )
 def get_sentry_issue_details(
     organization_slug: str,
