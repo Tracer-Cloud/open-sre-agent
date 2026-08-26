@@ -9,22 +9,16 @@ set -euo pipefail
 
 if [ -t 1 ]; then
   COLOR_RESET=$'\033[0m'
-  COLOR_BOLD=$'\033[1m'
-  COLOR_DIM=$'\033[2m'
   COLOR_RED=$'\033[31m'
   COLOR_GREEN=$'\033[32m'
   COLOR_YELLOW=$'\033[33m'
-  COLOR_CYAN=$'\033[36m'
   COLOR_GRAY=$'\033[90m'
   SUCCESS_MARK="✓"
 else
   COLOR_RESET=""
-  COLOR_BOLD=""
-  COLOR_DIM=""
   COLOR_RED=""
   COLOR_GREEN=""
   COLOR_YELLOW=""
-  COLOR_CYAN=""
   COLOR_GRAY=""
   SUCCESS_MARK="Success:"
 fi
@@ -40,7 +34,6 @@ INSTALL_CHANNEL_EXPLICIT=0
 [ -n "${OPENSRE_INSTALL_CHANNEL:-}" ] && INSTALL_CHANNEL_EXPLICIT=1
 MAIN_RELEASE_TAG="${OPENSRE_MAIN_RELEASE_TAG:-main-build}"
 BIN_NAME="opensre"
-PROGRESS_PID=""
 requested_version="${OPENSRE_VERSION:-}"
 
 [ -n "$INSTALL_DIR" ] && INSTALL_DIR_OVERRIDE=1
@@ -67,10 +60,6 @@ success() {
   printf '%s%s %s%s\n' "${COLOR_GREEN:-}" "${SUCCESS_MARK:-Success:}" "$*" "${COLOR_RESET:-}"
 }
 
-step() {
-  printf '%s%s%s\n' "${COLOR_CYAN:-}" "$*" "${COLOR_RESET:-}"
-}
-
 install_verbose() {
   case "${OPENSRE_INSTALL_VERBOSE:-}" in
     1|true|TRUE|yes|YES)
@@ -82,268 +71,8 @@ install_verbose() {
   esac
 }
 
-is_interactive_terminal() {
-  [ -t 1 ] && [ "${TERM:-}" != "dumb" ] && ! install_verbose
-}
-
 is_interactive_status_terminal() {
   [ -t 2 ] && [ "${TERM:-}" != "dumb" ] && ! install_verbose
-}
-
-terminal_supports_unicode() {
-  local locale_value="${LC_ALL:-${LC_CTYPE:-${LANG:-}}}"
-
-  case "$locale_value" in
-    *UTF-8*|*utf-8*|*UTF8*|*utf8*)
-      return 0
-      ;;
-  esac
-
-  case "${TERM_PROGRAM:-}" in
-    Apple_Terminal|iTerm.app|vscode|WezTerm)
-      return 0
-      ;;
-  esac
-
-  return 1
-}
-
-terminal_columns() {
-  local cols=""
-
-  if command -v tput >/dev/null 2>&1; then
-    cols="$(tput cols 2>/dev/null || true)"
-  fi
-  if [ -z "$cols" ]; then
-    cols="${COLUMNS:-}"
-  fi
-
-  case "$cols" in
-    ''|*[!0-9]*)
-      cols=80
-      ;;
-  esac
-  if [ "$cols" -lt 20 ]; then
-    cols=20
-  fi
-
-  printf '%s\n' "$cols"
-}
-
-truncate_text() {
-  local value="$1"
-  local max_width="$2"
-
-  value="${value//$'\r'/ }"
-  value="${value//$'\n'/ }"
-
-  if [ "$max_width" -le 0 ]; then
-    return
-  fi
-  if [ "${#value}" -le "$max_width" ]; then
-    printf '%s' "$value"
-    return
-  fi
-  if [ "$max_width" -le 3 ]; then
-    printf '%.*s' "$max_width" "$value"
-    return
-  fi
-
-  printf '%.*s...' "$((max_width - 3))" "$value"
-}
-
-friendly_progress_label() {
-  local label="$1"
-
-  case "$label" in
-    *Downloading\ OpenSRE*)
-      printf 'downloading'
-      ;;
-    *Fetching\ and\ verifying\ checksum*|*Verifying\ release\ archive*)
-      printf 'verifying checksum'
-      ;;
-    *)
-      printf '%s' "$label"
-      ;;
-  esac
-}
-
-progress_frame() {
-  local step_count="$1"
-
-  if terminal_supports_unicode; then
-    case $((step_count % 10)) in
-      0) printf '⠋' ;;
-      1) printf '⠙' ;;
-      2) printf '⠹' ;;
-      3) printf '⠸' ;;
-      4) printf '⠼' ;;
-      5) printf '⠴' ;;
-      6) printf '⠦' ;;
-      7) printf '⠧' ;;
-      8) printf '⠇' ;;
-      *) printf '⠏' ;;
-    esac
-    return
-  fi
-
-  case $((step_count % 4)) in
-    0) printf '-' ;;
-    1) printf '\\' ;;
-    2) printf '|' ;;
-    *) printf '/' ;;
-  esac
-}
-
-draw_progress() {
-  local label="$1"
-  local step_count="$2"
-  local title="${3:-Installing OpenSRE}"
-  local frame
-  local columns
-  local reserve
-  local available
-  local width
-  local label_width
-  local short_label
-  local trail=8
-  local head
-  local bar=""
-  local i=0
-
-  columns="$(terminal_columns)"
-  if [ "$columns" -lt 56 ]; then
-    title="OpenSRE"
-  fi
-
-  reserve=$((2 + 1 + 1 + 1 + ${#title} + 1))
-  available=$((columns - reserve))
-  if [ "$available" -lt 12 ]; then
-    width=4
-  else
-    width=$((available / 2))
-    if [ "$width" -gt 28 ]; then
-      width=28
-    fi
-    if [ "$width" -lt 8 ]; then
-      width=8
-    fi
-  fi
-
-  label_width=$((columns - reserve - width))
-  if [ "$label_width" -lt 8 ] && [ "$width" -gt 4 ]; then
-    width=$((columns - reserve - 8))
-    if [ "$width" -lt 4 ]; then
-      width=4
-    fi
-    label_width=$((columns - reserve - width))
-  fi
-  if [ "$label_width" -lt 0 ]; then
-    label_width=0
-  fi
-
-  short_label="$(truncate_text "$(friendly_progress_label "$label")" "$label_width")"
-  frame="$(progress_frame "$step_count")"
-  head=$((step_count % (width + trail)))
-
-  while [ "$i" -lt "$width" ]; do
-    local age=$((head - i))
-    if [ "$age" -ge 0 ] && [ "$age" -lt "$trail" ]; then
-      if terminal_supports_unicode; then
-        case "$age" in
-          0|1) bar="${bar}${COLOR_GREEN:-}█${COLOR_RESET:-}" ;;
-          2|3) bar="${bar}${COLOR_CYAN:-}█${COLOR_RESET:-}" ;;
-          4|5) bar="${bar}${COLOR_RED:-}█${COLOR_RESET:-}" ;;
-          *) bar="${bar}${COLOR_YELLOW:-}█${COLOR_RESET:-}" ;;
-        esac
-      else
-        bar="${bar}#"
-      fi
-    else
-      if terminal_supports_unicode; then
-        bar="${bar}${COLOR_DIM:-}░${COLOR_RESET:-}"
-      else
-        bar="${bar}-"
-      fi
-    fi
-    i=$((i + 1))
-  done
-
-  printf '\r\033[K  %s%s%s %s %s%s%s %s' \
-    "${COLOR_YELLOW:-}" "$frame" "${COLOR_RESET:-}" \
-    "$bar" "${COLOR_BOLD:-}" "$title" "${COLOR_RESET:-}" "$short_label"
-}
-
-animate_progress() {
-  local label="$1"
-  local step_count=0
-
-  while :; do
-    draw_progress "$label" "$step_count"
-    step_count=$((step_count + 1))
-    sleep 0.08
-  done
-}
-
-finish_progress() {
-  local progress_pid="${1:-}"
-
-  if [ -n "$progress_pid" ]; then
-    kill "$progress_pid" 2>/dev/null || true
-    wait "$progress_pid" 2>/dev/null || true
-  fi
-  printf '\r\033[K\033[?25h'
-}
-
-run_with_progress() {
-  local label="$1"
-  shift
-
-  if ! is_interactive_terminal; then
-    step "$label"
-    "$@"
-    return
-  fi
-
-  local log_file
-  local command_pid
-  local status
-  log_file="$(mktemp "${TMPDIR:-/tmp}/opensre-install-progress.XXXXXX")"
-
-  step "$label"
-  "$@" >"$log_file" 2>&1 &
-  command_pid=$!
-
-  printf '\033[?25l'
-  animate_progress "$label" &
-  PROGRESS_PID=$!
-  trap 'kill "$command_pid" 2>/dev/null || true; finish_progress "$PROGRESS_PID"; rm -f "$log_file"; exit 130' INT TERM
-
-  if wait "$command_pid"; then
-    status=0
-  else
-    status=$?
-  fi
-
-  finish_progress "$PROGRESS_PID"
-  PROGRESS_PID=""
-  trap - INT TERM
-
-  if [ "$status" -ne 0 ]; then
-    printf '%sError:%s %s failed (exit %s).%s\n' "${COLOR_RED:-}" "${COLOR_RESET:-}" "$label" "$status" "${COLOR_RESET:-}" >&2
-    if [ "$status" -gt 128 ]; then
-      printf 'Process was terminated by signal %s (e.g. killed by the OS, possibly out-of-memory).\n' "$((status - 128))" >&2
-    fi
-    if [ -s "$log_file" ]; then
-      cat "$log_file" >&2
-    else
-      printf '(no output was captured before the process ended)\n' >&2
-    fi
-    rm -f "$log_file"
-    return "$status"
-  fi
-
-  rm -f "$log_file"
 }
 
 animate_dots() {
@@ -503,10 +232,8 @@ ensure_github_cli() {
     return 0
   fi
 
-  step "Installing GitHub CLI (gh) for OpenSRE GitHub tools"
-
   if command -v brew >/dev/null 2>&1; then
-    if brew install gh; then
+    if run_with_dots "Installing GitHub CLI (gh) for OpenSRE GitHub tools" brew install gh; then
       success "Installed GitHub CLI (gh) via Homebrew"
       return 0
     fi
@@ -906,22 +633,14 @@ extract_and_verify_binary() {
   local extraction_dir="$2"
   local extracted_binary_path
   local extracted_version
-  local extract_status
 
-  printf '%sExtracting OpenSRE...%s\n' \
-    "${COLOR_GRAY:-}" "${COLOR_RESET:-}" >&2
-  set +e
-  extract_archive "$archive_path" "$extraction_dir"
-  extract_status=$?
-  set -e
-  if [ "$extract_status" -ne 0 ]; then
-    printf 'Archive extraction failed (exit %s).\n' "$extract_status" >&2
-    return "$extract_status"
-  fi
-  printf '%sExtraction finished, locating %s binary...%s\n' \
-    "${COLOR_GRAY:-}" "$BIN_NAME" "${COLOR_RESET:-}" >&2
+  run_with_dots "Extracting OpenSRE" extract_archive "$archive_path" "$extraction_dir" \
+    || return "$?"
 
-  extracted_binary_path="$(get_binary_path_from_archive "$extraction_dir" "$BIN_NAME")"
+  extracted_binary_path="$(
+    run_with_dots "Locating ${BIN_NAME} binary" \
+      get_binary_path_from_archive "$extraction_dir" "$BIN_NAME"
+  )" || return "$?"
   if [ "$INSTALL_CHANNEL" = "main" ]; then
     extracted_version="$(
       run_with_dots "Found ${BIN_NAME} binary, verifying it runs" \
@@ -1135,7 +854,10 @@ configure_path() {
 }
 
 ensure_on_path() {
-  muted "Checking PATH configuration..."
+  run_with_dots "Checking PATH configuration" ensure_on_path_impl
+}
+
+ensure_on_path_impl() {
   if path_has_dir "$INSTALL_DIR"; then
     muted "PATH already configured"
     return
@@ -1311,7 +1033,7 @@ download_release_archive() {
     download_label="Downloading OpenSRE v${version} for ${platform}-${asset_arch}"
   fi
 
-  run_with_progress "$download_label" download_to "$download_url" "$archive_path" \
+  run_with_dots "$download_label" download_to "$download_url" "$archive_path" \
     || die "Failed to download '${archive}'."
 }
 
@@ -1320,7 +1042,7 @@ verify_release_checksum() {
 
   if release_has_asset "$release_json" "$checksum_asset"; then
     checksum_path="${tmp_dir}/${checksum_asset}"
-    run_with_progress "Fetching and verifying checksum" \
+    run_with_dots "Fetching and verifying checksum" \
       download_and_verify_checksum "$checksum_url" "$checksum_path" "$archive_path" \
       || die "Failed to download or verify checksum '${checksum_asset}'."
     muted "Checksum verification passed"
@@ -1344,7 +1066,8 @@ extract_release_binary() {
 }
 
 install_release_binary() {
-  install_verified_binary "$binary_path" "${INSTALL_DIR}/${BIN_NAME}" \
+  run_with_dots "Installing OpenSRE" \
+    install_verified_binary "$binary_path" "${INSTALL_DIR}/${BIN_NAME}" \
     || die "Failed to install ${BIN_NAME} to '${INSTALL_DIR}'."
 }
 

@@ -86,7 +86,7 @@ def test_install_sh_logging_falls_back_to_plain_text_when_not_tty() -> None:
         """
         warn "check config"
         success "installed"
-        step "[1/4] Fetching metadata"
+        muted "[1/4] Fetching metadata"
         """
     )
 
@@ -168,15 +168,6 @@ def test_install_sh_defines_progress_helpers() -> None:
     source = INSTALL_SH.read_text()
 
     for helper in (
-        "is_interactive_terminal()",
-        "terminal_supports_unicode()",
-        "terminal_columns()",
-        "truncate_text()",
-        "friendly_progress_label()",
-        "progress_frame()",
-        "draw_progress()",
-        "finish_progress()",
-        "run_with_progress()",
         "is_interactive_status_terminal()",
         "animate_dots()",
         "finish_dots()",
@@ -189,67 +180,12 @@ def test_install_sh_defines_progress_helpers() -> None:
 
     assert "OPENSRE_INSTALL_VERBOSE" in source
     assert "\\033[?25h" in source
-    assert 'trap \'kill "$command_pid"' in source
     assert "\\033[2J" not in source
     assert "preparing installer" not in source
-
-
-def test_install_sh_draw_progress_fits_terminal_width_with_long_labels() -> None:
-    download_label = "Downloading OpenSRE main build for darwin-arm64"
-    result = _run_logging_snippet(
-        f"""
-        terminal_columns() {{ printf '60\\n'; }}
-        terminal_supports_unicode() {{ return 1; }}
-        draw_progress {shlex.quote(download_label)} 9
-        """
-    )
-    output = result.stdout + result.stderr
-    visible_segments = [
-        _visible_terminal_text(segment) for segment in re.split(r"[\r\n]", output) if segment
-    ]
-
-    assert result.returncode == 0, result.stderr
-    assert visible_segments
-    assert all(len(segment) <= 60 for segment in visible_segments)
-    assert "downloading" in visible_segments[-1]
-
-
-def test_install_sh_animated_repaints_do_not_wrap_or_leave_long_label_residue() -> None:
-    download_label = "Downloading OpenSRE main build for darwin-arm64"
-    result = _run_logging_snippet(
-        f"""
-        is_interactive_terminal() {{ return 0; }}
-        terminal_columns() {{ printf '56\\n'; }}
-        terminal_supports_unicode() {{ return 1; }}
-        run_with_progress {shlex.quote(download_label)} bash -c 'sleep 0.25'
-        """
-    )
-    output = result.stdout + result.stderr
-    animated_segments = [
-        _visible_terminal_text(segment)
-        for segment in re.split(r"[\r\n]", output)
-        if "Installing OpenSRE" in _visible_terminal_text(segment)
-    ]
-
-    assert result.returncode == 0, result.stderr
-    assert animated_segments
-    assert all(len(segment) <= 56 for segment in animated_segments)
-    assert all("darwin-arm64" not in segment for segment in animated_segments)
-
-
-def test_install_sh_progress_plain_when_not_tty() -> None:
-    result = _run_logging_snippet(
-        """
-        run_with_progress "Plain progress step" bash -c 'printf "work complete\\\\n"'
-        """
-    )
-    output = result.stdout + result.stderr
-
-    assert result.returncode == 0, result.stderr
-    assert "Plain progress step" in output
-    assert "work complete" in output
-    assert "\x1b[" not in output
-    assert "\r" not in output
+    assert "run_with_progress" not in source
+    assert "draw_progress" not in source
+    assert "█" not in source
+    assert "░" not in source
 
 
 def test_install_sh_animates_binary_verification_dots() -> None:
@@ -282,27 +218,6 @@ def test_install_sh_verification_dots_are_plain_when_not_tty() -> None:
     assert output == "Found opensre binary, verifying it runs...\n"
     assert "\x1b[" not in output
     assert "\r" not in output
-
-
-def test_install_sh_run_with_progress_prints_captured_logs_on_failure() -> None:
-    result = _run_logging_snippet(
-        """
-        is_interactive_terminal() { return 0; }
-        terminal_supports_unicode() { return 1; }
-        if run_with_progress "Failing progress step" bash -c 'echo hidden-out; echo hidden-err >&2; exit 7'; then
-            exit 99
-        else
-            progress_status=$?
-        fi
-        exit "$progress_status"
-        """
-    )
-    output = result.stdout + result.stderr
-
-    assert result.returncode == 7
-    assert "Failing progress step failed" in output
-    assert "hidden-out" in output
-    assert "hidden-err" in output
 
 
 def test_install_sh_verify_binary_failure_includes_diagnostics(tmp_path: Path) -> None:
@@ -358,7 +273,10 @@ def test_install_sh_uses_concise_unnumbered_install_messages() -> None:
     source = INSTALL_SH.read_text()
 
     assert "Downloading OpenSRE main build for ${platform}-${asset_arch}" in source
-    assert 'run_with_progress "Fetching and verifying checksum"' in source
+    assert 'run_with_dots "Fetching and verifying checksum"' in source
+    assert 'run_with_dots "Extracting OpenSRE"' in source
+    assert 'run_with_dots "Installing OpenSRE"' in source
+    assert 'run_with_dots "Checking PATH configuration"' in source
     assert 'muted "Checksum verification passed"' in source
     assert "Run '${BIN_NAME}' to get started!" in source
     assert re.search(r"\[[0-9]+/[0-9]+\]", source) is None
@@ -396,13 +314,15 @@ def test_install_sh_concise_output_sequence() -> None:
 
     assert result.returncode == 0, result.stderr
     assert result.stdout.splitlines() == [
-        "Downloading OpenSRE main build for darwin-arm64",
-        "Fetching and verifying checksum",
         "Checksum verification passed",
         "OpenSRE v2026.8.26 installed successfully to /tmp/bin/opensre",
-        "Checking PATH configuration...",
         "PATH already configured",
         "Run 'opensre' to get started!",
+    ]
+    assert result.stderr.splitlines() == [
+        "Downloading OpenSRE main build for darwin-arm64...",
+        "Fetching and verifying checksum...",
+        "Checking PATH configuration...",
     ]
 
 
@@ -569,10 +489,8 @@ def test_ensure_on_path_reports_existing_configuration(tmp_path: Path) -> None:
     result, _ = _run_ensure_on_path(tmp_path, [], include_install_dir=True)
 
     assert result.returncode == 0, result.stderr
-    assert result.stdout.splitlines() == [
-        "Checking PATH configuration...",
-        "PATH already configured",
-    ]
+    assert result.stdout.splitlines() == ["PATH already configured"]
+    assert result.stderr.splitlines() == ["Checking PATH configuration..."]
 
 
 def test_ensure_on_path_does_not_link_into_arbitrary_dependency_bin(tmp_path: Path) -> None:
