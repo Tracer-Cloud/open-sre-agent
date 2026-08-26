@@ -533,19 +533,21 @@ def test_fanout_three_transports_one_capacity_sentence_and_bindings_survive(
             )
         )
 
-    # Barrier-controlled stub LLM: the 4 admitted turns block in dispatch so
-    # the peak is deterministic; the 8 rejected never reach it.
-    peak_barrier = threading.Barrier(limit + 1)
+    # Hold admitted turns in dispatch until the main thread has sampled peak
+    # concurrency. Prefer an Event over Barrier: under CI load, Barrier often
+    # times out before all parties arrive and raises BrokenBarrierError.
     release = threading.Event()
+    peak_reached = threading.Event()
     inflight = {"count": 0}
     inflight_lock = threading.Lock()
 
     def _stub_dispatch(message: str) -> TurnResult:
         with inflight_lock:
             inflight["count"] += 1
+            if inflight["count"] >= limit:
+                peak_reached.set()
         try:
-            peak_barrier.wait(timeout=30)
-            release.wait(timeout=30)
+            assert release.wait(timeout=60), "timed out waiting for release"
         finally:
             with inflight_lock:
                 inflight["count"] -= 1
@@ -629,16 +631,12 @@ def test_fanout_three_transports_one_capacity_sentence_and_bindings_survive(
     for t in threads:
         t.start()
 
-    # The barrier opens once the 4 admitted turns are in dispatch plus the main
-    # thread — that moment is the peak.
-    try:
-        peak_barrier.wait(timeout=30)
-        with inflight_lock:
-            peak = inflight["count"]
-    finally:
-        # Always release admitted workers, even if the barrier times out / breaks;
-        # otherwise they sit in ``release.wait`` and ``_join`` reports hung threads.
-        release.set()
+    # Wait until the gate has admitted ``limit`` turns into dispatch, sample
+    # peak, then release everyone.
+    assert peak_reached.wait(timeout=60), f"timed out waiting for {limit} concurrent admitted turns"
+    with inflight_lock:
+        peak = inflight["count"]
+    release.set()
     _join(threads, timeout=60.0)
 
     assert not errors, [repr(e) for e in errors]

@@ -705,7 +705,10 @@ def identify_saved_github_username() -> None:
     ``$ai_generation`` include ``github_username`` without requiring a fresh
     device-flow login each session.
     """
-    from integrations.github import saved_github_username
+    # Import the owning leaf module (not the package re-export) so tests that
+    # patch ``integrations.github.identity.saved_github_username`` always win,
+    # even when another test has cached a binding on ``integrations.github``.
+    from integrations.github.identity import saved_github_username
 
     identify_github_username(saved_github_username())
 
