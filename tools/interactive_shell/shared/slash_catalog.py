@@ -71,8 +71,8 @@ MCP_BY_COMMAND: dict[str, _SlashMcpFields] = {
         anti_examples=("User asks to configure an observability integration (use /integrations)",),
     ),
     "/auto": _mcp(
-        "Set Auto autonomy: off (approve all), low (edits and read-only), "
-        "med (reversible commands), high (allow all, alpha default).",
+        "Set Auto autonomy: off (ask before every tool), low (also ask before investigations), "
+        "med (ask before mutating agent tools), high (ask nothing, alpha default).",
         "User asks to change Auto Off/Low/Med/High or how much the agent may run without approval",
         anti_examples=("User asks to enable trust mode (use /trust)",),
     ),
