@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from typing import Protocol, cast
+
 from rich.console import Console
 from rich.text import Text
 
@@ -17,16 +19,26 @@ from surfaces.shared.terminal.components.choice_menu import repl_tty_interactive
 _CHOICE_PROMPT = "Choose a number or option label, or type another answer:"
 
 
+class _PromptInputFn(Protocol):
+    def __call__(
+        self,
+        prompt: str,
+        *,
+        accepts_any_answer: bool = False,
+    ) -> str:
+        """Wait for prompt input, optionally accepting arbitrary text."""
+
+
 class ReplHumanInteractionPort:
     """Render a choice and wait through the REPL's prompt-owned input path."""
 
     def __init__(
         self,
         console: Console,
-        confirm_fn: ConfirmFn,
+        prompt_input: _PromptInputFn,
     ) -> None:
         self._console = console
-        self._confirm_fn = confirm_fn
+        self._prompt_input = prompt_input
 
     def choose(self, request: UserChoiceRequest) -> str | None:
         title = Text()
@@ -40,7 +52,10 @@ class ReplHumanInteractionPort:
             self._console.print(line)
         self._console.print(Text("  Other — type a custom answer", style=DIM))
 
-        answer = self._confirm_fn(_CHOICE_PROMPT).strip()
+        answer = self._prompt_input(
+            _CHOICE_PROMPT,
+            accepts_any_answer=True,
+        ).strip()
         if not answer:
             return None
         if answer.isdecimal():
@@ -64,7 +79,7 @@ def repl_human_interaction_factory(
         return None
     if is_tty is None and not repl_tty_interactive():
         return None
-    return ReplHumanInteractionPort(console, confirm_fn)
+    return ReplHumanInteractionPort(console, cast(_PromptInputFn, confirm_fn))
 
 
 __all__ = ["ReplHumanInteractionPort", "repl_human_interaction_factory"]

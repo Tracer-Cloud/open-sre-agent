@@ -29,7 +29,7 @@ def _console() -> tuple[Console, io.StringIO]:
 
 def test_numbered_choice_returns_canonical_label() -> None:
     console, output = _console()
-    port = adapter.ReplHumanInteractionPort(console, lambda _prompt: "2")
+    port = adapter.ReplHumanInteractionPort(console, lambda _prompt, **_kwargs: "2")
 
     answer = port.choose(_REQUEST)
 
@@ -42,8 +42,14 @@ def test_numbered_choice_returns_canonical_label() -> None:
 
 def test_label_and_custom_answers_are_accepted() -> None:
     console, _output = _console()
-    label_port = adapter.ReplHumanInteractionPort(console, lambda _prompt: "rolling")
-    custom_port = adapter.ReplHumanInteractionPort(console, lambda _prompt: "Shadow traffic")
+    label_port = adapter.ReplHumanInteractionPort(
+        console,
+        lambda _prompt, **_kwargs: "rolling",
+    )
+    custom_port = adapter.ReplHumanInteractionPort(
+        console,
+        lambda _prompt, **_kwargs: "Shadow traffic",
+    )
 
     assert label_port.choose(_REQUEST) == "Rolling"
     assert custom_port.choose(_REQUEST) == "Shadow traffic"
@@ -53,5 +59,30 @@ def test_factory_requires_interactive_prompt_input(monkeypatch: pytest.MonkeyPat
     console, _output = _console()
     monkeypatch.setattr(adapter, "repl_tty_interactive", lambda: False)
 
-    assert adapter.repl_human_interaction_factory(console, lambda _prompt: "1", None) is None
+    assert (
+        adapter.repl_human_interaction_factory(
+            console,
+            lambda _prompt, **_kwargs: "1",
+            None,
+        )
+        is None
+    )
     assert adapter.repl_human_interaction_factory(console, None, True) is None
+
+
+def test_choice_requests_accept_arbitrary_prompt_input() -> None:
+    console, _output = _console()
+    accepts_any_values: list[bool] = []
+
+    def _prompt_input(
+        _prompt: str,
+        *,
+        accepts_any_answer: bool = False,
+    ) -> str:
+        accepts_any_values.append(accepts_any_answer)
+        return "Shadow traffic"
+
+    port = adapter.ReplHumanInteractionPort(console, _prompt_input)
+
+    assert port.choose(_REQUEST) == "Shadow traffic"
+    assert accepts_any_values == [True]

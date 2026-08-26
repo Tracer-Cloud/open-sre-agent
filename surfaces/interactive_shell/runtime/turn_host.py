@@ -113,6 +113,18 @@ async def run_agent_turn(runtime: AgentTurnResources, text: str) -> None:
     """Set up shell presentation for one turn and drive its lifecycle."""
     dispatch_cancel = threading.Event()
     console = _streaming_console(runtime, dispatch_cancel)
+
+    def _request_prompt_input(
+        prompt: str,
+        *,
+        accepts_any_answer: bool = False,
+    ) -> str:
+        return request_confirmation_via_prompt(
+            runtime.state,
+            prompt,
+            accepts_any_answer=accepts_any_answer,
+        )
+
     emit = ConsoleAgentEventSink(
         session=runtime.session,
         spinner=runtime.spinner,
@@ -145,7 +157,7 @@ async def run_agent_turn(runtime: AgentTurnResources, text: str) -> None:
                 text=text,
                 output=console,
                 recorder=recorder,
-                confirm=lambda prompt: request_confirmation_via_prompt(runtime.state, prompt),
+                confirm=_request_prompt_input,
                 emit=emit,
                 dispatch_cancel=dispatch_cancel,
             )
@@ -253,6 +265,7 @@ async def run_input_loop(
                 exit_requested=state.exit_requested,
                 dispatch_running=state.is_dispatch_running(),
                 awaiting_confirmation=state.is_awaiting_confirmation(),
+                confirmation_accepts_any_answer=state.confirmation_accepts_any_answer,
             ),
             needs_exclusive_stdin=lambda text: turn_needs_exclusive_stdin(
                 text,

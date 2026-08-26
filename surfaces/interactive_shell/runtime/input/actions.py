@@ -30,6 +30,7 @@ class ShellInputSnapshot:
     exit_requested: bool
     dispatch_running: bool
     awaiting_confirmation: bool
+    confirmation_accepts_any_answer: bool = False
 
 
 @dataclass(frozen=True)
@@ -92,7 +93,9 @@ def decide_input_action(
                 return CancelTurn(submitted_text=stripped)
 
             if snapshot.awaiting_confirmation:
-                if looks_like_confirmation_answer(stripped):
+                if snapshot.confirmation_accepts_any_answer or looks_like_confirmation_answer(
+                    stripped
+                ):
                     return DeliverConfirmation(text=stripped)
                 return SubmitTurn(
                     text=stripped,

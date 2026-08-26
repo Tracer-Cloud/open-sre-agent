@@ -17,9 +17,18 @@ class DispatchCancelled(Exception):
     """Raised when in-flight dispatch is cancelled during confirmation."""
 
 
-def request_confirmation_via_prompt(state: ReplState, prompt_text: str) -> str:
+def request_confirmation_via_prompt(
+    state: ReplState,
+    prompt_text: str,
+    *,
+    accepts_any_answer: bool = False,
+) -> str:
     response_event = threading.Event()
-    state.begin_confirmation(response_event, prompt_text)
+    state.begin_confirmation(
+        response_event,
+        prompt_text,
+        accepts_any_answer=accepts_any_answer,
+    )
     try:
         while not response_event.is_set():
             cancel = state.current_cancel_event

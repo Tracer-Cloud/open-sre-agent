@@ -54,6 +54,7 @@ class ReplState:
     confirm_event: threading.Event | None = None
     confirm_response: list[str] = field(default_factory=list)
     confirm_prompt_text: str = ""
+    confirmation_accepts_any_answer: bool = False
     phase: TurnPhase = TurnPhase.IDLE
 
     def is_dispatch_running(self) -> bool:
@@ -77,13 +78,20 @@ class ReplState:
     def request_exit(self) -> None:
         self.exit_requested = True
 
-    def begin_confirmation(self, event: threading.Event, prompt_text: str = "") -> None:
+    def begin_confirmation(
+        self,
+        event: threading.Event,
+        prompt_text: str = "",
+        *,
+        accepts_any_answer: bool = False,
+    ) -> None:
         # Reset the response list BEFORE publishing ``confirm_event`` so a
         # concurrent ``deliver_confirmation`` cannot have its answer clobbered.
         # ``phase`` is set before the publish so a parked worker is observable
         # as awaiting confirmation the instant the event is visible.
         self.confirm_response = []
         self.confirm_prompt_text = prompt_text
+        self.confirmation_accepts_any_answer = accepts_any_answer
         self.phase = TurnPhase.AWAITING_CONFIRMATION
         self.confirm_event = event
 
@@ -91,6 +99,7 @@ class ReplState:
         self.confirm_event = None
         self.confirm_response = []
         self.confirm_prompt_text = ""
+        self.confirmation_accepts_any_answer = False
         # Only a normal confirmation completion returns to dispatching/idle; a
         # cancel in progress must keep its CANCELLING phase.
         if self.phase is TurnPhase.AWAITING_CONFIRMATION:
