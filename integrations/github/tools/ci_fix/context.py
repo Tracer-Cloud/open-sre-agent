@@ -5,6 +5,7 @@ from __future__ import annotations
 import re
 from dataclasses import dataclass, replace
 from typing import Any
+from urllib.parse import quote
 
 from infrastructure.safety.masking import MaskingPolicy, MaskingRules
 from integrations.github.repo_scope import detect_git_remote_repo_scope
@@ -240,8 +241,11 @@ def gather_branch_ci_fix_context(
         )
 
     repo_full_name = f"{repo_owner}/{repo_name}"
+    # Branch names may contain URL-reserved characters (feat/x); escape them so
+    # the REST path keeps the name as a single segment.
+    branch_path = quote(branch_name, safe="")
     head = run_gh_json(
-        ["api", f"repos/{repo_full_name}/branches/{branch_name}", "--jq", '{"sha": .commit.sha}'],
+        ["api", f"repos/{repo_full_name}/branches/{branch_path}", "--jq", '{"sha": .commit.sha}'],
         repo=repo_full_name,
         github_token=github_token,
         repo_flag=False,
@@ -402,9 +406,12 @@ def _log_excerpt(raw: str) -> str:
 def _build_task(ctx: CiFixContext) -> str:
     masker = MaskingRules(MaskingPolicy.from_env())
     if ctx.is_branch_target:
-        lines = [
+        header = (
             f"Fix the failing GitHub Actions workflow runs on {ctx.owner}/{ctx.repo} "
-            f"branch {ctx.head_branch}.",
+            f"branch {ctx.head_branch}."
+        )
+        lines = [
+            header,
             "",
             f"Branch to edit and push: {ctx.head_branch}",
             f"Head SHA: {ctx.head_sha}",

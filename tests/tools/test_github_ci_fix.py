@@ -600,6 +600,59 @@ def test_gather_branch_ci_fix_context_builds_task_from_failing_runs() -> None:
     assert log_view.call_args.args[0] == ["run", "view", "9", "--log-failed"]
 
 
+def test_gather_branch_ci_fix_context_escapes_slashed_branch() -> None:
+    runs_payload = {
+        "runs": [
+            {
+                "databaseId": 9,
+                "name": "CI",
+                "workflowName": "CI",
+                "conclusion": "failure",
+                "status": "completed",
+                "url": "https://github.com/Tracer-Cloud/opensre/actions/runs/9",
+            }
+        ]
+    }
+
+    with (
+        patch(
+            "integrations.github.tools.ci_fix.context.run_gh_json",
+            side_effect=[{"sha": "deadbeef1234"}, runs_payload],
+        ) as gh,
+        patch(
+            "integrations.github.tools.ci_fix.context.run_gh_text",
+            return_value="Error: pytest failed",
+        ),
+    ):
+        ctx = gather_branch_ci_fix_context(
+            branch="feat/x",
+            owner="Tracer-Cloud",
+            repo="opensre",
+            github_token="tok",
+        )
+
+    assert ctx.head_branch == "feat/x"
+    assert gh.call_args_list[0].args[0][1] == "repos/Tracer-Cloud/opensre/branches/feat%2Fx"
+
+
+def test_checkout_target_branch_refuses_moved_branch_head() -> None:
+    from integrations.github.tools.ci_fix.ship import checkout_target_branch
+
+    with (
+        patch("integrations.github.tools.ci_fix.ship.ensure_git_repo"),
+        patch("integrations.github.tools.ci_fix.ship.current_branch", return_value="main"),
+        patch("integrations.github.tools.ci_fix.ship._fast_forward_to_origin"),
+        patch("integrations.github.tools.ci_fix.ship._head_sha", return_value="other-sha"),
+    ):
+        try:
+            checkout_target_branch("/workspace", _BRANCH_CTX)
+        except GitHubCiFixError as exc:
+            assert "moved from" in exc.message
+            assert exc.branch_name == "main"
+        else:
+            raise AssertionError("expected moved-branch refusal")
+
+
 def test_gather_branch_ci_fix_context_reports_no_failing_runs() -> None:
     with patch(
         "integrations.github.tools.ci_fix.context.run_gh_json",

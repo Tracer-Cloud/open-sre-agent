@@ -49,8 +49,9 @@ def checkout_target_branch(workspace: str, ctx: CiFixContext) -> None:
     """Switch the workspace to the branch the fix will edit and push.
 
     PR mode refuses protected/base branches; branch mode targets the requested
-    branch itself (approval-gated upstream) and fast-forwards it to origin so
-    the fix edits the code that is actually failing.
+    branch itself (approval-gated upstream), fast-forwards it to origin so the
+    fix edits the code that is actually failing, and refuses to continue when
+    the branch head no longer matches the inspected CI context.
     """
     try:
         ensure_git_repo(workspace)
@@ -62,6 +63,16 @@ def checkout_target_branch(workspace: str, ctx: CiFixContext) -> None:
             checkout_branch(workspace, ctx.head_branch)
         if ctx.is_branch_target:
             _fast_forward_to_origin(workspace, ctx.head_branch)
+            head = _head_sha(workspace)
+            if ctx.head_sha and head != ctx.head_sha:
+                raise GitCommandError(
+                    BRANCH_FAILED,
+                    (
+                        f"Branch '{ctx.head_branch}' moved from {ctx.head_sha[:12]} to "
+                        f"{head[:12]} since its CI was inspected; re-run the fix against "
+                        "the new head. No push was made."
+                    ),
+                )
     except GitCommandError as exc:
         raise GitHubCiFixError(exc.kind, exc.message, branch_name=ctx.head_branch) from exc
 
