@@ -26,8 +26,11 @@ _QUERY_SUMMARY_TRUNCATE_LEN = 80
 #: _ensure_take_clause leaves a caller-supplied query untouched when it
 #: already contains a ``take`` pipe stage -- ``effective_limit`` is computed
 #: but never actually applied to that query. A caller's own smaller ``take
-#: N`` is therefore the real ceiling, not ``effective_limit``.
-_TAKE_CLAUSE_RE = re.compile(r"\btake\s+(\d+)\b", re.IGNORECASE)
+#: N`` is therefore the real ceiling, not ``effective_limit``. Require a
+#: preceding ``|`` (the actual KQL pipe-stage syntax) so a ``take N`` that
+#: only appears inside a quoted string or a ``//`` comment -- not a real
+#: operator -- isn't mistaken for one.
+_TAKE_CLAUSE_RE = re.compile(r"\|\s*take\s+(\d+)\b", re.IGNORECASE)
 
 
 def _bounded_limit(limit: int, max_results: int) -> int:

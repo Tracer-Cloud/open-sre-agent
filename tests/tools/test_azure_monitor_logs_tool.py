@@ -275,6 +275,26 @@ class TestMapQueryAzureMonitorLogs:
 
         assert evidence["catalog_entries"][0]["summary"].startswith("3 row(s)")
 
+    def test_ignores_take_text_that_is_not_a_real_pipe_stage(self) -> None:
+        """Regression: 'take N' inside a quoted string literal or a comment
+        is not an actual KQL take operator (which requires a preceding `|`)
+        -- matching it as one would falsely mark a complete result as
+        truncated."""
+        evidence: dict[str, Any] = {}
+
+        _map_query_azure_monitor_logs(
+            evidence,
+            {
+                "available": True,
+                "total_returned": 3,
+                "effective_limit": 50,
+                "query": 'AppTraces | where Message contains "take 5 minutes"',
+            },
+            {},
+        )
+
+        assert evidence["catalog_entries"][0]["summary"].startswith("3 row(s)")
+
     def test_strips_carriage_returns_from_query(self) -> None:
         """Regression: a query with bare \\r or \\r\\n line endings must not
         leave a literal carriage return in the report summary."""
