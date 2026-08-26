@@ -130,8 +130,11 @@ class ActionRenderObserver:
         self.planned_count += 1
 
     def _set_spinner_phase(self, label: str) -> None:
+        # Only relabel an already-running spinner; never activate one. Literal
+        # slash turns suppress the spinner (turn_start skips ``start()``) and
+        # never call ``stop()``, so activating it here would leave it on screen.
         spinner = get_investigation_spinner()
-        if spinner is not None:
+        if spinner is not None and getattr(spinner, "streaming", False):
             spinner.set_phase(label)
 
     def _advance_spinner_verb(self, data: dict[str, Any]) -> None:

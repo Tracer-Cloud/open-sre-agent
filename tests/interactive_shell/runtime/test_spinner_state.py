@@ -75,3 +75,15 @@ def test_spinner_empty_when_not_streaming() -> None:
     spinner.start()
     spinner.stop()
     assert spinner.inline_spinner_ansi() == ""
+
+
+def test_inline_spinner_clips_a_long_phase_to_one_prompt_row() -> None:
+    """A long phase label must not soft-wrap past the one reserved prompt row."""
+    from surfaces.shared.terminal.prompt_layout import prompt_line_width
+
+    spinner = SpinnerState()
+    spinner.start()
+    spinner.set_phase("X" * 400)
+    rendered = re.sub(r"\x1b\[[0-9;]*m", "", spinner.inline_spinner_ansi())
+
+    assert len(rendered) <= prompt_line_width()
