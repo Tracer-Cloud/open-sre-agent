@@ -157,6 +157,28 @@ class TestMapPagerdutyServices:
         assert entries[0]["source"] == "pagerduty_services"
         assert entries[0]["summary"] == "'Web App': active"
 
+    def test_truncates_long_multiline_service_name(self) -> None:
+        """Regression: service names are free-form, human-entered text that
+        can be long or multi-line — collapse and cap it before it goes into
+        the report summary."""
+        evidence: dict[str, Any] = {}
+        long_name = "Web App\nProduction\n" + "x" * 200
+
+        _map_pagerduty_services(
+            evidence,
+            {
+                "available": True,
+                "services": [],
+                "service": {"name": long_name, "status": "active"},
+                "total": 1,
+            },
+            {},
+        )
+
+        summary = evidence["catalog_entries"][0]["summary"]
+        assert "\n" not in summary
+        assert len(summary) < len(long_name)
+
     def test_records_entry_with_service_count_when_listing(self) -> None:
         evidence: dict[str, Any] = {}
 

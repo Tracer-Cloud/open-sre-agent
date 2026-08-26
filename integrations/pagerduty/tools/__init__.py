@@ -9,6 +9,7 @@ from typing import Any
 from core.domain.types.evidence import record_evidence_entry
 from core.tool import BaseTool
 from core.tool_framework.utils import tool_unavailable
+from infrastructure.text.truncation import truncate
 from integrations.pagerduty.client import make_pagerduty_client
 
 #: PagerDuty's REST API v2 caps every list endpoint's page size at 100
@@ -18,11 +19,27 @@ from integrations.pagerduty.client import make_pagerduty_client
 #: against the effective page size that was requested.
 _PAGERDUTY_MAX_PAGE_SIZE = 100
 
+#: Incident titles and service names are free-form, human-entered PagerDuty
+#: text -- unbounded and can contain newlines. Cap the length used in a
+#: report summary so one long or multi-line value can't produce a malformed
+#: or oversized report line.
+_NAME_SUMMARY_TRUNCATE_LEN = 120
+
+
+def _pagerduty_summary_text(value: str) -> str:
+    """Collapse and cap free-form PagerDuty text before it goes into a summary."""
+    return truncate(value.replace("\n", " "), _NAME_SUMMARY_TRUNCATE_LEN)
+
 
 def _pagerduty_count_label(count: int, requested_limit: int) -> str:
     """Format a list count, appending "+" when the page may be truncated."""
+    return f"{count}+" if _pagerduty_page_is_truncated(count, requested_limit) else str(count)
+
+
+def _pagerduty_page_is_truncated(returned_count: int, requested_limit: int) -> bool:
+    """True when a returned page may not contain every matching record."""
     effective_limit = min(max(requested_limit, 1), _PAGERDUTY_MAX_PAGE_SIZE)
-    return f"{count}+" if count >= effective_limit else str(count)
+    return returned_count >= effective_limit
 
 
 def _map_pagerduty_incident_detail(
@@ -34,7 +51,8 @@ def _map_pagerduty_incident_detail(
     incident = output.get("incident") or {}
     if not incident:
         return
-    parts = [f"'{incident.get('title', 'unknown')}'", incident.get("status", "unknown")]
+    title = _pagerduty_summary_text(str(incident.get("title", "unknown")))
+    parts = [f"'{title}'", incident.get("status", "unknown")]
     total_log_entries = output.get("total_log_entries", 0)
     if total_log_entries:
         label = _pagerduty_count_label(total_log_entries, tool_input.get("log_limit", 25))
@@ -176,17 +194,28 @@ _ACTIVE_STATUSES = {"triggered", "acknowledged"}
 def _map_pagerduty_incidents(
     evidence: dict[str, Any], output: dict[str, Any], tool_input: dict[str, Any]
 ) -> None:
-    """Cite the incident count and how many are currently active."""
+    """Cite the incident count and how many are currently active.
+
+    ``active_incidents`` is filtered from the same page-capped ``incidents``
+    list the total is drawn from, not a separately-queried true count -- if
+    the page is truncated (the total gets a "+"), the active subset can't
+    speak for incidents outside that page either, so it needs the same
+    qualifier.
+    """
     if not output.get("available"):
         return
     incidents = output.get("incidents") or []
     if not incidents:
         return
-    label = _pagerduty_count_label(output.get("total", len(incidents)), tool_input.get("limit", 25))
+    total = output.get("total", len(incidents))
+    requested_limit = tool_input.get("limit", 25)
+    truncated = _pagerduty_page_is_truncated(total, requested_limit)
+    label = f"{total}+" if truncated else str(total)
     active_count = len(output.get("active_incidents") or [])
     summary = f"{label} incident(s)"
     if active_count:
-        summary += f", {active_count} active"
+        active_label = f"{active_count}+" if truncated else str(active_count)
+        summary += f", {active_label} active"
     record_evidence_entry(
         evidence,
         source="pagerduty_incidents",
@@ -472,11 +501,12 @@ def _map_pagerduty_services(
         return
     service = output.get("service") or {}
     if service:
+        name = _pagerduty_summary_text(str(service.get("name", "unknown")))
         record_evidence_entry(
             evidence,
             source="pagerduty_services",
             label="PagerDuty Services",
-            summary=f"'{service.get('name', 'unknown')}': {service.get('status', 'unknown')}",
+            summary=f"'{name}': {service.get('status', 'unknown')}",
         )
         return
     services = output.get("services") or []

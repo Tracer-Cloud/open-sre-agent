@@ -153,6 +153,26 @@ class TestMapPagerdutyIncidents:
 
         assert evidence["catalog_entries"][0]["summary"] == "25+ incident(s)"
 
+    def test_qualifies_active_count_when_page_is_truncated(self) -> None:
+        """Regression: active_incidents is filtered from the same page-capped
+        list, so it must inherit the "+" qualifier when the page saturates —
+        an unqualified active count would understate incidents outside the
+        page that could also be active."""
+        evidence: dict[str, Any] = {}
+
+        _map_pagerduty_incidents(
+            evidence,
+            {
+                "available": True,
+                "total": 25,
+                "incidents": [{"id": str(i)} for i in range(25)],
+                "active_incidents": [{"id": str(i)} for i in range(10)],
+            },
+            {"limit": 25},
+        )
+
+        assert evidence["catalog_entries"][0]["summary"] == "25+ incident(s), 10+ active"
+
     def test_records_nothing_when_no_incidents(self) -> None:
         evidence: dict[str, Any] = {}
 
