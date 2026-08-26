@@ -45,7 +45,9 @@ def _map_prefect_flow_runs(
     truncated = _prefect_page_is_truncated(total, tool_input.get("limit", 20))
     total_label = f"{total}+" if truncated else str(total)
     failed_count = output.get("total_failed", 0)
-    failed_label = f"{failed_count}+" if failed_count and truncated else str(failed_count)
+    # A truncated page's failed-count is only a floor even when it's zero --
+    # zero failed runs *in the returned page* does not mean zero overall.
+    failed_label = f"{failed_count}+" if truncated else str(failed_count)
     parts = [f"{total_label} flow run(s), {failed_label} failed"]
     if output.get("fetched_logs_for_run_id"):
         error_count = len(output.get("error_log_lines") or [])

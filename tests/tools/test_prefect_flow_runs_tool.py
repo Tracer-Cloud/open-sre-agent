@@ -164,6 +164,25 @@ class TestMapPrefectFlowRuns:
 
         assert evidence["catalog_entries"][0]["summary"] == "20+ flow run(s), 5+ failed"
 
+    def test_qualifies_zero_failed_when_page_is_saturated(self) -> None:
+        """Regression: a saturated page with zero failed runs visible must
+        not claim '0 failed' as an exact total -- there could be more beyond
+        the returned page."""
+        evidence: dict[str, Any] = {}
+
+        _map_prefect_flow_runs(
+            evidence,
+            {
+                "available": True,
+                "total": 20,
+                "total_failed": 0,
+                "flow_runs": [{"id": "run-1"}],
+            },
+            {"limit": 20},
+        )
+
+        assert evidence["catalog_entries"][0]["summary"] == "20+ flow run(s), 0+ failed"
+
     def test_records_nothing_when_no_flow_runs(self) -> None:
         evidence: dict[str, Any] = {}
 
