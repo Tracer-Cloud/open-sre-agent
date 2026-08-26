@@ -8,6 +8,9 @@ from integrations.signoz.tools import (
     query_signoz_metrics,
     query_signoz_traces,
 )
+from integrations.signoz.tools.query_signoz_logs_tool.tool import _map_query_signoz_logs
+from integrations.signoz.tools.query_signoz_metrics_tool.tool import _map_query_signoz_metrics
+from integrations.signoz.tools.query_signoz_traces_tool.tool import _map_query_signoz_traces
 
 
 class _FakeSigNozBackend:
@@ -210,3 +213,150 @@ class TestQuerySignozTraces:
         assert result["source"] == "signoz_traces"
         assert result["available"] is False
         assert "not configured" in result.get("error", "").lower()
+
+
+class TestMapQuerySignozLogs:
+    def test_records_plain_count_with_error_count(self) -> None:
+        evidence: dict[str, Any] = {}
+
+        _map_query_signoz_logs(
+            evidence,
+            {
+                "available": True,
+                "total": 2,
+                "logs": [{"severity": "ERROR"}, {"severity": "INFO"}],
+                "error_logs": [{"severity": "ERROR"}],
+            },
+            {"limit": 50},
+        )
+
+        entries = evidence["catalog_entries"]
+        assert len(entries) == 1
+        assert entries[0]["source"] == "query_signoz_logs"
+        assert entries[0]["summary"] == "2 log(s), 1 error(s)"
+
+    def test_qualifies_count_when_saturated(self) -> None:
+        evidence: dict[str, Any] = {}
+
+        _map_query_signoz_logs(
+            evidence,
+            {
+                "available": True,
+                "total": 50,
+                "logs": [{"severity": "INFO"} for _ in range(50)],
+                "error_logs": [],
+            },
+            {"limit": 50},
+        )
+
+        assert evidence["catalog_entries"][0]["summary"] == "50+ log(s)"
+
+    def test_records_nothing_when_no_logs(self) -> None:
+        evidence: dict[str, Any] = {}
+
+        _map_query_signoz_logs(evidence, {"available": True, "total": 0, "logs": []}, {})
+
+        assert "catalog_entries" not in evidence
+
+    def test_records_nothing_on_unavailable_result(self) -> None:
+        evidence: dict[str, Any] = {}
+
+        _map_query_signoz_logs(evidence, {"available": False, "error": "not configured"}, {})
+
+        assert "catalog_entries" not in evidence
+
+
+class TestMapQuerySignozMetrics:
+    def test_records_entry_with_metric_and_aggregation(self) -> None:
+        evidence: dict[str, Any] = {}
+
+        _map_query_signoz_metrics(
+            evidence,
+            {
+                "available": True,
+                "total": 1,
+                "resolved_metric": "cpu_usage",
+                "aggregation": "avg",
+                "metrics": [{"value": 42.0}],
+            },
+            {"limit": 50},
+        )
+
+        entries = evidence["catalog_entries"]
+        assert len(entries) == 1
+        assert entries[0]["source"] == "query_signoz_metrics"
+        assert entries[0]["summary"] == "cpu_usage (avg): 1 data point(s)"
+
+    def test_records_nothing_when_no_metrics(self) -> None:
+        evidence: dict[str, Any] = {}
+
+        _map_query_signoz_metrics(evidence, {"available": True, "total": 0, "metrics": []}, {})
+
+        assert "catalog_entries" not in evidence
+
+    def test_records_nothing_on_unavailable_result(self) -> None:
+        evidence: dict[str, Any] = {}
+
+        _map_query_signoz_metrics(evidence, {"available": False, "error": "not configured"}, {})
+
+        assert "catalog_entries" not in evidence
+
+
+class TestMapQuerySignozTraces:
+    def test_records_entry_from_aggregate_summary(self) -> None:
+        evidence: dict[str, Any] = {}
+
+        _map_query_signoz_traces(
+            evidence,
+            {
+                "available": True,
+                "total": 1,
+                "traces": [{"trace_id": "abc"}],
+                "summary": {
+                    "available": True,
+                    "total_spans": 100,
+                    "error_spans": 5,
+                    "p99_ms": 250.0,
+                },
+            },
+            {"limit": 50},
+        )
+
+        entries = evidence["catalog_entries"]
+        assert len(entries) == 1
+        assert entries[0]["source"] == "query_signoz_traces"
+        assert entries[0]["summary"] == "100 span(s), 5 error(s), p99 250.0ms"
+
+    def test_falls_back_to_trace_count_when_summary_unavailable(self) -> None:
+        evidence: dict[str, Any] = {}
+
+        _map_query_signoz_traces(
+            evidence,
+            {
+                "available": True,
+                "total": 1,
+                "traces": [{"trace_id": "abc"}],
+                "summary": {"available": False, "error": "aggregation failed"},
+            },
+            {"limit": 50},
+        )
+
+        assert evidence["catalog_entries"][0]["summary"] == "1 trace(s)"
+
+    def test_records_nothing_when_summary_and_traces_both_empty(self) -> None:
+        evidence: dict[str, Any] = {}
+
+        _map_query_signoz_traces(
+            evidence,
+            {"available": True, "total": 0, "traces": [], "summary": {"available": False}},
+            {},
+        )
+
+        assert "catalog_entries" not in evidence
+
+    def test_records_nothing_on_unavailable_result(self) -> None:
+        evidence: dict[str, Any] = {}
+
+        _map_query_signoz_traces(evidence, {"available": False, "error": "not configured"}, {})
+
+        assert "catalog_entries" not in evidence

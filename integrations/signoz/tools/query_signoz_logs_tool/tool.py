@@ -4,12 +4,35 @@ from __future__ import annotations
 
 from typing import Any, cast
 
+from core.domain.types.evidence import record_evidence_entry
 from core.tool_framework import tool
 from core.tool_framework.utils import tool_unavailable
 from infrastructure.evidence.evidence_compaction import compact_logs, summarize_counts
-from integrations.signoz import SigNozConfig, signoz_extract_params
+from integrations.signoz import SigNozConfig, signoz_count_label, signoz_extract_params
 from integrations.signoz.availability import signoz_available_or_backend
 from integrations.signoz.client import SigNozClient
+
+
+def _map_query_signoz_logs(
+    evidence: dict[str, Any], output: dict[str, Any], tool_input: dict[str, Any]
+) -> None:
+    """Cite the log count retrieved and how many matched an error signal."""
+    if not output.get("available"):
+        return
+    logs = output.get("logs") or []
+    if not logs:
+        return
+    label = signoz_count_label(output.get("total", len(logs)), tool_input.get("limit", 50))
+    error_count = len(output.get("error_logs") or [])
+    summary = f"{label} log(s)"
+    if error_count:
+        summary += f", {error_count} error(s)"
+    record_evidence_entry(
+        evidence,
+        source="query_signoz_logs",
+        label="SigNoz Logs",
+        summary=summary,
+    )
 
 
 def _logs_is_available(sources: dict[str, dict]) -> bool:
@@ -88,6 +111,7 @@ def _normalize_logs_payload(
     },
     is_available=_logs_is_available,
     extract_params=_logs_extract_params,
+    evidence_mapper=_map_query_signoz_logs,
 )
 def query_signoz_logs(
     service: str | None = None,

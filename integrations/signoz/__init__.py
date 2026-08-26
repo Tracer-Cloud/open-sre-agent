@@ -140,6 +140,20 @@ def signoz_extract_params(sources: dict[str, dict]) -> dict[str, Any]:
     }
 
 
+def signoz_count_label(count: int, requested_limit: int) -> str:
+    """Format a list count, appending "+" when the page may be truncated.
+
+    Every SigNoz query tool (logs/metrics/traces) applies its ``limit`` as
+    the query spec's own row cap (``_clamp_limit`` in
+    ``integrations/signoz/client.py``) and reports ``total`` as
+    ``len(<rows>)`` from that already-capped response -- there is no
+    separate unbounded total. A returned count that reaches the requested
+    limit may not be every matching row.
+    """
+    effective_limit = max(requested_limit, 1)
+    return f"{count}+" if count >= effective_limit else str(count)
+
+
 def classify(credentials: dict[str, Any], record_id: str) -> tuple[SigNozConfig | None, str | None]:
     try:
         cfg = build_signoz_config(

@@ -218,9 +218,6 @@ query_new_relic_alerts
 query_new_relic_metrics
 query_openobserve_logs
 query_opensearch_analytics
-query_signoz_logs
-query_signoz_metrics
-query_signoz_traces
 query_splunk_logs
 query_yc_metrics
 read_yc_logs
