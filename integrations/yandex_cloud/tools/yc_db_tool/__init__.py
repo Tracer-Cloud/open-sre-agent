@@ -72,15 +72,21 @@ def _connection_hint(engine: Engine, hosts: list[dict[str, Any]]) -> dict[str, A
         (host for host in hosts if str(host.get("role", "")).upper() in {"MASTER", "PRIMARY"}),
         hosts[0] if hosts else None,
     )
-    return {
+    hint: dict[str, Any] = {
         "integration": engine.integration,
         "host": primary["name"] if primary else "",
         "port": engine.port,
+        "port_is_tls": True,
         "tls": (
             "Public hosts require TLS against Yandex's private CA, which is in no "
             f"system trust store. Fetch it from {CA_CERTIFICATE_URL}."
         ),
     }
+    if engine.plaintext_port is not None:
+        # Handing over the wrong one of the two produces a connection timeout,
+        # which reads exactly like the database being down.
+        hint["port_without_tls"] = engine.plaintext_port
+    return hint
 
 
 def _list_clusters(client: YandexCloudClient, engine: Engine, page_token: str) -> dict[str, Any]:

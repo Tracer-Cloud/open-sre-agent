@@ -37,7 +37,13 @@ class Engine:
     """REST path prefix."""
 
     port: int
-    """Default data-plane port."""
+    """Data-plane port with TLS on, which is how a managed cluster is normally set up.
+
+    Naming it plainly because several engines listen on two: Valkey answers TLS
+    on 6380 and plaintext on 6379, StoreDoc on 27018 and 27017, ClickHouse on
+    8443 and 8123. Handing an operator the wrong one produces a connection
+    timeout that reads exactly like a dead database.
+    """
 
     integration: str
     """OpenSRE integration that queries this engine's data plane."""
@@ -50,6 +56,9 @@ class Engine:
     ``segment-hosts``, and asking for ``hosts`` returns a 404 that leaves the
     cluster looking like it has no hosts and no address to connect to.
     """
+
+    plaintext_port: int | None = None
+    """The same port with TLS off, when the engine listens on a different one."""
 
     log_service_types: tuple[str, ...] = ()
     """``serviceType`` values the ``:logs`` endpoint accepts, first one default.
@@ -90,6 +99,7 @@ ENGINES: Final[tuple[Engine, ...]] = (
         "/managed-clickhouse/v1",
         8443,
         "clickhouse",
+        plaintext_port=8123,
         # Required here: without it the endpoint refuses the read.
         log_service_types=("CLICKHOUSE", "CLICKHOUSE_KEEPER"),
     ),
@@ -100,6 +110,7 @@ ENGINES: Final[tuple[Engine, ...]] = (
         "/managed-redis/v1",
         6380,
         "redis",
+        plaintext_port=6379,
         log_service_types=("REDIS",),
     ),
     Engine(
@@ -109,9 +120,18 @@ ENGINES: Final[tuple[Engine, ...]] = (
         "/managed-mongodb/v1",
         27018,
         "mongodb",
+        plaintext_port=27017,
         log_service_types=("MONGOD", "MONGOS", "MONGOCFG", "AUDIT"),
     ),
-    Engine("kafka", "Apache Kafka", "managed-kafka", "/managed-kafka/v1", 9091, "kafka"),
+    Engine(
+        "kafka",
+        "Apache Kafka",
+        "managed-kafka",
+        "/managed-kafka/v1",
+        9091,
+        "kafka",
+        plaintext_port=9092,
+    ),
     Engine(
         "opensearch",
         "OpenSearch",

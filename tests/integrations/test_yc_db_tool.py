@@ -282,3 +282,51 @@ class TestHostsLiveWhereTheEngineKeepsThem:
 
         assert result["hosts"] == []
         assert "hosts" in result["hosts_error"]
+
+
+class TestTheConnectionHintNamesWhichPortItMeans:
+    """Several engines listen on two ports, and the wrong one looks like a dead host."""
+
+    def _hint(self, monkeypatch: pytest.MonkeyPatch, engine: str, prefix: str) -> dict[str, Any]:
+        monkeypatch.setattr(
+            "integrations.yandex_cloud.rest_client.send_request",
+            _responder(
+                {
+                    "/hosts": {
+                        "hosts": [{"name": "rc1a.mdb", "role": "MASTER", "health": "ALIVE"}]
+                    },
+                    "/operations": {"operations": []},
+                    f"{prefix}/clusters/c1": {"id": "c1", "status": "RUNNING"},
+                }
+            ),
+        )
+        return get_yc_db_cluster(cluster_id="c1", engine=engine, **_CREDENTIALS)["connect"]
+
+    @pytest.mark.parametrize(
+        ("engine", "prefix", "tls", "plaintext"),
+        [
+            ("valkey", "/managed-redis/v1", 6380, 6379),
+            ("storedoc", "/managed-mongodb/v1", 27018, 27017),
+            ("clickhouse", "/managed-clickhouse/v1", 8443, 8123),
+        ],
+    )
+    def test_both_ports_are_offered_when_they_differ(
+        self,
+        engine: str,
+        prefix: str,
+        tls: int,
+        plaintext: int,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        connect = self._hint(monkeypatch, engine, prefix)
+
+        assert connect["port"] == tls
+        assert connect["port_is_tls"] is True
+        assert connect["port_without_tls"] == plaintext
+
+    def test_an_engine_with_one_port_offers_one(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """PostgreSQL answers on 6432 either way, so a second number would be noise."""
+        connect = self._hint(monkeypatch, "postgresql", "/managed-postgresql/v1")
+
+        assert connect["port"] == 6432
+        assert "port_without_tls" not in connect
