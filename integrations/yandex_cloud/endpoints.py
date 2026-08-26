@@ -244,10 +244,9 @@ def known_endpoints(*, refresh: bool = True) -> dict[str, str]:
             cached = _cache.endpoints
         if cached:
             endpoints.update(cached)
-    _apply_host_aliases(endpoints)
-    # Overrides land last, so an operator pointing a service somewhere else wins
-    # over both the registry and the alias above.
-    endpoints.update(_endpoint_overrides())
+    overrides = _endpoint_overrides()
+    endpoints.update(overrides)
+    _apply_host_aliases(endpoints, overrides)
     return endpoints
 
 
@@ -258,14 +257,20 @@ def known_endpoints(*, refresh: bool = True) -> dict[str, str]:
 _HOST_ALIASES: Final[dict[str, str]] = {"storage": "storage-api"}
 
 
-def _apply_host_aliases(endpoints: dict[str, str]) -> None:
+def _apply_host_aliases(endpoints: dict[str, str], overrides: dict[str, str]) -> None:
     """Re-point each aliased name at the host that answers for it.
 
-    Applied to the resolved registry data rather than the snapshot because the
+    Applied to the resolved registry data rather than the snapshot, because the
     snapshot is refreshed from Yandex at runtime and the upstream value would
     come straight back.
+
+    Either name is a fair thing for an operator to override, so both work: an
+    override on the alias itself wins outright, and one on the registry name is
+    what the alias then points at.
     """
     for name, registered_as in _HOST_ALIASES.items():
+        if name in overrides:
+            continue
         host = endpoints.get(registered_as)
         if host:
             endpoints[name] = host

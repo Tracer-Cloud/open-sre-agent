@@ -256,8 +256,13 @@ _SERVICE_ALIASES: Final[dict[str, str]] = {"alb": "apploadbalancer"}
 
 
 def canonical_service(service: str) -> str:
-    """Return the name the index knows this service by."""
-    wanted = service.strip()
+    """Return the name the index knows this service by.
+
+    Case-folded because the index is lowercase throughout while host resolution
+    lowercases what it is given: a caller saying "COMPUTE" would otherwise read
+    as an unknown service to the gate and as the real host to the client.
+    """
+    wanted = service.strip().lower()
     return _SERVICE_ALIASES.get(wanted, wanted)
 
 

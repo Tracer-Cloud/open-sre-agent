@@ -399,3 +399,15 @@ class TestObjectStorageResolvesToItsControlPlane:
         endpoints.reset_endpoint_cache()
 
         assert endpoints.resolve_endpoint("storage", refresh=False) == "storage.internal"
+
+    def test_an_override_on_the_registry_name_also_lands(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """Either name is a fair thing to override, so both have to take effect."""
+        from integrations.yandex_cloud import endpoints
+
+        monkeypatch.setenv(YC_ENDPOINT_OVERRIDES_ENV, '{"storage-api": "storage.internal"}')
+        endpoints.reset_endpoint_cache()
+
+        assert endpoints.resolve_endpoint("storage", refresh=False) == "storage.internal"
+        assert endpoints.resolve_endpoint("storage-api", refresh=False) == "storage.internal"
