@@ -37,7 +37,8 @@ def _map_search_bitbucket_code(
     summary = f"{count_label} match(es)"
     query = output.get("query")
     if query:
-        safe_query = truncate(str(query).replace("\n", " "), _QUERY_SUMMARY_TRUNCATE_LEN)
+        collapsed = str(query).replace("\r\n", " ").replace("\r", " ").replace("\n", " ")
+        safe_query = truncate(collapsed, _QUERY_SUMMARY_TRUNCATE_LEN)
         summary += f" for '{safe_query}'"
     record_evidence_entry(
         evidence,

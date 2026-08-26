@@ -21,6 +21,11 @@ from integrations.bitbucket.tools.bitbucket_search_code_tool import (
 _ID_SUMMARY_TRUNCATE_LEN = 80
 
 
+def _safe_id(value: str) -> str:
+    collapsed = value.replace("\r\n", " ").replace("\r", " ").replace("\n", " ")
+    return truncate(collapsed, _ID_SUMMARY_TRUNCATE_LEN)
+
+
 def _map_get_bitbucket_file_contents(
     evidence: dict[str, Any], output: dict[str, Any], _tool_input: dict[str, Any]
 ) -> None:
@@ -39,12 +44,10 @@ def _map_get_bitbucket_file_contents(
     parts = [f"{count_label} char(s)"]
     path = output.get("path")
     if path:
-        safe_path = truncate(str(path).replace("\n", " "), _ID_SUMMARY_TRUNCATE_LEN)
-        parts.append(f"from '{safe_path}'")
+        parts.append(f"from '{_safe_id(str(path))}'")
     ref = output.get("ref")
     if ref:
-        safe_ref = truncate(str(ref).replace("\n", " "), _ID_SUMMARY_TRUNCATE_LEN)
-        parts.append(f"at '{safe_ref}'")
+        parts.append(f"at '{_safe_id(str(ref))}'")
     record_evidence_entry(
         evidence,
         source="get_bitbucket_file_contents",

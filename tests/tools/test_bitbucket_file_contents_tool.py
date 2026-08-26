@@ -195,6 +195,25 @@ class TestMapGetBitbucketFileContents:
 
         assert evidence["catalog_entries"][0]["summary"].startswith("10000+ char(s)")
 
+    def test_strips_carriage_returns_from_path_and_ref(self) -> None:
+        """Regression: a path/ref with bare \\r or \\r\\n line endings must not
+        leave a literal carriage return in the report summary."""
+        evidence: dict[str, Any] = {}
+
+        _map_get_bitbucket_file_contents(
+            evidence,
+            {
+                "available": True,
+                "path": "src\r\nmain.py",
+                "ref": "feature\rbranch",
+                "content": "x",
+                "truncated": False,
+            },
+            {},
+        )
+
+        assert "\r" not in evidence["catalog_entries"][0]["summary"]
+
     def test_records_nothing_when_content_missing(self) -> None:
         evidence: dict[str, Any] = {}
 

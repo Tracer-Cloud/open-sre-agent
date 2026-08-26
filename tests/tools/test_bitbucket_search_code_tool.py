@@ -190,6 +190,24 @@ class TestMapSearchBitbucketCode:
 
         assert "\n" not in evidence["catalog_entries"][0]["summary"]
 
+    def test_strips_carriage_returns_from_query(self) -> None:
+        """Regression: a query with bare \\r or \\r\\n line endings must not
+        leave a literal carriage return in the report summary."""
+        evidence: dict[str, Any] = {}
+
+        _map_search_bitbucket_code(
+            evidence,
+            {
+                "available": True,
+                "query": "error\r\nOR\rexception",
+                "total_returned": 1,
+                "results": [{"path": "src/main.py"}],
+            },
+            {},
+        )
+
+        assert "\r" not in evidence["catalog_entries"][0]["summary"]
+
     def test_records_nothing_when_no_results(self) -> None:
         evidence: dict[str, Any] = {}
 
