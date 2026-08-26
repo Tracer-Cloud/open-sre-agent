@@ -30,6 +30,10 @@ The Cursor project hook [`.cursor/hooks/check-ci-failures.sh`](.cursor/hooks/che
 
 - Use strict typing, follow DRY principle
 - One clear purpose per file (separation of concerns)
+- Keep every Python `__init__.py` as a lightweight package facade: declare the
+  public interface with imports and `__all__` only. Put implementation,
+  orchestration, and side effects in focused modules, then re-export only the
+  intended public API; never let `__init__.py` become a god file.
 - Keep docstrings concise and contract-focused. Use one sentence for straightforward
   APIs; add only non-obvious invariants, failure behavior, or layering constraints
   callers must understand. Keep bug history and implementation narration in tests,
