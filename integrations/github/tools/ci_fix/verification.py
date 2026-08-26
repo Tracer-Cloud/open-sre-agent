@@ -213,12 +213,23 @@ def wait_for_branch_checks(
                 terminal_signature = signature
                 terminal_since = now
             if terminal_since is not None and now - terminal_since >= max(0, settle_seconds):
-                failing = tuple(_run_name(run) for run in runs if _run_failed(run))
-                return CheckVerification(
-                    state=CheckState.FAILED if failing else CheckState.PASSED,
-                    check_names=last_names,
-                    failing_checks=failing,
+                # Workflow runs alone miss non-Actions check runs and commit
+                # statuses (external apps); gate the verdict on those too.
+                external_terminal, external_failing = _commit_check_state(
+                    repo=repo,
+                    github_token=github_token,
+                    commit_sha=expected_head_sha,
                 )
+                if external_terminal:
+                    run_failing = (_run_name(run) for run in runs if _run_failed(run))
+                    failing = tuple(dict.fromkeys((*run_failing, *external_failing)))
+                    return CheckVerification(
+                        state=CheckState.FAILED if failing else CheckState.PASSED,
+                        check_names=last_names,
+                        failing_checks=failing,
+                    )
+                terminal_signature = ()
+                terminal_since = None
         else:
             terminal_signature = ()
             terminal_since = None
@@ -251,6 +262,50 @@ def _commit_runs(
         github_token=github_token,
     )
     return _check_rows(payload.get(_WORKFLOW_RUNS_KEY))
+
+
+_STATUS_FAILED_STATES = frozenset({"ERROR", "FAILURE"})
+_CHECK_RUN_COMPLETED = "completed"
+
+
+def _commit_check_state(
+    *,
+    repo: str,
+    github_token: str | None,
+    commit_sha: str,
+) -> tuple[bool, tuple[str, ...]]:
+    """Terminal-ness and failing names across the commit's check runs and statuses.
+
+    Check runs cover both Actions jobs and external check apps; commit statuses
+    cover legacy status integrations. Returns ``(all_terminal, failing_names)``.
+    """
+    checks_payload = run_gh_json(
+        ["api", f"repos/{repo}/commits/{commit_sha}/check-runs?per_page=100"],
+        repo=repo,
+        github_token=github_token,
+        repo_flag=False,
+    )
+    check_runs = _check_rows(checks_payload.get("check_runs"))
+    all_terminal = all(
+        str(run.get("status") or "").strip().lower() == _CHECK_RUN_COMPLETED for run in check_runs
+    )
+    failing = [
+        _run_name(run)
+        for run in check_runs
+        if str(run.get("conclusion") or "").strip().upper() in _FAILED_CONCLUSIONS
+    ]
+    status_payload = run_gh_json(
+        ["api", f"repos/{repo}/commits/{commit_sha}/status"],
+        repo=repo,
+        github_token=github_token,
+        repo_flag=False,
+    )
+    failing.extend(
+        str(status.get("context") or "unnamed status")
+        for status in _check_rows(status_payload.get("statuses"))
+        if str(status.get("state") or "").strip().upper() in _STATUS_FAILED_STATES
+    )
+    return all_terminal, tuple(dict.fromkeys(failing))
 
 
 def _run_name(run: dict[str, Any]) -> str:
