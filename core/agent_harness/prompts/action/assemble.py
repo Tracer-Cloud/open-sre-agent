@@ -88,7 +88,7 @@ def build_action_system_prompt_envelope(turn_snapshot: TurnSnapshot) -> PromptEn
             # Trailing separators stay in the block; avoid ``base + "\n\n"`` which
             # copies the entire stable prompt body on every turn.
             content="".join((_SYSTEM_PROMPT_BASE, "\n\n")),
-            provenance="core.agent_harness.prompts.action.opensre_system_prompt.md",
+            provenance="core.agent_harness.prompts.opensre_system_prompt.md",
         ),
     ]
     vendor_fragments = action_prompt_vendor_fragments()
