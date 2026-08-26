@@ -3,12 +3,18 @@
 from __future__ import annotations
 
 import io
+from collections.abc import Callable
+from typing import Any
 
 from rich.console import Console
 
+from core.agent_harness import OutputSink
 from core.agent_harness.accounting.turn_accounting import DefaultTurnAccounting
+from core.agent_harness.ports import ConfirmFn
+from core.agent_harness.runtime import TurnPlan
 from core.agent_harness.session.persistence.memory import InMemorySessionStore
 from core.agent_harness.turns.orchestrator import run_turn
+from core.tool import ToolExecutionHooks
 from surfaces.interactive_shell.runtime.core.turn_accounting import (
     ToolCallingTurnResult,
 )
@@ -33,7 +39,19 @@ def _console() -> Console:
     return Console(file=io.StringIO(), force_terminal=False, color_system=None, width=80)
 
 
-def _unhandled_turn(*_args: object, **_kwargs: object) -> ToolCallingTurnResult:
+def _unhandled_turn(
+    message: str,
+    session: Session,
+    console: Console,
+    *,
+    confirm_fn: ConfirmFn | None = None,
+    is_tty: bool | None = None,
+    request_exit: Callable[[], None] | None = None,
+    turn_plan: TurnPlan | None = None,
+    output: OutputSink | None = None,
+    tool_hooks: ToolExecutionHooks | None = None,
+) -> ToolCallingTurnResult:
+    """A RunActionToolTurn seam whose action turn handles nothing."""
     return ToolCallingTurnResult(
         planned_count=0,
         executed_count=0,
@@ -65,7 +83,19 @@ def test_recorder_flushes_once_for_silent_handled_turn() -> None:
     recorder = _Recorder()
     session = Session()
 
-    def _handled(*_args: object, **_kwargs: object) -> ToolCallingTurnResult:
+    def _handled(
+        message: str,
+        session: Session,
+        console: Console,
+        *,
+        confirm_fn: ConfirmFn | None = None,
+        is_tty: bool | None = None,
+        request_exit: Callable[[], None] | None = None,
+        turn_plan: TurnPlan | None = None,
+        output: OutputSink | None = None,
+        tool_hooks: ToolExecutionHooks | None = None,
+    ) -> ToolCallingTurnResult:
+        """A RunActionToolTurn seam whose action turn handles the request."""
         return ToolCallingTurnResult(
             planned_count=1,
             executed_count=1,
@@ -98,7 +128,14 @@ def test_default_turn_accounting_persists_action_only_context() -> None:
     session = Session(store=storage)
     storage.open_session(session)
 
-    def _handled(*_args: object, **_kwargs: object) -> ToolCallingTurnResult:
+    def _handled(
+        text: str,
+        *,
+        confirm_fn: ConfirmFn | None = None,
+        is_tty: bool | None = None,
+        turn_plan: Any = None,
+    ) -> ToolCallingTurnResult:
+        """An ExecuteActions seam whose action turn handles the request."""
         return ToolCallingTurnResult(
             planned_count=1,
             executed_count=1,
