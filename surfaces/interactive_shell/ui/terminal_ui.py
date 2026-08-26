@@ -57,15 +57,18 @@ def render_prompt_region(session: Session, state: ReplState, spinner: SpinnerSta
     with the rest of the region on submit (``erase_when_done=True``).
     """
     base = prompt_rendering._prompt_message(session).value
-    if state.is_awaiting_confirmation():
-        return ANSI(f"\n{state.confirm_prompt_text}\n{base}")
-    prefix = strip_cpr_sequences(
-        prompt_rendering.resolve_prompt_prefix_ansi(
-            inline_spinner=spinner.inline_spinner_ansi(),
-            idle_hint=prompt_rendering.resolve_idle_hint_ansi(session),
-        )
-    )
     auto_line = strip_cpr_sequences(auto_status_ansi(session))
+    # The confirmation prompt takes the prefix row so every state renders the
+    # same rows (blank, prefix, auto status, input) — no height delta on redraw.
+    if state.is_awaiting_confirmation():
+        prefix = state.confirm_prompt_text
+    else:
+        prefix = strip_cpr_sequences(
+            prompt_rendering.resolve_prompt_prefix_ansi(
+                inline_spinner=spinner.inline_spinner_ansi(),
+                idle_hint=prompt_rendering.resolve_idle_hint_ansi(session),
+            )
+        )
     return ANSI(f"\n{prefix}\n{auto_line}\n{base}")
 
 

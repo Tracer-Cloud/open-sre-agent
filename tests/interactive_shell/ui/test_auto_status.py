@@ -61,3 +61,25 @@ def test_render_prompt_region_shows_the_auto_status_line() -> None:
     plain = re.sub(r"\x1b\[[0-9;]*[A-Za-z]|\x1b\][^\x07]*\x07", "", rendered)
 
     assert "Auto (Med)" in plain
+
+
+def test_prompt_region_height_is_constant_across_confirmation() -> None:
+    """Entering/leaving confirmation must not change the region's row count."""
+    from surfaces.interactive_shell.runtime.core.state import (
+        ReplState,
+        SpinnerState,
+        TurnPhase,
+    )
+    from surfaces.interactive_shell.ui.terminal_ui import render_prompt_region
+
+    session = Session()
+    spinner = SpinnerState()
+
+    normal_rows = render_prompt_region(session, ReplState(), spinner).value.count("\n")
+
+    confirming = ReplState()
+    confirming.phase = TurnPhase.AWAITING_CONFIRMATION
+    confirming.confirm_prompt_text = "Proceed? [Y/n]"
+    confirm_rows = render_prompt_region(session, confirming, spinner).value.count("\n")
+
+    assert normal_rows == confirm_rows
