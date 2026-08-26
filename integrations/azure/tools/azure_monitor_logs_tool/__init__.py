@@ -11,15 +11,52 @@ from config.constants.azure import (
     AZURE_MAX_RESULTS_DEFAULT,
     AZURE_MAX_RESULTS_HARD_LIMIT,
 )
+from core.domain.types.evidence import record_evidence_entry
 from core.domain.types.tools import ToolSurface
 from core.tool import report_run_error
 from core.tool_framework import tool
 from core.tool_framework.utils import tool_unavailable
+from infrastructure.text.truncation import truncate
+
+#: Bound the KQL query text echoed into a report summary -- it can be a long
+#: or multi-line query built by the caller, not just the short bounded form.
+_QUERY_SUMMARY_TRUNCATE_LEN = 80
 
 
 def _bounded_limit(limit: int, max_results: int) -> int:
     safe_max = max(1, min(max_results, AZURE_MAX_RESULTS_HARD_LIMIT))
     return max(1, min(limit, safe_max))
+
+
+def _map_query_azure_monitor_logs(
+    evidence: dict[str, Any], output: dict[str, Any], _tool_input: dict[str, Any]
+) -> None:
+    """Cite the row count and a bounded snippet of the KQL query executed.
+
+    ``rows`` is truncated to ``effective_limit`` after the query runs, so a
+    returned count at that ceiling may understate how many rows actually
+    matched -- use the "N+" convention.
+    """
+    if not output.get("available"):
+        return
+    total = output.get("total_returned", 0)
+    if not total:
+        return
+    effective_limit = output.get("effective_limit", total)
+    count_label = f"{total}+" if total >= effective_limit else str(total)
+    query = truncate(
+        str(output.get("query", "")).replace("\r\n", " ").replace("\r", " ").replace("\n", " "),
+        _QUERY_SUMMARY_TRUNCATE_LEN,
+    )
+    summary = f"{count_label} row(s)"
+    if query:
+        summary += f" for query '{query}'"
+    record_evidence_entry(
+        evidence,
+        source="query_azure_monitor_logs",
+        label="Azure Monitor Logs",
+        summary=summary,
+    )
 
 
 def _azure_available(sources: dict[str, dict[str, Any]]) -> bool:
@@ -79,6 +116,7 @@ def _ensure_take_clause(query: str, limit: int) -> str:
     is_available=_azure_available,
     injected_params=("access_token", "workspace_id"),
     extract_params=_azure_extract_params,
+    evidence_mapper=_map_query_azure_monitor_logs,
 )
 def query_azure_monitor_logs(
     workspace_id: str,
@@ -153,5 +191,6 @@ def query_azure_monitor_logs(
         "integration_id": integration_id,
         "query": bounded_query,
         "total_returned": len(rows),
+        "effective_limit": effective_limit,
         "rows": rows,
     }
