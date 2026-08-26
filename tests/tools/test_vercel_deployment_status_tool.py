@@ -174,6 +174,25 @@ class TestMapVercelDeploymentStatus:
 
         assert evidence["catalog_entries"][0]["summary"] == "10+ deployment(s), 1+ failed"
 
+    def test_qualifies_zero_failed_when_page_is_saturated(self) -> None:
+        """Regression: a saturated page with zero failures visible must not
+        claim '0 failed' as an exact total -- there could be more beyond the
+        returned page."""
+        evidence: dict[str, Any] = {}
+
+        _map_vercel_deployment_status(
+            evidence,
+            {
+                "available": True,
+                "total": 10,
+                "deployments": [{"id": "dpl_1"}] * 10,
+                "failed_deployments": [],
+            },
+            {"limit": 10},
+        )
+
+        assert evidence["catalog_entries"][0]["summary"] == "10+ deployment(s), 0+ failed"
+
     def test_records_nothing_when_no_deployments(self) -> None:
         evidence: dict[str, Any] = {}
 

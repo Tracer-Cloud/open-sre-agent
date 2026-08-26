@@ -188,6 +188,27 @@ class TestMapVercelDeploymentLogs:
             evidence["catalog_entries"][0]["summary"] == "1 event(s), 0 matching an error keyword"
         )
 
+    def test_qualifies_counts_when_saturated_including_zero_errors(self) -> None:
+        """Regression: a saturated events page with zero keyword matches must
+        not claim '0 matching an error keyword' as an exact total, and a
+        saturated runtime-log page must qualify its count too."""
+        evidence: dict[str, Any] = {}
+
+        _map_vercel_deployment_logs(
+            evidence,
+            {
+                "available": True,
+                "total_events": 100,
+                "error_events": [],
+                "total_runtime_logs": 100,
+            },
+            {"limit": 100},
+        )
+
+        assert evidence["catalog_entries"][0]["summary"] == (
+            "100+ event(s), 0+ matching an error keyword, 100+ runtime log(s)"
+        )
+
     def test_records_nothing_when_no_events_or_logs(self) -> None:
         evidence: dict[str, Any] = {}
 
