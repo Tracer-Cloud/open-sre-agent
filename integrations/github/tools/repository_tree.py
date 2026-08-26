@@ -40,11 +40,13 @@ def _map_get_github_repository_tree(
 ) -> None:
     tree = output.get("tree")
     if isinstance(tree, dict) and isinstance(tree.get("tree"), list):
+        count = len(tree["tree"])
+        word = "item" if count == 1 else "items"
         record_evidence_entry(
             evidence,
             source="get_github_repository_tree",
             label="GitHub Repository Tree",
-            summary=f"{len(tree['tree'])} items",
+            summary=f"{count} {word}",
         )
 
 

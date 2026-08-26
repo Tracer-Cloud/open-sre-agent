@@ -346,11 +346,13 @@ def _map_list_github_security_alerts(
 ) -> None:
     alerts = output.get("alerts", [])
     if alerts:
+        count = len(alerts)
+        word = "alert" if count == 1 else "alerts"
         record_evidence_entry(
             evidence,
             source="list_github_security_alerts",
             label="GitHub Security Alerts",
-            summary=f"{len(alerts)} alerts",
+            summary=f"{count} {word}",
         )
 
 

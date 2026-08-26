@@ -103,11 +103,13 @@ def _map_get_github_star_history(
 ) -> None:
     daily = output.get("daily", [])
     if daily:
+        count = len(daily)
+        word = "day" if count == 1 else "days"
         record_evidence_entry(
             evidence,
             source="get_github_star_history",
             label="GitHub Star History",
-            summary=f"{len(daily)} days recorded",
+            summary=f"{count} {word} recorded",
         )
 
 

@@ -54,11 +54,13 @@ def _map_list_github_commits(
 ) -> None:
     commits = output.get("commits", [])
     if commits:
+        count = len(commits)
+        word = "commit" if count == 1 else "commits"
         record_evidence_entry(
             evidence,
             source="list_github_commits",
             label="GitHub Commits",
-            summary=f"{len(commits)} commits",
+            summary=f"{count} {word}",
         )
 
 
