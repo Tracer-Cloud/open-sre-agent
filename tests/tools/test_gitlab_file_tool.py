@@ -267,6 +267,27 @@ class TestMapGetGitlabFileContents:
         assert entries[0]["source"] == "get_gitlab_file"
         assert entries[0]["summary"] == "'config/settings.yaml' @ main, 3 line(s)"
 
+    def test_records_correct_line_count_with_trailing_newline(self) -> None:
+        """Regression: a trailing newline must not be counted as an extra line."""
+        evidence: dict[str, Any] = {}
+
+        _map_get_gitlab_file_contents(
+            evidence,
+            {
+                "available": True,
+                "file": {
+                    "file_path": "config/settings.yaml",
+                    "ref": "main",
+                    "content": "line1\nline2\nline3\n",
+                },
+            },
+            {},
+        )
+
+        assert (
+            evidence["catalog_entries"][0]["summary"] == "'config/settings.yaml' @ main, 3 line(s)"
+        )
+
     def test_records_entry_with_zero_lines_for_empty_file(self) -> None:
         evidence: dict[str, Any] = {}
 
