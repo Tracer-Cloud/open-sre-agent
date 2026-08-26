@@ -146,26 +146,13 @@ friendly_progress_label() {
   local label="$1"
 
   case "$label" in
-    *Fetching\ latest\ main\ build\ metadata*|*Fetching\ latest\ release\ version*|*Fetching\ release\ metadata*)
-      printf 'fetching metadata'
+    *Downloading\ OpenSRE*)
+      printf 'downloading'
       ;;
-    *Preparing\ opensre*)
-      printf 'resolving build'
-      ;;
-    *Downloading\ release\ archive*)
-      printf 'downloading archive'
-      ;;
-    *Downloading\ and\ verifying\ checksum*|*Verifying\ release\ archive*)
+    *Fetching\ and\ verifying\ checksum*|*Verifying\ release\ archive*)
       printf 'verifying checksum'
       ;;
-    *Extracting\ and\ verifying\ binary*)
-      printf 'verifying binary'
-      ;;
-    *Installing\ *opensre*)
-      printf 'installing binary'
-      ;;
     *)
-      label="${label#*\] }"
       printf '%s' "$label"
       ;;
   esac
@@ -313,6 +300,7 @@ run_with_progress() {
   local status
   log_file="$(mktemp "${TMPDIR:-/tmp}/opensre-install-progress.XXXXXX")"
 
+  step "$label"
   "$@" >"$log_file" 2>&1 &
   command_pid=$!
 
@@ -346,84 +334,6 @@ run_with_progress() {
   fi
 
   rm -f "$log_file"
-  printf '  %s%s%s %s\n' "${COLOR_GREEN:-}" "${SUCCESS_MARK:-ok}" "${COLOR_RESET:-}" "$label"
-}
-
-capture_with_progress() {
-  local __result_var="$1"
-  local label="$2"
-  shift 2
-
-  if ! is_interactive_terminal; then
-    step "$label"
-    local captured
-    local status
-    if captured="$("$@")"; then
-      printf -v "$__result_var" '%s' "$captured"
-      return
-    else
-      status=$?
-    fi
-
-    if [ -n "$captured" ]; then
-      printf '%s\n' "$captured" >&2
-    fi
-    return "$status"
-  fi
-
-  local stdout_file
-  local stderr_file
-  local command_pid
-  local status
-  stdout_file="$(mktemp "${TMPDIR:-/tmp}/opensre-install-stdout.XXXXXX")"
-  stderr_file="$(mktemp "${TMPDIR:-/tmp}/opensre-install-stderr.XXXXXX")"
-
-  "$@" >"$stdout_file" 2>"$stderr_file" &
-  command_pid=$!
-
-  printf '\033[?25l'
-  animate_progress "$label" &
-  PROGRESS_PID=$!
-  trap 'kill "$command_pid" 2>/dev/null || true; finish_progress "$PROGRESS_PID"; rm -f "$stdout_file" "$stderr_file"; exit 130' INT TERM
-
-  if wait "$command_pid"; then
-    status=0
-  else
-    status=$?
-  fi
-
-  finish_progress "$PROGRESS_PID"
-  PROGRESS_PID=""
-  trap - INT TERM
-
-  if [ "$status" -ne 0 ]; then
-    printf '%sError:%s %s failed (exit %s).%s\n' "${COLOR_RED:-}" "${COLOR_RESET:-}" "$label" "$status" "${COLOR_RESET:-}" >&2
-    if [ "$status" -gt 128 ]; then
-      printf 'Process was terminated by signal %s (e.g. killed by the OS, possibly out-of-memory).\n' "$((status - 128))" >&2
-    fi
-    if [ ! -s "$stdout_file" ] && [ ! -s "$stderr_file" ]; then
-      printf '(no output was captured before the process ended)\n' >&2
-    else
-      cat "$stdout_file" >&2
-      cat "$stderr_file" >&2
-    fi
-    rm -f "$stdout_file" "$stderr_file"
-    return "$status"
-  fi
-
-  printf -v "$__result_var" '%s' "$(cat "$stdout_file")"
-  rm -f "$stdout_file" "$stderr_file"
-  printf '  %s%s%s %s\n' "${COLOR_GREEN:-}" "${SUCCESS_MARK:-ok}" "${COLOR_RESET:-}" "$label"
-}
-
-print_installer_header() {
-  if ! is_interactive_terminal; then
-    return
-  fi
-
-  log "${COLOR_BOLD:-}${COLOR_CYAN:-}OpenSRE Installer${COLOR_RESET:-}"
-  log "${COLOR_BOLD:-}Installing the OpenSRE CLI${COLOR_RESET:-}"
-  log ""
 }
 
 usage() {
@@ -1114,8 +1024,7 @@ configure_path() {
       path_line="fish_add_path \"${INSTALL_DIR}\""
       ;;
     *)
-      log "Add the following line to your shell profile to use ${BIN_NAME:-opensre}:"
-      log "  export PATH=\"${INSTALL_DIR}:\$PATH\""
+      log "Add ${INSTALL_DIR} to PATH to run ${BIN_NAME:-opensre} from any terminal."
       return
       ;;
   esac
@@ -1124,59 +1033,28 @@ configure_path() {
   [ "$rc_dir" != "$rc_file" ] && [ ! -d "$rc_dir" ] && mkdir -p "$rc_dir"
 
   if [ -f "$rc_file" ] && grep -qF "${INSTALL_DIR}" "$rc_file"; then
+    log "PATH already configured in ${rc_file}"
     return
   fi
 
   local marker="# Added by opensre installer"
   if [ -f "$rc_file" ] && grep -qF "$marker" "$rc_file" && grep -qF "${INSTALL_DIR}" "$rc_file"; then
+    log "PATH already configured in ${rc_file}"
     return
   fi
 
   printf '\n%s\n%s\n' "$marker" "$path_line" >> "$rc_file"
-
-  log ""
-  log "${BIN_NAME:-opensre} has been added to PATH in ${rc_file}."
-  log "To apply now, run:  source \"${rc_file}\""
-  log "Or open a new terminal."
+  log "PATH configured in ${rc_file}"
 }
 
 ensure_on_path() {
-  # A child process cannot edit the parent shell's PATH, so when the install
-  # dir is not already on PATH, link the binary into a user-writable directory
-  # that is — no sudo, and `opensre` works in this terminal immediately. Only
-  # when no PATH directory is writable fall back to the shell rc update.
-  local link_dir
-
-  if [ "$platform" != "windows" ] && ! path_has_dir "$INSTALL_DIR"; then
-    if link_dir="$(select_writable_path_candidate_from_list "$PATH")" \
-      && mkdir -p "$link_dir" 2>/dev/null \
-      && ln -sf "${INSTALL_DIR}/${BIN_NAME}" "${link_dir}/${BIN_NAME}" 2>/dev/null; then
-      success "Linked ${BIN_NAME} into ${link_dir} — ready to run in this terminal."
-      return
-    fi
+  log "Checking PATH configuration..."
+  if path_has_dir "$INSTALL_DIR"; then
+    log "PATH already configured"
+    return
   fi
 
   configure_path
-}
-
-print_success_screen() {
-  local version="$1"
-  local sep="────────────────────────────────────────────"
-
-  if [ ! -t 1 ]; then
-    sep="--------------------------------------------"
-  fi
-
-  log ""
-  log "$sep"
-  success "Welcome to OpenSRE"
-  if [ "$version" = "main" ]; then
-    log "  ${COLOR_BOLD:-}opensre (main build) installed successfully${COLOR_RESET:-}"
-  else
-    log "  ${COLOR_BOLD:-}opensre v${version} installed successfully${COLOR_RESET:-}"
-  fi
-  log "$sep"
-  log ""
 }
 
 cleanup() {
@@ -1226,15 +1104,7 @@ resolve_release_metadata() {
   version="$requested_version"
   release_tag=""
 
-  if [ "$INSTALL_CHANNEL" = "main" ]; then
-    metadata_step="[1/5] Fetching latest main build metadata"
-  elif [ -n "$version" ]; then
-    metadata_step="[1/5] Fetching release metadata for v${version}"
-  else
-    metadata_step="[1/5] Fetching latest release version"
-  fi
-
-  capture_with_progress release_json "$metadata_step" fetch_release_json "$version" || {
+  release_json="$(fetch_release_json "$version")" || {
     if [ "$INSTALL_CHANNEL" = "main" ]; then
       die "Failed to query main build metadata from GitHub."
     fi
@@ -1345,8 +1215,16 @@ create_temp_workspace() {
 }
 
 download_release_archive() {
+  local download_label
+
   archive_path="${tmp_dir}/${archive}"
-  run_with_progress "[2/5] Downloading release archive (${archive})" download_to "$download_url" "$archive_path" \
+  if [ "$INSTALL_CHANNEL" = "main" ]; then
+    download_label="Downloading OpenSRE main build for ${platform}-${asset_arch}"
+  else
+    download_label="Downloading OpenSRE v${version} for ${platform}-${asset_arch}"
+  fi
+
+  run_with_progress "$download_label" download_to "$download_url" "$archive_path" \
     || die "Failed to download '${archive}'."
 }
 
@@ -1355,9 +1233,10 @@ verify_release_checksum() {
 
   if release_has_asset "$release_json" "$checksum_asset"; then
     checksum_path="${tmp_dir}/${checksum_asset}"
-    run_with_progress "[3/5] Downloading and verifying checksum (${checksum_asset})" \
+    run_with_progress "Fetching and verifying checksum" \
       download_and_verify_checksum "$checksum_url" "$checksum_path" "$archive_path" \
       || die "Failed to download or verify checksum '${checksum_asset}'."
+    log "Checksum verification passed"
     return
   fi
 
@@ -1371,24 +1250,22 @@ verify_release_checksum() {
 extract_release_binary() {
   local verified_binary
 
-  capture_with_progress verified_binary "[4/5] Extracting and verifying binary" extract_and_verify_binary "$archive_path" "$tmp_dir"
+  verified_binary="$(extract_and_verify_binary "$archive_path" "$tmp_dir")" \
+    || die "Failed to extract or verify '${archive}'."
   binary_path="${verified_binary%%$'\n'*}"
   installed_version="${verified_binary#*$'\n'}"
 }
 
 install_release_binary() {
-  run_with_progress "[5/5] Installing ${BIN_NAME} to ${INSTALL_DIR}" install_verified_binary "$binary_path" "${INSTALL_DIR}/${BIN_NAME}"
+  install_verified_binary "$binary_path" "${INSTALL_DIR}/${BIN_NAME}" \
+    || die "Failed to install ${BIN_NAME} to '${INSTALL_DIR}'."
 }
 
 print_install_confirmation() {
-  if [ "$INSTALL_CHANNEL" = "main" ]; then
-    if [ "$installed_version" = "main" ]; then
-      success "Installed ${BIN_NAME} main build to ${INSTALL_DIR}/${BIN_NAME}"
-    else
-      success "Installed ${BIN_NAME} main build (${installed_version}) to ${INSTALL_DIR}/${BIN_NAME}"
-    fi
+  if [ "$installed_version" = "main" ]; then
+    log "OpenSRE main build installed successfully to ${INSTALL_DIR}/${BIN_NAME}"
   else
-    success "Installed ${BIN_NAME} v${installed_version} to ${INSTALL_DIR}/${BIN_NAME}"
+    log "OpenSRE v${installed_version} installed successfully to ${INSTALL_DIR}/${BIN_NAME}"
   fi
 }
 
@@ -1396,7 +1273,7 @@ finish_install() {
   print_install_confirmation
   ensure_on_path
   ensure_github_cli
-  print_success_screen "$installed_version"
+  log "Run '${BIN_NAME}' to get started!"
 }
 
 main() {
@@ -1404,7 +1281,6 @@ main() {
   require_prerequisites
   detect_platform
   resolve_install_dir
-  print_installer_header
   resolve_release_metadata
   select_archive_asset
   prepare_download

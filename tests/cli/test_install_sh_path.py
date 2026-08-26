@@ -80,41 +80,6 @@ def _run_logging_snippet(body: str) -> subprocess.CompletedProcess[str]:
     return subprocess.run(["bash", "-c", script], capture_output=True, text=True)
 
 
-def _find_release_metadata_step_block() -> str:
-    lines = INSTALL_SH.read_text().splitlines()
-    for i, line in enumerate(lines):
-        if line.strip() != 'release_tag=""':
-            continue
-
-        block = []
-        for candidate in lines[i + 1 :]:
-            block.append(candidate)
-            if candidate.strip() == "fi":
-                return "\n".join(block)
-
-    raise RuntimeError(f"Could not locate release metadata step block in {INSTALL_SH}.")
-
-
-def _run_release_metadata_step(
-    install_channel: str = "release", version: str = ""
-) -> subprocess.CompletedProcess[str]:
-    block = _find_release_metadata_step_block()
-    install_sh = _INSTALL_SH_SHELL
-    script = textwrap.dedent(f"""\
-        eval "$(awk '/^REPO=/{{exit}} {{print}}' {install_sh})"
-        eval "$(awk '
-            /^[a-z_][a-z_]*\\(\\)/ {{ in_fn=1 }}
-            in_fn {{ print }}
-            in_fn && /^\\}}$/ {{ in_fn=0 }}
-        ' {install_sh})"
-        INSTALL_CHANNEL="{install_channel}"
-        version="{version}"
-        {block}
-        printf '%s\\n' "$metadata_step"
-    """)
-    return subprocess.run(["bash", "-c", script], capture_output=True, text=True)
-
-
 def test_install_sh_logging_falls_back_to_plain_text_when_not_tty() -> None:
     result = _run_logging_snippet(
         """
@@ -149,15 +114,19 @@ def test_install_sh_defines_tty_aware_ansi_formatting() -> None:
     assert "success()" in source
 
 
-def test_install_sh_success_screen_has_visual_structure() -> None:
-    result = _run_logging_snippet("print_success_screen 2026.4.1")
+def test_install_sh_prints_concise_install_confirmation() -> None:
+    result = _run_logging_snippet(
+        """
+        BIN_NAME="opensre"
+        INSTALL_DIR="/tmp/bin"
+        installed_version="2026.4.1"
+        print_install_confirmation
+        """
+    )
     output = result.stdout + result.stderr
 
     assert result.returncode == 0, result.stderr
-    assert "--------------------------------------------" in output
-    assert "Success: Welcome to OpenSRE" in output
-    assert "opensre v2026.4.1 installed successfully" in output
-    assert "Next steps:" not in output
+    assert output == "OpenSRE v2026.4.1 installed successfully to /tmp/bin/opensre\n"
 
 
 def test_install_sh_does_not_auto_launch_onboarding() -> None:
@@ -165,13 +134,6 @@ def test_install_sh_does_not_auto_launch_onboarding() -> None:
 
     assert "launch_onboarding_after_install" not in source
     assert "Launching ${BIN_NAME} onboard" not in source
-
-
-def test_install_sh_has_step_for_explicit_version_fetch() -> None:
-    result = _run_release_metadata_step(version="2026.4.29")
-
-    assert result.returncode == 0, result.stderr
-    assert "[1/5] Fetching release metadata for v2026.4.29" in result.stdout
 
 
 def test_install_sh_defaults_to_main_build_channel() -> None:
@@ -192,12 +154,10 @@ def test_install_sh_defines_progress_helpers() -> None:
         "terminal_columns()",
         "truncate_text()",
         "friendly_progress_label()",
-        "print_installer_header()",
         "progress_frame()",
         "draw_progress()",
         "finish_progress()",
         "run_with_progress()",
-        "capture_with_progress()",
         "binary_app_root()",
         "install_binary_app()",
         "print_binary_diagnostics()",
@@ -212,14 +172,12 @@ def test_install_sh_defines_progress_helpers() -> None:
 
 
 def test_install_sh_draw_progress_fits_terminal_width_with_long_labels() -> None:
-    long_checksum = (
-        "[3/5] Downloading and verifying checksum (opensre_main_darwin-arm64.tar.gz.sha256)"
-    )
+    download_label = "Downloading OpenSRE main build for darwin-arm64"
     result = _run_logging_snippet(
         f"""
         terminal_columns() {{ printf '60\\n'; }}
         terminal_supports_unicode() {{ return 1; }}
-        draw_progress {shlex.quote(long_checksum)} 9
+        draw_progress {shlex.quote(download_label)} 9
         """
     )
     output = result.stdout + result.stderr
@@ -230,20 +188,17 @@ def test_install_sh_draw_progress_fits_terminal_width_with_long_labels() -> None
     assert result.returncode == 0, result.stderr
     assert visible_segments
     assert all(len(segment) <= 60 for segment in visible_segments)
-    assert "verifying checksum" in visible_segments[-1]
-    assert "opensre_main_darwin-arm64" not in visible_segments[-1]
+    assert "downloading" in visible_segments[-1]
 
 
 def test_install_sh_animated_repaints_do_not_wrap_or_leave_long_label_residue() -> None:
-    long_checksum = (
-        "[3/5] Downloading and verifying checksum (opensre_main_darwin-arm64.tar.gz.sha256)"
-    )
+    download_label = "Downloading OpenSRE main build for darwin-arm64"
     result = _run_logging_snippet(
         f"""
         is_interactive_terminal() {{ return 0; }}
         terminal_columns() {{ printf '56\\n'; }}
         terminal_supports_unicode() {{ return 1; }}
-        run_with_progress {shlex.quote(long_checksum)} bash -c 'sleep 0.25'
+        run_with_progress {shlex.quote(download_label)} bash -c 'sleep 0.25'
         """
     )
     output = result.stdout + result.stderr
@@ -256,23 +211,7 @@ def test_install_sh_animated_repaints_do_not_wrap_or_leave_long_label_residue() 
     assert result.returncode == 0, result.stderr
     assert animated_segments
     assert all(len(segment) <= 56 for segment in animated_segments)
-    assert all("opensre_main_darwin-arm64" not in segment for segment in animated_segments)
-
-
-def test_install_sh_header_is_stable_without_intro_animation() -> None:
-    result = _run_logging_snippet(
-        """
-        is_interactive_terminal() { return 0; }
-        print_installer_header
-        """
-    )
-    output = result.stdout + result.stderr
-
-    assert result.returncode == 0, result.stderr
-    assert "OpenSRE Installer" in output
-    assert "Installing the OpenSRE CLI" in output
-    assert "preparing installer" not in output
-    assert "\x1b[2J" not in output
+    assert all("darwin-arm64" not in segment for segment in animated_segments)
 
 
 def test_install_sh_progress_plain_when_not_tty() -> None:
@@ -288,40 +227,6 @@ def test_install_sh_progress_plain_when_not_tty() -> None:
     assert "work complete" in output
     assert "\x1b[" not in output
     assert "\r" not in output
-
-
-def test_install_sh_capture_with_progress_keeps_stdout_value_clean() -> None:
-    result = _run_logging_snippet(
-        """
-        is_interactive_terminal() { return 0; }
-        terminal_supports_unicode() { return 1; }
-        capture_with_progress captured_value "Capture value" bash -c 'printf "release-json"'
-        printf '\\nRESULT:%s\\n' "$captured_value"
-        """
-    )
-
-    assert result.returncode == 0, result.stderr
-    assert "RESULT:release-json" in result.stdout
-    assert "RESULT:Capture value" not in result.stdout
-
-
-def test_install_sh_capture_with_progress_preserves_failure_status_and_logs() -> None:
-    result = _run_logging_snippet(
-        """
-        if capture_with_progress captured_value "Failing capture step" bash -c 'echo hidden-out; echo hidden-err >&2; exit 7'; then
-            exit 99
-        else
-            progress_status=$?
-        fi
-        exit "$progress_status"
-        """
-    )
-    output = result.stdout + result.stderr
-
-    assert result.returncode == 7
-    assert "Failing capture step" in output
-    assert "hidden-out" in output
-    assert "hidden-err" in output
 
 
 def test_install_sh_run_with_progress_prints_captured_logs_on_failure() -> None:
@@ -394,15 +299,54 @@ def test_install_sh_installs_pyinstaller_onedir_app(tmp_path: Path) -> None:
     assert "opensre test" in result.stdout
 
 
-def test_install_sh_uses_five_step_extract_verify_install_labels() -> None:
+def test_install_sh_uses_concise_unnumbered_install_messages() -> None:
     source = INSTALL_SH.read_text()
 
-    assert "[3/5] Downloading and verifying checksum" in source
-    assert "[4/5] Extracting and verifying binary" in source
-    assert "[5/5] Installing ${BIN_NAME} to ${INSTALL_DIR}" in source
-    assert "Preparing opensre" not in source
-    assert "[5/5] Extracting release archive" not in source
-    assert 'capture_with_progress installed_version "Verifying installed binary"' not in source
+    assert "Downloading OpenSRE main build for ${platform}-${asset_arch}" in source
+    assert 'run_with_progress "Fetching and verifying checksum"' in source
+    assert 'log "Checksum verification passed"' in source
+    assert "Run '${BIN_NAME}' to get started!" in source
+    assert re.search(r"\[[0-9]+/[0-9]+\]", source) is None
+
+
+def test_install_sh_concise_output_sequence() -> None:
+    result = _run_logging_snippet(
+        """
+        INSTALL_CHANNEL="main"
+        platform="darwin"
+        asset_arch="arm64"
+        archive="opensre_main_darwin-arm64.tar.gz"
+        tmp_dir="/tmp"
+        download_url="https://example.invalid/archive"
+        checksum_asset="${archive}.sha256"
+        checksum_url="${download_url}.sha256"
+        release_json="{}"
+        INSTALL_DIR="/tmp/bin"
+        BIN_NAME="opensre"
+        installed_version="2026.8.26"
+        PATH="${INSTALL_DIR}:${PATH}"
+        download_to() { return 0; }
+        release_has_asset() { return 0; }
+        download_and_verify_checksum() { return 0; }
+
+        download_release_archive
+        verify_release_checksum
+        print_install_confirmation
+        ensure_on_path
+        log "Run '${BIN_NAME}' to get started!"
+        """
+    )
+
+    assert result.returncode == 0, result.stderr
+    assert result.stdout.splitlines() == [
+        "Downloading OpenSRE main build for darwin-arm64",
+        "Fetching and verifying checksum",
+        "Checksum verification passed",
+        "OpenSRE v2026.8.26 installed successfully to /tmp/bin/opensre",
+        "Checking PATH configuration...",
+        "PATH already configured",
+        "Run 'opensre' to get started!",
+    ]
 
 
 def test_zsh_writes_export_to_zshrc(tmp_path: Path) -> None:
@@ -444,7 +388,8 @@ def test_unknown_shell_prints_manual_instructions(tmp_path: Path) -> None:
     assert not (home / ".zshrc").exists()
     assert not (home / ".bashrc").exists()
     assert not (home / ".bash_profile").exists()
-    assert "export PATH" in result.stdout or "export PATH" in result.stderr
+    assert "Add " in result.stdout
+    assert " to PATH to run opensre" in result.stdout
 
 
 def test_idempotent_no_duplicate_on_rerun(tmp_path: Path) -> None:
@@ -480,11 +425,12 @@ def test_marker_comment_present(tmp_path: Path) -> None:
     assert "# Added by opensre installer" in content
 
 
-def test_post_install_message_mentions_source(tmp_path: Path) -> None:
+def test_post_install_message_is_concise(tmp_path: Path) -> None:
     result = _run(tmp_path, shell="/bin/zsh")
     assert result.returncode == 0, result.stderr
     combined = result.stdout + result.stderr
-    assert "source" in combined
+    assert "PATH configured in " in combined
+    assert "source" not in combined
 
 
 def test_fish_creates_parent_dirs(tmp_path: Path) -> None:
@@ -521,7 +467,10 @@ def test_install_ps1_contains_onboarding_hint() -> None:
 
 
 def _run_ensure_on_path(
-    tmp_path: Path, path_dirs: list[str], platform: str = "linux"
+    tmp_path: Path,
+    path_dirs: list[str],
+    platform: str = "linux",
+    include_install_dir: bool = False,
 ) -> tuple[subprocess.CompletedProcess[str], Path]:
     """Call the real ensure_on_path() with INSTALL_DIR off PATH.
 
@@ -534,7 +483,8 @@ def _run_ensure_on_path(
     binary.write_text("#!/usr/bin/env bash\necho opensre-ok\n")
     binary.chmod(0o755)
 
-    path_value = ":".join([*path_dirs, "/usr/bin", "/bin"])
+    effective_path_dirs = [str(install_dir), *path_dirs] if include_install_dir else path_dirs
+    path_value = ":".join([*effective_path_dirs, "/usr/bin", "/bin"])
     script = textwrap.dedent(f"""\
         eval "$(awk '
             /^[a-z_][a-z_]*\\(\\)/ {{ in_fn=1 }}
@@ -558,20 +508,25 @@ def _run_ensure_on_path(
     return completed, install_dir
 
 
-def test_ensure_on_path_links_into_writable_path_dir(tmp_path: Path) -> None:
-    """A writable dir already on PATH gets a symlink, so `opensre` works in
-    the current terminal immediately — no sudo, no rc-file edit needed."""
-    writable_dir = tmp_path / "on-path-bin"
-    writable_dir.mkdir()
-
-    result, install_dir = _run_ensure_on_path(tmp_path, [str(writable_dir)])
+def test_ensure_on_path_reports_existing_configuration(tmp_path: Path) -> None:
+    result, _ = _run_ensure_on_path(tmp_path, [], include_install_dir=True)
 
     assert result.returncode == 0, result.stderr
-    link = writable_dir / "opensre"
-    assert link.is_symlink()
-    assert link.resolve() == (install_dir / "opensre").resolve()
-    assert "Linked opensre into" in result.stdout
-    assert not (tmp_path / "home" / ".zshrc").exists()
+    assert result.stdout.splitlines() == [
+        "Checking PATH configuration...",
+        "PATH already configured",
+    ]
+
+
+def test_ensure_on_path_does_not_link_into_arbitrary_dependency_bin(tmp_path: Path) -> None:
+    dependency_bin = tmp_path / "apache-spark" / "bin"
+    dependency_bin.mkdir(parents=True)
+
+    result, _ = _run_ensure_on_path(tmp_path, [str(dependency_bin)])
+
+    assert result.returncode == 0, result.stderr
+    assert not (dependency_bin / "opensre").exists()
+    assert (tmp_path / "home" / ".zshrc").exists()
 
 
 def test_ensure_on_path_falls_back_to_rc_update_without_writable_dir(tmp_path: Path) -> None:
@@ -591,23 +546,6 @@ def test_ensure_on_path_ignores_relative_path_entries(tmp_path: Path) -> None:
     assert result.returncode == 0, result.stderr
     assert not (tmp_path / "opensre").exists()
     assert (tmp_path / "home" / ".zshrc").exists()
-
-
-def test_ensure_on_path_skips_python_venv_bin(tmp_path: Path) -> None:
-    """``.venv/bin`` on PATH must not be hijacked (``uv run`` / editable installs)."""
-    venv_bin = tmp_path / ".venv" / "bin"
-    venv_bin.mkdir(parents=True)
-    (tmp_path / ".venv" / "pyvenv.cfg").write_text("home = /usr\n", encoding="utf-8")
-    safe_bin = tmp_path / "safe-bin"
-    safe_bin.mkdir()
-
-    result, install_dir = _run_ensure_on_path(tmp_path, [str(venv_bin), str(safe_bin)])
-
-    assert result.returncode == 0, result.stderr
-    assert not (venv_bin / "opensre").exists()
-    link = safe_bin / "opensre"
-    assert link.is_symlink()
-    assert link.resolve() == (install_dir / "opensre").resolve()
 
 
 def _run_ensure_github_cli(
