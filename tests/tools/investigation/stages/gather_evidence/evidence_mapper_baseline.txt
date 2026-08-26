@@ -13,8 +13,6 @@ GetErrorLogs
 GetRecentLogs
 GetResources
 GetServiceDependencies
-alertmanager_alerts
-alertmanager_silences
 argocd_application_diff
 argocd_application_status
 buzz_send_message

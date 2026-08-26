@@ -11,6 +11,7 @@ from __future__ import annotations
 
 from typing import Any
 
+from core.domain.types.evidence import record_evidence_entry
 from core.tool import BaseTool
 from core.tool_framework.utils import tool_unavailable
 from integrations.alertmanager.client import make_alertmanager_client
@@ -18,10 +19,35 @@ from integrations.alertmanager.client import make_alertmanager_client
 _FIRING_STATES = {"active", "unprocessed"}
 
 
+def _map_alertmanager_alerts(
+    evidence: dict[str, Any], output: dict[str, Any], _tool_input: dict[str, Any]
+) -> None:
+    """Record the alert landscape as one citeable entry, or nothing.
+
+    A failed call returns the unavailable envelope with ``alerts: []``, so the
+    emptiness check covers the error shape too — an entry reading "0 alerts"
+    would cost context on every later turn and support no claim.
+    """
+    alerts = output.get("alerts", [])
+    if not alerts:
+        return
+    summary = f"{len(alerts)} alerts"
+    firing = output.get("firing_alerts", [])
+    if firing:
+        summary += f", {len(firing)} firing"
+    record_evidence_entry(
+        evidence,
+        source="alertmanager_alerts",
+        label="Alertmanager Alerts",
+        summary=summary,
+    )
+
+
 class AlertmanagerAlertsTool(BaseTool):
     """Query Alertmanager for active, silenced, and inhibited alerts to correlate incident signals."""
 
     name = "alertmanager_alerts"
+    evidence_mapper = _map_alertmanager_alerts
     source = "alertmanager"
     description = (
         "Query Alertmanager to list firing, silenced, and inhibited alerts. "
@@ -182,10 +208,34 @@ Useful for understanding whether an alert was intentionally suppressed
 from core.tool import BaseTool
 
 
+def _map_alertmanager_silences(
+    evidence: dict[str, Any], output: dict[str, Any], _tool_input: dict[str, Any]
+) -> None:
+    """Record the silence landscape as one citeable entry, or nothing.
+
+    Same contract as the alerts mapper: the unavailable envelope carries
+    ``silences: []``, so a failed call records nothing.
+    """
+    silences = output.get("silences", [])
+    if not silences:
+        return
+    summary = f"{len(silences)} silences"
+    active = output.get("active_silences", [])
+    if active:
+        summary += f", {len(active)} active"
+    record_evidence_entry(
+        evidence,
+        source="alertmanager_silences",
+        label="Alertmanager Silences",
+        summary=summary,
+    )
+
+
 class AlertmanagerSilencesTool(BaseTool):
     """Query Alertmanager silences to detect suppressed alerts."""
 
     name = "alertmanager_silences"
+    evidence_mapper = _map_alertmanager_silences
     source = "alertmanager"
     description = (
         "Query Alertmanager silences to see which alerts are currently suppressed and why. "
