@@ -87,7 +87,7 @@ class TestMapGetMariadbProcessList:
         entries = evidence["catalog_entries"]
         assert len(entries) == 1
         assert entries[0]["source"] == "get_mariadb_process_list"
-        assert entries[0]["summary"] == "2 active process(es), longest running 40s"
+        assert entries[0]["summary"] == "2 active process(es) shown, longest running 40s"
 
     def test_records_nothing_when_no_processes(self) -> None:
         evidence: dict[str, Any] = {}

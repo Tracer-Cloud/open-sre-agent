@@ -17,7 +17,14 @@ from integrations.mariadb import (
 def _map_get_mariadb_process_list(
     evidence: dict[str, Any], output: dict[str, Any], _tool_input: dict[str, Any]
 ) -> None:
-    """Cite the active process count and the longest-running query."""
+    """Cite the returned process count and the longest-running query.
+
+    ``get_process_list`` applies its ``LIMIT`` in SQL itself, so
+    ``total_processes`` is always exactly ``len(processes)`` -- there is no
+    separate unbounded count. Say "shown" rather than implying this is every
+    active process on the server, since a busy server can have more active
+    processes than the query's result cap.
+    """
     if not output.get("available"):
         return
     processes = output.get("processes") or []
@@ -29,7 +36,7 @@ def _map_get_mariadb_process_list(
         source="get_mariadb_process_list",
         label="MariaDB Process List",
         summary=(
-            f"{output.get('total_processes', len(processes))} active process(es), "
+            f"{output.get('total_processes', len(processes))} active process(es) shown, "
             f"longest running {longest}s"
         ),
     )
