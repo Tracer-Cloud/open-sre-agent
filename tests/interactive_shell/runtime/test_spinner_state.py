@@ -5,6 +5,8 @@ from __future__ import annotations
 import re
 import time
 
+import pytest
+
 from surfaces.interactive_shell.runtime.core.state import SpinnerState
 
 _GLYPHS = SpinnerState._SPINNER_FRAMES
@@ -63,3 +65,17 @@ def test_spinner_empty_when_not_streaming() -> None:
     spinner.start()
     spinner.stop()
     assert spinner.inline_spinner_ansi() == ""
+
+
+def test_spinner_clips_long_phase_to_one_prompt_row(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Long investigation labels must not soft-wrap the prompt prefix row."""
+    monkeypatch.setattr(
+        "surfaces.interactive_shell.runtime.core.state.prompt_line_width",
+        lambda: 40,
+    )
+    spinner = SpinnerState()
+    spinner.set_phase("Gathering Datadog APM spans for checkout-service p99 regression analysis")
+    rendered = re.sub(r"\x1b\[[0-9;?]*[A-Za-z]", "", spinner.inline_spinner_ansi())
+    assert "\n" not in rendered
+    assert len(rendered) <= 40
+    assert rendered.endswith("…") or "esc to cancel" in rendered

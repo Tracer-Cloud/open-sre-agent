@@ -2,12 +2,16 @@
 
 from __future__ import annotations
 
+from typing import TYPE_CHECKING
+
 from config.constants.repl_autonomy import DEFAULT_AUTO_LEVEL, format_auto_status_plain
 from infrastructure.safety.terminal_output import strip_terminal_controls
 from infrastructure.terminal import theme as ui_theme
-from surfaces.interactive_shell.runtime import Session
 from surfaces.interactive_shell.ui.input_prompt.layout import clip_prompt_text, prompt_line_width
 from surfaces.shared.terminal.tables.provider import detect_provider_model
+
+if TYPE_CHECKING:
+    from surfaces.interactive_shell.session import Session
 
 
 def auto_status_ansi(session: Session) -> str:

@@ -2,50 +2,21 @@
 
 from __future__ import annotations
 
-from prompt_toolkit.application.current import get_app_or_none
+from surfaces.shared.terminal.prompt_layout import (
+    DEFAULT_TERMINAL_COLUMNS,
+    clip_prompt_text,
+    prompt_line_width,
+    terminal_columns,
+)
 
-from infrastructure.safety.terminal_output import strip_terminal_controls
-
-_DEFAULT_TERMINAL_COLUMNS = 80
 _COMPLETION_META_PADDING = 6
 _COMPLETION_META_MIN_WIDTH = 24
 
-
-def _terminal_columns() -> int:
-    app = get_app_or_none()
-    if app is None:
-        return _DEFAULT_TERMINAL_COLUMNS
-    try:
-        return app.output.get_size().columns
-    except Exception:
-        return _DEFAULT_TERMINAL_COLUMNS
-
-
-def prompt_line_width(cols: int | None = None) -> int:
-    """Visible width for a live prompt-region line.
-
-    Leave the last terminal column empty. A glyph in that column puts the
-    cursor in the pending-wrap state; on shrink-resize the emulator soft-wraps
-    the line, prompt-toolkit's row accounting drifts, and stale hint/rule
-    frames are left in scrollback.
-    """
-    width = _terminal_columns() if cols is None else cols
-    return max(width - 1, 1)
-
-
-def clip_prompt_text(text: str, max_len: int) -> str:
-    """Truncate to ``max_len`` visible characters after stripping controls.
-
-    Overlay and menu rows interpolate this into raw ANSI. Control characters
-    (ESC, OSC, CR) would spoof the terminal and break row accounting, so they
-    are removed before width is measured.
-    """
-    visible = strip_terminal_controls(text)
-    if max_len <= 0:
-        return ""
-    if len(visible) <= max_len:
-        return visible
-    return visible[: max_len - 1] + "…"
+# In-package aliases (prompt rendering / completion stay on the private names).
+_DEFAULT_TERMINAL_COLUMNS = DEFAULT_TERMINAL_COLUMNS
+_terminal_columns = terminal_columns
+_prompt_line_width = prompt_line_width
+_clip_text = clip_prompt_text
 
 
 def _completion_meta_width(command_name: str, cols: int) -> int:
@@ -61,7 +32,13 @@ def _short_meta(
 ) -> str:
     if max_len is None:
         if command_name:
-            max_len = _completion_meta_width(command_name, cols or _terminal_columns())
+            max_len = _completion_meta_width(command_name, cols or terminal_columns())
         else:
             max_len = 54
     return clip_prompt_text(text, max_len)
+
+
+__all__ = [
+    "clip_prompt_text",
+    "prompt_line_width",
+]

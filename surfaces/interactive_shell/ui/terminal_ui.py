@@ -23,6 +23,7 @@ from surfaces.interactive_shell.ui.auto_status import auto_status_ansi
 from surfaces.interactive_shell.ui.input_prompt import rendering as prompt_rendering
 from surfaces.shared.terminal.banner import render_ready_box
 from surfaces.shared.terminal.components.cpr_stdin import strip_cpr_sequences
+from surfaces.shared.terminal.prompt_layout import clip_prompt_text, prompt_line_width
 
 if TYPE_CHECKING:
     from surfaces.interactive_shell.runtime.core.state import ReplState, SpinnerState
@@ -61,7 +62,9 @@ def render_prompt_region(session: Session, state: ReplState, spinner: SpinnerSta
     # The confirmation prompt takes the prefix row so every state renders the
     # same rows (blank, prefix, auto status, input) — no height delta on redraw.
     if state.is_awaiting_confirmation():
-        prefix = state.confirm_prompt_text
+        # Same one-row budget as the spinner/idle hint: a long confirm string
+        # must not soft-wrap when the spinner path is clipped to width.
+        prefix = clip_prompt_text(state.confirm_prompt_text, prompt_line_width())
     else:
         prefix = strip_cpr_sequences(
             prompt_rendering.resolve_prompt_prefix_ansi(
