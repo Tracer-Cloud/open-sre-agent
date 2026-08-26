@@ -171,7 +171,7 @@ def test_install_sh_has_step_for_explicit_version_fetch() -> None:
     result = _run_release_metadata_step(version="2026.4.29")
 
     assert result.returncode == 0, result.stderr
-    assert "[1/6] Fetching release metadata for v2026.4.29" in result.stdout
+    assert "[1/5] Fetching release metadata for v2026.4.29" in result.stdout
 
 
 def test_install_sh_defaults_to_main_build_channel() -> None:
@@ -213,7 +213,7 @@ def test_install_sh_defines_progress_helpers() -> None:
 
 def test_install_sh_draw_progress_fits_terminal_width_with_long_labels() -> None:
     long_checksum = (
-        "[4/6] Downloading and verifying checksum (opensre_main_darwin-arm64.tar.gz.sha256)"
+        "[3/5] Downloading and verifying checksum (opensre_main_darwin-arm64.tar.gz.sha256)"
     )
     result = _run_logging_snippet(
         f"""
@@ -236,7 +236,7 @@ def test_install_sh_draw_progress_fits_terminal_width_with_long_labels() -> None
 
 def test_install_sh_animated_repaints_do_not_wrap_or_leave_long_label_residue() -> None:
     long_checksum = (
-        "[4/6] Downloading and verifying checksum (opensre_main_darwin-arm64.tar.gz.sha256)"
+        "[3/5] Downloading and verifying checksum (opensre_main_darwin-arm64.tar.gz.sha256)"
     )
     result = _run_logging_snippet(
         f"""
@@ -394,13 +394,14 @@ def test_install_sh_installs_pyinstaller_onedir_app(tmp_path: Path) -> None:
     assert "opensre test" in result.stdout
 
 
-def test_install_sh_uses_six_step_extract_verify_install_labels() -> None:
+def test_install_sh_uses_five_step_extract_verify_install_labels() -> None:
     source = INSTALL_SH.read_text()
 
-    assert "[4/6] Downloading and verifying checksum" in source
-    assert "[5/6] Extracting and verifying binary" in source
-    assert "[6/6] Installing ${BIN_NAME} to ${INSTALL_DIR}" in source
-    assert "[6/6] Extracting release archive" not in source
+    assert "[3/5] Downloading and verifying checksum" in source
+    assert "[4/5] Extracting and verifying binary" in source
+    assert "[5/5] Installing ${BIN_NAME} to ${INSTALL_DIR}" in source
+    assert "Preparing opensre" not in source
+    assert "[5/5] Extracting release archive" not in source
     assert 'capture_with_progress installed_version "Verifying installed binary"' not in source
 
 

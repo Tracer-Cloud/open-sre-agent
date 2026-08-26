@@ -1227,11 +1227,11 @@ resolve_release_metadata() {
   release_tag=""
 
   if [ "$INSTALL_CHANNEL" = "main" ]; then
-    metadata_step="[1/6] Fetching latest main build metadata"
+    metadata_step="[1/5] Fetching latest main build metadata"
   elif [ -n "$version" ]; then
-    metadata_step="[1/6] Fetching release metadata for v${version}"
+    metadata_step="[1/5] Fetching release metadata for v${version}"
   else
-    metadata_step="[1/6] Fetching latest release version"
+    metadata_step="[1/5] Fetching latest release version"
   fi
 
   capture_with_progress release_json "$metadata_step" fetch_release_json "$version" || {
@@ -1290,11 +1290,6 @@ prepare_download() {
   checksum_asset="${archive}.sha256"
   checksum_url="${download_url}.sha256"
 
-  if [ "$INSTALL_CHANNEL" = "main" ]; then
-    step "[2/6] Preparing opensre main build (${platform}/${target_arch})"
-  else
-    step "[2/6] Preparing opensre v${version} (${platform}/${target_arch})"
-  fi
   if [ "$asset_arch" != "$target_arch" ]; then
     log "Using release asset built for ${platform}/${asset_arch}."
   fi
@@ -1351,7 +1346,7 @@ create_temp_workspace() {
 
 download_release_archive() {
   archive_path="${tmp_dir}/${archive}"
-  run_with_progress "[3/6] Downloading release archive (${archive})" download_to "$download_url" "$archive_path" \
+  run_with_progress "[2/5] Downloading release archive (${archive})" download_to "$download_url" "$archive_path" \
     || die "Failed to download '${archive}'."
 }
 
@@ -1360,7 +1355,7 @@ verify_release_checksum() {
 
   if release_has_asset "$release_json" "$checksum_asset"; then
     checksum_path="${tmp_dir}/${checksum_asset}"
-    run_with_progress "[4/6] Downloading and verifying checksum (${checksum_asset})" \
+    run_with_progress "[3/5] Downloading and verifying checksum (${checksum_asset})" \
       download_and_verify_checksum "$checksum_url" "$checksum_path" "$archive_path" \
       || die "Failed to download or verify checksum '${checksum_asset}'."
     return
@@ -1376,13 +1371,13 @@ verify_release_checksum() {
 extract_release_binary() {
   local verified_binary
 
-  capture_with_progress verified_binary "[5/6] Extracting and verifying binary" extract_and_verify_binary "$archive_path" "$tmp_dir"
+  capture_with_progress verified_binary "[4/5] Extracting and verifying binary" extract_and_verify_binary "$archive_path" "$tmp_dir"
   binary_path="${verified_binary%%$'\n'*}"
   installed_version="${verified_binary#*$'\n'}"
 }
 
 install_release_binary() {
-  run_with_progress "[6/6] Installing ${BIN_NAME} to ${INSTALL_DIR}" install_verified_binary "$binary_path" "${INSTALL_DIR}/${BIN_NAME}"
+  run_with_progress "[5/5] Installing ${BIN_NAME} to ${INSTALL_DIR}" install_verified_binary "$binary_path" "${INSTALL_DIR}/${BIN_NAME}"
 }
 
 print_install_confirmation() {
