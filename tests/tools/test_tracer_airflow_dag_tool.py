@@ -101,6 +101,28 @@ class TestMapGetAirflowDagRuns:
 
         assert evidence["catalog_entries"][0]["summary"] == "1 DAG run(s), 0 failed for 'etl_daily'"
 
+    def test_cites_state_filter_instead_of_a_misleading_failed_count(self) -> None:
+        """Regression: `state` filters the API query itself, so a
+        state='success' query returning zero 'failed' runs does not mean
+        there were no failures -- they were filtered out before the mapper
+        ever saw them. Cite the filter, not a derived (and misleading)
+        zero-failed count."""
+        evidence: dict[str, Any] = {}
+
+        _map_get_airflow_dag_runs(
+            evidence,
+            {
+                "source": "airflow",
+                "dag_id": "etl_daily",
+                "dag_runs": [{"state": "success"}, {"state": "success"}],
+            },
+            {"limit": 10, "state": "success"},
+        )
+
+        summary = evidence["catalog_entries"][0]["summary"]
+        assert summary == "2 DAG run(s) with state 'success' for 'etl_daily'"
+        assert "failed" not in summary
+
     def test_qualifies_count_when_page_is_saturated(self) -> None:
         evidence: dict[str, Any] = {}
 

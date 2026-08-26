@@ -63,7 +63,15 @@ def _map_get_recent_airflow_failures(
 def _map_get_airflow_dag_runs(
     evidence: dict[str, Any], output: dict[str, Any], tool_input: dict[str, Any]
 ) -> None:
-    """Cite the DAG run count and how many are in a failed state."""
+    """Cite the DAG run count and how many are in a failed state.
+
+    ``state`` filters the API query itself (only runs in that state come
+    back), so when it's set the "N failed" count would either be trivially
+    all of them (state="failed") or a misleading, unqualified zero for any
+    other state -- the caller filtered failures out of view, not confirmed
+    their absence. Cite the filter instead of a derived failure count in
+    that case.
+    """
     if output.get("error"):
         return
     dag_runs = output.get("dag_runs") or []
@@ -72,10 +80,14 @@ def _map_get_airflow_dag_runs(
     total = len(dag_runs)
     requested_limit = tool_input.get("limit", 10)
     count_label = f"{total}+" if total >= max(requested_limit, 1) else str(total)
-    failed = sum(
-        1 for run in dag_runs if str(run.get("state", "")).lower() in _FAILED_DAG_RUN_STATES
-    )
-    summary = f"{count_label} DAG run(s), {failed} failed"
+    state_filter = tool_input.get("state")
+    if state_filter:
+        summary = f"{count_label} DAG run(s) with state '{_safe_id(str(state_filter))}'"
+    else:
+        failed = sum(
+            1 for run in dag_runs if str(run.get("state", "")).lower() in _FAILED_DAG_RUN_STATES
+        )
+        summary = f"{count_label} DAG run(s), {failed} failed"
     dag_id = output.get("dag_id")
     if dag_id:
         summary += f" for '{_safe_id(dag_id)}'"
