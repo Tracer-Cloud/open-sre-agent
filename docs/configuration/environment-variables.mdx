@@ -8,8 +8,9 @@ All configuration options for OpenSRE can be set via environment variables. This
 ## Secret storage
 
 Environment variables are checked first. Credentials you enter through
-`opensre onboard` or `opensre integrations setup` are written to `.env` and
-to an owner-only file at `~/.opensre/credentials.json` (mode `0600`). OpenSRE
+`opensre onboard` for LLM setup, or through `opensre integrations setup` for
+tools, are written to `.env` and to an owner-only file at
+`~/.opensre/credentials.json` (mode `0600`). OpenSRE
 does not write secrets to the OS keychain.
 
 A value in the process environment or a local `.env` file wins over the
@@ -339,7 +340,7 @@ For secrets (`*_TOKEN`, `*_KEY`, `*_PASSWORD`, `*_SECRET`, and similar), OpenSRE
 1. Your process environment
 2. The owner-only file `~/.opensre/credentials.json`
 
-`opensre onboard` saves credentials there so they still work after you clear `.env`.
+`opensre onboard` saves LLM credentials there so they still work after you clear `.env`.
 
 **Not stored as secrets:** webhook-style URLs such as `SLACK_WEBHOOK_URL` and `ROCKETCHAT_WEBHOOK_URL`. Those stay in env / store only — treat them as secrets and don't log them.
 

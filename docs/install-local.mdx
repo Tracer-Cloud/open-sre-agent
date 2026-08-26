@@ -80,12 +80,11 @@ opensre onboard
 You'll set up:
 
 - Your LLM (so OpenSRE can reason about incidents)
-- Tool credentials (Datadog, Grafana, Slack, and so on)
-- Optional messaging and reporting
+- A model and credential, or a CLI login
 
 #### Where credentials are saved
 
-OpenSRE checks environment variables first. When onboarding saves a credential,
+OpenSRE checks environment variables first. When onboarding saves an LLM credential,
 it writes to an owner-only file at `~/.opensre/credentials.json` (mode `0600`).
 That keeps first-run setup from writing credentials to disk.
 

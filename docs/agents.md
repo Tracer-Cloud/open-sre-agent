@@ -120,7 +120,7 @@ One tool only:
 opensre integrations verify datadog
 ```
 
-If verify fails, check the printed error. Common causes: missing or expired credential, wrong URL, or the tool was skipped during onboard. Re-run `opensre integrations setup <service>` for that tool.
+If verify fails, check the printed error. Common causes: missing or expired credential, wrong URL, or a skipped setup step. Re-run `opensre integrations setup <service>` for that tool.
 
 ## Step 4: Suggest a first run
 

@@ -9,8 +9,8 @@ OpenSRE queries Splunk over the REST API during investigations. The agent calls
 `query_splunk_logs` with a planner-supplied SPL `query`.
 
 There is **no** `opensre integrations setup splunk` handler today. Configure
-Splunk via the onboarding wizard, environment variables, or the integration
-store, then verify with `opensre integrations verify splunk`.
+Splunk via environment variables or the integration store, then verify with
+`opensre integrations verify splunk`.
 
 ## Prerequisites
 
@@ -20,17 +20,7 @@ store, then verify with `opensre integrations verify splunk`.
 
 ## Setup
 
-### Option 1: Onboarding wizard
-
-```bash
-opensre onboard
-```
-
-Select **Splunk** under Observability and provide the REST API base URL and
-bearer token. The wizard validates and writes the integration store (token
-stays in the credential store; URL/index/SSL settings sync to `.env`).
-
-### Option 2: Environment variables
+### Option 1: Environment variables
 
 ```bash
 SPLUNK_URL=https://splunk.corp.com:8089    # REST API base URL (port 8089 default)
@@ -48,7 +38,7 @@ SPLUNK_CA_BUNDLE=/etc/ssl/certs/corp-ca.pem  # Path to custom CA bundle (optiona
 | `SPLUNK_VERIFY_SSL` | `true` | Set to `false` to disable SSL verification (dev/local only) |
 | `SPLUNK_CA_BUNDLE` | — | Path to a PEM CA bundle for enterprise self-signed certificates |
 
-### Option 3: Persistent store
+### Option 2: Persistent store
 
 ```json
 {
@@ -294,7 +284,7 @@ Detail: Connected to Splunk 9.x.x
 | Empty search results | Data may not have been ingested yet, or the index name is wrong |
 | `Connection refused` on port 8089 | Splunk management port may be firewalled; confirm network access |
 | `opensre integrations verify` fails | Check `SPLUNK_URL` includes the protocol and port (`https://host:8089`) |
-| `opensre integrations setup splunk` | Not available — use `opensre onboard`, env vars, or the store, then `verify` |
+| `opensre integrations setup splunk` | Not available — use env vars or the store, then `verify` |
 
 ## Security
 

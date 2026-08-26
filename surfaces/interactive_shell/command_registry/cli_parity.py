@@ -194,11 +194,10 @@ def _cmd_onboard(session: Session, console: Console, args: list[str]) -> bool:  
     if session_terminal(session) is None:
         cli_cmd = " ".join(["uv run opensre onboard", *args]).strip()
         message = (
-            "Onboarding is an interactive wizard (LLM provider, integrations, messaging). "
+            "Onboarding is an interactive wizard for LLM provider setup. "
             "It cannot run inside a Telegram chat.\n\n"
             f"Run on the server:\n  {cli_cmd}\n\n"
-            "Or configure individual services with "
-            "`/integrations setup <service>`."
+            "Configure integrations separately with `/integrations setup <service>`."
         )
         console.print()
         console.print(message)

@@ -14,17 +14,9 @@ OpenSRE can write investigation findings directly to Google Drive as formatted G
 
 ## Setup
 
-There is no dedicated `opensre integrations setup google_docs` command today. Configure Google Docs through the onboarding wizard, environment variables, or the persistent store.
+There is no dedicated `opensre integrations setup google_docs` command today. Configure Google Docs through environment variables or the persistent store.
 
-### Option 1: Onboarding wizard
-
-```bash
-opensre onboard
-```
-
-Select **Google Docs** when prompted and provide your credentials file path and folder ID.
-
-### Option 2: Environment variables
+### Option 1: Environment variables
 
 Add to your `.env`:
 
@@ -38,7 +30,7 @@ GOOGLE_DRIVE_FOLDER_ID=your-google-drive-folder-id
 | `GOOGLE_CREDENTIALS_FILE` | — | **Required.** Path to the service account JSON file |
 | `GOOGLE_DRIVE_FOLDER_ID` | — | **Required.** Google Drive folder ID for investigation reports |
 
-### Option 3: Persistent store
+### Option 2: Persistent store
 
 ```json
 {

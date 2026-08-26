@@ -15,7 +15,7 @@ from surfaces.shared.terminal.banner import build_ready_panel
 #: a landing page that lists every command reads as "here is everything" rather
 #: than "start here".
 _LANDING_EXAMPLES: tuple[tuple[str, str], ...] = (
-    ("opensre onboard", "Configure your LLM provider and integrations (start here)"),
+    ("opensre onboard", "Configure your LLM provider (start here)"),
     ('opensre ask "why is checkout-api slow?"', "Ask the agent a question directly"),
     ("opensre investigate -i alert.json", "Run a root-cause investigation on an alert"),
     ("opensre doctor", "Check this machine is set up correctly"),

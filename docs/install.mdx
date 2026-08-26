@@ -11,7 +11,7 @@ After install, you have:
 
 - The `opensre` CLI on your PATH
 - An interactive shell when you run `opensre` with no arguments
-- An onboard wizard to pick your LLM and connect tools like Datadog or Slack
+- An onboard wizard to pick your LLM provider
 
 No sudo required on macOS/Linux in the usual case — the installer puts the binary somewhere writable (often `~/.local/bin`) and tells you if you need a PATH tweak.
 
@@ -56,11 +56,16 @@ opensre onboard
 
 The wizard asks for:
 
-1. **An LLM** — OpenAI, Anthropic, a local model, or another provider you already use
-2. **Your tools** — whatever you want investigations to query (Datadog, Grafana, Slack, and so on)
-3. **Optional extras** — masking and messaging, if you want them
+1. **An LLM provider** — Claude Code, OpenAI, OpenRouter, or another supported provider
+2. **A model and credential** — an API key, CLI login, or local endpoint depending on the provider
 
-Then check that the tools you connected actually work:
+Add tools later, when you need them:
+
+```bash
+opensre integrations setup <service>
+```
+
+Then check that the tools you connected work:
 
 ```bash
 opensre integrations verify
