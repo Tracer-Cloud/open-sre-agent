@@ -26,15 +26,20 @@ from typing import Any
 
 import click
 
-from integrations.hermes.agent import DEFAULT_LOG_PATH, HermesAgent
-from integrations.hermes.correlating_sink import CorrelatingSink
-from integrations.hermes.correlator import IncidentCorrelator, RouteDestination
-from integrations.hermes.investigation import run_incident_investigation
-from integrations.hermes.sinks import AlarmDispatcherPort, TelegramSink
-from integrations.rocketchat.alarms import RocketChatAlarmDispatcher
-from integrations.rocketchat.credentials import (
+from integrations.hermes import (
+    DEFAULT_LOG_PATH,
+    AlarmDispatcherPort,
+    CorrelatingSink,
+    HermesAgent,
+    IncidentCorrelator,
+    RouteDestination,
+    TelegramSink,
+    run_incident_investigation,
+)
+from integrations.rocketchat import (
     load_credentials_from_env as load_rocketchat_credentials_from_env,
 )
+from integrations.rocketchat.alarms import RocketChatAlarmDispatcher
 from integrations.telegram.alarms import AlarmDispatcher
 from integrations.telegram.credentials import load_credentials_from_env
 from tools.investigation.capability import run_investigation

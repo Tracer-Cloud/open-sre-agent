@@ -7,7 +7,7 @@ from typing import Any
 
 from config.config import get_tracer_base_url
 from core.domain.types.tools import ToolSurface
-from core.tool_framework.tool_decorator import tool
+from core.tool_framework import tool
 from integrations.tracer import (
     PipelineRunSummary,
     get_tracer_web_client,

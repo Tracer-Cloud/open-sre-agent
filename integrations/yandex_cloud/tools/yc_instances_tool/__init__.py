@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from core.tool_framework.tool_decorator import tool
+from core.tool_framework import tool
 from core.tool_framework.utils import tool_unavailable
 from integrations.yandex_cloud.availability import (
     YC_INJECTED_PARAMS,

@@ -121,6 +121,69 @@ Status:  passed
 Detail:  Connected to Alertmanager at http://alertmanager.monitoring.svc:9093; cluster status: ready.
 ```
 
+### Local Docker verification
+
+Start a disposable Alertmanager without external credentials:
+
+```bash
+docker run --rm --detach --name opensre-alertmanager \
+  --publish 127.0.0.1:9093:9093 \
+  prom/alertmanager:v0.28.1 || exit 1
+for attempt in $(seq 1 30); do
+  curl --fail --silent http://127.0.0.1:9093/-/ready && break
+  if [ "$attempt" -eq 30 ]; then
+    docker logs opensre-alertmanager
+    exit 1
+  fi
+  sleep 1
+done
+```
+
+Seed one firing alert and one active silence so both investigation tools return
+real data:
+
+```bash
+curl --fail --silent --request POST \
+  --header "Content-Type: application/json" \
+  --data '[{"labels":{"alertname":"OpenSREHighLatency","service":"checkout","severity":"critical"},"annotations":{"summary":"Checkout p99 latency exceeds 2 seconds"}}]' \
+  http://127.0.0.1:9093/api/v2/alerts
+
+starts_at=$(uv run python -c 'from datetime import UTC, datetime; print(datetime.now(UTC).isoformat())')
+ends_at=$(uv run python -c 'from datetime import UTC, datetime, timedelta; print((datetime.now(UTC) + timedelta(hours=1)).isoformat())')
+curl --fail --silent --request POST \
+  --header "Content-Type: application/json" \
+  --data "{\"matchers\":[{\"name\":\"alertname\",\"value\":\"OpenSREMaintenance\",\"isRegex\":false}],\"startsAt\":\"${starts_at}\",\"endsAt\":\"${ends_at}\",\"createdBy\":\"opensre-local-verification\",\"comment\":\"Disposable local verification silence\"}" \
+  http://127.0.0.1:9093/api/v2/silences
+```
+
+From a source checkout, run `uv run opensre integrations setup alertmanager`.
+Enter `http://127.0.0.1:9093` as the URL and select **None** for authentication,
+then verify the connection:
+
+```bash
+uv run opensre integrations verify alertmanager
+```
+
+The verifier should report cluster status `ready`. Exercise both tools through
+an agent turn:
+
+```bash
+uv run opensre ask \
+  --allowed-tool alertmanager_alerts \
+  --allowed-tool alertmanager_silences \
+  "Report the firing Alertmanager alert and the active silence."
+```
+
+The result should include the `OpenSREHighLatency` alert and the
+`OpenSREMaintenance` silence. Stop the disposable instance when finished:
+
+```bash
+docker stop opensre-alertmanager
+```
+
+This unauthenticated instance binds only to loopback and is for local
+verification only.
+
 ## Troubleshooting
 
 | Symptom | Fix |

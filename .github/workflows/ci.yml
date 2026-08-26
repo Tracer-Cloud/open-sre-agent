@@ -150,6 +150,7 @@ jobs:
               tests/tools
               tests/core
               tests/infrastructure
+              tests/filestorage
               tests/utils
               tests/masking
               tests/watch_dog
@@ -168,6 +169,7 @@ jobs:
             pytest_paths: >-
               tests/cli
               tests/interactive_shell
+              tests/surfaces
               tests/agent
               tests/core/agent
               tests/fleet_monitoring
@@ -186,6 +188,7 @@ jobs:
               tests/shared
               tests/config
               tests/github_ci
+              tests/quality
               tests/packaging
               tests/scheduler
               gateway/tests

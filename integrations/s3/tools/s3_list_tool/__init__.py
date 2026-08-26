@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from core.tool_framework.tool_decorator import tool
+from core.tool_framework import tool
 from integrations.aws.s3_client import list_objects
 
 

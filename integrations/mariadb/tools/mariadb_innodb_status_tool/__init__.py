@@ -2,8 +2,9 @@
 
 from typing import Any
 
+from core.domain.types.evidence import record_evidence_entry
 from core.domain.types.tools import ToolSurface
-from core.tool_framework.tool_decorator import tool
+from core.tool_framework import tool
 from core.tool_framework.utils import call_db_tool_with_default_db_warning
 from integrations.mariadb import (
     MariaDBConfig,
@@ -11,6 +12,26 @@ from integrations.mariadb import (
     mariadb_extract_params,
     mariadb_is_available,
 )
+
+
+def _map_get_mariadb_innodb_status(
+    evidence: dict[str, Any], output: dict[str, Any], _tool_input: dict[str, Any]
+) -> None:
+    """Cite that InnoDB status was captured, flagging a recorded deadlock section."""
+    if not output.get("available"):
+        return
+    status_text = output.get("innodb_status") or ""
+    if not status_text:
+        return
+    summary = "InnoDB engine status captured"
+    if "LATEST DETECTED DEADLOCK" in status_text:
+        summary += " — includes a recorded deadlock"
+    record_evidence_entry(
+        evidence,
+        source="get_mariadb_innodb_status",
+        label="MariaDB InnoDB Status",
+        summary=summary,
+    )
 
 
 @tool(
@@ -21,6 +42,7 @@ from integrations.mariadb import (
     is_available=mariadb_is_available,
     injected_params=("host", "password", "username"),
     extract_params=mariadb_extract_params,
+    evidence_mapper=_map_get_mariadb_innodb_status,
 )
 def get_mariadb_innodb_status(
     host: str,

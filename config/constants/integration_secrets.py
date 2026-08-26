@@ -1,10 +1,8 @@
 """Secret env names for catalog integrations without a dedicated constants module.
 
 These integrations call :func:`config.llm_credentials.resolve_env_credential`
-with string literals. The one-time keychain importer discovers candidates by
-scanning ``config.constants.*`` for ``*_ENV`` values, so the names must live
-here (a leaf) — not only inside ``integrations/``, which would pull credentials
-→ store → keychain_import and cycle.
+with string literals. The names live here (a leaf) so ``integrations/`` does
+not have to import the credentials façade just to declare an env-var constant.
 """
 
 from __future__ import annotations

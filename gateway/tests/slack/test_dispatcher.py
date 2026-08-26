@@ -12,7 +12,9 @@ import pytest
 
 from config.constants.billing import ORGANIZATION_ID_ENV, USAGE_SECRET_ENV, WEBAPP_URL_ENV
 from config.principal import Principal, StorageScope
+from gateway.core.billing import turn_metering
 from gateway.core.billing.credits_client import CreditsOutcome
+from gateway.tests.billing.turn_metering_harness import metered_callback
 from gateway.transports.slack.processing.dispatcher import SlackTurnDispatcher
 from gateway.transports.slack.processing.events import SlackInboundMessage
 from gateway.transports.slack.processing.principal import slack_scope
@@ -236,20 +238,24 @@ def test_out_of_credits_blocks_turn_with_short_reply(monkeypatch: pytest.MonkeyP
         reasons.append(kwargs["reason"])
         return CreditsOutcome.DENIED
 
-    monkeypatch.setattr("gateway.transports.slack.processing.dispatcher.consume_credits", deny)
+    monkeypatch.setattr(turn_metering, "consume_credits", deny)
 
     _dispatcher(
         settings=_settings(["U1"]),
         messaging=messaging,
         resolver=resolver,
-        handler=lambda text, *_args: turns.append(text),
+        handler=metered_callback(lambda text, *_args: turns.append(text)),
     ).dispatch(_inbound())
 
     assert turns == []
     assert reasons == ["slack_turn"]
     # Short thread reply; no balances or env details leak to the channel.
-    assert messaging.posts[0]["text"] == "Out of credits — top up in the OpenSRE console."
+    assert messaging.updates[-1]["text"] == "Out of credits — top up in the OpenSRE console."
     assert messaging.posts[0]["thread_ts"] == "100.1"
+    emoji_ops = [(reaction["op"], reaction["emoji"]) for reaction in messaging.reactions]
+    assert ("remove", "eyes") in emoji_ops
+    assert ("add", "x") in emoji_ops
+    assert ("add", "white_check_mark") not in emoji_ops
 
 
 @pytest.mark.parametrize(
@@ -263,7 +269,8 @@ def test_non_denied_credit_outcomes_run_the_turn(
     resolver = _FakeSessionResolver()
     turns: list[str] = []
     monkeypatch.setattr(
-        "gateway.transports.slack.processing.dispatcher.consume_credits",
+        turn_metering,
+        "consume_credits",
         lambda *_args, **_kw: outcome,
     )
 
@@ -272,7 +279,10 @@ def test_non_denied_credit_outcomes_run_the_turn(
         sink.finalize("done")
 
     _dispatcher(
-        settings=_settings(["U1"]), messaging=messaging, resolver=resolver, handler=handler
+        settings=_settings(["U1"]),
+        messaging=messaging,
+        resolver=resolver,
+        handler=metered_callback(handler),
     ).dispatch(_inbound())
 
     assert len(turns) == 1

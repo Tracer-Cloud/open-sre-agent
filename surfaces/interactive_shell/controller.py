@@ -14,12 +14,12 @@ from rich.console import Console
 
 from config.repl_config import ReplConfig
 from core.domain.alerts import inbox as _alert_inbox
-from surfaces.interactive_shell.runtime.background.workers import BackgroundTaskManager
+from surfaces.interactive_shell.runtime.background.workers import BackgroundTaskPool
 from surfaces.interactive_shell.runtime.context import (
-    ReplRuntimeContext,
-    create_repl_runtime_context,
+    ReplRuntime,
+    create_repl_runtime,
 )
-from surfaces.interactive_shell.runtime.core.prompt_manager import PromptManager
+from surfaces.interactive_shell.runtime.core.prompt_builder import PromptBuilder
 from surfaces.interactive_shell.runtime.core.state import (
     ReplState,
     SpinnerState,
@@ -111,24 +111,24 @@ def _alert_listener(
 
 
 def _resolve_runtime_context(
-    session: Session | ReplRuntimeContext | None,
+    session: Session | ReplRuntime | None,
     *,
     state: ReplState | None,
     spinner: SpinnerState | None,
     pt_session: PromptSession[str] | None,
     inbox: _alert_inbox.AlertInbox | None,
-) -> ReplRuntimeContext:
-    if isinstance(session, ReplRuntimeContext):
+) -> ReplRuntime:
+    if isinstance(session, ReplRuntime):
         if state is None and spinner is None and pt_session is None and inbox is None:
             return session
-        return ReplRuntimeContext(
+        return ReplRuntime(
             session=session.session,
             state=state if state is not None else session.state,
             spinner=spinner if spinner is not None else session.spinner,
             pt_session=pt_session if pt_session is not None else session.pt_session,
             inbox=inbox if inbox is not None else session.inbox,
         )
-    return create_repl_runtime_context(
+    return create_repl_runtime(
         session,
         state=state,
         spinner=spinner,
@@ -156,7 +156,7 @@ class InteractiveShellController:
 
     def __init__(
         self,
-        session: Session | ReplRuntimeContext | None = None,
+        session: Session | ReplRuntime | None = None,
         *,
         config: ReplConfig | None = None,
         state: ReplState | None = None,
@@ -183,7 +183,7 @@ class InteractiveShellController:
             color_system="truecolor",
             legacy_windows=False,
         )
-        self.prompt = PromptManager(
+        self.prompt = PromptBuilder(
             self.session,
             self.state,
             self.spinner,
@@ -220,7 +220,7 @@ class InteractiveShellController:
             self.session,
             self.echo_console,
         )
-        self.background: BackgroundTaskManager | None = None
+        self.background: BackgroundTaskPool | None = None
         self.tasks: list[tuple[str, asyncio.Task[None]]] = []
 
     async def start_interactive_shell(self) -> None:
@@ -246,7 +246,7 @@ class InteractiveShellController:
 
     def _start_runtime_services(self) -> None:
         self.prompt.setup()
-        self.background = BackgroundTaskManager(
+        self.background = BackgroundTaskPool(
             self.session,
             self.state,
             self.spinner,

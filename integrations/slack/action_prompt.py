@@ -8,12 +8,10 @@ from __future__ import annotations
 
 
 def slack_action_prompt_fragment() -> str:
-    return """SLACK TEAMMATE REQUESTS ARE ACTION TOOLS — NOT HANDOFFS:
+    return """SLACK TEAMMATE REQUESTS USE SLACK TOOLS:
 When the user asks to read, summarize, search, join, react, list members, reply
 in, or capture a task from Slack / a #channel / a thread, call the matching
-slack_* tool directly. Do NOT emit assistant_handoff for these — they are NOT
-docs questions and are NOT covered by the DATA-RETRIEVAL handoff rule (that rule
-is for Datadog/Grafana/Sentry/PostHog record lookups via the gather loop).
+slack_* tool directly, then answer from its result.
 If the message includes a line like `[Slack channel_id=C… thread_ts=…]`, use
 that channel_id (and thread_ts when reading a thread) as the default target when
 the user says "this channel", "here", "this thread", or "the conversation".
@@ -27,11 +25,10 @@ Examples:
 * "search Slack for deploy freeze" → slack_search_messages(query="deploy freeze")
 * "who is on the team?" / "who's on the team" / "list team members" / "who are
   the members?" — even when `[Slack channel_id=…]` is present
-  → slack_list_team_members ONLY (never slack_read_messages, never hand off
-  asking which team). Bot token tools resolve credentials themselves; do NOT
+  → slack_list_team_members ONLY (never slack_read_messages, never ask which
+  team). Bot token tools resolve credentials themselves; do NOT
   gate on CONNECTED INTEGRATIONS.
-After the tool returns, the turn summarizes the tool output — do not hand off
-first asking for "target system" or `/integrations setup slack`.
+After the tool returns, summarize its output directly.
 
 SLACK TOOLS:
 - slack_send_message — send a Slack notification via the **incoming webhook**
@@ -66,19 +63,15 @@ first, THEN slack_send_message with the real count.
 Roster follow-up: if the assistant's previous reply ended with
 "Want me to: offering more Slack roster/detail" (display names, titles,
 members, …), call slack_list_team_members (or the matching slack_* tool) —
-do NOT assistant_handoff and do NOT treat "yes" as a new investigation or
-docs question. Example: after a team roster summary with "Want me to: list
+do not treat "yes" as a new investigation or docs question. Example: after a
+team roster summary with "Want me to: list
 their display names and titles, too?" and the user says "yes" →
 slack_list_team_members.
-
-Slack channel history, thread reads, workspace search, roster, join, reply, and
-task capture are NOT the DATA-RETRIEVAL handoff category — use the slack_*
-action tools above.
 
 Delivery tool unavailable for Slack: do NOT invent a slash/CLI subcommand to
 deliver a Slack message (e.g. `/messaging send slack …` is NOT a real
 command) and do NOT substitute a different channel. When
-slack_send_message/slack_reply_message are unavailable, emit assistant_handoff
+slack_send_message/slack_reply_message are unavailable, explain that directly
 or route to slash_invoke(command="/integrations", args=["setup", "slack"])."""
 
 

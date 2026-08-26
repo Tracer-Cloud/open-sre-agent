@@ -9,13 +9,13 @@ from typing import Any
 from core.tool.contracts import AgentToolContext
 
 ToolExecutionPayload = bool | dict[str, Any]
-ToolExecutor = Callable[[dict[str, Any], "ActionToolContext"], ToolExecutionPayload]
+ToolExecutor = Callable[[dict[str, Any], "ActionToolScope"], ToolExecutionPayload]
 ACTION_TOOL_CONTEXT_RESOURCE_KEY = "action_tool_context"
 _ACTION_SESSION_SOURCE = "_action_session"
 
 
 @dataclass(frozen=True)
-class ActionToolContext:
+class ActionToolScope:
     """Per-turn resources exposed to action-surface tools."""
 
     session: Any
@@ -39,11 +39,15 @@ class ActionToolContext:
     slash_ports: Any = None
 
 
-def action_context_from_agent_context(context: AgentToolContext) -> ActionToolContext:
+def action_scope_from_agent_context(context: AgentToolContext) -> ActionToolScope:
     action_context = context.resources.get(ACTION_TOOL_CONTEXT_RESOURCE_KEY)
-    if not isinstance(action_context, ActionToolContext):
+    if not isinstance(action_context, ActionToolScope):
         raise RuntimeError("action tool requires action runtime context")
     return action_context
+
+
+# Backwards-compatibility alias for helper function
+action_context_from_agent_context = action_scope_from_agent_context
 
 
 def execute_with_action_context(
@@ -51,7 +55,7 @@ def execute_with_action_context(
     context: AgentToolContext,
     execute: ToolExecutor,
 ) -> dict[str, Any]:
-    action_context = action_context_from_agent_context(context)
+    action_context = action_scope_from_agent_context(context)
     if getattr(action_context.console, "cancel_requested", False):
         action_context.console.print("[dim](remaining actions cancelled)[/]")
         return {"ok": False, "cancelled": True}
@@ -89,10 +93,11 @@ def capability_not_explicitly_disabled(session: Any, capability_name: str) -> bo
 
 __all__ = [
     "ACTION_TOOL_CONTEXT_RESOURCE_KEY",
-    "ActionToolContext",
+    "ActionToolScope",
     "ToolExecutor",
     "ToolExecutionPayload",
     "action_context_from_agent_context",
+    "action_scope_from_agent_context",
     "capability_available_from_sources",
     "capability_not_explicitly_disabled",
     "execute_with_action_context",

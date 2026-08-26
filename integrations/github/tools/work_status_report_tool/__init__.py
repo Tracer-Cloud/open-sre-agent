@@ -4,9 +4,10 @@ from __future__ import annotations
 
 from typing import Any
 
+from core.domain.types.evidence import record_evidence_entry
 from core.domain.types.tools import ToolSurface
 from core.tool import SideEffectLevel
-from core.tool_framework.tool_decorator import tool
+from core.tool_framework import tool
 from integrations.github.client import resolve_github_token
 from integrations.github.helpers import (
     GITHUB_INJECTED_PARAMS,
@@ -31,6 +32,18 @@ def _report_extract_params(sources: dict[str, dict]) -> dict[str, Any]:
     if not gh:
         return {}
     return {"owner": gh.get("owner"), "repo": gh.get("repo"), **github_creds(gh)}
+
+
+def _map_generate_work_status_report(
+    evidence: dict[str, Any], output: dict[str, Any], _input: dict[str, Any]
+) -> None:
+    if output.get("slack_text"):
+        record_evidence_entry(
+            evidence,
+            source="generate_work_status_report",
+            label="Work Status Report",
+            summary="Engineering work status report",
+        )
 
 
 @tool(
@@ -60,6 +73,7 @@ def _report_extract_params(sources: dict[str, dict]) -> dict[str, Any]:
     is_available=_report_available,
     extract_params=_report_extract_params,
     injected_params=GITHUB_INJECTED_PARAMS,
+    evidence_mapper=_map_generate_work_status_report,
 )
 def generate_work_status_report(
     owner: str = "",

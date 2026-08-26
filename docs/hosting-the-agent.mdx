@@ -21,7 +21,7 @@ harness API. Nothing else under `core.agent_harness` is part of it.
 | **Embed** | run turns with the standard ports | `core.agent_harness` — `AgentSession`, `SessionConfig`, `SessionCore`, `SessionManager`, `TurnResult`, `ToolCallingTurnResult`, `OutputSink` |
 | **Host** | build one agent from your ports, handle it per message | `core.agent_harness.runtime` — `DefaultHeadlessBuild`, `InMemoryHeadlessBuild`, `HeadlessAgent`, `TurnBinding`, `GatherPhase`, `DefaultToolProvider`, `ActionTurnRunner`; also the ReAct engine the investigation pipeline shares (`AgentConfig`, `build_agent`, the default LLM factories) |
 | **Host** | call helpers around a turn | `core.agent_harness.spi.<role>` — `session_goal`, `session_state`, `cancel`, `accounting`, `prompt_chrome`, `integrations`, `grounding`, `defaults` |
-| **Write a tool** | implement an action tool | `core.agent_harness.tools` — `ActionToolContext`, `execute_with_action_context`, `capability_available_from_sources`, `HandoffField`, `EVIDENCE_KIND_VALUES` |
+| **Write a tool** | implement an action tool | `core.agent_harness.tools` — `ActionToolScope`, `execute_with_action_context`, `capability_available_from_sources`, `HandoffField`, `EVIDENCE_KIND_VALUES` |
 | **Implement** | satisfy a protocol the harness calls | `core.agent_harness.ports` — `OutputSink`, `ToolProvider`, `PromptContextProvider`, `ReasoningClientProvider`, `RunRecordFactory`, `ErrorReporter`, `TurnAccounting`, `SessionState`, and the rebind mix-ins `ConsoleBindable` / `OutputBindable` / `SessionBindable` |
 
 ## The host loop

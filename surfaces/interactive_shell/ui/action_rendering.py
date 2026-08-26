@@ -20,6 +20,7 @@ from rich.console import Console
 from rich.text import Text
 
 from core.agent_harness.spi.accounting import SELF_RECORDING_ACTION_TOOL_NAMES
+from infrastructure.safety.terminal_output import strip_terminal_controls
 from infrastructure.terminal.theme import BOLD_SKILL, DIM, HIGHLIGHT
 from surfaces.interactive_shell.runtime import Session
 from surfaces.interactive_shell.ui.streaming import render_markdown_block
@@ -44,21 +45,28 @@ _SIMPLE_TOOL_LABELS: dict[str, tuple[str, str]] = {
 
 
 def tool_call_display(tool_name: str, args: dict[str, Any]) -> tuple[str, str]:
-    """Return a ``(label, content)`` pair describing a planned tool call."""
+    """Return a ``(label, content)`` pair describing a planned tool call.
+
+    Both strings are stripped of terminal controls: callers append them to a
+    raw Rich line, and the tool name and args are model-supplied.
+    """
     if tool_name == "slash_invoke":
         command = str(args.get("command", "")).strip()
         raw_args = args.get("args")
         parsed_args = [str(item).strip() for item in raw_args] if isinstance(raw_args, list) else []
-        return "command", " ".join([command, *parsed_args]).strip()
-    if tool_name == "synthetic_run":
+        label, content = "command", " ".join([command, *parsed_args]).strip()
+    elif tool_name == "synthetic_run":
         suite = str(args.get("suite", "")).strip()
         scenario = str(args.get("scenario", "")).strip()
-        return "synthetic test", f"{suite}:{scenario}" if scenario else suite
-    simple = _SIMPLE_TOOL_LABELS.get(tool_name)
-    if simple is not None:
-        label, arg_key = simple
-        return label, str(args.get(arg_key, "")).strip()
-    return tool_name, json.dumps(args, default=str, sort_keys=True)
+        label, content = "synthetic test", f"{suite}:{scenario}" if scenario else suite
+    else:
+        simple = _SIMPLE_TOOL_LABELS.get(tool_name)
+        if simple is not None:
+            key_label, arg_key = simple
+            label, content = key_label, str(args.get(arg_key, "")).strip()
+        else:
+            label, content = tool_name, json.dumps(args, default=str, sort_keys=True)
+    return strip_terminal_controls(label), strip_terminal_controls(content)
 
 
 class ActionRenderObserver:
@@ -100,7 +108,7 @@ class ActionRenderObserver:
         if kind != "tool_start":
             return
         name = str(data.get("name", "")).strip()
-        if not name or name == "assistant_handoff":
+        if not name:
             return
         if name == "skill_view":
             self._render_skill_start(data)
@@ -138,13 +146,14 @@ class ActionRenderObserver:
         if not content:
             return
         self.console.print()
+        # ``render_markdown_block`` sanitizes model text at ``_build_markdown_block``.
         render_markdown_block(self.console, content)
 
     def _render_skill_start(self, data: dict[str, Any]) -> None:
         """Print ``Skill <name>`` when the agent starts loading a skill."""
         args = data.get("input")
         raw_name = str(args.get("name", "")).strip() if isinstance(args, dict) else ""
-        slug = raw_name.replace("_", "-").lower() or "skill"
+        slug = strip_terminal_controls(raw_name.replace("_", "-").lower()) or "skill"
         self._pending_skill_calls[str(data.get("id") or "")] = slug
         # ``Text`` renders the (model-supplied) skill name literally — never
         # through Rich markup.

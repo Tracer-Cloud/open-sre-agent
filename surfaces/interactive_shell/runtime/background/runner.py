@@ -4,9 +4,9 @@ from __future__ import annotations
 
 import contextvars
 import threading
-from collections.abc import Callable
+from collections.abc import Mapping
 from contextlib import nullcontext
-from typing import Any
+from typing import Any, Protocol, TypedDict, cast
 from uuid import uuid4
 
 from prompt_toolkit.patch_stdout import patch_stdout
@@ -27,7 +27,27 @@ from surfaces.interactive_shell.runtime.background.notifications import (
 from surfaces.interactive_shell.ui import DIM, ERROR, HIGHLIGHT, WARNING
 from surfaces.shared.error_handling.exception_reporting import report_exception
 
-BackgroundRunFn = Callable[..., dict[str, Any]]
+
+class BackgroundRunResult(TypedDict, total=False):
+    """Fields consumed from a background investigation result."""
+
+    root_cause: str
+    validated_claims: list[dict[str, Any]]
+    remediation_steps: list[str]
+    evidence_entries: list[Any]
+    investigation_loop_count: int
+    validity_score: float
+
+
+class BackgroundRunFn(Protocol):
+    """Callable contract for running a background investigation."""
+
+    def __call__(
+        self,
+        *,
+        cancel_requested: threading.Event,
+    ) -> BackgroundRunResult:
+        """Run a background investigation with cooperative cancellation support."""
 
 
 def _persist_record(session: Session, record: BackgroundInvestigationRecord) -> None:
@@ -91,7 +111,7 @@ def _build_record(
     )
 
 
-def _top_analysis(final_state: dict[str, Any]) -> tuple[str, ...]:
+def _top_analysis(final_state: Mapping[str, Any]) -> tuple[str, ...]:
     claims = final_state.get("validated_claims", [])
     if not isinstance(claims, list):
         return ()
@@ -107,7 +127,7 @@ def _top_analysis(final_state: dict[str, Any]) -> tuple[str, ...]:
     return tuple(lines)
 
 
-def _next_steps(final_state: dict[str, Any]) -> tuple[str, ...]:
+def _next_steps(final_state: Mapping[str, Any]) -> tuple[str, ...]:
     steps = final_state.get("remediation_steps", [])
     if not isinstance(steps, list):
         return ()
@@ -119,7 +139,7 @@ def _next_steps(final_state: dict[str, Any]) -> tuple[str, ...]:
     return tuple(values)
 
 
-def _stats(final_state: dict[str, Any]) -> dict[str, Any]:
+def _stats(final_state: Mapping[str, Any]) -> dict[str, Any]:
     tool_calls = final_state.get("evidence_entries", [])
     loops = final_state.get("investigation_loop_count", 0)
     validity = final_state.get("validity_score", 0.0)
@@ -136,7 +156,6 @@ def _start_background_investigation(
     console: Console,
     display_command: str,
     run_fn: BackgroundRunFn,
-    kwargs: dict[str, Any],
     investigation_target: str = "",
     input_path: str | None = None,
 ) -> str:
@@ -168,7 +187,7 @@ def _start_background_investigation(
                     investigation_target=investigation_target or None,
                     session=session,
                 ) as tracker:
-                    final_state = run_fn(cancel_requested=task.cancel_requested, **kwargs)
+                    final_state = run_fn(cancel_requested=task.cancel_requested)
                     tracker.record_loop_metrics_from_state(final_state)
                 root = str(final_state.get("root_cause") or "")
                 record.status = "completed"
@@ -251,15 +270,23 @@ def start_background_text_investigation(
         run_investigation_for_session_background,
     )
 
+    context_overrides = dict(session.accumulated_context) or None
+
+    def _run(*, cancel_requested: threading.Event) -> BackgroundRunResult:
+        return cast(
+            BackgroundRunResult,
+            run_investigation_for_session_background(
+                alert_text=alert_text,
+                context_overrides=context_overrides,
+                cancel_requested=cancel_requested,
+            ),
+        )
+
     return _start_background_investigation(
         session=session,
         console=console,
         display_command=display_command,
-        run_fn=run_investigation_for_session_background,
-        kwargs={
-            "alert_text": alert_text,
-            "context_overrides": session.accumulated_context or None,
-        },
+        run_fn=_run,
         investigation_target=investigation_target,
         input_path=display_command,
     )
@@ -277,15 +304,23 @@ def start_background_template_investigation(
         run_sample_alert_for_session_background,
     )
 
+    context_overrides = dict(session.accumulated_context) or None
+
+    def _run(*, cancel_requested: threading.Event) -> BackgroundRunResult:
+        return cast(
+            BackgroundRunResult,
+            run_sample_alert_for_session_background(
+                template_name=template_name,
+                context_overrides=context_overrides,
+                cancel_requested=cancel_requested,
+            ),
+        )
+
     return _start_background_investigation(
         session=session,
         console=console,
         display_command=display_command,
-        run_fn=run_sample_alert_for_session_background,
-        kwargs={
-            "template_name": template_name,
-            "context_overrides": session.accumulated_context or None,
-        },
+        run_fn=_run,
         investigation_target=investigation_target,
         input_path=f"template:{template_name}",
     )

@@ -16,7 +16,7 @@ from core.agent_harness import ToolCallingTurnResult, TurnResult
 from core.agent_harness.spi.accounting import ToolCallingAccountingStatus
 from infrastructure.analytics.cli import capture_terminal_turn_summarized
 from surfaces.interactive_shell.session import Session
-from surfaces.interactive_shell.utils.telemetry import PromptRecorder
+from surfaces.interactive_shell.telemetry import PromptRecorder
 
 
 @dataclass
@@ -41,10 +41,9 @@ class ShellTurnAccounting:
     def finalize(self, result: TurnResult) -> TurnResult:
         """Flush the recorder, persist the turn, and stamp the session intent."""
         self._flush_prompt_recorder(result)
-        if result.llm_run is not None and not self._cli_agent_already_recorded():
-            # ActionRenderObserver may already have recorded this text on the
-            # first non-handoff tool_start (e.g. memory_remember alongside
-            # assistant_handoff). Do not append a duplicate history row.
+        if result.assistant_response_text and not self._cli_agent_already_recorded():
+            # ActionRenderObserver may already have recorded this turn on the
+            # first tool_start. Do not append a duplicate history row.
             self.session.record("cli_agent", self.text)
         self.session.last_assistant_intent = result.final_intent
         return result
@@ -82,9 +81,9 @@ class ShellTurnAccounting:
         capture_repl_execution_policy_decision(
             {
                 "policy_stage": "shell_action_agent",
-                "policy_trace": (
-                    "agent_tool_calls" if action_result.planned_count else "assistant_handoff"
-                ),
+                "policy_trace": "agent_tool_calls"
+                if action_result.planned_count
+                else "agent_reply",
                 "planned_count": action_result.planned_count,
                 "has_unhandled_clause": action_result.has_unhandled_clause,
             }
@@ -124,7 +123,7 @@ class ShellTurnAccounting:
             self.recorder.set_error(pending_error[0], pending_error[1])
         self.recorder.set_response(
             result.assistant_response_text,
-            result.llm_run if result.llm_run is not None else pending_run,
+            pending_run,
         )
         self.recorder.flush()
 

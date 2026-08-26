@@ -48,7 +48,7 @@ from surfaces.interactive_shell.command_registry.model import (
 from surfaces.interactive_shell.command_registry.privacy_cmds import (
     COMMANDS as PRIVACY_COMMANDS,
 )
-from surfaces.interactive_shell.command_registry.rca_cmds import COMMANDS as RCA_COMMANDS
+from surfaces.interactive_shell.command_registry.rca import COMMANDS as RCA_COMMANDS
 from surfaces.interactive_shell.command_registry.remote_sync_cmds import (
     COMMANDS as REMOTE_SYNC_COMMANDS,
 )
@@ -74,9 +74,9 @@ from surfaces.interactive_shell.command_registry.types import SlashCommand
 from surfaces.interactive_shell.command_registry.watch_cmds import COMMANDS as WATCH_COMMANDS
 from surfaces.interactive_shell.command_registry.work_cmds import COMMANDS as WORK_COMMANDS
 from surfaces.interactive_shell.runtime import Session
+from surfaces.interactive_shell.telemetry.console_capture import capture_console_segment
+from surfaces.interactive_shell.telemetry.turn_outcome import format_terminal_turn_outcome
 from surfaces.interactive_shell.ui.execution_confirm import execution_allowed
-from surfaces.interactive_shell.utils.telemetry.console_capture import capture_console_segment
-from surfaces.interactive_shell.utils.telemetry.turn_outcome import format_terminal_turn_outcome
 from tools.interactive_shell.shared import allow_tool
 
 _MERGED_SEQUENCE = tuple(

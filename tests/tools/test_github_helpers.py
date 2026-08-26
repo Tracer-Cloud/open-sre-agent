@@ -4,9 +4,9 @@ from __future__ import annotations
 
 from unittest.mock import MagicMock, patch
 
+from integrations.github.envelope import normalize_github_tool_result
 from integrations.github.helpers import (
     github_creds,
-    normalize_github_tool_result,
     resolve_github_mcp_config,
 )
 from integrations.github.mcp import DEFAULT_GITHUB_MCP_MODE

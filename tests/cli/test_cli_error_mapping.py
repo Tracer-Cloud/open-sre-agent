@@ -23,7 +23,7 @@ def test_credit_exhausted_error_maps_to_opensre_error_with_auth_hint() -> None:
 
 
 def test_anthropic_model_not_found_raises_opensre_error() -> None:
-    """RuntimeError from an invalid Anthropic model name maps to a user-friendly OpenSREError."""
+    """An invalid Anthropic model name maps to a generic OpenSREError that never echoes the id."""
     exc = RuntimeError(
         "Anthropic model 'not-a-real-model-xyz' was not found. "
         "Check your configured model name and try again."
@@ -32,7 +32,8 @@ def test_anthropic_model_not_found_raises_opensre_error() -> None:
         reraise_cli_runtime_error(exc)
 
     err = exc_info.value
-    assert "not-a-real-model-xyz" in str(err)
+    assert "not-a-real-model-xyz" not in str(err)
+    assert "Anthropic model was not found" in str(err)
     assert err.suggestion is not None
     assert "ANTHROPIC_REASONING_MODEL" in err.suggestion
     assert "ANTHROPIC_TOOLCALL_MODEL" in err.suggestion

@@ -11,6 +11,7 @@ from typing import Any
 from filelock import FileLock
 
 from config.constants import OPENSRE_HOME_DIR
+from infrastructure.scheduling.scheduler import reload_signal
 from infrastructure.scheduling.scheduler.claim_store import _DB_FILENAME, delete_runs
 from infrastructure.scheduling.scheduler.types import ScheduledTask
 
@@ -110,6 +111,8 @@ def add_task(task: ScheduledTask, store_path: Path | None = None) -> ScheduledTa
             return ScheduledTask.model_validate(existing)
         raw.append(task.model_dump(mode="json"))
         _save_raw(path, raw)
+    # A new task changed the schedule: wake any running scheduler to resync.
+    reload_signal.request_scheduler_reload()
     return task
 
 
@@ -130,6 +133,9 @@ def remove_task(task_id: str, store_path: Path | None = None) -> bool:
         if len(raw) == original_len:
             return False
         _save_raw(path, raw)
+
+    # The schedule changed: wake any running scheduler so it stops firing this.
+    reload_signal.request_scheduler_reload()
 
     # Cascade: remove orphaned TaskRun records from the SQLite claim store.
     # Derive the DB path from the same directory as the JSON store.

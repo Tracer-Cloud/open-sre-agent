@@ -13,7 +13,7 @@ from core.agent_harness.spi.session_state import (
     set_auto_command,
 )
 from core.agent_harness.tools import (
-    ActionToolContext,
+    ActionToolScope,
     capability_available_from_sources,
     execute_with_action_context,
 )
@@ -82,7 +82,7 @@ _MAX_OBSERVED_OUTPUT_CHARS = 2000
 
 
 def _dispatch_and_translate_exit(
-    command: str, ctx: ActionToolContext, **kwargs: Any
+    command: str, ctx: ActionToolScope, **kwargs: Any
 ) -> bool | dict[str, Any]:
     should_continue = ctx.slash_ports.dispatch(
         command,
@@ -97,7 +97,7 @@ def _dispatch_and_translate_exit(
     return _slash_observation(ctx, command)
 
 
-def _slash_observation(ctx: ActionToolContext, command: str) -> bool | dict[str, Any]:
+def _slash_observation(ctx: ActionToolScope, command: str) -> bool | dict[str, Any]:
     """Build the model-facing result from the slash row this dispatch recorded.
 
     ``dispatch_slash`` records a history row for the command with an outcome
@@ -178,7 +178,7 @@ def _slash_line_parts(stripped: str) -> list[str]:
         return stripped.split()
 
 
-def execute_slash_tool(args: dict[str, Any], ctx: ActionToolContext) -> bool | dict[str, Any]:
+def execute_slash_tool(args: dict[str, Any], ctx: ActionToolScope) -> bool | dict[str, Any]:
     if ctx.slash_ports is None:
         raise RuntimeError("slash tool requires slash runtime ports")
     command = str(args.get("command", "")).strip()

@@ -5,6 +5,7 @@ from __future__ import annotations
 from pathlib import Path
 
 from infrastructure.deployment.packaging.release_manifest import (
+    infrastructure_data_entries,
     required_skill_files,
     runtime_hidden_imports,
 )
@@ -82,3 +83,48 @@ def test_release_build_uses_checked_in_spec() -> None:
     assert "OPENSRE_PYINSTALLER_MODE: ${{ matrix.pyinstaller_mode }}" in workflow
     assert "release_manifest.py" in spec
     assert "skill_data_entries(ROOT)" in spec
+
+
+def test_pull_requests_build_release_binaries_without_publishing() -> None:
+    workflow = _RELEASE_WORKFLOW.read_text(encoding="utf-8")
+
+    assert "  pull_request:\n    branches: [main]" in workflow
+    assert 'if [ "$EVENT_NAME" = "pull_request" ]; then' in workflow
+    assert 'echo "channel=pr" >> "$GITHUB_OUTPUT"' in workflow
+    assert workflow.count('ASSET_BASENAME="opensre_pr_${{ matrix.target }}"') == 1
+    assert workflow.count('$assetBaseName = "opensre_pr_${{ matrix.target }}"') == 1
+    assert "if: needs.prepare.outputs.channel == 'release'" in workflow
+
+
+def test_infrastructure_data_excludes_the_cloudflare_worker() -> None:
+    """The Cloudflare install-proxy is a JS Worker deployed via ``wrangler``.
+
+    It never runs from the frozen binary, so bundling it only adds dead,
+    non-Python weight to the release artifact.
+    """
+    relative_paths = {
+        Path(dest) / Path(source).name for source, dest in infrastructure_data_entries(_REPO_ROOT)
+    }
+
+    assert not any("cloudflare_install_proxy" in path.parts for path in relative_paths), (
+        relative_paths
+    )
+
+    assert Path("infrastructure/deployment/cloudflare_install_proxy/README.md").exists()
+    assert Path("infrastructure/deployment/cloudflare_install_proxy/src/index.mjs").exists()
+
+
+def test_infrastructure_data_still_covers_real_infrastructure_code() -> None:
+    relative_paths = {
+        Path(dest) / Path(source).name for source, dest in infrastructure_data_entries(_REPO_ROOT)
+    }
+
+    assert Path("infrastructure/deployment/packaging/release_manifest.py") in relative_paths
+    assert Path("infrastructure/deployment/ec2/telegram_gateway/README.md") in relative_paths
+
+
+def test_spec_bundles_infrastructure_via_the_filtered_helper() -> None:
+    spec = _SPEC_FILE.read_text(encoding="utf-8")
+
+    assert "infrastructure_data_entries(ROOT)" in spec
+    assert '(str(ROOT / "infrastructure"), "infrastructure")' not in spec

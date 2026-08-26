@@ -15,6 +15,7 @@ from typing import Any
 
 from core.llm import factory
 from core.llm.factory import LLMRole, get_llm, reset_llm_clients
+from core.llm.internal.client_cache_key import current_llm_client_cache_key
 from core.llm.transports.sdk.llm_clients import LLMClient, OpenAILLMClient
 from core.state import AgentState
 from tests.benchmarks.toolcall_model_benchmark.pricing import estimate_run_cost_usd
@@ -94,7 +95,7 @@ def configure_baseline_reasoning_for_tools() -> None:
     """Ablation: tool nodes use the same client instance as reasoning."""
     reset_llm_singletons()
     reasoning = get_llm(LLMRole.REASONING)
-    factory._cache.store(LLMRole.TOOLCALL, reasoning)
+    factory._cache.store(LLMRole.TOOLCALL, reasoning, current_llm_client_cache_key())
 
 
 def make_investigation_state(fixture: ScenarioFixture) -> AgentState:

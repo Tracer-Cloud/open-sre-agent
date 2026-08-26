@@ -128,7 +128,7 @@ def _parse_bool(value: str | None) -> bool:
 def compile_extra_patterns(policy: MaskingPolicy) -> dict[str, re.Pattern[str]]:
     """Compile a policy's extra regex patterns into a label→Pattern dict.
 
-    Public helper so callers (e.g. MaskingContext) can compile once per
+    Public helper so callers (e.g. MaskingRules) can compile once per
     investigation rather than on every mask call.
     """
     compiled: dict[str, re.Pattern[str]] = {}

@@ -79,6 +79,7 @@ webhook, or monitoring system directly into OpenSRE's investigation pipeline:
 ```python
 from bootstrap.process import EMBEDDED_PROFILE, configure_process
 from core.agent_harness import AgentSession
+from tools.investigation.capability import run_investigation_payload
 
 # 1. Register tools and investigation adapters
 configure_process(EMBEDDED_PROFILE)
@@ -94,7 +95,7 @@ alert_payload = {
     "description": "p99 latency exceeded 1200ms in us-east-1",
 }
 
-report = session.investigate(alert_payload)
+report = session.investigate(alert_payload, runner=run_investigation_payload)
 print(report.report)
 ```
 
@@ -105,6 +106,7 @@ Every surface uses the same two verbs:
 ```python
 from bootstrap.process import EMBEDDED_PROFILE, configure_process
 from core.agent_harness import AgentSession
+from tools.investigation.capability import run_investigation_payload
 
 configure_process(EMBEDDED_PROFILE)
 
@@ -118,7 +120,10 @@ action_ok = (
 if (result.answered or action_ok) and not result.cancelled:
     print(result.primary_response_text)
 
-report = session.investigate({"alert_name": "HighLatency", "severity": "warning"})
+report = session.investigate(
+    {"alert_name": "HighLatency", "severity": "warning"},
+    runner=run_investigation_payload,
+)
 print(report.report)
 ```
 
@@ -135,7 +140,8 @@ an agent with the standard ports — the same tools and prompts the interactive
 shell uses. It does **not** register adapters (``core`` may not import
 ``bootstrap``); call ``configure_process`` first or use
 ``start_embedded_session``. `investigate` does not require an attached chat
-agent; it uses the payload runner installed by `configure_process`.
+agent; pass it the `run_investigation_payload` runner as shown above (``core``
+may not import ``tools``, so the caller supplies it).
 
 Always verify turn success before trusting chat text:
 - For conversational questions and digests, the agent synthesizes an answer (`result.answered`).
@@ -145,8 +151,8 @@ Always verify turn success before trusting chat text:
 ### Internal seams (not for hosts)
 
 Chat hosts terminate at `dispatch_chat_turn` → `run_turn`. Investigation
-terminates at the installed payload runner (`run_investigation_payload`). Do not
-invent parallel public entrypoints.
+terminates at the payload runner the caller passes to `investigate`
+(`run_investigation_payload`). Do not invent parallel public entrypoints.
 
 ## Unattended daily delivery and background loops
 

@@ -6,7 +6,7 @@ from typing import Any
 
 from core.domain.types.tools import ToolSurface
 from core.tool import BaseTool, SideEffectLevel
-from core.tool_framework.tool_decorator import tool
+from core.tool_framework import tool
 from integrations.telegram.tools.telegram_send_message_tool.constants import SOURCE
 from integrations.telegram.tools.telegram_send_message_tool.delivery import (
     dispatch_message,

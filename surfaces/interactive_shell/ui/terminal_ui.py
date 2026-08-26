@@ -1,16 +1,15 @@
 """Single entry point composing the full terminal UI render.
 
-The terminal UI has four pieces, all composed from this module:
+The terminal UI has three pieces, all composed from this module:
 
-1. splash screen (Braille logo, version, first-run notice)
-2. welcome panel (identity column + tips/ambient status)
-3. hint/spinner line above the prompt rule
-4. prompt rule + ``[n] ❯`` input line
+1. welcome panel (identity column + tips/ambient status)
+2. hint/spinner line above the prompt rule
+3. prompt rule + ``[n] ❯`` input line
 
-Pieces 1–2 are static chrome printed once by :func:`render_terminal_ui`.
-Pieces 3–4 form the live prompt region: prompt-toolkit re-evaluates them on
+Piece 1 is static chrome printed once by :func:`render_terminal_ui`.
+Pieces 2–3 form the live prompt region: prompt-toolkit re-evaluates them on
 every keystroke, spinner tick, and prompt invalidation, so they are composed
-by :func:`render_prompt_region`, which ``PromptManager`` calls per redraw.
+by :func:`render_prompt_region`, which ``PromptBuilder`` calls per redraw.
 """
 
 from __future__ import annotations
@@ -21,7 +20,7 @@ from prompt_toolkit.formatted_text import ANSI
 from rich.console import Console
 
 from surfaces.interactive_shell.ui.input_prompt import rendering as prompt_rendering
-from surfaces.shared.terminal.banner import render_ready_box, render_splash
+from surfaces.shared.terminal.banner import render_ready_box
 from surfaces.shared.terminal.components.cpr_stdin import strip_cpr_sequences
 
 if TYPE_CHECKING:
@@ -33,16 +32,14 @@ def render_terminal_ui(
     console: Console | None = None,
     *,
     session: object = None,
-    first_run: bool | None = None,
 ) -> None:
-    """Render the static terminal chrome: splash screen then welcome panel."""
+    """Render the static terminal chrome: the welcome panel."""
     console = console or Console(
         highlight=False,
         force_terminal=True,
         color_system="truecolor",
         legacy_windows=False,
     )
-    render_splash(console, first_run=first_run)
     render_ready_box(console, session=session)
 
 

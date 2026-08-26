@@ -6,6 +6,7 @@ from __future__ import annotations
 
 from typing import Any
 
+from core.domain.types.evidence import record_evidence_entry
 from core.tool import BaseTool
 from infrastructure.evidence.evidence_compaction import compact_logs, summarize_counts
 from integrations.elasticsearch._client import make_client, unavailable
@@ -23,10 +24,31 @@ _ERROR_KEYWORDS = (
 )
 
 
+def _map_elasticsearch_logs(
+    evidence: dict[str, Any], output: dict[str, Any], tool_input: dict[str, Any]
+) -> None:
+    logs = output.get("logs", [])
+    error_logs = output.get("error_logs", [])
+    evidence["elasticsearch_logs"] = logs
+    evidence["elasticsearch_error_logs"] = error_logs
+    evidence["elasticsearch_logs_query"] = output.get("query") or tool_input.get("query", "")
+    if logs:
+        summary_parts = [f"{len(logs)} logs"]
+        if error_logs:
+            summary_parts.append(f"{len(error_logs)} errors")
+        record_evidence_entry(
+            evidence,
+            source="query_elasticsearch_logs",
+            label="Elasticsearch Logs",
+            summary=", ".join(summary_parts),
+        )
+
+
 class ElasticsearchLogsTool(BaseTool):
     """Search Elasticsearch logs for errors, exceptions, and application events."""
 
     name = "query_elasticsearch_logs"
+    evidence_mapper = _map_elasticsearch_logs
     source = "elasticsearch"
     description = "Search Elasticsearch logs for errors, exceptions, and application events."
     use_cases = [

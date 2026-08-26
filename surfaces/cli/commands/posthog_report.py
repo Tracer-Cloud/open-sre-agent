@@ -48,7 +48,7 @@ def posthog_report_command() -> None:
 )
 def posthog_report_run(stats_period: str, metrics: str) -> None:
     """Run the metric report once and print it to stdout."""
-    from infrastructure.scheduling.scheduler.agent_runner import invoke_agent_runner
+    from bootstrap.adapters import scheduler_runners
     from integrations.posthog.report_prerequisites import (
         DEFAULT_POSTHOG_PERIOD,
         require_posthog_integration,
@@ -64,7 +64,7 @@ def posthog_report_run(stats_period: str, metrics: str) -> None:
         payload["metrics"] = metrics.strip()
 
     try:
-        message = invoke_agent_runner(payload)
+        message = scheduler_runners().agent(payload)
     except Exception as exc:
         _console.print(f"[red]PostHog report failed: {exc}[/red]")
         raise SystemExit(1) from exc
@@ -223,6 +223,7 @@ def posthog_report_schedule_remove(task_id: str) -> None:
 @click.argument("task_id")
 def posthog_report_schedule_run(task_id: str) -> None:
     """Run a scheduled PostHog metric report task immediately."""
+    from bootstrap.adapters import scheduler_runners
     from infrastructure.scheduling.scheduler.runner import run_task_now
     from infrastructure.scheduling.scheduler.store import get_task
     from infrastructure.scheduling.scheduler.types import TaskKind
@@ -241,7 +242,7 @@ def posthog_report_schedule_run(task_id: str) -> None:
     require_report_delivery_provider(task.provider.value)
 
     _console.print(f"Running PostHog report task {task_id}...")
-    success = run_task_now(task_id)
+    success = run_task_now(task_id, scheduler_runners())
     if success:
         _console.print("[green]Done.[/green]")
     else:

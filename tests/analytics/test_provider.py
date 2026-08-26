@@ -305,11 +305,11 @@ def test_analytics_events_from_same_instance_share_exact_distinct_id(
     for payload in posted_payloads:
         properties = payload["json"]["properties"]
         assert (
-            properties["execution_environment"] == provider._RUNTIME_CONTEXT.execution_environment
+            properties["execution_environment"] == provider._ANALYTICS_RUNTIME.execution_environment
         )
-        assert properties["is_ci"] is provider._RUNTIME_CONTEXT.is_ci
-        assert properties["is_container"] is provider._RUNTIME_CONTEXT.is_container
-        assert properties["container_runtime"] == provider._RUNTIME_CONTEXT.container_runtime
+        assert properties["is_ci"] is provider._ANALYTICS_RUNTIME.is_ci
+        assert properties["is_container"] is provider._ANALYTICS_RUNTIME.is_container
+        assert properties["container_runtime"] == provider._ANALYTICS_RUNTIME.container_runtime
     log_lines = (tmp_path / "posthog_events.txt").read_text(encoding="utf-8").splitlines()
     assert len(log_lines) == 3
     assert Event.CLI_INVOKED.value in log_lines[0]

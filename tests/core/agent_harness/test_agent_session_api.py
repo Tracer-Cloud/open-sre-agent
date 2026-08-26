@@ -5,14 +5,8 @@ from __future__ import annotations
 from typing import Any
 from unittest.mock import patch
 
-import pytest
-
 from core.agent_harness.harness import AgentSession, SessionConfig
-from core.agent_harness.investigation_api import (
-    InvestigationResult,
-    install_investigation_payload_runner,
-    reset_investigation_payload_runner_for_tests,
-)
+from core.agent_harness.investigation_api import InvestigationResult
 from core.agent_harness.turns.turn_results import ToolCallingTurnResult, TurnResult
 
 
@@ -27,7 +21,6 @@ def _stub_turn_result() -> TurnResult:
             handled=True,
         ),
         assistant_response_text="ok",
-        llm_run=object(),
     )
 
 
@@ -142,9 +135,8 @@ def test_chat_is_the_public_verb(monkeypatch: Any) -> None:
     assert captured == ["why is checkout-api slow?", "follow-up"]
 
 
-def test_investigate_uses_installed_runner() -> None:
-    reset_investigation_payload_runner_for_tests()
-
+def test_investigate_runs_through_the_injected_runner() -> None:
+    # Arrange: a runner the caller supplies, asserting it receives the alert verbatim.
     def _fake_runner(
         *,
         raw_alert: Any,
@@ -162,24 +154,18 @@ def test_investigate_uses_installed_runner() -> None:
             "validity_score": 0.9,
         }
 
-    install_investigation_payload_runner(_fake_runner)
-    try:
-        result = AgentSession().investigate(
-            {"alert_name": "HighLatency"},
-            investigation_metadata=("HighLatency", "warning"),
-        )
-        assert isinstance(result, InvestigationResult)
-        assert result.report == "done"
-        assert result.root_cause == "r"
-        assert result.as_dict()["report"] == "done"
-    finally:
-        reset_investigation_payload_runner_for_tests()
+    # Act: investigate through the injected runner.
+    result = AgentSession().investigate(
+        {"alert_name": "HighLatency"},
+        runner=_fake_runner,
+        investigation_metadata=("HighLatency", "warning"),
+    )
 
-
-def test_investigate_fails_closed_without_runner() -> None:
-    reset_investigation_payload_runner_for_tests()
-    with pytest.raises(RuntimeError, match="Investigation payload runner is not installed"):
-        AgentSession().investigate("spike")
+    # Assert: the payload is wrapped into the typed public result.
+    assert isinstance(result, InvestigationResult)
+    assert result.report == "done"
+    assert result.root_cause == "r"
+    assert result.as_dict()["report"] == "done"
 
 
 def test_investigation_result_round_trips_optional_fields() -> None:

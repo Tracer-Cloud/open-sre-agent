@@ -11,6 +11,7 @@ from dataclasses import dataclass, field
 from typing import Any
 
 from core.agent_harness.ports import (
+    CancelCapableConsole,
     ConfirmFn,
     ToolEventObserver,
 )
@@ -23,7 +24,6 @@ from core.agent_harness.turns.turn_results import (
     ToolCallingTurnResult,
     TurnResult,
 )
-from core.llm.types import StreamingReasoningClient
 
 
 @dataclass
@@ -144,9 +144,6 @@ class EmptyPromptContextProvider:
     def setup_state(self) -> str:
         return ""
 
-    def suggested_synthetic_prompt(self) -> str:
-        return ""
-
     def log_diagnostics(self, reason: str) -> None:
         _ = reason
 
@@ -158,7 +155,7 @@ class NullToolProvider:
         """No tools to retarget."""
         _ = session
 
-    def bind_console(self, console: Any) -> None:
+    def bind_console(self, console: CancelCapableConsole) -> None:
         """No console-backed tools."""
         _ = console
 
@@ -199,44 +196,3 @@ class NoopErrorReporter:
 
     def report(self, exc: BaseException, *, context: str, expected: bool = False) -> None:
         _ = (exc, context, expected)
-
-
-@dataclass
-class SimpleRunRecord:
-    """Opaque conversational-LLM run record for headless runs."""
-
-    response_text: str
-    prompt: str = ""
-    started: float = 0.0
-
-
-class SimpleRunRecordFactory:
-    """Builds :class:`SimpleRunRecord` values."""
-
-    def bind_session(self, session: Any) -> None:
-        """Records are ephemeral — no session handle to update."""
-        _ = session
-
-    def build(
-        self, *, client: Any, prompt: str, response_text: str, started: float
-    ) -> SimpleRunRecord:
-        _ = client
-        return SimpleRunRecord(response_text=response_text, prompt=prompt, started=started)
-
-
-@dataclass
-class StaticReasoningClientProvider:
-    """Provides a fixed reasoning client (or None to skip the assistant)."""
-
-    client: StreamingReasoningClient | None = None
-
-    def bind_session(self, session: Any) -> None:
-        """Client is fixed at construction — ignore session retargets."""
-        _ = session
-
-    def bind_output(self, output: Any) -> None:
-        """No sink of its own — accept rebind for :class:`OutputBindable` parity."""
-        _ = output
-
-    def get(self) -> StreamingReasoningClient | None:
-        return self.client

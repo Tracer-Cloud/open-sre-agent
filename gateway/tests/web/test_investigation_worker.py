@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import json
+import threading
+import time
 from pathlib import Path
 from typing import Any
 
@@ -203,3 +205,52 @@ def test_ensure_worker_started_once(monkeypatch: pytest.MonkeyPatch) -> None:
     assert first is not None
     assert second is first
     first.stop()
+
+
+def test_pool_runs_two_investigations_concurrently(tmp_path: Path) -> None:
+    # Arrange: two queued investigations, a two-worker pool, and a gate that
+    # admits two turns. The runner meets a two-party barrier, so it can only
+    # return if a second investigation is genuinely in flight at the same time.
+    from infrastructure.turn_host.concurrency import (
+        TurnConcurrencyGate,
+        reset_process_turn_gate_for_tests,
+        set_process_turn_gate,
+    )
+
+    store = InMemoryInvestigationRepository()
+    first_id = _queued(store, org="org_a")
+    second_id = _queued(store, org="org_b")
+    both_in_flight = threading.Barrier(2, timeout=5)
+
+    def runner(_trigger: dict[str, Any]) -> dict[str, Any]:
+        both_in_flight.wait()  # times out unless a second worker is running too
+        return {"report": "ok"}
+
+    worker = InvestigationWorker(
+        store,
+        runner=runner,
+        artifacts_dir=tmp_path,
+        poll_interval_seconds=0.01,
+        pool_size=2,
+    )
+    set_process_turn_gate(TurnConcurrencyGate(2))
+    try:
+        # Act
+        threads = worker.start()
+        assert len(threads) == 2
+
+        deadline = time.monotonic() + 5
+        while time.monotonic() < deadline:
+            records = [store.get(first_id), store.get(second_id)]
+            if all(r is not None and r.status is InvestigationStatus.COMPLETED for r in records):
+                break
+            time.sleep(0.02)
+    finally:
+        worker.stop()
+        reset_process_turn_gate_for_tests()
+
+    # Assert: both finished, which only happens if they ran at the same time.
+    for investigation_id in (first_id, second_id):
+        record = store.get(investigation_id)
+        assert record is not None
+        assert record.status is InvestigationStatus.COMPLETED

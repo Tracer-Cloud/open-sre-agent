@@ -13,7 +13,10 @@ from typing import Any
 import pytest
 
 from integrations.elasticsearch.client import ElasticsearchConfig
-from integrations.opensearch.tools.opensearch_analytics_tool import query_opensearch_analytics
+from integrations.opensearch.tools.opensearch_analytics_tool import (
+    _map_query_opensearch_analytics,
+    query_opensearch_analytics,
+)
 from tests.tools.conftest import BaseToolContract
 
 # ---------------------------------------------------------------------------
@@ -354,3 +357,70 @@ def test_propagates_unknown_client_error(monkeypatch: pytest.MonkeyPatch) -> Non
     assert result["available"] is False
     # Tool falls back to a generic message rather than raising
     assert "Unknown OpenSearch error" in result["error"]
+
+
+# ---------------------------------------------------------------------------
+# Evidence mapper
+# ---------------------------------------------------------------------------
+
+
+class TestMapQueryOpensearchAnalytics:
+    def test_records_entry_with_log_count(self) -> None:
+        evidence: dict[str, Any] = {}
+
+        _map_query_opensearch_analytics(
+            evidence,
+            {
+                "available": True,
+                "total_returned": 2,
+                "query": "service:checkout",
+                "index_pattern": "logs-*",
+                "logs": [{"message": "error 1"}, {"message": "error 2"}],
+            },
+            {},
+        )
+
+        entries = evidence["catalog_entries"]
+        assert len(entries) == 1
+        assert entries[0]["source"] == "query_opensearch_analytics"
+        assert entries[0]["summary"] == "2 log(s) for query 'service:checkout' on 'logs-*'"
+
+    def test_truncates_long_query_and_index_pattern_in_summary(self) -> None:
+        evidence: dict[str, Any] = {}
+        long_query = "service:checkout AND " + "x" * 200
+        long_index_pattern = "logs-" + "y" * 200
+
+        _map_query_opensearch_analytics(
+            evidence,
+            {
+                "available": True,
+                "total_returned": 1,
+                "query": long_query,
+                "index_pattern": long_index_pattern,
+                "logs": [{"message": "error 1"}],
+            },
+            {},
+        )
+
+        summary = evidence["catalog_entries"][0]["summary"]
+        assert len(summary) < len(long_query) + len(long_index_pattern)
+        assert long_query not in summary
+        assert long_index_pattern not in summary
+
+    def test_records_nothing_when_no_logs(self) -> None:
+        evidence: dict[str, Any] = {}
+
+        _map_query_opensearch_analytics(
+            evidence, {"available": True, "total_returned": 0, "logs": []}, {}
+        )
+
+        assert "catalog_entries" not in evidence
+
+    def test_records_nothing_on_unavailable_result(self) -> None:
+        evidence: dict[str, Any] = {}
+
+        _map_query_opensearch_analytics(
+            evidence, {"available": False, "error": "auth failed", "logs": []}, {}
+        )
+
+        assert "catalog_entries" not in evidence

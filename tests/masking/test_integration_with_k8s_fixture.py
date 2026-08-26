@@ -9,23 +9,22 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
+from typing import Any, cast
 
-from infrastructure.safety.masking.context import MaskingContext
 from infrastructure.safety.masking.policy import ALL_KINDS, MaskingPolicy
+from infrastructure.safety.masking.rules import MaskingRules
 
 FIXTURE = (
     Path(__file__).parent.parent / "e2e" / "kubernetes" / "fixtures" / "datadog_k8s_alert.json"
 )
 
 
-def _load_fixture() -> dict:
-    return json.loads(FIXTURE.read_text(encoding="utf-8"))
+def _load_fixture() -> dict[str, Any]:
+    return cast(dict[str, Any], json.loads(FIXTURE.read_text(encoding="utf-8")))
 
 
-def _enabled_ctx() -> MaskingContext:
-    return MaskingContext(
-        policy=MaskingPolicy.model_validate({"enabled": True, "kinds": ALL_KINDS})
-    )
+def _enabled_ctx() -> MaskingRules:
+    return MaskingRules(policy=MaskingPolicy.model_validate({"enabled": True, "kinds": ALL_KINDS}))
 
 
 def test_fixture_file_exists() -> None:
@@ -63,7 +62,7 @@ def test_masking_produces_at_least_one_placeholder() -> None:
 
 def test_disabled_policy_leaves_fixture_unchanged() -> None:
     original = _load_fixture()
-    disabled = MaskingContext(
+    disabled = MaskingRules(
         policy=MaskingPolicy.model_validate({"enabled": False, "kinds": ALL_KINDS})
     )
     assert disabled.mask_value(original) == original
@@ -72,7 +71,7 @@ def test_disabled_policy_leaves_fixture_unchanged() -> None:
 
 def test_extra_regex_policy_activates_new_kind_without_code_change() -> None:
     """Acceptance criterion #2: configuration without editing code."""
-    ctx = MaskingContext(
+    ctx = MaskingRules(
         policy=MaskingPolicy.from_env(
             {
                 "OPENSRE_MASK_ENABLED": "true",

@@ -242,8 +242,8 @@ Construct **one** `HeadlessAgent` per logical chat session
    cancel / approvals. Do **not** pass `output=` here unless replacing the
    `OutputSink` object itself (then `OutputBindable` ports, e.g. reasoning,
    must follow).
-3. `agent.handle(text, TurnBinding(...))` — SessionGoal outer loop +
-   `dispatch` per inner turn. Do **not** wrap this as `AgentSession.chat`
+3. `agent.handle(text, TurnBinding(...))` — SessionGoal turn loop +
+   `dispatch` per turn. Do **not** wrap this as `AgentSession.chat`
    on the gateway path; the pool owns the agent and calls `handle` directly.
 
 Do **not** build a fresh headless agent on every message. Same-session turns

@@ -35,7 +35,7 @@ class CredentialKind(StrEnum):
     translation in ``surfaces/shared/llm_setup/catalog.py``.
     """
 
-    #: A user-supplied API key stored by OpenSRE (keyring/.env).
+    #: A user-supplied API key stored by OpenSRE (credentials file / env).
     API_KEY = "api_key"
     #: A vendor CLI handles its own auth (Codex, Claude Code); no key in .env.
     CLI = "cli"

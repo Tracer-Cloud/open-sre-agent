@@ -535,3 +535,21 @@ def classify(
     if cfg.is_configured:
         return cfg, "sentry_mcp"
     return None, None
+
+
+__all__ = [
+    "DEFAULT_SENTRY_MCP_URL",
+    "SentryMCPConfig",
+    "SentryMCPContentItem",
+    "SentryMCPToolCallResult",
+    "SentryMCPToolDescriptor",
+    "SentryMCPValidationResult",
+    "build_sentry_mcp_config",
+    "call_sentry_mcp_tool",
+    "classify",
+    "describe_sentry_mcp_error",
+    "list_sentry_mcp_tools",
+    "sentry_mcp_config_from_env",
+    "sentry_mcp_runtime_unavailable_reason",
+    "validate_sentry_mcp_config",
+]

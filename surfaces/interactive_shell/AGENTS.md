@@ -97,7 +97,7 @@ owning area rather than adding more logic to the caller.
   prompt buffer, causing garbage like `^[[60;1R` to appear.
   **Any command that calls `print_repl_table` (directly or via `render_table` /
   `render_integrations_table` / `render_models_table` / etc.) must be added to
-  `_EXCLUSIVE_STDIN_MENU_COMMANDS` in `runtime/utils/input_policy.py`.** That makes the main
+  `_EXCLUSIVE_STDIN_MENU_COMMANDS` in `runtime/input_policy.py`.** That makes the main
   loop call `await state.queue.join()`, blocking the next prompt until dispatch
   completes and both drain cycles clean up stale CPR bytes before the next
   `prompt_async()` starts.

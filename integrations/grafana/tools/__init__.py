@@ -6,8 +6,9 @@ from __future__ import annotations
 
 from typing import Any
 
+from core.domain.types.evidence import record_evidence_entry
 from core.tool import EvidenceType, SideEffectLevel
-from core.tool_framework.tool_decorator import tool
+from core.tool_framework import tool
 from core.tool_framework.utils import tool_unavailable
 
 _GRAFANA_RUNTIME_PARAMS = (
@@ -62,10 +63,25 @@ def _normalize_backend_alert_rules(raw: dict[str, Any]) -> list[dict[str, Any]]:
     return rules
 
 
+def _map_grafana_alert_rules(
+    evidence: dict[str, Any], output: dict[str, Any], _input: dict[str, Any]
+) -> None:
+    rules = output.get("rules", [])
+    evidence["grafana_alert_rules"] = rules
+    if rules:
+        record_evidence_entry(
+            evidence,
+            source="grafana_alert_rules",
+            label="Grafana Alert Rules",
+            summary=f"{len(rules)} rules",
+        )
+
+
 @tool(
     name="query_grafana_alert_rules",
     display_name="Grafana alerts",
     source="grafana",
+    evidence_mapper=_map_grafana_alert_rules,
     description="Query Grafana alert rules to understand what is being monitored.",
     use_cases=[
         "Investigating DatasourceNoData alerts to find the exact PromQL/LogQL query",
@@ -138,7 +154,7 @@ def query_grafana_alert_rules(
 import time
 from datetime import UTC, datetime
 
-from core.tool_framework.tool_decorator import tool
+from core.tool_framework import tool
 from integrations.grafana.base import _epoch_ms_to_iso, _map_annotation
 
 
@@ -280,7 +296,7 @@ def query_grafana_annotations(
 """Grafana Loki log query tool — primary owner of Grafana helpers."""
 
 
-from core.tool_framework.tool_decorator import tool
+from core.tool_framework import tool
 from infrastructure.evidence.evidence_compaction import summarize_counts
 from infrastructure.evidence.log_compaction import build_error_taxonomy, deduplicate_logs
 from integrations.grafana.client import get_grafana_client_from_credentials
@@ -373,10 +389,20 @@ _GRAFANA_LOGS_ANTI = (
 )
 
 
+def _map_grafana_logs(
+    evidence: dict[str, Any], output: dict[str, Any], _input: dict[str, Any]
+) -> None:
+    evidence["grafana_logs"] = output.get("logs", [])
+    evidence["grafana_error_logs"] = output.get("error_logs", [])
+    evidence["grafana_logs_query"] = output.get("query", "")
+    evidence["grafana_logs_service"] = output.get("service_name", "")
+
+
 @tool(
     name="query_grafana_logs",
     display_name="Grafana Loki",
     source="grafana",
+    evidence_mapper=_map_grafana_logs,
     description=(
         "Query Grafana Loki log streams for one service_name (required). "
         "Optionally narrow with execution_run_id or pipeline_name and a lookback window."
@@ -520,7 +546,7 @@ def query_grafana_logs(
 
 from pydantic import BaseModel, Field
 
-from core.tool_framework.tool_decorator import tool
+from core.tool_framework import tool
 
 
 class QueryGrafanaMetricsInput(BaseModel):
@@ -559,10 +585,29 @@ def _query_grafana_metrics_available(sources: dict[str, dict]) -> bool:
     return _grafana_available(sources)
 
 
+def _map_grafana_metrics(
+    evidence: dict[str, Any], output: dict[str, Any], tool_input: dict[str, Any]
+) -> None:
+    metric_name = str(output.get("metric_name") or tool_input.get("metric_name") or "")
+    metric_results = evidence.setdefault("grafana_metric_results", {})
+    if isinstance(metric_results, dict) and metric_name:
+        metric_results[metric_name] = output
+    metrics = output.get("metrics", [])
+    evidence["grafana_metrics"] = metrics
+    if metrics:
+        record_evidence_entry(
+            evidence,
+            source="grafana_metrics",
+            label="Grafana Metrics",
+            summary=", ".join(p for p in [metric_name or None, f"{len(metrics)} series"] if p),
+        )
+
+
 @tool(
     name="query_grafana_metrics",
     display_name="Grafana Mimir",
     source="grafana",
+    evidence_mapper=_map_grafana_metrics,
     description="Query Grafana Cloud Mimir for pipeline metrics.",
     use_cases=[
         "Checking pipeline throughput and error rate metrics",
@@ -637,7 +682,7 @@ def query_grafana_metrics(
 """Grafana Loki service name discovery tool."""
 
 
-from core.tool_framework.tool_decorator import tool
+from core.tool_framework import tool
 
 
 def _query_grafana_service_names_extract_params(sources: dict[str, dict]) -> dict[str, Any]:
@@ -652,9 +697,24 @@ def _query_grafana_service_names_available(sources: dict[str, dict]) -> bool:
     return _grafana_available(sources)
 
 
+def _map_grafana_service_names(
+    evidence: dict[str, Any], output: dict[str, Any], _input: dict[str, Any]
+) -> None:
+    service_names = output.get("service_names", [])
+    evidence["grafana_service_names"] = service_names
+    if service_names:
+        record_evidence_entry(
+            evidence,
+            source="grafana_service_names",
+            label="Grafana Service Names",
+            summary=f"{len(service_names)} services",
+        )
+
+
 @tool(
     name="query_grafana_service_names",
     source="grafana",
+    evidence_mapper=_map_grafana_service_names,
     description="Discover available service names in Loki.",
     use_cases=[
         "Finding the correct service_name label when query_grafana_logs returns no results",
@@ -714,7 +774,7 @@ def query_grafana_service_names(
 
 
 from core.domain.pipeline_spans import extract_pipeline_spans as _extract_pipeline_spans
-from core.tool_framework.tool_decorator import tool
+from core.tool_framework import tool
 from infrastructure.evidence.evidence_compaction import DEFAULT_TRACE_LIMIT, compact_traces
 
 
@@ -741,10 +801,26 @@ def _query_grafana_traces_available(sources: dict[str, dict]) -> bool:
     return _grafana_available(sources)
 
 
+def _map_grafana_traces(
+    evidence: dict[str, Any], output: dict[str, Any], _input: dict[str, Any]
+) -> None:
+    traces = output.get("traces", [])
+    evidence["grafana_traces"] = traces
+    evidence["grafana_pipeline_spans"] = output.get("pipeline_spans", [])
+    if traces:
+        record_evidence_entry(
+            evidence,
+            source="grafana_traces",
+            label="Grafana Traces",
+            summary=f"{len(traces)} traces",
+        )
+
+
 @tool(
     name="query_grafana_traces",
     display_name="Grafana Tempo",
     source="grafana",
+    evidence_mapper=_map_grafana_traces,
     description="Query Grafana Cloud Tempo for pipeline traces.",
     use_cases=[
         "Tracing distributed request flows during a pipeline failure",

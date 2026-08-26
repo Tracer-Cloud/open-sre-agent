@@ -5,7 +5,7 @@ from __future__ import annotations
 from typing import Any
 
 from core.domain.types.tools import ToolSurface
-from core.tool_framework.tool_decorator import tool
+from core.tool_framework import tool
 from infrastructure.evidence.log_compaction import build_error_taxonomy, deduplicate_logs
 from integrations.tracer import get_tracer_web_client
 

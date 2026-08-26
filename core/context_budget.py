@@ -13,12 +13,14 @@ logger = logging.getLogger(__name__)
 # models use a conservative default so we trim early rather than overflow.
 _MODEL_CONTEXT_WINDOWS: dict[str, int] = {
     "claude": 200_000,
+    "gemini": 1_000_000,
     "gpt-4o": 128_000,
     "gpt-4.1": 1_000_000,
     "gpt-4": 128_000,
-    # Lookup is first-substring-match in insertion order, so gpt-5.6 must stay
-    # above the gpt-5 catch-all or it is never reached.
+    # Lookup is first-substring-match in insertion order, so gpt-5.4 / gpt-5.6
+    # must stay above the gpt-5 catch-all or they are never reached.
     "gpt-5.6": 1_000_000,
+    "gpt-5.4": 1_000_000,
     # gpt-5 window is conservatively pinned to 128k until confirmed for the
     # dated snapshot in use; raise once verified to reclaim headroom.
     "gpt-5": 128_000,

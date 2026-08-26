@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import io
-from dataclasses import dataclass
 from unittest.mock import Mock
 
 import pytest
@@ -15,7 +14,10 @@ from core.agent_harness.turns.turn_results import ToolCallingTurnResult
 from infrastructure.terminal.theme import BOLD_SKILL, HIGHLIGHT
 from surfaces.interactive_shell.runtime.action_turn import run_action_tool_turn
 from surfaces.interactive_shell.session import Session
-from surfaces.interactive_shell.ui.action_rendering import ActionRenderObserver
+from surfaces.interactive_shell.ui.action_rendering import (
+    ActionRenderObserver,
+    tool_call_display,
+)
 from surfaces.interactive_shell.ui.input_prompt.rendering import (
     _prompt_turn_number,
     render_submitted_prompt,
@@ -138,6 +140,62 @@ def test_skill_view_renders_bold_green_skill_label() -> None:
     assert len(heading.spans) == 2
     assert str(heading.spans[0].style) == BOLD_SKILL
     assert str(heading.spans[1].style) == str(HIGHLIGHT)
+
+
+def test_skill_view_strips_terminal_controls_from_model_name() -> None:
+    # Arrange: a model-supplied skill name carrying an ANSI escape + BEL
+    console = Mock(spec=Console)
+    observer = ActionRenderObserver(session=Session(), console=console, message="run code review")
+
+    # Act
+    observer(
+        "tool_start",
+        {"id": "t1", "name": "skill_view", "input": {"name": "code\x1b[2Kreview\x07"}},
+    )
+
+    # Assert: the rendered skill heading carries no C0/C1/DEL controls
+    heading = console.print.call_args_list[1].args[0]
+    assert isinstance(heading, Text)
+    assert "\x1b" not in heading.plain
+    assert "\x07" not in heading.plain
+
+
+def test_tool_call_display_strips_terminal_controls_from_model_args() -> None:
+    # Arrange + Act: a model-supplied tool arg with an ANSI escape + BEL
+    label, content = tool_call_display("shell_run", {"command": "ls\x1b[2Krm\x07"})
+
+    # Assert: no control characters survive into the raw Rich line
+    assert "\x1b" not in content
+    assert "\x07" not in content
+    assert content == "ls[2Krm"
+
+
+def test_intermediate_message_strips_terminal_controls_before_markdown() -> None:
+    # Arrange: a real terminal, where Rich would otherwise pass the model's
+    # control bytes straight through (a non-terminal console strips them anyway,
+    # so this must force a terminal to exercise the sanitizer).
+    session = Session()
+    buffer = io.StringIO()
+    console = Console(file=buffer, force_terminal=True, highlight=False, width=80)
+    observer = ActionRenderObserver(session=session, console=console, message="x")
+
+    # Act: model narration carrying a clear-screen escape and a BEL
+    observer(
+        "message_update",
+        {
+            "has_tool_calls": True,
+            "content": "### [1/2] Scope\x1b[2J\nLooking at p99\x07",
+        },
+    )
+
+    # Assert: the dangerous payloads are gone (Rich's own styling escapes are
+    # ``ESC[…m``, never ``ESC[2J``, so this stays a clean security assertion),
+    # while the newline-separated prose survives.
+    output = buffer.getvalue()
+    assert "\x1b[2J" not in output
+    assert "\x07" not in output
+    assert "Scope" in output
+    assert "Looking at p99" in output
 
 
 def test_skill_view_failure_renders_failure_child() -> None:
@@ -266,11 +324,6 @@ def test_literal_slash_command_records_single_history_entry(
     assert _prompt_turn_number(session) == 2
 
 
-@dataclass
-class _FakeLlmRun:
-    response_text: str = "hello back"
-
-
 def test_chat_turn_records_single_cli_agent_history_entry() -> None:
     session = Session()
     console = Console(file=io.StringIO(), force_terminal=False, highlight=False)
@@ -288,16 +341,8 @@ def test_chat_turn_records_single_cli_agent_history_entry() -> None:
             executed_success_count=0,
             has_unhandled_clause=False,
             handled=False,
-            accounting_status="not_run",
+            response_text="hello back",
         )
-
-    def _answer(
-        _text: str,
-        _session: Session,
-        _console: Console,
-        **kwargs: object,
-    ) -> _FakeLlmRun:
-        return _FakeLlmRun()
 
     run_harness_turn(
         "what broke in prod?",
@@ -305,7 +350,6 @@ def test_chat_turn_records_single_cli_agent_history_entry() -> None:
         console,
         recorder=None,
         execute_actions=_no_actions,
-        answer_agent=_answer,
     )
 
     assert session.history == [{"type": "cli_agent", "text": "what broke in prod?", "ok": True}]

@@ -13,10 +13,6 @@ from gateway.tests.runtime.concurrency_limited_handler import (
     ConcurrencyLimitedTurnHandler,
 )
 from infrastructure.deployment.contracts.models import SizeProfile
-from infrastructure.scheduling.scheduler.agent_runner import (
-    invoke_agent_runner,
-    register_agent_runner,
-)
 from infrastructure.scheduling.scheduler.runners import SchedulerRunners
 from infrastructure.turn_host.concurrency import TurnConcurrencyGate
 
@@ -222,9 +218,9 @@ def test_scheduler_runner_waits_for_the_same_chat_capacity() -> None:
         entered.set()
         return "done"
 
-    SchedulerRunners(agent=scheduled_runner, investigation=_unused_runner).gated(gate).install()
+    bundle = SchedulerRunners(agent=scheduled_runner, investigation=_unused_runner).gated(gate)
     thread = threading.Thread(
-        target=lambda: result.append(invoke_agent_runner({})),
+        target=lambda: result.append(bundle.agent({})),
     )
     thread.start()
     assert not entered.wait(0.05)
@@ -232,6 +228,34 @@ def test_scheduler_runner_waits_for_the_same_chat_capacity() -> None:
     gate.release()
     assert entered.wait(1)
     thread.join(1)
-    register_agent_runner(None)
 
     assert result == ["done"]
+
+
+def test_max_concurrent_turns_override_beats_the_size_profile(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    # A deployment can raise concurrency on the same task without changing tier.
+    from infrastructure.turn_host.concurrency import (
+        process_turn_gate,
+        reset_process_turn_gate_for_tests,
+    )
+
+    reset_process_turn_gate_for_tests()
+    monkeypatch.setenv("OPENSRE_SIZE_PROFILE", "SMALL")  # profile would give 1
+    monkeypatch.setenv("OPENSRE_MAX_CONCURRENT_TURNS", "3")
+    assert process_turn_gate().limit == 3
+    reset_process_turn_gate_for_tests()
+
+
+def test_invalid_override_falls_back_to_the_size_profile(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    # A typo (non-positive / unparseable) must not drop the gate below the tier.
+    from infrastructure.turn_host.concurrency import configured_turn_limit
+
+    monkeypatch.setenv("OPENSRE_SIZE_PROFILE", "SMALL")
+    monkeypatch.setenv("OPENSRE_MAX_CONCURRENT_TURNS", "0")
+    assert configured_turn_limit() == 1
+    monkeypatch.setenv("OPENSRE_MAX_CONCURRENT_TURNS", "lots")
+    assert configured_turn_limit() == 1

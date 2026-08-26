@@ -15,7 +15,7 @@ from core.domain.types.tools import ToolSurface
 from core.llm.types import ToolCall
 from core.tool import RegisteredTool, availability_view
 from infrastructure.observability.trace.redaction import RedactedToolView, redact_tool_view
-from tools.registry import get_registered_tools
+from tools.registry import get_registered_tool, get_registered_tools
 
 # Consecutive iterations made up ENTIRELY of duplicate (already-seen) tool calls
 # that we tolerate before forcing the agent to conclude.
@@ -300,29 +300,9 @@ def merge_tool_evidence(
     if not isinstance(output, dict):
         return
 
-    if tool_name == "query_grafana_logs":
-        evidence["grafana_logs"] = output.get("logs", [])
-        evidence["grafana_error_logs"] = output.get("error_logs", [])
-        evidence["grafana_logs_query"] = output.get("query", "")
-        evidence["grafana_logs_service"] = output.get("service_name", "")
-        return
-
-    if tool_name == "query_grafana_metrics":
-        metric_name = str(output.get("metric_name") or tool_input.get("metric_name") or "")
-        metric_results = evidence.setdefault("grafana_metric_results", {})
-        if isinstance(metric_results, dict) and metric_name:
-            metric_results[metric_name] = output
-        evidence["grafana_metrics"] = output.get("metrics", [])
-        return
-
-    if tool_name == "query_grafana_traces":
-        evidence["grafana_traces"] = output.get("traces", [])
-        evidence["grafana_pipeline_spans"] = output.get("pipeline_spans", [])
-        return
-
-    if tool_name == "query_grafana_alert_rules":
-        evidence["grafana_alert_rules"] = output.get("rules", [])
-        return
-
-    if tool_name == "query_grafana_service_names":
-        evidence["grafana_service_names"] = output.get("service_names", [])
+    # The mapping into canonical report keys travels with the tool
+    # (``@tool(evidence_mapper=...)``), so this stage stays vendor-agnostic.
+    tool = get_registered_tool(tool_name)
+    mapper = tool.evidence_mapper if tool is not None else None
+    if mapper is not None:
+        mapper(evidence, output, tool_input)

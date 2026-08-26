@@ -17,6 +17,13 @@ from surfaces.interactive_shell.runtime.background.runner import (
     start_background_template_investigation,
     start_background_text_investigation,
 )
+from surfaces.interactive_shell.telemetry.investigation_analytics import (
+    publish_investigation_outcome_analytics,
+)
+from surfaces.interactive_shell.telemetry.turn_outcome import (
+    format_investigation_outcome,
+    format_investigation_terminal_outcome,
+)
 from surfaces.interactive_shell.ui import (
     DIM,
     ERROR,
@@ -27,13 +34,6 @@ from surfaces.interactive_shell.ui.foreground_investigation import run_foregroun
 from surfaces.interactive_shell.ui.investigation_outcome import (
     InvestigationOutcome,
     normalize_investigation_target,
-)
-from surfaces.interactive_shell.utils.telemetry.investigation_analytics import (
-    publish_investigation_outcome_analytics,
-)
-from surfaces.interactive_shell.utils.telemetry.turn_outcome import (
-    format_investigation_outcome,
-    format_investigation_terminal_outcome,
 )
 from surfaces.shared.error_handling.exception_reporting import report_exception
 from surfaces.shared.terminal.components.choice_menu import (

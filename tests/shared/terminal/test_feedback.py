@@ -8,13 +8,12 @@ import os
 import pytest
 from rich.console import Console
 
-from surfaces.shared.terminal.feedback import (
-    _CHOICES,
+from surfaces.shared.terminal.feedback.context_display import (
     _format_root_cause_lines,
     _print_context,
     _root_cause_width,
-    _run_select,
 )
+from surfaces.shared.terminal.feedback.prompts import _CHOICES, _run_select
 
 
 def _fixed_terminal_size(*_args: object, **_kwargs: object) -> os.terminal_size:
@@ -120,12 +119,12 @@ def test_run_select_returns_highlighted_choice_on_enter(
         return "enter" if calls["n"] > 1 else "down"
 
     monkeypatch.setattr(
-        "surfaces.shared.terminal.feedback.read_key_unix",
+        "surfaces.shared.terminal.feedback.prompts.read_key_unix",
         read_then_enter,
     )
-    monkeypatch.setattr("surfaces.shared.terminal.feedback.flush_stdin_unix", lambda: None)
+    monkeypatch.setattr("surfaces.shared.terminal.feedback.prompts.flush_stdin_unix", lambda: None)
     monkeypatch.setattr(
-        "surfaces.shared.terminal.feedback.restore_stdin_terminal",
+        "surfaces.shared.terminal.feedback.prompts.restore_stdin_terminal",
         lambda: None,
     )
 

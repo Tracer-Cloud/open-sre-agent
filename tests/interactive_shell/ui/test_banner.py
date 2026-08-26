@@ -22,7 +22,6 @@ def test_banner_shows_ollama_model(monkeypatch: object) -> None:
     console_file = io.StringIO()
     console = Console(file=console_file, force_terminal=False, highlight=False)
 
-    banner_module.render_splash(console)
     banner_module.render_ready_box(console)
 
     output = console_file.getvalue()
@@ -194,16 +193,18 @@ def test_count_scheduled_tasks_survives_store_failure(monkeypatch: object) -> No
 
 
 def test_ready_box_expands_to_console_width() -> None:
-    console_file = io.StringIO()
-    console = Console(file=console_file, force_terminal=False, highlight=False, width=120)
+    from rich.cells import cell_len
 
-    banner_module.render_ready_box(console)
-
-    lines = [
-        line for line in console_file.getvalue().splitlines() if line.startswith(("╭", "╰", "│"))
-    ]
-    assert lines
-    assert max(len(line) for line in lines) == 120
+    for width in (120, 80, 50):
+        console = Console(record=True, force_terminal=False, highlight=False, width=width)
+        banner_module.render_ready_box(console)
+        plain = console.export_text(styles=False)
+        box_lines = [line for line in plain.splitlines() if line.startswith(("╭", "│", "╰"))]
+        assert box_lines
+        assert {cell_len(line.rstrip()) for line in box_lines} == {
+            max(cell_len(line.rstrip()) for line in box_lines)
+        }
+        assert all(cell_len(line.rstrip()) <= width for line in plain.splitlines())
 
 
 def test_identity_greeting_matches_first_run_state(monkeypatch: object) -> None:

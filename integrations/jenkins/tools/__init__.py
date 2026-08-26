@@ -12,7 +12,7 @@ from __future__ import annotations
 from typing import Any
 
 from core.domain.types.tools import ToolSurface
-from core.tool_framework.tool_decorator import tool
+from core.tool_framework import tool
 from core.tool_framework.utils import tool_unavailable
 from integrations.jenkins import jenkins_config_from_env
 from integrations.jenkins.client import JenkinsClient, make_jenkins_client

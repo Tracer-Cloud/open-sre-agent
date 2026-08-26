@@ -147,12 +147,6 @@ def _handle_remove(session: Session, console: Console, service: str | None) -> b
         delete_webapp_org_integration(svc)
         repl_print(console, f"[{HIGHLIGHT}]removed '{escape(svc)}'.[/]")
         capture_integration_removed(svc)
-        if svc == "github":
-            from surfaces.interactive_shell.runtime.startup.first_launch_github import (
-                clear_github_login_deferral,
-            )
-
-            clear_github_login_deferral()
     else:
         repl_print(console, f"[{ERROR}]no integration found for:[/] {escape(svc)}")
         session.mark_latest(ok=False, kind="slash")

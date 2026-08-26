@@ -6,7 +6,7 @@ import base64
 from typing import Any
 
 from core.domain.types.tools import ToolSurface
-from core.tool_framework.tool_decorator import tool
+from core.tool_framework import tool
 from core.tool_framework.utils import code_host_unavailable_payload, tool_unavailable
 from integrations.gitlab import (
     get_gitlab_file,

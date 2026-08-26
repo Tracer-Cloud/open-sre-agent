@@ -5,7 +5,7 @@ from __future__ import annotations
 from typing import Any
 
 from core.agent_harness.tools import (
-    ActionToolContext,
+    ActionToolScope,
     capability_available_from_sources,
     execute_with_action_context,
 )
@@ -16,7 +16,7 @@ from tools.interactive_shell.cli import run_opensre_cli_command
 from tools.interactive_shell.subprocess import require_subprocess_presenter
 
 
-def execute_cli_command_tool(args: dict[str, Any], ctx: ActionToolContext) -> bool:
+def execute_cli_command_tool(args: dict[str, Any], ctx: ActionToolScope) -> bool:
     payload = str(args.get("payload", "")).strip()
     if not payload:
         return False

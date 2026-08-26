@@ -12,7 +12,7 @@ import re
 
 from core.agent_harness import SessionCore
 from gateway.core.session import seed_session_history
-from integrations.slack.web_client import (
+from integrations.slack import (
     fetch_channel_messages,
     resolve_bot_token,
 )

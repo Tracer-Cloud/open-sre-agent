@@ -27,7 +27,7 @@ import time
 from dataclasses import dataclass
 from typing import IO
 
-from infrastructure.safety.masking import MaskingContext, MaskingPolicy
+from infrastructure.safety.masking import MaskingPolicy, MaskingRules
 
 _MAX_OUTPUT_CHARS = 8000
 _POLL_INTERVAL_SEC = 0.5
@@ -234,7 +234,7 @@ def classify_agent_outcome(
     """Classify a run into success / error from output, exit code, and changes."""
     # Mask free-text fields (the agent may echo env/secrets); the diff is handled by
     # the caller verbatim since masking would corrupt code that must be reviewed.
-    masker = MaskingContext(MaskingPolicy.from_env())
+    masker = MaskingRules(MaskingPolicy.from_env())
     out_text = outcome.stdout.strip()
     err_text = outcome.stderr.strip()
     summary = masker.mask(out_text[:_MAX_OUTPUT_CHARS])

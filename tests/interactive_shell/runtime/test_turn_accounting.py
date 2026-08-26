@@ -26,7 +26,7 @@ class _FakeRecorder:
         self.flushed += 1
 
 
-def _result(*, llm_run: Any | None = None, text: str = "done") -> TurnResult:
+def _result(*, text: str = "done") -> TurnResult:
     return TurnResult(
         final_intent="slash",
         action_result=ToolCallingTurnResult(
@@ -37,7 +37,6 @@ def _result(*, llm_run: Any | None = None, text: str = "done") -> TurnResult:
             handled=True,
         ),
         assistant_response_text=text,
-        llm_run=llm_run,
     )
 
 
@@ -55,30 +54,15 @@ def test_finalize_applies_pending_turn_llm_when_no_conversational_run() -> None:
     assert session.terminal.pop_pending_turn_llm() is None
 
 
-def test_finalize_prefers_conversational_run_over_pending() -> None:
-    session = Session()
-    session.terminal.set_pending_turn_llm(LlmRunInfo(model="stale"))
-    conversational = LlmRunInfo(model="fresh")
-    recorder = _FakeRecorder()
-    accounting = ShellTurnAccounting(session=session, text="hi", recorder=recorder)  # type: ignore[arg-type]
-
-    accounting.finalize(_result(llm_run=conversational))
-
-    assert recorder.responses[0][1] is conversational
-    # The stale pending run was still consumed so it cannot leak later.
-    assert session.terminal.pop_pending_turn_llm() is None
-
-
 def test_finalize_does_not_duplicate_early_cli_agent_history() -> None:
-    """memory_remember + handoff: ActionRenderObserver records once; finalize must not again."""
+    """ActionRenderObserver records once; finalize must not append again."""
     session = Session()
     prompt = "Use the MySQL tool to query active connections."
     session.record("cli_agent", prompt)
-    conversational = LlmRunInfo(model="fresh")
     recorder = _FakeRecorder()
     accounting = ShellTurnAccounting(session=session, text=prompt, recorder=recorder)  # type: ignore[arg-type]
 
-    accounting.finalize(_result(llm_run=conversational))
+    accounting.finalize(_result())
 
     cli_rows = [row for row in session.history if row.get("type") == "cli_agent"]
     assert len(cli_rows) == 1

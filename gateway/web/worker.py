@@ -9,6 +9,10 @@ from collections.abc import Callable
 from pathlib import Path
 from typing import Any
 
+from config.constants.gateway import (
+    INVESTIGATION_WORKER_ENABLED_ENV,
+    INVESTIGATION_WORKERS_ENV,
+)
 from gateway.core.billing.credits_client import CreditsOutcome, consume_credits
 from gateway.core.storage.investigations.repository import (
     InvestigationRepository,
@@ -17,7 +21,7 @@ from gateway.core.storage.investigations.repository import (
 from gateway.web.artifacts import upload_report_to_s3, write_local_report
 
 # The worker is opt-in so API-only processes (and tests) never run the pipeline.
-WORKER_ENABLED_ENV = "OPENSRE_INVESTIGATION_WORKER"
+WORKER_ENABLED_ENV = INVESTIGATION_WORKER_ENABLED_ENV
 
 logger = logging.getLogger(__name__)
 
@@ -26,7 +30,10 @@ InvestigationRunner = Callable[[dict[str, Any]], dict[str, Any]]
 
 def _run_pipeline(trigger: dict[str, Any]) -> dict[str, Any]:
     from core.agent_harness import AgentSession
-    from tools.investigation.capability import resolve_investigation_context
+    from tools.investigation.capability import (
+        resolve_investigation_context,
+        run_investigation_payload,
+    )
 
     raw_alert = trigger.get("raw_alert") or {}
     investigation_metadata = resolve_investigation_context(
@@ -38,6 +45,7 @@ def _run_pipeline(trigger: dict[str, Any]) -> dict[str, Any]:
         AgentSession()
         .investigate(
             raw_alert,
+            runner=run_investigation_payload,
             investigation_metadata=investigation_metadata,
         )
         .as_dict()
@@ -45,7 +53,14 @@ def _run_pipeline(trigger: dict[str, Any]) -> dict[str, Any]:
 
 
 class InvestigationWorker:
-    """Claims queued investigations one at a time and persists their artifacts."""
+    """Claims queued investigations and persists their artifacts.
+
+    ``pool_size`` threads each claim and run one investigation at a time; the
+    claim is atomic (an in-memory lock, or Postgres ``FOR UPDATE SKIP LOCKED``),
+    so no record is processed twice. Each running investigation still takes a
+    turn-gate slot, so ``pool_size`` bounds threads while the gate bounds total
+    concurrency across chat and scheduled work.
+    """
 
     def __init__(
         self,
@@ -54,11 +69,13 @@ class InvestigationWorker:
         runner: InvestigationRunner = _run_pipeline,
         poll_interval_seconds: float = 2.0,
         artifacts_dir: Path | None = None,
+        pool_size: int = 1,
     ) -> None:
         self._store = store
         self._runner = runner
         self._poll_interval_seconds = poll_interval_seconds
         self._artifacts_dir = artifacts_dir
+        self._pool_size = max(1, pool_size)
         self._stop_event = threading.Event()
 
     def run_once(self) -> bool:
@@ -134,10 +151,14 @@ class InvestigationWorker:
                 error=type(exc).__name__,
             )
 
-    def start(self) -> threading.Thread:
-        thread = threading.Thread(target=self._loop, name="InvestigationWorker", daemon=True)
-        thread.start()
-        return thread
+    def start(self) -> list[threading.Thread]:
+        threads = [
+            threading.Thread(target=self._loop, name=f"InvestigationWorker-{i}", daemon=True)
+            for i in range(self._pool_size)
+        ]
+        for thread in threads:
+            thread.start()
+        return threads
 
     def stop(self) -> None:
         self._stop_event.set()
@@ -160,6 +181,24 @@ def worker_enabled() -> bool:
     return os.getenv(WORKER_ENABLED_ENV, "").strip().lower() in {"1", "true", "yes", "on"}
 
 
+def _configured_worker_count() -> int:
+    """Concurrent investigation threads from the env; one when unset or invalid."""
+    raw = os.getenv(INVESTIGATION_WORKERS_ENV, "").strip()
+    if not raw:
+        return 1
+    try:
+        count = int(raw)
+    except ValueError:
+        logger.warning("[investigations] ignoring invalid %s=%r", INVESTIGATION_WORKERS_ENV, raw)
+        return 1
+    if count < 1:
+        logger.warning(
+            "[investigations] ignoring non-positive %s=%r", INVESTIGATION_WORKERS_ENV, raw
+        )
+        return 1
+    return count
+
+
 def ensure_worker_started(store: InvestigationRepository) -> InvestigationWorker | None:
     """Start the process-wide worker on first call; no-op unless enabled by env."""
     global _worker
@@ -167,7 +206,8 @@ def ensure_worker_started(store: InvestigationRepository) -> InvestigationWorker
         return None
     with _worker_lock:
         if _worker is None:
-            _worker = InvestigationWorker(store)
+            count = _configured_worker_count()
+            _worker = InvestigationWorker(store, pool_size=count)
             _worker.start()
-            logger.info("[investigations] worker started")
+            logger.info("[investigations] worker started (%d thread(s))", count)
         return _worker

@@ -17,7 +17,6 @@ from dataclasses import dataclass
 from typing import Any
 
 from core.agent.cancel import tool_resources_cancel_requested
-from core.agent.handle_conclusion import ConclusionHandler
 from core.agent.loop_host import LoopHost
 from core.agent.run_io import AgentRunInput, AgentRunResult
 from core.context_budget import (
@@ -39,7 +38,7 @@ from core.events import (
     TurnStartEvent,
 )
 from core.llm.types import ToolCall
-from core.messages import MessageMapper
+from core.messages import MessageMapper, UserRuntimeMessage
 from core.provider import ProviderRequest
 from core.tool.contracts import RuntimeTool
 from core.tool.execution import (
@@ -109,7 +108,6 @@ class ReactLoop[RuntimeToolT: RuntimeTool]:
         self._iterations_used = 0
         self._stop_reason = "iteration_cap"
         self._operation_run_id = uuid.uuid4().hex[:12]
-        self._conclusion = ConclusionHandler(host, self._messages, self._runtime_tools)
 
     def run(self) -> AgentRunResult:
         """Drive the loop to completion and return its outcome."""
@@ -250,8 +248,6 @@ class ReactLoop[RuntimeToolT: RuntimeTool]:
             )
         self._messages.append(assistant_message)
 
-        # A no-tool response is a candidate conclusion; the conclusion handler
-        # may still append a nudge or queued follow-up and continue the loop.
         if not response.has_tool_calls:
             return self._handle_conclusion(response, assistant_message, iteration)
         return self._observe(response, assistant_message, iteration)
@@ -316,19 +312,29 @@ class ReactLoop[RuntimeToolT: RuntimeTool]:
     def _handle_conclusion(
         self, response: Any, assistant_message: Any, iteration: int
     ) -> _IterationResult:
-        """No tool calls: accept the answer (maybe after a follow-up) or nudge and continue."""
-        accepted = self._conclusion.handle(
-            response,
-            assistant_message,
-            iteration,
-            evidence_count=len(self._executed),
+        """Accept a no-tool reply unless a follow-up is already queued."""
+        follow_up = self._host._pop_follow_up_message()
+        if follow_up is not None:
+            self._messages.append(UserRuntimeMessage(content=follow_up))
+            self._host._emit_runtime(
+                TurnEndEvent(
+                    iteration=iteration,
+                    message=assistant_message,
+                    data={"accepted": False, "queued_follow_up": True},
+                )
+            )
+            return _IterationResult(should_stop=False, outcome="conclusion_deferred")
+        self._host._emit_runtime(
+            TurnEndEvent(
+                iteration=iteration,
+                message=assistant_message,
+                data={"accepted": True},
+            )
         )
-        if accepted:
-            self._final_text = response.content or ""
-            self._hit_cap = False
-            self._stop_reason = "no_tools_needed" if not self._executed else "completed"
-            return _IterationResult(should_stop=True, outcome=self._stop_reason)
-        return _IterationResult(should_stop=False, outcome="conclusion_deferred")
+        self._final_text = response.content or ""
+        self._hit_cap = False
+        self._stop_reason = "no_tools_needed" if not self._executed else "completed"
+        return _IterationResult(should_stop=True, outcome=self._stop_reason)
 
     def _observe(self, response: Any, assistant_message: Any, iteration: int) -> _IterationResult:
         """Execute the requested tools, record results, and emit events."""

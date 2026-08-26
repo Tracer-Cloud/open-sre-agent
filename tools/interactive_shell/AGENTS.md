@@ -11,7 +11,7 @@ tools listed in `core/agent_harness/tools/action_tools.py`:
 
 - `actions/` — the action tools themselves (`shell_run`, `cli_exec`,
   `slash_invoke`, `code_implement`, `investigation_start`, `alert_sample`,
-  `assistant_handoff`, `llm_set_provider`, `synthetic_run`, `task_cancel`).
+  `session_goal_set`, `llm_set_provider`, `synthetic_run`, `task_cancel`).
 - `shell/` — shell command parsing, execution policy, and the
   `run_shell_command`/`run_cd`/`run_pwd` runner behind `actions/shell.py`.
 - `synthetic/` — the synthetic-test runner behind `actions/synthetic.py`.
@@ -34,7 +34,7 @@ Subprocess runners must stay split into two layers:
    no `execution_confirm`.
 2. **REPL presentation** under `surfaces/interactive_shell/runtime/subprocess_runner/`
    — `ReplSubprocessPresenter` implements `SubprocessPresenter` and is injected
-   through `ActionToolContext.subprocess_presenter` from `action_turn.py`.
+   through `ActionToolScope.subprocess_presenter` from `action_turn.py`.
 
 Shared stdlib-only helpers live in `tools/interactive_shell/subprocess.py`.
 Rich stream relay stays in `surfaces/.../subprocess_runner/task_streaming.py`.

@@ -569,3 +569,22 @@ def classify(
     if cfg.is_configured:
         return cfg, "posthog_mcp"
     return None, None
+
+
+__all__ = [
+    "DEFAULT_POSTHOG_MCP_URL",
+    "POSTHOG_MCP_EU_URL",
+    "PostHogMCPConfig",
+    "PostHogMCPContentItem",
+    "PostHogMCPToolCallResult",
+    "PostHogMCPToolDescriptor",
+    "PostHogMCPValidationResult",
+    "build_posthog_mcp_config",
+    "call_posthog_mcp_tool",
+    "classify",
+    "describe_posthog_mcp_error",
+    "list_posthog_mcp_tools",
+    "posthog_mcp_config_from_env",
+    "posthog_mcp_runtime_unavailable_reason",
+    "validate_posthog_mcp_config",
+]

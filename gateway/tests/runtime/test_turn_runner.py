@@ -117,7 +117,7 @@ def test_turn_runner_resolves_action_tools_from_live_session(monkeypatch: Any) -
     assert recorded == [chat_integrations]
 
 
-def _empty_turn_result(*, llm_run: Any = None) -> TurnResult:
+def _empty_turn_result(*, streamed: bool = False) -> TurnResult:
     return TurnResult(
         final_intent="cli_agent_handled",
         action_result=ToolCallingTurnResult(
@@ -127,9 +127,9 @@ def _empty_turn_result(*, llm_run: Any = None) -> TurnResult:
             has_unhandled_clause=False,
             handled=True,
             response_text="",
+            response_streamed=streamed,
         ),
         assistant_response_text="",
-        llm_run=llm_run,
     )
 
 
@@ -265,7 +265,7 @@ def test_turn_runner_finalizes_fallback_on_empty_response(monkeypatch: Any) -> N
 
 def test_turn_runner_skips_finalize_when_answer_was_streamed(monkeypatch: Any) -> None:
     """A streamed answer (llm_run set) already resolved the status; do not re-finalize."""
-    result = _empty_turn_result(llm_run=MagicMock())  # answered=True
+    result = _empty_turn_result(streamed=True)
     _patch_headless_agent(monkeypatch, result)
     sink = MagicMock()
     handler = TurnRunner(console=Console(force_terminal=False))
@@ -563,10 +563,15 @@ def test_run_returns_none_and_says_at_capacity_when_the_gate_refuses(monkeypatch
     # Arrange
     from infrastructure.turn_host.concurrency import AT_CAPACITY_MESSAGE, TurnConcurrencyGate
 
-    _patch_headless_agent(monkeypatch, _empty_turn_result())
+    factory = _patch_headless_agent(monkeypatch, _empty_turn_result())
     gate = TurnConcurrencyGate(1)
     assert gate.try_acquire() is True  # the only slot is taken
-    handler = TurnRunner(console=Console(force_terminal=False), gate=gate)
+    admission_check = MagicMock(return_value=True)
+    handler = TurnRunner(
+        console=Console(force_terminal=False),
+        gate=gate,
+        admission_check=admission_check,
+    )
     sink = RecordingTurnOutput()
 
     # Act
@@ -577,3 +582,77 @@ def test_run_returns_none_and_says_at_capacity_when_the_gate_refuses(monkeypatch
     # Assert
     assert returned is None
     assert sink.finalized == AT_CAPACITY_MESSAGE
+    admission_check.assert_not_called()
+    factory.assert_not_called()
+
+
+def test_run_rejected_by_admission_never_starts_agent_work(monkeypatch: Any) -> None:
+    """A billing denial owns its response and never constructs an agent."""
+    factory = _patch_headless_agent(monkeypatch, _empty_turn_result())
+    handler = TurnRunner(
+        console=Console(force_terminal=False),
+        admission_check=MagicMock(return_value=False),
+    )
+
+    returned = handler.run(
+        "hello",
+        SessionCore(store=InMemorySessionStore()),
+        RecordingTurnOutput(),
+        logging.getLogger("t"),
+    )
+
+    assert returned is None
+    factory.assert_not_called()
+
+
+def test_run_cancelled_before_admission_is_never_charged(monkeypatch: Any) -> None:
+    """A turn stopped while queued must not reach a metering hook that debits."""
+    factory = _patch_headless_agent(monkeypatch, _empty_turn_result())
+    sink = RecordingTurnOutput()
+    sink.turn_cancel = threading.Event()
+    sink.turn_cancel.set()
+    admission_check = MagicMock(return_value=True)
+
+    returned = TurnRunner(
+        console=Console(force_terminal=False),
+        admission_check=admission_check,
+    ).run(
+        "hello",
+        SessionCore(store=InMemorySessionStore()),
+        sink,
+        logging.getLogger("t"),
+    )
+
+    assert returned is None
+    admission_check.assert_not_called()
+    factory.assert_not_called()
+    # The cancelling host owns the terminal message; the runner adds none.
+    assert sink.finalized is None
+
+
+def test_run_cancelled_during_successful_admission_still_starts_turn(
+    monkeypatch: Any,
+) -> None:
+    """Once admission may debit, cancellation must not detach work from billing."""
+    factory = _patch_headless_agent(monkeypatch, _empty_turn_result())
+    sink = RecordingTurnOutput()
+    sink.turn_cancel = threading.Event()
+
+    def _admit_after_timeout() -> bool:
+        sink.turn_cancel.set()
+        return True
+
+    handler = TurnRunner(
+        console=Console(force_terminal=False),
+        admission_check=_admit_after_timeout,
+    )
+
+    returned = handler.run(
+        "hello",
+        SessionCore(store=InMemorySessionStore()),
+        sink,
+        logging.getLogger("t"),
+    )
+
+    assert returned is not None
+    factory.assert_called_once()

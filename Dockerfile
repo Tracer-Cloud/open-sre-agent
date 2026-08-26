@@ -1,7 +1,8 @@
 # Unified Dockerfile for OpenSRE
-# Supports two runtime modes via MODE environment variable:
-#   MODE=web      - FastAPI web API (health, alerts, async investigations)
-#   MODE=gateway  - Two-way messaging gateway (Slack Socket Mode + Telegram)
+# Supports three runtime modes via MODE environment variable:
+#   MODE=web        - FastAPI web API (health, alerts, async investigations)
+#   MODE=gateway    - Two-way messaging gateway (Slack Socket Mode + Telegram)
+#   MODE=scheduler  - Dedicated cron/loop scheduler service (no gateway/web)
 #
 # Web mode usage:
 #   docker build -t opensre:latest .
@@ -56,4 +57,4 @@ HEALTHCHECK --interval=30s --timeout=10s --start-period=30s --retries=3 \
 
 USER opensre
 
-CMD ["sh", "-c", "if [ \"$MODE\" = \"gateway\" ]; then exec opensre gateway start --foreground; else exec uvicorn gateway.web.webapp:app --host 0.0.0.0 --port ${PORT:-8000}; fi"]
+CMD ["sh", "-c", "if [ \"$MODE\" = \"gateway\" ]; then exec opensre gateway start --foreground; elif [ \"$MODE\" = \"scheduler\" ]; then exec opensre cron start --service; else exec uvicorn gateway.web.webapp:app --host 0.0.0.0 --port ${PORT:-8000}; fi"]

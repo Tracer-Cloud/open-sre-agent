@@ -3,7 +3,7 @@
 from typing import Any
 
 from core.domain.types.tools import ToolSurface
-from core.tool_framework.tool_decorator import tool
+from core.tool_framework import tool
 from integrations.mongodb import (
     MongoDBConfig,
     get_rs_status,
@@ -25,6 +25,7 @@ def get_mongodb_replica_status(
     connection_string: str,
     auth_source: str = "admin",
     tls: bool = True,
+    **_kwargs: Any,
 ) -> dict[str, Any]:
     """Fetch status of all members in the MongoDB replica set."""
     config = MongoDBConfig(

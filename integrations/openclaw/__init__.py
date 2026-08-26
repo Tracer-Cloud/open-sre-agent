@@ -651,3 +651,20 @@ def classify(
     if cfg.is_configured:
         return cfg, "openclaw"
     return None, None
+
+
+__all__ = [
+    "OpenClawConfig",
+    "OpenClawContentItem",
+    "OpenClawToolCallResult",
+    "OpenClawToolDescriptor",
+    "OpenClawValidationResult",
+    "build_openclaw_config",
+    "call_openclaw_tool",
+    "classify",
+    "describe_openclaw_error",
+    "list_openclaw_tools",
+    "openclaw_config_from_env",
+    "openclaw_runtime_unavailable_reason",
+    "validate_openclaw_config",
+]

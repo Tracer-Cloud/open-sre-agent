@@ -56,7 +56,6 @@ htmlcov/
 .tox/
 .nox/
 .hypothesis/
-.pytest_cache/
 nosetests.xml
 coverage.xml
 *.cover

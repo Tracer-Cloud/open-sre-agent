@@ -2,9 +2,9 @@
 
 from __future__ import annotations
 
-from integrations.alertmanager.client import make_alertmanager_client
+from integrations.alertmanager import make_alertmanager_client
 from integrations.betterstack import build_betterstack_config, validate_betterstack_config
-from integrations.opsgenie.client import OpsGenieClient, OpsGenieConfig
+from integrations.opsgenie import OpsGenieClient, OpsGenieConfig
 
 from .shared import IntegrationHealthResult
 

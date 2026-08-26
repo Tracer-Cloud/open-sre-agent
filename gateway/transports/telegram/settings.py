@@ -27,6 +27,7 @@ class GatewaySettings(StrictConfigModel):
     max_concurrent_turns: int = Field(default_factory=turn_limit_for_profile, ge=1)
     stream_edit_interval_seconds: float = Field(default=1.5, gt=0)
     turn_timeout_seconds: float = Field(default=240.0, gt=0)
+    shutdown_drain_seconds: float = Field(default=5.0, gt=0)
     auto_start_enabled: bool = True
 
 

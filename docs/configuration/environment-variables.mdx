@@ -8,16 +8,12 @@ All configuration options for OpenSRE can be set via environment variables. This
 ## Secret storage
 
 Environment variables are checked first. Credentials you enter through
-`opensre onboard` or `opensre integrations setup` are written to an
-owner-only file at `~/.opensre/credentials.json` (mode `0600`). OpenSRE
-does not write new secrets to the OS keychain, so first-run setup does
-not trigger a keychain prompt.
+`opensre onboard` or `opensre integrations setup` are written to `.env` and
+to an owner-only file at `~/.opensre/credentials.json` (mode `0600`). OpenSRE
+does not write secrets to the OS keychain.
 
 A value in the process environment or a local `.env` file wins over the
-local file. Keep `.env` out of source control and never commit real secrets.
-
-Secrets stored in the OS keychain by an earlier OpenSRE version are copied
-into that local file once, then the keychain copies are removed.
+credentials file. Keep `.env` out of source control.
 
 Want credentials only from the environment, never on disk? Set
 `OPENSRE_DISABLE_KEYRING=1` and export everything yourself.

@@ -13,7 +13,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from core.agent_harness.tools import ActionToolContext, execute_with_action_context
+from core.agent_harness.tools import ActionToolScope, execute_with_action_context
 from core.domain.types.tools import ToolSurface
 from core.tool import RegisteredTool, SideEffectLevel
 from core.tool_framework.utils import object_schema, string_property
@@ -69,7 +69,7 @@ def _render_result(console: Any, out: dict[str, Any]) -> None:
         console.print("[dim]Diff left in your working tree (no PR requested).[/]")
 
 
-def execute_sentry_fix_tool(args: dict[str, Any], ctx: ActionToolContext) -> bool:
+def execute_sentry_fix_tool(args: dict[str, Any], ctx: ActionToolScope) -> bool:
     sentry_url = str(args.get("sentry_url", "")).strip()
     if not sentry_url:
         return False

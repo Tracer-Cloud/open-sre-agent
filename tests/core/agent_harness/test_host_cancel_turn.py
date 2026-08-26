@@ -59,10 +59,7 @@ def test_host_cancel_requested_reads_sink_event() -> None:
     assert host_cancel_requested(None) is False
 
 
-def test_run_turn_cancelled_action_skips_gather_and_answer() -> None:
-    answer_calls: list[str] = []
-    gather_calls: list[str] = []
-
+def test_run_turn_cancelled_action_stops_turn() -> None:
     def execute_actions(_text: str, **_kwargs: object) -> ToolCallingTurnResult:
         return ToolCallingTurnResult(
             0,
@@ -73,56 +70,33 @@ def test_run_turn_cancelled_action_skips_gather_and_answer() -> None:
             cancelled=True,
         )
 
-    def answer(text: str, _request: object = None, **_kwargs: object) -> object:
-        answer_calls.append(text)
-        return type("Run", (), {"response_text": "should-not-run"})()
-
-    def gather(text: str, **_kwargs: object) -> None:
-        gather_calls.append(text)
-        return None
-
     result = run_turn(
         "question?",
         SessionCore(store=InMemorySessionStore()),
         execute_actions=execute_actions,
-        answer=answer,
-        gather=gather,
         accounting=_Accounting(),
         output=_CancelSink(),
     )
     assert result.final_intent == FINAL_INTENT_CANCELLED
     assert result.cancelled is True
     assert result.answered is False
-    assert answer_calls == []
-    assert gather_calls == []
 
 
-def test_run_turn_cancel_during_gather_skips_answer() -> None:
+def test_run_turn_cancel_after_action_stops_turn() -> None:
     sink = _CancelSink()
-    answer_calls: list[str] = []
 
     def execute_actions(_text: str, **_kwargs: object) -> ToolCallingTurnResult:
-        return ToolCallingTurnResult(0, 0, 0, False, False)
-
-    def gather(_text: str, **_kwargs: object) -> str:
         sink.turn_cancel.set()
-        return "evidence"
-
-    def answer(text: str, _request: object = None, **_kwargs: object) -> object:
-        answer_calls.append(text)
-        return type("Run", (), {"response_text": "should-not-run"})()
+        return ToolCallingTurnResult(0, 0, 0, False, False)
 
     result = run_turn(
         "question?",
         SessionCore(store=InMemorySessionStore()),
         execute_actions=execute_actions,
-        answer=answer,
-        gather=gather,
         accounting=_Accounting(),
         output=sink,
     )
     assert result.final_intent == FINAL_INTENT_CANCELLED
-    assert answer_calls == []
 
 
 def test_bindable_output_stream_stops_when_turn_cancel_set() -> None:

@@ -2963,7 +2963,7 @@ class TestCliDelegatedCommands:
     def test_slash_onboard_delegates_to_run_cli_command(self, monkeypatch: object) -> None:
         """``/onboard`` must delegate to ``run_cli_command`` so the wizard runs
         with inherited stdin. The REPL loop guarantees exclusive stdin for
-        ``/onboard`` via ``runtime.utils.input_policy``, so
+        ``/onboard`` via ``runtime.input_policy``, so
         the wizard's prompt_toolkit Application no longer conflicts with the
         shell's active one.
         """

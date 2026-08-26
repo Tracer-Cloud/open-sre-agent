@@ -257,7 +257,6 @@ def _cli_env(home: Path, project_env_path: Path) -> dict[str, str]:
     env["PYTHONIOENCODING"] = "utf-8"
     env["TERM"] = "xterm-256color"
     env.pop("OPENSRE_DISABLE_KEYRING", None)
-    env["PYTHON_KEYRING_BACKEND"] = "tests.shared.keyring_backend.MemoryKeyring"
     return env
 
 
@@ -669,11 +668,6 @@ def test_onboard_interactive_smoke(cli_sandbox: CliSandbox) -> None:
         actions=[
             PtyAction(expect="How do you want to get started?", send=b"\r"),
             PtyAction(expect="Choose your LLM provider", send=b"\r"),
-            PtyAction(
-                expect="Choose Anthropic auth method",
-                send=b"\r",
-                stagger_j=1,
-            ),
             # #3591: the model is picked BEFORE the credential, so the live probe runs
             # against the model that actually gets persisted.
             PtyAction(expect="Choose Anthropic model", send=b"\r"),
@@ -710,29 +704,17 @@ def test_onboard_interactive_smoke(cli_sandbox: CliSandbox) -> None:
     assert target["provider"] == "anthropic"
     assert "api_key" not in target
     assert "LLM_PROVIDER=anthropic" in cli_sandbox.read_project_env()
-    assert "ANTHROPIC_API_KEY=" not in cli_sandbox.read_project_env()
+    assert "ANTHROPIC_API_KEY=" in cli_sandbox.read_project_env()
     assert "ANTHROPIC_REASONING_MODEL=" in cli_sandbox.read_project_env()
 
 
 @pytest.mark.parametrize(
-    ("_cli_binary", "provider_key", "provider_label", "uses_oauth", "pty_timeout"),
+    ("_cli_binary", "provider_key", "provider_label", "pty_timeout"),
     [
-        pytest.param(
-            "codex",
-            "openai",
-            "OpenAI OAuth",
-            True,
-            60.0,
-            marks=pytest.mark.skipif(
-                shutil.which("codex") is None,
-                reason="OpenAI Codex CLI not on PATH",
-            ),
-        ),
         pytest.param(
             "opencode",
             "opencode",
             "OpenCode CLI",
-            False,
             120.0,
             marks=pytest.mark.skipif(
                 shutil.which("opencode") is None,
@@ -747,7 +729,6 @@ def test_onboard_interactive_smoke_cli_provider_repick_when_unauthenticated(
     _cli_binary: str,
     provider_key: str,
     provider_label: str,
-    uses_oauth: bool,
     pty_timeout: float,
 ) -> None:
     """PTY: quickstart → local CLI LLM → repick when unauthenticated, then finish as Anthropic.
@@ -780,46 +761,35 @@ def test_onboard_interactive_smoke_cli_provider_repick_when_unauthenticated(
     actions = [
         PtyAction(expect="How do you want to get started?", send=b"\r"),
         PtyAction(expect="Choose your LLM provider", send=b"\r", stagger_j=stagger_j),
+        PtyAction(expect=model_prompt, send=b"\r", timeout=30.0),
+        PtyAction(
+            expect=login_prompt,
+            send=b"\r",
+            stagger_j=1,
+            timeout=90.0,
+        ),
+        PtyAction(expect="Choose your LLM provider", send=b"\r"),
+        # #3591: the model is chosen BEFORE the credential, so the live probe
+        # runs against the model that gets persisted. Same order as
+        # test_onboard_interactive_smoke: model -> key -> recovery menu.
+        PtyAction(expect="Choose Anthropic model", send=b"\r"),
+        PtyAction(expect="Anthropic API key", send=b"smoke-test-key\r"),
+        # smoke-test-key fails validation; move to "Save anyway without
+        # validating" to keep the local credentials-file path and every
+        # downstream assertion intact.
+        PtyAction(
+            expect="could not be verified. What next?",
+            send=b"\r",
+            stagger_j=1,
+            timeout=90.0,
+        ),
+        PtyAction(
+            expect="Choose an integration to configure",
+            send=b"\r",
+            stagger_j=1,
+            stagger_key=b"k",
+        ),
     ]
-    if uses_oauth:
-        actions.append(PtyAction(expect="Choose OpenAI auth method", send=b"\r"))
-    actions.extend(
-        [
-            PtyAction(expect=model_prompt, send=b"\r", timeout=30.0),
-            PtyAction(
-                expect=login_prompt,
-                send=b"\r",
-                stagger_j=2 if uses_oauth else 1,
-                timeout=90.0,
-            ),
-            PtyAction(expect="Choose your LLM provider", send=b"\r"),
-            PtyAction(
-                expect="Choose Anthropic auth method",
-                send=b"\r",
-                stagger_j=1,
-            ),
-            # #3591: the model is chosen BEFORE the credential, so the live probe
-            # runs against the model that gets persisted. Same order as
-            # test_onboard_interactive_smoke: model -> key -> recovery menu.
-            PtyAction(expect="Choose Anthropic model", send=b"\r"),
-            PtyAction(expect="Anthropic API key", send=b"smoke-test-key\r"),
-            # smoke-test-key fails validation; move to "Save anyway without
-            # validating" to keep the keyring persistence path and every
-            # downstream assertion intact.
-            PtyAction(
-                expect="could not be verified. What next?",
-                send=b"\r",
-                stagger_j=1,
-                timeout=90.0,
-            ),
-            PtyAction(
-                expect="Choose an integration to configure",
-                send=b"\r",
-                stagger_j=1,
-                stagger_key=b"k",
-            ),
-        ]
-    )
 
     try:
         result = _run_cli_pty(
@@ -838,14 +808,6 @@ def test_onboard_interactive_smoke_cli_provider_repick_when_unauthenticated(
     except AssertionError as exc:
         msg = str(exc)
         if (
-            _cli_binary == "codex"
-            and "Choose OpenAI OAuth model" in msg
-            and "requires login" in msg
-        ):
-            pytest.skip(
-                "OpenAI Codex CLI appears already authenticated; unauth repick flow skipped"
-            )
-        if (
             _cli_binary == "opencode"
             and "environment provider key(s)" in msg
             and "OpenCode:" in msg
@@ -862,7 +824,7 @@ def test_onboard_interactive_smoke_cli_provider_repick_when_unauthenticated(
     assert "api_key" not in target
     env_body = cli_sandbox.read_project_env()
     assert "LLM_PROVIDER=anthropic\n" in env_body
-    assert "ANTHROPIC_API_KEY=" not in env_body
+    assert "ANTHROPIC_API_KEY=" in env_body
     assert "ANTHROPIC_REASONING_MODEL=" in env_body
 
 

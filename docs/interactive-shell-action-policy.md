@@ -35,7 +35,7 @@ recurring source of precedence drift.
    literal-`/slash` dispatch" addendum below). This is an explicit-command
    bypass, not natural-language intent inference: free-form text is still
    selected entirely by the action agent. The runtime's literal-`/slash`
-   detection in `runtime/utils/input_policy._literal_slash_command_text` remains
+   detection in `runtime/input_policy._literal_slash_command_text` remains
    terminal-UI policy (spinner suppression and exclusive-stdin gating); the
    execution-side deterministic dispatch lives in
    `core/agent_harness/turns/action_driver.py`.
@@ -70,11 +70,10 @@ answered without adding keyword/regex rules. Two complementary mechanisms:
    (`surfaces/interactive_shell/main.py`) hydrates
    `session.configured_integrations` from the shared
    `configured_integration_services()` helper in `integrations/catalog.py`
-   (the same source the welcome banner uses, so they never diverge). The chat
-   assistant prompt (`build_environment_block` in
-   `core/agent_harness/prompts/assistant.py`) lists the configured set as
-   facts, letting the model answer directly when state is already known.
-2. LLM-driven discovery. The action-agent system prompt
+   (the same source the welcome banner uses, so they never diverge). The agent
+   prompt lists the configured set as facts, letting the model answer directly
+   when state is already known.
+2. LLM-driven discovery. The agent system prompt
    (`core/agent_harness/prompts/action/assemble.py`) lets the model, at its own
    discretion, emit a read-only discovery action (for example
    `slash_invoke("/integrations", ["list"])` or `["verify"]`) to discover the
@@ -83,32 +82,15 @@ answered without adding keyword/regex rules. Two complementary mechanisms:
    confirmation (`execution_policy.allow_tool("slash")` returns `allow`); the
    former `ExecutionTier`/`resolve_slash_execution_tier` classification was
    removed because it gated nothing. No fail-closed regex rule is involved; the
-   action agent decides whether to emit a discovery action.
+   agent decides whether to emit a discovery action.
 
 ### Observe→answer summary loop
 
 Addendum — Jun 18, 2026.
 
-When the action agent runs a read-only discovery command to answer a question (e.g.
-the user asks "is sentry installed?" and the model runs `/integrations`), the
-raw command output (a verification table) is not a direct answer on its own.
-The pipeline now follows up with a short assistant pass that summarizes that
-output:
-
-1. Read-only discovery slash commands stash a compact text view of what they
-   found on `session.agent.last_observation`
-   (`_record_integrations_observation` in
-   `surfaces/interactive_shell/command_registry/integrations.py`).
-2. `run_agent_prompt` resets that field at the start of every action-agent
-   turn and, when a discovery command produced an observation and succeeded,
-   calls the conversational assistant with `tool_observation=...`
-   (inside the handled-turn observation branch in `pipeline.py`). The assistant
-   summarizes the output into a direct answer and is instructed not to emit
-   further actions.
-
-This only fires when the action-agent tool path executes a read-only discovery command
-and records an observation. The pipeline no longer has a pre-agent deterministic
-dispatch branch.
+When the agent runs a read-only discovery command, the tool result is appended
+to the same ReAct conversation. The same model then writes the user-facing
+answer. There is no second assistant pass or deterministic pre-agent dispatch.
 
 Discovery commands also no longer dump validator stack traces into the REPL: a
 vendor/config failure during verification (for example a GitHub MCP `401`) is

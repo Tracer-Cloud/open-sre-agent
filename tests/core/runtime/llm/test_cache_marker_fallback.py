@@ -59,10 +59,10 @@ class _FlakyMessages:
         )
 
 
-class _InactiveGuardrailEngine:
+class _InactiveGuardrailEvaluator:
     is_active = False
 
-    def __call__(self) -> _InactiveGuardrailEngine:
+    def __call__(self) -> _InactiveGuardrailEvaluator:
         return self
 
 
@@ -147,8 +147,8 @@ class TestBedrockMessagesClientFallback:
     @pytest.fixture(autouse=True)
     def _inactive_guardrails(self, monkeypatch: pytest.MonkeyPatch) -> None:
         monkeypatch.setattr(
-            "infrastructure.safety.guardrails.engine.get_guardrail_engine",
-            _InactiveGuardrailEngine(),
+            "infrastructure.safety.guardrails.evaluator.get_guardrail_evaluator",
+            _InactiveGuardrailEvaluator(),
         )
 
     def test_cache_rejection_retries_without_markers(self) -> None:
@@ -204,8 +204,8 @@ class TestAnthropicMessagesClientFallback:
     @pytest.fixture(autouse=True)
     def _inactive_guardrails(self, monkeypatch: pytest.MonkeyPatch) -> None:
         monkeypatch.setattr(
-            "infrastructure.safety.guardrails.engine.get_guardrail_engine",
-            _InactiveGuardrailEngine(),
+            "infrastructure.safety.guardrails.evaluator.get_guardrail_evaluator",
+            _InactiveGuardrailEvaluator(),
         )
 
     def _client(self, messages: _FlakyMessages) -> sdk_llm.LLMClient:

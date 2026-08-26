@@ -10,7 +10,7 @@ Host-scoped completion across many `chat` turns. **Not** the ReAct
 | `goal.py` | `SessionGoal`, statuses/reasons, attach/clear, reason derive |
 | `evaluate.py` | Structured host completion (claim ≠ proof) |
 | `confirm.py` | Optional LLM confirm after tool-evidence achieve |
-| `progress.py` | `SESSION_GOAL_PAINT_MARK` + progress / status-line formatting |
+| `progress.py` | `SESSION_GOAL_PROGRESS_MARK` + progress / status-line formatting |
 | `continuation.py` | Session-goal continuation prompts |
 | `persist.py` | Flush / restore payload |
 | `run_until.py` | `run_until_session_goal` |

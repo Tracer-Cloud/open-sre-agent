@@ -5,7 +5,7 @@
 from typing import Any
 
 from core.domain.types.tools import ToolSurface
-from core.tool_framework.tool_decorator import tool
+from core.tool_framework import tool
 from integrations.dagster import (
     DagsterConfig,
     dagster_extract_params,
@@ -39,7 +39,7 @@ def list_dagster_assets(
 
 from typing import Any
 
-from core.tool_framework.tool_decorator import tool
+from core.tool_framework import tool
 from integrations.dagster import (
     dagster_extract_params,
     dagster_is_available,
@@ -89,7 +89,7 @@ def get_dagster_run_logs(
 
 from typing import Any
 
-from core.tool_framework.tool_decorator import tool
+from core.tool_framework import tool
 from integrations.dagster import (
     dagster_extract_params,
     dagster_is_available,
@@ -134,7 +134,7 @@ def list_dagster_runs(
 
 from typing import Any
 
-from core.tool_framework.tool_decorator import tool
+from core.tool_framework import tool
 from integrations.dagster import (
     dagster_extract_params,
     dagster_is_available,
@@ -181,7 +181,7 @@ def list_dagster_schedule_ticks(
 
 from typing import Any
 
-from core.tool_framework.tool_decorator import tool
+from core.tool_framework import tool
 from integrations.dagster import (
     dagster_extract_params,
     dagster_is_available,

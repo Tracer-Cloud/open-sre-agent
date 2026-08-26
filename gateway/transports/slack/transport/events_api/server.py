@@ -25,6 +25,7 @@ import uvicorn
 from fastapi import FastAPI, Request, Response
 from fastapi.responses import JSONResponse, PlainTextResponse
 
+from config.constants.gateway import DEFAULT_STOP_TIMEOUT_SECONDS
 from gateway.core.lifecycle.errors import GatewayTransportFailedError
 from gateway.core.middleware.approvals import ApprovalBroker
 from gateway.core.storage.events.repository import HandledSlackEventRepository
@@ -82,7 +83,7 @@ class SlackHttpServerHandle:
     def bound_address(self) -> str:
         return f"{self.bound_host}:{self.bound_port}"
 
-    def stop(self, *, timeout: float = 8.0) -> bool:
+    def stop(self, *, timeout: float = DEFAULT_STOP_TIMEOUT_SECONDS) -> bool:
         """Stop serving and report whether the listener thread ended in time.
 
         Signature matches ``gateway.startup.TransportWorker`` so the

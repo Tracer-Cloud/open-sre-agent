@@ -78,6 +78,9 @@ def set_turn_outcome_hint(session: Any, hint: str) -> None:
     hints.append(hint)
 
 
+_ONBOARD_SLASH = "/onboard"
+
+
 def set_auto_command(session: Any, command: str) -> None:
     terminal = session_terminal(session)
     if terminal is not None:
@@ -87,6 +90,26 @@ def set_auto_command(session: Any, command: str) -> None:
         session,
         f"Run `{command}` in the interactive shell (`uv run opensre`).",
     )
+
+
+def execute_cli_onboard_on_missing_key(
+    session: Any | None,
+    message: str,
+    *,
+    provider: str | None = None,
+) -> str | None:
+    """Queue ``/onboard`` when *message* is a missing-key failure.
+
+    Returns the same guidance as :func:`remediate_missing_llm_credentials`,
+    or ``None`` when this is not a missing-key error.
+    """
+    from core.llm_invoke_errors import remediate_missing_llm_credentials
+
+    text = remediate_missing_llm_credentials(message, provider=provider)
+    if text is None or session is None or exclusive_stdin_active(session):
+        return text
+    set_auto_command(session, _ONBOARD_SLASH)
+    return text
 
 
 def clear_pending_autosubmit(session: Any) -> None:
@@ -111,6 +134,7 @@ __all__ = [
     "background_notification_channels",
     "clear_pending_autosubmit",
     "exclusive_stdin_active",
+    "execute_cli_onboard_on_missing_key",
     "pop_turn_outcome_hint",
     "session_terminal",
     "set_auto_command",

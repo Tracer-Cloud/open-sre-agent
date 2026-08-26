@@ -87,7 +87,7 @@ You'll set up:
 
 OpenSRE checks environment variables first. When onboarding saves a credential,
 it writes to an owner-only file at `~/.opensre/credentials.json` (mode `0600`).
-That keeps first-run setup from opening an OS keychain prompt.
+That keeps first-run setup from writing credentials to disk.
 
 You can also provide a credential through your shell or project `.env`;
 environment values take precedence. Never commit real credentials to `.env` or

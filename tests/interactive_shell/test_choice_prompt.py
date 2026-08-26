@@ -89,7 +89,7 @@ def test_non_tty_prints_options_as_text(monkeypatch: pytest.MonkeyPatch) -> None
 
 
 def test_choose_is_registered_with_exclusive_stdin(monkeypatch: pytest.MonkeyPatch) -> None:
-    import surfaces.interactive_shell.runtime.utils.input_policy as input_policy
+    import surfaces.interactive_shell.runtime.input_policy as input_policy
     from surfaces.interactive_shell.command_registry import SLASH_COMMANDS
 
     assert "/choose" in SLASH_COMMANDS

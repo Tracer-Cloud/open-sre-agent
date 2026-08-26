@@ -5,7 +5,7 @@ from __future__ import annotations
 from typing import Any
 
 from core.agent_harness.tools import (
-    ActionToolContext,
+    ActionToolScope,
     capability_available_from_sources,
     execute_with_action_context,
 )
@@ -24,7 +24,7 @@ def _coerce_quiet(value: Any) -> bool:
     return bool(value)
 
 
-def execute_shell_tool(args: dict[str, Any], ctx: ActionToolContext) -> dict[str, Any]:
+def execute_shell_tool(args: dict[str, Any], ctx: ActionToolScope) -> dict[str, Any]:
     command = str(args.get("command", "")).strip()
     if not command:
         return {"ok": False, "command": "", "response_text": "missing shell command"}
