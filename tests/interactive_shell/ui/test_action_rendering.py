@@ -171,11 +171,15 @@ def test_tool_call_display_strips_terminal_controls_from_model_args() -> None:
 
 
 def test_intermediate_message_strips_terminal_controls_before_markdown() -> None:
+    # Arrange: a real terminal, where Rich would otherwise pass the model's
+    # control bytes straight through (a non-terminal console strips them anyway,
+    # so this must force a terminal to exercise the sanitizer).
     session = Session()
     buffer = io.StringIO()
-    console = Console(file=buffer, force_terminal=False, highlight=False)
+    console = Console(file=buffer, force_terminal=True, highlight=False, width=80)
     observer = ActionRenderObserver(session=session, console=console, message="x")
 
+    # Act: model narration carrying a clear-screen escape and a BEL
     observer(
         "message_update",
         {
@@ -184,8 +188,11 @@ def test_intermediate_message_strips_terminal_controls_before_markdown() -> None
         },
     )
 
+    # Assert: the dangerous payloads are gone (Rich's own styling escapes are
+    # ``ESC[…m``, never ``ESC[2J``, so this stays a clean security assertion),
+    # while the newline-separated prose survives.
     output = buffer.getvalue()
-    assert "\x1b" not in output
+    assert "\x1b[2J" not in output
     assert "\x07" not in output
     assert "Scope" in output
     assert "Looking at p99" in output

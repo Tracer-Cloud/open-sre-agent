@@ -146,6 +146,7 @@ class ActionRenderObserver:
         if not content:
             return
         self.console.print()
+        # ``render_markdown_block`` sanitizes model text at ``_build_markdown_block``.
         render_markdown_block(self.console, content)
 
     def _render_skill_start(self, data: dict[str, Any]) -> None:

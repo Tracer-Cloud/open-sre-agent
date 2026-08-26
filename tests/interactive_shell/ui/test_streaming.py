@@ -65,6 +65,19 @@ class TestNonTtyFallback:
         # No spinner / Live cursor-movement artifacts in non-TTY captures.
         assert "thinking" not in output
 
+    def test_strips_terminal_controls_from_streamed_model_prose(self) -> None:
+        console, buf = _non_tty_console()
+        result = stream_to_console(
+            console,
+            label="assistant",
+            chunks=_yield_chunks(["Hello\x1b[2J", ", world\x07"]),
+        )
+
+        assert "\x1b" not in buf.getvalue()
+        assert "\x07" not in buf.getvalue()
+        assert "Hello" in result
+        assert "world" in result
+
     def test_suppression_drains_silently_in_non_tty(self) -> None:
         """Suppressed payloads (machine-readable payloads) must not appear in piped output."""
         console, buf = _non_tty_console()
