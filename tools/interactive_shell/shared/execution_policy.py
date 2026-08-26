@@ -173,6 +173,33 @@ def apply_auto_level(
     )
 
 
+def is_mutating_tool_type(tool_type: str) -> bool:
+    """True for tool types that can change state (the Med approval set)."""
+    return tool_type in (AUTO_LEVEL_ASK_TOOL_TYPES[AutoLevel.MED] or frozenset())
+
+
+def apply_plan_only_gate(
+    result: ExecutionPolicyResult,
+    *,
+    plan_only_active: bool,
+) -> ExecutionPolicyResult:
+    """Promote a mutating default-allow verdict to ``ask`` while a plan-only request stands.
+
+    The user asked for a plan without running it, so execution stays gated —
+    regardless of the ``/auto`` level — until the user confirms a mutating step
+    at the gate. Read-only tool types run normally.
+    """
+    if not plan_only_active or result.verdict != "allow":
+        return result
+    if not is_mutating_tool_type(result.tool_type):
+        return result
+    return replace(
+        result,
+        verdict="ask",
+        reason="Plan-only request stands — confirm before running this step",
+    )
+
+
 def allow_tool(tool_type: str) -> ExecutionPolicyResult:
     """Default-allow verdict for a tool launch.
 
@@ -206,6 +233,8 @@ __all__ = [
     "ToolExecutionPlan",
     "allow_tool",
     "apply_auto_level",
+    "apply_plan_only_gate",
+    "is_mutating_tool_type",
     "plan_foreground_tool",
     "resolve_confirmation",
 ]

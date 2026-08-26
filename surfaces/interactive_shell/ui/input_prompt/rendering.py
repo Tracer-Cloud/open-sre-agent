@@ -143,7 +143,12 @@ def resolve_prompt_prefix_ansi(*, inline_spinner: str, idle_hint: str) -> str:
 
 
 def resolve_idle_hint_ansi(session: Session) -> str:
-    """Dim hint line above the prompt rule: shortcuts plus connected integrations."""
+    """Status line when no turn is running: ``Ready`` plus shortcuts.
+
+    The live prompt always shows either ``Thinking…`` (spinner) or ``Ready``.
+    Without ``Ready``, an in-progress plan overlay looks like the agent is
+    still working after the turn has already returned the prompt.
+    """
     parts = ["/ for commands", "tab tool details", "↑↓ history"]
     if session.configured_integrations_known and session.configured_integrations:
         max_shown = 4
@@ -159,8 +164,13 @@ def resolve_idle_hint_ansi(session: Session) -> str:
         parts.append("esc to clear")
     # Clip to the safe prompt-region width so a long integration list cannot
     # reach the last column and soft-wrap on shrink-resize.
-    hint = clip_prompt_text(" · ".join(parts), prompt_line_width())
-    return f"{ui_theme.DIM_ANSI}{hint}{ui_theme.ANSI_RESET}"
+    width = prompt_line_width()
+    status = "Ready"
+    rest = clip_prompt_text(" · ".join(parts), max(width - len(status) - 3, 1))
+    return (
+        f"{ui_theme.PROMPT_ACCENT_ANSI}{status}{ui_theme.ANSI_RESET}"
+        f"{ui_theme.DIM_ANSI} · {rest}{ui_theme.ANSI_RESET}"
+    )
 
 
 def resolve_prompt_placeholder(session: Session) -> ANSI:
@@ -175,4 +185,12 @@ def resolve_prompt_placeholder(session: Session) -> ANSI:
         parts.append(f"resumed: {_short_meta(session.resumed_from_name, max_len=32)}")
     if parts:
         return ANSI(f"{ui_theme.ANSI_DIM}{' · '.join(parts)}{ui_theme.ANSI_RESET}")
+    if (
+        session.task_plan is not None
+        and session.task_plan.all_pending
+        and session.plan_only_until_authorized
+    ):
+        return ANSI(
+            f"{ui_theme.ANSI_DIM}say go to start the plan, or type a message{ui_theme.ANSI_RESET}"
+        )
     return _DEFAULT_PLACEHOLDER_ANSI

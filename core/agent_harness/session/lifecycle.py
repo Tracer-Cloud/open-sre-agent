@@ -276,6 +276,11 @@ class SessionManager:
             )
 
             apply_session_goal_state(session, goal_state)
+        plan_state = data.get("task_plan_state")
+        if plan_state is not None:
+            from core.agent_harness.task_plan.persist import apply_task_plan_state
+
+            apply_task_plan_state(session, plan_state)
         history = data.get("history")
         if isinstance(history, list):
             session.history = [dict(item) for item in history if isinstance(item, dict)]

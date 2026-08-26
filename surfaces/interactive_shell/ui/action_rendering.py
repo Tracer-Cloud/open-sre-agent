@@ -20,11 +20,21 @@ from rich.console import Console
 from rich.text import Text
 
 from core.agent_harness.spi.accounting import SELF_RECORDING_ACTION_TOOL_NAMES
+from core.agent_harness.spi.task_plan import (
+    apply_update_plan_host_policy,
+    apply_update_plan_session,
+    is_plan_diagnosis_prose,
+    parse_task_plan,
+)
 from infrastructure.safety.terminal_output import strip_terminal_controls
 from infrastructure.terminal.theme import BOLD_SKILL, BRAND, DIM, HIGHLIGHT
 from surfaces.interactive_shell.runtime import Session
 from surfaces.interactive_shell.runtime.core.state import SpinnerState
 from surfaces.interactive_shell.ui.streaming import render_markdown_block
+from surfaces.interactive_shell.ui.task_plan import (
+    render_plan_updated,
+    render_task_plan,
+)
 from surfaces.shared.terminal.output.console_state import get_investigation_spinner
 
 # Tools whose preview is just ``(label, single-arg)``. The display content is the
@@ -90,6 +100,7 @@ class ActionRenderObserver:
         self.message = message
         self.planned_count = 0
         self._pending_skill_calls: dict[str, str] = {}
+        self._last_plan_signature: tuple[tuple[str, Any], ...] | None = None
 
     def __call__(self, kind: str, data: dict[str, Any]) -> None:
         if kind == "llm_start":
@@ -121,6 +132,8 @@ class ActionRenderObserver:
         self._set_spinner_phase(SpinnerState.INVOKING_TOOLS_PHASE)
         if name == "skill_view":
             self._render_skill_start(data)
+        elif name == "update_plan":
+            self._render_plan_update(data)
         elif name in _SELF_RENDERING_TOOLS:
             pass  # owns its UI; a generic preview would duplicate it
         else:
@@ -166,6 +179,8 @@ class ActionRenderObserver:
         content = str(data.get("content", "")).strip()
         if not content:
             return
+        if is_plan_diagnosis_prose(content):
+            return
         self.console.print()
         # ``render_markdown_block`` sanitizes model text at ``_build_markdown_block``.
         render_markdown_block(self.console, content)
@@ -194,6 +209,33 @@ class ActionRenderObserver:
             line.append(f" {content}", style=str(BRAND))
         self.console.print()
         self.console.print(line)
+
+    def _render_plan_update(self, data: dict[str, Any]) -> None:
+        args = data.get("input")
+        if not isinstance(args, dict):
+            self._render_tool_invocation("update_plan", data)
+            return
+        plan, error = parse_task_plan(args)
+        if error is not None or plan is None:
+            self._render_tool_invocation("update_plan", data)
+            return
+        plan, plan_only = apply_update_plan_host_policy(
+            plan,
+            plan_only_requested=bool(args.get("plan_only")),
+            turn_user_message=self.message,
+            session=self.session,
+        )
+        apply_update_plan_session(self.session, plan, plan_only=plan_only)
+        # Dedupe: redundant update_plan calls in one workload must not reprint
+        # the unchanged checklist.
+        signature = tuple((item.step, item.status) for item in plan.steps)
+        if signature == self._last_plan_signature:
+            return
+        self._last_plan_signature = signature
+        if plan.all_pending:
+            render_task_plan(self.console, plan)
+            return
+        render_plan_updated(self.console, plan)
 
     def _render_skill_end(self, data: dict[str, Any]) -> None:
         """Print the ``↳`` child line under the skill's ``tool_start`` parent."""

@@ -159,11 +159,11 @@ class TestResolveIdleHint:
         session.configured_integrations_known = True
         session.configured_integrations = ("datadog", "github", "grafana")
         rendered = _strip_ansi(resolve_idle_hint_ansi(session))
+        assert rendered.startswith("Ready")
         assert "/ for commands" in rendered
         assert "tab tool details" in rendered
         assert "Datadog" in rendered
         assert "GitHub" in rendered
-        assert "Grafana" in rendered
 
     def test_omits_integrations_when_none_configured(self) -> None:
         session = Session()

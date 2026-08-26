@@ -21,6 +21,7 @@ from rich.console import Console
 
 from surfaces.interactive_shell.ui.auto_status import auto_status_ansi
 from surfaces.interactive_shell.ui.input_prompt import rendering as prompt_rendering
+from surfaces.interactive_shell.ui.task_plan import task_plan_overlay_ansi
 from surfaces.shared.terminal.banner import render_ready_box
 from surfaces.shared.terminal.components.cpr_stdin import strip_cpr_sequences
 from surfaces.shared.terminal.prompt_layout import clip_prompt_text, prompt_line_width
@@ -72,6 +73,13 @@ def render_prompt_region(session: Session, state: ReplState, spinner: SpinnerSta
                 idle_hint=prompt_rendering.resolve_idle_hint_ansi(session),
             )
         )
+    # A live plan sits as an overlay above the prefix. Its presence tracks
+    # ``session.task_plan`` (stable across redraws), not the prompt state, so it
+    # adds a constant row whether or not a confirmation is pending.
+    plan = session.task_plan
+    if plan is not None and plan.steps:
+        overlay = strip_cpr_sequences(task_plan_overlay_ansi(plan))
+        return ANSI(f"\n{overlay}\n{prefix}\n{auto_line}\n{base}")
     return ANSI(f"\n{prefix}\n{auto_line}\n{base}")
 
 

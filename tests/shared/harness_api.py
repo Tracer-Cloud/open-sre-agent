@@ -28,6 +28,7 @@ SPI_ROLES: frozenset[str] = frozenset(
         "grounding",
         "defaults",
         "handoff",
+        "task_plan",
     }
 )
 

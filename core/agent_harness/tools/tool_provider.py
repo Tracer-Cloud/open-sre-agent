@@ -83,6 +83,7 @@ class DefaultToolProvider:
         confirm_fn: ConfirmFn | None,
         is_tty: bool | None,
         resolved_integrations: dict[str, Any] | None = None,
+        turn_user_message: str = "",
     ) -> list[Any]:
         subprocess_presenter = None
         presenter_factory = self._subprocess_presenter_factory
@@ -121,6 +122,7 @@ class DefaultToolProvider:
             # Built once per turn, before any tool runs — so the current
             # history length is this turn's starting boundary.
             history_start=len(getattr(self._session, "history", None) or []),
+            turn_user_message=turn_user_message,
             subprocess_presenter=subprocess_presenter,
             investigation_ports=investigation_ports,
             llm_provider_ports=llm_provider_ports,

@@ -33,6 +33,8 @@ from tools.interactive_shell.shared import (
     ExecutionPolicyResult,
     ExecutionVerdict,
     apply_auto_level,
+    apply_plan_only_gate,
+    is_mutating_tool_type,
     resolve_confirmation,
 )
 
@@ -117,6 +119,8 @@ def execution_allowed(
     confirm = confirm_fn or DEFAULT_CONFIRM_FN
     auto_level = getattr(getattr(session, "terminal", None), "auto_level", DEFAULT_AUTO_LEVEL)
     result = apply_auto_level(result, auto_level)
+    plan_only_active = bool(getattr(session, "plan_only_until_authorized", False))
+    result = apply_plan_only_gate(result, plan_only_active=plan_only_active)
 
     plan = resolve_confirmation(result, trust_mode=trust_mode, is_tty=tty)
 
@@ -188,6 +192,10 @@ def execution_allowed(
         reason="user_confirmed",
         user_prompted=True,
     )
+    if plan_only_active and is_mutating_tool_type(result.tool_type):
+        # Confirming a mutating step at the gate is the explicit authorization
+        # that lifts a plan-only request; the rest of the plan runs normally.
+        session.plan_only_until_authorized = False
     return True
 
 
