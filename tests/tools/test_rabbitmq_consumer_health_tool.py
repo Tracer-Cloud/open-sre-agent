@@ -65,6 +65,28 @@ class TestMapGetRabbitmqConsumerHealth:
         assert entries[0]["source"] == "get_rabbitmq_consumer_health"
         assert entries[0]["summary"] == "2 consumer(s), 1 inactive"
 
+    def test_qualifies_inactive_count_when_list_is_truncated(self) -> None:
+        evidence: dict[str, Any] = {}
+
+        _map_get_rabbitmq_consumer_health(
+            evidence,
+            {
+                "available": True,
+                "total_consumers": 100,
+                "returned": 2,
+                "consumers": [
+                    {"queue": "orders", "active": True},
+                    {"queue": "billing", "active": False},
+                ],
+            },
+            {},
+        )
+
+        assert (
+            evidence["catalog_entries"][0]["summary"]
+            == "100 consumer(s), 1 of the 2 shown are inactive"
+        )
+
     def test_records_entry_without_inactive_clause_when_all_active(self) -> None:
         evidence: dict[str, Any] = {}
 

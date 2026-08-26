@@ -89,6 +89,38 @@ class TestMapGetRabbitmqQueueBacklog:
             == "2 queue(s), top backlog 105 on 'orders', 1 with zero consumers"
         )
 
+    def test_qualifies_zero_consumer_count_when_list_is_truncated(self) -> None:
+        evidence: dict[str, Any] = {}
+
+        _map_get_rabbitmq_queue_backlog(
+            evidence,
+            {
+                "available": True,
+                "total_queues": 100,
+                "returned": 2,
+                "queues": [
+                    {
+                        "name": "orders",
+                        "messages_ready": 100,
+                        "messages_unacknowledged": 5,
+                        "consumers": 0,
+                    },
+                    {
+                        "name": "emails",
+                        "messages_ready": 3,
+                        "messages_unacknowledged": 0,
+                        "consumers": 1,
+                    },
+                ],
+            },
+            {},
+        )
+
+        assert (
+            evidence["catalog_entries"][0]["summary"]
+            == "100 queue(s), top backlog 105 on 'orders', 1 of the 2 shown have zero consumers"
+        )
+
     def test_records_entry_without_zero_consumer_clause(self) -> None:
         evidence: dict[str, Any] = {}
 
