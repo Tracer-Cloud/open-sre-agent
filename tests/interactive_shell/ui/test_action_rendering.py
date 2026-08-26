@@ -380,3 +380,103 @@ def test_set_spinner_phase_does_not_activate_a_suppressed_spinner() -> None:
         assert spinner.streaming is False
     finally:
         set_investigation_spinner(None)
+
+
+_UPDATE_PLAN = [
+    {"step": "Measure wait vs work", "status": "pending"},
+    {"step": "Verify p99 recovery", "status": "pending"},
+]
+
+
+def test_update_plan_tool_start_does_not_commit_session_state() -> None:
+    """Rejected update_plan must not leave a plan that never succeeded."""
+    from core.agent_harness.task_plan.plan import parse_task_plan
+
+    observer, buffer = _observer_with_buffer("plan the fix")
+    plan, error = parse_task_plan({"plan": _UPDATE_PLAN, "explanation": "### Facts\n- p99 up"})
+    assert error is None and plan is not None
+
+    observer(
+        "tool_start",
+        {
+            "id": "p1",
+            "name": "update_plan",
+            "input": {
+                "plan": _UPDATE_PLAN,
+                "explanation": "### Facts\n- p99 up",
+                "plan_only": True,
+            },
+        },
+    )
+    assert observer.session.task_plan is None
+    assert observer.session.plan_only_until_authorized is False
+    assert "Plan" not in buffer.getvalue()
+
+    # Simulate a failed tool (schema/hook rejection) — still no session write.
+    observer(
+        "tool_end", {"id": "p1", "name": "update_plan", "output": {"ok": False, "error": "nope"}}
+    )
+    assert observer.session.task_plan is None
+    assert observer.session.plan_only_until_authorized is False
+    assert "Plan" not in buffer.getvalue()
+
+
+def test_update_plan_tool_end_renders_after_successful_commit() -> None:
+    from core.agent_harness.task_plan.plan import parse_task_plan
+    from core.agent_harness.task_plan.update_plan_policy import apply_update_plan_session
+
+    observer, buffer = _observer_with_buffer("plan the fix")
+    plan, error = parse_task_plan({"plan": _UPDATE_PLAN, "explanation": "### Facts\n- p99 up"})
+    assert error is None and plan is not None
+    apply_update_plan_session(observer.session, plan, plan_only=True)
+
+    observer(
+        "tool_end",
+        {"id": "p1", "name": "update_plan", "output": {"ok": True, "total": 2}},
+    )
+    output = buffer.getvalue()
+    assert "Plan ready" in output or "Plan ·" in output
+    assert "Measure wait vs work" in output
+    assert "p99 up" in output
+
+
+def test_update_plan_dedupe_refreshes_when_only_explanation_changes() -> None:
+    from core.agent_harness.task_plan.plan import parse_task_plan
+    from core.agent_harness.task_plan.update_plan_policy import apply_update_plan_session
+
+    observer, buffer = _observer_with_buffer("plan the fix")
+    first, error = parse_task_plan({"plan": _UPDATE_PLAN, "explanation": "first diagnosis"})
+    assert error is None and first is not None
+    apply_update_plan_session(observer.session, first, plan_only=True)
+    observer("tool_end", {"id": "p1", "name": "update_plan", "output": {"ok": True}})
+    assert "first diagnosis" in buffer.getvalue()
+
+    second, error = parse_task_plan({"plan": _UPDATE_PLAN, "explanation": "revised diagnosis"})
+    assert error is None and second is not None
+    apply_update_plan_session(observer.session, second, plan_only=True)
+    observer("tool_end", {"id": "p2", "name": "update_plan", "output": {"ok": True}})
+    assert "revised diagnosis" in buffer.getvalue()
+
+
+_IN_PROGRESS_PLAN = [
+    {"step": "Measure wait vs work", "status": "in_progress"},
+    {"step": "Verify p99 recovery", "status": "pending"},
+]
+
+
+def test_in_progress_explanation_only_update_renders_markdown() -> None:
+    from core.agent_harness.task_plan.plan import parse_task_plan
+    from core.agent_harness.task_plan.update_plan_policy import apply_update_plan_session
+
+    observer, buffer = _observer_with_buffer("keep going")
+    first, error = parse_task_plan({"plan": _IN_PROGRESS_PLAN, "explanation": "first diagnosis"})
+    assert error is None and first is not None
+    apply_update_plan_session(observer.session, first, plan_only=False)
+    observer("tool_end", {"id": "p1", "name": "update_plan", "output": {"ok": True}})
+    assert "first diagnosis" in buffer.getvalue()
+
+    second, error = parse_task_plan({"plan": _IN_PROGRESS_PLAN, "explanation": "revised diagnosis"})
+    assert error is None and second is not None
+    apply_update_plan_session(observer.session, second, plan_only=False)
+    observer("tool_end", {"id": "p2", "name": "update_plan", "output": {"ok": True}})
+    assert "revised diagnosis" in buffer.getvalue()

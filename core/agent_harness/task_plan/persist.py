@@ -15,11 +15,19 @@ TASK_PLAN_STATE_CUSTOM_TYPE = "task_plan_state"
 
 
 def task_plan_state_snapshot(session: Any) -> dict[str, Any] | None:
-    """Flush payload for the session's live task plan, or ``None`` when empty."""
+    """Flush payload for the session's live task plan, or ``None`` when empty.
+
+    Includes ``plan_only_until_authorized`` so resume keeps the confirmation
+    latch that gates mutating tools until the user explicitly authorizes.
+    """
     plan = getattr(session, "task_plan", None)
     if not isinstance(plan, TaskPlan) or not plan.steps:
         return None
-    return task_plan_to_payload(plan)
+    payload = task_plan_to_payload(plan)
+    payload["plan_only_until_authorized"] = bool(
+        getattr(session, "plan_only_until_authorized", False)
+    )
+    return payload
 
 
 def _last_task_plan_content(
@@ -53,13 +61,21 @@ def should_persist_task_plan_state(
 
 
 def apply_task_plan_state(session: Any, payload: Any) -> None:
-    """Rehydrate ``session.task_plan`` from a flush snapshot or tombstone."""
+    """Rehydrate ``session.task_plan`` (and the plan-only latch) from a snapshot."""
     if not hasattr(session, "task_plan"):
         return
-    if payload is None or payload == {}:
+    if not isinstance(payload, dict) or not payload:
         session.task_plan = None
+        if hasattr(session, "plan_only_until_authorized"):
+            session.plan_only_until_authorized = False
         return
-    session.task_plan = task_plan_from_payload(payload)
+    restored = task_plan_from_payload(payload)
+    session.task_plan = restored
+    if hasattr(session, "plan_only_until_authorized"):
+        # Do not arm the confirmation boundary without a restored checklist.
+        session.plan_only_until_authorized = bool(
+            restored is not None and payload.get("plan_only_until_authorized")
+        )
 
 
 __all__ = [

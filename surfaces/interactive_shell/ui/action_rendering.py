@@ -20,12 +20,7 @@ from rich.console import Console
 from rich.text import Text
 
 from core.agent_harness.spi.accounting import SELF_RECORDING_ACTION_TOOL_NAMES
-from core.agent_harness.spi.task_plan import (
-    apply_update_plan_host_policy,
-    apply_update_plan_session,
-    is_plan_diagnosis_prose,
-    parse_task_plan,
-)
+from core.agent_harness.spi.task_plan import TaskPlan, is_plan_diagnosis_prose
 from infrastructure.safety.terminal_output import strip_terminal_controls
 from infrastructure.terminal.theme import BOLD_SKILL, BRAND, DIM, HIGHLIGHT
 from surfaces.interactive_shell.runtime import Session
@@ -100,7 +95,8 @@ class ActionRenderObserver:
         self.message = message
         self.planned_count = 0
         self._pending_skill_calls: dict[str, str] = {}
-        self._last_plan_signature: tuple[tuple[str, Any], ...] | None = None
+        # (explanation, ((step, status), ...)) — explanation changes must refresh.
+        self._last_plan_signature: tuple[str, tuple[tuple[str, str], ...]] | None = None
 
     def __call__(self, kind: str, data: dict[str, Any]) -> None:
         if kind == "llm_start":
@@ -120,8 +116,13 @@ class ActionRenderObserver:
                 )
             return
         if kind == "tool_end":
-            if str(data.get("name", "")).strip() == "skill_view":
+            name = str(data.get("name", "")).strip()
+            if name == "skill_view":
                 self._render_skill_end(data)
+            elif name == "update_plan":
+                # Commit lives in the tool; paint only after a successful result
+                # so a rejected call cannot leave session/overlay on a failed plan.
+                self._render_plan_update(data)
             self._set_spinner_phase(SpinnerState.EXECUTING_PHASE)
             return
         if kind != "tool_start":
@@ -133,7 +134,7 @@ class ActionRenderObserver:
         if name == "skill_view":
             self._render_skill_start(data)
         elif name == "update_plan":
-            self._render_plan_update(data)
+            pass  # render on tool_end after the tool commits session state
         elif name in _SELF_RENDERING_TOOLS:
             pass  # owns its UI; a generic preview would duplicate it
         else:
@@ -211,24 +212,22 @@ class ActionRenderObserver:
         self.console.print(line)
 
     def _render_plan_update(self, data: dict[str, Any]) -> None:
-        args = data.get("input")
-        if not isinstance(args, dict):
-            self._render_tool_invocation("update_plan", data)
+        """Paint the checklist after a successful ``update_plan`` tool result.
+
+        Session state is written by the tool itself — this observer must not
+        commit on ``tool_start``, or a later validation/hook failure would leave
+        the overlay and flush transcript advertising a plan that never landed.
+        """
+        output = data.get("output")
+        if not isinstance(output, dict) or not output.get("ok"):
             return
-        plan, error = parse_task_plan(args)
-        if error is not None or plan is None:
-            self._render_tool_invocation("update_plan", data)
+        plan = getattr(self.session, "task_plan", None)
+        if not isinstance(plan, TaskPlan) or not plan.steps:
             return
-        plan, plan_only = apply_update_plan_host_policy(
-            plan,
-            plan_only_requested=bool(args.get("plan_only")),
-            turn_user_message=self.message,
-            session=self.session,
+        signature = (
+            plan.explanation,
+            tuple((item.step, str(item.status)) for item in plan.steps),
         )
-        apply_update_plan_session(self.session, plan, plan_only=plan_only)
-        # Dedupe: redundant update_plan calls in one workload must not reprint
-        # the unchanged checklist.
-        signature = tuple((item.step, item.status) for item in plan.steps)
         if signature == self._last_plan_signature:
             return
         self._last_plan_signature = signature
@@ -236,6 +235,9 @@ class ActionRenderObserver:
             render_task_plan(self.console, plan)
             return
         render_plan_updated(self.console, plan)
+        explanation = strip_terminal_controls(plan.explanation)
+        if explanation:
+            render_markdown_block(self.console, explanation)
 
     def _render_skill_end(self, data: dict[str, Any]) -> None:
         """Print the ``↳`` child line under the skill's ``tool_start`` parent."""

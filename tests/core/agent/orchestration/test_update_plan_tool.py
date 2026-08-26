@@ -51,14 +51,18 @@ def test_update_plan_stores_the_checklist_on_the_session() -> None:
 
 
 def test_update_plan_rejects_two_in_progress_steps() -> None:
+    session = Session()
     result = execute_update_plan_tool(
         {
             "plan": [
                 {"step": "First", "status": "in_progress"},
                 {"step": "Second", "status": "in_progress"},
-            ]
+            ],
+            "plan_only": True,
         },
-        _ctx(),
+        _ctx(session=session),
     )
     assert result["ok"] is False
     assert "at most one" in result["error"]
+    assert session.task_plan is None
+    assert session.plan_only_until_authorized is False
