@@ -7,7 +7,12 @@ from typing import Any, cast
 from core.domain.types.evidence import record_evidence_entry
 from core.tool_framework import tool
 from core.tool_framework.utils import tool_unavailable
-from integrations.signoz import SigNozConfig, signoz_count_label, signoz_extract_params
+from integrations.signoz import (
+    SigNozConfig,
+    signoz_count_label,
+    signoz_effective_limit,
+    signoz_extract_params,
+)
 from integrations.signoz.availability import signoz_available_or_backend
 from integrations.signoz.client import SigNozClient
 
@@ -21,7 +26,9 @@ def _map_query_signoz_metrics(
     metrics = output.get("metrics") or []
     if not metrics:
         return
-    label = signoz_count_label(output.get("total", len(metrics)), tool_input.get("limit", 50))
+    label = signoz_count_label(
+        output.get("total", len(metrics)), signoz_effective_limit(output, tool_input)
+    )
     metric_name = output.get("resolved_metric") or output.get("metric_name", "unknown")
     aggregation = output.get("aggregation", "avg")
     record_evidence_entry(

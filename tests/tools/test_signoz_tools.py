@@ -251,6 +251,28 @@ class TestMapQuerySignozLogs:
 
         assert evidence["catalog_entries"][0]["summary"] == "50+ log(s)"
 
+    def test_qualifies_count_against_config_effective_limit_not_requested_limit(self) -> None:
+        """Regression: SigNozConfig.max_results can clamp the query to a lower
+        cap than the caller's requested `limit`. The client echoes the real
+        `effective_limit` it used back in output — the mapper must qualify
+        against that, not the (higher) requested limit, or a config-capped
+        result would be reported as if it were exact."""
+        evidence: dict[str, Any] = {}
+
+        _map_query_signoz_logs(
+            evidence,
+            {
+                "available": True,
+                "total": 20,
+                "effective_limit": 20,
+                "logs": [{"severity": "INFO"} for _ in range(20)],
+                "error_logs": [],
+            },
+            {"limit": 200},
+        )
+
+        assert evidence["catalog_entries"][0]["summary"] == "20+ log(s)"
+
     def test_records_nothing_when_no_logs(self) -> None:
         evidence: dict[str, Any] = {}
 
@@ -286,6 +308,24 @@ class TestMapQuerySignozMetrics:
         assert len(entries) == 1
         assert entries[0]["source"] == "query_signoz_metrics"
         assert entries[0]["summary"] == "cpu_usage (avg): 1 data point(s)"
+
+    def test_qualifies_count_against_config_effective_limit_not_requested_limit(self) -> None:
+        evidence: dict[str, Any] = {}
+
+        _map_query_signoz_metrics(
+            evidence,
+            {
+                "available": True,
+                "total": 20,
+                "effective_limit": 20,
+                "resolved_metric": "cpu_usage",
+                "aggregation": "avg",
+                "metrics": [{"value": 1.0} for _ in range(20)],
+            },
+            {"limit": 200},
+        )
+
+        assert evidence["catalog_entries"][0]["summary"] == "cpu_usage (avg): 20+ data point(s)"
 
     def test_records_nothing_when_no_metrics(self) -> None:
         evidence: dict[str, Any] = {}
@@ -342,6 +382,23 @@ class TestMapQuerySignozTraces:
         )
 
         assert evidence["catalog_entries"][0]["summary"] == "1 trace(s)"
+
+    def test_qualifies_fallback_count_against_config_effective_limit(self) -> None:
+        evidence: dict[str, Any] = {}
+
+        _map_query_signoz_traces(
+            evidence,
+            {
+                "available": True,
+                "total": 20,
+                "effective_limit": 20,
+                "traces": [{"trace_id": str(i)} for i in range(20)],
+                "summary": {"available": False, "error": "aggregation failed"},
+            },
+            {"limit": 200},
+        )
+
+        assert evidence["catalog_entries"][0]["summary"] == "20+ trace(s)"
 
     def test_records_nothing_when_summary_and_traces_both_empty(self) -> None:
         evidence: dict[str, Any] = {}

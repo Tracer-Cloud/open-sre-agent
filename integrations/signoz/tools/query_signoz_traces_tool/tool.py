@@ -7,7 +7,12 @@ from typing import Any
 from core.domain.types.evidence import record_evidence_entry
 from core.tool_framework import tool
 from core.tool_framework.utils import tool_unavailable
-from integrations.signoz import SigNozConfig, signoz_count_label, signoz_extract_params
+from integrations.signoz import (
+    SigNozConfig,
+    signoz_count_label,
+    signoz_effective_limit,
+    signoz_extract_params,
+)
 from integrations.signoz.availability import signoz_available_or_backend
 from integrations.signoz.client import SigNozClient
 
@@ -41,7 +46,9 @@ def _map_query_signoz_traces(
     traces = output.get("traces") or []
     if not traces:
         return
-    label = signoz_count_label(output.get("total", len(traces)), tool_input.get("limit", 50))
+    label = signoz_count_label(
+        output.get("total", len(traces)), signoz_effective_limit(output, tool_input)
+    )
     record_evidence_entry(
         evidence,
         source="query_signoz_traces",

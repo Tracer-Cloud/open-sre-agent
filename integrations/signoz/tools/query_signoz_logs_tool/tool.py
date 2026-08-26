@@ -8,7 +8,12 @@ from core.domain.types.evidence import record_evidence_entry
 from core.tool_framework import tool
 from core.tool_framework.utils import tool_unavailable
 from infrastructure.evidence.evidence_compaction import compact_logs, summarize_counts
-from integrations.signoz import SigNozConfig, signoz_count_label, signoz_extract_params
+from integrations.signoz import (
+    SigNozConfig,
+    signoz_count_label,
+    signoz_effective_limit,
+    signoz_extract_params,
+)
 from integrations.signoz.availability import signoz_available_or_backend
 from integrations.signoz.client import SigNozClient
 
@@ -22,7 +27,9 @@ def _map_query_signoz_logs(
     logs = output.get("logs") or []
     if not logs:
         return
-    label = signoz_count_label(output.get("total", len(logs)), tool_input.get("limit", 50))
+    label = signoz_count_label(
+        output.get("total", len(logs)), signoz_effective_limit(output, tool_input)
+    )
     error_count = len(output.get("error_logs") or [])
     summary = f"{label} log(s)"
     if error_count:
@@ -81,6 +88,8 @@ def _normalize_logs_payload(
         "total": result.get("total", 0),
         "service": service,
     }
+    if "effective_limit" in result:
+        result_data["effective_limit"] = result["effective_limit"]
     summary = summarize_counts(result.get("total", 0), len(compacted_logs), "logs")
     if summary:
         result_data["truncation_note"] = summary
