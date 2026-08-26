@@ -90,7 +90,12 @@ def _map_incident_io_incidents(
         parts = [_incident_io_incident_summary(incident)]
         total_updates = output.get("total_updates", 0)
         if total_updates:
-            parts.append(f"{total_updates} update(s)")
+            label = (
+                f"{total_updates}+"
+                if _incident_io_page_is_truncated(output)
+                else str(total_updates)
+            )
+            parts.append(f"{label} update(s)")
         record_evidence_entry(
             evidence,
             source="incident_io_incidents",

@@ -200,6 +200,28 @@ class TestMapIncidentIoIncidents:
             == "'Database outage', Mitigating, 5 update(s)"
         )
 
+    def test_qualifies_context_update_count_when_more_pages_exist(self) -> None:
+        """Regression: get_incident_context's total_updates can be a single
+        page -- when pagination_meta.after is present, cite it as a floor."""
+        evidence: dict[str, Any] = {}
+
+        _map_incident_io_incidents(
+            evidence,
+            {
+                "available": True,
+                "action": "context",
+                "incident": {"name": "Database outage", "status": "Mitigating"},
+                "total_updates": 20,
+                "pagination_meta": {"after": "cursor-1"},
+            },
+            {},
+        )
+
+        assert (
+            evidence["catalog_entries"][0]["summary"]
+            == "'Database outage', Mitigating, 20+ update(s)"
+        )
+
     def test_records_nothing_for_append_summary_action(self) -> None:
         evidence: dict[str, Any] = {}
 
