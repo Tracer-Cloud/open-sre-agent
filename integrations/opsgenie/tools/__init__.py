@@ -212,7 +212,9 @@ def _map_opsgenie_alerts(
     # alerts is non-empty here (checked above), so a zero open_count is a
     # genuine "0 of N open" finding worth citing, not noise to suppress.
     open_count = len(output.get("open_alerts") or [])
-    open_label = f"{open_count}+" if open_count and truncated else str(open_count)
+    # A truncated page's open-count is only a floor even when it's zero --
+    # zero open alerts *in the returned page* does not mean zero overall.
+    open_label = f"{open_count}+" if truncated else str(open_count)
     summary += f", {open_label} open"
     record_evidence_entry(
         evidence,

@@ -149,6 +149,25 @@ class TestMapOpsgenieAlerts:
 
         assert evidence["catalog_entries"][0]["summary"] == "100+ alert(s), 100+ open"
 
+    def test_qualifies_zero_open_when_page_is_saturated(self) -> None:
+        """Regression: a saturated page with zero open alerts visible must
+        not claim '0 open' as an exact total -- there could be more beyond
+        the returned page."""
+        evidence: dict[str, Any] = {}
+
+        _map_opsgenie_alerts(
+            evidence,
+            {
+                "available": True,
+                "total": 100,
+                "alerts": [{"status": "closed"}] * 100,
+                "open_alerts": [],
+            },
+            {"limit": 100},
+        )
+
+        assert evidence["catalog_entries"][0]["summary"] == "100+ alert(s), 0+ open"
+
     def test_records_nothing_when_no_alerts(self) -> None:
         evidence: dict[str, Any] = {}
 
