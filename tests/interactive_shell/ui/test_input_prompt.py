@@ -423,7 +423,7 @@ class TestResolvePromptPrefix:
             idle_hint=spinner.idle_hint_ansi(),
         )
         assert "preview line" not in prefix
-        assert "esc to cancel" in _strip_ansi(prefix)
+        assert "Press ESC to stop" in _strip_ansi(prefix)
 
     def test_prefers_completion_preview_over_idle_hint(
         self, monkeypatch: pytest.MonkeyPatch

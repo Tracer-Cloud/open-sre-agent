@@ -16,7 +16,6 @@ from surfaces.shared.terminal.components.token_format import (
     _CHARS_PER_TOKEN,
     format_token_count_short,
 )
-from surfaces.shared.terminal.prompt_layout import clip_prompt_text, prompt_line_width
 
 # How often prompt-toolkit refreshes prompt callbacks and confirmation polling.
 PROMPT_REFRESH_INTERVAL_S = 0.25
@@ -153,6 +152,9 @@ class SpinnerState:
     # render pass (layout measurement + paint), so a per-call counter can land
     # on the same frame every visible render and freeze the animation.
     _FRAME_INTERVAL_SECONDS = 0.1
+    EXECUTING_PHASE = "Thinking…"
+    INVOKING_TOOLS_PHASE = "Invoking tools…"
+    _STOP_HINT = "(Press ESC to stop)"
     # Netrunner verb pools, escalating with time spent in the net: the longer
     # the run, the hotter the trace. Each entry maps the minimum elapsed
     # seconds to the pool active from that point on (tiers never de-escalate
@@ -212,7 +214,7 @@ class SpinnerState:
         self.bytes_in = 0
         self._verb_tier = 0
         self._verb = self._pick_verb()
-        self.phase = ""
+        self.phase = self.EXECUTING_PHASE
 
     def advance_verb(self) -> None:
         """Pick a fresh thinking verb (the rotation cadence is the caller's).
@@ -287,7 +289,10 @@ class SpinnerState:
         app = get_app_or_none()
         if app is not None and app.current_buffer.text:
             hint += "  ·  esc to clear"
-        return f"{ui_theme.DIM_ANSI}{hint}{ui_theme.ANSI_RESET}"
+        return (
+            f"{ui_theme.PROMPT_ACCENT_ANSI}Ready{ui_theme.ANSI_RESET}"
+            f"{ui_theme.DIM_ANSI} · {hint}{ui_theme.ANSI_RESET}"
+        )
 
     def inline_spinner_ansi(self) -> str:
         if not self.streaming:
@@ -299,24 +304,13 @@ class SpinnerState:
         glyph = self._SPINNER_FRAMES[frame_idx % len(self._SPINNER_FRAMES)]
         if token_count > 0:
             tokens_str = format_token_count_short(token_count)
-            suffix = f" ({elapsed:.0f}s · ↓ {tokens_str} tokens)"
+            elapsed_badge = f"[ {elapsed:.0f}s · ↓ {tokens_str} tokens]"
         else:
-            suffix = f" ({elapsed:.0f}s)"
+            elapsed_badge = f"[ {elapsed:.0f}s]"
         label = self.phase or f"{self._verb}…"
-        cancel = "  esc to cancel"
-        # One prompt-region row only: a long investigation phase (or a narrow
-        # terminal) must not soft-wrap — that desyncs row height vs the one-row
-        # confirmation prefix and leaves stale spinner/status lines.
-        width = prompt_line_width()
-        lead = f"{glyph} "
-        reserved = len(lead) + len(suffix) + len(cancel)
-        if reserved >= width:
-            visible = clip_prompt_text(f"{lead}{label}{suffix}{cancel}", width)
-            return f"{ui_theme.PROMPT_ACCENT_ANSI}{visible}{ui_theme.ANSI_RESET}"
-        clipped_label = clip_prompt_text(label, width - reserved)
         return (
-            f"{ui_theme.PROMPT_ACCENT_ANSI}{lead}{clipped_label}{ui_theme.ANSI_RESET}"
-            f"{ui_theme.ANSI_DIM}{suffix}{cancel}{ui_theme.ANSI_RESET}"
+            f"{ui_theme.PROMPT_ACCENT_ANSI}{glyph} {label}{ui_theme.ANSI_RESET}"
+            f"{ui_theme.ANSI_DIM} {self._STOP_HINT}  {elapsed_badge}{ui_theme.ANSI_RESET}"
         )
 
 

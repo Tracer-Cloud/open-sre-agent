@@ -700,9 +700,7 @@ class TestSpinnerState:
         spinner.start()
         spinner.bytes_in = 1234 * _CHARS_PER_TOKEN  # = 1234 tokens
         rendered = _strip_ansi(spinner.inline_spinner_ansi())
-        # The verb is randomly picked from the tier pools per turn —
-        # any of them followed by ``…`` is acceptable.
-        assert any(f"{verb}…" in rendered for verb in self._all_verbs(spinner))
+        assert loop_state.SpinnerState.EXECUTING_PHASE in rendered
         # 1234 tokens → "1.2k" via format_token_count_short.
         assert "1.2k tokens" in rendered
         # Spinner glyph from the brail palette.
@@ -734,17 +732,16 @@ class TestSpinnerState:
 
     def test_streaming_inline_spinner_verb_stays_constant_across_calls(self) -> None:
         """A turn's verb is fixed at ``start()`` so the indicator
-        doesn't flicker between words mid-stream."""
+        doesn't flicker between words mid-stream. The visible label is the
+        executing phase; the verb is kept for investigation-stage fallback.
+        """
         spinner = loop_state.SpinnerState()
         spinner.start()
-        verbs_seen: set[str] = set()
+        first = spinner._verb
         for _ in range(20):
             rendered = _strip_ansi(spinner.inline_spinner_ansi())
-            for verb in self._all_verbs(spinner):
-                if f"{verb}…" in rendered:
-                    verbs_seen.add(verb)
-                    break
-        assert len(verbs_seen) == 1, f"verb changed mid-turn — saw {verbs_seen}"
+            assert spinner._verb == first
+            assert loop_state.SpinnerState.EXECUTING_PHASE in rendered
 
     def test_advance_verb_changes_verb_between_agent_steps(self) -> None:
         """``advance_verb`` re-rolls the verb and never repeats the current one."""
@@ -871,6 +868,7 @@ class TestSpinnerState:
         """
         spinner = loop_state.SpinnerState()
         rendered = _strip_ansi(spinner.idle_hint_ansi())
+        assert rendered.startswith("Ready")
         assert "/ for commands" in rendered
         assert "tab tool details" in rendered
         assert "history" in rendered
@@ -900,15 +898,15 @@ class TestSpinnerState:
         assert "esc to clear" in rendered
         assert "/ for commands" in rendered
 
-    def test_inline_spinner_contains_esc_to_cancel_when_streaming(self) -> None:
+    def test_inline_spinner_contains_stop_hint_when_streaming(self) -> None:
         """During streaming the inline spinner (shown in the prompt's first
-        reserved line) carries the ``esc to cancel`` hint so the user can
+        reserved line) carries ``(Press ESC to stop)`` so the user can
         interrupt the dispatch.
         """
         spinner = loop_state.SpinnerState()
         spinner.start()
         rendered = _strip_ansi(spinner.inline_spinner_ansi())
-        assert "esc to cancel" in rendered
+        assert "(Press ESC to stop)" in rendered
         # Idle hint text should NOT appear in the spinner row.
         assert "/ for commands" not in rendered
 
