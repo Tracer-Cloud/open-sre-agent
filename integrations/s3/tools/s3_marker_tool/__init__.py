@@ -2,6 +2,9 @@
 
 from __future__ import annotations
 
+from typing import Any
+
+from core.domain.types.evidence import record_evidence_entry
 from core.tool_framework import tool
 from integrations.aws.s3_client import check_s3_marker_presence
 
@@ -25,9 +28,28 @@ def _extract_check_s3_marker_params(sources: dict[str, dict]) -> dict:
     }
 
 
+def _map_check_s3_marker(
+    evidence: dict[str, Any], output: dict[str, Any], _input: dict[str, Any]
+) -> None:
+    if "marker_exists" not in output:
+        return
+    file_count = output.get("file_count")
+    if not isinstance(file_count, int):
+        files = output.get("files")
+        file_count = len(files) if isinstance(files, list) else 0
+    status = "marker present" if output.get("marker_exists") else "marker missing"
+    record_evidence_entry(
+        evidence,
+        source="check_s3_marker",
+        label="S3 Success Marker",
+        summary=f"{status}, {file_count} files",
+    )
+
+
 @tool(
     name="check_s3_marker",
     source="storage",
+    evidence_mapper=_map_check_s3_marker,
     description="Check if a _SUCCESS marker exists in S3 storage to verify pipeline completion.",
     use_cases=[
         "Verifying if a data pipeline run completed successfully",

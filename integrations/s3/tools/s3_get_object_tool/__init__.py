@@ -2,6 +2,9 @@
 
 from __future__ import annotations
 
+from typing import Any
+
+from core.domain.types.evidence import record_evidence_entry
 from core.tool_framework import tool
 from integrations.aws.s3_client import get_full_object
 
@@ -25,10 +28,41 @@ def _extract_get_s3_object_params(sources: dict[str, dict]) -> dict:
     }
 
 
+def _s3_object_summary(output: dict[str, Any]) -> str:
+    bucket = output.get("bucket")
+    key = output.get("key")
+    parts: list[str] = []
+    if bucket and key:
+        parts.append(f"s3://{bucket}/{key}")
+    elif key:
+        parts.append(str(key))
+    size = output.get("size")
+    if isinstance(size, int):
+        parts.append(f"{size} bytes")
+    content_type = output.get("content_type")
+    if content_type:
+        parts.append(str(content_type))
+    return ", ".join(parts) or "object retrieved"
+
+
+def _map_get_s3_object(
+    evidence: dict[str, Any], output: dict[str, Any], _input: dict[str, Any]
+) -> None:
+    if output.get("found") is not True:
+        return
+    record_evidence_entry(
+        evidence,
+        source="get_s3_object",
+        label="S3 Object",
+        summary=_s3_object_summary(output),
+    )
+
+
 @tool(
     name="get_s3_object",
     display_name="S3 audit",
     source="storage",
+    evidence_mapper=_map_get_s3_object,
     description="Get full S3 object content — audit payloads, configs, lineage data.",
     use_cases=[
         "Retrieving audit payloads when audit_key found in S3 metadata",

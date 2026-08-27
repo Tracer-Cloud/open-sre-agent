@@ -2,6 +2,9 @@
 
 from __future__ import annotations
 
+from typing import Any
+
+from core.domain.types.evidence import record_evidence_entry
 from core.tool_framework import tool
 from infrastructure.delivery.notifications.limits import MAX_MESSAGE_SIZE
 from integrations.aws.s3_client import get_object_metadata, get_object_sample
@@ -18,10 +21,37 @@ def _extract_inspect_s3_params(sources: dict[str, dict]) -> dict:
     }
 
 
+def _map_inspect_s3_object(
+    evidence: dict[str, Any], output: dict[str, Any], _input: dict[str, Any]
+) -> None:
+    if output.get("found") is not True:
+        return
+    bucket = output.get("bucket")
+    key = output.get("key")
+    parts: list[str] = []
+    if bucket and key:
+        parts.append(f"s3://{bucket}/{key}")
+    elif key:
+        parts.append(str(key))
+    size = output.get("size")
+    if isinstance(size, int):
+        parts.append(f"{size} bytes")
+    last_modified = output.get("last_modified")
+    if last_modified and str(last_modified) not in {"None", ""}:
+        parts.append(f"last modified {last_modified}")
+    record_evidence_entry(
+        evidence,
+        source="inspect_s3_object",
+        label="S3 Object Inspection",
+        summary=", ".join(parts) or "object inspected",
+    )
+
+
 @tool(
     name="inspect_s3_object",
     display_name="S3",
     source="storage",
+    evidence_mapper=_map_inspect_s3_object,
     description="Inspect an S3 object's metadata and sample content.",
     use_cases=[
         "Tracing data lineage upstream to find root cause",

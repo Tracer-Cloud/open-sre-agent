@@ -2,6 +2,9 @@
 
 from __future__ import annotations
 
+from typing import Any
+
+from core.domain.types.evidence import record_evidence_entry
 from core.tool_framework import tool
 from integrations.aws.s3_client import list_objects
 
@@ -18,9 +21,28 @@ def _extract_list_s3_params(sources: dict[str, dict]) -> dict:
     }
 
 
+def _map_list_s3_objects(
+    evidence: dict[str, Any], output: dict[str, Any], _input: dict[str, Any]
+) -> None:
+    objects = output.get("objects")
+    if not isinstance(objects, list) or not objects:
+        return
+    count = output.get("count", len(objects))
+    summary = f"{count} objects"
+    if output.get("is_truncated"):
+        summary += ", truncated"
+    record_evidence_entry(
+        evidence,
+        source="list_s3_objects",
+        label="S3 Objects",
+        summary=summary,
+    )
+
+
 @tool(
     name="list_s3_objects",
     source="storage",
+    evidence_mapper=_map_list_s3_objects,
     description="List objects in an S3 bucket with optional prefix filter.",
     use_cases=[
         "Exploring S3 bucket contents and finding relevant data files",
