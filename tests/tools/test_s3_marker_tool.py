@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from unittest.mock import MagicMock, patch
+from unittest.mock import patch
 
 from integrations.s3.tools.s3_marker_tool import check_s3_marker
 from tests.tools.conftest import BaseToolContract, mock_agent_state
@@ -29,27 +29,35 @@ def test_extract_params_maps_fields() -> None:
 
 
 def test_run_marker_exists() -> None:
-    mock_result = MagicMock()
-    mock_result.marker_exists = True
-    mock_result.file_count = 5
-    mock_result.files = ["_SUCCESS"]
+    fake_data = {
+        "objects": [{"key": "data/_SUCCESS"}, {"key": "data/part-0"}],
+        "count": 2,
+    }
     with patch(
-        "integrations.s3.tools.s3_marker_tool.check_s3_marker_presence",
-        return_value=mock_result,
+        "integrations.s3.tools.s3_marker_tool.list_objects",
+        return_value={"success": True, "data": fake_data},
     ):
         result = check_s3_marker(bucket="b", prefix="data/")
     assert result["marker_exists"] is True
-    assert result["file_count"] == 5
+    assert result["file_count"] == 2
 
 
 def test_run_marker_missing() -> None:
-    mock_result = MagicMock()
-    mock_result.marker_exists = False
-    mock_result.file_count = 0
-    mock_result.files = []
+    fake_data = {"objects": [], "count": 0}
     with patch(
-        "integrations.s3.tools.s3_marker_tool.check_s3_marker_presence",
-        return_value=mock_result,
+        "integrations.s3.tools.s3_marker_tool.list_objects",
+        return_value={"success": True, "data": fake_data},
     ):
         result = check_s3_marker(bucket="b", prefix="data/")
     assert result["marker_exists"] is False
+    assert "error" not in result
+
+
+def test_run_listing_error_does_not_look_like_missing_marker() -> None:
+    with patch(
+        "integrations.s3.tools.s3_marker_tool.list_objects",
+        return_value={"success": False, "error": "boto3 not available"},
+    ):
+        result = check_s3_marker(bucket="b", prefix="data/")
+    assert result == {"error": "boto3 not available", "bucket": "b", "prefix": "data/"}
+    assert "marker_exists" not in result

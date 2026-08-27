@@ -54,6 +54,18 @@ def test_check_s3_marker_mapper_records_nothing_without_result() -> None:
     assert "catalog_entries" not in evidence
 
 
+def test_check_s3_marker_mapper_records_nothing_on_listing_error() -> None:
+    evidence: dict[str, Any] = {}
+
+    _map_check_s3_marker(
+        evidence,
+        {"error": "boto3 not available", "bucket": "b", "prefix": "p/"},
+        {},
+    )
+
+    assert "catalog_entries" not in evidence
+
+
 def test_get_s3_object_mapper_records_metadata_not_content() -> None:
     evidence: dict[str, Any] = {}
     output = {
