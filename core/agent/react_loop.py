@@ -82,7 +82,7 @@ def _update_fingerprint(digest: Any, value: Any) -> None:
     """Feed a stable, bounded-memory representation of a tool value into ``digest``."""
     if isinstance(value, dict):
         digest.update(b"{")
-        for key in sorted(value, key=lambda item: repr(item)):
+        for key in sorted(value, key=repr):
             _update_fingerprint(digest, key)
             _update_fingerprint(digest, value[key])
         digest.update(b"}")
