@@ -47,12 +47,14 @@ def test_all_pending_overlay_shows_the_full_indented_checklist() -> None:
     assert lines[2] == "  ○ Verify recovery"
 
 
-def test_overlay_collapses_to_the_current_step_once_work_starts() -> None:
+def test_overlay_shows_the_full_checklist_during_execution() -> None:
+    # Every step stays visible with its progress glyph while work runs.
     overlay = _strip_ansi(task_plan_overlay_ansi(_sample_plan()))
-    assert overlay.startswith("Plan · 2/3")
-    assert "  ● Trace 502s to the last deploy" in overlay
-    assert "Capture 502 samples from checkout" not in overlay
-    assert "Confirm checkout returns 2xx" not in overlay
+    lines = overlay.splitlines()
+    assert lines[0].startswith("Plan · 2/3")
+    assert lines[1] == "  ✓ Capture 502 samples from checkout"
+    assert lines[2] == "  ● Trace 502s to the last deploy"
+    assert lines[3] == "  ○ Confirm checkout returns 2xx"
 
 
 def test_overlay_strips_control_characters_from_a_raw_step() -> None:

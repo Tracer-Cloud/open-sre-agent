@@ -224,8 +224,11 @@ INVESTIGATION_DISPATCH_TOOL_NAMES: frozenset[str] = frozenset(
 )
 # Tools whose user-facing event is owned by the host UI, so the end-of-turn
 # generic formatter must stay silent: repeating their summary would double-print,
-# and their payload (e.g. the full skill body) is for the model only.
-_HOST_RENDERED_TOOL_NAMES: frozenset[str] = frozenset({"ask_user_choice", "skill_view"})
+# and their payload (e.g. the full skill body) is for the model only. update_plan
+# renders as the pinned plan overlay, so its summary must not also print as text.
+_HOST_RENDERED_TOOL_NAMES: frozenset[str] = frozenset(
+    {"ask_user_choice", "skill_view", "update_plan"}
+)
 
 
 @dataclass(frozen=True)
@@ -373,12 +376,13 @@ def _format_generic_tool_payload(tool_call: ToolCall, tool_result: Any) -> str:
             return str(parsed["stdout"]).strip()
         if parsed.get("error"):
             return str(parsed["error"]).strip()
-    args = public_tool_input(tool_call.input)
-    if args:
-        return (
-            f"{tool_call.name} input: {json.dumps(args, ensure_ascii=False, default=str)}"
-            f"\n{tool_call.name} result: {content}"
-        )
+    if parsed is not None:
+        # An opaque JSON payload (a dict with no user-facing field, or a list) is
+        # for the model, not the user. The invocation was already shown at
+        # tool_start, so dumping the raw JSON only floods the transcript — stay
+        # silent and let execution read as a clean list of tool steps.
+        return ""
+    # Non-JSON content is the tool's real text output; show it under the name.
     return f"{tool_call.name} result: {content}"
 
 

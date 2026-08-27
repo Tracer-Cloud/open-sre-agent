@@ -64,19 +64,15 @@ def _indented_step_overlay_line(item: PlanStep, width: int) -> str:
 
 
 def task_plan_overlay_ansi(plan: TaskPlan) -> str:
-    """ANSI plan overlay pinned above the prompt, indented under its header.
+    """ANSI plan overlay pinned above the prompt: the whole checklist, indented
+    under its header, with ✓ done / ● current / ○ pending.
 
-    Before execution (every step pending) the whole checklist is shown so the
-    user reads the plan where it lives — at the bottom, above the action bar.
-    Once work starts it collapses to the header plus the current step to keep
-    the prompt region short while tool output streams above it.
+    Every step is shown at all times — before and during execution — so the user
+    always sees progress across the full plan, at the bottom above the action bar.
     """
     width = prompt_line_width()
     header = _overlay_line(format_plan_header(plan), ui_theme.SECONDARY_ANSI, width)
-    if plan.all_pending:
-        rows = [header, *(_indented_step_overlay_line(item, width) for item in plan.steps)]
-    else:
-        rows = [header, _indented_step_overlay_line(plan.focused_step, width)]
+    rows = [header, *(_indented_step_overlay_line(item, width) for item in plan.steps)]
     return "\n".join(rows)
 
 
