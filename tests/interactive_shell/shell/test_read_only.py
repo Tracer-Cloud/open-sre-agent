@@ -64,9 +64,18 @@ _MUTATING = [
     "ls -la\nrm -rf /tmp/x",  # newline separates a mutation — must gate
     'date -s "2020-01-01"',  # sets system clock
     "date -s2026-08-27",  # attached short-option value also sets the clock
+    "date 12121212",  # legacy positional MMDDhhmm form sets the clock
+    "date 010203042025.00",
     "hostname newname",  # sets kernel hostname
+    "hostname -F/tmp/x",  # Linux attached -F writes hostname from a file
+    "hostname -F /tmp/x",
     "LD_PRELOAD=/evil.so ls",  # env prefix can inject code
     "git ls-remote ext::evil",  # ext:: transport runs a helper
+    "git ls-remote EXT::evil",  # protocol match is case-insensitive
+    "git ls-remote --upload-pack=/tmp/evil origin",  # helper-path override
+    "git ls-remote --upload-pack /tmp/evil origin",
+    "git -c protocol.ext.allow=always ls-remote origin",  # process-local config
+    "git -cprotocol.ext.allow=always ls-remote origin",
     "./ls",  # path-qualified executable is not the allowlisted command
     "/tmp/git status",  # attacker-controlled path
     "diff <(rm /tmp/x) file",  # process substitution runs a nested command
@@ -116,6 +125,26 @@ def test_git_output_write_bypasses_neither_auto_nor_plan_only_gates(command: str
 
     Those commands must stay ``unrestricted`` so low-auto and plan-only still ask.
     """
+    result = evaluate_shell_command(command)
+    assert result.shell_classification == "unrestricted"
+    assert apply_auto_level(result, AutoLevel.LOW).verdict == "ask"
+    assert apply_plan_only_gate(result, plan_only_active=True).verdict == "ask"
+
+
+@pytest.mark.parametrize(
+    "command",
+    [
+        "date 12121212",
+        "hostname -F/tmp/x",
+        "git ls-remote --upload-pack=/tmp/evil origin",
+        "git -cprotocol.ext.allow=always ls-remote origin",
+        "git ls-remote ext::evil",
+    ],
+)
+def test_mutation_and_helper_forms_bypass_neither_auto_nor_plan_only_gates(
+    command: str,
+) -> None:
+    """Clock/hostname setters and git helper/config injectors must still ask."""
     result = evaluate_shell_command(command)
     assert result.shell_classification == "unrestricted"
     assert apply_auto_level(result, AutoLevel.LOW).verdict == "ask"

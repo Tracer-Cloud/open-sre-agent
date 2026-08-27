@@ -438,3 +438,26 @@ def test_bulky_tool_output_is_capped_and_fenced_for_display() -> None:
     assert joined.count("run ") <= 12
     assert "```text" not in response_text
     assert response_text.count("run ") == 30
+
+
+def test_plan_snapshots_are_stripped_from_the_reply() -> None:
+    # The model sometimes restates the plan (or every historical snapshot) in its
+    # closing text; the overlay already shows it, so display strips the snapshots
+    # while keeping the prose verification.
+    reply = (
+        "All 12 local actions completed successfully.\n\n"
+        "- Repository: /Users/x/opensre\n"
+        "- Branch: perf/checks\n\n"
+        "Plan · 1/7\n  ✓ Inspect path\n  ● Show branch\n  ○ Read commit\n"
+        "Plan · 7/7\n  ✓ Inspect path\n  ✓ Confirm all actions succeeded (verify)"
+    )
+    result = _Result(tool_results=[], final_text=reply)
+
+    _rt, display_chunks, use_final = _compose_response(result, _Session(), _counts(0))
+    shown = "\n".join(display_chunks)
+
+    assert use_final is True
+    assert "All 12 local actions completed successfully." in shown
+    assert "Repository: /Users/x/opensre" in shown
+    assert "Plan ·" not in shown
+    assert "✓ Inspect path" not in shown

@@ -331,9 +331,7 @@ _DANGEROUS_TRANSPORTS = ("ext::", "fd::")
 # for a single invocation — never auto-allow when present anywhere on the argv.
 _GIT_CONFIG_INJECT_FLAGS: frozenset[str] = frozenset({"-c", "--config", "--config-env"})
 # Helper-path overrides run an attacker-chosen executable (default Git config).
-_GIT_HELPER_EXEC_FLAGS: frozenset[str] = frozenset(
-    {"--upload-pack", "--receive-pack", "--exec"}
-)
+_GIT_HELPER_EXEC_FLAGS: frozenset[str] = frozenset({"--upload-pack", "--receive-pack", "--exec"})
 # ``date -s`` / ``date --set=`` set the system clock.
 _DATE_WRITE_FLAGS: frozenset[str] = frozenset({"-s", "--set"})
 # Linux ``hostname -F <file>`` / ``-b`` write the kernel hostname from a file.

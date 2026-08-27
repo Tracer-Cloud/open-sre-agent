@@ -342,6 +342,21 @@ _DISPLAY_OUTPUT_MAX_CHARS = 800
 _OUTPUT_TRUNCATED_MARKER = "… (output truncated)"
 
 
+_PLAN_SNAPSHOT_RE = re.compile(r"Plan\s*[·.]\s*\d+\s*/\s*\d+(?:\s*[✓●○][^✓●○\n]*)*")
+
+
+def _strip_plan_snapshots(text: str) -> str:
+    """Remove ``Plan · n/m`` checklist snapshots the model restates in its reply.
+
+    The plan lives in the pinned overlay, so echoing it — let alone every
+    historical step-completion state — is a redundant wall. Prose (``-``/``•``
+    bullets, sentences) is untouched."""
+    if "Plan" not in text:
+        return text
+    cleaned = _PLAN_SNAPSHOT_RE.sub("", text)
+    return re.sub(r"\n{3,}", "\n\n", cleaned).strip()
+
+
 def _looks_like_json(text: str) -> bool:
     stripped = text.strip()
     if not stripped or stripped[0] not in "[{":
@@ -929,7 +944,9 @@ def _compose_response(
         )
     )
     final_text_chunk = "" if suppress_final else final_text
-    display_final = final_text_chunk
+    # The model sometimes restates the plan (or every historical snapshot) in its
+    # reply; the pinned overlay already shows it, so strip snapshots from display.
+    display_final = _strip_plan_snapshots(final_text_chunk)
     # History entries are already rendered by self-recording tools (shell/slash/…).
     # Console display uses final_text + generic results + hints only so users see
     # github_cli / other registry tools without double-printing shell output.
