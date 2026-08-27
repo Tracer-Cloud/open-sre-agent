@@ -14,9 +14,10 @@ from core.llm.types import ToolCall
 
 
 class _ToolResult:
-    def __init__(self, payload: dict[str, Any]) -> None:
+    def __init__(self, payload: dict[str, Any], *, is_error: bool = False) -> None:
         self.content = json.dumps(payload)
-        self.is_error = False
+        self.details = payload
+        self.is_error = is_error
 
 
 class _Result:
@@ -250,6 +251,54 @@ def test_queued_choice_preserves_sibling_tool_results() -> None:
 
     assert response_text == "3 failed, 59 succeeded"
     assert display_chunks == ["3 failed, 59 succeeded"]
+    assert use_final_text is False
+
+
+def test_queued_choice_preserves_substantive_closing_text() -> None:
+    choice = ToolCall(
+        id="1",
+        name="ask_user_choice",
+        input={"title": "Deploy how?", "options": ["Canary", "Rolling"]},
+    )
+    closing = "I found three failed checks; review those while choosing the rollout strategy."
+    result = _Result(
+        tool_results=[(choice, _ToolResult({"ok": True, "menu": "queued"}))],
+        final_text=closing,
+    )
+    session = _Session()
+    session.pending_user_choice = object()
+
+    response_text, display_chunks, use_final_text = _compose_response(result, session, _counts(1))
+
+    assert response_text == closing
+    assert display_chunks == [closing]
+    assert use_final_text is True
+
+
+def test_choice_failure_remains_visible_beside_preferred_sibling_response() -> None:
+    github = ToolCall(id="1", name="github_cli", input={"command": "run list"})
+    choice = ToolCall(id="2", name="ask_user_choice", input={"title": "", "options": []})
+    result = _Result(
+        tool_results=[
+            (github, _ToolResult(_payload("3 failed, 59 succeeded"))),
+            (
+                choice,
+                _ToolResult(
+                    {"ok": False, "error": "title is required"},
+                    is_error=True,
+                ),
+            ),
+        ],
+        final_text="I could not open the picker.",
+    )
+
+    response_text, display_chunks, use_final_text = _compose_response(
+        result, _Session(), _counts(2)
+    )
+
+    assert "3 failed, 59 succeeded" in response_text
+    assert "title is required" in response_text
+    assert display_chunks == ["3 failed, 59 succeeded\ntitle is required"]
     assert use_final_text is False
 
 
