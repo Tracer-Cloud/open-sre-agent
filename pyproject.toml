@@ -166,7 +166,6 @@ include = [
 [tool.setuptools.package-data]
 "surfaces.shared" = ["sample_alerts/*.json"]
 "core.agent_harness.prompts" = ["opensre_system_prompt.md", "skills/**/*.md"]
-"core.agent_harness.task_plan" = ["planning_instructions.md"]
 "integrations" = ["**/SKILL.md", "yandex_cloud/api_index.json"]
 "tools" = ["**/SKILL.md"]
 

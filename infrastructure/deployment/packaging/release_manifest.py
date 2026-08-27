@@ -14,7 +14,6 @@ _SKILL_DATA_ROOTS = (Path("integrations"), Path("tools"))
 #: Data files read at runtime that are not skill documents. Without an entry
 #: here a file can be absent from both the wheel and the frozen binary.
 _RUNTIME_DATA_FILES = (
-    Path("core/agent_harness/task_plan/planning_instructions.md"),
     Path("integrations/yandex_cloud/api_index.json"),
 )
 _RUNTIME_DISCOVERY_EXCLUSIONS = frozenset({"registry.py"})

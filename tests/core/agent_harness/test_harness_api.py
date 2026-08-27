@@ -168,7 +168,6 @@ SPI_ROLE_NAMES: dict[str, frozenset[str]] = {
             "format_plan_header",
             "format_task_plan_plain",
             "is_plan_diagnosis_prose",
-            "load_planning_instructions",
             "parse_task_plan",
             "promote_first_pending_step",
             "task_plan_to_payload",

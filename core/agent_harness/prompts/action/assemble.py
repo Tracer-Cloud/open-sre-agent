@@ -24,7 +24,6 @@ from core.agent_harness.prompts.skills.loader import load_skills_demo_block, loa
 from core.agent_harness.task_plan.prompt import (
     ask_user_answered_block,
     current_task_plan_block,
-    load_planning_instructions,
 )
 from infrastructure.harness_providers import action_prompt_vendor_fragments
 
@@ -127,15 +126,6 @@ def build_action_system_prompt_envelope(turn_snapshot: TurnSnapshot) -> PromptEn
             tier=PromptTier.STABLE,
             content=skills_index,
             provenance="core.agent_harness.prompts.skills",
-        )
-    )
-    blocks.append(
-        PromptBlock(
-            id=PromptBlockId.ACTION_PLANNING_INSTRUCTIONS,
-            kind=PromptBlockKind.RULE,
-            tier=PromptTier.STABLE,
-            content="".join((load_planning_instructions(), "\n\n")),
-            provenance="core.agent_harness.task_plan.planning_instructions.md",
         )
     )
     if turn_snapshot.setup_state:

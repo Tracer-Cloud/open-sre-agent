@@ -1,14 +1,10 @@
 """Prompt fragments for the live task plan.
 
-The STABLE planning instructions live in ``planning_instructions.md``. This
-module renders the per-turn CURRENT PLAN block from the snapshotted plan so
-transcript compaction cannot drop it.
+Renders the per-turn CURRENT PLAN block from the snapshotted plan so
+transcript compaction cannot drop it, plus Ask User answered guidance.
 """
 
 from __future__ import annotations
-
-from functools import lru_cache
-from pathlib import Path
 
 from core.agent_harness.session.pending_choice import parse_ask_user_answers
 from core.agent_harness.task_plan.plan import PlanStepStatus, TaskPlan
@@ -58,16 +54,6 @@ ASK_USER_ANSWERED_PLAN_ONLY_GUIDANCE = (
     "Do not pass plan_only=false; the host keeps the plan-only latch until the user "
     "confirms a mutating step at the execution gate."
 )
-
-
-_INSTRUCTIONS_FILENAME = "planning_instructions.md"
-
-
-@lru_cache(maxsize=1)
-def load_planning_instructions() -> str:
-    """Return the bundled planning-instruction markdown."""
-    path = Path(__file__).with_name(_INSTRUCTIONS_FILENAME)
-    return path.read_text(encoding="utf-8")
 
 
 def ask_user_answered_block(text: str, *, plan_only: bool = False) -> str:
@@ -127,5 +113,4 @@ __all__ = [
     "ASK_USER_ANSWERED_PLAN_ONLY_GUIDANCE",
     "ask_user_answered_block",
     "current_task_plan_block",
-    "load_planning_instructions",
 ]
