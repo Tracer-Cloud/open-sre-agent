@@ -36,7 +36,7 @@ _PLANNING_INSTRUCTIONS_MARKER = "PLANNING — update_plan"
 def package_smoke_command() -> None:
     """Fail unless essential dynamically bundled code and data are available."""
     from core.agent_harness.spi.grounding import list_action_skills, load_skill_body
-    from core.agent_harness.task_plan.prompt import load_planning_instructions
+    from core.agent_harness.spi.task_plan import load_planning_instructions
     from integrations._verifiers_loader import register_all_verifiers
     from integrations.verification import list_verifiers
     from tools.registry import get_registered_tool_map
