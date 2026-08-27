@@ -6,7 +6,7 @@ from typing import Any
 
 from core.domain.types.evidence import record_evidence_entry
 from core.tool_framework import tool
-from integrations.aws.s3_client import check_s3_marker_presence
+from integrations.aws.s3_client import list_objects
 
 
 def _check_s3_marker_available(sources: dict[str, dict]) -> bool:
@@ -31,7 +31,7 @@ def _extract_check_s3_marker_params(sources: dict[str, dict]) -> dict:
 def _map_check_s3_marker(
     evidence: dict[str, Any], output: dict[str, Any], _input: dict[str, Any]
 ) -> None:
-    if "marker_exists" not in output:
+    if output.get("error") or "marker_exists" not in output:
         return
     file_count = output.get("file_count")
     if not isinstance(file_count, int):
@@ -69,9 +69,17 @@ def _map_check_s3_marker(
 )
 def check_s3_marker(bucket: str, prefix: str) -> dict:
     """Check if a _SUCCESS marker exists in S3 storage."""
-    result = check_s3_marker_presence(bucket, prefix)
+    listing = list_objects(bucket, prefix, max_keys=100)
+    if not listing.get("success"):
+        return {
+            "error": str(listing.get("error") or "Unknown error"),
+            "bucket": bucket,
+            "prefix": prefix,
+        }
+    objects = listing.get("data", {}).get("objects", [])
+    files = [obj["key"] for obj in objects]
     return {
-        "marker_exists": result.marker_exists,
-        "file_count": result.file_count,
-        "files": result.files,
+        "marker_exists": any("_SUCCESS" in f or "marker" in f.lower() for f in files),
+        "file_count": len(files),
+        "files": files,
     }
