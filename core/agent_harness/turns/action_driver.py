@@ -342,6 +342,17 @@ _DISPLAY_OUTPUT_MAX_CHARS = 800
 _OUTPUT_TRUNCATED_MARKER = "… (output truncated)"
 
 
+def _looks_like_json(text: str) -> bool:
+    stripped = text.strip()
+    if not stripped or stripped[0] not in "[{":
+        return False
+    try:
+        json.loads(stripped)
+    except (TypeError, ValueError, json.JSONDecodeError):
+        return False
+    return True
+
+
 def _cap_for_display(text: str) -> str:
     """Cap verbose tool output for the console so a large result cannot flood the
     transcript. The model and persisted history keep the full text; only the
@@ -358,16 +369,17 @@ def _cap_for_display(text: str) -> str:
 
 
 def _visible_stdout(stdout: str) -> str:
-    """Plain-text stdout is shown; a raw JSON payload (e.g. a ``gh api`` response)
-    is for the model only and must not flood the transcript."""
+    """Plain-text stdout is shown as-is; a JSON payload (e.g. a ``gh api``
+    response) is pretty-printed so it reads as formatted data, not a one-line
+    blob. Capping and fenced-block styling happen later, at display time."""
     stripped = stdout.strip()
     if not stripped:
         return ""
     try:
-        json.loads(stripped)
+        parsed = json.loads(stripped)
     except (TypeError, ValueError, json.JSONDecodeError):
         return stripped
-    return ""
+    return json.dumps(parsed, indent=2, ensure_ascii=False)
 
 
 def _format_generic_tool_payload(tool_call: ToolCall, tool_result: Any) -> str:
@@ -410,11 +422,10 @@ def _format_generic_tool_payload(tool_call: ToolCall, tool_result: Any) -> str:
         if parsed.get("error"):
             return str(parsed["error"]).strip()
     if parsed is not None:
-        # An opaque JSON payload (a dict with no user-facing field, or a list) is
-        # for the model, not the user. The invocation was already shown at
-        # tool_start, so dumping the raw JSON only floods the transcript — stay
-        # silent and let execution read as a clean list of tool steps.
-        return ""
+        # An opaque JSON payload (a dict with no user-facing field, or a list):
+        # pretty-print it so raw data reads as formatted JSON rather than a
+        # one-line blob. Capping and fenced-block styling happen at display time.
+        return json.dumps(parsed, indent=2, ensure_ascii=False)
     # Non-JSON content is the tool's real text output; show it under the name.
     return f"{tool_call.name} result: {content}"
 
@@ -924,12 +935,15 @@ def _compose_response(
     # github_cli / other registry tools without double-printing shell output.
     # response_text still includes history for persistence / non-TTY surfaces.
     display_generic = _cap_for_display(generic_text)
+    is_json = _looks_like_json(generic_text)
     bulky = display_generic.count("\n") >= 4 or display_generic.endswith(_OUTPUT_TRUNCATED_MARKER)
-    if display_generic and bulky:
-        # Bulky tool output (raw data, long command results) reads as code: put it
-        # in its own fenced block below a blank line so it never blends with the
-        # report prose above it. Short summaries stay inline.
-        display_generic = f"\n```text\n{display_generic}\n```"
+    if display_generic and (is_json or bulky):
+        # Bulky or JSON tool output reads as code: put it in its own fenced block
+        # below a blank line so it never blends with the report prose above it.
+        # JSON gets a ``json`` fence for syntax highlighting. Short summaries stay
+        # inline.
+        lang = "json" if is_json else "text"
+        display_generic = f"\n```{lang}\n{display_generic}\n```"
     display_chunks = [chunk for chunk in (display_final, display_generic, hint) if chunk]
     response_chunks = [
         chunk

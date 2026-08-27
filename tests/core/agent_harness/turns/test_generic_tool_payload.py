@@ -29,14 +29,18 @@ def _call(name: str) -> ToolCall:
     return ToolCall(id="t1", name=name, input={"owner": "acme", "repo": "svc"})
 
 
-def test_opaque_json_object_is_suppressed() -> None:
-    # A large GitHub-style payload with no summary field must not print.
+def test_opaque_json_object_is_pretty_printed() -> None:
+    # A GitHub-style payload with no summary field is pretty-printed, not a blob.
     payload = {"ok": True, "available": True, "repository": {"full_name": "acme/svc"}}
-    assert _format_generic_tool_payload(_call("get_github_repository"), _result(payload)) == ""
+    shown = _format_generic_tool_payload(_call("get_github_repository"), _result(payload))
+    assert '"full_name": "acme/svc"' in shown
+    assert "\n" in shown  # indented, multi-line
 
 
-def test_opaque_json_list_is_suppressed() -> None:
-    assert _format_generic_tool_payload(_call("list_runs"), _result([{"id": 1}, {"id": 2}])) == ""
+def test_opaque_json_list_is_pretty_printed() -> None:
+    shown = _format_generic_tool_payload(_call("list_runs"), _result([{"id": 1}, {"id": 2}]))
+    assert '"id": 1' in shown
+    assert "\n" in shown
 
 
 def test_a_real_summary_is_still_shown() -> None:
@@ -50,15 +54,16 @@ def test_plain_text_output_is_still_shown() -> None:
     assert "build succeeded" in shown
 
 
-def test_json_stdout_is_suppressed_but_plain_stdout_is_shown() -> None:
-    # A gh-api-style JSON stdout floods the transcript; suppress it. Plain-text
-    # command output (ls, git) is the user's real result and must still show.
+def test_json_stdout_is_pretty_printed_and_plain_stdout_is_shown() -> None:
+    # gh-api JSON stdout is pretty-printed (readable data). Plain-text command
+    # output (ls, git) is the user's real result and shows as-is.
     json_stdout = _result({"ok": True, "stdout": '{"id": 18260225, "name": "main"}'})
-    assert _format_generic_tool_payload(_call("github_cli"), json_stdout) == ""
+    shown = _format_generic_tool_payload(_call("github_cli"), json_stdout)
+    assert '"name": "main"' in shown
+    assert "\n" in shown  # pretty-printed
 
     plain_stdout = _result({"ok": True, "stdout": "total 56\ndrwxr-xr-x  15 user"})
-    shown = _format_generic_tool_payload(_call("shell"), plain_stdout)
-    assert "drwxr-xr-x" in shown
+    assert "drwxr-xr-x" in _format_generic_tool_payload(_call("shell"), plain_stdout)
 
 
 def test_verbose_output_is_capped_for_display_only() -> None:
