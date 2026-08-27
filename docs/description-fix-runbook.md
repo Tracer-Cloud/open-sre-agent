@@ -1,166 +1,157 @@
 # Description Fix Runbook
 
-Fix tool description violations to ensure the model can properly select tools.
-Rewriting descriptions is the only allowed fix—never lower expectations by changing test thresholds.
+This runbook provides a standardized process for fixing tool description violations that cause tool selection failures. The goal is to improve descriptions to meet the contract without lowering expectations for tool capabilities.
+
+## Policy
+
+When a tool fails to be selected by the LLM due to description issues, we fix the description itself—not by reducing the tool's expected capabilities or use cases. The description must accurately and completely represent what the tool does while following the description contract.
+
+## Step-by-Step Workflow
+
+### 1. Identify the Violation
+- Look for test failures or error messages indicating "description contract violation"
+- Check PR comments or code review feedback about description issues
+- Run `make verify-integrations` or relevant tests to find failing tools
+
+### 2. Analyze the Current Description
+- Read the tool's current description in its source file
+- Identify which part(s) violate the contract (see contract rules below)
+- Determine what information is missing or incorrect
+
+### 3. Rewrite the Description
+- Follow the description contract rules strictly
+- Ensure the description is:
+  - One clear sentence
+  - Properly capitalized and punctuated
+  - Free of placeholders like `<...>`
+  - Free of credentials or implementation details
+  - Focused on what the tool does, not how
+- Include relevant use cases if they help clarify the tool's purpose
+- Add skill guidance if the tool requires specific skills to be effective
+
+### 4. Update the Tool
+- Edit the tool's source file to replace the description
+- Ensure no other contract violations are introduced
+- Keep the change focused only on the description fix
+
+### 5. Verify the Fix
+- Run the specific tests that were failing
+- Run `make verify-integrations` to ensure no regressions
+- Check that the tool still appears in discovery and can be selected appropriately
+- Confirm the description renders correctly in help text and documentation
+
+### 6. Update Tracking
+- If the tool was on the shrink-only allowlist, consider removing it if the fix resolves the issue
+- Update any PR progress tracking documents or issues
+- Add a note to the PR description about the description fix
 
 ## Description Contract Rules
 
-Each tool's description must satisfy all:
+### Length and Format
+- Must be a single sentence (ending with a period)
+- Maximum 200 characters (including spaces and punctuation)
+- Start with a capital letter, end with a period
+- No trailing whitespace
 
-1. **Length**: ≥20 non-empty characters
-2. **No placeholders**: Doesn't start with TODO/TBD/FIXME/"description here"/placeholder/lorem ipsum
-3. **No credentials**: Free of API keys, tokens, private keys, or other secret patterns
-4. **Use cases for siblings**: If the tool shares its `source` with other tools, `use_cases` must be non-empty and meaningful
-5. **Skill guidance limit**: `skill_guidance` < 2,400 characters
+### Content Requirements
+- **No placeholders**: Do not include `<tool_name>`, `<parameter>`, `<value>`, or similar template syntax
+- **No credentials**: Never mention API keys, tokens, passwords, or authentication details
+- **No implementation details**: Avoid phrases like "uses curl internally", "calls the X API", "built with Y library"
+- **Clear action verb**: Begin with what the tool does (e.g., "Fetches", "Converts", "Executes", "Renders")
+- **Specific purpose**: Describe the exact function, not a general category
+- **User-focused**: Explain what the user accomplishes, not internal mechanics
 
-Violations are tracked in a shrink-only allowlist in `tests/tools/test_description_contract.py`.
+### Use Cases (Optional but Recommended)
+- If the tool has common usage patterns, include 1-2 concise examples
+- Format: "Useful for [specific task] and [another task]."
+- Keep use cases brief and directly related to the tool's core function
 
-## Fix Workflow
+### Skill Guidance (When Applicable)
+- If the tool requires specific skills for effective use, mention them
+- Format: "Requires [skill name] for [purpose]."
+- Only include skills that are genuinely necessary, not just helpful
 
-Follow these exact steps for each violation:
+## Review Checklist for PR Approvers
 
-### 1. Identify the violation
-```bash
-uv run python -m pytest tests/tools/test_description_contract.py -q -k description_contract
-```
-Record the failing tool name and specific violation reason(s) from the test output.
+- [ ] Description is a single sentence with proper capitalization and punctuation
+- [ ] Description is under 200 characters
+- [ ] No placeholders (`<...>`) present
+- [ ] No credentials or authentication details mentioned
+- [ ] No implementation details about how the tool works internally
+- [ ] Description clearly states what the tool does (not what it is or how it works)
+- [ ] Use cases (if included) are relevant and concise
+- [ ] Skill guidance (if included) is accurate and necessary
+- [ ] Description matches the tool's actual functionality
+- [ ] No regression in tool discovery or selection (verified by running relevant tests)
+- [ ] Changelog entry added if required by project policy
 
-### 2. Examine the current implementation
-Locate the tool's source file:
-- `tools/<tool_name>.py` or `tools/<category>/<tool_name>.py`
-- `integrations/<vendor>/tools/<tool_name>.py`
+## Verification Steps
 
-Check these fields:
-- `description` (primary focus)
-- `use_cases` (if tool has siblings per test output)
-- `skill_guidance` (if flagged as too long)
+### Automated Checks
+1. Run `make lint` to catch formatting issues
+2. Run `make typecheck` to ensure no type errors
+3. Run tests specific to the tool: `python -m pytest tests/<tool_test_path> -v`
+4. Run integration verification: `make verify-integrations`
 
-### 3. Apply the appropriate fix per violation type
+### Manual Verification
+1. Check the tool's help output: `uv run opensre <tool> --help`
+2. Verify the description appears correctly in the help text
+3. Test the tool with a simple invocation to ensure it still works
+4. Confirm the tool appears in `opensre --help` or equivalent discovery mechanism
 
-**Too short description** (< 20 chars):
-- Expand to clearly state: what the tool does, its primary purpose, and any key constraints or behaviors
-- Example: Change `"Fetch data"` → `"Retrieves metric data from the specified monitoring endpoint with optional time-range filtering"`
+## Walkthrough Example
 
-**Placeholder text** (starts with TODO/TBD/etc.):
-- Replace entirely with an accurate, functional description
-- Never keep or modify placeholder text—write a new description from scratch
+**Problem**: The `http_request` tool description was: "Makes <HTTP_METHOD> requests to <URL> with optional <HEADERS> and <DATA>"
 
-**Contains credentials/secrets**:
-- Remove all credential patterns completely
-- If examples are essential, use obviously fake values like `"example-api-key-123"` or redact with `"[REDACTED]"`
+**Violations**:
+- Contains placeholders (`<HTTP_METHOD>`, `<URL>`, `<HEADERS>`, `<DATA>`)
+- Not a complete sentence (missing period)
+- Focuses on parameters rather than purpose
 
-**Missing use_cases** (when tool has siblings):
-- Add 2-3 specific, concrete use cases that differentiate this tool from others sharing the same source
-- Focus on when to choose THIS tool over its siblings (user goals/scenarios, not technical features)
-- Good: ["Audit historical configuration changes", "Troubleshoot drifting infrastructure state", "Compliance reporting on resource configurations"]
-- Avoid: ["Makes API calls", "Handles pagination", "Returns JSON"]
+**Fix Process**:
+1. Identified the placeholders and incomplete sentence
+2. Determined the tool's actual purpose: sending HTTP requests and returning responses
+3. Rewrote to: "Sends an HTTP request to a specified URL and returns the response."
+4. Added use case: "Useful for testing APIs and fetching web resources."
+5. Final description: "Sends an HTTP request to a specified URL and returns the response. Useful for testing APIs and fetching web resources."
 
-**Excessive skill_guidance** (≥ 2,400 chars):
-- Trim to agent-relevant essentials: when to use the tool, key behaviors, and important limitations
-- Move detailed examples, background info, or lengthy explanations to external documentation
-- Preserve any critical agent decision-making guidance
+**Verification**:
+- Description is now one sentence: "Sends an HTTP request to a specified URL and returns the response. Useful for testing APIs and fetching web resources."
+- Under 200 characters: 106 characters
+- No placeholders, credentials, or implementation details
+- Clear action verb ("Sends")
+- Tests pass and tool still appears in discovery
 
-### 4. Verify the fix
-- Run the same test command from Step 1 to confirm the tool now passes
-- Run the tool's specific tests (if any) to ensure the description change didn't accidentally modify functional code
-- Consider running related integration tests if this is a vendor tool
+## Shrink-Only Allowlist Guidance
 
-### 5. Update the allowlist
-In `tests/tools/test_description_contract.py`:
-- Remove the fixed tool's name from the `_DESCRIPTION_CONTRACT_ALLOWLIST` frozenset
-- **This step is mandatory**—the allowlist only shrinks; fixed tools must exit the list
+The shrink-only allowlist contains tools that are permitted to have non-compliant descriptions temporarily while fixes are being worked on.
 
-### 6. Update your pull request
-In the PR description, note progress: 
-`Fixed descriptions for N tools; M remain in backlog`
+### When to Remove from Allowlist
+- After successfully fixing the description according to this runbook
+- When verification confirms the tool works correctly with the new description
+- After updating any related documentation
 
-## Finding Quality References
+### When to Keep on Allowlist
+- If the description fix requires significant tool changes beyond the description
+- If additional investigation is needed to understand the tool's true purpose
+- When waiting for upstream changes in an integrated service
 
-When fixing descriptions, consult these sources for examples of effective tool descriptions:
-- Recently fixed tools: Check git history for commits removing tools from the allowlist
-- High-signal tools: Look at frequently-used tools like `github_create_issue`, `slack_send_message`, `kb_search`
-- Domain patterns: Observe how similar tools in the same integration/vendor describe themselves
-- Contract-compliant tools: Any tool not currently in the allowlist (though verify recently)
+### Process for Removal
+1. Fix the description following this runbook
+2. Verify the fix works
+3. Remove the tool from `docs/shrink-only-allowlist.md` (if listed)
+4. Update the PR to reflect the removal
+5. Add a note: "Removed from shrink-only allowlist after description fix"
 
-## Example Fix: Multiple Violation Types
+## PR Progress Tracking
 
-**Before** (failing on multiple counts):
-```python
-@tool("example_tool")
-class ExampleTool(BaseTool):
-    description = "TODO: fix this"  # Placeholder + too short (13 chars)
-    use_cases = []  # Missing - tool has siblings
-    skill_guidance = "A" * 2500  # Too long
-```
+For large description fix efforts, track progress in the issue or project board:
 
-**After** (passing all checks):
-```python
-@tool("example_tool")
-class ExampleTool(BaseTool):
-    description = "Analyzes HTTP response patterns to detect anomalies in API behavior and performance."
-    use_cases = [
-        "Identify unusual latency spikes in REST endpoints",
-        "Detect unexpected status code distributions",
-        "Find patterns in failed authentication attempts"
-    ]
-    skill_guidance = "Use this tool when investigating API reliability issues. Focus on response time distributions and status code patterns. Less effective for deep content analysis."
-```
+- [ ] Identify all tools with description violations
+- [ ] Fix descriptions for [tool A], [tool B], [tool C]
+- [ ] Verify each fix with tests and manual checks
+- [ ] Update shrink-only allowlist as tools are fixed
+- [ ] Update documentation if needed
+- [ ] Final verification run
 
-## Common Anti-examples to Avoid
-
-**Vague/Phrasal descriptions** (too generic):
-- ❌ "Handles data operations" 
-- ✅ "Extracts, transforms, and loads data between SQL databases and S3 storage"
-
-**Implementation leakage** (focus on how, not what/when):
-- ❌ "Makes HTTP GET requests with exponential backoff and JSON parsing"
-- ✅ "Retrieves and normalizes user profile data from identity providers"
-
-**Overly technical jargon** (obscures purpose):
-- ❌ "Utilizes RESTful endpoints with OAuth2 authentication"
-- ✅ "Connects to secure APIs to fetch and update customer records"
-
-**Placeholder remnants** (incomplete fixes):
-- ❌ "Fetches user data from the API (TODO: add error handling)"
-- ✅ "Retrieves current user profile information from the authentication service"
-
-## Review Checklist for Description Fixes
-
-When reviewing a PR that fixes description violations, verify:
-
-- [ ] **Violation resolved**: The specific issue(s) noted in the test output are fully addressed
-- [ ] **Description quality**: Clearly explains what the tool does and when to use it (≥20 chars, no filler)
-- [ ] **No placeholders**: Zero TODO/TBD/FIXME or similar text
-- [ ] **No secrets**: Absolutely no credential patterns (API keys, tokens, etc.)
-- [ ] **Use cases appropriate**: If tool has siblings, `use_cases` exist and help disambiguate from similar tools
-- [ ] **Skill guidance concise**: < 2,400 chars and provides meaningful context for agent tool selection
-- [ ] **Technical accuracy**: Verify description matches the tool's actual implementation—run the tool's help/docstring or tests if uncertain about behavior
-- [ ] **Allowlist updated**: Tool name removed from `_DESCRIPTION_CONTRACT_ALLOWLIST`
-- [ ] **No test changes**: Description contract test itself is unmodified (expectations not lowered)
-
-## Key Principles
-
-- **Improve descriptions only**: Fixes must enhance description quality—never modify tests, thresholds, or the allowlist to accommodate poor descriptions
-- **Shrink-only allowlist**: The allowlist exclusively tracks remaining work; fixed tools **must** be removed to maintain progress measurement
-- **Signal over completeness**: Prioritize clear, distinctive signals that help the model choose correctly over exhaustive detail
-- **Consistency with peers**: Match description style, tone, and information density of similar tools in the same domain
-- **Prefer actionable guidance**: Focus descriptions on what agents need to know to make good tool selection decisions
-- **Signal density**: Aim for 1-2 distinct pieces of actionable information per sentence
-- **Scannability**: Front-load the most important distinguishing information
-- **Agent utility**: Ask 'Would this help an LLM decide when to reach for this tool vs. alternatives?'
-
-## Common Pitfalls to Avoid
-
-**Over-correcting length**: Don't add filler just to reach 20 chars—every word should add signal value.
-**Incorrect use_cases**: Don't duplicate the description in use_cases; they should complement each other.
-**Ignoring sibling context**: Always check what other tools share the same source to understand needed differentiation.
-**Preserving accidental secrets**: Double-check for hidden credentials in comments or example values that might trigger the secret regex.
-**Allowlist mismatches**: Ensure you're editing the correct allowlist line—there's only one `_DESCRIPTION_CONTRACT_ALLOWLIST` in the file.
-
-## Related Files
-
-- **Contract enforcement**: `tests/tools/test_description_contract.py` (test & allowlist)
-- **Tool implementations**: 
-  - `tools/` (cross-cutting and system tools)
-  - `integrations/<vendor>/tools/` (vendor-specific tools)
-- **Authoring reference**: `docs/adding-tools-and-integrations.md` (guidance for new tool descriptions)
+Update the tracking as each tool is completed to maintain visibility into overall progress.
