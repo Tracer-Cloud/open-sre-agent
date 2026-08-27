@@ -17,6 +17,9 @@ Agents **must** close the loop on CI and tests. Do not treat "pushed a fix" or "
 3. **Tests that fail under CI load** (xdist, barriers, fan-out concurrency) are real bugs in the test harness — harden synchronization; do not ignore flakes.
 4. **Import / API-border failures** (`check_imports.py`, `test_integrations_api_border`) mean the wrong module edge was used — import the package API allowlisted in `.importlinter.strict` / the border allowlist, not an internal leaf, unless the ignore list explicitly names that edge.
 5. Keep monitoring until merge requirements in [CI.md §8](CI.md) (green checks + Greptile 5/5) are met.
+6. After merge, monitor the merge commit's `main` CI, full CodeQL, and release
+   workflows. A post-merge failure is unfinished delivery: fix or revert it
+   before reporting completion.
 
 The Cursor project hook [`.cursor/hooks/check-ci-failures.sh`](.cursor/hooks/check-ci-failures.sh) (wired in `.cursor/hooks.json`) re-injects this checklist on agent stop when the current branch's PR has failing checks — treat that follow-up as blocking work, not a suggestion.
 
