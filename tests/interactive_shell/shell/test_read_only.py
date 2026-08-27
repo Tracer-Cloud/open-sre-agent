@@ -16,6 +16,8 @@ _READ_ONLY = [
     "git log --oneline | head",
     "cat file | grep needle | wc -l",
     "sort file | uniq",
+    'cd /Users/x/repo && git status --short --branch | head -5; echo "==="; grep -Ei foo Makefile',
+    "cd /tmp && ls",
 ]
 
 _MUTATING = [
@@ -32,6 +34,7 @@ _MUTATING = [
     "sed -i s/a/b/ f",
     "python script.py",
     "cat $(rm x)",
+    "cd /tmp && rm -rf x",
 ]
 
 
