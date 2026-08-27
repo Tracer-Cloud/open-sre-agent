@@ -48,11 +48,11 @@ def test_heavy_test_suites_are_duration_balanced_with_measured_headroom() -> Non
     test_job = _workflow("ci.yml")["jobs"]["test"]
     entries = test_job["strategy"]["matrix"]["include"]
 
-    assert test_job["strategy"]["max-parallel"] == 19
+    assert test_job["strategy"]["max-parallel"] == 20
     expected_splits = {
         "tools-runtime": 6,
         "cli-runtime": 5,
-        "integrations-and-misc": 5,
+        "integrations-and-misc": 6,
     }
     for base, splits in expected_splits.items():
         groups = [entry for entry in entries if entry["shard"].startswith(f"{base}-")]

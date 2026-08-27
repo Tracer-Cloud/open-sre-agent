@@ -137,7 +137,7 @@ jobs:
     name: test (${{ matrix.shard }})
     strategy:
       fail-fast: false
-      max-parallel: 19
+      max-parallel: 20
       matrix:
         include:
           - os: ubuntu-latest
@@ -360,7 +360,7 @@ jobs:
           - os: ubuntu-latest
             shard: integrations-and-misc-1
             split_args: >-
-              --ci-splits=5 --ci-group=1
+              --ci-splits=6 --ci-group=1
               --ci-durations-path=.github/ci/pytest-file-durations.json
             pytest_paths: >-
               tests/integrations
@@ -377,7 +377,7 @@ jobs:
           - os: ubuntu-latest
             shard: integrations-and-misc-2
             split_args: >-
-              --ci-splits=5 --ci-group=2
+              --ci-splits=6 --ci-group=2
               --ci-durations-path=.github/ci/pytest-file-durations.json
             pytest_paths: >-
               tests/integrations
@@ -394,7 +394,7 @@ jobs:
           - os: ubuntu-latest
             shard: integrations-and-misc-3
             split_args: >-
-              --ci-splits=5 --ci-group=3
+              --ci-splits=6 --ci-group=3
               --ci-durations-path=.github/ci/pytest-file-durations.json
             pytest_paths: >-
               tests/integrations
@@ -411,7 +411,7 @@ jobs:
           - os: ubuntu-latest
             shard: integrations-and-misc-4
             split_args: >-
-              --ci-splits=5 --ci-group=4
+              --ci-splits=6 --ci-group=4
               --ci-durations-path=.github/ci/pytest-file-durations.json
             pytest_paths: >-
               tests/integrations
@@ -428,7 +428,24 @@ jobs:
           - os: ubuntu-latest
             shard: integrations-and-misc-5
             split_args: >-
-              --ci-splits=5 --ci-group=5
+              --ci-splits=6 --ci-group=5
+              --ci-durations-path=.github/ci/pytest-file-durations.json
+            pytest_paths: >-
+              tests/integrations
+              tests/bootstrap
+              tests/benchmarks
+              tests/chaos_engineering
+              tests/shared
+              tests/config
+              tests/github_ci
+              tests/quality
+              tests/packaging
+              tests/scheduler
+              gateway/tests
+          - os: ubuntu-latest
+            shard: integrations-and-misc-6
+            split_args: >-
+              --ci-splits=6 --ci-group=6
               --ci-durations-path=.github/ci/pytest-file-durations.json
             pytest_paths: >-
               tests/integrations
