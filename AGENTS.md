@@ -260,16 +260,20 @@ Steps:
 
 ### Changing the investigation pipeline
 
-Investigations are coordinated in `tools/investigation/lifecycle.py` and exposed via
+Investigations are coordinated in `tools/investigation/agent_pipeline.py`
+(`run_agent_investigation`) and exposed via
 `tools/investigation/capability.py`. Semantic stages live under
 `tools/investigation/stages/`; reporting lives under
 `tools/investigation/reporting/`. See
 [docs/investigation-pipeline-architecture.md](docs/investigation-pipeline-architecture.md)
 for the end-to-end stage/loop diagrams before making structural changes.
 
+`tools/investigation/lifecycle.py` is a **deprecated** compatibility facade
+over `agent_pipeline` — do not add new callers; keep the module until removal.
+
 Files to touch:
 
-- `tools/investigation/lifecycle.py` for high-level stage ordering.
+- `tools/investigation/agent_pipeline.py` for high-level stage ordering.
 - `core/state/` for shared agent state and investigation pipeline slice contracts
   that cross stage boundaries.
 - `core/domain/` for pure investigation rules (alert source mapping, tool planning,

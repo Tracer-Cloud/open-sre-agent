@@ -19,11 +19,11 @@ def test_run_investigation_initializes_sentry_and_captures_unhandled_errors(
     def capture_stub(exc: BaseException, **_kwargs: object) -> None:
         captured_errors.append(exc)
 
-    import tools.investigation.lifecycle as pipeline_module
-
     monkeypatch.setattr(runners, "init_sentry", lambda **_kw: sentry_init_calls.append(None))
     monkeypatch.setattr(boundary, "capture_exception", capture_stub)
-    monkeypatch.setattr(pipeline_module, "run_connected_investigation", failing_run)
+    import tools.investigation.agent_pipeline as pipeline_module
+
+    monkeypatch.setattr(pipeline_module, "run_agent_investigation", failing_run)
 
     with pytest.raises(RuntimeError, match="investigation failed"):
         runners.run_investigation("cpu high on api")
