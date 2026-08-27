@@ -18,6 +18,7 @@ def test_package_smoke_finds_essential_tools_and_skills() -> None:
     assert payload["registered_tools"] >= 250
     assert payload["action_skills"] >= 5
     assert payload["integration_verifiers"] >= 60
+    assert payload["planning_instructions"] == "ok"
 
 
 def test_package_smoke_command_is_hidden_from_help() -> None:
