@@ -44,21 +44,22 @@ def test_full_codeql_is_post_merge_and_pr_profile_is_manual() -> None:
     assert "queries" not in benchmark_init["with"]
 
 
-def test_heavy_test_suites_have_five_duration_balanced_groups() -> None:
+def test_heavy_test_suites_are_duration_balanced_with_measured_headroom() -> None:
     test_job = _workflow("ci.yml")["jobs"]["test"]
     entries = test_job["strategy"]["matrix"]["include"]
 
-    assert test_job["strategy"]["max-parallel"] == 18
-    for base in ("tools-runtime", "cli-runtime", "integrations-and-misc"):
+    assert test_job["strategy"]["max-parallel"] == 19
+    expected_splits = {
+        "tools-runtime": 6,
+        "cli-runtime": 5,
+        "integrations-and-misc": 5,
+    }
+    for base, splits in expected_splits.items():
         groups = [entry for entry in entries if entry["shard"].startswith(f"{base}-")]
         assert [entry["shard"] for entry in groups] == [
-            f"{base}-1",
-            f"{base}-2",
-            f"{base}-3",
-            f"{base}-4",
-            f"{base}-5",
+            f"{base}-{group}" for group in range(1, splits + 1)
         ]
-        assert all("--ci-splits=5" in entry["split_args"] for entry in groups)
+        assert all(f"--ci-splits={splits}" in entry["split_args"] for entry in groups)
 
     live_agent = next(entry for entry in entries if entry["shard"] == "cli-live-agent")
     assert live_agent["pytest_paths"] == "tests/core/agent/test_turn_scenarios.py"

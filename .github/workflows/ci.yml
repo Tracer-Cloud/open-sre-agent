@@ -137,7 +137,7 @@ jobs:
     name: test (${{ matrix.shard }})
     strategy:
       fail-fast: false
-      max-parallel: 18
+      max-parallel: 19
       matrix:
         include:
           - os: ubuntu-latest
@@ -149,7 +149,7 @@ jobs:
               --ignore=tests/core/tool/test_contracts.py
               --ignore=tests/tools/test_registry_index.py
             split_args: >-
-              --ci-splits=5 --ci-group=1
+              --ci-splits=6 --ci-group=1
               --ci-durations-path=.github/ci/pytest-file-durations.json
             pytest_paths: >-
               tests/tools
@@ -166,7 +166,7 @@ jobs:
               --ignore=tests/core/tool/test_contracts.py
               --ignore=tests/tools/test_registry_index.py
             split_args: >-
-              --ci-splits=5 --ci-group=2
+              --ci-splits=6 --ci-group=2
               --ci-durations-path=.github/ci/pytest-file-durations.json
             pytest_paths: >-
               tests/tools
@@ -183,7 +183,7 @@ jobs:
               --ignore=tests/core/tool/test_contracts.py
               --ignore=tests/tools/test_registry_index.py
             split_args: >-
-              --ci-splits=5 --ci-group=3
+              --ci-splits=6 --ci-group=3
               --ci-durations-path=.github/ci/pytest-file-durations.json
             pytest_paths: >-
               tests/tools
@@ -200,7 +200,7 @@ jobs:
               --ignore=tests/core/tool/test_contracts.py
               --ignore=tests/tools/test_registry_index.py
             split_args: >-
-              --ci-splits=5 --ci-group=4
+              --ci-splits=6 --ci-group=4
               --ci-durations-path=.github/ci/pytest-file-durations.json
             pytest_paths: >-
               tests/tools
@@ -217,7 +217,24 @@ jobs:
               --ignore=tests/core/tool/test_contracts.py
               --ignore=tests/tools/test_registry_index.py
             split_args: >-
-              --ci-splits=5 --ci-group=5
+              --ci-splits=6 --ci-group=5
+              --ci-durations-path=.github/ci/pytest-file-durations.json
+            pytest_paths: >-
+              tests/tools
+              tests/core
+              tests/infrastructure
+              tests/filestorage
+              tests/utils
+              tests/masking
+              tests/watch_dog
+          - os: ubuntu-latest
+            shard: tools-runtime-6
+            extra_pytest_args: >-
+              --ignore=tests/core/agent
+              --ignore=tests/core/tool/test_contracts.py
+              --ignore=tests/tools/test_registry_index.py
+            split_args: >-
+              --ci-splits=6 --ci-group=6
               --ci-durations-path=.github/ci/pytest-file-durations.json
             pytest_paths: >-
               tests/tools
