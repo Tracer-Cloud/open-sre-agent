@@ -21,15 +21,9 @@ from rich.console import Console
 from rich.rule import Rule
 from rich.text import Text
 
-from config.llm_auth.auth_method import (
-    OAUTH_AUTH_METHOD,
-    canonical_llm_provider,
-    get_configured_llm_auth_method,
-    normalize_llm_auth_method,
-)
 from config.llm_auth.credentials import has_llm_api_key, save_api_key
 from config.llm_auth.provider_catalog import API_KEY_PROVIDER_ENVS
-from config.llm_credentials import get_keyring_setup_instructions, save_keyring_secret
+from config.llm_credentials import get_keyring_setup_instructions, save_credential
 from config.setup_store import get_store_path, load_local_config
 from infrastructure.terminal.theme import (
     BG,
@@ -123,36 +117,17 @@ def local_defaults() -> dict[str, str | bool | None]:
     targets = _as_mapping(stored.get("targets"))
     local = _as_mapping(targets.get("local"))
     raw_provider = local.get("provider")
-    raw_provider_value = string_value(raw_provider) if raw_provider else ""
-    provider_value = canonical_llm_provider(raw_provider_value) if raw_provider_value else ""
+    provider_value = string_value(raw_provider) if raw_provider else ""
     provider = PROVIDER_BY_VALUE.get(provider_value) if provider_value else None
-    raw_provider_option = PROVIDER_BY_VALUE.get(raw_provider_value) if raw_provider_value else None
-    api_key_provider = raw_provider_option or provider
-    api_key_env = string_value(
-        local.get("api_key_env"), api_key_provider.api_key_env if api_key_provider else ""
-    )
-    is_cli = bool(
-        raw_provider_option and raw_provider_option.credential_kind == WizardCredentialKind.CLI
-    )
-    is_host = bool(
-        api_key_provider and api_key_provider.credential_kind == WizardCredentialKind.HOST
-    )
-    is_oauth_backend = bool(raw_provider_value and raw_provider_value != provider_value)
-    raw_auth_method = local.get("auth_method")
-    auth_method = (
-        normalize_llm_auth_method(raw_auth_method if isinstance(raw_auth_method, str) else None)
-        if raw_auth_method
-        else get_configured_llm_auth_method(string_value(raw_provider))
-    )
-    if is_oauth_backend:
-        auth_method = OAUTH_AUTH_METHOD
+    api_key_env = string_value(local.get("api_key_env"), provider.api_key_env if provider else "")
+    is_cli = bool(provider and provider.credential_kind == WizardCredentialKind.CLI)
+    is_host = bool(provider and provider.credential_kind == WizardCredentialKind.HOST)
     wizard_mode = string_value(wizard.get("mode"), "quickstart")
     if wizard_mode in {"aha", "focused"}:
         wizard_mode = "quickstart"
     return {
         "wizard_mode": wizard_mode,
-        "provider": provider_value if raw_provider_value else None,
-        "auth_method": auth_method,
+        "provider": provider_value or None,
         "model": string_value(local.get("model")),
         "api_key_env": api_key_env,
         # A ``host`` credential (e.g. the Ollama host) is only real when the
@@ -421,6 +396,13 @@ def prompt_value(
         console.print(f"[{ERROR}]  {GLYPH_ERROR}  Required.[/]")
 
 
+def _write_llm_api_key_to_env(env_var: str, value: str) -> None:
+    """Mirror a saved API key into the project ``.env``."""
+    from config.env_file import sync_env_values
+
+    sync_env_values({env_var: value})
+
+
 def persist_llm_api_key(env_var: str, value: str) -> bool:
     try:
         provider = next(
@@ -434,9 +416,10 @@ def persist_llm_api_key(env_var: str, value: str) -> bool:
         if provider:
             result = save_api_key(provider, value)
         else:
-            result = persist_api_key_secret(env_var, value, save_secret=save_keyring_secret)
+            result = persist_api_key_secret(env_var, value, save_secret=save_credential)
         detail = result.detail if result.used_fallback else ""
-    except (AuthSetupError, RuntimeError, ValueError) as exc:
+        _write_llm_api_key_to_env(env_var, value)
+    except (AuthSetupError, RuntimeError, ValueError, OSError) as exc:
         console.print(f"[{ERROR}]  {GLYPH_ERROR}  {exc}[/]")
         console.print(
             f"[{WARNING}]  {GLYPH_WARNING}  OpenSRE could not save your API key to secure local storage.[/]"
@@ -446,7 +429,7 @@ def persist_llm_api_key(env_var: str, value: str) -> bool:
         return False
     if detail:
         # Saved, but not where we would have preferred — say so rather than
-        # letting a silent downgrade to on-disk storage look like a keychain write.
+        # letting a silent downgrade look like a successful write.
         console.print(f"[{WARNING}]  {GLYPH_WARNING}  {detail}[/]")
     return True
 

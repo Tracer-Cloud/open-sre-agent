@@ -40,7 +40,6 @@ dependencies = [
     # OpenSSL >= 3.2 (SSL_get0_group_name). release.yml pins Homebrew openssl@3
     # and re-copies those dylibs into the PyInstaller onedir bundle.
     "cryptography>=50.0.0,<51",
-    "keyring>=23.0.1",
     # AWS
     "boto3>=1.42.88",
     # Slack (Socket Mode gateway + Web API)

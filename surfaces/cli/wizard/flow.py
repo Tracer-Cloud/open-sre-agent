@@ -4,12 +4,7 @@ from __future__ import annotations
 
 import logging
 import os
-import re
-import shlex
-import subprocess
 import sys
-from dataclasses import dataclass
-from pathlib import Path
 from typing import Literal
 
 import questionary
@@ -17,15 +12,6 @@ from rich.text import Text
 
 import surfaces.cli.wizard._integration_configurators as _integration_configurators_module
 from config.env_file import sync_env_values
-from config.llm_auth.auth_method import (
-    API_KEY_AUTH_METHOD,
-    OAUTH_AUTH_METHOD,
-    OAUTH_BACKEND_PROVIDER_BY_PROVIDER,
-    LLMAuthMethod,
-    normalize_llm_auth_method,
-    supports_oauth_auth_method,
-)
-from config.llm_auth.records import save_provider_auth_record
 from config.setup_store import get_store_path, save_local_config
 from core.llm.providers.azure_openai import is_azure_openai_provider
 from infrastructure.terminal.theme import (
@@ -36,7 +22,7 @@ from infrastructure.terminal.theme import (
     TEXT,
     WARNING,
 )
-from integrations.llm_cli import CodexOAuthError, diagnose_binary_path, run_codex_oauth_login
+from integrations.llm_cli import diagnose_binary_path
 from surfaces.cli.wizard.azure_openai import (
     choose_provider_model,
 )
@@ -94,22 +80,9 @@ from surfaces.shared.llm_setup.env_sync import sync_provider_env
 WIZARD_TOTAL_STEPS = 4
 logger = logging.getLogger(__name__)
 
-_CLI_SUBSCRIPTION_LOGIN_ARGS: dict[str, tuple[str, ...]] = {
-    "claude-code": ("auth", "login"),
-    "codex": ("login",),
-}
-_HIDDEN_ONBOARDING_BACKEND_PROVIDERS = frozenset(OAUTH_BACKEND_PROVIDER_BY_PROVIDER.values())
-_CODEX_CONFIG_ERROR_RE = re.compile(
-    r"Error loading configuration:\s*(?P<location>[^\n]+config\.toml:\d+:\d+):\s*(?P<detail>[^\n]+)"
-)
-_CODEX_CONFIG_LOCATION_RE = re.compile(r"^(?P<path>.+config\.toml):(?P<line>\d+):(?P<column>\d+)$")
-_CODEX_STALE_SERVICE_TIER_DETAIL_RE = re.compile(
-    r"unknown variant [`'\"]priority[`'\"], expected [`'\"]fast[`'\"] or [`'\"]flex[`'\"]"
-)
-_CODEX_PRIORITY_SERVICE_TIER_RE = re.compile(
-    r"^(?P<prefix>[ \t]*service_tier[ \t]*=[ \t]*)(?P<quote>[\"'])"
-    r"priority(?P=quote)(?P<suffix>[ \t]*(?:#.*)?)?(?P<newline>\r?\n)?$"
-)
+#: Vendor-CLI providers a user can only reach by setting ``LLM_PROVIDER``
+#: directly; onboarding no longer offers a subscription/OAuth login for them.
+_HIDDEN_ONBOARDING_PROVIDERS = frozenset({"codex", "claude-code"})
 
 __all__ = [
     "DEFAULT_GITHUB_MCP_MODE",
@@ -138,384 +111,15 @@ def _seed_onboarding_loops() -> int:
         return 0
 
 
-def _provider_label_for_saved_summary(
-    provider: ProviderOption, auth_method: str | None = None
-) -> str:
-    if normalize_llm_auth_method(auth_method) == OAUTH_AUTH_METHOD:
-        return f"{_provider_choice_label(provider)} OAuth"
-    return provider.label
-
-
-@dataclass(frozen=True)
-class _SubscriptionLoginResult:
-    ok: bool
-    detail: str = ""
-    config_error: bool = False
-    config_error_location: str = ""
-    config_error_detail: str = ""
-
-
-@dataclass(frozen=True)
-class _LoginProcessResult:
-    returncode: int
-    stdout: str = ""
-    stderr: str = ""
-
-
-@dataclass(frozen=True)
-class _CodexConfigRepairResult:
-    ok: bool
-    detail: str
-
-
 def _onboarding_provider_options() -> tuple[ProviderOption, ...]:
     return tuple(
         provider
         for provider in SUPPORTED_PROVIDERS
-        if provider.value not in _HIDDEN_ONBOARDING_BACKEND_PROVIDERS
+        if provider.value not in _HIDDEN_ONBOARDING_PROVIDERS
     )
 
 
-def _auth_method_label(auth_method: str) -> str:
-    return "OAuth" if normalize_llm_auth_method(auth_method) == OAUTH_AUTH_METHOD else "API key"
-
-
-def _choose_auth_method(
-    provider: ProviderOption,
-    *,
-    default: str | None,
-) -> LLMAuthMethod:
-    if provider.value in _HIDDEN_ONBOARDING_BACKEND_PROVIDERS:
-        return OAUTH_AUTH_METHOD
-    if not supports_oauth_auth_method(provider.value):
-        return API_KEY_AUTH_METHOD
-    method = choose(
-        f"Choose {provider.label.removesuffix(' API key')} auth method",
-        [
-            Choice(
-                value=OAUTH_AUTH_METHOD,
-                label="OAuth",
-                hint="Browser login managed by onboarding",
-            ),
-            Choice(
-                value=API_KEY_AUTH_METHOD,
-                label="API key",
-                hint=f"Paste {provider.api_key_env}",
-            ),
-        ],
-        default=default
-        if default in {API_KEY_AUTH_METHOD, OAUTH_AUTH_METHOD}
-        else OAUTH_AUTH_METHOD,
-        back_on_cancel=True,
-    )
-    return normalize_llm_auth_method(method)
-
-
-def _oauth_backend_provider(provider: ProviderOption, auth_method: str) -> ProviderOption:
-    if normalize_llm_auth_method(auth_method) != OAUTH_AUTH_METHOD:
-        return provider
-    backend = OAUTH_BACKEND_PROVIDER_BY_PROVIDER.get(provider.value)
-    if backend is None:
-        return provider
-    return PROVIDER_BY_VALUE[backend]
-
-
-def _persisted_auth_method(
-    provider: ProviderOption, auth_method: str | None
-) -> LLMAuthMethod | None:
-    if auth_method is None:
-        return None
-    if provider.value in _HIDDEN_ONBOARDING_BACKEND_PROVIDERS or supports_oauth_auth_method(
-        provider.value
-    ):
-        return normalize_llm_auth_method(auth_method)
-    return None
-
-
-def _subscription_login_command(
-    provider: ProviderOption, binary_path: str | None
-) -> list[str] | None:
-    """Return the vendor CLI login command for subscription-backed LLM providers."""
-    if not binary_path:
-        return None
-    args = _CLI_SUBSCRIPTION_LOGIN_ARGS.get(provider.value)
-    if args is None:
-        return None
-    return [binary_path, *args]
-
-
-def _subscription_login_preflight_command(
-    provider: ProviderOption, binary_path: str | None
-) -> list[str] | None:
-    """Return a non-OAuth command that validates config before interactive login."""
-    if not binary_path:
-        return None
-    if provider.value == "codex":
-        return [binary_path, "login", "--help"]
-    return None
-
-
-def _parse_codex_config_error_location(location: str) -> tuple[Path, int] | None:
-    match = _CODEX_CONFIG_LOCATION_RE.match(location.strip())
-    if match is None:
-        return None
-    try:
-        line_no = int(match.group("line"))
-    except ValueError:
-        return None
-    if line_no < 1:
-        return None
-    return Path(match.group("path")).expanduser(), line_no
-
-
-def _codex_priority_service_tier_repair_hint(*, location: str, detail: str) -> str | None:
-    if not _CODEX_STALE_SERVICE_TIER_DETAIL_RE.search(detail):
-        return None
-    parsed = _parse_codex_config_error_location(location)
-    if parsed is None:
-        return None
-    path, line_no = parsed
-    try:
-        lines = path.read_text(encoding="utf-8").splitlines(keepends=True)
-    except OSError:
-        return None
-    if line_no > len(lines):
-        return None
-    if _CODEX_PRIORITY_SERVICE_TIER_RE.match(lines[line_no - 1]) is None:
-        return None
-    return f"Change {path}:{line_no} service_tier from priority to fast"
-
-
-def _repair_codex_priority_service_tier(*, location: str, detail: str) -> _CodexConfigRepairResult:
-    hint = _codex_priority_service_tier_repair_hint(location=location, detail=detail)
-    if hint is None:
-        return _CodexConfigRepairResult(
-            ok=False,
-            detail="This Codex config error is not one OpenSRE can repair safely.",
-        )
-    parsed = _parse_codex_config_error_location(location)
-    if parsed is None:
-        return _CodexConfigRepairResult(ok=False, detail=f"Could not parse {location}.")
-
-    path, line_no = parsed
-    try:
-        lines = path.read_text(encoding="utf-8").splitlines(keepends=True)
-    except OSError as exc:
-        return _CodexConfigRepairResult(
-            ok=False,
-            detail=f"Could not read {path}: {exc}",
-        )
-    if line_no > len(lines):
-        return _CodexConfigRepairResult(
-            ok=False,
-            detail=f"Could not repair {path}: line {line_no} is outside the file.",
-        )
-
-    match = _CODEX_PRIORITY_SERVICE_TIER_RE.match(lines[line_no - 1])
-    if match is None:
-        return _CodexConfigRepairResult(
-            ok=False,
-            detail=f'Could not repair {path}: line {line_no} is no longer service_tier = "priority".',
-        )
-
-    lines[line_no - 1] = (
-        f"{match.group('prefix')}{match.group('quote')}fast{match.group('quote')}"
-        f"{match.group('suffix') or ''}{match.group('newline') or ''}"
-    )
-    try:
-        path.write_text("".join(lines), encoding="utf-8")
-    except OSError as exc:
-        return _CodexConfigRepairResult(
-            ok=False,
-            detail=f"Could not update {path}: {exc}",
-        )
-    return _CodexConfigRepairResult(ok=True, detail=hint)
-
-
-def _run_login_preflight_process(command: list[str]) -> _LoginProcessResult:
-    result = subprocess.run(
-        command,
-        check=False,
-        capture_output=True,
-        text=True,
-        encoding="utf-8",
-        errors="replace",
-    )
-    return _LoginProcessResult(
-        returncode=result.returncode,
-        stdout=result.stdout or "",
-        stderr=result.stderr or "",
-    )
-
-
-def _run_interactive_login_process(command: list[str]) -> _LoginProcessResult:
-    result = subprocess.run(command, check=False)
-    return _LoginProcessResult(
-        returncode=result.returncode,
-    )
-
-
-def _subscription_login_error(
-    provider: ProviderOption, result: _LoginProcessResult
-) -> _SubscriptionLoginResult:
-    text = "\n".join(
-        part.strip()
-        for part in (getattr(result, "stdout", "") or "", getattr(result, "stderr", "") or "")
-        if part and part.strip()
-    )
-    if provider.value == "codex":
-        match = _CODEX_CONFIG_ERROR_RE.search(text)
-        if match:
-            location = match.group("location")
-            detail = match.group("detail")
-            return _SubscriptionLoginResult(
-                ok=False,
-                config_error=True,
-                config_error_location=location,
-                config_error_detail=detail,
-                detail=(
-                    "Codex CLI could not start because its local config is invalid: "
-                    f"{location} ({detail}). "
-                    "Fix that file, then retry OAuth login."
-                ),
-            )
-    tail = text[:500]
-    return _SubscriptionLoginResult(
-        ok=False,
-        detail=(
-            f"Login exited with code {result.returncode}: {tail}"
-            if tail
-            else f"Login exited with code {result.returncode}."
-        ),
-    )
-
-
-def _run_subscription_login(
-    provider: ProviderOption, binary_path: str | None
-) -> _SubscriptionLoginResult:
-    """Launch the provider CLI login flow and report whether it exited cleanly."""
-    if provider.value == "codex":
-        console.print(
-            f"[{SECONDARY}]Starting OpenSRE Codex OAuth server on http://localhost:1455[/]"
-        )
-        try:
-            oauth_result = run_codex_oauth_login()
-        except CodexOAuthError as exc:
-            detail = str(exc)
-            console.print(f"[{WARNING}]  {GLYPH_WARNING}  {detail}[/]")
-            return _SubscriptionLoginResult(ok=False, detail=detail)
-        save_provider_auth_record(
-            provider="codex",
-            auth_name="chatgpt",
-            kind="cli_subscription",
-            source="codex-oauth",
-            detail=oauth_result.detail,
-        )
-        console.print(f"[{SECONDARY}]{oauth_result.detail}[/]")
-        return _SubscriptionLoginResult(ok=True, detail=oauth_result.detail)
-
-    command = _subscription_login_command(provider, binary_path)
-    if command is None:
-        auth_hint = provider.adapter_factory().auth_hint if provider.adapter_factory else ""
-        detail = f"No browser login command is registered for {provider.label}. {auth_hint}"
-        console.print(f"[{WARNING}]  {GLYPH_WARNING}  {detail}[/]")
-        return _SubscriptionLoginResult(ok=False, detail=detail)
-
-    preflight_command = _subscription_login_preflight_command(provider, binary_path)
-    if preflight_command is not None:
-        try:
-            preflight_result = _run_login_preflight_process(preflight_command)
-        except OSError as exc:
-            detail = f"Could not check login config: {exc}"
-            console.print(f"[{WARNING}]  {GLYPH_WARNING}  {detail}[/]")
-            return _SubscriptionLoginResult(ok=False, detail=detail)
-        if preflight_result.returncode != 0:
-            login_result = _subscription_login_error(provider, preflight_result)
-            console.print(f"[{WARNING}]  {GLYPH_WARNING}  {login_result.detail}[/]")
-            return login_result
-
-    console.print(f"[{SECONDARY}]Launching {shlex.join(command)} for browser login…[/]")
-    try:
-        result = _run_interactive_login_process(command)
-    except KeyboardInterrupt:
-        console.print(f"[{WARNING}]  {GLYPH_WARNING}  Login cancelled.[/]")
-        return _SubscriptionLoginResult(ok=False, detail="Login cancelled.")
-    except OSError as exc:
-        detail = f"Could not launch login: {exc}"
-        console.print(f"[{WARNING}]  {GLYPH_WARNING}  {detail}[/]")
-        return _SubscriptionLoginResult(ok=False, detail=detail)
-    if result.returncode != 0:
-        login_result = _subscription_login_error(provider, result)
-        console.print(f"[{WARNING}]  {GLYPH_WARNING}  {login_result.detail}[/]")
-        return login_result
-    return _SubscriptionLoginResult(ok=True)
-
-
-def _recover_subscription_config_error(
-    provider: ProviderOption,
-    *,
-    provider_label: str,
-    binary_path: str | None,
-    login_result: _SubscriptionLoginResult,
-) -> Literal["ok", "continue", "repick"]:
-    repair_hint: str | None = None
-    if provider.value == "codex":
-        repair_hint = _codex_priority_service_tier_repair_hint(
-            location=login_result.config_error_location,
-            detail=login_result.config_error_detail,
-        )
-
-    choices: list[Choice] = []
-    if repair_hint is not None:
-        choices.append(
-            Choice(
-                value="repair",
-                label="Apply known Codex config fix and retry",
-                hint=repair_hint,
-            )
-        )
-    choices.extend(
-        [
-            Choice(
-                value="retry",
-                label="Retry after fixing local config",
-                hint=login_result.detail,
-            ),
-            Choice(
-                value="repick",
-                label="Pick a different LLM provider",
-                hint=None,
-            ),
-        ]
-    )
-    recovery = choose(
-        f"{provider_label} OAuth could not start. What next?",
-        choices,
-        default="repair" if repair_hint is not None else "retry",
-    )
-    if recovery == "repick":
-        return "repick"
-    if recovery != "repair":
-        return "continue"
-
-    repair_result = _repair_codex_priority_service_tier(
-        location=login_result.config_error_location,
-        detail=login_result.config_error_detail,
-    )
-    if not repair_result.ok:
-        console.print(f"[{WARNING}]  {GLYPH_WARNING}  {repair_result.detail}[/]")
-        return "continue"
-
-    console.print(f"[{SECONDARY}]  Updated Codex config: {repair_result.detail}.[/]")
-    retry_result = _run_subscription_login(provider, binary_path)
-    if retry_result.ok:
-        return "ok"
-    return "continue"
-
-
-def _run_cli_llm_onboarding(
-    provider: ProviderOption, *, display_label: str | None = None
-) -> Literal["ok", "abort", "repick"]:
+def _run_cli_llm_onboarding(provider: ProviderOption) -> Literal["ok", "abort", "repick"]:
     """Probe CLI binary + auth; recovery menu when missing. ``repick`` = choose another LLM."""
     factory = provider.adapter_factory
     if factory is None:
@@ -528,7 +132,7 @@ def _run_cli_llm_onboarding(
     install_hint = adapter.install_hint
     auth_hint = adapter.auth_hint
     name = adapter.name
-    provider_label = display_label or provider.label
+    provider_label = provider.label
     for _attempt in range(10):
         probe = adapter.detect()
         if probe.installed and probe.logged_in is True:
@@ -541,16 +145,8 @@ def _run_cli_llm_onboarding(
                 if probe.logged_in is False
                 else f"Could not verify {provider_label} login. What next?"
             )
-            choices = []
-            if _subscription_login_command(provider, probe.bin_path) is not None:
-                choices.append(
-                    Choice(
-                        value="login",
-                        label="Open browser login now",
-                        hint=auth_hint,
-                    )
-                )
-            choices.extend(
+            action = choose(
+                status_prompt,
                 [
                     Choice(
                         value="retry",
@@ -562,31 +158,11 @@ def _run_cli_llm_onboarding(
                         label="Pick a different LLM provider",
                         hint=None,
                     ),
-                ]
-            )
-            action = choose(
-                status_prompt,
-                choices,
-                default="login" if choices and choices[0].value == "login" else "retry",
+                ],
+                default="retry",
             )
             if action == "repick":
                 return "repick"
-            if action == "login":
-                login_result = _run_subscription_login(provider, probe.bin_path)
-                if login_result.ok:
-                    return "ok"
-                if login_result.config_error:
-                    recovery = _recover_subscription_config_error(
-                        provider,
-                        provider_label=provider_label,
-                        binary_path=probe.bin_path,
-                        login_result=login_result,
-                    )
-                    if recovery == "ok":
-                        return "ok"
-                    if recovery == "repick":
-                        return "repick"
-                continue
             continue
         console.print(f"[{WARNING}]  {GLYPH_WARNING}  {probe.detail}[/]")
         action = choose(
@@ -634,12 +210,6 @@ def run_wizard(_argv: list[str] | None = None) -> int:
     saved_model_value = defaults["model"] if isinstance(defaults["model"], str) else ""
     default_wizard_mode = (
         defaults["wizard_mode"] if isinstance(defaults["wizard_mode"], str) else "quickstart"
-    )
-    raw_saved_auth_method = defaults.get("auth_method")
-    saved_auth_method = (
-        normalize_llm_auth_method(raw_saved_auth_method)
-        if isinstance(raw_saved_auth_method, str)
-        else API_KEY_AUTH_METHOD
     )
     provider_options = _onboarding_provider_options()
     provider_option_values = {p.value for p in provider_options}
@@ -689,13 +259,11 @@ def run_wizard(_argv: list[str] | None = None) -> int:
 
     force_repick = False
     provider: ProviderOption
-    model_provider: ProviderOption
-    auth_method: LLMAuthMethod | None
     model: str
     provider_extra_env: dict[str, str] = {}
     credential_state: CredentialState = OK
-    # Records a ``continue_unsaved`` secret export so it can be re-applied after
-    # ``sync_provider_env`` pops it, before the in-process shell handoff.
+    # Records a ``continue_unsaved`` secret export so it can be re-applied
+    # before the in-process shell handoff.
     session_env_sink: dict[str, str] = {}
     while True:
         credential_state = OK
@@ -705,15 +273,9 @@ def run_wizard(_argv: list[str] | None = None) -> int:
             PROVIDER_BY_VALUE.get(saved_provider_value) if saved_provider_value else None
         )
         if saved_provider is not None and not force_repick:
-            saved_model_provider = _oauth_backend_provider(saved_provider, saved_auth_method)
-            current_model = saved_model_value or saved_model_provider.default_model
-            auth_segment = (
-                f"  ·  {_auth_method_label(saved_auth_method)}"
-                if supports_oauth_auth_method(saved_provider.value)
-                else ""
-            )
+            current_model = saved_model_value or saved_provider.default_model
             console.print(
-                f"[{SECONDARY}]current provider  {_provider_choice_label(saved_provider)}{auth_segment}  ·  {current_model}[/]"
+                f"[{SECONDARY}]current provider  {_provider_choice_label(saved_provider)}  ·  {current_model}[/]"
             )
             change_provider = confirm("Change provider?", default=False)
         else:
@@ -742,18 +304,14 @@ def run_wizard(_argv: list[str] | None = None) -> int:
                         default=default_provider_value,
                     )
                 ]
-                auth_method = _choose_auth_method(provider, default=OAUTH_AUTH_METHOD)
-                model_provider = _oauth_backend_provider(provider, auth_method)
             except WizardBack:
                 force_repick = True
                 continue
-            model = model_provider.default_model
+            model = provider.default_model
         else:
             assert saved_provider is not None
             provider = saved_provider
-            auth_method = saved_auth_method
-            model_provider = _oauth_backend_provider(provider, auth_method)
-            model = saved_model_value or model_provider.default_model
+            model = saved_model_value or provider.default_model
 
         # The model pick comes BEFORE the credential block, in both branches: the live
         # probe must run against the model that actually gets persisted. Probing the
@@ -770,42 +328,31 @@ def run_wizard(_argv: list[str] | None = None) -> int:
                 try:
                     model = choose_provider_model(
                         provider,
-                        model_provider,
                         default=model,
-                        prompt_label=(
-                            f"{_provider_choice_label(provider)} OAuth"
-                            if auth_method == OAUTH_AUTH_METHOD
-                            else _provider_choice_label(provider)
-                        ),
+                        prompt_label=_provider_choice_label(provider),
                         back_on_cancel=True,
                     )
                 except WizardBack:
                     force_repick = True
                     continue
-        elif model_provider.models:
+        elif provider.models:
             current_display = model or "CLI default"
             console.print(f"[{SECONDARY}]current model  {current_display}[/]")
             if confirm("Change model?", default=False):
                 model = choose_provider_model(
                     provider,
-                    model_provider,
                     default=model,
-                    prompt_label=(
-                        f"{_provider_choice_label(provider)} OAuth"
-                        if auth_method == OAUTH_AUTH_METHOD
-                        else _provider_choice_label(provider)
-                    ),
+                    prompt_label=_provider_choice_label(provider),
                 )
 
         if change_provider:
-            if auth_method == API_KEY_AUTH_METHOD and provider.credential_kind not in (
+            if provider.credential_kind not in (
                 WizardCredentialKind.CLI,
                 WizardCredentialKind.NONE,
             ):
                 credential_outcome, model = _prompt_validated_llm_credential(
                     provider,
                     model=model,
-                    model_provider=model_provider,
                     session_env_sink=session_env_sink,
                 )
                 if credential_outcome == CANCEL:
@@ -834,7 +381,7 @@ def run_wizard(_argv: list[str] | None = None) -> int:
                 provider_extra_env = azure_env
                 os.environ.update(azure_env)
         else:
-            if auth_method == API_KEY_AUTH_METHOD and provider.credential_kind not in (
+            if provider.credential_kind not in (
                 WizardCredentialKind.CLI,
                 WizardCredentialKind.NONE,
             ):
@@ -864,7 +411,6 @@ def run_wizard(_argv: list[str] | None = None) -> int:
                     credential_outcome, model = _prompt_validated_llm_credential(
                         provider,
                         model=model,
-                        model_provider=model_provider,
                         session_env_sink=session_env_sink,
                     )
                     if credential_outcome == CANCEL:
@@ -890,15 +436,8 @@ def run_wizard(_argv: list[str] | None = None) -> int:
             provider_extra_env = azure_env
             os.environ.update(azure_env)
 
-        if model_provider.credential_kind == WizardCredentialKind.CLI:
-            cli_out = _run_cli_llm_onboarding(
-                model_provider,
-                display_label=(
-                    f"{_provider_choice_label(provider)} OAuth"
-                    if auth_method == OAUTH_AUTH_METHOD
-                    else None
-                ),
-            )
+        if provider.credential_kind == WizardCredentialKind.CLI:
+            cli_out = _run_cli_llm_onboarding(provider)
             if cli_out == "abort":
                 return 1
             if cli_out == "repick":
@@ -910,31 +449,24 @@ def run_wizard(_argv: list[str] | None = None) -> int:
         "local": local_probe.as_dict(),
         "remote": remote_probe.as_dict(),
     }
-    persisted_auth_method = _persisted_auth_method(provider, auth_method)
     saved_path = save_local_config(
         wizard_mode=wizard_mode,
         provider=provider.value,
         model=model,
         api_key_env=provider.api_key_env,
-        model_env=model_provider.model_env,
-        auth_method=persisted_auth_method,
+        model_env=provider.model_env,
         probes=probes,
     )
     env_path = sync_provider_env(
         provider=provider,
         model=model,
-        model_provider=model_provider,
-        auth_method=persisted_auth_method,
         extra_env=provider_extra_env or None,
     )
     if credential_state == UNSAVED:
-        # sync_provider_env pops every secret provider's api-key env; re-apply the
-        # session-only value the user chose to continue with so the in-process shell
-        # handoff can read it. Secrets persist via the secret store (the
-        # owner-only local credential file). A ``host`` value
-        # normally goes straight to .env and never reaches this sink; it only lands
-        # here when its .env write failed and the user picked "continue without
-        # saving", where re-applying it to os.environ is exactly what is wanted.
+        # Re-apply the session-only value the user chose to continue with so the
+        # in-process shell handoff can read it. A ``host`` value normally goes
+        # straight to .env and never reaches this sink; it only lands here when
+        # its .env write failed and the user picked "continue without saving".
         os.environ.update(session_env_sink)
 
     step_header(3, WIZARD_TOTAL_STEPS, "Integrations")
@@ -955,13 +487,13 @@ def run_wizard(_argv: list[str] | None = None) -> int:
 
     step_header(4, WIZARD_TOTAL_STEPS, "Summary")
     render_saved_summary(
-        provider_label=_provider_label_for_saved_summary(provider, persisted_auth_method),
+        provider_label=provider.label,
         model=model,
         saved_path=str(saved_path),
         env_path=summary_env_path,
         configured_integrations=configured_integrations,
         credential_line=_credential_line_for_saved_summary(
-            provider, persisted_auth_method, credential_state=credential_state
+            provider, credential_state=credential_state
         ),
     )
     render_next_steps()

@@ -37,6 +37,7 @@ from core.agent_harness.prompts import (
     build_action_user_message,
 )
 from core.agent_harness.session.integration_resolution import resolve_and_cache_integrations
+from core.agent_harness.session.terminal_access import execute_cli_onboard_on_missing_key
 from core.agent_harness.session_goal.goal import strip_session_goal_progress_tags
 from core.agent_harness.turns.assistant_handoff import (
     AssistantHandoff,
@@ -51,7 +52,6 @@ from core.agent_harness.turns.wal_recorder import with_wal_recording
 from core.events import runtime_event_callback_from_observer
 from core.llm.failure_classification import is_context_length_overflow
 from core.llm.types import AgentLLMResponse, SchemaDescribedTool, ToolCall
-from core.llm_invoke_errors import remediate_missing_llm_credentials
 from core.tool.execution import (
     BeforeToolCallResult,
     ToolExecutionHooks,
@@ -1074,8 +1074,8 @@ def _run_action_turn(
 
         provider = resolve_provider_name(llm_client) if llm_client is not None else None
         display_text = (
-            remediate_missing_llm_credentials(
-                error_text, provider=provider or get_configured_llm_provider()
+            execute_cli_onboard_on_missing_key(
+                session, error_text, provider=provider or get_configured_llm_provider()
             )
             or error_text
         )

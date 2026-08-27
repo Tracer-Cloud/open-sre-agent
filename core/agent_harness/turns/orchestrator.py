@@ -47,6 +47,7 @@ from core.agent_harness.session.pending_offer import (
     first_pending_offer,
     is_pending_offer_confirmation,
 )
+from core.agent_harness.session.terminal_access import execute_cli_onboard_on_missing_key
 from core.agent_harness.session_goal.goal import (
     attach_session_goal_from_handoffs,
     session_goal_is_active,
@@ -90,7 +91,7 @@ from core.agent_harness.turns.turn_route import (
     routing_input_from_result,
 )
 from core.agent_harness.turns.turn_snapshot import TurnSnapshot
-from core.llm_invoke_errors import is_cli_timeout_error, remediate_missing_llm_credentials
+from core.llm_invoke_errors import is_cli_timeout_error
 from infrastructure.harness_providers import preferred_evidence_sources_for
 from infrastructure.observability.trace.spans import component_span, emit_route
 
@@ -172,8 +173,10 @@ def _stream_response(
         from config.config import get_configured_llm_provider
         from core.agent_harness.accounting.token_accounting import resolve_provider_name
 
-        remediation = remediate_missing_llm_credentials(
-            str(exc), provider=resolve_provider_name(client) or get_configured_llm_provider()
+        remediation = execute_cli_onboard_on_missing_key(
+            session,
+            str(exc),
+            provider=resolve_provider_name(client) or get_configured_llm_provider(),
         )
         output.render_error(remediation or f"assistant failed: {exc}")
         return None

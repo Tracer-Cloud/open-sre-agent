@@ -15,7 +15,6 @@ from typing import Final, Literal
 
 from rich.text import Text
 
-from config.llm_auth.auth_method import OAUTH_AUTH_METHOD, normalize_llm_auth_method
 from core.llm.providers.azure_openai import is_azure_openai_provider
 from infrastructure.terminal.theme import (
     BRAND,
@@ -107,24 +106,19 @@ def _credential_prompt_label(provider: ProviderOption) -> str:
 
 def _credential_line_for_saved_summary(
     provider: ProviderOption,
-    auth_method: str | None = None,
     *,
     credential_state: CredentialState = OK,
 ) -> str:
     """One-line credential description for the post-wizard saved summary.
 
     ``credential_state`` keeps this line honest: the summary must not print
-    "system keychain" right after the wizard warned that the credential was never
-    saved, or that it was saved without being verified.
+    the credentials file right after the wizard warned that the credential was
+    never saved, or that it was saved without being verified.
     """
-    if normalize_llm_auth_method(auth_method) == OAUTH_AUTH_METHOD:
-        if provider.value == "openai":
-            return "OpenAI OAuth tokens (Codex CLI)"
-        return f"{_provider_choice_label(provider)} OAuth session"
     if provider.credential_kind == WizardCredentialKind.HOST:
         # A ``host`` credential (e.g. the Ollama host URL) is written to the project
-        # ``.env`` by ``_persist_llm_credential``, never the keyring — the summary must
-        # name .env, not the system keychain, in both the verified and unverified cases.
+        # ``.env`` by ``_persist_llm_credential``, never the credentials file — the
+        # summary must name .env in both the verified and unverified cases.
         if credential_state == UNVERIFIED:
             return "project .env (unverified)"
         return "project .env"
@@ -134,8 +128,8 @@ def _credential_line_for_saved_summary(
         if credential_state == UNSAVED:
             return "not saved — re-enter next run"
         if credential_state == UNVERIFIED:
-            return "system keychain (unverified)"
-        return "system keychain"
+            return "local credentials file (~/.opensre/credentials.json, unverified)"
+        return "local credentials file (~/.opensre/credentials.json)"
     if provider.adapter_factory is None:
         return f"{provider.label} (CLI)"
     cli_adapter = provider.adapter_factory()
@@ -148,7 +142,7 @@ def _persist_llm_credential(provider: ProviderOption, value: str) -> bool:
     ``credential_kind == WizardCredentialKind.HOST`` values (e.g. the Ollama host URL) are plain
     runtime configuration, not secrets: the runtime resolves them from the
     environment only, never the keyring, so they belong in the project ``.env``.
-    Everything else keeps the keyring path.
+    Everything else is written to the credentials file and mirrored to ``.env``.
 
     Returns ``False`` on a failed write so ``_persist_llm_credential_with_recovery``
     can offer the shared recovery menu. A host ``.env`` write that raises ``OSError``
@@ -265,10 +259,9 @@ def _persist_llm_credential_with_recovery(
     host write returns ``True`` and never reaches this menu.
 
     ``session_env_sink`` records the ``continue_unsaved`` export ``{env_key: api_key}``
-    so ``run_wizard`` can re-apply it after ``sync_provider_env`` — which pops every
-    secret provider's api-key env — hands off to the in-process shell (#3591). This is
-    the single point where an unsaved secret is exported, so it is the only capture
-    site needed for all callers.
+    so ``run_wizard`` can re-apply it before the in-process shell handoff (#3591).
+    This is the single point where an unsaved secret is exported, so it is the
+    only capture site needed for all callers.
     """
     env_key = provider.api_key_env
     for _attempt in range(_LLM_CREDENTIAL_MAX_ATTEMPTS):
@@ -276,7 +269,7 @@ def _persist_llm_credential_with_recovery(
             return OK
         action = _recovery_action(
             prompt=f"{env_key} could not be saved. What next?",
-            retry_label="Retry saving to the system keychain",
+            retry_label="Retry saving to the local credentials file",
             retry_hint="Run the steps above first, then retry",
             escape=Choice(
                 value=CONTINUE_UNSAVED,
@@ -287,9 +280,9 @@ def _persist_llm_credential_with_recovery(
         if action == RETRY:
             continue
         if action == CONTINUE_UNSAVED:
-            # Process-local only. A secret must never reach .env: the keyring is the
-            # only place OpenSRE stores an API key. A ``host`` value is not a secret, but
-            # the same os.environ-only export is still correct for it.
+            # Process-local only. ``continue_unsaved`` must not write the secret to
+            # ``.env``. A ``host`` value is not a secret, but the same os.environ-only
+            # export is still correct for it.
             os.environ[env_key] = api_key
             if session_env_sink is not None:
                 session_env_sink[env_key] = api_key
@@ -332,7 +325,6 @@ def _prompt_validated_llm_credential(
     provider: ProviderOption,
     *,
     model: str,
-    model_provider: ProviderOption,
     session_env_sink: dict[str, str] | None = None,
 ) -> tuple[CredentialOutcome, str]:
     """Prompt for, validate against ``model``, and persist one LLM credential.
@@ -347,7 +339,8 @@ def _prompt_validated_llm_credential(
     ``repick`` = pick a different LLM provider (mirrors ``_run_cli_llm_onboarding``).
 
     ``session_env_sink`` is forwarded to ``_persist_llm_credential_with_recovery`` so a
-    ``continue_unsaved`` export survives the post-wizard ``sync_provider_env`` (#3591).
+    ``continue_unsaved`` export is still in ``os.environ`` for the in-process shell
+    handoff (#3591).
     """
     step(provider.credential_label.title())
     label = _credential_prompt_label(provider)
@@ -399,7 +392,6 @@ def _prompt_validated_llm_credential(
             try:
                 model = choose_provider_model(
                     provider,
-                    model_provider,
                     default=model,
                     back_on_cancel=True,
                 )

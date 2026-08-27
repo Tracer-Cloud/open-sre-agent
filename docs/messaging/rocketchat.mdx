@@ -40,7 +40,7 @@ opensre integrations setup rocketchat
 
 Interactive shell: `/onboard`. Choose **Rocket.Chat**, then pick **token**, **webhook**, or **both**. The wizard prompts for:
 
-- Token mode: **Server URL** (`ROCKETCHAT_SERVER_URL`), **personal access token** (OS keyring via `sync_env_secret`, not plain `.env`), **user ID** (`ROCKETCHAT_USER_ID`), and **default channel** (`ROCKETCHAT_DEFAULT_CHANNEL`)
+- Token mode: **Server URL** (`ROCKETCHAT_SERVER_URL`), **personal access token** (`ROCKETCHAT_AUTH_TOKEN` in `.env` and `~/.opensre/credentials.json`), **user ID** (`ROCKETCHAT_USER_ID`), and **default channel** (`ROCKETCHAT_DEFAULT_CHANNEL`)
 - Webhook mode: **webhook URL** — saved to the integration store (`~/.opensre/integrations.json`) and/or `ROCKETCHAT_WEBHOOK_URL` in `.env`; never written to the keyring (`*_URL` is non-keyring config). The URL often embeds a token — treat the whole URL like a password.
 
 Credentials are also saved via `upsert_integration("rocketchat", ...)`.

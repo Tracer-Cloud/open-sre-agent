@@ -172,6 +172,7 @@ from config.constants.llm import (
     AZURE_OPENAI_API_KEY_ENV,
     AZURE_OPENAI_API_VERSION_ENV,
     AZURE_OPENAI_BASE_URL_ENV,
+    LLM_AUTH_METHOD_ENV,
     LLM_PROVIDER_ENV,
     OPENSRE_LLM_NATIVE_STRUCTURED_OUTPUT_ENV,
 )
@@ -308,7 +309,6 @@ from config.constants.runtime_metadata import (
 from config.constants.scheduler import OPENSRE_GATEWAY_HOST_SCHEDULER_ENV
 from config.constants.secrets import (
     CREDENTIAL_FALLBACK_FILENAME,
-    KEYRING_SERVICE,
     OPENSRE_DISABLE_KEYRING_ENV,
 )
 from config.constants.sentry import (
@@ -552,11 +552,11 @@ __all__ = [
     "JENKINS_API_TOKEN_ENV",
     "JENKINS_BASE_URL_ENV",
     "JENKINS_USERNAME_ENV",
-    "KEYRING_SERVICE",
     "KUBECONFIG_CONTENT_ENV",
     "KUBECONFIG_CONTEXT_ENV",
     "KUBECONFIG_NAMESPACE_ENV",
     "KUBECONFIG_PATH_ENV",
+    "LLM_AUTH_METHOD_ENV",
     "LLM_PROVIDER_ENV",
     "MACHINE_SECRET_ENV",
     "MARIADB_DATABASE_ENV",

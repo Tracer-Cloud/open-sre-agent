@@ -131,7 +131,6 @@ def choose_azure_deployment(
 
 def choose_provider_model(
     provider: ProviderOption,
-    model_provider: ProviderOption,
     *,
     default: str | None,
     prompt_label: str | None = None,
@@ -141,11 +140,11 @@ def choose_provider_model(
     if is_azure_openai_provider(provider.value):
         return choose_azure_deployment(
             default=default,
-            model_env=model_provider.model_env,
+            model_env=provider.model_env,
             back_on_cancel=back_on_cancel,
         )
     return choose_model(
-        model_provider,
+        provider,
         default=default,
         prompt_label=prompt_label,
         back_on_cancel=back_on_cancel,

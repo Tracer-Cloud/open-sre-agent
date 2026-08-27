@@ -130,7 +130,7 @@ These commands delegate to the same Click CLI you would run outside the REPL.
 | Command | What it does |
 | --- | --- |
 | `/auth` | Log in to LLM providers, show provider auth status, or clear credentials |
-| `/login` | Shortcut for `/auth login` (`/login chatgpt`, `/login claude`, `/login deepseek`) |
+| `/login` | Shortcut for `/auth login` (`/login openai`, `/login anthropic`, `/login deepseek`) |
 | `/onboard` | Interactive onboarding wizard |
 | `/remote` | Connect to and operate remote deployed agents |
 | `/remote-sync` | Manage remote sync to your object store. Subcommands: `status`, `sync`, `setup`. See [Sync to your own object store](/configuration/remote-sync). |
@@ -1047,8 +1047,8 @@ Log in to LLM providers, show local auth status, or clear stored credentials. Sa
 
 ```text
 /login
-/login chatgpt
-/login claude
+/login openai
+/login anthropic
 /login deepseek
 ```
 

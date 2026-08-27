@@ -53,15 +53,9 @@ def resolve_configured_llm_identity() -> tuple[str, str]:
     """Best-effort ``(provider, model)`` from the configured LLM settings."""
     try:
         from config.config import resolve_llm_settings
-        from config.llm_auth.auth_method import (
-            effective_llm_provider,
-            get_configured_llm_auth_method,
-        )
 
         settings = resolve_llm_settings()
-        provider = effective_llm_provider(
-            settings.provider, get_configured_llm_auth_method(settings.provider)
-        )
+        provider = settings.provider
         # Settings attributes use the underscore form; the slug can be hyphenated.
         model = str(getattr(settings, f"{provider.replace('-', '_')}_reasoning_model", "") or "")
         return provider, model

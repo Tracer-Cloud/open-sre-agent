@@ -91,7 +91,7 @@ def render_saved_summary(
     saved_path: str,
     env_path: str,
     configured_integrations: list[str],
-    credential_line: str = "system keychain",
+    credential_line: str = "local credentials file (~/.opensre/credentials.json)",
 ) -> None:
     """Print the post-onboarding success screen.
 
@@ -105,7 +105,7 @@ def render_saved_summary(
         services    grafana · datadog            [SECONDARY key] [TEXT value]
         config      ~/.opensre/opensre.json      [SECONDARY key] [BRAND path]
         env         .env                         [SECONDARY key] [BRAND path]
-        credentials system keychain              [SECONDARY key] [TEXT value]
+        credentials ~/.opensre/credentials.json  [SECONDARY key] [TEXT value]
         store       ~/.opensre/store.json        [SECONDARY key] [BRAND path]
     """
     from integrations.store import STORE_PATH
