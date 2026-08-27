@@ -137,7 +137,7 @@ jobs:
     name: test (${{ matrix.shard }})
     strategy:
       fail-fast: false
-      max-parallel: 21
+      max-parallel: 23
       matrix:
         include:
           - os: ubuntu-latest
@@ -258,6 +258,7 @@ jobs:
             llm_provider: openai
             extra_pytest_args: >-
               --ignore=tests/core/agent/test_turn_scenarios.py
+              --ignore=tests/cli/test_smoke.py
             split_args: >-
               --ci-splits=6 --ci-group=1
               --ci-durations-path=.github/ci/pytest-file-durations.json
@@ -278,6 +279,7 @@ jobs:
             llm_provider: openai
             extra_pytest_args: >-
               --ignore=tests/core/agent/test_turn_scenarios.py
+              --ignore=tests/cli/test_smoke.py
             split_args: >-
               --ci-splits=6 --ci-group=2
               --ci-durations-path=.github/ci/pytest-file-durations.json
@@ -298,6 +300,7 @@ jobs:
             llm_provider: openai
             extra_pytest_args: >-
               --ignore=tests/core/agent/test_turn_scenarios.py
+              --ignore=tests/cli/test_smoke.py
             split_args: >-
               --ci-splits=6 --ci-group=3
               --ci-durations-path=.github/ci/pytest-file-durations.json
@@ -318,6 +321,7 @@ jobs:
             llm_provider: openai
             extra_pytest_args: >-
               --ignore=tests/core/agent/test_turn_scenarios.py
+              --ignore=tests/cli/test_smoke.py
             split_args: >-
               --ci-splits=6 --ci-group=4
               --ci-durations-path=.github/ci/pytest-file-durations.json
@@ -338,6 +342,7 @@ jobs:
             llm_provider: openai
             extra_pytest_args: >-
               --ignore=tests/core/agent/test_turn_scenarios.py
+              --ignore=tests/cli/test_smoke.py
             split_args: >-
               --ci-splits=6 --ci-group=5
               --ci-durations-path=.github/ci/pytest-file-durations.json
@@ -358,6 +363,7 @@ jobs:
             llm_provider: openai
             extra_pytest_args: >-
               --ignore=tests/core/agent/test_turn_scenarios.py
+              --ignore=tests/cli/test_smoke.py
             split_args: >-
               --ci-splits=6 --ci-group=6
               --ci-durations-path=.github/ci/pytest-file-durations.json
@@ -377,6 +383,33 @@ jobs:
             shard: cli-live-agent
             llm_provider: openai
             pytest_paths: tests/core/agent/test_turn_scenarios.py
+          # This subprocess-heavy file dominated a whole duration-balanced
+          # shard. Run complementary selections independently so its tests can
+          # use four runner cores without changing or dropping coverage.
+          - os: ubuntu-latest
+            shard: cli-smoke-1
+            llm_provider: openai
+            pytest_paths: tests/cli/test_smoke.py
+            extra_pytest_args: >-
+              -k 'test_opensre_landing_page_smoke or
+              test_opensre_help_smoke or
+              test_investigate_print_template_new_relic_smoke or
+              test_integrations_list_and_show_smoke or
+              test_tests_inventory_commands_smoke or
+              (test_onboard_interactive_smoke and not
+              test_onboard_interactive_smoke_cli_provider)'
+          - os: ubuntu-latest
+            shard: cli-smoke-2
+            llm_provider: openai
+            pytest_paths: tests/cli/test_smoke.py
+            extra_pytest_args: >-
+              -k 'not (test_opensre_landing_page_smoke or
+              test_opensre_help_smoke or
+              test_investigate_print_template_new_relic_smoke or
+              test_integrations_list_and_show_smoke or
+              test_tests_inventory_commands_smoke or
+              (test_onboard_interactive_smoke and not
+              test_onboard_interactive_smoke_cli_provider))'
           - os: ubuntu-latest
             shard: integrations-and-misc-1
             split_args: >-

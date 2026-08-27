@@ -48,7 +48,7 @@ def test_heavy_test_suites_are_duration_balanced_with_measured_headroom() -> Non
     test_job = _workflow("ci.yml")["jobs"]["test"]
     entries = test_job["strategy"]["matrix"]["include"]
 
-    assert test_job["strategy"]["max-parallel"] == 21
+    assert test_job["strategy"]["max-parallel"] == 23
     expected_splits = {
         "tools-runtime": 6,
         "cli-runtime": 6,
@@ -68,6 +68,21 @@ def test_heavy_test_suites_are_duration_balanced_with_measured_headroom() -> Non
         "--ignore=tests/core/agent/test_turn_scenarios.py" in entry["extra_pytest_args"]
         for entry in cli_groups
     )
+    assert all(
+        "--ignore=tests/cli/test_smoke.py" in entry["extra_pytest_args"] for entry in cli_groups
+    )
+
+    smoke_groups = {
+        entry["shard"]: entry for entry in entries if entry["shard"].startswith("cli-smoke-")
+    }
+    assert set(smoke_groups) == {"cli-smoke-1", "cli-smoke-2"}
+    assert all(
+        entry["pytest_paths"] == "tests/cli/test_smoke.py" for entry in smoke_groups.values()
+    )
+    first_selector = smoke_groups["cli-smoke-1"]["extra_pytest_args"].removeprefix("-k ")
+    second_selector = smoke_groups["cli-smoke-2"]["extra_pytest_args"].removeprefix("-k ")
+    first_expression = first_selector.removeprefix("'").removesuffix("'")
+    assert second_selector == "'not (" + first_expression + ")'"
 
     run_step = next(step for step in test_job["steps"] if step.get("name") == "Run tests")
     assert "-p tests.ci_sharding" in run_step["run"]
