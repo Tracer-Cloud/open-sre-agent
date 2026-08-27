@@ -48,10 +48,10 @@ def test_heavy_test_suites_are_duration_balanced_with_measured_headroom() -> Non
     test_job = _workflow("ci.yml")["jobs"]["test"]
     entries = test_job["strategy"]["matrix"]["include"]
 
-    assert test_job["strategy"]["max-parallel"] == 20
+    assert test_job["strategy"]["max-parallel"] == 21
     expected_splits = {
         "tools-runtime": 6,
-        "cli-runtime": 5,
+        "cli-runtime": 6,
         "integrations-and-misc": 6,
     }
     for base, splits in expected_splits.items():

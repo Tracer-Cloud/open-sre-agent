@@ -137,7 +137,7 @@ jobs:
     name: test (${{ matrix.shard }})
     strategy:
       fail-fast: false
-      max-parallel: 20
+      max-parallel: 21
       matrix:
         include:
           - os: ubuntu-latest
@@ -259,7 +259,7 @@ jobs:
             extra_pytest_args: >-
               --ignore=tests/core/agent/test_turn_scenarios.py
             split_args: >-
-              --ci-splits=5 --ci-group=1
+              --ci-splits=6 --ci-group=1
               --ci-durations-path=.github/ci/pytest-file-durations.json
             pytest_paths: >-
               tests/cli
@@ -279,7 +279,7 @@ jobs:
             extra_pytest_args: >-
               --ignore=tests/core/agent/test_turn_scenarios.py
             split_args: >-
-              --ci-splits=5 --ci-group=2
+              --ci-splits=6 --ci-group=2
               --ci-durations-path=.github/ci/pytest-file-durations.json
             pytest_paths: >-
               tests/cli
@@ -299,7 +299,7 @@ jobs:
             extra_pytest_args: >-
               --ignore=tests/core/agent/test_turn_scenarios.py
             split_args: >-
-              --ci-splits=5 --ci-group=3
+              --ci-splits=6 --ci-group=3
               --ci-durations-path=.github/ci/pytest-file-durations.json
             pytest_paths: >-
               tests/cli
@@ -319,7 +319,7 @@ jobs:
             extra_pytest_args: >-
               --ignore=tests/core/agent/test_turn_scenarios.py
             split_args: >-
-              --ci-splits=5 --ci-group=4
+              --ci-splits=6 --ci-group=4
               --ci-durations-path=.github/ci/pytest-file-durations.json
             pytest_paths: >-
               tests/cli
@@ -339,7 +339,27 @@ jobs:
             extra_pytest_args: >-
               --ignore=tests/core/agent/test_turn_scenarios.py
             split_args: >-
-              --ci-splits=5 --ci-group=5
+              --ci-splits=6 --ci-group=5
+              --ci-durations-path=.github/ci/pytest-file-durations.json
+            pytest_paths: >-
+              tests/cli
+              tests/interactive_shell
+              tests/surfaces
+              tests/agent
+              tests/core/agent
+              tests/fleet_monitoring
+              tests/analytics
+              tests/tools/investigation
+              tests/delivery
+              tests/sandbox
+              tests/hermes
+          - os: ubuntu-latest
+            shard: cli-runtime-6
+            llm_provider: openai
+            extra_pytest_args: >-
+              --ignore=tests/core/agent/test_turn_scenarios.py
+            split_args: >-
+              --ci-splits=6 --ci-group=6
               --ci-durations-path=.github/ci/pytest-file-durations.json
             pytest_paths: >-
               tests/cli
