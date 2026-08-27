@@ -1,0 +1,115 @@
+---
+title: "AWS EKS"
+description: "Investigate Amazon EKS cluster, node, and workload health during incidents"
+---
+
+## Overview
+
+OpenSRE uses AWS EKS to investigate Kubernetes cluster health and surface recent operational events — cluster status, add-ons, nodes, node groups, deployments, and pod logs — when an alert fires against a managed EKS cluster.
+
+All EKS API calls are read-only and routed through the shared `aws_sdk_client` allowlist, so the integration cannot mutate your cluster or workloads.
+
+## Prerequisites
+
+- AWS credentials configured per the [AWS integration](/aws) (role ARN recommended)
+- An EKS cluster you want OpenSRE to investigate
+- IAM permissions for the EKS describe/list actions listed below
+- (optional) `kubectl`-free access — the integration talks to the EKS API and Kubernetes API directly via the AWS SDK
+
+## Setup
+
+### Option 1: Interactive CLI
+
+```bash
+opensre integrations setup eks
+```
+
+### Option 2: Environment variables
+
+```bash
+EKS_CLUSTER_NAME=prod-cluster
+AWS_REGION=us-east-1
+```
+
+| Variable | Default | Description |
+| --- | --- | --- |
+| `EKS_CLUSTER_NAME` | — | **Required.** The EKS cluster name OpenSRE should investigate |
+| `AWS_REGION` | `us-east-1` | AWS region the cluster lives in |
+| `EKS_REGION` | `us-east-1` | Fallback used only when `AWS_REGION` is not set |
+
+Region resolution order (highest priority first):
+
+1. `region` field on the source dict (when configured via the integrations store)
+2. `AWS_REGION` environment variable
+3. `EKS_REGION` environment variable
+4. `us-east-1` (default)
+
+## Credentials
+
+The integration only needs read-only EKS actions on the same IAM role or user used for the [AWS integration](/aws):
+
+```json
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Effect": "Allow",
+      "Action": [
+        "eks:DescribeCluster",
+        "eks:ListClusters",
+        "eks:DescribeAddon",
+        "eks:DescribeNodegroup",
+        "eks:ListNodegroups",
+        "eks:ListUpdates"
+      ],
+      "Resource": "*"
+    }
+  ]
+}
+```
+
+If you already use the AWS managed `ReadOnlyAccess` policy, these actions are covered.
+
+## Investigation tools
+
+| Tool | What it returns |
+| --- | --- |
+| `eks_list_clusters` | Cluster names in the region |
+| `eks_describe_cluster` | Cluster status, endpoint, Kubernetes version, platform version, VPC/subnet/security-group config |
+| `eks_describe_addon` | Add-on name, version, status, and health |
+| `eks_events` | Recent cluster events (node registration, pod scheduling failures, etc.) |
+| `eks_node_health` | Node status, conditions, and resource pressure |
+| `eks_nodegroup_health` | Node group status and health issues |
+| `eks_list_pods` | Pods in the cluster with status and node placement |
+| `eks_pod_logs` | Logs for a specific pod/container |
+| `eks_list_deployments` | Deployments with replica status |
+| `eks_deployment_status` | Deployment rollout status and conditions |
+| `eks_list_namespaces` | Namespace names |
+
+These tools become available whenever `eks.cluster_name` is present in the resolved sources.
+
+### Use cases
+
+- Checking cluster status (`ACTIVE`, `CREATING`, `DEGRADED`, `FAILED`) when an alert fires
+- Correlating node group health issues with pod scheduling failures
+- Inspecting a crash-looping deployment's rollout status and pod logs
+- Verifying add-on health after an upgrade or maintenance window
+
+## Verify
+
+There is no dedicated `opensre integrations verify eks` target today. Confirm AWS credentials work (see [AWS](/aws)) and that tools can describe your cluster during an investigation.
+
+## Troubleshooting
+
+| Symptom | Fix |
+| --- | --- |
+| **AccessDenied on `eks:DescribeCluster`** | Add the IAM policy above to the role or user used by the AWS integration |
+| **ResourceNotFoundException** | Confirm `EKS_CLUSTER_NAME` matches a cluster in `AWS_REGION` |
+| **Tool reports the wrong region** | Check the region resolution order above for a stale store `region` or wrong `AWS_REGION` |
+| **Pod logs empty** | Confirm the pod name/namespace are correct and the container has produced output |
+
+## Security
+
+- Use read-only IAM (`Describe*` / `List*` only).
+- Prefer role ARN / least privilege over long-lived keys.
+- Store cluster name and credentials out of source control.
