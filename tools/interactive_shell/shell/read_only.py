@@ -442,7 +442,12 @@ def _executable_is_read_only(exe: str, rest: list[str]) -> bool:
     if name in ("yq", "sed", "perl", "awk"):
         # These can edit files in place / run programs; only ever gate them.
         return False
-    return name in _READ_ONLY_COMMANDS
+    if name not in _READ_ONLY_COMMANDS:
+        return False
+    # Membership is not enough: unknown helper-exec flags on an allowlisted
+    # name (``--pre``, ``--hostname-bin``, ``--compress-program``) still run
+    # a program. Fail closed the same way ``rg`` / ``sort`` already do.
+    return not any(_token_is_write_flag(tok, _RG_HELPER_FLAGS | _SORT_HELPER_FLAGS) for tok in rest)
 
 
 def _segment_is_read_only(segment: str) -> bool:

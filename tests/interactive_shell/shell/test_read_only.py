@@ -104,6 +104,7 @@ _MUTATING = [
     "rg --pre=/tmp/evil.sh pattern",
     "rg --hostname-bin=/tmp/evil pattern",
     "sort --compress-program=/tmp/evil file",
+    "ls --pre=/tmp/evil",  # allowlisted names still fail closed on helper-exec flags
     "./ls",  # path-qualified executable is not the allowlisted command
     "/tmp/git status",  # attacker-controlled path
     "diff <(rm /tmp/x) file",  # process substitution runs a nested command
@@ -192,6 +193,7 @@ def test_mutation_and_helper_forms_bypass_neither_auto_nor_plan_only_gates(
         "rg --pre=/tmp/evil.sh pattern",
         "rg --hostname-bin=/tmp/evil pattern",
         "sort --compress-program=/tmp/evil file",
+        "ls --pre=/tmp/evil",
     ],
 )
 def test_rg_helper_forms_bypass_neither_auto_nor_plan_only_gates(command: str) -> None:
