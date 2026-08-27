@@ -121,6 +121,7 @@ def test_bounded_limit_enforces_minimum_of_one() -> None:
             "AppTraces | order by TimeGenerated desc | take 5",
         ),
         ("AppTraces | take 100", 5, "AppTraces | take 100"),
+        ("AppTraces | limit 100", 5, "AppTraces | limit 100"),
     ],
 )
 def test_ensure_take_clause_branches(query: str, limit: int, expected: str) -> None:
@@ -255,6 +256,25 @@ class TestMapQueryAzureMonitorLogs:
                 "total_returned": 5,
                 "effective_limit": 50,
                 "query": "AppTraces | where Level == 'Error' | take 5",
+            },
+            {},
+        )
+
+        assert evidence["catalog_entries"][0]["summary"].startswith("5+ row(s)")
+
+    def test_qualifies_count_when_caller_query_has_a_smaller_limit_clause(self) -> None:
+        """Regression: KQL defines `limit` as a synonym for `take`, so a
+        caller-supplied `| limit N` clause is just as real a ceiling as
+        `| take N` and must be detected the same way."""
+        evidence: dict[str, Any] = {}
+
+        _map_query_azure_monitor_logs(
+            evidence,
+            {
+                "available": True,
+                "total_returned": 5,
+                "effective_limit": 50,
+                "query": "AppTraces | where Level == 'Error' | limit 5",
             },
             {},
         )

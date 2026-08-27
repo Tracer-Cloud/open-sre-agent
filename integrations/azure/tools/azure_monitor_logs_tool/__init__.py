@@ -53,7 +53,11 @@ def _ensure_take_clause(query: str, limit: int) -> str:
     if not normalized:
         return f"AppTraces | order by TimeGenerated desc | take {limit}"
     lowered = normalized.lower()
-    if " take " in f" {lowered} ":
+    padded = f" {lowered} "
+    # KQL defines `limit` as a synonym for `take` -- a caller who already
+    # bounded rows with either must not get a second, conflicting stage
+    # appended.
+    if " take " in padded or " limit " in padded:
         return normalized
     return f"{normalized} | take {limit}"
 
