@@ -188,7 +188,7 @@ _GIT_CONFIG_WRITE_FLAGS: frozenset[str] = frozenset(
 _GIT_OUTPUT_WRITE_FLAGS: frozenset[str] = frozenset({"--output", "-o"})
 
 
-def _git_token_is_write_flag(token: str, write_flags: frozenset[str]) -> bool:
+def _token_is_write_flag(token: str, write_flags: frozenset[str]) -> bool:
     """True when ``token`` is a write flag, including ``--flag=value`` / ``-uupstream``."""
     if token in write_flags:
         return True
@@ -215,9 +215,7 @@ def _git_is_read_only(rest: list[str]) -> bool:
     if subcommand in _GIT_READ_ONLY_SUBCOMMANDS:
         # ``git {diff,log,show,…} --output=<file>`` overwrites a file — never
         # treat as read-only (fail closed for any allowlisted subcommand).
-        return not any(
-            _git_token_is_write_flag(flag, _GIT_OUTPUT_WRITE_FLAGS) for flag in flags_after
-        )
+        return not any(_token_is_write_flag(flag, _GIT_OUTPUT_WRITE_FLAGS) for flag in flags_after)
     positional_after = [tok for tok in after if not tok.startswith("-")]
     if subcommand == "remote":
         return not any(tok in _GIT_REMOTE_WRITE_VERBS for tok in positional_after)
@@ -226,10 +224,10 @@ def _git_is_read_only(rest: list[str]) -> bool:
         # List forms carry only read flags and no positional (create/delete) name.
         # ``--set-upstream-to=<upstream>`` must match even with ``=value`` attached.
         return not positional_after and not any(
-            _git_token_is_write_flag(flag, write_flags) for flag in flags_after
+            _token_is_write_flag(flag, write_flags) for flag in flags_after
         )
     if subcommand == "config":
-        if any(_git_token_is_write_flag(flag, _GIT_CONFIG_WRITE_FLAGS) for flag in flags_after):
+        if any(_token_is_write_flag(flag, _GIT_CONFIG_WRITE_FLAGS) for flag in flags_after):
             return False
         return len(positional_after) <= 1  # `--get key` reads; `key value` writes
     return False
@@ -316,6 +314,8 @@ def _is_redirect_token(token: str) -> bool:
 # git transports that run a helper program (``git ls-remote ext::<cmd>``); these
 # execute code regardless of the read-only subcommand, so always gate them.
 _DANGEROUS_TRANSPORTS = ("ext::", "fd::")
+# ``date -s`` / ``date --set=`` set the system clock.
+_DATE_WRITE_FLAGS: frozenset[str] = frozenset({"-s", "--set"})
 
 
 def _executable_is_read_only(exe: str, rest: list[str]) -> bool:
@@ -329,8 +329,8 @@ def _executable_is_read_only(exe: str, rest: list[str]) -> bool:
     if name == "sort":
         return not any(tok.startswith("-o") or tok.startswith("--output") for tok in rest)
     if name == "date":
-        # ``date -s`` / ``date --set=`` changes the system clock.
-        return not any(tok in ("-s", "--set") or tok.startswith("--set=") for tok in rest)
+        # ``date -s`` / ``date -s<value>`` / ``date --set=`` changes the clock.
+        return not any(_token_is_write_flag(tok, _DATE_WRITE_FLAGS) for tok in rest)
     if name == "hostname":
         # A positional argument sets the hostname; only flags read.
         return not any(not tok.startswith("-") for tok in rest)

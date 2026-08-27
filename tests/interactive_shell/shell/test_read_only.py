@@ -50,6 +50,7 @@ _MUTATING = [
     "git config user.name Bob",
     "ls -la\nrm -rf /tmp/x",  # newline separates a mutation — must gate
     'date -s "2020-01-01"',  # sets system clock
+    "date -s2026-08-27",  # attached short-option value also sets the clock
     "hostname newname",  # sets kernel hostname
     "LD_PRELOAD=/evil.so ls",  # env prefix can inject code
     "git ls-remote ext::evil",  # ext:: transport runs a helper
