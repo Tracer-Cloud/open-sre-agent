@@ -7,8 +7,9 @@ from pathlib import Path
 import pytest
 
 from config.constants.hermes import HERMES_LOG_PATH_ENV
+from core.llm.types import ToolCall
 from core.tool.contracts import REGISTERED_TOOL_ATTR, RegisteredTool
-from core.tool.execution import availability_view
+from core.tool.execution import availability_view, execute_tool_calls
 from integrations._catalog_impl import classify_integrations, load_env_integrations
 from integrations.catalog import resolve_effective_integrations
 from integrations.hermes.setup import HERMES_SETUP
@@ -75,3 +76,42 @@ def test_environment_directory_does_not_expose_the_log_tool(
 
     assert isinstance(registered, RegisteredTool)
     assert registered.is_available(availability_view(runtime_sources)) is False
+
+
+def test_runtime_uses_the_catalog_path_when_the_environment_differs(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    configured_path = tmp_path / "stored" / "errors.log"
+    configured_path.parent.mkdir()
+    configured_path.write_text(
+        "2026-08-27 00:00:00,000 ERROR hermes: configured path\n",
+        encoding="utf-8",
+    )
+    monkeypatch.setenv(HERMES_LOG_PATH_ENV, str(tmp_path / "env" / "errors.log"))
+    runtime_sources = classify_integrations(
+        [
+            {
+                "id": "stored-hermes",
+                "service": "hermes",
+                "status": "active",
+                "credentials": {"log_path": str(configured_path)},
+            }
+        ]
+    )
+    registered = getattr(get_hermes_logs, REGISTERED_TOOL_ATTR)
+    assert isinstance(registered, RegisteredTool)
+
+    execution = execute_tool_calls(
+        [
+            ToolCall(
+                id="hermes-scan",
+                name="get_hermes_logs",
+                input={"op": "scan", "tail_lines": 10},
+            )
+        ],
+        [registered],
+        runtime_sources,
+    )[0]
+
+    assert execution.is_error is False
+    assert execution.details["records"][0]["message"] == "configured path"
