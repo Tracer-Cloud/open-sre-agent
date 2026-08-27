@@ -60,6 +60,8 @@ def test_heavy_test_suites_have_three_duration_balanced_groups() -> None:
 
     run_step = next(step for step in test_job["steps"] if step.get("name") == "Run tests")
     assert "-p tests.ci_sharding" in run_step["run"]
+    assert "--cov=config" not in run_step["run"]
+    assert "github.event_name == 'push'" in run_step["env"]["PYTEST_COVERAGE_ARGS"]
 
 
 def test_quality_jobs_start_in_parallel_and_gate_aggregates_them() -> None:

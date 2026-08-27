@@ -113,6 +113,9 @@ synthetic tests, and interactive-shell checks run concurrently. Automated and
 human review completion, including Greptile, remains a separate merge
 requirement and is not part of that execution-time SLO.
 
+Pull requests run the complete test selection without coverage instrumentation;
+the same matrix produces and combines the full coverage report on `main`.
+
 Full CodeQL `security-and-quality` analysis runs after every merge to `main` and
 on the weekly schedule, not on ordinary pull requests. A production-only,
 default-query profile is available through the CodeQL workflow's manual

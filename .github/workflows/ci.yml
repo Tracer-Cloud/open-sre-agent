@@ -384,6 +384,13 @@ jobs:
         if: steps.changes.outputs.source == 'true' || github.event_name == 'push'
         env:
           COVERAGE_FILE: .coverage.${{ matrix.shard }}
+          # PRs do not consume coverage artifacts. Avoid instrumenting every
+          # test there; pushes to main retain the complete combined report.
+          PYTEST_COVERAGE_ARGS: >-
+            ${{ github.event_name == 'push' &&
+            '--cov=config --cov=core --cov=infrastructure.deployment.ec2
+            --cov=integrations --cov=infrastructure --cov=surfaces --cov=tools
+            --cov=gateway --cov-report=' || '' }}
           PYTEST_MARKER_EXPR: ${{ fromJSON('["not synthetic", "not (synthetic or live_llm)"]')[github.event_name == 'pull_request' && github.event.pull_request.head.repo.fork == true] }}
         # Keep ``run: >`` (folded) so ``matrix.pytest_paths`` stays one argv list.
         # A ``run: |`` + ``\`` rewrite can drop/split those paths and yield
@@ -391,15 +398,7 @@ jobs:
         run: >
           uv run python -m pytest -p tests.ci_sharding -n auto -v
           ${{ matrix.pytest_paths }}
-          --cov=config
-          --cov=core
-          --cov=infrastructure.deployment.ec2
-          --cov=integrations
-          --cov=infrastructure
-          --cov=surfaces
-          --cov=tools
-          --cov=gateway
-          --cov-report=
+          ${PYTEST_COVERAGE_ARGS}
           --ignore=tests/e2e/kubernetes_local_alert_simulation
           --ignore=tests/synthetic
           ${{ matrix.extra_pytest_args }}
