@@ -33,6 +33,10 @@ from integrations.posthog_mcp import (
     posthog_mcp_config_from_env,
     posthog_mcp_runtime_unavailable_reason,
 )
+from integrations.posthog_mcp.tools.posthog_mcp_tool._evidence import (
+    map_call_posthog_tool,
+    map_list_posthog_tools,
+)
 
 PostHogMCPParams = dict[str, object]
 PostHogMCPResponse = dict[str, object]
@@ -350,6 +354,7 @@ def _normalize_tool_result(result: PostHogMCPToolCallResult) -> PostHogMCPRespon
     ),
     is_available=_posthog_mcp_available,
     extract_params=_posthog_mcp_extract_params,
+    evidence_mapper=map_list_posthog_tools,
 )
 def list_posthog_tools(
     name_filter: str | None = None,
@@ -466,6 +471,7 @@ def list_posthog_tools(
     ),
     is_available=_posthog_mcp_available,
     extract_params=_posthog_mcp_extract_params,
+    evidence_mapper=map_call_posthog_tool,
 )
 def call_posthog_tool(
     tool_name: str | None = None,

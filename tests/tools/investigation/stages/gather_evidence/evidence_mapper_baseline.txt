@@ -17,7 +17,6 @@ argocd_application_diff
 argocd_application_status
 buzz_send_message
 call_openclaw_tool
-call_posthog_tool
 call_sentry_tool
 call_x_tool
 check_s3_marker
@@ -139,7 +138,6 @@ list_jenkins_builds
 list_jenkins_jobs
 list_jenkins_running_builds
 list_openclaw_tools
-list_posthog_tools
 list_s3_objects
 list_sentry_tools
 list_x_tools

@@ -12,6 +12,10 @@ from integrations.posthog_mcp.tools.posthog_mcp_tool import (
     call_posthog_tool,
     list_posthog_tools,
 )
+from integrations.posthog_mcp.tools.posthog_mcp_tool._evidence import (
+    map_call_posthog_tool,
+    map_list_posthog_tools,
+)
 from tests.tools.conftest import BaseToolContract, mock_agent_state
 
 
@@ -505,3 +509,87 @@ def test_query_values_are_first_in_normalized_result() -> None:
     assert normalized["results"] == [[4271, 3900]]
     assert "arguments" not in normalized
     assert "content" not in normalized
+
+
+# ---------------------------------------------------------------------------
+# Evidence mappers
+# ---------------------------------------------------------------------------
+
+
+def test_map_list_posthog_tools_records_entry() -> None:
+    evidence: dict[str, object] = {}
+    map_list_posthog_tools(
+        evidence,
+        {"available": True, "returned_tools": 2, "matched_tools": 2, "total_tools": 244},
+        {},
+    )
+    entries = evidence["catalog_entries"]
+    assert len(entries) == 1
+    assert entries[0]["source"] == "list_posthog_tools"
+    assert entries[0]["summary"] == "2 tool(s) listed"
+
+
+def test_map_list_posthog_tools_qualifies_when_listing_is_capped() -> None:
+    evidence: dict[str, object] = {}
+    map_list_posthog_tools(
+        evidence,
+        {"available": True, "returned_tools": 80, "matched_tools": 244, "total_tools": 244},
+        {},
+    )
+    assert evidence["catalog_entries"][0]["summary"].startswith("244+ tool(s)")
+
+
+def test_map_list_posthog_tools_skips_empty_listing() -> None:
+    evidence: dict[str, object] = {}
+    map_list_posthog_tools(evidence, {"available": True, "returned_tools": 0}, {})
+    assert "catalog_entries" not in evidence
+
+
+def test_map_call_posthog_tool_records_row_count() -> None:
+    evidence: dict[str, object] = {}
+    map_call_posthog_tool(
+        evidence,
+        {"available": True, "tool": "execute-sql", "results": [[1], [2], [3]]},
+        {"tool_name": "execute-sql"},
+    )
+    entries = evidence["catalog_entries"]
+    assert len(entries) == 1
+    assert entries[0]["source"] == "call_posthog_tool:execute-sql"
+    assert "3 row(s)" in entries[0]["summary"]
+
+
+def test_map_call_posthog_tool_records_text_when_no_rows() -> None:
+    evidence: dict[str, object] = {}
+    map_call_posthog_tool(
+        evidence,
+        {"available": True, "tool": "feature-flag-get-all", "text": "flag-a, flag-b"},
+        {"tool_name": "feature-flag-get-all"},
+    )
+    assert "flag-a, flag-b" in evidence["catalog_entries"][0]["summary"]
+
+
+def test_map_call_posthog_tool_disambiguates_repeat_calls() -> None:
+    """Regression: call_posthog_tool is a generic dispatcher invoked many times
+    per investigation with different arguments -- record_evidence_entry lets
+    the first entry for a source win, so reusing one source key would
+    silently drop every call after the first."""
+    evidence: dict[str, object] = {}
+    output = {"available": True, "tool": "execute-sql", "results": [[1]]}
+    map_call_posthog_tool(evidence, output, {"tool_name": "execute-sql"})
+    map_call_posthog_tool(evidence, output, {"tool_name": "execute-sql"})
+    sources = [e["source"] for e in evidence["catalog_entries"]]
+    assert sources == ["call_posthog_tool:execute-sql", "call_posthog_tool:execute-sql#2"]
+
+
+def test_map_call_posthog_tool_skips_when_no_result_content() -> None:
+    evidence: dict[str, object] = {}
+    map_call_posthog_tool(
+        evidence, {"available": True, "tool": "feature-flag-create"}, {"tool_name": "x"}
+    )
+    assert "catalog_entries" not in evidence
+
+
+def test_map_call_posthog_tool_skips_unavailable() -> None:
+    evidence: dict[str, object] = {}
+    map_call_posthog_tool(evidence, {"available": False, "error": "denied"}, {})
+    assert "catalog_entries" not in evidence
