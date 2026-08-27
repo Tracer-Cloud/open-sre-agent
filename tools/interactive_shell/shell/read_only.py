@@ -106,8 +106,8 @@ _READ_ONLY_COMMANDS: frozenset[str] = frozenset(
         "false",
     }
 )
-# git subcommands that are read-only in their common forms. branch/tag/config are
-# excluded because they can also mutate (delete, set).
+# git subcommands that only read. Mutation-capable ones (remote/branch/tag/config)
+# are handled separately: read-only only without a write verb or flag.
 _GIT_READ_ONLY_SUBCOMMANDS: frozenset[str] = frozenset(
     {
         "status",
@@ -117,14 +117,94 @@ _GIT_READ_ONLY_SUBCOMMANDS: frozenset[str] = frozenset(
         "blame",
         "ls-files",
         "rev-parse",
+        "rev-list",
         "describe",
         "shortlog",
         "ls-tree",
+        "ls-remote",
         "cat-file",
         "for-each-ref",
         "reflog",
+        "show-ref",
+        "symbolic-ref",
+        "name-rev",
+        "merge-base",
+        "count-objects",
+        "whatchanged",
+        "verify-commit",
+        "verify-tag",
+        "grep",
+        "version",
+        "help",
     }
 )
+# `git remote <verb>` verbs that change remotes; bare/list/-v/show/get-url read.
+_GIT_REMOTE_WRITE_VERBS: frozenset[str] = frozenset(
+    {"add", "remove", "rm", "rename", "set-url", "set-head", "set-branches", "prune", "update"}
+)
+# Write flags per subcommand. `-a` reads for branch (all) but writes for tag
+# (annotate), so the two sets are kept separate.
+_GIT_BRANCH_WRITE_FLAGS: frozenset[str] = frozenset(
+    {
+        "-d",
+        "-D",
+        "-m",
+        "-M",
+        "-c",
+        "-C",
+        "-u",
+        "-f",
+        "--delete",
+        "--move",
+        "--copy",
+        "--force",
+        "--edit-description",
+        "--set-upstream-to",
+        "--unset-upstream",
+        "--create-reflog",
+    }
+)
+_GIT_TAG_WRITE_FLAGS: frozenset[str] = frozenset(
+    {"-a", "-s", "-d", "-f", "-m", "--delete", "--force", "--annotate", "--sign"}
+)
+# Write flags for `git config`; a bare `key value` pair also writes.
+_GIT_CONFIG_WRITE_FLAGS: frozenset[str] = frozenset(
+    {
+        "--unset",
+        "--unset-all",
+        "--replace-all",
+        "--add",
+        "--edit",
+        "-e",
+        "--rename-section",
+        "--remove-section",
+    }
+)
+
+
+def _git_is_read_only(rest: list[str]) -> bool:
+    positional = [tok for tok in rest if not tok.startswith("-")]
+    subcommand = positional[0] if positional else None
+    if subcommand is None:
+        return True  # bare `git`, `git --version`, `git -h`
+    if subcommand in _GIT_READ_ONLY_SUBCOMMANDS:
+        return True
+    after = rest[rest.index(subcommand) + 1 :]
+    positional_after = [tok for tok in after if not tok.startswith("-")]
+    flags_after = [tok for tok in after if tok.startswith("-")]
+    if subcommand == "remote":
+        return not any(tok in _GIT_REMOTE_WRITE_VERBS for tok in positional_after)
+    if subcommand in ("branch", "tag"):
+        write_flags = _GIT_BRANCH_WRITE_FLAGS if subcommand == "branch" else _GIT_TAG_WRITE_FLAGS
+        # List forms carry only read flags and no positional (create/delete) name.
+        return not positional_after and not any(flag in write_flags for flag in flags_after)
+    if subcommand == "config":
+        if any(flag in _GIT_CONFIG_WRITE_FLAGS for flag in flags_after):
+            return False
+        return len(positional_after) <= 1  # `--get key` reads; `key value` writes
+    return False
+
+
 # find primaries that delete, run, or write instead of only listing.
 _FIND_MUTATING_PRIMARIES: frozenset[str] = frozenset(
     {"-delete", "-exec", "-execdir", "-ok", "-okdir", "-fprint", "-fprint0", "-fprintf", "-fls"}
@@ -203,8 +283,7 @@ def _is_redirect_token(token: str) -> bool:
 def _executable_is_read_only(exe: str, rest: list[str]) -> bool:
     name = exe.rsplit("/", 1)[-1]
     if name == "git":
-        subcommand = next((tok for tok in rest if not tok.startswith("-")), None)
-        return subcommand in _GIT_READ_ONLY_SUBCOMMANDS
+        return _git_is_read_only(rest)
     if name == "find":
         return not any(tok in _FIND_MUTATING_PRIMARIES for tok in rest)
     if name == "sort":

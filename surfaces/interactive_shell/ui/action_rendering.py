@@ -19,18 +19,24 @@ import shlex
 from typing import Any
 
 from rich.console import Console
+from rich.padding import Padding
+from rich.syntax import Syntax
 from rich.text import Text
 
 from core.agent_harness.spi.accounting import SELF_RECORDING_ACTION_TOOL_NAMES
 from core.agent_harness.spi.task_plan import is_plan_diagnosis_prose
 from infrastructure.observability.trace.redaction import redact_sensitive
 from infrastructure.safety.terminal_output import strip_terminal_controls
-from infrastructure.terminal.theme import BOLD_SKILL, BRAND, DIM, HIGHLIGHT
+from infrastructure.terminal.theme import BOLD_SKILL, BRAND, DIM, HIGHLIGHT, MARKDOWN_CODE_THEME
 from surfaces.interactive_shell.runtime import Session
 from surfaces.interactive_shell.runtime.core.state import SpinnerState
 from surfaces.interactive_shell.ui.streaming import render_markdown_block
 from surfaces.shared.terminal.output.console_state import get_investigation_spinner
 from tools.interactive_shell.action_names import ActionToolName
+
+# Tool labels whose payload is a runnable command: render it as a highlighted
+# shell code block rather than plain inline text.
+_COMMAND_TOOL_LABELS: frozenset[str] = frozenset({"Execute", "GitHub CLI", "opensre"})
 
 # Tools whose preview is just ``(label, single-arg)``. The display content is the
 # stripped string value of that single argument. Anything that needs to combine
@@ -401,11 +407,28 @@ class ActionRenderObserver:
         """Show the running tool: orange verb, then payload."""
         args = data.get("input")
         label, content = tool_call_display(name, args if isinstance(args, dict) else {})
+        self.console.print()
+        if content and label in _COMMAND_TOOL_LABELS:
+            # A runnable command reads as code: label line, then a syntax-
+            # highlighted shell block indented under it.
+            self.console.print(Text(label, style=str(HIGHLIGHT)))
+            self.console.print(
+                Padding(
+                    Syntax(
+                        content,
+                        "bash",
+                        theme=MARKDOWN_CODE_THEME,
+                        background_color="default",
+                        word_wrap=True,
+                    ),
+                    (0, 0, 0, 2),
+                )
+            )
+            return
         line = Text()
         line.append(label, style=str(HIGHLIGHT))
         if content:
             line.append(f" {content}", style=str(BRAND))
-        self.console.print()
         self.console.print(line)
 
     def _render_skill_end(self, data: dict[str, Any]) -> None:

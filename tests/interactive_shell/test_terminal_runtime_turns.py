@@ -246,26 +246,21 @@ async def test_queued_literal_quit_requests_runtime_exit(
     worker = asyncio.create_task(run_agent_turn_queue(state=state, run_turn=_run_turn))
     try:
         await state.queue.put("/quit")
-<<<<<<< HEAD
-        # Generous under loaded test-cov + xdist (see test_terminal_runtime.py).
-        await asyncio.wait_for(state.queue.join(), timeout=5.0)
-        await asyncio.wait_for(worker, timeout=5.0)
+        # Deliberately no per-await deadline. A real turn takes ~1-2s, so a short
+        # one loses the race under parallel CI load -- and losing it hangs rather
+        # than fails: the TimeoutError unwinds into asyncio teardown, where
+        # ``_cancel_all_tasks`` can park forever with the turn thread already
+        # finished. That burned the 30-minute ``cli-runtime-3`` job budget with
+        # no traceback. ``timeout`` in pytest.ini is the backstop for a genuine
+        # deadlock; stubbing the analytics flush above keeps ``/quit`` off the
+        # PostHog network path under xdist + coverage.
+        await state.queue.join()
+        await worker
     finally:
         if not worker.done():
             worker.cancel()
             with contextlib.suppress(asyncio.CancelledError):
                 await worker
-=======
-        # Deliberately no per-await deadline. A real turn takes ~1-2s, so a short
-        # one loses the race under parallel CI load -- and losing it hangs rather
-        # than fails: the TimeoutError unwinds into ``asyncio.run`` teardown,
-        # where ``_cancel_all_tasks`` then parks in ``selector.select(None)``
-        # forever with the turn thread already finished. That is what burned the
-        # 30-minute ``cli-runtime-3`` job budget with no traceback.
-        # ``timeout`` in pytest.ini is the backstop for a genuine deadlock.
-        await state.queue.join()
-        await worker
->>>>>>> origin/main
 
     assert state.exit_requested is True
 

@@ -18,6 +18,9 @@ _READ_ONLY = [
     "sort file | uniq",
     'cd /Users/x/repo && git status --short --branch | head -5; echo "==="; grep -Ei foo Makefile',
     "cd /tmp && ls",
+    "git remote -v",
+    "git branch -a",
+    "cd /x && git status | head; git remote -v; git branch -a",
 ]
 
 _MUTATING = [
@@ -35,6 +38,9 @@ _MUTATING = [
     "python script.py",
     "cat $(rm x)",
     "cd /tmp && rm -rf x",
+    "git remote add origin url",
+    "git branch -d feature",
+    "git config user.name Bob",
 ]
 
 

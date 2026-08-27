@@ -251,6 +251,10 @@ def _cli_env(home: Path, project_env_path: Path) -> dict[str, str]:
     env["PYTHONPATH"] = os.pathsep.join(pythonpath_parts)
     env["HOME"] = str(home)
     env["USERPROFILE"] = str(home)
+    # Pin the product home into the sandbox. A parent ``OPENSRE_HOME`` (common
+    # for local workbench / release smoke) would otherwise leak real
+    # integrations and LLM credentials into these subprocesses.
+    env["OPENSRE_HOME"] = str(home / ".opensre")
     env["OPENSRE_NO_TELEMETRY"] = "1"
     env["OPENSRE_PROJECT_ENV_PATH"] = str(project_env_path)
     env["PYTHONUTF8"] = "1"
