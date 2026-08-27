@@ -5,11 +5,9 @@ from __future__ import annotations
 from core.agent_harness.prompts import (
     PromptBlockId,
     PromptTier,
-    build_action_system_prompt,
     build_action_system_prompt_envelope,
 )
 from core.agent_harness.task_plan.plan import parse_task_plan
-from core.agent_harness.task_plan.prompt import load_planning_instructions
 from core.agent_harness.turns.turn_snapshot import TurnSnapshot
 
 
@@ -26,48 +24,15 @@ def _ctx(*, plan=None) -> TurnSnapshot:
     )
 
 
-def test_planning_instructions_carry_the_dense_diagnosis_exemplar() -> None:
-    text = load_planning_instructions()
-    lines = text.splitlines()
-    assert 60 <= len(lines) <= 200
-    assert "update_plan" in text
-    assert "ASK THEN PLAN" in text
-    assert "ask_user_choice" in text
-    assert "go-ahead to continue" in text
-    assert "do not invent a pause" in text.lower()
-    assert "VERIFIABILITY" in text
-    assert "Confirm checkout returns 2xx" in text
-    assert "work_task_*" in text
-    assert "/goal" in text
-    # Dense diagnosis is required for incident workloads; guard the exemplar
-    # and the scope fence so ordinary implementation work is not forced into
-    # fabricated Facts / hypothesis prose.
-    assert "GOOD EXPLANATION" in text
-    assert "What the signature tells us" in text
-    assert "Discriminator" in text
-    assert "EXPLANATION — match the workload" in text
-    assert "Do not fabricate telemetry" in text
-    assert "ordinary plan-only" in text.lower()
+def test_composed_prompt_omits_removed_planning_instructions_file() -> None:
+    from core.agent_harness.prompts import build_action_system_prompt
 
-
-def test_planning_instructions_skip_ask_user_for_investigate_with_payload() -> None:
-    """Pasted alert JSON + investigate must not open Ask User before dispatch.
-
-    Live oracle 306/340 failed when ASK THEN PLAN's shape/signals coaching
-    overrode investigation_start. Keep the skip rule in the planning contract.
-    """
-    text = load_planning_instructions()
-    collapsed = " ".join(text.split())
-    assert "pasted alert JSON" in collapsed
-    assert "investigation_start" in collapsed
-    assert "Do **not** open Ask User for onset shape" in collapsed
-    assert "explicit investigate/RCA dispatch" in collapsed
-
-
-def test_composed_prompt_includes_planning_instructions() -> None:
     prompt = build_action_system_prompt(_ctx())
-    assert "PLANNING — update_plan" in prompt
-    assert "The LAST step is always a verification step" in prompt
+    assert "PLANNING — update_plan" not in prompt
+    assert "ASK THEN PLAN" not in prompt
+    assert "action-agent-planning-instructions" not in [
+        block.id for block in build_action_system_prompt_envelope(_ctx()).blocks
+    ]
 
 
 def test_current_plan_is_ephemeral_so_compaction_cannot_drop_it() -> None:
