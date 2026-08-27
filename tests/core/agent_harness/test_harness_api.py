@@ -150,6 +150,29 @@ SPI_ROLE_NAMES: dict[str, frozenset[str]] = {
             "sessions_dir",
         }
     ),
+    "handoff": frozenset(
+        {
+            "AskUserQuestion",
+            "format_ask_user_answers",
+            "parse_ask_user_answers",
+        }
+    ),
+    "task_plan": frozenset(
+        {
+            "PLAN_STATUS_GLYPH",
+            "PlanStep",
+            "PlanStepStatus",
+            "TaskPlan",
+            "apply_update_plan_host_policy",
+            "apply_update_plan_session",
+            "format_plan_header",
+            "format_task_plan_plain",
+            "is_plan_diagnosis_prose",
+            "parse_task_plan",
+            "promote_first_pending_step",
+            "task_plan_to_payload",
+        }
+    ),
 }
 
 RUNTIME = frozenset(

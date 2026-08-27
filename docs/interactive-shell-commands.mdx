@@ -13,7 +13,10 @@ opensre
 When you type `/` and browse with the arrow keys, the hint line above the prompt shows the highlighted command's description.
 
 <Info>
-  Commands marked **elevated** may ask for confirmation unless trust mode is on (`/trust on`). Outside a TTY, elevated actions are blocked.
+  Confirmation prompts come from **`/auto`** (tool-approval autonomy) and from
+  elevated slash commands. Default `/auto` is **high** (alpha: no tool prompts).
+  `/trust on` skips approval prompts for the rest of the session. Outside a TTY,
+  actions that would ask are blocked.
 </Info>
 
 ## How the REPL works
@@ -59,6 +62,7 @@ When you first launch the shell with no scheduled loops, a picker offers three s
 | `/cost` | Token usage and LLM call count for the current session |
 | `/context` | Infra metadata accumulated during the session |
 | `/effort` | Set or show reasoning effort (`low` … `max`) |
+| `/auto` | Tool-approval autonomy (`off` / `low` / `med` / `high`; default `high`) |
 | `/trust` | Enable or disable trust mode (skip confirmation prompts) |
 | `/verbose` | Toggle verbose logging |
 | `/clear` | Clear the screen and re-render the banner |
@@ -302,6 +306,31 @@ Set reasoning depth for **OpenAI and Codex** providers in this REPL session only
 Bare `/effort` prints the current level, the config default for your provider/model, and supported choices. `/status` includes the same field.
 
 Other providers (Anthropic, Ollama, etc.) ignore `/effort`; the shell prints a hint suggesting `/model set openai` or `/model set codex`. Set `OPENSRE_REASONING_EFFORT` in the environment for non-interactive defaults. See [LLM providers](/llm-providers).
+
+</Accordion>
+
+<Accordion title="/auto">
+
+Set how often the REPL asks before running agent tools. Shown on the status line as `Auto (Med) · …`.
+
+```text
+/auto
+/auto med
+/auto high
+```
+
+| Level | Prompts before |
+| --- | --- |
+| `high` (default) | Nothing — alpha default; every tool runs immediately |
+| `med` | Mutating agent tools: shell, code agent, slash/CLI, synthetic tests, LLM provider switch, Sentry issue fix, … |
+| `low` | Everything `med` asks about, plus starting an investigation (including sample-alert) |
+| `off` | Every tool type |
+
+`/auto` is **not** a shell-command allowlist: under alpha, shell strings still run when approved (or when High skips the prompt). Lower levels only promote the existing `ask` confirmation hook by `tool_type`.
+
+**With `/trust`:** `/trust on` skips approval prompts even when `/auto` would ask. Turn trust off to restore `/auto` prompts.
+
+Session preference only — not restored by `/resume`. Bare `/auto` prints the current level, the default, and each caption.
 
 </Accordion>
 
@@ -885,7 +914,7 @@ Channels are **off by default**. They are cleared when the REPL process exits; `
 </AccordionGroup>
 
 ### Watchdog
-Monitor a local process and send **Telegram** alarms when CPU, memory, or runtime thresholds breach. Configure Telegram credentials before use (via `/onboard` or env — see messaging docs).
+Monitor a local process and send **Telegram** alarms when CPU, memory, or runtime thresholds breach. Configure Telegram credentials before use (via `/integrations setup telegram` or env — see messaging docs).
 
 <AccordionGroup>
 <Accordion title="/watch">
@@ -1318,19 +1347,28 @@ goodbye.
 
 </AccordionGroup>
 
-## Trust mode and confirmations
+## Trust mode, `/auto`, and confirmations
+
+Two controls decide whether the REPL prompts before an action:
+
+| Control | Role |
+| --- | --- |
+| `/auto` | Which **agent tool types** need approval (default **high** = none) |
+| `/trust` | Session override that **skips** approval prompts when `/auto` (or an elevated slash command) would ask |
 
 | Tier | Examples | Confirmation |
 | --- | --- | --- |
-| Exempt | `/help`, `/exit`, `/trust` | Never prompts |
+| Exempt | `/help`, `/exit`, `/trust`, `/auto` | Never prompts |
 | Safe | `/status`, `/health`, `/investigate`, `/integrations list` | Read-only or standard risk |
-| Elevated | `/save`, `/watch`, `/cancel`, `/integrations remove`, `/fleet kill`, `/uninstall` | Prompt `[y/N]` unless trust on |
+| Elevated | `/save`, `/watch`, `/cancel`, `/integrations remove`, `/fleet kill`, `/uninstall` | Prompt unless trust on |
 
-Non-TTY: elevated commands **fail closed** (error message, no side effect).
+Non-TTY: actions that would ask **fail closed** (error message, no side effect).
 
 ```text
+/auto med   # ask before mutating agent tools
+/auto high  # alpha default — no tool prompts
 /trust on   # skip prompts for this session
-/trust off  # restore prompts
+/trust off  # restore /auto (and elevated) prompts
 ```
 
 ---

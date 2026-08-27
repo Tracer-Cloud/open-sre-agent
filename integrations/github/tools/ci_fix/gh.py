@@ -25,9 +25,12 @@ def run_gh_json(
     repo: str,
     github_token: str | None,
     timeout: int = DEFAULT_GH_TIMEOUT_SECONDS,
+    repo_flag: bool = True,
 ) -> dict[str, Any]:
     """Run a read-only ``gh`` command and decode a JSON object."""
-    raw = run_gh_text(args, repo=repo, github_token=github_token, timeout=timeout)
+    raw = run_gh_text(
+        args, repo=repo, github_token=github_token, timeout=timeout, repo_flag=repo_flag
+    )
     try:
         parsed = json.loads(raw or "{}")
     except json.JSONDecodeError as exc:
@@ -49,8 +52,13 @@ def run_gh_text(
     repo: str,
     github_token: str | None,
     timeout: int = DEFAULT_GH_TIMEOUT_SECONDS,
+    repo_flag: bool = True,
 ) -> str:
-    """Run a narrow ``gh`` command with OpenSRE-resolved token auth."""
+    """Run a narrow ``gh`` command with OpenSRE-resolved token auth.
+
+    ``repo_flag=False`` omits the global ``-R`` selector for subcommands that
+    reject it (``gh api``, whose endpoint path already names the repo).
+    """
     token = resolve_github_token(github_token)
     if not token:
         raise GitHubCiFixError(
@@ -67,7 +75,7 @@ def run_gh_text(
     env["GH_TOKEN"] = token
     env["GITHUB_TOKEN"] = token
     env.pop("GH_ENTERPRISE_TOKEN", None)
-    argv = ["gh", "-R", repo, *args]
+    argv = ["gh", "-R", repo, *args] if repo_flag else ["gh", *args]
     try:
         completed = subprocess.run(
             argv,

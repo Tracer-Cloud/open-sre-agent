@@ -4,17 +4,16 @@ from __future__ import annotations
 
 from config.env_file import sync_env_values
 from infrastructure.terminal.theme import SECONDARY
+from integrations.google_docs import GOOGLE_DOCS_SETUP
 from integrations.servicenow import SERVICENOW_SETUP
 from integrations.store import upsert_integration
 from surfaces.cli.wizard.components import (
     console,
     integration_defaults,
     prompt_value,
-    string_value,
 )
 from surfaces.cli.wizard.configurators.spec_configurator import configure_from_spec
 from surfaces.cli.wizard.integration_health import (
-    validate_google_docs_integration,
     validate_jira_integration,
     validate_notion_integration,
 )
@@ -96,37 +95,12 @@ def _configure_servicenow() -> tuple[str, str]:
 
 
 def _configure_google_docs() -> tuple[str, str]:
-    _, credentials = integration_defaults("google_docs")
-    while True:
-        credentials_file = prompt_value(
-            "Path to Google service account credentials JSON file",
-            default=string_value(credentials.get("credentials_file")),
-        )
-        folder_id = prompt_value(
-            "Google Drive folder ID for incident reports",
-            default=string_value(credentials.get("folder_id")),
-        )
-        with console.status("Validating Google Docs integration...", spinner="dots"):
-            result = validate_google_docs_integration(
-                credentials_file=credentials_file,
-                folder_id=folder_id,
-            )
-        render_integration_result("Google Docs", result)
-        if result.ok:
-            upsert_integration(
-                "google_docs",
-                {
-                    "credentials": {
-                        "credentials_file": credentials_file,
-                        "folder_id": folder_id,
-                    }
-                },
-            )
-            env_path = sync_env_values(
-                {
-                    "GOOGLE_CREDENTIALS_FILE": credentials_file,
-                    "GOOGLE_DRIVE_FOLDER_ID": folder_id,
-                }
-            )
-            return "Google Docs", str(env_path)
-        console.print(f"[{SECONDARY}]Try again or press Ctrl+C to cancel.[/]")
+    return configure_from_spec(
+        GOOGLE_DOCS_SETUP,
+        title="Google Docs",
+        intro=(
+            "\n[bold]Google Docs Integration[/bold]\n"
+            "Use a service account JSON key and share a Drive folder with that "
+            "account as Editor.\n"
+        ),
+    )

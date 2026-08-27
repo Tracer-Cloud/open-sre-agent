@@ -25,15 +25,7 @@ opensre integrations setup slack
 
 Choose **webhook**, **Socket Mode**, or **both**. Credentials are persisted to `~/.opensre/integrations.json` (and can be merged on re-run). Picking one mode clears the other when you intentionally switch.
 
-### Option 2: Onboarding wizard
-
-```bash
-opensre onboard
-```
-
-Select **Slack** and choose webhook / Socket Mode / both. The wizard validates the webhook when configured, then persists credentials to the integration store. Socket Mode tokens are dual-written to `~/.opensre/credentials.json`; the webhook URL is not.
-
-### Option 3: Environment variables
+### Option 2: Environment variables
 
 ```bash
 SLACK_WEBHOOK_URL=https://hooks.slack.com/services/<workspace-id>/<binding-id>/<secret>

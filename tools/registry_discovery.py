@@ -98,7 +98,6 @@ INTEGRATION_TOOL_PACKAGES: tuple[str, ...] = (
 
 _SKIP_MODULE_NAMES = {
     "__pycache__",
-    "investigation_registry",
     "registry",
 }
 _TOOL_MODULES_ATTR = "TOOL_MODULES"

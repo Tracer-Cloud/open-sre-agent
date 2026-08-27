@@ -70,6 +70,12 @@ MCP_BY_COMMAND: dict[str, _SlashMcpFields] = {
         "User asks to log in, authenticate, connect an LLM provider, or check provider auth",
         anti_examples=("User asks to configure an observability integration (use /integrations)",),
     ),
+    "/auto": _mcp(
+        "Set Auto autonomy: off (ask before every tool), low (also ask before investigations), "
+        "med (ask before mutating agent tools), high (ask nothing, alpha default).",
+        "User asks to change Auto Off/Low/Med/High or how much the agent may run without approval",
+        anti_examples=("User asks to enable trust mode (use /trust)",),
+    ),
     "/background": _mcp(
         "Manage session-local background investigation mode and completed RCA summaries. "
         "Subcommands: on, off, status, list, show <task_id>, use <task_id>, notify list, notify set.",
@@ -287,8 +293,8 @@ MCP_BY_COMMAND: dict[str, _SlashMcpFields] = {
         ),
     ),
     "/onboard": _mcp(
-        "Launch the interactive onboarding wizard (handoff if run inside the REPL).",
-        "User asks to run onboarding or initial setup wizard",
+        "Launch the interactive LLM onboarding wizard (handoff if run inside the REPL).",
+        "User asks to run onboarding or reconfigure the LLM provider",
     ),
     "/privacy": _mcp(
         "Show history persistence settings, redaction status, and the local threat model.",
@@ -339,6 +345,11 @@ MCP_BY_COMMAND: dict[str, _SlashMcpFields] = {
         "total turns, and investigation count for each session.",
         "User asks to see past sessions, session history, or what was run in previous sessions",
         anti_examples=("User asks for the current session status (use /status)",),
+    ),
+    "/setup": _mcp(
+        "First-run setup: GitHub sign-in, LLM key, then open the interactive shell.",
+        "User asks to run first-run setup or factory-style install setup",
+        "User just installed OpenSRE and needs to sign in and add an LLM key",
     ),
     "/status": _mcp(
         "Explicit /status command operation: show REPL session status, including "

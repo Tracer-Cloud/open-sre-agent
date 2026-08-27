@@ -131,3 +131,72 @@ def test_too_many_options_is_rejected() -> None:
     options = [f"Option {index}" for index in range(9)]
     result = execute_ask_user_choice_tool({"title": _TITLE, "options": options}, _ctx())
     assert result["ok"] is False
+
+
+_QUESTIONS = [
+    {
+        "label": "Codebase",
+        "title": "Where does the /api/orders service live?",
+        "options": ["Hypothetical/demo scenario, no real code", "I'll point you at a repo"],
+    },
+    {
+        "label": "Metrics",
+        "title": "How should I get the p99 latency data?",
+        "options": ["I'll paste the raw numbers/graph description", "Query Datadog"],
+    },
+    {
+        "label": "Window",
+        "title": "What's the time window of the p99 regression?",
+        "options": ["Last 7 days", "Last 24 hours"],
+    },
+]
+
+
+def test_batched_questions_queue_one_ask_user_menu() -> None:
+    session = Session()
+    ctx = _ctx(session=session)
+
+    result = execute_ask_user_choice_tool(
+        {"title": "Ask User", "questions": _QUESTIONS},
+        ctx,
+    )
+
+    assert result["ok"] is True
+    assert result["menu"] == "queued"
+    assert "update_plan" in result["instruction"]
+    pending = session.pending_user_choice
+    assert pending is not None
+    assert pending.is_batch() is True
+    assert len(pending.questions) == 3
+    assert pending.questions[0].label == "Codebase"
+    assert session.terminal.pending_prompt_default == "/choose"
+    assert session.terminal.awaiting_handoff_answer is True
+
+
+def test_questions_only_payload_is_valid_and_queues() -> None:
+    """The model omits title when sending a batched questions payload."""
+    session = Session()
+    error = ask_user_choice_tool.validate_public_input({"questions": _QUESTIONS})
+    assert error is None
+    result = execute_ask_user_choice_tool({"questions": _QUESTIONS}, _ctx(session=session))
+    assert result["ok"] is True
+    assert result["menu"] == "queued"
+    assert session.pending_user_choice is not None
+    assert session.pending_user_choice.title == "Ask User"
+
+
+def test_one_item_questions_array_is_rejected() -> None:
+    result = execute_ask_user_choice_tool(
+        {"title": "Ask User", "questions": _QUESTIONS[:1]},
+        _ctx(),
+    )
+    assert result["ok"] is False
+    assert "title and options" in result["error"]
+
+
+def test_malformed_question_is_rejected() -> None:
+    result = execute_ask_user_choice_tool(
+        {"title": "Ask User", "questions": [{"label": "Codebase", "title": "Where?"}]},
+        _ctx(),
+    )
+    assert result["ok"] is False

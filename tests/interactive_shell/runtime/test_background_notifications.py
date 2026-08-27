@@ -241,7 +241,7 @@ def test_deliver_background_notifications_marks_missing_telegram(monkeypatch) ->
             "TELEGRAM_BOT_TOKEN is not set.",
             suggestion=(
                 "Configure Telegram with `opensre integrations setup telegram` "
-                "(or `opensre onboard`), or export TELEGRAM_BOT_TOKEN=<your-bot-token>."
+                "or export TELEGRAM_BOT_TOKEN=<your-bot-token>."
             ),
         )
 

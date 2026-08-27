@@ -91,6 +91,7 @@ _WAIT_FOR_COMPLETION_COMMANDS: frozenset[str] = frozenset(
         "/exit",
         "/quit",
         "/update",
+        "/setup",
         "/onboard",
         "/config",
         "/auth",

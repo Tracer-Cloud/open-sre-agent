@@ -31,6 +31,8 @@ class ActionToolScope:
     #: Length of ``session.history`` when this turn began, so a tool can tell
     #: what THIS turn produced from what the session already contained.
     history_start: int = 0
+    #: User message that started this action turn (Ask User answers, slash, …).
+    turn_user_message: str = ""
     # Surface-injected subprocess presenter (``tools.interactive_shell.subprocess``).
     subprocess_presenter: Any = None
     investigation_ports: Any = None

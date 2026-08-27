@@ -99,7 +99,7 @@ def load_credentials_from_env(
             "TELEGRAM_BOT_TOKEN is not set.",
             suggestion=(
                 "Configure Telegram with `opensre integrations setup telegram` "
-                "(or `opensre onboard`), or export TELEGRAM_BOT_TOKEN=<your-bot-token>. "
+                "or export TELEGRAM_BOT_TOKEN=<your-bot-token>. "
                 "Get a token from @BotFather on Telegram."
             ),
         )

@@ -14,17 +14,9 @@ OpenSRE connects to Jira to create incident tickets, update existing issues, and
 
 ## Setup
 
-There is no dedicated `opensre integrations setup jira` command today. Configure Jira through the onboarding wizard, environment variables, or the persistent store.
+There is no dedicated `opensre integrations setup jira` command today. Configure Jira through environment variables or the persistent store.
 
-### Option 1: Onboarding wizard
-
-```bash
-opensre onboard
-```
-
-Select **Jira** when prompted and provide your base URL, email, API token, and project key. The wizard validates with a live `/myself` call and project check, then stores the config (it does not write `JIRA_*` env vars).
-
-### Option 2: Environment variables
+### Option 1: Environment variables
 
 ```bash
 JIRA_BASE_URL=https://your-org.atlassian.net
@@ -40,7 +32,7 @@ JIRA_PROJECT_KEY=OPS
 | `JIRA_API_TOKEN` | **Required.** Jira API token |
 | `JIRA_PROJECT_KEY` | Default project key for new issues (for example `OPS`, `SRE`) |
 
-### Option 3: Persistent store
+### Option 2: Persistent store
 
 Add to `~/.opensre/integrations.json`:
 

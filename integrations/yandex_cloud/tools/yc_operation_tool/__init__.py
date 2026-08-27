@@ -17,7 +17,7 @@ from typing import Any
 from core.domain.types.tools import ToolSurface
 from core.tool_framework import tool
 from core.tool_framework.utils import tool_unavailable
-from integrations.yandex_cloud.api_index import known_services, lookup
+from integrations.yandex_cloud.api_index import canonical_service, known_services, lookup
 from integrations.yandex_cloud.availability import (
     YC_INJECTED_PARAMS,
     client_from_params,
@@ -144,8 +144,11 @@ def execute_yc_operation(
     # path that Yandex binds to GET, or a path the generator never listed.
     # Unknown services still fall through to the client, which names them as
     # unknown. A known service with a path the index does not list is refused
-    # here so a well-formed write never reaches the network.
-    if service in known_services() and lookup(service, path) is None:
+    # here so a well-formed write never reaches the network. Canonicalise first:
+    # the caller may use the name the tools and the registry use, and asking the
+    # index about a name it does not carry would read as "unknown service" and
+    # skip the check.
+    if canonical_service(service) in known_services() and lookup(service, path) is None:
         return {
             "success": False,
             "service": service,

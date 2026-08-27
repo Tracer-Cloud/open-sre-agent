@@ -22,7 +22,7 @@ from surfaces.interactive_shell.session.session import Session
 # pending_recovery_note (WAL recovery note for the first turn after /resume),
 # plus the session-goal trio (session_goal, pending_integration_setup_offer,
 # offered_upgrade_ctas).
-_CORE_FIELD_COUNT = 28
+_CORE_FIELD_COUNT = 31
 _FACET_FIELDS = ("alerts", "terminal")
 
 

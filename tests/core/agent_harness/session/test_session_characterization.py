@@ -29,6 +29,9 @@ _CORE_FIELDS = (
     "pending_schedule_offer",
     "pending_investigation_offer",
     "pending_user_choice",
+    "ask_user_rounds",
+    "task_plan",
+    "plan_only_until_authorized",
     "pending_recovery_note",
     # Outer multi-turn goal, plus the evidence-tier upgrade CTA it can offer.
     "session_goal",

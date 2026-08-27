@@ -1,8 +1,9 @@
 from __future__ import annotations
 
+from typing import Any
 from unittest.mock import MagicMock, patch
 
-from integrations.opsgenie.tools import OpsGenieAlertDetailTool
+from integrations.opsgenie.tools import OpsGenieAlertDetailTool, _map_opsgenie_alert_detail
 
 
 def _tool() -> OpsGenieAlertDetailTool:
@@ -108,3 +109,80 @@ def test_metadata_requires_alert_id() -> None:
     t = _tool()
     assert t.name == "opsgenie_alert_detail"
     assert "alert_id" in t.input_schema["required"]
+
+
+class TestMapOpsgenieAlertDetail:
+    def test_records_entry_with_priority_and_log_count(self) -> None:
+        evidence: dict[str, Any] = {}
+
+        _map_opsgenie_alert_detail(
+            evidence,
+            {
+                "available": True,
+                "alert": {"message": "CPU high", "status": "open", "priority": "P1"},
+                "total_log_entries": 3,
+            },
+            {},
+        )
+
+        entries = evidence["catalog_entries"]
+        assert len(entries) == 1
+        assert entries[0]["source"] == "opsgenie_alert_detail"
+        assert entries[0]["summary"] == "'CPU high', open, P1, 3 log entries"
+
+    def test_records_entry_without_optional_clauses(self) -> None:
+        evidence: dict[str, Any] = {}
+
+        _map_opsgenie_alert_detail(
+            evidence,
+            {"available": True, "alert": {"message": "CPU high", "status": "open"}},
+            {},
+        )
+
+        assert evidence["catalog_entries"][0]["summary"] == "'CPU high', open"
+
+    def test_strips_carriage_returns_from_message(self) -> None:
+        """Regression: a message with bare \\r or \\r\\n line endings must not
+        leave a literal carriage return in the report summary."""
+        evidence: dict[str, Any] = {}
+
+        _map_opsgenie_alert_detail(
+            evidence,
+            {
+                "available": True,
+                "alert": {"message": "CPU high\r\non host-42\r", "status": "open"},
+            },
+            {},
+        )
+
+        summary = evidence["catalog_entries"][0]["summary"]
+        assert "\r" not in summary
+
+    def test_qualifies_log_count_when_page_is_saturated(self) -> None:
+        evidence: dict[str, Any] = {}
+
+        _map_opsgenie_alert_detail(
+            evidence,
+            {
+                "available": True,
+                "alert": {"message": "CPU high", "status": "open"},
+                "total_log_entries": 100,
+            },
+            {"log_limit": 100},
+        )
+
+        assert evidence["catalog_entries"][0]["summary"] == "'CPU high', open, 100+ log entries"
+
+    def test_records_nothing_when_alert_empty(self) -> None:
+        evidence: dict[str, Any] = {}
+
+        _map_opsgenie_alert_detail(evidence, {"available": True, "alert": {}}, {})
+
+        assert "catalog_entries" not in evidence
+
+    def test_records_nothing_on_unavailable_result(self) -> None:
+        evidence: dict[str, Any] = {}
+
+        _map_opsgenie_alert_detail(evidence, {"available": False, "error": "HTTP 404"}, {})
+
+        assert "catalog_entries" not in evidence

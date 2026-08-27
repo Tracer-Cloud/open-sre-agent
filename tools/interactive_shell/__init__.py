@@ -27,6 +27,7 @@ TOOL_MODULES = (
     "actions.slash",
     "actions.synthetic",
     "actions.task_cancel",
+    "actions.update_plan",
 )
 
 __all__ = ["TOOL_MODULES"]

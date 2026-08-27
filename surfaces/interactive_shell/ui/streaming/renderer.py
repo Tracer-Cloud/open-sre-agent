@@ -11,6 +11,7 @@ from rich.console import Console
 import infrastructure.terminal.theme as ui_theme
 from core.agent_harness.spi.prompt_chrome import normalize_three_tier_spacing
 from core.agent_harness.spi.session_goal import strip_session_goal_progress_tags
+from infrastructure.safety.terminal_output import strip_terminal_controls
 
 if TYPE_CHECKING:
     from rich.markdown import Markdown
@@ -32,6 +33,10 @@ def _escape_markdown_dunder_filenames(text: str) -> str:
 def _build_markdown_block(text: str) -> Markdown:
     """Build a Markdown renderable with the shared escaping and code theme.
 
+    Strips terminal controls (ESC/CR/BEL/C1) while keeping LF/Tab so multi-line
+    model prose cannot spoof the TTY. All whole and streamed markdown paths
+    build through this helper.
+
     Reads the ``Markdown`` class off the already-loaded package module via
     ``sys.modules`` rather than importing it here (directly, or by importing
     the package back) — tests substitute the class by patching
@@ -42,7 +47,8 @@ def _build_markdown_block(text: str) -> Markdown:
     """
     assert __package__  # always set for a package submodule
     package = sys.modules[__package__]
-    spaced = normalize_three_tier_spacing(text)
+    safe = strip_terminal_controls(text, keep_whitespace=True)
+    spaced = normalize_three_tier_spacing(safe)
     return package.Markdown(  # type: ignore[no-any-return]
         _escape_markdown_dunder_filenames(spaced.rstrip()),
         code_theme=ui_theme.MARKDOWN_CODE_THEME,
@@ -54,7 +60,8 @@ def render_markdown_block(console: Console, text: str) -> None:
 
     The single rendering path for model prose that arrives whole (not
     chunk-streamed) — e.g. the action agent's intermediate phase headers —
-    so every markdown surface shares one escaping/theme policy.
+    so every markdown surface shares one escaping/theme policy. Terminal
+    controls are stripped inside ``_build_markdown_block``.
     """
     visible = strip_session_goal_progress_tags(text)
     if not visible.strip():

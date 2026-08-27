@@ -2,6 +2,7 @@
 
 from typing import Any
 
+from core.domain.types.evidence import record_evidence_entry
 from core.domain.types.tools import ToolSurface
 from core.tool_framework import tool
 from integrations.rabbitmq import (
@@ -10,6 +11,29 @@ from integrations.rabbitmq import (
     rabbitmq_extract_params,
     rabbitmq_is_available,
 )
+
+
+def _map_get_rabbitmq_node_health(
+    evidence: dict[str, Any], output: dict[str, Any], _tool_input: dict[str, Any]
+) -> None:
+    """Cite node count, flagging partitions and any active mem/disk alarms."""
+    if not output.get("available"):
+        return
+    nodes = output.get("nodes") or []
+    if not nodes:
+        return
+    alarmed = [n.get("name", "") for n in nodes if n.get("mem_alarm") or n.get("disk_free_alarm")]
+    summary = f"{output.get('node_count', len(nodes))} node(s)"
+    if output.get("any_partitioned"):
+        summary += ", cluster partitioned"
+    if alarmed:
+        summary += f", alarm on {', '.join(alarmed)}"
+    record_evidence_entry(
+        evidence,
+        source="get_rabbitmq_node_health",
+        label="RabbitMQ Node Health",
+        summary=summary,
+    )
 
 
 @tool(
@@ -25,6 +49,7 @@ from integrations.rabbitmq import (
     is_available=rabbitmq_is_available,
     injected_params=("host", "password", "username"),
     extract_params=rabbitmq_extract_params,
+    evidence_mapper=_map_get_rabbitmq_node_health,
 )
 def get_rabbitmq_node_health(
     host: str,

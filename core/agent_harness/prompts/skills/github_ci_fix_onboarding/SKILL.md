@@ -84,16 +84,11 @@ own reply:
 
 Whenever this flow reaches a point where the user must choose between a small,
 fixed set of actions, call the `ask_user_choice` tool so the interactive shell
-renders the decision as an arrow-key selection menu. Never ask the user to type
-free-form text for these decisions, never write a numbered list with "Reply
-with 1, 2, or 3", and never end the turn with prose such as "please commit,
-stash, or move your changes".
-
-After calling `ask_user_choice`, end the turn with at most one short sentence
-of context. The menu opens when the turn ends and the user's selection arrives
-verbatim as the next user message — resume the flow from that selection. If the
-tool result says the menu is unavailable (non-TTY / gateway surface), fall back
-to a short numbered list and ask the user to reply with their choice.
+renders and owns the decision. Never write a numbered list with "Reply with 1,
+2, or 3", and never ask the same question in prose. End the turn after calling
+the tool; the selected or custom answer arrives as the next user message. If
+the tool result says the interaction UI is unavailable, fall back to a short
+numbered list.
 
 ### Uncommitted changes (most common blocker)
 
@@ -102,17 +97,15 @@ interfere with the end-to-end CI fix:
 
 1. State the facts in one short paragraph (prerequisites ready, target PR,
    dirty tree). Do not paste raw tool output into the reply.
-2. Immediately call `ask_user_choice` with this exact title and these exact
-   options (do not rephrase them):
-
-   **Title:** How should I handle the uncommitted changes?
-   **Options:**
-   1. Stash the changes (recommended – quick & safe)
-   2. Commit the changes
-   3. Use a separate git worktree
-
-3. End the turn and wait for the user's selection before doing anything else.
-4. After the user chooses, execute the corresponding action and continue the
+2. Immediately call `ask_user_choice` with these exact values (do not rephrase
+   them):
+   - `title`: `How should I handle the uncommitted changes?`
+   - `options`:
+     1. `Stash the changes (recommended – quick & safe)`
+     2. `Commit the changes`
+     3. `Use a separate git worktree`
+3. End the turn and wait for the user's selection.
+4. After the answer arrives, execute the corresponding action and continue the
    live fix cycle against the chosen PR:
    - Stash: `git stash push -u -m "pre-ci-fix-onboarding"` (include untracked
      files so the tree is fully clean; remind the user the stash name).

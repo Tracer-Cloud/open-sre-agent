@@ -7,7 +7,29 @@ import re
 
 from config.constants import SLACK_LINK_RE
 
-__all__ = ["format_html_link", "format_slack_link", "shorten_text", "slack_links_to_plain_text"]
+__all__ = [
+    "escape_slack_mrkdwn",
+    "format_html_link",
+    "format_slack_link",
+    "shorten_text",
+    "slack_links_to_plain_text",
+]
+
+
+def escape_slack_mrkdwn(text: str) -> str:
+    """Neutralize Slack mrkdwn markup in untrusted external text.
+
+    Slack's own spec requires literal ``&``, ``<``, ``>`` to be escaped as
+    HTML entities, or text can inject a fake link/mention (``<url|label>``,
+    ``<!channel>``). This project's ``markdown_to_slack_mrkdwn`` additionally
+    rewrites any ``[text](url)`` pattern found anywhere in the final report
+    text into a live Slack link *after* this function runs, so bracket
+    characters are also neutralized (fullwidth lookalikes keep the text
+    readable) -- HTML-entity escaping alone would not stop that later pass
+    from matching literal ``[``/``]`` in untrusted text.
+    """
+    escaped = text.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
+    return escaped.replace("[", "［").replace("]", "］")
 
 
 def shorten_text(text: str, max_chars: int = 120, suffix: str = "...") -> str:
@@ -33,10 +55,15 @@ def shorten_text(text: str, max_chars: int = 120, suffix: str = "...") -> str:
 def format_slack_link(label: str, url: str | None) -> str:
     """Return a Slack-formatted hyperlink, falling back to plain text."""
     if not url:
-        return label
+        return escape_slack_mrkdwn(label)
 
-    safe_label = label.replace("|", "¦").strip() or url
-    return f"<{url}|{safe_label}>"
+    # A literal "|" in either half collides with Slack's own <url|label>
+    # delimiter -- percent-encode it in the URL (semantically correct, stays
+    # a valid link) and swap it for a lookalike in the label (consistent with
+    # how escape_slack_mrkdwn neutralizes other structural characters).
+    safe_url = escape_slack_mrkdwn(url).replace("|", "%7C")
+    safe_label = escape_slack_mrkdwn(label.replace("|", "¦").strip()) or url
+    return f"<{safe_url}|{safe_label}>"
 
 
 def slack_links_to_plain_text(text: str) -> str:

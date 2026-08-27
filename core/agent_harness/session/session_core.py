@@ -34,6 +34,7 @@ from core.agent_harness.session.pending_offer import (
 from core.agent_harness.session.persistence.contracts import SessionStore
 from core.agent_harness.session.persistence.jsonl_store import JsonlSessionStore
 from core.agent_harness.session_goal.goal import SessionGoal
+from core.agent_harness.task_plan.plan import TaskPlan
 from core.state import MutableAgentState
 from infrastructure.scheduling.task_registry import TaskRegistry
 
@@ -165,6 +166,20 @@ class SessionCore:
     """Structured multiple-choice question queued for the ``/choose`` selection
     menu — set by the ``ask_user_choice`` action tool, consumed once by the
     ``/choose`` handler."""
+
+    ask_user_rounds: int = 0
+    """Ask-User clarification rounds asked this workload; caps repeated batches.
+    Reset on a genuine user turn."""
+
+    task_plan: TaskPlan | None = None
+    """Live execution checklist for the current workload, rendered above the
+    prompt and persisted so it survives transcript compaction."""
+
+    plan_only_until_authorized: bool = False
+    """Set when the user asked for a plan without running it; the execution gate
+    keeps mutating steps behind confirmation until a step is confirmed. Set-only
+    here — cleared only at the gate on a confirmed mutating step."""
+
     pending_recovery_note: str | None = None
     """WAL recovery note for the next action turn — set on ``/resume`` when the
     resumed session log holds tool intents that never committed (the process
@@ -408,6 +423,9 @@ class SessionCore:
         self.session_goal = None
         self.offered_upgrade_ctas.clear()
         self.pending_user_choice = None
+        self.ask_user_rounds = 0
+        self.task_plan = None
+        self.plan_only_until_authorized = False
         self.pending_recovery_note = None
         self.gather_unreachable_tools.clear()
         self.gather_unreachable_sources.clear()

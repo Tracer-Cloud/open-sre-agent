@@ -78,7 +78,7 @@ def test_install_ps1_contains_auto_onboarding_launch_hook() -> None:
     assert "function Test-OpenSreAutoLaunchEnabled" in source
     assert "function Start-OpenSreOnboardingAfterInstall" in source
     assert "OPENSRE_AUTO_LAUNCH" in source
-    assert "& $BinaryPath onboard" in source
+    assert "& $BinaryPath setup" in source
     assert "Start-OpenSreOnboardingAfterInstall -BinaryPath $installedBinaryPath" in source
     # A redirected/piped host must be treated as non-interactive so the
     # full-screen prompt is not launched into a terminal it cannot control

@@ -97,7 +97,7 @@ def test_a_terse_closing_line_is_the_answer_when_nothing_else_ran() -> None:
 
 def test_iteration_cap_is_preserved_on_turn_result() -> None:
     harness = ActionExecutionHarness(
-        llm=FakeActionLLM([tool_response("skill_view", {"name": "missing"}) for _ in range(13)])
+        llm=FakeActionLLM([tool_response("skill_view", {"name": "missing"}) for _ in range(5)])
     )
 
     result = run_action_tool_turn(
@@ -108,3 +108,7 @@ def test_iteration_cap_is_preserved_on_turn_result() -> None:
     )
 
     assert result.hit_iteration_cap is True
+    assert result.response_streamed is True
+    assert "repeated tool calls produced no new result" in result.response_text
+    assert _console_text(harness).count("repeated tool calls produced no new result") == 1
+    assert harness.llm.invocations == 5

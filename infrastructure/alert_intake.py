@@ -26,12 +26,9 @@ from core.domain.alerts.inbox import (
     get_current_inbox,
     set_current_inbox,
 )
+from infrastructure.request_body_limit import RequestBodyLimitMiddleware
 
 logger = logging.getLogger(__name__)
-
-# Cap on POST body size accepted from any caller (authed or not). Realistic
-# alert payloads top out around 50 KB, so 1 MiB is ~20× headroom.
-MAX_ALERT_BODY_BYTES = 1 * 1024 * 1024
 
 _LOOPBACK_HOSTS = frozenset({"127.0.0.1", "::1", "localhost"})
 
@@ -85,16 +82,8 @@ async def receive_alert(request: Request) -> JSONResponse:
         return JSONResponse({"error": "invalid Content-Length"}, status_code=HTTPStatus.BAD_REQUEST)
     if declared_length < 0:
         return JSONResponse({"error": "invalid Content-Length"}, status_code=HTTPStatus.BAD_REQUEST)
-    if declared_length > MAX_ALERT_BODY_BYTES:
-        return JSONResponse(
-            {"error": "payload too large"}, status_code=HTTPStatus.REQUEST_ENTITY_TOO_LARGE
-        )
-
+    # Size is bounded by RequestBodyLimitMiddleware before this handler runs.
     body = await request.body()
-    if len(body) > MAX_ALERT_BODY_BYTES:
-        return JSONResponse(
-            {"error": "payload too large"}, status_code=HTTPStatus.REQUEST_ENTITY_TOO_LARGE
-        )
 
     try:
         data = json.loads(body)
@@ -133,12 +122,12 @@ def build_alert_intake_app() -> FastAPI:
     profile — it needs only the shared inbox the host installs.
     """
     app = FastAPI()
+    app.add_middleware(RequestBodyLimitMiddleware)
     app.include_router(router)
     return app
 
 
 __all__ = [
-    "MAX_ALERT_BODY_BYTES",
     "build_alert_intake_app",
     "require_local_or_token",
     "router",

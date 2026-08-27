@@ -26,17 +26,7 @@ investigation query tools.
 opensre integrations setup servicenow
 ```
 
-### Option 2: Onboarding wizard
-
-```bash
-opensre onboard
-```
-
-Select **ServiceNow** under *Incident & Comms* and provide instance URL, username,
-and password. The wizard validates credentials with a one-row authenticated read of
-the `sys_user` table before saving.
-
-### Option 3: Environment variables
+### Option 2: Environment variables
 
 ```bash
 export SERVICENOW_INSTANCE_URL=https://dev12345.service-now.com
@@ -47,7 +37,7 @@ export SERVICENOW_PASSWORD=your-password
 `SERVICENOW_PASSWORD` is also resolved from `~/.opensre/credentials.json` when the environment
 variable is not set (the wizard stores it there).
 
-### Option 4: Persistent store
+### Option 3: Persistent store
 
 ```json
 {
@@ -76,8 +66,8 @@ variable is not set (the wizard stores it there).
 ## Credentials
 
 Use a dedicated ServiceNow user with the minimum roles needed for a one-row read
-of `sys_user` (for example `itil`). Prefer the onboarding wizard so the password
-stays in `~/.opensre/credentials.json` instead of `.env`.
+of `sys_user` (for example `itil`). Prefer `opensre integrations setup servicenow`
+so the password stays in `~/.opensre/credentials.json` instead of `.env`.
 
 ## Investigation tools
 
@@ -118,5 +108,5 @@ You can also ask the interactive shell:
 ## Security
 
 - Use a **dedicated ServiceNow user** with minimum read roles.
-- Prefer the onboarding wizard so the password stays in `~/.opensre/credentials.json`.
+- Prefer `opensre integrations setup servicenow` so the password stays in `~/.opensre/credentials.json`.
 - Rotate the password periodically and remove the integration when it is no longer needed.

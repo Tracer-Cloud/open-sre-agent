@@ -315,7 +315,6 @@ def test_install_sh_help_lists_all_channels() -> None:
 def test_install_sh_source_exposes_env_knobs() -> None:
     source = INSTALL_SH.read_text(encoding="utf-8")
     for needle in (
-        "OPENSRE_AUTO_LAUNCH",
         "OPENSRE_SKIP_GH_INSTALL",
         "OPENSRE_INSTALL_CHANNEL",
         "OPENSRE_INSTALL_DIR",
@@ -324,7 +323,6 @@ def test_install_sh_source_exposes_env_knobs() -> None:
         "OPENSRE_INSTALL_VERBOSE",
         "OPENSRE_INSTALL_REPO",
         'INSTALL_CHANNEL="${OPENSRE_INSTALL_CHANNEL:-main}"',
-        "launch_onboarding_after_install",
         "ensure_github_cli",
     ):
         assert needle in source, f"install.sh missing {needle!r}"
@@ -346,7 +344,7 @@ def test_install_ps1_source_exposes_all_windows_install_knobs() -> None:
         "Start-OpenSreOnboardingAfterInstall",
         'else { "main" }',
         "main-build",
-        "$exe onboard",
+        "$exe setup",
     ):
         assert needle in source, f"install.ps1 missing {needle!r}"
 
@@ -391,7 +389,7 @@ def test_install_sh_main_channel_end_to_end(tmp_path: Path) -> None:
     assert version.returncode == 0
     assert "opensre" in version.stdout.lower() or "0.1" in version.stdout
     assert "Welcome to OpenSRE" in combined or "installed successfully" in combined
-    assert "opensre onboard" in combined
+    assert "opensre onboard" not in combined
 
 
 def test_install_sh_version_channel_end_to_end(tmp_path: Path) -> None:
