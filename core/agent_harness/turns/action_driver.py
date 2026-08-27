@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import json
 import logging
+import re
 import shlex
 from collections.abc import Sequence
 from dataclasses import dataclass
@@ -224,13 +225,24 @@ INVESTIGATION_DISPATCH_TOOL_NAMES: frozenset[str] = frozenset(
 # generic formatter must stay silent: repeating their summary would double-print,
 # and their payload (e.g. the full skill body) is for the model only.
 _HOST_RENDERED_TOOL_NAMES: frozenset[str] = frozenset({"ask_user_choice", "skill_view"})
-_CHOICE_INVITATION_PREFIXES: tuple[str, ...] = (
-    "choose ",
-    "please choose ",
-    "select ",
-    "please select ",
-    "pick ",
-    "please pick ",
+_CHOICE_INVITATION_WORDS: frozenset[str] = frozenset(
+    {
+        "a",
+        "an",
+        "choose",
+        "following",
+        "from",
+        "of",
+        "one",
+        "option",
+        "options",
+        "pick",
+        "please",
+        "preferred",
+        "select",
+        "the",
+        "your",
+    }
 )
 
 
@@ -892,20 +904,23 @@ def _compose_response(
 
 
 def _is_redundant_choice_invitation(result: Any, final_text: str) -> bool:
-    """True when a short single-choice closing duplicates the queued picker."""
-    normalized = " ".join(final_text.casefold().strip().rstrip(".!?").split())
-    if not normalized:
+    """True when a single-choice closing adds no words beyond picker context."""
+    final_words = set(re.findall(r"[a-z0-9]+", final_text.casefold()))
+    if not final_words:
         return True
-    for tool_call, _tool_result in getattr(result, "tool_results", []):
+    for tool_call, tool_result in getattr(result, "tool_results", []):
         if tool_call.name != "ask_user_choice":
             continue
         args = public_tool_input(tool_call.input)
         if args.get("questions"):
             return False
-        title = " ".join(str(args.get("title", "")).casefold().strip().rstrip(".!?").split())
-        if title and normalized == title:
-            return True
-        return len(normalized.split()) <= 16 and normalized.startswith(_CHOICE_INVITATION_PREFIXES)
+        picker_words = set(re.findall(r"[a-z0-9]+", str(args.get("title", "")).casefold()))
+        details = getattr(tool_result, "details", None)
+        if isinstance(details, dict):
+            picker_words.update(
+                re.findall(r"[a-z0-9]+", str(details.get("summary", "")).casefold())
+            )
+        return final_words <= picker_words | _CHOICE_INVITATION_WORDS
     return False
 
 

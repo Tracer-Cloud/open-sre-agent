@@ -260,7 +260,7 @@ def test_queued_choice_preserves_substantive_closing_text() -> None:
         name="ask_user_choice",
         input={"title": "Deploy how?", "options": ["Canary", "Rolling"]},
     )
-    closing = "I found three failed checks; review those while choosing the rollout strategy."
+    closing = "Choose Canary only if the error rate remains stable."
     result = _Result(
         tool_results=[(choice, _ToolResult({"ok": True, "menu": "queued"}))],
         final_text=closing,
