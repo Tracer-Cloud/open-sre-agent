@@ -82,7 +82,12 @@ Facts (bullets), "What the signature tells us", hypothesis-ranking table,
 and for plan-only workloads optional phased narrative (Phase 1 — …) plus
 "Biggest risk". Do not repeat that prose in the assistant closing reply.
 explanation is optional on revisions; include it when the plan or diagnosis
-changes.
+changes. The steps are terse on purpose — the explanation is where the detail
+lives, so make it substantive: every Fact names a specific signal (route,
+number, span, revision), every "what it rules out" line eliminates an
+alternative, and every hypothesis row carries a discriminator (the one
+observation that separates it from the others). A one-line or vague
+explanation is not acceptable.
 plan_only is optional; true only for an explicit "don't run yet" request.
 
 GOOD PLAN — checkout 502s (last step verifies):
@@ -96,6 +101,27 @@ GOOD PLAN — plan-only (user said do not execute yet):
 2. pending         Patch the workflow from the error
 3. pending         Confirm the workflow run is green
 
+GOOD EXPLANATION — the diagnosis rendered under the checkout 502s plan.
+Match this depth; terse steps above, specifics here:
+
+### Facts
+- 502s on POST /checkout/submit only; other checkout routes stay healthy.
+- Onset was sudden, within minutes of deploy abc123.
+- Payments upstream span shows read timeouts near 30s, not app crashes.
+
+### What the signature tells us
+- Submit-only rules out a gateway-wide or storefront outage.
+- Sudden-at-deploy rules out organic traffic growth or a slow leak.
+- Read timeouts (not connection refusals) rule out the dependency being
+  fully down — it is reachable but slow or starved.
+
+### Hypotheses
+| # | Hypothesis | Why it fits | Discriminator |
+|---|------------|-------------|---------------|
+| 1 | Deploy lowered the payments client timeout below its p99 | Sudden at deploy; read timeouts | Diff the timeout config in abc123 |
+| 2 | A new synchronous call on submit exhausts the pool | Submit-only; saturation-shaped | Pool metrics plus the added call in the diff |
+| 3 | The payments dependency itself degraded | Timeout signature | Its own health and error budget over the window |
+
 BAD PLANS (never do these)
 - A single step ("fix it").
 - Last step is "make the change" with no check.
@@ -104,3 +130,5 @@ BAD PLANS (never do these)
 - Calling update_plan before Ask User when missing facts still block.
 - Leaving every step pending after answers when the user asked to execute.
 - Treating /work or /goal as a substitute for this live checklist.
+- A one-line or vague explanation ("investigating the issue"): it must carry
+  specific Facts, what they rule out, and a ranked hypothesis table.

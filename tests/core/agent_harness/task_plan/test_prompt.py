@@ -26,10 +26,10 @@ def _ctx(*, plan=None) -> TurnSnapshot:
     )
 
 
-def test_planning_instructions_are_about_seventy_lines_with_examples() -> None:
+def test_planning_instructions_carry_the_dense_diagnosis_exemplar() -> None:
     text = load_planning_instructions()
     lines = text.splitlines()
-    assert 60 <= len(lines) <= 120
+    assert 60 <= len(lines) <= 160
     assert "update_plan" in text
     assert "ASK THEN PLAN" in text
     assert "ask_user_choice" in text
@@ -39,6 +39,11 @@ def test_planning_instructions_are_about_seventy_lines_with_examples() -> None:
     assert "Confirm checkout returns 2xx" in text
     assert "work_task_*" in text
     assert "/goal" in text
+    # The worked explanation exemplar is what drives dense diagnoses; guard it so
+    # the density guidance cannot be silently thinned back to a one-liner.
+    assert "GOOD EXPLANATION" in text
+    assert "What the signature tells us" in text
+    assert "Discriminator" in text
 
 
 def test_composed_prompt_includes_planning_instructions() -> None:
