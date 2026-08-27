@@ -357,7 +357,7 @@ _BUILTIN_SPECS: tuple[IntegrationSpec, ...] = (
         service="hermes",
         has_verifier=True,
         direct_effective=True,
-        setup_order=55,
+        setup_order=56,
         verify_order=101,
     ),
     IntegrationSpec(
