@@ -236,7 +236,7 @@ def test_github_cli_tool_call_display_uses_sdk_arguments_without_runtime_details
     assert "120" not in content
 
 
-def test_python_tool_call_display_summarizes_execution_without_source_or_values() -> None:
+def test_python_tool_call_display_summarizes_execution_with_safe_input_values() -> None:
     label, content = tool_call_display(
         "execute_python_code",
         {
@@ -252,11 +252,37 @@ def test_python_tool_call_display_summarizes_execution_without_source_or_values(
     )
 
     assert label == "Python"
-    assert content == "run analysis · network enabled · inputs: owner, repo, week_start_local"
+    assert content == (
+        "run analysis · network enabled · inputs: owner=react, repo=react, "
+        "week_start_local=2026-08-24T00:00:00+01:00"
+    )
     assert "print" not in content
-    assert "react" not in content
     assert "timeout" not in content
     assert "60" not in content
+
+
+def test_python_tool_call_display_derives_high_level_details_from_source() -> None:
+    label, content = tool_call_display(
+        "execute_python_code",
+        {
+            "allow_network": True,
+            "code": """
+owner = inputs["owner"]
+url = f"https://api.github.com/repos/{owner}/react/stargazers?per_page=100"
+print({"stars_gained": 3, "pages_scanned": 2})
+""",
+            "timeout": 60,
+        },
+    )
+
+    assert label == "Python"
+    assert "target: api.github.com/repos/{owner}/react/stargazers" in content
+    assert "inputs: owner" in content
+    assert "outputs: stars_gained, pages_scanned" in content
+    assert "network enabled" in content
+    assert "per_page" not in content
+    assert "print" not in content
+    assert "timeout" not in content
 
 
 def test_generic_tool_call_display_is_bounded_and_omits_execution_controls() -> None:

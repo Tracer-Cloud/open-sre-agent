@@ -12,7 +12,9 @@ binding core ports while terminal formatting stays in ``ui/``.
 
 from __future__ import annotations
 
+import ast
 import contextlib
+import re
 import shlex
 from typing import Any
 
@@ -52,6 +54,7 @@ _SENSITIVE_KEY_PARTS = (
     "secret",
     "token",
 )
+_PYTHON_URL_RE = re.compile(r"https?://[^\s'\"`]+")
 
 _SIMPLE_TOOL_LABELS: dict[str, tuple[str, str]] = {
     ActionToolName.LLM_SET_PROVIDER: ("LLM provider", "target"),
@@ -136,14 +139,91 @@ def _python_execution_display(args: dict[str, Any]) -> tuple[str, str]:
     details = ["run analysis"]
     if args.get("allow_network") is True:
         details.append("network enabled")
+    code = str(args.get("code", "") or "")
+    targets = _python_network_targets(code)
+    if targets:
+        details.append(f"target: {', '.join(targets)}")
+    outputs = _python_output_fields(code)
+    if outputs:
+        details.append(f"outputs: {', '.join(outputs)}")
     inputs = args.get("inputs")
     if isinstance(inputs, dict):
-        names = sorted(
-            str(key) for key in inputs if key != "opensre_runtime" and not _is_sensitive_key(key)
+        safe_inputs = redact_sensitive(
+            {
+                str(key): value
+                for key, value in inputs.items()
+                if key != "opensre_runtime" and not _is_sensitive_key(key)
+            }
         )
-        if names:
-            details.append(f"inputs: {', '.join(names)}")
-    return "Python", _bounded_preview(" · ".join(details))
+        rendered_inputs = [
+            f"{key}={_bounded_preview(str(value), limit=40)}"
+            for key, value in sorted(safe_inputs.items())
+        ]
+        if rendered_inputs:
+            details.append(f"inputs: {', '.join(rendered_inputs)}")
+    else:
+        referenced_inputs = _python_referenced_inputs(code)
+        if referenced_inputs:
+            details.append(f"inputs: {', '.join(referenced_inputs)}")
+    return "Python", _bounded_preview(" · ".join(details), limit=240)
+
+
+def _python_network_targets(code: str) -> list[str]:
+    targets: list[str] = []
+    for match in _PYTHON_URL_RE.finditer(code):
+        target = match.group(0).split("://", 1)[1].split("?", 1)[0].rstrip("/),]")
+        if not target or any(existing.startswith(target) for existing in targets):
+            continue
+        targets = [existing for existing in targets if not target.startswith(existing)]
+        targets.append(_bounded_preview(target, limit=64))
+    return targets[:2]
+
+
+def _python_tree(code: str) -> ast.AST | None:
+    try:
+        return ast.parse(code)
+    except (SyntaxError, ValueError):
+        return None
+
+
+def _python_referenced_inputs(code: str) -> list[str]:
+    tree = _python_tree(code)
+    if tree is None:
+        return []
+    names = {
+        str(node.slice.value)
+        for node in ast.walk(tree)
+        if isinstance(node, ast.Subscript)
+        and isinstance(node.value, ast.Name)
+        and node.value.id == "inputs"
+        and isinstance(node.slice, ast.Constant)
+        and isinstance(node.slice.value, str)
+        and not _is_sensitive_key(node.slice.value)
+    }
+    return sorted(names)
+
+
+def _python_output_fields(code: str) -> list[str]:
+    tree = _python_tree(code)
+    if tree is None:
+        return []
+    fields: list[str] = []
+    for node in ast.walk(tree):
+        if not isinstance(node, ast.Call) or not isinstance(node.func, ast.Name):
+            continue
+        if node.func.id != "print" or not node.args:
+            continue
+        value = node.args[0]
+        while isinstance(value, ast.Call) and value.args:
+            value = value.args[0]
+        if not isinstance(value, ast.Dict):
+            continue
+        for key in value.keys:
+            if not isinstance(key, ast.Constant) or not isinstance(key.value, str):
+                continue
+            if key.value not in fields and not _is_sensitive_key(key.value):
+                fields.append(key.value)
+    return fields[:4]
 
 
 def _generic_tool_display(tool_name: str, args: dict[str, Any]) -> tuple[str, str]:
