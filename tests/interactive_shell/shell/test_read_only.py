@@ -49,6 +49,10 @@ _MUTATING = [
     "git show -o/tmp/commit.patch HEAD",
     "git config user.name Bob",
     "ls -la\nrm -rf /tmp/x",  # newline separates a mutation — must gate
+    'date -s "2020-01-01"',  # sets system clock
+    "hostname newname",  # sets kernel hostname
+    "LD_PRELOAD=/evil.so ls",  # env prefix can inject code
+    "git ls-remote ext::evil",  # ext:: transport runs a helper
 ]
 
 

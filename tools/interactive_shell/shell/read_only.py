@@ -313,14 +313,27 @@ def _is_redirect_token(token: str) -> bool:
     return (">" in token) or ("<" in token) or token == "/dev/null"
 
 
+# git transports that run a helper program (``git ls-remote ext::<cmd>``); these
+# execute code regardless of the read-only subcommand, so always gate them.
+_DANGEROUS_TRANSPORTS = ("ext::", "fd::")
+
+
 def _executable_is_read_only(exe: str, rest: list[str]) -> bool:
     name = exe.rsplit("/", 1)[-1]
     if name == "git":
+        if any(tok.startswith(_DANGEROUS_TRANSPORTS) for tok in rest):
+            return False
         return _git_is_read_only(rest)
     if name == "find":
         return not any(tok in _FIND_MUTATING_PRIMARIES for tok in rest)
     if name == "sort":
         return not any(tok.startswith("-o") or tok.startswith("--output") for tok in rest)
+    if name == "date":
+        # ``date -s`` / ``date --set=`` changes the system clock.
+        return not any(tok in ("-s", "--set") or tok.startswith("--set=") for tok in rest)
+    if name == "hostname":
+        # A positional argument sets the hostname; only flags read.
+        return not any(not tok.startswith("-") for tok in rest)
     if name in ("yq", "sed", "perl", "awk"):
         # These can edit files in place / run programs; only ever gate them.
         return False
@@ -333,8 +346,12 @@ def _segment_is_read_only(segment: str) -> bool:
     except ValueError:
         return False
     for index, token in enumerate(tokens):
-        if _ENV_ASSIGN_RE.match(token) or _is_redirect_token(token):
+        if _is_redirect_token(token):
             continue
+        if _ENV_ASSIGN_RE.match(token):
+            # An env-var prefix (LD_PRELOAD, GIT_SSH_COMMAND, GIT_CONFIG_*, …) can
+            # change a command's behavior or enable code execution; never auto-run.
+            return False
         return _executable_is_read_only(token, tokens[index + 1 :])
     return False
 
