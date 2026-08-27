@@ -220,6 +220,39 @@ def test_queued_choice_owns_the_turn_display() -> None:
     assert use_final_text is False
 
 
+def test_queued_choice_preserves_sibling_tool_results() -> None:
+    github = ToolCall(id="1", name="github_cli", input={"command": "run list"})
+    choice = ToolCall(
+        id="2",
+        name="ask_user_choice",
+        input={"title": "Deploy how?", "options": ["Canary", "Rolling"]},
+    )
+    result = _Result(
+        tool_results=[
+            (github, _ToolResult(_payload("3 failed, 59 succeeded"))),
+            (
+                choice,
+                _ToolResult(
+                    {
+                        "ok": True,
+                        "menu": "queued",
+                        "summary": "Choose your preferred deployment strategy.",
+                    }
+                ),
+            ),
+        ],
+        final_text="Choose your preferred deployment strategy.",
+    )
+    session = _Session()
+    session.pending_user_choice = object()
+
+    response_text, display_chunks, use_final_text = _compose_response(result, session, _counts(2))
+
+    assert response_text == "3 failed, 59 succeeded"
+    assert display_chunks == ["3 failed, 59 succeeded"]
+    assert use_final_text is False
+
+
 def test_selected_choice_hides_only_a_pure_acknowledgement() -> None:
     result = _Result(tool_results=[], final_text="Blue-green selected.")
     session = _Session()

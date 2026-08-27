@@ -226,7 +226,7 @@ INVESTIGATION_DISPATCH_TOOL_NAMES: frozenset[str] = frozenset(
 # Tools whose user-facing event is owned by the host UI, so the end-of-turn
 # generic formatter must stay silent: repeating their summary would double-print,
 # and their payload (e.g. the full skill body) is for the model only.
-_HOST_RENDERED_TOOL_NAMES: frozenset[str] = frozenset({"skill_view"})
+_HOST_RENDERED_TOOL_NAMES: frozenset[str] = frozenset({"ask_user_choice", "skill_view"})
 
 
 @dataclass(frozen=True)
@@ -834,7 +834,7 @@ def _compose_response(
     """
     final_text = str(getattr(result, "final_text", "") or "").strip()
     waiting_for_choice = getattr(session, "pending_user_choice", None) is not None
-    generic_text = "" if waiting_for_choice else _response_text_from_generic_results(result)
+    generic_text = _response_text_from_generic_results(result)
     hint = _pop_turn_outcome_hint(session)
     prefer_tool_response_text = _has_preferred_tool_response_text(result)
     terminal = getattr(session, "terminal", None)
