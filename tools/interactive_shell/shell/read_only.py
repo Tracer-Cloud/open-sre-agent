@@ -5,9 +5,10 @@ segments is on a curated allowlist and nothing writes to a file. The classifier
 is deliberately conservative: anything it cannot prove safe (command
 substitution, heredocs, output redirects, unknown executables, command-runners
 like ``xargs``/``sudo``, or a read-only tool invoked with a write flag such as
-``find -delete`` or ``sort -o``) returns ``False`` so the execution gate still
-asks. A read-only command may then run without approval, matching how coding
-agents let inspection commands through while still gating mutations.
+``find -delete``, ``sort -o``, or ``rg --pre``) returns ``False`` so the
+execution gate still asks. A read-only command may then run without approval,
+matching how coding agents let inspection commands through while still gating
+mutations.
 """
 
 from __future__ import annotations
@@ -343,6 +344,15 @@ _GIT_CONFIG_INJECT_FLAGS: frozenset[str] = frozenset({"-c", "--config", "--confi
 _GIT_HELPER_EXEC_FLAGS: frozenset[str] = frozenset(
     {"--upload-pack", "--receive-pack", "--exec", "--exec-path"}
 )
+# Diff-family helpers. ``--ext-diff`` runs ``diff.external``; ``--textconv`` runs
+# attribute/config converters. ``-c`` already covers process-local config of either.
+_GIT_DIFF_HELPER_FLAGS: frozenset[str] = frozenset({"--ext-diff", "--textconv"})
+# ``rg --pre`` / ``--pre=`` runs a preprocessor per matched file. ``--hostname-bin``
+# runs an arbitrary hostname helper when hyperlinks are on. Matched with
+# ``_token_is_write_flag`` so ``--pretty`` / ``--pre-glob`` stay ordinary reads.
+_RG_HELPER_FLAGS: frozenset[str] = frozenset({"--pre", "--hostname-bin"})
+# ``sort --compress-program`` runs an external compressor on temp files.
+_SORT_HELPER_FLAGS: frozenset[str] = frozenset({"--compress-program"})
 # ``date -s`` / ``date --set=`` set the system clock.
 _DATE_WRITE_FLAGS: frozenset[str] = frozenset({"-s", "--set"})
 # Linux ``hostname -F <file>`` / ``-b`` write the kernel hostname from a file.
@@ -358,6 +368,8 @@ def _git_argv_is_unsafe(rest: list[str]) -> bool:
         if _token_is_write_flag(tok, _GIT_CONFIG_INJECT_FLAGS):
             return True
         if _token_is_write_flag(tok, _GIT_HELPER_EXEC_FLAGS):
+            return True
+        if _token_is_write_flag(tok, _GIT_DIFF_HELPER_FLAGS):
             return True
     return False
 
@@ -393,11 +405,15 @@ def _executable_is_read_only(exe: str, rest: list[str]) -> bool:
     if name == "find":
         return not any(tok in _FIND_MUTATING_PRIMARIES for tok in rest)
     if name == "sort":
-        return not any(tok.startswith("-o") or tok.startswith("--output") for tok in rest)
+        if any(tok.startswith("-o") or tok.startswith("--output") for tok in rest):
+            return False
+        return not any(_token_is_write_flag(tok, _SORT_HELPER_FLAGS) for tok in rest)
     if name == "date":
         return _date_is_read_only(rest)
     if name == "hostname":
         return _hostname_is_read_only(rest)
+    if name in ("rg", "ag", "ack", "grep", "egrep", "fgrep"):
+        return not any(_token_is_write_flag(tok, _RG_HELPER_FLAGS) for tok in rest)
     if name in ("yq", "sed", "perl", "awk"):
         # These can edit files in place / run programs; only ever gate them.
         return False

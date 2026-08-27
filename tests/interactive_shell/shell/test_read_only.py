@@ -29,6 +29,9 @@ _READ_ONLY = [
     "git reflog list",
     "git reflog exists HEAD",
     "git reflog HEAD",
+    "rg needle file",
+    "rg --pretty needle",  # --pretty is display, not the --pre preprocessor
+    "rg --pre-glob '*.pdf' needle",  # glob-only; no preprocessor without --pre
 ]
 
 _MUTATING = [
@@ -81,6 +84,15 @@ _MUTATING = [
     "git ls-remote --upload-pack /tmp/evil origin",
     "git -c protocol.ext.allow=always ls-remote origin",  # process-local config
     "git -cprotocol.ext.allow=always ls-remote origin",
+    "git diff --ext-diff",  # runs diff.external
+    "git log --ext-diff",
+    "git show --textconv HEAD",
+    "git diff --textconv",
+    "rg --pre python pattern",  # preprocessor runs per matched file
+    "rg --pre=python pattern",
+    "rg --pre=/tmp/evil.sh pattern",
+    "rg --hostname-bin=/tmp/evil pattern",
+    "sort --compress-program=/tmp/evil file",
     "./ls",  # path-qualified executable is not the allowlisted command
     "/tmp/git status",  # attacker-controlled path
     "diff <(rm /tmp/x) file",  # process substitution runs a nested command
@@ -144,12 +156,32 @@ def test_git_output_write_bypasses_neither_auto_nor_plan_only_gates(command: str
         "git ls-remote --upload-pack=/tmp/evil origin",
         "git -cprotocol.ext.allow=always ls-remote origin",
         "git ls-remote ext::evil",
+        "git diff --ext-diff",
+        "git show --textconv HEAD",
     ],
 )
 def test_mutation_and_helper_forms_bypass_neither_auto_nor_plan_only_gates(
     command: str,
 ) -> None:
     """Clock/hostname setters and git helper/config injectors must still ask."""
+    result = evaluate_shell_command(command)
+    assert result.shell_classification == "unrestricted"
+    assert apply_auto_level(result, AutoLevel.LOW).verdict == "ask"
+    assert apply_plan_only_gate(result, plan_only_active=True).verdict == "ask"
+
+
+@pytest.mark.parametrize(
+    "command",
+    [
+        "rg --pre python pattern",
+        "rg --pre=python pattern",
+        "rg --pre=/tmp/evil.sh pattern",
+        "rg --hostname-bin=/tmp/evil pattern",
+        "sort --compress-program=/tmp/evil file",
+    ],
+)
+def test_rg_helper_forms_bypass_neither_auto_nor_plan_only_gates(command: str) -> None:
+    """``rg --pre`` / ``--hostname-bin`` run a helper; low-auto and plan-only must still ask."""
     result = evaluate_shell_command(command)
     assert result.shell_classification == "unrestricted"
     assert apply_auto_level(result, AutoLevel.LOW).verdict == "ask"
