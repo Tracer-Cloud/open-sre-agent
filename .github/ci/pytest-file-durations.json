@@ -820,7 +820,7 @@
     "tests": 18
   },
   "tests/cli/test_install_ps1_progress.py": {
-    "seconds": 0.046,
+    "seconds": 5.5,
     "tests": 10
   },
   "tests/cli/test_install_readme.py": {
@@ -1252,8 +1252,8 @@
     "tests": 3
   },
   "tests/core/agent/test_turn_scenarios.py": {
-    "seconds": 0.051,
-    "tests": 7
+    "seconds": 45.0,
+    "tests": 23
   },
   "tests/core/agent/test_turn_snapshot_runtime_request.py": {
     "seconds": 0.028,
