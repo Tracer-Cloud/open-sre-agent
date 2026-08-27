@@ -64,6 +64,14 @@ def test_ask_user_choice_tool_is_action_surface_read_only() -> None:
         "headless, scheduled, gateway, or /goal" in example
         for example in ask_user_choice_tool.anti_examples
     )
+    assert any(
+        "investigation_start instead of Ask User" in example
+        for example in ask_user_choice_tool.anti_examples
+    )
+    assert any(
+        "no investigate/RCA verb with a concrete alert payload" in case
+        for case in ask_user_choice_tool.use_cases
+    )
 
 
 def test_interactive_repl_defers_menu_to_choose_turn() -> None:

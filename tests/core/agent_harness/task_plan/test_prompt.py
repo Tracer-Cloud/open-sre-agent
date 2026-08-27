@@ -50,6 +50,20 @@ def test_planning_instructions_carry_the_dense_diagnosis_exemplar() -> None:
     assert "ordinary plan-only" in text.lower()
 
 
+def test_planning_instructions_skip_ask_user_for_investigate_with_payload() -> None:
+    """Pasted alert JSON + investigate must not open Ask User before dispatch.
+
+    Live oracle 306/340 failed when ASK THEN PLAN's shape/signals coaching
+    overrode investigation_start. Keep the skip rule in the planning contract.
+    """
+    text = load_planning_instructions()
+    collapsed = " ".join(text.split())
+    assert "pasted alert JSON" in collapsed
+    assert "investigation_start" in collapsed
+    assert "Do **not** open Ask User for onset shape" in collapsed
+    assert "explicit investigate/RCA dispatch" in collapsed
+
+
 def test_composed_prompt_includes_planning_instructions() -> None:
     prompt = build_action_system_prompt(_ctx())
     assert "PLANNING — update_plan" in prompt

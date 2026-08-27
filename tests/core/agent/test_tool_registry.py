@@ -239,6 +239,8 @@ def test_investigation_tool_description_preserves_compound_slash_guidance() -> N
     assert "placeholder quoted text like 'hello world'" in description
     assert "separate second tool call" in description
     assert "never drop the quoted investigation" in description
+    assert "do not call ask_user_choice first" in description
+    assert "pasted alert json" in description
 
 
 def test_session_goal_control_tool_is_registered() -> None:
