@@ -617,6 +617,28 @@ def test_in_progress_explanation_only_update_renders_markdown() -> None:
     assert "revised diagnosis" in buffer.getvalue()
 
 
+def test_multiline_explanation_keeps_its_line_breaks_when_rendered() -> None:
+    # Arrange: a multi-line markdown explanation (a Facts heading + a bullet).
+    from core.agent_harness.task_plan.plan import parse_task_plan
+    from core.agent_harness.task_plan.update_plan_policy import apply_update_plan_session
+
+    observer, buffer = _observer_with_buffer("keep going")
+    plan, error = parse_task_plan(
+        {"plan": _IN_PROGRESS_PLAN, "explanation": "### Facts\n- gradual onset"}
+    )
+    assert error is None and plan is not None
+
+    # Act: render the plan update through the observer.
+    apply_update_plan_session(observer.session, plan, plan_only=False)
+    observer("tool_end", {"id": "p1", "name": "update_plan", "output": {"ok": True}})
+
+    # Assert: both lines survive and are not flattened onto one line.
+    output = buffer.getvalue()
+    assert "Facts" in output
+    assert "gradual onset" in output
+    assert "Facts- gradual onset" not in output
+
+
 def test_unchanged_plan_signature_does_not_reprint() -> None:
     from core.agent_harness.task_plan.plan import parse_task_plan
     from core.agent_harness.task_plan.update_plan_policy import apply_update_plan_session
