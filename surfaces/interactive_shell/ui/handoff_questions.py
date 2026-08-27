@@ -72,6 +72,19 @@ def render_handoff_answer_marker() -> Text:
     return Text("↗ answer", style=str(ui_theme.DIM))
 
 
+def render_choice_selection(console: Console, title: str, answer: str) -> None:
+    """Persist a compact selected-choice result after the transient picker closes."""
+    heading = Text()
+    heading.append("✓ ", style=f"bold {ui_theme.HIGHLIGHT}")
+    heading.append(_display_safe(title.strip()), style=str(ui_theme.TEXT))
+    selected = Text("  ", style=str(ui_theme.DIM))
+    selected.append(_display_safe(answer.strip()), style=str(ui_theme.BRAND))
+    console.print()
+    console.print(heading)
+    console.print(selected)
+    console.print()
+
+
 def render_ask_user_qa(console: Console, pairs: list[tuple[str, str]]) -> None:
     """Print Ask User Q→A: orange header, numbered questions, brand answers.
 
@@ -114,6 +127,7 @@ __all__ = [
     "is_handoff_question",
     "last_assistant_asked_handoff",
     "render_ask_user_qa",
+    "render_choice_selection",
     "render_handoff_answer_marker",
     "render_handoff_question",
     "try_render_ask_user_submission",

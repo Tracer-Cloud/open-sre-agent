@@ -106,6 +106,12 @@ def render_submitted_prompt(console: Console, session: Session, text: str) -> No
         return
     autosubmitted = bool(session.terminal.last_input_autosubmitted)
     session.terminal.last_input_autosubmitted = False
+    if is_handoff_answer and autosubmitted:
+        # A fixed picker choice already has a compact persistent result. Do not
+        # manufacture a second user turn in scrollback; only mark the synthetic
+        # answer so a no-op model acknowledgement can be omitted as well.
+        session.terminal.pending_choice_response = stripped
+        return
     if is_handoff_answer:
         console.print(render_handoff_answer_marker())
     elif autosubmitted:

@@ -18,6 +18,7 @@ from infrastructure.terminal import theme as ui_theme
 from surfaces.interactive_shell.command_registry.types import SlashCommand
 from surfaces.interactive_shell.runtime import Session
 from surfaces.interactive_shell.ui.ask_user import CUSTOM_OPTION, repl_ask_user
+from surfaces.interactive_shell.ui.handoff_questions import render_choice_selection
 from surfaces.shared.terminal.components.choice_menu import (
     print_valid_choice_list,
     repl_choose_one,
@@ -74,8 +75,9 @@ def _cmd_choose(session: Session, console: Console, args: list[str]) -> bool:
         session.terminal.awaiting_handoff_answer = False
         return True
 
-    # Auto-submit the chosen label as the next user message; the prompt echo is
-    # the confirmation, so nothing is printed here.
+    # The picker is transient, so leave one compact result in scrollback. The
+    # synthetic answer turn itself stays hidden by submitted-prompt rendering.
+    render_choice_selection(console, items[0].title, picked_one)
     session.terminal.set_auto_command(picked_one)
     session.terminal.awaiting_handoff_answer = True
     return True

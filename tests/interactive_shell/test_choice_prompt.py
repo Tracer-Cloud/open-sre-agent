@@ -40,7 +40,7 @@ def test_selection_is_auto_submitted_as_next_user_message(
 ) -> None:
     session = Session()
     session.pending_user_choice = _CHOICE
-    console, _buf = _console()
+    console, buf = _console()
 
     def _pick_second(**kwargs: object) -> str:
         assert kwargs["title"] == _CHOICE.title
@@ -53,6 +53,10 @@ def test_selection_is_auto_submitted_as_next_user_message(
     assert session.pending_user_choice is None
     assert session.terminal.pending_prompt_default == "Commit the changes"
     assert session.terminal.pending_prompt_autosubmit is True
+    output = buf.getvalue()
+    assert "✓" in output
+    assert _CHOICE.title in output
+    assert "Commit the changes" in output
 
 
 def test_cancelled_menu_leaves_prompt_free(monkeypatch: pytest.MonkeyPatch) -> None:

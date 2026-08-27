@@ -11,6 +11,7 @@ from surfaces.interactive_shell.ui.handoff_questions import (
     is_handoff_question,
     last_assistant_asked_handoff,
     render_ask_user_qa,
+    render_choice_selection,
     render_handoff_question,
     try_render_ask_user_submission,
 )
@@ -104,6 +105,33 @@ def test_choose_slash_is_not_echoed() -> None:
     # The queued /choose must not leave a stale autosubmit flag, or the next
     # genuine turn is misread as autosubmitted and skips the round-counter reset.
     assert session.terminal.last_input_autosubmitted is False
+
+
+def test_auto_submitted_single_choice_is_not_echoed_as_a_user_turn() -> None:
+    session = Session()
+    session.terminal.awaiting_handoff_answer = True
+    session.terminal.last_input_autosubmitted = True
+    buffer = io.StringIO()
+    console = Console(file=buffer, force_terminal=False, highlight=False, width=80)
+
+    render_submitted_prompt(console, session, "Blue-green")
+
+    assert buffer.getvalue() == ""
+    assert session.terminal.submitted_turn_count == 0
+    assert session.terminal.pending_choice_response == "Blue-green"
+
+
+def test_choice_selection_strips_terminal_controls() -> None:
+    buffer = io.StringIO()
+    console = Console(file=buffer, force_terminal=False, highlight=False, width=80)
+
+    render_choice_selection(console, "Deploy?\x1b]0;pwn\x07", "Canary\x1b[2K")
+
+    output = buffer.getvalue()
+    assert "\x1b" not in output
+    assert "\x07" not in output
+    assert "✓ Deploy?" in output
+    assert "Canary" in output
 
 
 def test_try_render_rejects_a_single_choice_label() -> None:

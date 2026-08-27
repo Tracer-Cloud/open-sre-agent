@@ -289,6 +289,7 @@ class InteractiveShellController:
                     # A genuine typed turn starts a new workload: reset the ask-user
                     # round counter so the two-round cap is per-request, not per-session.
                     self.session.ask_user_rounds = 0
+                    self.session.terminal.pending_choice_response = None
                 wait_for_turn = _should_wait_until_turn_finishes(
                     exclusive_stdin=wait,
                     goal_condition_autosubmitted=autosubmitted and not ask_user_answers,

@@ -35,6 +35,12 @@ class _Result:
 class _Session:
     def __init__(self) -> None:
         self.history: list[dict[str, Any]] = []
+        self.pending_user_choice: object | None = None
+
+        class _Terminal:
+            pending_choice_response: str | None = None
+
+        self.terminal = _Terminal()
 
 
 def _shell_call(call_id: str, command: str, *, quiet: bool) -> ToolCall:
@@ -181,3 +187,62 @@ def test_a_generic_tool_result_is_not_replaced_by_quiet_stdout() -> None:
     shown = "\n".join(display_chunks)
     assert "3 failed, 59 succeeded" in shown
     assert "rate limit 4998" not in shown
+
+
+def test_queued_choice_owns_the_turn_display() -> None:
+    call = ToolCall(
+        id="1",
+        name="ask_user_choice",
+        input={"title": "Deploy how?", "options": ["Canary", "Rolling"]},
+    )
+    result = _Result(
+        tool_results=[
+            (
+                call,
+                _ToolResult(
+                    {
+                        "ok": True,
+                        "menu": "queued",
+                        "summary": "Choose your preferred deployment strategy.",
+                    }
+                ),
+            )
+        ],
+        final_text="Choose your preferred deployment strategy.",
+    )
+    session = _Session()
+    session.pending_user_choice = object()
+
+    response_text, display_chunks, use_final_text = _compose_response(result, session, _counts(1))
+
+    assert response_text == ""
+    assert display_chunks == []
+    assert use_final_text is False
+
+
+def test_selected_choice_hides_only_a_pure_acknowledgement() -> None:
+    result = _Result(tool_results=[], final_text="Blue-green selected.")
+    session = _Session()
+    session.terminal.pending_choice_response = "Blue-green"
+
+    response_text, display_chunks, use_final_text = _compose_response(result, session, _counts(0))
+
+    assert response_text == ""
+    assert display_chunks == []
+    assert use_final_text is False
+    assert session.terminal.pending_choice_response is None
+
+
+def test_selected_choice_keeps_meaningful_follow_up_response() -> None:
+    result = _Result(
+        tool_results=[],
+        final_text="Blue-green avoids routing a full release to every instance at once.",
+    )
+    session = _Session()
+    session.terminal.pending_choice_response = "Blue-green"
+
+    _response_text, display_chunks, _use_final_text = _compose_response(result, session, _counts(0))
+
+    shown = "\n".join(display_chunks)
+    assert "Blue-green avoids routing" in shown
+    assert session.terminal.pending_choice_response is None

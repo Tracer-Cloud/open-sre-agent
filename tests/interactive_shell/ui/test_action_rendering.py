@@ -48,6 +48,36 @@ def test_slash_invoke_tool_start_does_not_record_cli_agent() -> None:
     assert "/model show" in buffer.getvalue()
 
 
+def test_internal_choose_slash_has_no_tool_preview() -> None:
+    session = Session()
+    buffer = io.StringIO()
+    console = Console(file=buffer, force_terminal=False, highlight=False)
+    observer = ActionRenderObserver(session=session, console=console, message="/choose")
+
+    observer(
+        "tool_start",
+        {"name": "slash_invoke", "input": {"command": "/choose", "args": []}},
+    )
+
+    assert observer.planned_count == 1
+    assert buffer.getvalue() == ""
+
+
+def test_ask_user_choice_has_no_generic_tool_preview() -> None:
+    observer, buffer = _observer_with_buffer("ask me to choose")
+
+    observer(
+        "tool_start",
+        {
+            "name": "ask_user_choice",
+            "input": {"title": "Deploy how?", "options": ["Canary", "Rolling"]},
+        },
+    )
+
+    assert observer.planned_count == 1
+    assert buffer.getvalue() == ""
+
+
 def test_shell_run_tool_start_does_not_record_cli_agent() -> None:
     session = Session()
     console = Console(file=io.StringIO(), force_terminal=False, highlight=False)

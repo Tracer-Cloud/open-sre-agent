@@ -53,7 +53,20 @@ _SIMPLE_TOOL_LABELS: dict[str, tuple[str, str]] = {
 #: Tools that render their own dedicated UI (the investigation lap/spinner
 #: progress). The generic live tool-call preview is suppressed for these so it
 #: does not duplicate that UI as a wall of text.
-_SELF_RENDERING_TOOLS: frozenset[str] = frozenset({ActionToolName.INVESTIGATION_START})
+_SELF_RENDERING_TOOLS: frozenset[str] = frozenset(
+    {
+        ActionToolName.ASK_USER_CHOICE,
+        ActionToolName.INVESTIGATION_START,
+    }
+)
+
+
+def _is_internal_choice_command(name: str, data: dict[str, Any]) -> bool:
+    """True for the private slash turn that opens the choice picker."""
+    if name != ActionToolName.SLASH_INVOKE:
+        return False
+    args = data.get("input")
+    return isinstance(args, dict) and str(args.get("command", "")).strip() == "/choose"
 
 
 def tool_call_display(tool_name: str, args: dict[str, Any]) -> tuple[str, str]:
@@ -136,6 +149,8 @@ class ActionRenderObserver:
             self._render_skill_start(data)
         elif name == ActionToolName.UPDATE_PLAN:
             pass  # render on tool_end after the tool commits session state
+        elif _is_internal_choice_command(name, data):
+            pass  # private picker plumbing; the menu owns the visible interaction
         elif name in _SELF_RENDERING_TOOLS:
             pass  # owns its UI; a generic preview would duplicate it
         else:

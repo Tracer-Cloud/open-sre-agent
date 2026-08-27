@@ -223,11 +223,10 @@ _EXECUTED_HISTORY_TYPES = {
 INVESTIGATION_DISPATCH_TOOL_NAMES: frozenset[str] = frozenset(
     {"investigation_start", "alert_sample"}
 )
-# Tools whose user-facing event is rendered live by the surface's tool-event
-# observer (``tool_start``/``tool_end``), so the end-of-turn generic formatter
-# must stay silent for them: repeating their summary would double-print, and
-# their payload (e.g. the full skill body) is for the model only.
-_OBSERVER_RENDERED_TOOL_NAMES: frozenset[str] = frozenset({"skill_view"})
+# Tools whose user-facing event is owned by the host UI, so the end-of-turn
+# generic formatter must stay silent: repeating their summary would double-print,
+# and their payload (e.g. the full skill body) is for the model only.
+_HOST_RENDERED_TOOL_NAMES: frozenset[str] = frozenset({"skill_view"})
 
 
 @dataclass(frozen=True)
@@ -338,7 +337,7 @@ def _generic_tool_results(result: Any) -> list[tuple[ToolCall, Any]]:
 
 def _format_generic_tool_payload(tool_call: ToolCall, tool_result: Any) -> str:
     """Build a user-visible summary for one non-self-recording tool result."""
-    if tool_call.name in _OBSERVER_RENDERED_TOOL_NAMES:
+    if tool_call.name in _HOST_RENDERED_TOOL_NAMES:
         return ""
     preferred_response = _preferred_tool_response_text(tool_result)
     if preferred_response:
@@ -834,9 +833,17 @@ def _compose_response(
     Consumes the session's pending outcome hint.
     """
     final_text = str(getattr(result, "final_text", "") or "").strip()
-    generic_text = _response_text_from_generic_results(result)
+    waiting_for_choice = getattr(session, "pending_user_choice", None) is not None
+    generic_text = "" if waiting_for_choice else _response_text_from_generic_results(result)
     hint = _pop_turn_outcome_hint(session)
     prefer_tool_response_text = _has_preferred_tool_response_text(result)
+    terminal = getattr(session, "terminal", None)
+    pending_choice_response = getattr(terminal, "pending_choice_response", None)
+    selected_choice = (
+        pending_choice_response.strip() if isinstance(pending_choice_response, str) else ""
+    )
+    if selected_choice and terminal is not None:
+        terminal.pending_choice_response = None
     # Self-recording tools (slash/shell/…) already rendered the real output.
     # Drop model closings so they cannot contradict what the user just saw
     # (classic failure: inventing "health check passed" after a failed /health).
@@ -845,11 +852,16 @@ def _compose_response(
     # question, which seeks direction instead of restating output; and any
     # quiet ``shell_run``, which withheld live stdout so the closing *is*
     # the turn's display.
-    suppress_final = prefer_tool_response_text or (
-        _self_recording_tools_only(result)
-        and not _multi_step_grounded_chain(result)
-        and not _asks_the_user(final_text)
-        and not _has_quiet_shell_run(result)
+    suppress_final = (
+        waiting_for_choice
+        or _is_choice_acknowledgement(final_text, selected_choice)
+        or prefer_tool_response_text
+        or (
+            _self_recording_tools_only(result)
+            and not _multi_step_grounded_chain(result)
+            and not _asks_the_user(final_text)
+            and not _has_quiet_shell_run(result)
+        )
     )
     final_text_chunk = "" if suppress_final else final_text
     display_final = final_text_chunk
@@ -871,6 +883,22 @@ def _compose_response(
     use_final_text = bool(final_text_chunk)
     response_text = final_text if use_final_text else "\n".join(response_chunks)
     return response_text, display_chunks, use_final_text
+
+
+def _is_choice_acknowledgement(text: str, selected_choice: str) -> bool:
+    """True only for a bare restatement of the selected picker label."""
+    if not text or not selected_choice:
+        return False
+    choice = " ".join(selected_choice.casefold().split())
+    response = " ".join(text.casefold().strip().rstrip(".!?").split())
+    return response in {
+        choice,
+        f"{choice} selected",
+        f"{choice} was selected",
+        f"selected {choice}",
+        f"selected: {choice}",
+        f"you selected {choice}",
+    }
 
 
 def _show_response(
