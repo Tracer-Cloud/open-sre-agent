@@ -4,7 +4,7 @@ description: >
   Default GitHub skill for the action agent. Use github_cli for any GitHub
   request — create/list/view/close issues and PRs, assign, labels, repos, releases,
   checks, github.com/owner/repo URLs, or gh api. Prefer over shell_run/!gh.
-  Never assistant_handoff these to gather — github_cli is action-only.
+  Run these with github_cli in the current agent turn.
 tools:
   - github_cli
 ---

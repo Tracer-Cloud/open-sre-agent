@@ -19,9 +19,12 @@ from typing import TYPE_CHECKING
 from prompt_toolkit.formatted_text import ANSI
 from rich.console import Console
 
+from surfaces.interactive_shell.ui.auto_status import auto_status_ansi
 from surfaces.interactive_shell.ui.input_prompt import rendering as prompt_rendering
+from surfaces.interactive_shell.ui.task_plan import task_plan_overlay_ansi
 from surfaces.shared.terminal.banner import render_ready_box
 from surfaces.shared.terminal.components.cpr_stdin import strip_cpr_sequences
+from surfaces.shared.terminal.prompt_layout import clip_prompt_text, prompt_line_width
 
 if TYPE_CHECKING:
     from surfaces.interactive_shell.runtime.core.state import ReplState, SpinnerState
@@ -47,7 +50,8 @@ def render_prompt_region(session: Session, state: ReplState, spinner: SpinnerSta
     """Compose the live prompt region: context line plus rule and input prefix.
 
     The top line is the pending confirmation prompt when one is active,
-    otherwise the spinner, completion preview, or idle hint.
+    otherwise the spinner, completion preview, or idle hint, followed by the
+    autonomy status line showing the active ``/auto`` level.
 
     The region always starts with one blank row so the hint/spinner line never
     sits flush against whatever output scrolled above it. The row is constant
@@ -55,15 +59,28 @@ def render_prompt_region(session: Session, state: ReplState, spinner: SpinnerSta
     with the rest of the region on submit (``erase_when_done=True``).
     """
     base = prompt_rendering._prompt_message(session).value
+    auto_line = strip_cpr_sequences(auto_status_ansi(session))
+    # The confirmation prompt takes the prefix row so every state renders the
+    # same rows (blank, prefix, auto status, input) — no height delta on redraw.
     if state.is_awaiting_confirmation():
-        return ANSI(f"\n{state.confirm_prompt_text}\n{base}")
-    prefix = strip_cpr_sequences(
-        prompt_rendering.resolve_prompt_prefix_ansi(
-            inline_spinner=spinner.inline_spinner_ansi(),
-            idle_hint=prompt_rendering.resolve_idle_hint_ansi(session),
+        # Same one-row budget as the spinner/idle hint: a long confirm string
+        # must not soft-wrap when the spinner path is clipped to width.
+        prefix = clip_prompt_text(state.confirm_prompt_text, prompt_line_width())
+    else:
+        prefix = strip_cpr_sequences(
+            prompt_rendering.resolve_prompt_prefix_ansi(
+                inline_spinner=spinner.inline_spinner_ansi(),
+                idle_hint=prompt_rendering.resolve_idle_hint_ansi(session),
+            )
         )
-    )
-    return ANSI(f"\n{prefix}\n{base}")
+    # A live plan sits as an overlay above the prefix. Its presence tracks
+    # ``session.task_plan`` (stable across redraws), not the prompt state, so it
+    # adds a constant row whether or not a confirmation is pending.
+    plan = session.task_plan
+    if plan is not None and plan.steps:
+        overlay = strip_cpr_sequences(task_plan_overlay_ansi(plan))
+        return ANSI(f"\n{overlay}\n{prefix}\n{auto_line}\n{base}")
+    return ANSI(f"\n{prefix}\n{auto_line}\n{base}")
 
 
 __all__ = ["render_prompt_region", "render_terminal_ui"]

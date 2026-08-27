@@ -1302,80 +1302,44 @@ def test_try_parse_tool_call_json_recovers_when_unfenced_preamble_precedes_json(
     assert parsed["tool_calls"][0]["name"] == "t1"
 
 
-def test_cli_backed_agent_client_streamed_initial_prose_becomes_assistant_handoff() -> None:
-    """A CLI planner that starts writing the answer should hand off instead of running long."""
-
+def test_cli_backed_agent_client_accepts_plain_text_as_final_answer() -> None:
     from core.llm.transports.sdk.agent_clients import CLIBackedAgentClient
 
-    class _ClosingChunkStream:
-        def __init__(self) -> None:
-            self.closed = False
-            self.yield_count = 0
-
-        def __iter__(self) -> _ClosingChunkStream:
-            return self
-
-        def __next__(self) -> str:
-            if self.closed:
-                raise StopIteration
-            self.yield_count += 1
-            if self.yield_count > 20:
-                pytest.fail("plain-text handoff guard did not stop the CLI stream")
-            return "OpenSRE is a command-line SRE assistant for operational work. "
-
-        def close(self) -> None:
-            self.closed = True
-
     class _FakeCLI:
-        def __init__(self, stream: _ClosingChunkStream) -> None:
-            self.stream = stream
-
-        def invoke_stream(self, prompt: str) -> _ClosingChunkStream:
-            _ = prompt
-            return self.stream
-
         def invoke(self, prompt: str) -> object:
             _ = prompt
-            pytest.fail("handoff guard should use streaming invocation")
+            return type("Response", (), {"content": "Direct answer"})()
 
-    stream = _ClosingChunkStream()
     client = CLIBackedAgentClient.__new__(CLIBackedAgentClient)
-    client._cli_client = _FakeCLI(stream)
-    result = client.invoke(
-        [{"role": "user", "content": "what is this tool and how do i use it in 10k words"}],
-        tools=[{"name": "assistant_handoff", "input_schema": {"type": "object"}}],
-    )
+    client._cli_client = _FakeCLI()
+    result = client.invoke([{"role": "user", "content": "what is this tool?"}], tools=[])
 
-    assert stream.closed
-    assert stream.yield_count < 20
-    assert result.content == ""
-    assert len(result.tool_calls) == 1
-    assert result.tool_calls[0].name == "assistant_handoff"
-    assert result.tool_calls[0].input == {"content": "chat:conversation"}
+    assert result.content == "Direct answer"
+    assert result.tool_calls == []
 
 
-def test_cli_backed_agent_client_streamed_tool_json_with_handoff_available() -> None:
-    """The prose guard must not swallow valid JSON tool calls."""
+def test_cli_backed_agent_client_parses_tool_json() -> None:
 
     from core.llm.transports.sdk.agent_clients import CLIBackedAgentClient
 
     class _FakeCLI:
-        def invoke_stream(self, prompt: str) -> object:
-            _ = prompt
-            return iter([('{"tool_calls": [{"id": "c1", "name": "my_tool", "input": {"x": 1}}]}')])
-
         def invoke(self, prompt: str) -> object:
             _ = prompt
-            pytest.fail("handoff guard should use streaming invocation")
+            return type(
+                "Response",
+                (),
+                {
+                    "content": (
+                        '{"tool_calls": [{"id": "c1", "name": "my_tool", "input": {"x": 1}}]}'
+                    )
+                },
+            )()
 
     client = CLIBackedAgentClient.__new__(CLIBackedAgentClient)
     client._cli_client = _FakeCLI()
     result = client.invoke(
         [{"role": "user", "content": "investigate"}],
-        tools=[
-            {"name": "assistant_handoff", "input_schema": {"type": "object"}},
-            {"name": "my_tool", "input_schema": {"type": "object"}},
-        ],
+        tools=[{"name": "my_tool", "input_schema": {"type": "object"}}],
     )
 
     assert result.content == ""

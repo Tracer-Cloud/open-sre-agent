@@ -13,9 +13,25 @@ roles are kept deliberately separate, mirroring a storage-vs-repository split:
 
 from __future__ import annotations
 
+from enum import StrEnum
 from typing import Any, Protocol, runtime_checkable
 
 from core.state import MutableAgentState
+
+
+class RestoreContextKey(StrEnum):
+    """Keys of the restore-context payload written by the repo and read on load.
+
+    Shared here so the write side (``SessionRepo``) and the read side
+    (``restore_context``) cannot drift: a rename lands in one spelling.
+    """
+
+    CLI_AGENT_MESSAGES = "cli_agent_messages"
+    ACCUMULATED_CONTEXT = "accumulated_context"
+    SESSION_GOAL_STATE = "session_goal_state"
+    TASK_PLAN_STATE = "task_plan_state"
+    HISTORY = "history"
+
 
 # Turn kinds that represent user-initiated chat messages. Session.record()
 # is called with the turn kind, not a normalized "chat" label, so this set must

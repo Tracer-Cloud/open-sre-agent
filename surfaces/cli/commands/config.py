@@ -89,7 +89,7 @@ def _emit_llm_config() -> None:
     click.echo(f"Auth     : {auth_status.detail}")
     click.echo()
     click.echo("To log in or change LLM auth, run: opensre auth login")
-    click.echo("To rerun the full setup wizard, run: opensre onboard")
+    click.echo("To rerun LLM setup, run: opensre onboard")
     click.echo("Local CLI YAML: opensre config show / opensre config set …")
 
 

@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import json
 import logging
+import re
 import shlex
 from collections.abc import Sequence
 from dataclasses import dataclass
@@ -37,12 +38,9 @@ from core.agent_harness.prompts import (
     build_action_user_message,
 )
 from core.agent_harness.session.integration_resolution import resolve_and_cache_integrations
+from core.agent_harness.session.pending_choice import parse_ask_user_answers
 from core.agent_harness.session.terminal_access import execute_cli_onboard_on_missing_key
 from core.agent_harness.session_goal.goal import strip_session_goal_progress_tags
-from core.agent_harness.turns.assistant_handoff import (
-    AssistantHandoff,
-    assistant_handoffs_from_tool_inputs,
-)
 from core.agent_harness.turns.conversation_recording import record_conversation_turn
 from core.agent_harness.turns.goal_review import build_goal_reviewer, tap_executed_tool_names
 from core.agent_harness.turns.turn_plan import TurnPlan
@@ -50,7 +48,6 @@ from core.agent_harness.turns.turn_results import ToolCallingTurnResult
 from core.agent_harness.turns.turn_snapshot import TurnSnapshot
 from core.agent_harness.turns.wal_recorder import with_wal_recording
 from core.events import runtime_event_callback_from_observer
-from core.llm.failure_classification import is_context_length_overflow
 from core.llm.types import AgentLLMResponse, SchemaDescribedTool, ToolCall
 from core.tool.execution import (
     BeforeToolCallResult,
@@ -209,14 +206,11 @@ def with_duplicate_action_call_guard(
     )
 
 
-# Some hosted tool-calling models emit one tool call per assistant turn even when
-# parallel tool calls are enabled. Keep the tool-calling loop bounded, but leave
-# enough headroom for a *data-dependent* compound request that must run
-# sequentially: each step waits for the previous tool's result before the next
-# call can be emitted (e.g. "look up the weather and then send it to Slack" =
-# Architecture audit needs headroom for clone + ≤3 agent-scan probes +
-# 4 heuristic shells + cleanup + save observations (then a no-tool report).
-_MAX_TOOL_CALLING_ITERATIONS = 13
+# This is an emergency ceiling, not the normal workflow budget. Productive
+# action turns may need many sequential calls; repeated observations are stopped
+# independently by the stagnation guard below.
+_MAX_TOOL_CALLING_ITERATIONS = 64
+_MAX_STAGNANT_TOOL_ITERATIONS = 3
 _EXECUTED_HISTORY_TYPES = {
     "slash",
     "shell",
@@ -228,11 +222,10 @@ _EXECUTED_HISTORY_TYPES = {
 INVESTIGATION_DISPATCH_TOOL_NAMES: frozenset[str] = frozenset(
     {"investigation_start", "alert_sample"}
 )
-# Tools whose user-facing event is rendered live by the surface's tool-event
-# observer (``tool_start``/``tool_end``), so the end-of-turn generic formatter
-# must stay silent for them: repeating their summary would double-print, and
-# their payload (e.g. the full skill body) is for the model only.
-_OBSERVER_RENDERED_TOOL_NAMES: frozenset[str] = frozenset({"skill_view"})
+# Tools whose user-facing event is owned by the host UI, so the end-of-turn
+# generic formatter must stay silent: repeating their summary would double-print,
+# and their payload (e.g. the full skill body) is for the model only.
+_HOST_RENDERED_TOOL_NAMES: frozenset[str] = frozenset({"ask_user_choice", "skill_view"})
 
 
 @dataclass(frozen=True)
@@ -338,13 +331,12 @@ def _generic_tool_results(result: Any) -> list[tuple[ToolCall, Any]]:
         (tool_call, tool_result)
         for tool_call, tool_result in getattr(result, "tool_results", [])
         if tool_call.name not in SELF_RECORDING_ACTION_TOOL_NAMES
-        and tool_call.name != "assistant_handoff"
     ]
 
 
 def _format_generic_tool_payload(tool_call: ToolCall, tool_result: Any) -> str:
     """Build a user-visible summary for one non-self-recording tool result."""
-    if tool_call.name in _OBSERVER_RENDERED_TOOL_NAMES:
+    if tool_call.name in _HOST_RENDERED_TOOL_NAMES and not getattr(tool_result, "is_error", False):
         return ""
     preferred_response = _preferred_tool_response_text(tool_result)
     if preferred_response:
@@ -417,17 +409,13 @@ def _has_preferred_tool_response_text(result: Any) -> bool:
 
 
 def _self_recording_tools_only(result: Any) -> bool:
-    """True when every executed tool (except handoff) already printed to the console.
+    """True when every executed tool already printed to the console.
 
     Those tools return a bare success flag to the model; any closing prose is
     invented without the command's on-screen output (e.g. claiming ``/health``
     was all-green after the report already showed failures).
     """
-    names = [
-        tool_call.name
-        for tool_call, _tool_result in getattr(result, "tool_results", [])
-        if tool_call.name != "assistant_handoff"
-    ]
+    names = [tool_call.name for tool_call, _tool_result in getattr(result, "tool_results", [])]
     return bool(names) and all(name in SELF_RECORDING_ACTION_TOOL_NAMES for name in names)
 
 
@@ -452,11 +440,7 @@ def _multi_step_grounded_chain(result: Any) -> bool:
     output block is already on screen, and a paraphrase only adds
     contradiction risk.
     """
-    names = [
-        tool_call.name
-        for tool_call, _tool_result in getattr(result, "tool_results", [])
-        if tool_call.name != "assistant_handoff"
-    ]
+    names = [tool_call.name for tool_call, _tool_result in getattr(result, "tool_results", [])]
     return len(names) >= 2 and all(name in _GROUNDED_CHAIN_TOOL_NAMES for name in names)
 
 
@@ -497,16 +481,6 @@ def _response_text_from_generic_results(result: Any) -> str:
         if formatted:
             chunks.append(formatted)
     return "\n".join(chunks)
-
-
-def _is_user_facing_final_text(text: str) -> bool:
-    """True when post-tool model text should replace tool dumps and be streamed."""
-    stripped = text.strip()
-    if not stripped:
-        return False
-    if "\n" in stripped or stripped.startswith("#"):
-        return True
-    return len(stripped) > 60
 
 
 def _generic_tool_result_counts(result: Any) -> tuple[int, int]:
@@ -723,7 +697,11 @@ def _build_action_agent(
         # The reviewer reads executed tool names from the shared list the
         # event tap below fills, so it can stand down on handoff/dispatch
         # turns whose outcome is not reviewable at conclusion time.
-        goal = build_goal_reviewer(llm, message, executed_tool_names)
+        goal = build_goal_reviewer(
+            llm,
+            _goal_review_user_request(message, turn_snapshot),
+            executed_tool_names,
+        )
 
     # WAL first, observer second: the tool intent must be on disk before
     # any surface side effect reacts to the same event.
@@ -741,6 +719,7 @@ def _build_action_agent(
         tools=tuple(agent_tools),
         resolved_integrations=resolved_integrations,
         max_iterations=_MAX_TOOL_CALLING_ITERATIONS,
+        max_stagnant_iterations=_MAX_STAGNANT_TOOL_ITERATIONS,
         tool_resources=tool_resources,
         tool_hooks=tool_hooks,
         on_runtime_event=on_runtime_event,
@@ -752,6 +731,19 @@ def _build_action_agent(
         llm=llm,
         max_iterations=_MAX_TOOL_CALLING_ITERATIONS,
     )
+
+
+def _goal_review_user_request(message: str, turn_snapshot: TurnSnapshot | None) -> str:
+    """Recover the original user request when this turn contains Ask User answers."""
+    if turn_snapshot is None or not parse_ask_user_answers(message):
+        return message
+    for role, content in reversed(turn_snapshot.conversation_messages):
+        if role.casefold() != "user" or not content.strip():
+            continue
+        if parse_ask_user_answers(content):
+            continue
+        return content
+    return message
 
 
 @dataclass(frozen=True)
@@ -840,9 +832,6 @@ class _TurnCounts:
     planned_count: int
     handled: bool
     investigation_dispatched: bool
-    handoff_contents: tuple[str, ...]
-    assistant_handoffs: tuple[AssistantHandoff, ...] = ()
-    handoff_requires_gather: bool = True
 
 
 def _compose_response(
@@ -861,9 +850,17 @@ def _compose_response(
     Consumes the session's pending outcome hint.
     """
     final_text = str(getattr(result, "final_text", "") or "").strip()
+    waiting_for_choice = getattr(session, "pending_user_choice", None) is not None
     generic_text = _response_text_from_generic_results(result)
     hint = _pop_turn_outcome_hint(session)
     prefer_tool_response_text = _has_preferred_tool_response_text(result)
+    terminal = getattr(session, "terminal", None)
+    pending_choice_response = getattr(terminal, "pending_choice_response", None)
+    selected_choice = (
+        pending_choice_response.strip() if isinstance(pending_choice_response, str) else ""
+    )
+    if selected_choice and terminal is not None:
+        terminal.pending_choice_response = None
     # Self-recording tools (slash/shell/…) already rendered the real output.
     # Drop model closings so they cannot contradict what the user just saw
     # (classic failure: inventing "health check passed" after a failed /health).
@@ -872,24 +869,19 @@ def _compose_response(
     # question, which seeks direction instead of restating output; and any
     # quiet ``shell_run``, which withheld live stdout so the closing *is*
     # the turn's display.
-    # A handoff means the assistant answers this turn, so the action's closing
-    # prose would be a second reply to one message ("good morning" twice).
     suppress_final = (
-        prefer_tool_response_text
+        (waiting_for_choice and _is_redundant_choice_invitation(result, final_text))
+        or _is_choice_acknowledgement(final_text, selected_choice)
+        or prefer_tool_response_text
         or (
             _self_recording_tools_only(result)
             and not _multi_step_grounded_chain(result)
             and not _asks_the_user(final_text)
             and not _has_quiet_shell_run(result)
         )
-        or bool(counts.handoff_contents)
     )
     final_text_chunk = "" if suppress_final else final_text
-    # Unhandled turns fall through to ``gather_and_answer`` / ``stream_answer``.
-    # Painting the closing here produced two ``● assistant`` bubbles (e.g. a
-    # wrong weekday from the action agent, then the grounded day from live
-    # runtime facts). Keep ``response_text``; blank only the console chunk.
-    display_final = "" if (suppress_final or not counts.handled) else final_text
+    display_final = final_text_chunk
     # History entries are already rendered by self-recording tools (shell/slash/…).
     # Console display uses final_text + generic results + hints only so users see
     # github_cli / other registry tools without double-printing shell output.
@@ -905,14 +897,53 @@ def _compose_response(
         )
         if chunk
     ]
-    # Prefer the agent's closing prose when it looks like a real reply (report /
-    # multi-line Markdown). Short one-liners like "done" are common after a
-    # single tool call and must not replace tool-derived response_text or get
-    # streamed on action-only turns (gateway finalize / cross-surface parity).
-    # A tool's explicit ``response_text`` also wins over chatty model closings.
-    use_final_text = _is_user_facing_final_text(final_text) and not suppress_final
-    response_text = final_text if use_final_text else "\n".join(response_chunks)
+    use_final_text = bool(final_text_chunk)
+    response_text = "\n".join(response_chunks)
     return response_text, display_chunks, use_final_text
+
+
+def _is_redundant_choice_invitation(result: Any, final_text: str) -> bool:
+    """True when a single-choice closing repeats the title or tool summary."""
+    final_tokens = _choice_invitation_tokens(final_text)
+    if not final_tokens:
+        return True
+    for tool_call, tool_result in getattr(result, "tool_results", []):
+        if tool_call.name != "ask_user_choice":
+            continue
+        args = public_tool_input(tool_call.input)
+        if args.get("questions"):
+            return False
+        picker_copy = {_choice_invitation_tokens(str(args.get("title", "")))}
+        details = getattr(tool_result, "details", None)
+        if isinstance(details, dict):
+            picker_copy.add(_choice_invitation_tokens(str(details.get("summary", ""))))
+        picker_copy.discard(())
+        return final_tokens in picker_copy
+    return False
+
+
+def _choice_invitation_tokens(text: str) -> tuple[str, ...]:
+    """Normalize picker copy while allowing an optional polite prefix."""
+    tokens = tuple(re.findall(r"[a-z0-9]+", text.casefold()))
+    if tokens[:1] == ("please",):
+        return tokens[1:]
+    return tokens
+
+
+def _is_choice_acknowledgement(text: str, selected_choice: str) -> bool:
+    """True only for a bare restatement of the selected picker label."""
+    if not text or not selected_choice:
+        return False
+    choice = " ".join(selected_choice.casefold().split())
+    response = " ".join(text.casefold().strip().rstrip(".!?").split())
+    return response in {
+        choice,
+        f"{choice} selected",
+        f"{choice} was selected",
+        f"selected {choice}",
+        f"selected: {choice}",
+        f"you selected {choice}",
+    }
 
 
 def _show_response(
@@ -928,7 +959,7 @@ def _show_response(
     reply; only then is it streamed as the assistant speaking. Progress tags
     are scrubbed for display only — ``response_text`` keeps them for evaluate.
     """
-    if handled and final_text:
+    if final_text:
         visible = strip_session_goal_progress_tags(final_text)
         if visible.strip():
             output.stream(label="OpenSRE", chunks=iter([visible]))
@@ -961,15 +992,7 @@ def _count_turn(result: Any, session: SessionState, history_start: int) -> _Turn
         if item.get("type") in _EXECUTED_HISTORY_TYPES
     ]
     generic_executed_count, generic_success_count = _generic_tool_result_counts(result)
-    # ``assistant_handoff`` runs like a tool but hands back to conversation, so
-    # it must not make the turn look like it did something for the user.
-    planned_count = sum(1 for tc, _output in result.executed if tc.name != "assistant_handoff")
-    handoff_inputs = [
-        public_tool_input(tc.input)
-        for tc, _output in result.executed
-        if tc.name == "assistant_handoff"
-    ]
-    assistant_handoffs = assistant_handoffs_from_tool_inputs(handoff_inputs)
+    planned_count = len(result.executed)
     return _TurnCounts(
         executed_entries=executed_entries,
         executed_count=len(executed_entries) + generic_executed_count,
@@ -981,15 +1004,6 @@ def _count_turn(result: Any, session: SessionState, history_start: int) -> _Turn
         handled=planned_count > 0,
         investigation_dispatched=any(
             tc.name in INVESTIGATION_DISPATCH_TOOL_NAMES for tc, _output in result.executed
-        ),
-        handoff_contents=tuple(
-            tag for handoff in assistant_handoffs for tag in handoff.to_handoff_contents()
-        ),
-        assistant_handoffs=assistant_handoffs,
-        # Gather stays required unless every handoff this turn opted out; a
-        # single gather-needing handoff must not be starved by another's opt-out.
-        handoff_requires_gather=(
-            not assistant_handoffs or any(handoff.requires_gather for handoff in assistant_handoffs)
         ),
     )
 
@@ -1051,10 +1065,6 @@ def _run_action_turn(
             system_prompt=result.final_system_prompt,
         )
     except Exception as exc:
-        if is_context_length_overflow(str(exc)):
-            log.debug("shell action prompt overflow; falling through to assistant", exc_info=True)
-            return ToolCallingTurnResult(0, 0, 0, False, False, accounting_status="not_run")
-
         error_text = str(exc)
         if args.error_reporter is not None:
             args.error_reporter.report(
@@ -1091,10 +1101,7 @@ def _run_action_turn(
     cancelled = tool_resources_cancel_requested(tool_resources) or bool(
         getattr(result, "cancelled", False)
     )
-    # Cancelled turns must not fall through to gather/answer: the host already
-    # owns the terminal UX (timeout message / stop). Drop handoffs; the
-    # orchestrator short-circuits on ``cancelled`` before routing.
-    handoff_contents = () if cancelled else counts.handoff_contents
+    # Cancelled turns stop before the host records or finalizes the response.
     # Discovery tools that opt into ``summarize_observation`` (via tool tags)
     # return structured JSON users should not see raw. Stash only those results.
     if (
@@ -1112,8 +1119,9 @@ def _run_action_turn(
         _show_response(
             args.output,
             handled=counts.handled,
-            # use_final_text means the composed text *is* the closing message.
-            final_text=response_text if use_final_text else "",
+            # Stream only terminal-visible chunks. ``response_text`` may also
+            # contain self-recording history for persistence/headless surfaces.
+            final_text="\n".join(display_chunks) if use_final_text else "",
             display_chunks=display_chunks,
         )
 
@@ -1132,10 +1140,9 @@ def _run_action_turn(
         False,
         False if cancelled else counts.handled,
         response_text="" if cancelled else response_text,
-        handoff_contents=() if cancelled else handoff_contents,
-        assistant_handoffs=() if cancelled else counts.assistant_handoffs,
-        handoff_requires_gather=(False if cancelled else counts.handoff_requires_gather),
+        response_streamed=bool(use_final_text and not cancelled),
         investigation_dispatched=(False if cancelled else counts.investigation_dispatched),
+        hit_iteration_cap=bool(result.hit_iteration_cap and not cancelled),
         cancelled=cancelled,
     )
 

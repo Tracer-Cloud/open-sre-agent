@@ -1,8 +1,8 @@
 """Rendered summary screens for the wizard onboarding flow.
 
 One job: print the wizard's non-interactive output sections — the opening
-splash header, the post-onboarding saved-configuration summary, the per-step
-integration result card, and the closing next-steps list. These are pure
+splash header, the post-onboarding saved-configuration summary, optional
+integration result cards, and the closing next-steps list. These are pure
 renders against the shared ``console`` (from
 :mod:`surfaces.cli.wizard.components`); they hold no prompt or state logic.
 """
@@ -11,6 +11,8 @@ from __future__ import annotations
 
 from typing import cast
 
+from rich import box
+from rich.panel import Panel
 from rich.rule import Rule
 from rich.text import Text
 
@@ -39,8 +41,32 @@ def render_header() -> None:
       opensre  ·  v<version>                     [SECONDARY name] [DIM ·] [BRAND version]
       open-source SRE agent for automated …      [SECONDARY description]
       ─────────────────────────────────────────  [DIM rule]
-      Setup — Configure your local AI stack …    [SECONDARY subtitle]
+      Complete your setup to get started          [TEXT heading]
+      [1] Select your LLM provider and key        [BRAND number] [SECONDARY body]
+      [2] OpenSRE checks the connection           [BRAND number] [SECONDARY body]
     """
+    _render_splash_header(
+        heading="Complete your setup to get started",
+        steps=(
+            "Select your LLM provider and add its API key or CLI login.",
+            "OpenSRE checks the connection and continues.",
+        ),
+    )
+
+
+def render_factory_setup_header() -> None:
+    """Print the first-run setup splash (GitHub → LLM → shell)."""
+    _render_splash_header(
+        heading="A few steps and you are in the terminal",
+        steps=(
+            "Sign in with GitHub (required).",
+            "Choose your LLM provider and add its API key or CLI login.",
+            "OpenSRE opens the interactive shell.",
+        ),
+    )
+
+
+def _render_splash_header(*, heading: str, steps: tuple[str, ...]) -> None:
     from surfaces.shared.terminal.components.banner_art import render_art
 
     art = render_art()
@@ -75,12 +101,23 @@ def render_header() -> None:
     console.print(Rule(style=DIM))
     console.print()
 
-    setup_line = Text()
-    setup_line.append("  Setup", style=f"bold {TEXT}")
-    setup_line.append(
-        "  —  Configure your local AI stack and optional integrations.", style=SECONDARY
+    setup = Text()
+    setup.append(heading, style=f"bold {TEXT}")
+    setup.append("\n\n")
+    for index, body in enumerate(steps, start=1):
+        setup.append(f"[{index}] ", style=f"bold {BRAND}")
+        setup.append(body, style=SECONDARY)
+        if index < len(steps):
+            setup.append("\n")
+    console.print(
+        Panel(
+            setup,
+            border_style=DIM,
+            padding=(1, 2),
+            expand=True,
+            box=box.ROUNDED,
+        )
     )
-    console.print(setup_line)
     console.print()
 
 
@@ -90,7 +127,6 @@ def render_saved_summary(
     model: str,
     saved_path: str,
     env_path: str,
-    configured_integrations: list[str],
     credential_line: str = "local credentials file (~/.opensre/credentials.json)",
 ) -> None:
     """Print the post-onboarding success screen.
@@ -102,15 +138,12 @@ def render_saved_summary(
                                                   [blank]
         provider    Anthropic                    [SECONDARY key] [TEXT value]
         model       claude-opus-4-5              [SECONDARY key] [TEXT value]
-        services    grafana · datadog            [SECONDARY key] [TEXT value]
         config      ~/.opensre/opensre.json      [SECONDARY key] [BRAND path]
         env         .env                         [SECONDARY key] [BRAND path]
         credentials ~/.opensre/credentials.json  [SECONDARY key] [TEXT value]
         store       ~/.opensre/store.json        [SECONDARY key] [BRAND path]
     """
     from integrations.store import STORE_PATH
-
-    integrations_str = "  ·  ".join(configured_integrations) if configured_integrations else "none"
 
     console.print()
     console.print(Rule(style=DIM))
@@ -133,7 +166,6 @@ def render_saved_summary(
 
     _kv("provider", provider_label)
     _kv("model", model)
-    _kv("services", integrations_str)
     _kv("config", saved_path, BRAND)
     _kv("env", env_path, BRAND)
     _kv("credentials", credential_line)
@@ -195,13 +227,10 @@ def render_next_steps() -> None:
     console.print()
 
     next_steps: tuple[tuple[str, str], ...] = (
-        ("opensre", "Start the interactive agent and run /loops"),
-        (
-            "opensre investigate -i tests/e2e/kubernetes/fixtures/datadog_k8s_alert.json",
-            "Run root-cause analysis on a sample alert",
-        ),
-        ("opensre doctor", "Verify your full environment setup"),
-        ("opensre onboard", "Re-run this setup at any time"),
+        ("opensre", "Start the interactive agent"),
+        ("opensre doctor", "Check this machine is ready"),
+        ("opensre integrations setup github", "Optional: add GitHub when repository work needs it"),
+        ("opensre onboard", "Re-run LLM setup at any time"),
     )
 
     for cmd, description in next_steps:

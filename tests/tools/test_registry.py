@@ -14,7 +14,6 @@ from core.tool.contracts import REGISTERED_TOOL_ATTR, BaseTool, RegisteredTool
 from core.tool_framework.tool_decorator import tool
 from tools import registry as registry_module
 from tools import registry_discovery
-from tools.investigation_registry.actions import get_available_actions
 
 _V2_TOOL_CONTRACT_NAMES = frozenset(
     {
@@ -607,12 +606,18 @@ def test_resolve_tool_display_name_falls_back_for_unknown_tools() -> None:
 
 
 def test_real_registry_discovers_migrated_sre_guidance_tool() -> None:
-    action_names = {tool_def.name for tool_def in get_available_actions()}
+    action_names = {
+        tool_def.name
+        for tool_def in registry_module.get_registered_tools(ToolSurface.INVESTIGATION)
+    }
     assert "get_sre_guidance" in action_names
 
 
 def test_real_registry_discovers_honeycomb_and_coralogix_tools() -> None:
-    action_names = {tool_def.name for tool_def in get_available_actions()}
+    action_names = {
+        tool_def.name
+        for tool_def in registry_module.get_registered_tools(ToolSurface.INVESTIGATION)
+    }
     assert {"query_honeycomb_traces", "query_coralogix_logs"} <= action_names
 
 

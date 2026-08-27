@@ -7,15 +7,10 @@ from pathlib import Path
 import pytest
 
 from core.agent_harness.prompts import (
-    _SYSTEM_PROMPT_BASE,
     build_action_system_prompt,
     connected_integrations_block,
     prior_action_facts_block,
     recent_conversation_block,
-)
-from core.agent_harness.prompts.assistant import (
-    build_cli_agent_prompt_from_provider,
-    build_handoff_guidance_block,
 )
 from core.agent_harness.prompts.memory.conversation import NO_HISTORY_PLACEHOLDER
 from core.agent_harness.prompts.skills.loader import (
@@ -94,19 +89,6 @@ def test_prior_action_facts_block_surfaces_telegram_followup_values() -> None:
     assert "slack_send_message input" in block
 
 
-def test_system_prompt_base_is_markdown_backed_opensre_prompt() -> None:
-    """Stable base is ``opensre_system_prompt.md`` — the action planner, not a coding agent."""
-    prompt = _SYSTEM_PROMPT_BASE
-    assert prompt.startswith("You plan actions for the OpenSRE interactive shell.")
-    assert "COMPOUND TURN RULE" in prompt
-    assert "GOAL PERSISTENCE" in prompt
-    assert "senior production engineer mapping intent to tools" in prompt
-    assert "GPT-5.2" not in prompt
-    assert "Codex CLI" not in prompt
-    assert "update_plan" not in prompt
-    assert "apply_patch" not in prompt
-
-
 def test_system_prompt_slack_fragment_documents_roster_followup() -> None:
     # Slack-specific "Want me to" roster follow-up now lives in
     # integrations.slack.action_prompt and is appended to the composed action
@@ -122,11 +104,8 @@ def test_system_prompt_routes_slack_teammate_reads_to_action_tools() -> None:
     # registry (see integrations/harness_adapters.py), not hardcoded in core.
     prompt = build_action_system_prompt(_ctx()).lower()
     compact = prompt.replace(" ", "")
-    assert "slack teammate requests are action tools" in prompt
-    assert "not handoffs" in prompt
+    assert "slack teammate requests use slack tools" in prompt
     assert 'slack_read_messages(channel="#opensre-slack-testing"' in compact
-    assert "are not covered by the data-retrieval handoff rule" in prompt
-    assert "do not emit assistant_handoff for these" in prompt
     assert "roster / people questions ignore channel_id" in prompt
     assert "slack_list_team_members only" in prompt
     assert "never slack_read_messages" in prompt
@@ -137,23 +116,12 @@ def test_system_prompt_routes_github_cli_to_action_tools() -> None:
     # appended to the composed action prompt via the harness-ports fragment
     # registry (see integrations/harness_adapters.py), not hardcoded in core.
     prompt = build_action_system_prompt(_ctx()).lower()
-    assert "github cli requests are action tools" in prompt
-    assert "not handoffs" in prompt
+    assert "github cli requests use github tools" in prompt
     assert "call github_cli directly" in prompt
     assert "from this info create an issue on github" in prompt
-    assert "github_cli is action-only" in prompt
     assert "exception: github issue/pr/repo" in prompt
     assert "get_github_star_history" in prompt
     assert "day-by-day stars" in prompt
-
-
-def test_skills_loader_routes_star_history_away_from_github_cli() -> None:
-    cached_load_skills_block.cache_clear()
-    body = load_skill_body("github-cli").lower()
-    assert "star history" in body
-    assert "get_github_star_history" in body
-    assert "assistant_handoff" in body
-    assert "undercount" in body or "false zeros" in body
 
 
 def test_system_prompt_slack_fragment_documents_invented_command_example() -> None:
@@ -175,10 +143,7 @@ def test_morning_report_skill_closes_with_schedule_offer() -> None:
     assert "daily_summary" in body
     assert 'cron="0 8 * * 1-5"' in body or "cron='0 8 * * 1-5'" in body
     assert "do not call /cron yet" in body
-    # Handing off after the fetches re-triggers gather → a second "morning
-    # report" from K8s/GitHub that clobbers the weather+news briefing UX.
-    assert "do not call assistant_handoff" in body
-    assert "hand the real content to the assistant" not in body
+    assert "do not start an investigation" in body
     # Intermediate curls must be quiet so the user does not see weather/news
     # once as $ stdout and again in the composed OpenSRE briefing.
     assert "quiet=true" in body
@@ -236,28 +201,6 @@ def test_skills_loader_bundles_architecture_audit_skill() -> None:
     assert "### Findings by severity" in body
 
 
-def test_skills_loader_bundles_github_cli_skill() -> None:
-    cached_load_skills_block.cache_clear()
-    skill = skills_dir() / "github_cli" / "SKILL.md"
-    assert skill.is_file()
-
-    index = load_skills_index()
-    assert "github-cli" in index
-    assert "github_cli(args=" not in index
-
-    body = load_skill_body("github-cli")
-    assert "GITHUB CLI SKILL" in body
-    assert "do NOT assistant_handoff" in body
-    assert "github_cli(args=" in body
-    assert "create an issue from that" in body
-
-    prompt = build_action_system_prompt(_ctx(messages=[("user", "audit architecture")]))
-    assert "architecture-audit" in prompt
-    assert "ARCHITECTURE AUDIT SKILL" not in prompt
-    assert "### Findings by severity" not in prompt
-    cached_load_skills_block.cache_clear()
-
-
 def test_skills_loader_bundles_github_security_fix_skill() -> None:
     cached_load_skills_block.cache_clear()
     skill = skills_dir() / "github_security_fix" / "SKILL.md"
@@ -290,22 +233,24 @@ def test_skills_loader_bundles_github_ci_fix_skill() -> None:
 
     assert "github-ci-fix" in load_skills_index()
     body = load_skill_body("github-ci-fix")
-    assert "GITHUB PR CI FIX SKILL" in body
+    assert "GITHUB CI FIX SKILL" in body
     assert "fix_github_pr_ci" in body
     assert "output exactly that text and stop" in body
     assert '"next steps"' in body
-    assert "pushes to the existing PR head branch" in body
+    assert "separate linked git" in body
+    assert "worktree, commits on a fresh" in body
+    assert 'branch="main"' in body
     cached_load_skills_block.cache_clear()
 
 
-def test_skill_matches_take_priority_over_generic_docs_handoff() -> None:
+def test_skill_matches_take_priority_over_generic_docs_answer() -> None:
     cached_load_skills_block.cache_clear()
 
     index = load_skills_index()
     body = load_skill_body("github-ci-fix-onboarding")
     prompt = build_action_system_prompt(_ctx())
 
-    assert "Skill matches outrank the generic docs/how-to assistant handoff" in index
+    assert "Skill matches outrank a generic docs/how-to answer" in index
     assert '"onboard me"' in index
     assert "Can you onboard me on the CI/CD flow?" in body
     # Skills index still rides the assembled prompt after the markdown base.
@@ -340,7 +285,6 @@ def test_skills_index_is_thin_relative_to_full_bodies() -> None:
     assert names >= {
         "morning-report",
         "architecture-audit",
-        "github-cli",
         "github-security-fix",
         "github-ci-fix",
     }
@@ -362,215 +306,6 @@ def test_action_system_prompt_includes_skills_block() -> None:
     assert prompt.index(SKILLS_HEADER) < prompt.index(
         "CONNECTED INTEGRATIONS (this install, right now):"
     )
-
-
-def test_morning_report_skill_still_documents_local_llama_in_base() -> None:
-    """Vague local-llama requests map to provider:local_llama_connect in the planner base."""
-    assert "provider:local_llama_connect" in _SYSTEM_PROMPT_BASE
-    assert _SYSTEM_PROMPT_BASE.startswith("You plan actions for the OpenSRE interactive shell.")
-
-
-class _FakePrompts:
-    def surface(self) -> str:
-        return "interactive_shell"
-
-    def cli_reference(self) -> str:
-        return "cli reference"
-
-    def agents_md(self) -> str:
-        return ""
-
-    def docs(self, query: str) -> str:
-        _ = query
-        return ""
-
-    def investigation_flow(self) -> str:
-        return ""
-
-    def runtime_facts(self) -> dict[str, object]:
-
-        from config.runtime_metadata import capture_runtime_facts
-
-        return capture_runtime_facts()
-
-    def environment_block(self, runtime=None) -> str:  # noqa: ANN001, ARG002
-        return ""
-
-    def long_term_memory(self) -> str:
-        return ""
-
-    def setup_state(self) -> str:
-        return ""
-
-    def suggested_synthetic_prompt(self) -> str:
-        return ""
-
-    def log_diagnostics(self, reason: str) -> None:
-        _ = reason
-
-
-def test_local_llama_handoff_guidance_block() -> None:
-    block = build_handoff_guidance_block(("provider:local_llama_connect",))
-    assert "opensre onboard local_llm" in block
-    assert "/model set ollama" in block
-    assert build_handoff_guidance_block(("docs:datadog_setup",)) == ""
-
-
-def test_l0_degraded_guidance_structures_a_useful_local_close() -> None:
-    """Missing analytics source: structured close (sentence → how → draft query)."""
-    block = build_handoff_guidance_block(("evidence_tier:L0_degraded:posthog_mcp",))
-    assert "draft query" in block.lower() or "draft" in block.lower()
-    assert "Want me to" in block
-    assert "fenced code block" in block.lower() or "draft" in block.lower()
-    assert "invent metric numbers" in block.lower()
-
-
-def test_metric_unformed_guidance_requires_draft_query_and_setup_slash() -> None:
-    block = build_handoff_guidance_block(("evidence_tier:metric_unformed",))
-    assert "draft" in block.lower()
-    assert (
-        "fenced code block" in block.lower() or "```" in block or "query language" in block.lower()
-    )
-    assert "/integrations setup" in block
-    assert "Want me to" in block
-    assert "invent" in block.lower()
-    # Vendor-specific signup/login rules live in PostHog prompt fragments.
-    assert "user_signed_in" not in block
-    assert "HogQL" not in block
-    assert "PromQL" not in block
-
-
-def test_l0_degraded_config_guidance_is_distinct_from_missing_source() -> None:
-    """Connected-but-auth-failed uses the config: suffix guidance block."""
-    config = build_handoff_guidance_block(("evidence_tier:L0_degraded:config:posthog_mcp",))
-    missing = build_handoff_guidance_block(("evidence_tier:L0_degraded:posthog_mcp",))
-    assert "credentials or configuration" in config.lower() or "auth/config" in config.lower()
-    assert "NOT connected" not in config
-    assert config != missing
-    assert "Want me to" in config
-
-
-def test_database_query_handoff_guidance_block_matches_prefix() -> None:
-    """Oracle 332/331: ``database_query:*`` tags inject connect/query guidance."""
-    block = build_handoff_guidance_block(("database_query:mysql_active_connections",))
-    assert "database" in block.lower()
-    assert "/mcp connect" in block
-    assert "investigation" in block.lower()
-    assert build_handoff_guidance_block(("database_query:mariadb_dashboard",)) == block
-
-
-def test_database_query_handoff_guidance_still_documents_mysql_routing() -> None:
-    """Oracle 332: database_query tags inject connect/query guidance (assistant path).
-
-    Handoff guidance remains the contract for that tag; the action base also
-    documents database_query handoff routing for the planner.
-    """
-    block = build_handoff_guidance_block(("database_query:mysql_active_connections",))
-    assert "database" in block.lower()
-    assert "/mcp connect" in block
-    assert "investigation" in block.lower()
-    assert "database_query:" in _SYSTEM_PROMPT_BASE
-    assert _SYSTEM_PROMPT_BASE.startswith("You plan actions for the OpenSRE interactive shell.")
-
-
-def test_incident_description_handoff_guidance_keeps_user_symptoms() -> None:
-    """Oracle 325: bare incident handoffs must not drop service/error specifics."""
-    block = build_handoff_guidance_block(("incident_description:checkout_502_rate",))
-    assert "checkout" in block.lower()
-    assert "502" in block
-    assert "production error pattern" in block.lower()
-    assert build_handoff_guidance_block(("incident_description:orders_cpu_99",)) == block
-
-
-def test_database_query_handoff_injects_guidance_into_assistant_prompt() -> None:
-    turn_snapshot = TurnSnapshot(
-        text="Use the MySQL tool to query active connections.",
-        conversation_messages=(),
-        configured_integrations=(),
-        configured_integrations_known=True,
-        last_state=None,
-        last_synthetic_observation_path=None,
-        reasoning_effort=None,
-    )
-    prompt = build_cli_agent_prompt_from_provider(
-        message="Use the MySQL tool to query active connections.",
-        prompts=_FakePrompts(),
-        tool_observation=None,
-        tool_observation_on_screen=True,
-        handoff_contents=("database_query:mysql_active_connections",),
-        turn_snapshot=turn_snapshot,
-    )
-
-    assert "/mcp connect" in prompt
-    assert "named database" in prompt.lower() or "database/tool" in prompt.lower()
-
-
-def test_local_llama_handoff_injects_setup_guidance_into_assistant_prompt() -> None:
-    turn_snapshot = TurnSnapshot(
-        text="please connect to local llama",
-        conversation_messages=(),
-        configured_integrations=(),
-        configured_integrations_known=True,
-        last_state=None,
-        last_synthetic_observation_path=None,
-        reasoning_effort=None,
-    )
-    prompt = build_cli_agent_prompt_from_provider(
-        message="please connect to local llama",
-        prompts=_FakePrompts(),
-        tool_observation=None,
-        tool_observation_on_screen=True,
-        handoff_contents=("provider:local_llama_connect",),
-        turn_snapshot=turn_snapshot,
-    )
-
-    assert "opensre onboard local_llm" in prompt
-    assert "/onboard local_llm" in prompt
-    assert "/model set ollama" in prompt
-
-
-class _FakePromptsWithDocs(_FakePrompts):
-    """Provider that echoes the retrieval query so the wiring can be asserted."""
-
-    def __init__(self) -> None:
-        self.docs_query: str | None = None
-
-    def docs(self, query: str) -> str:
-        self.docs_query = query
-        return "=== docs/messaging/telegram.mdx ===\nCreate a bot with @BotFather"
-
-
-def test_docs_grounding_reaches_assistant_prompt() -> None:
-    """The user's question is retrieved against docs and injected into the prompt.
-
-    Locks the wiring the harness-move refactor severed: a procedural setup
-    question must carry its documentation page into the LLM grounding so the
-    assistant answers with the out-of-tool steps instead of improvising.
-    """
-    message = "how do I set up the telegram bot?"
-    turn_snapshot = TurnSnapshot(
-        text=message,
-        conversation_messages=(),
-        configured_integrations=(),
-        configured_integrations_known=True,
-        last_state=None,
-        last_synthetic_observation_path=None,
-        reasoning_effort=None,
-    )
-    prompts = _FakePromptsWithDocs()
-
-    prompt = build_cli_agent_prompt_from_provider(
-        message=message,
-        prompts=prompts,
-        tool_observation=None,
-        tool_observation_on_screen=True,
-        turn_snapshot=turn_snapshot,
-    )
-
-    assert prompts.docs_query == message
-    assert "--- Documentation reference (docs/) ---" in prompt
-    assert "docs/messaging/telegram.mdx" in prompt
-    assert "@BotFather" in prompt
 
 
 def test_action_prompt_includes_long_term_memory_bodies(

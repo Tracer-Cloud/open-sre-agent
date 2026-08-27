@@ -21,7 +21,6 @@ def _stub_turn_result() -> TurnResult:
             handled=True,
         ),
         assistant_response_text="ok",
-        llm_run=object(),
     )
 
 

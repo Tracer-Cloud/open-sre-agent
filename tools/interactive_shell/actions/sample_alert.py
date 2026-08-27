@@ -105,8 +105,8 @@ alert_sample_tool = RegisteredTool(
         "'demo alert' (e.g. 'investigate a sample test alert?', 'kick off a "
         "sample alert'). These requests carry NO real pasted alert text — that "
         "is what separates them from investigation_start. Prefer this over "
-        "investigation_start and assistant_handoff for sample/test/demo alerts, "
-        "regardless of the verb or a trailing '?'."
+        "investigation_start for sample/test/demo alerts, regardless of the verb "
+        "or a trailing '?'."
     ),
     input_schema=object_schema(
         properties={

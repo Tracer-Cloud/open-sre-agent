@@ -122,10 +122,13 @@ investigation_start_tool = RegisteredTool(
         "Start an investigation with the provided alert text or quoted payload. "
         "Use whenever the user explicitly instructs you to investigate, RCA, "
         "diagnose, analyze, root-cause, or send an investigation payload — including "
-        "'investigate why X ...' and placeholder quoted text like 'hello world' — "
-        "regardless of CONNECTED INTEGRATIONS. In compound turns like `run /remote "
-        'and then investigate "hello world"`, emit this as a separate second tool '
-        "call; never drop the quoted investigation after emitting the slash command. "
+        "'investigate why X ...', pasted alert JSON, and placeholder quoted text "
+        "like 'hello world' — regardless of CONNECTED INTEGRATIONS. Call this "
+        "immediately with the user's payload as alert_text; do not call "
+        "ask_user_choice first to refine onset, shape, blast radius, or signal "
+        "flavor. In compound turns like `run /remote and then investigate "
+        '"hello world"`, emit this as a separate second tool call; never drop '
+        "the quoted investigation after emitting the slash command. "
         "Do NOT use for bare incident statements with no investigate verb, generic "
         "'Run an investigation.' with no subject, sample/demo alerts, or plain data "
         "lookups."

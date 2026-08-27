@@ -398,6 +398,7 @@ class SigNozClient:
             "aggregation": aggregation,
             "metrics": metrics,
             "query_backend": "signoz_query_api",
+            "effective_limit": effective_limit,
         }
 
     def _query_logs_via_api(
@@ -453,6 +454,7 @@ class SigNozClient:
             "total": len(logs),
             "logs": logs,
             "query_backend": "signoz_query_api",
+            "effective_limit": effective_limit,
         }
 
     def _query_traces_via_api(
@@ -516,6 +518,7 @@ class SigNozClient:
             "total": len(traces),
             "traces": traces,
             "query_backend": "signoz_query_api",
+            "effective_limit": effective_limit,
         }
 
     def _query_trace_summary_via_api(

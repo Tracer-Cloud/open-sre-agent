@@ -11,44 +11,19 @@ from core.agent_harness.session_goal.goal import (
     SessionGoalStatus,
     apply_session_goal_progress,
     attach_session_goal,
-    session_goal_from_assistant_handoffs,
-    session_goal_from_handoffs,
+    build_session_goal,
 )
 from core.agent_harness.session_goal.run_until import run_until_session_goal
-from core.agent_harness.turns.assistant_handoff import AssistantHandoff
 from core.agent_harness.turns.turn_results import ToolCallingTurnResult, TurnResult
 
 
-def test_checklist_items_from_structured_handoff_tags() -> None:
-    goal = session_goal_from_handoffs(
-        (
-            "session_goal:max_turns=5;steps=3",
-            "session_goal_item:List the goal",
-            "session_goal_item:Name step one",
-            "session_goal_item:Confirm done",
-        ),
+def test_build_session_goal_preserves_structured_checklist() -> None:
+    goal = build_session_goal(
         condition="run the checklist",
+        checklist=("List the goal", "Name step one", "Confirm done"),
+        max_outer_turns=5,
     )
 
-    assert goal is not None
-    assert goal.checklist == ("List the goal", "Name step one", "Confirm done")
-    assert goal.completed == frozenset()
-    assert goal.max_outer_turns == 5
-
-
-def test_checklist_items_from_typed_assistant_handoff_fields() -> None:
-    goal = session_goal_from_assistant_handoffs(
-        (
-            AssistantHandoff(
-                content="run the checklist",
-                session_goal="max_turns=5;steps=3",
-                session_goal_items=("List the goal", "Name step one", "Confirm done"),
-            ),
-        ),
-        condition="run the checklist",
-    )
-
-    assert goal is not None
     assert goal.checklist == ("List the goal", "Name step one", "Confirm done")
     assert goal.max_outer_turns == 5
     assert goal.step_count == 3
@@ -216,7 +191,6 @@ def test_outer_loop_achieves_via_checklist_without_achieved_tag() -> None:
                 handled=True,
             ),
             assistant_response_text=body,
-            llm_run=None,
         )
 
     outcome = run_until_session_goal(_chat, session, "go", goal=goal)
@@ -266,7 +240,6 @@ def test_outer_loop_prompt_carries_reason_after_partial_progress() -> None:
                 handled=True,
             ),
             assistant_response_text=body,
-            llm_run=None,
         )
 
     run_until_session_goal(_chat, session, "go", goal=goal)

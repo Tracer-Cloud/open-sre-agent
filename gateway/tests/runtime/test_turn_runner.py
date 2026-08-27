@@ -86,7 +86,7 @@ def test_turn_runner_resolves_action_tools_from_live_session(monkeypatch: Any) -
         return [MagicMock(name="slack_send_message")]
 
     monkeypatch.setattr(
-        "core.agent_harness.tools.tool_provider.get_action_tools_from_integrations_context",
+        "core.agent_harness.tools.tool_provider.get_action_tools_from_integrations_view",
         _fake_get_tools,
     )
 
@@ -117,7 +117,7 @@ def test_turn_runner_resolves_action_tools_from_live_session(monkeypatch: Any) -
     assert recorded == [chat_integrations]
 
 
-def _empty_turn_result(*, llm_run: Any = None) -> TurnResult:
+def _empty_turn_result(*, streamed: bool = False) -> TurnResult:
     return TurnResult(
         final_intent="cli_agent_handled",
         action_result=ToolCallingTurnResult(
@@ -127,9 +127,9 @@ def _empty_turn_result(*, llm_run: Any = None) -> TurnResult:
             has_unhandled_clause=False,
             handled=True,
             response_text="",
+            response_streamed=streamed,
         ),
         assistant_response_text="",
-        llm_run=llm_run,
     )
 
 
@@ -265,7 +265,7 @@ def test_turn_runner_finalizes_fallback_on_empty_response(monkeypatch: Any) -> N
 
 def test_turn_runner_skips_finalize_when_answer_was_streamed(monkeypatch: Any) -> None:
     """A streamed answer (llm_run set) already resolved the status; do not re-finalize."""
-    result = _empty_turn_result(llm_run=MagicMock())  # answered=True
+    result = _empty_turn_result(streamed=True)
     _patch_headless_agent(monkeypatch, result)
     sink = MagicMock()
     handler = TurnRunner(console=Console(force_terminal=False))

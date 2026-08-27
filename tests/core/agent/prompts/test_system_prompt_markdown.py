@@ -1,52 +1,36 @@
-"""The action system prompt is loaded from bundled markdown.
-
-The file is the OpenSRE action *planner* STABLE base — compound turns, Phase 1b
-handoff vs investigation_start, follow-up tags, slash mapping. It is not a
-coding-agent / Codex clone (apply_patch, update_plan, AGENTS.md spec).
-"""
+"""The action system prompt is loaded from bundled markdown."""
 
 from __future__ import annotations
 
 from pathlib import Path
 
-from core.agent_harness.prompts.action import text as text_mod
-from core.agent_harness.prompts.action.text import _PROMPT_FILENAME, _SYSTEM_PROMPT_BASE
-
-_CODING_AGENT_MARKERS = frozenset(
-    {
-        "coding_assistant_opener",
-        "apply_patch",
-        "update_plan",
-        "agents_md_spec",
-    }
-)
+from core.agent_harness.prompts import system_prompt as prompt_mod
+from core.agent_harness.prompts.action.text import _SYSTEM_PROMPT_BASE
+from core.agent_harness.prompts.system_prompt import _PROMPT_FILENAME
 
 
 def test_system_prompt_base_comes_from_markdown_file() -> None:
-    path = Path(text_mod.__file__).with_name(_PROMPT_FILENAME)
+    path = Path(prompt_mod.__file__).with_name(_PROMPT_FILENAME)
     assert path.is_file()
     assert path.name == "opensre_system_prompt.md"
     assert path.read_text(encoding="utf-8") == _SYSTEM_PROMPT_BASE
 
 
-def test_system_prompt_is_the_action_planner_not_a_coding_agent() -> None:
-    prompt = _SYSTEM_PROMPT_BASE
-    assert prompt.startswith("You plan actions for the OpenSRE interactive shell.")
-    assert 'assistant_handoff(content="follow_up:prior_investigation")' in prompt
-    assert "checkout is returning 502s" in prompt
-    assert "check the health of my opensre and then show me all connected services" in prompt
-    assert 'slash_invoke("/integrations", args=["list"])' in prompt
-    assert _CODING_AGENT_MARKERS.isdisjoint(_prompt_markers(prompt))
+def test_system_prompt_runs_explicit_commands_without_repository_probe() -> None:
+    assert "execute it directly with the matching tool" in _SYSTEM_PROMPT_BASE
+    assert "Do not search for AGENTS.md files or inspect the repository first" in (
+        _SYSTEM_PROMPT_BASE
+    )
 
 
-def _prompt_markers(prompt: str) -> frozenset[str]:
-    found: set[str] = set()
-    if prompt.startswith("You are OpenSRE, a terminal-based SRE and coding assistant"):
-        found.add("coding_assistant_opener")
-    if "apply_patch" in prompt:
-        found.add("apply_patch")
-    if "update_plan" in prompt:
-        found.add("update_plan")
-    if "## AGENTS.md spec" in prompt:
-        found.add("agents_md_spec")
-    return frozenset(found)
+def test_ask_user_choice_is_for_blocking_decisions_not_automated_follow_ups() -> None:
+    """Optional next-step menus follow TURN INTERACTION facts, not surface guessing."""
+    text = _SYSTEM_PROMPT_BASE
+    collapsed = " ".join(text.split())
+    assert "before work can continue" in collapsed
+    assert "Do **not** call `ask_user_choice` just to park an optional follow-up" in collapsed
+    assert "when TURN INTERACTION says the menu is unavailable" in collapsed
+    assert "session_goal` is attached" in collapsed
+    assert "Always leave the user a selectable next step" not in text
+    assert "TURN INTERACTION says the ask_user_choice menu is available" in collapsed
+    assert "headless, scheduled, or gateway" not in collapsed

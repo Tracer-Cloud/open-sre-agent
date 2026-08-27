@@ -12,6 +12,7 @@ from integrations.github.tools.ci_fix.verification import (
     DEFAULT_POLL_INTERVAL_SECONDS,
     CheckState,
     _workflow_runs_state,
+    wait_for_branch_checks,
     wait_for_pr_checks,
 )
 
@@ -64,6 +65,148 @@ def _rollup(
             }
         ],
     }
+
+
+_BRANCH_CONTEXT = replace(
+    _CONTEXT,
+    number=None,
+    title="",
+    url="https://github.com/Tracer-Cloud/opensre/tree/main",
+    head_branch="main",
+)
+
+
+def test_wait_for_branch_checks_waits_for_commit_runs_then_passes() -> None:
+    responses = [
+        {"runs": [{"databaseId": 1, "name": "CI", "status": "in_progress", "conclusion": ""}]},
+        {"runs": [{"databaseId": 1, "name": "CI", "status": "completed", "conclusion": "success"}]},
+        {"check_runs": [{"name": "CI job", "status": "completed", "conclusion": "success"}]},
+        {"state": "success", "statuses": []},
+    ]
+    sleeps: list[float] = []
+
+    with patch(
+        "integrations.github.tools.ci_fix.verification.run_gh_json",
+        side_effect=responses,
+    ) as run_gh:
+        result = wait_for_branch_checks(
+            _BRANCH_CONTEXT,
+            github_token="tok",
+            expected_head_sha="new-sha",
+            registration_seconds=0,
+            timeout_seconds=30,
+            poll_interval_seconds=1,
+            settle_seconds=0,
+            sleep=sleeps.append,
+        )
+
+    assert result.state is CheckState.PASSED
+    assert result.check_names == ("CI",)
+    assert sleeps == [1]
+    assert run_gh.call_args_list[0].args[0][:4] == ["run", "list", "--commit", "new-sha"]
+
+
+def test_wait_for_branch_checks_reports_failing_run() -> None:
+    payload = {
+        "runs": [
+            {"databaseId": 1, "name": "CI", "status": "completed", "conclusion": "failure"},
+            {"databaseId": 2, "name": "CodeQL", "status": "completed", "conclusion": "success"},
+        ]
+    }
+
+    with patch(
+        "integrations.github.tools.ci_fix.verification.run_gh_json",
+        return_value=payload,
+    ):
+        result = wait_for_branch_checks(
+            _BRANCH_CONTEXT,
+            github_token="tok",
+            expected_head_sha="new-sha",
+            registration_seconds=0,
+            settle_seconds=0,
+        )
+
+    assert result.state is CheckState.FAILED
+    assert result.failing_checks == ("CI",)
+
+
+def test_wait_for_branch_checks_fails_on_external_commit_status() -> None:
+    # Actions runs alone are not the whole picture: a failing non-Actions
+    # check app or commit status must block the "all checks passed" verdict.
+    responses = [
+        {"runs": [{"databaseId": 1, "name": "CI", "status": "completed", "conclusion": "success"}]},
+        {"check_runs": [{"name": "CI job", "status": "completed", "conclusion": "success"}]},
+        {"state": "failure", "statuses": [{"context": "greptile/review", "state": "failure"}]},
+    ]
+
+    with patch(
+        "integrations.github.tools.ci_fix.verification.run_gh_json",
+        side_effect=responses,
+    ):
+        result = wait_for_branch_checks(
+            _BRANCH_CONTEXT,
+            github_token="tok",
+            expected_head_sha="new-sha",
+            registration_seconds=0,
+            settle_seconds=0,
+        )
+
+    assert result.state is CheckState.FAILED
+    assert result.failing_checks == ("greptile/review",)
+
+
+def test_wait_for_branch_checks_defers_verdict_while_legacy_status_pending() -> None:
+    # A pending commit status is external CI still running: the verdict must
+    # wait for it rather than reporting PASSED from completed workflows alone.
+    completed_runs = {
+        "runs": [{"databaseId": 1, "name": "CI", "status": "completed", "conclusion": "success"}]
+    }
+    completed_check_runs = {
+        "check_runs": [{"name": "CI job", "status": "completed", "conclusion": "success"}]
+    }
+    responses = [
+        completed_runs,
+        completed_check_runs,
+        {"state": "pending", "statuses": [{"context": "external/ci", "state": "pending"}]},
+        completed_runs,
+        completed_check_runs,
+        {"state": "success", "statuses": [{"context": "external/ci", "state": "success"}]},
+    ]
+    sleeps: list[float] = []
+
+    with patch(
+        "integrations.github.tools.ci_fix.verification.run_gh_json",
+        side_effect=responses,
+    ):
+        result = wait_for_branch_checks(
+            _BRANCH_CONTEXT,
+            github_token="tok",
+            expected_head_sha="new-sha",
+            registration_seconds=0,
+            timeout_seconds=30,
+            poll_interval_seconds=1,
+            settle_seconds=0,
+            sleep=sleeps.append,
+        )
+
+    assert result.state is CheckState.PASSED
+    assert sleeps == [1]
+
+
+def test_wait_for_branch_checks_times_out_when_no_runs_register() -> None:
+    with patch(
+        "integrations.github.tools.ci_fix.verification.run_gh_json",
+        return_value={"runs": []},
+    ):
+        result = wait_for_branch_checks(
+            _BRANCH_CONTEXT,
+            github_token="tok",
+            expected_head_sha="new-sha",
+            timeout_seconds=0,
+        )
+
+    assert result.state is CheckState.TIMED_OUT
+    assert result.check_names == ()
 
 
 def test_workflow_runs_state_uses_exact_commit() -> None:

@@ -57,6 +57,7 @@ def test_run_connected_investigation_emits_stage_spans(
 
     state = make_initial_state(raw_alert="alert text")
     with (
+        pytest.warns(DeprecationWarning, match="deprecated"),
         bind_session_trace(session_id),
         patch(
             "tools.investigation.stages.resolve_integrations.resolve_integrations",
@@ -114,6 +115,7 @@ def test_run_connected_investigation_skips_later_stages_on_noise(
 
     state = make_initial_state(raw_alert="noise")
     with (
+        pytest.warns(DeprecationWarning, match="deprecated"),
         bind_session_trace(session_id),
         patch(
             "tools.investigation.stages.resolve_integrations.resolve_integrations",
@@ -144,6 +146,7 @@ def test_run_connected_investigation_noop_sink_emits_nothing() -> None:
     assert isinstance(get_session_trace_store(), NoopSessionTraceStore)
     state = make_initial_state(raw_alert="alert text")
     with (
+        pytest.warns(DeprecationWarning, match="deprecated"),
         patch(
             "tools.investigation.stages.resolve_integrations.resolve_integrations",
             return_value={"resolved_integrations": {}},

@@ -50,7 +50,7 @@ owner module instead of broadening module responsibilities.
   agent lifecycle events (spinner, prompt suppression, `console.print`, CPR
   drain) only — not in the turn-entry adapter or the core harness.
 - `shell_turn_execution.py` — `execute_shell_turn`: binds shell adapters
-  (`action_turn.py`, `integration_tool_gathering.py`, `answer_turn.py`) plus
+  (`action_turn.py`, `answer_turn.py`) plus
   accounting around `core.agent_harness.turns.orchestrator.run_turn`. Each
   adapter owns its own binding; tests import them from their owning module,
   not `shell_turn_execution`.

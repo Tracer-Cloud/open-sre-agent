@@ -81,11 +81,11 @@ class TestUsdPerTokenBlended:
 
 
 class TestGpt56Family:
-    """GPT-5.6 Sol / Terra / Luna (#3931) — the confirmed litellm gap.
+    """GPT-5.6 Sol / Terra / Luna — local overrides for published OpenAI rates.
 
-    litellm's bundled table doesn't have this family yet (GA'd 2026-07-09).
-    Rates from https://developers.openai.com/api/docs/pricing, per 1M
-    tokens: sol 5/30, terra 2.50/15, luna 1/6. Cached input is 90% off.
+    litellm ships rows for this family, but terra/luna diverge from
+    https://developers.openai.com/api/docs/pricing (per 1M tokens:
+    sol 5/30, terra 2.50/15, luna 1/6). Cached input is 90% off.
     """
 
     @pytest.mark.parametrize(

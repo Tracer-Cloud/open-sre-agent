@@ -153,7 +153,8 @@ def render_integrations_table(console: Console, results: list[dict[str, str]]) -
     )
     if not rows:
         repl_print(
-            console, f"[{DIM}]no integrations configured.  try `opensre onboard` to add one.[/]"
+            console,
+            f"[{DIM}]no integrations configured.  try `opensre integrations setup` to add one.[/]",
         )
         return
     render_table(console, "Integrations", _INTEGRATION_COLS, [_integration_row(r) for r in rows])

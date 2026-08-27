@@ -9,8 +9,8 @@ OpenSRE queries OpsGenie for active alerts and alert details so investigations c
 correlate on-call incidents with infrastructure events.
 
 There is **no** `opensre integrations setup opsgenie` handler today. Configure OpsGenie
-with the onboarding wizard, environment variables, or the integration store, then
-verify with `opensre integrations verify opsgenie`.
+with environment variables or the integration store, then verify with
+`opensre integrations verify opsgenie`.
 
 ## Prerequisites
 
@@ -19,15 +19,7 @@ verify with `opensre integrations verify opsgenie`.
 
 ## Setup
 
-### Option 1: Onboarding wizard
-
-```bash
-opensre onboard
-```
-
-Select **OpsGenie** when prompted and provide your API key (and region if needed).
-
-### Option 2: Environment variables
+### Option 1: Environment variables
 
 ```bash
 OPSGENIE_API_KEY=your-api-key
@@ -39,7 +31,7 @@ OPSGENIE_REGION=us   # or "eu" for EU accounts
 | `OPSGENIE_API_KEY` | — | **Required.** OpsGenie API key |
 | `OPSGENIE_REGION` | `us` | Region: `us` or `eu` |
 
-### Option 3: Persistent store
+### Option 2: Persistent store
 
 ```json
 {
@@ -101,7 +93,7 @@ Detail: Connected to OpsGenie (US region); API key accepted.
 | **401 Unauthorized** | Check the API key and confirm it has Read access |
 | **404 Not Found** | Set `OPSGENIE_REGION=eu` if you use the EU instance |
 | **Rate limited** | OpsGenie enforces per-minute limits — reduce query frequency |
-| `opensre integrations setup opsgenie` | Not available — use `opensre onboard`, env vars, or the store |
+| `opensre integrations setup opsgenie` | Not available — use env vars or the store |
 
 ## Security
 

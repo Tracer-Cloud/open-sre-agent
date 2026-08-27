@@ -60,6 +60,7 @@ from config.constants.buzz import (
     BUZZ_PRIVATE_KEY_ENV,
     BUZZ_RELAY_URL_ENV,
 )
+from config.constants.clerk import CLERK_ISSUER_ENV, CLERK_JWKS_URL_ENV
 from config.constants.coralogix import (
     CORALOGIX_API_KEY_ENV,
     CORALOGIX_APPLICATION_NAME_ENV,
@@ -121,6 +122,10 @@ from config.constants.github import (
     GITHUB_TOKEN_ENV,
 )
 from config.constants.gitlab import GITLAB_AUTH_TOKEN_ENV, GITLAB_BASE_URL_ENV
+from config.constants.google_docs import (
+    GOOGLE_CREDENTIALS_FILE_ENV,
+    GOOGLE_DRIVE_FOLDER_ID_ENV,
+)
 from config.constants.grafana import (
     GRAFANA_CA_BUNDLE_ENV,
     GRAFANA_INSTANCE_URL_ENV,
@@ -145,11 +150,13 @@ from config.constants.helm import (
     HELM_PATH_ENV,
     OSRE_HELM_INTEGRATION_ENV,
 )
+from config.constants.hermes import HERMES_LOG_PATH_ENV
 from config.constants.honeycomb import (
     HONEYCOMB_API_KEY_ENV,
     HONEYCOMB_BASE_URL_ENV,
     HONEYCOMB_DATASET_ENV,
 )
+from config.constants.http import MAX_REQUEST_BODY_BYTES
 from config.constants.incident_io import INCIDENT_IO_API_KEY_ENV, INCIDENT_IO_BASE_URL_ENV
 from config.constants.investigation import (
     ALERT_TEMPLATE_CHOICES,
@@ -161,6 +168,13 @@ from config.constants.jenkins import (
     JENKINS_API_TOKEN_ENV,
     JENKINS_BASE_URL_ENV,
     JENKINS_USERNAME_ENV,
+)
+from config.constants.kafka import (
+    KAFKA_BOOTSTRAP_SERVERS_ENV,
+    KAFKA_SASL_MECHANISM_ENV,
+    KAFKA_SASL_PASSWORD_ENV,
+    KAFKA_SASL_USERNAME_ENV,
+    KAFKA_SECURITY_PROTOCOL_ENV,
 )
 from config.constants.kubernetes import (
     KUBECONFIG_CONTENT_ENV,
@@ -288,6 +302,15 @@ from config.constants.product import (
     RELEASES_API_URL_ENV,
     UV_RUN_RECURSION_DEPTH_ENV,
 )
+from config.constants.rabbitmq import (
+    RABBITMQ_HOST_ENV,
+    RABBITMQ_MANAGEMENT_PORT_ENV,
+    RABBITMQ_PASSWORD_ENV,
+    RABBITMQ_SSL_ENV,
+    RABBITMQ_USERNAME_ENV,
+    RABBITMQ_VERIFY_SSL_ENV,
+    RABBITMQ_VHOST_ENV,
+)
 from config.constants.rds import RDS_DB_INSTANCE_IDENTIFIER_ENV, RDS_REGION_ENV
 from config.constants.redis import (
     REDIS_DATABASE_ENV,
@@ -296,6 +319,15 @@ from config.constants.redis import (
     REDIS_PORT_ENV,
     REDIS_SSL_ENV,
     REDIS_USERNAME_ENV,
+)
+from config.constants.repl_autonomy import (
+    AUTO_LEVEL_ASK_TOOL_TYPES,
+    AUTO_LEVEL_CAPTIONS,
+    AUTO_LEVEL_TITLES,
+    DEFAULT_AUTO_LEVEL,
+    AutoLevel,
+    format_auto_status_plain,
+    parse_auto_level,
 )
 from config.constants.repl_theme import DEFAULT_THEME_NAME, THEME_NAMES, Theme
 from config.constants.reporting import SLACK_LINK_RE
@@ -467,6 +499,8 @@ __all__ = [
     "BUZZ_PATH_ENV",
     "BUZZ_PRIVATE_KEY_ENV",
     "BUZZ_RELAY_URL_ENV",
+    "CLERK_ISSUER_ENV",
+    "CLERK_JWKS_URL_ENV",
     "ATTACHMENT_MAX_FILE_CHARS",
     "ATTACHMENT_MAX_TOTAL_CHARS",
     "CREDITS_DENIED_MESSAGE",
@@ -488,6 +522,13 @@ __all__ = [
     "DEFAULT_REMOTE_SYNC_PREFIX",
     "DEFAULT_REMOTE_SYNC_PROVIDER",
     "DEFAULT_THEME_NAME",
+    "AUTO_LEVEL_ASK_TOOL_TYPES",
+    "AUTO_LEVEL_CAPTIONS",
+    "AUTO_LEVEL_TITLES",
+    "AutoLevel",
+    "DEFAULT_AUTO_LEVEL",
+    "format_auto_status_plain",
+    "parse_auto_level",
     "REMOTE_SYNC_BUCKET_ENV",
     "REMOTE_SYNC_ENDPOINT_URL_ENV",
     "REMOTE_SYNC_ENV",
@@ -525,6 +566,8 @@ __all__ = [
     "OPENSRE_COMMIT_COAUTHOR_TRAILER",
     "GITLAB_AUTH_TOKEN_ENV",
     "GITLAB_BASE_URL_ENV",
+    "GOOGLE_CREDENTIALS_FILE_ENV",
+    "GOOGLE_DRIVE_FOLDER_ID_ENV",
     "GRAFANA_CA_BUNDLE_ENV",
     "GRAFANA_INSTANCE_URL_ENV",
     "GRAFANA_LOKI_DATASOURCE_UID_ENV",
@@ -543,6 +586,7 @@ __all__ = [
     "HELM_NAMESPACE_ENV",
     "HELM_PATH_ENV",
     "OSRE_HELM_INTEGRATION_ENV",
+    "HERMES_LOG_PATH_ENV",
     "HONEYCOMB_API_KEY_ENV",
     "HONEYCOMB_BASE_URL_ENV",
     "HONEYCOMB_DATASET_ENV",
@@ -552,6 +596,11 @@ __all__ = [
     "JENKINS_API_TOKEN_ENV",
     "JENKINS_BASE_URL_ENV",
     "JENKINS_USERNAME_ENV",
+    "KAFKA_BOOTSTRAP_SERVERS_ENV",
+    "KAFKA_SASL_MECHANISM_ENV",
+    "KAFKA_SASL_PASSWORD_ENV",
+    "KAFKA_SASL_USERNAME_ENV",
+    "KAFKA_SECURITY_PROTOCOL_ENV",
     "KUBECONFIG_CONTENT_ENV",
     "KUBECONFIG_CONTEXT_ENV",
     "KUBECONFIG_NAMESPACE_ENV",
@@ -569,6 +618,7 @@ __all__ = [
     "INTEGRATIONS_SETUP_PREFIX",
     "INVESTIGATION_TOOL_CACHE_MAX_CHARS",
     "INVESTIGATION_TOOL_CACHE_MAX_ENTRIES",
+    "MAX_REQUEST_BODY_BYTES",
     "MAX_INVESTIGATION_LOOPS",
     "MONGODB_ATLAS_BASE_URL_ENV",
     "MONGODB_ATLAS_PRIVATE_KEY_ENV",
@@ -644,6 +694,13 @@ __all__ = [
     "POSTHOG_PERSONAL_API_KEY_ENV",
     "POSTHOG_PROJECT_ID_ENV",
     "POSTHOG_TIMEOUT_SECONDS_ENV",
+    "RABBITMQ_HOST_ENV",
+    "RABBITMQ_MANAGEMENT_PORT_ENV",
+    "RABBITMQ_PASSWORD_ENV",
+    "RABBITMQ_SSL_ENV",
+    "RABBITMQ_USERNAME_ENV",
+    "RABBITMQ_VERIFY_SSL_ENV",
+    "RABBITMQ_VHOST_ENV",
     "RDS_DB_INSTANCE_IDENTIFIER_ENV",
     "RDS_REGION_ENV",
     "REDIS_DATABASE_ENV",

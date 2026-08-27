@@ -17,15 +17,16 @@ read-only / mutating / restricted classification and its deny floor were removed
 evaluation still rejects is genuinely empty input (a bare ``!`` or whitespace),
 which is input validation rather than a guardrail.
 
-The ``ask`` verdict is retained so that ``trust_mode`` and any future opt-in
-stricter policy still have a hook, but the policy functions here never emit
-``ask``. If guardrails are reintroduced after alpha, gate them here at the
-execution stage (not the planner).
+The ``ask`` verdict is retained so that ``trust_mode``, ``/auto`` (Off/Low/Med),
+and any future opt-in stricter policy still have a hook. ``allow_tool`` still
+returns ``allow``; :func:`apply_auto_level` may promote that to ``ask``. High
+(the default) never does. If a shell-command allowlist is reintroduced after
+alpha, gate it here at the execution stage (not the planner).
 
 This module is intentionally **pure**: it has no terminal I/O, no analytics, and
 no console dependency. The decision is computed by :func:`resolve_confirmation`,
-and the interaction layer (printing the reason/hint, the ``Proceed? [Y/n]``
-prompt, and analytics emission) lives in
+and the interaction layer (printing the reason/hint, the
+``Command to approve`` prompt, and analytics emission) lives in
 ``interactive_shell.ui.execution_confirm.execution_allowed``.
 
 Shell-specific evaluation (empty-input rejection, ``plan_shell_execution``)
@@ -35,9 +36,15 @@ lives next to the rest of the shell machinery in
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from enum import StrEnum
 from typing import Literal
+
+from config.constants.repl_autonomy import (
+    AUTO_LEVEL_ASK_TOOL_TYPES,
+    AUTO_LEVEL_TITLES,
+    AutoLevel,
+)
 
 ExecutionVerdict = Literal["allow", "ask", "deny"]
 
@@ -145,6 +152,54 @@ def resolve_confirmation(
     )
 
 
+def apply_auto_level(
+    result: ExecutionPolicyResult,
+    auto_level: AutoLevel,
+) -> ExecutionPolicyResult:
+    """Promote a default-allow verdict to ``ask`` when ``/auto`` is below High.
+
+    High (alpha default) is a no-op. Lower levels use tool_type, not a shell
+    command allowlist.
+    """
+    if result.verdict != "allow":
+        return result
+    ask_types = AUTO_LEVEL_ASK_TOOL_TYPES[auto_level]
+    if ask_types is not None and result.tool_type not in ask_types:
+        return result
+    return replace(
+        result,
+        verdict="ask",
+        reason=f"Auto ({AUTO_LEVEL_TITLES[auto_level]}) requires approval for this action",
+    )
+
+
+def is_mutating_tool_type(tool_type: str) -> bool:
+    """True for tool types that can change state (the Med approval set)."""
+    return tool_type in (AUTO_LEVEL_ASK_TOOL_TYPES[AutoLevel.MED] or frozenset())
+
+
+def apply_plan_only_gate(
+    result: ExecutionPolicyResult,
+    *,
+    plan_only_active: bool,
+) -> ExecutionPolicyResult:
+    """Promote a mutating default-allow verdict to ``ask`` while a plan-only request stands.
+
+    The user asked for a plan without running it, so execution stays gated —
+    regardless of the ``/auto`` level — until the user confirms a mutating step
+    at the gate. Read-only tool types run normally.
+    """
+    if not plan_only_active or result.verdict != "allow":
+        return result
+    if not is_mutating_tool_type(result.tool_type):
+        return result
+    return replace(
+        result,
+        verdict="ask",
+        reason="Plan-only request stands — confirm before running this step",
+    )
+
+
 def allow_tool(tool_type: str) -> ExecutionPolicyResult:
     """Default-allow verdict for a tool launch.
 
@@ -177,6 +232,9 @@ __all__ = [
     "ToolExecutionMode",
     "ToolExecutionPlan",
     "allow_tool",
+    "apply_auto_level",
+    "apply_plan_only_gate",
+    "is_mutating_tool_type",
     "plan_foreground_tool",
     "resolve_confirmation",
 ]

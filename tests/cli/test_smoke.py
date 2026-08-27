@@ -472,6 +472,7 @@ def test_opensre_help_smoke(cli_sandbox: CliSandbox) -> None:
     assert "Welcome back" not in result.stdout
     # Commands are grouped so the entry point is not buried alphabetically.
     assert "Getting started:" in result.stdout
+    assert "setup" in result.stdout
     assert "onboard" in result.stdout
     assert "integrations" in result.stdout
     assert "--interactive / --no-interactive" in result.stdout
@@ -659,19 +660,15 @@ def test_tests_inventory_commands_smoke(cli_sandbox: CliSandbox) -> None:
 
 @pytest.mark.skipif(os.name == "nt", reason="interactive smoke uses POSIX PTYs")
 def test_onboard_interactive_smoke(cli_sandbox: CliSandbox) -> None:
-    # The select list wraps, and "Skip for now" is always the last option. A single
-    # vim-up (`k`) keypress from the first option wraps to it, so this stays correct
-    # regardless of how many integrations the picker lists.
     result = _run_cli_pty(
         cli_sandbox,
         "onboard",
         actions=[
-            PtyAction(expect="How do you want to get started?", send=b"\r"),
             PtyAction(expect="Choose your LLM provider", send=b"\r"),
             # #3591: the model is picked BEFORE the credential, so the live probe runs
             # against the model that actually gets persisted.
-            PtyAction(expect="Choose Anthropic model", send=b"\r"),
-            PtyAction(expect="Anthropic API key", send=b"smoke-test-key\r"),
+            PtyAction(expect="Choose OpenAI model", send=b"\r"),
+            PtyAction(expect="OpenAI API key", send=b"smoke-test-key\r"),
             # #3591: the wizard now live-validates the key; smoke-test-key fails
             # (401 online, connection error offline — the menu renders either way).
             # One `j` moves from the default "Re-enter the API key" to "Save anyway
@@ -685,12 +682,6 @@ def test_onboard_interactive_smoke(cli_sandbox: CliSandbox) -> None:
                 stagger_j=1,
                 timeout=90.0,
             ),
-            PtyAction(
-                expect="Choose an integration to configure",
-                send=b"\r",
-                stagger_j=1,
-                stagger_key=b"k",
-            ),
         ],
         timeout=30.0,
         extra_env={"OPENSRE_AUTO_LAUNCH": "0"},
@@ -701,11 +692,11 @@ def test_onboard_interactive_smoke(cli_sandbox: CliSandbox) -> None:
     assert "next" in result.stdout
 
     target = cli_sandbox.wizard_target("local")
-    assert target["provider"] == "anthropic"
+    assert target["provider"] == "openai"
     assert "api_key" not in target
-    assert "LLM_PROVIDER=anthropic" in cli_sandbox.read_project_env()
-    assert "ANTHROPIC_API_KEY=" in cli_sandbox.read_project_env()
-    assert "ANTHROPIC_REASONING_MODEL=" in cli_sandbox.read_project_env()
+    assert "LLM_PROVIDER=openai" in cli_sandbox.read_project_env()
+    assert "OPENAI_API_KEY=" in cli_sandbox.read_project_env()
+    assert "OPENAI_REASONING_MODEL=" in cli_sandbox.read_project_env()
 
 
 @pytest.mark.parametrize(
@@ -731,24 +722,31 @@ def test_onboard_interactive_smoke_cli_provider_repick_when_unauthenticated(
     provider_label: str,
     pty_timeout: float,
 ) -> None:
-    """PTY: quickstart → local CLI LLM → repick when unauthenticated, then finish as Anthropic.
+    """PTY: local CLI LLM → repick when unauthenticated, then finish as OpenAI.
 
-    Navigates from the default provider using the current runtime provider list order.
+    Navigates through the first-menu ``Other`` branch for less common providers.
     Fresh HOME has no CLI auth, so either ``requires login`` or ``Could not verify … login``
     is accepted before choosing repick. Skips when the CLI binary for each parametrized
     case is not on PATH.
     """
-    from surfaces.cli.wizard.flow import _onboarding_provider_options
+    from surfaces.cli.wizard.custom_endpoints import CUSTOM_ENDPOINT_SELECTION
+    from surfaces.shared.llm_setup.provider_choices import other_setup_provider_options
 
-    stagger_j = next(
-        (
-            i
-            for i, provider in enumerate(_onboarding_provider_options())
-            if provider.value == provider_key
+    other_values = [
+        CUSTOM_ENDPOINT_SELECTION,
+        *(
+            provider.value
+            for provider in other_setup_provider_options()
+            if provider.value not in {"custom-openai", "custom-anthropic"}
         ),
-        -1,
+    ]
+    other_index = other_values.index(provider_key) if provider_key in other_values else -1
+    other_default_index = other_values.index("anthropic")
+    other_stagger_up = (other_default_index - other_index) % len(other_values)
+    assert other_index >= 0, f"Provider '{provider_key}' missing from onboarding providers"
+    assert other_stagger_up > 0, (
+        f"Provider '{provider_key}' is already the default in the other-provider menu"
     )
-    assert stagger_j >= 0, f"Provider '{provider_key}' missing from onboarding providers"
 
     login_prompt: tuple[str, ...] = (
         f"{provider_label} requires login. What next?",
@@ -759,8 +757,13 @@ def test_onboard_interactive_smoke_cli_provider_repick_when_unauthenticated(
         "Model",
     )
     actions = [
-        PtyAction(expect="How do you want to get started?", send=b"\r"),
-        PtyAction(expect="Choose your LLM provider", send=b"\r", stagger_j=stagger_j),
+        PtyAction(expect="Choose your LLM provider", send=b"\r", stagger_j=2),
+        PtyAction(
+            expect="Choose another LLM provider",
+            send=b"\r",
+            stagger_j=other_stagger_up,
+            stagger_key=b"k",
+        ),
         PtyAction(expect=model_prompt, send=b"\r", timeout=30.0),
         PtyAction(
             expect=login_prompt,
@@ -772,8 +775,8 @@ def test_onboard_interactive_smoke_cli_provider_repick_when_unauthenticated(
         # #3591: the model is chosen BEFORE the credential, so the live probe
         # runs against the model that gets persisted. Same order as
         # test_onboard_interactive_smoke: model -> key -> recovery menu.
-        PtyAction(expect="Choose Anthropic model", send=b"\r"),
-        PtyAction(expect="Anthropic API key", send=b"smoke-test-key\r"),
+        PtyAction(expect="Choose OpenAI model", send=b"\r"),
+        PtyAction(expect="OpenAI API key", send=b"smoke-test-key\r"),
         # smoke-test-key fails validation; move to "Save anyway without
         # validating" to keep the local credentials-file path and every
         # downstream assertion intact.
@@ -782,12 +785,6 @@ def test_onboard_interactive_smoke_cli_provider_repick_when_unauthenticated(
             send=b"\r",
             stagger_j=1,
             timeout=90.0,
-        ),
-        PtyAction(
-            expect="Choose an integration to configure",
-            send=b"\r",
-            stagger_j=1,
-            stagger_key=b"k",
         ),
     ]
 
@@ -820,12 +817,12 @@ def test_onboard_interactive_smoke_cli_provider_repick_when_unauthenticated(
     assert "next" in result.stdout
 
     target = cli_sandbox.wizard_target("local")
-    assert target["provider"] == "anthropic"
+    assert target["provider"] == "openai"
     assert "api_key" not in target
     env_body = cli_sandbox.read_project_env()
-    assert "LLM_PROVIDER=anthropic\n" in env_body
-    assert "ANTHROPIC_API_KEY=" in env_body
-    assert "ANTHROPIC_REASONING_MODEL=" in env_body
+    assert "LLM_PROVIDER=openai\n" in env_body
+    assert "OPENAI_API_KEY=" in env_body
+    assert "OPENAI_REASONING_MODEL=" in env_body
 
 
 @pytest.mark.skipif(os.name == "nt", reason="interactive smoke uses POSIX PTYs")
