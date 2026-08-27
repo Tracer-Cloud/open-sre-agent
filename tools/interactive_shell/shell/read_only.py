@@ -293,7 +293,10 @@ def _split_on_operators(text: str) -> list[str] | None:
             current = []
             index += 2
             continue
-        if char in ("|", ";", "&"):
+        # A newline separates commands like ``;`` — without splitting on it, a
+        # mutation on the next line would ride in the first segment and be judged
+        # only by the leading read-only executable.
+        if char in ("|", ";", "&", "\n"):
             segments.append("".join(current))
             current = []
             index += 1

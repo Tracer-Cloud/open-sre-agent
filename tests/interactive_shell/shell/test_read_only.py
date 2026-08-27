@@ -48,6 +48,7 @@ _MUTATING = [
     "git show --output=/tmp/commit.patch HEAD",
     "git show -o/tmp/commit.patch HEAD",
     "git config user.name Bob",
+    "ls -la\nrm -rf /tmp/x",  # newline separates a mutation — must gate
 ]
 
 
