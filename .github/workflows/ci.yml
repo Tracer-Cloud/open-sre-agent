@@ -68,6 +68,10 @@ jobs:
         if: steps.changes.outputs.source == 'true' || github.event_name == 'push'
         run: make verify-integrations-smoke
 
+      - name: Verify tool registry index
+        if: steps.changes.outputs.source == 'true' || github.event_name == 'push'
+        run: uv run pytest -q tests/tools/test_registry_index.py
+
       - name: Import graph
         if: steps.changes.outputs.source == 'true' || github.event_name == 'push'
         run: uv run python .github/ci/check_imports.py --strict
@@ -125,6 +129,10 @@ jobs:
         if: steps.changes.outputs.source == 'true' || github.event_name == 'push'
         run: uv run python -m mypy $PYTHON_SOURCE_PATHS
 
+      - name: Verify typed tool contracts
+        if: steps.changes.outputs.source == 'true' || github.event_name == 'push'
+        run: uv run pytest -q tests/core/tool/test_contracts.py
+
   test:
     name: test (${{ matrix.shard }})
     strategy:
@@ -138,6 +146,8 @@ jobs:
             # which pins openai for its live action-planning oracles.
             extra_pytest_args: >-
               --ignore=tests/core/agent
+              --ignore=tests/core/tool/test_contracts.py
+              --ignore=tests/tools/test_registry_index.py
             split_args: >-
               --ci-splits=5 --ci-group=1
               --ci-durations-path=.github/ci/pytest-file-durations.json
@@ -153,6 +163,8 @@ jobs:
             shard: tools-runtime-2
             extra_pytest_args: >-
               --ignore=tests/core/agent
+              --ignore=tests/core/tool/test_contracts.py
+              --ignore=tests/tools/test_registry_index.py
             split_args: >-
               --ci-splits=5 --ci-group=2
               --ci-durations-path=.github/ci/pytest-file-durations.json
@@ -168,6 +180,8 @@ jobs:
             shard: tools-runtime-3
             extra_pytest_args: >-
               --ignore=tests/core/agent
+              --ignore=tests/core/tool/test_contracts.py
+              --ignore=tests/tools/test_registry_index.py
             split_args: >-
               --ci-splits=5 --ci-group=3
               --ci-durations-path=.github/ci/pytest-file-durations.json
@@ -183,6 +197,8 @@ jobs:
             shard: tools-runtime-4
             extra_pytest_args: >-
               --ignore=tests/core/agent
+              --ignore=tests/core/tool/test_contracts.py
+              --ignore=tests/tools/test_registry_index.py
             split_args: >-
               --ci-splits=5 --ci-group=4
               --ci-durations-path=.github/ci/pytest-file-durations.json
@@ -198,6 +214,8 @@ jobs:
             shard: tools-runtime-5
             extra_pytest_args: >-
               --ignore=tests/core/agent
+              --ignore=tests/core/tool/test_contracts.py
+              --ignore=tests/tools/test_registry_index.py
             split_args: >-
               --ci-splits=5 --ci-group=5
               --ci-durations-path=.github/ci/pytest-file-durations.json
