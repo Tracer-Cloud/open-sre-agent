@@ -367,3 +367,44 @@ class TestDiscoverySaysWhenItWasCutShort:
 
         assert result["complete"] is True
         assert "truncation_note" not in result
+
+
+class TestAPageTokenCountsAsIncomplete:
+    """Two ways to be partial, and only one leaves a marker in the list.
+
+    Yandex pages independently of the sanitizer, so a short page with a
+    continuation token holds fewer than a hundred names and no marker at all -
+    and reporting that as complete is how an existing metric gets called
+    missing.
+    """
+
+    def _with_token(self, names: list[str]) -> Any:
+        def _request(_method: str, url: str, **_kwargs: Any) -> httpx.Response:
+            if "/names" in url:
+                return httpx.Response(HTTPStatus.OK, json={"names": names, "nextPageToken": "more"})
+            return httpx.Response(HTTPStatus.OK, json={"keys": ["host"]})
+
+        return _request
+
+    def test_a_short_page_with_a_token_is_not_complete(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        monkeypatch.setattr(
+            "integrations.yandex_cloud.rest_client.send_request",
+            self._with_token(["cpu.idle", "cpu.user"]),
+        )
+
+        result = list_yc_metrics(**_CREDENTIALS)
+
+        assert result["complete"] is False
+        assert "there are more" in result["truncation_note"]
+
+    def test_no_token_and_no_marker_is_complete(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        monkeypatch.setattr(
+            "integrations.yandex_cloud.rest_client.send_request",
+            _discovery_responder(["cpu.idle"], ["host"]),
+        )
+
+        result = list_yc_metrics(**_CREDENTIALS)
+
+        assert result["complete"] is True

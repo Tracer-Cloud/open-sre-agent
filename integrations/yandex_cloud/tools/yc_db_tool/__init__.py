@@ -107,13 +107,37 @@ def _connection_hint(engine: Engine, hosts: list[dict[str, Any]]) -> dict[str, A
     return hint
 
 
-def _list_clusters(client: YandexCloudClient, engine: Engine, page_token: str) -> dict[str, Any]:
-    return client.get(
-        engine.service,
-        f"{engine.path}/clusters",
-        {"folderId": client.folder_id},
-        page_token=page_token,
-    )
+#: How many pages one collection is followed for. A folder with more clusters or
+#: hosts than this is beyond what a single answer should carry anyway - the point
+#: of the cap is that the tool stops and says so, rather than stopping quietly.
+_MAX_PAGES = 5
+
+
+def _list_clusters(
+    client: YandexCloudClient, engine: Engine
+) -> tuple[list[dict[str, Any]], str, bool]:
+    """Return every cluster of *engine*, an error if the read failed, and completeness.
+
+    Yandex answers a hundred at a time. Reading only the first page would drop
+    later clusters from both the list and the count - and a count that is quietly
+    short is worse than no count, because nothing about it looks wrong.
+    """
+    clusters: list[dict[str, Any]] = []
+    page_token = ""
+    for _page in range(_MAX_PAGES):
+        response = client.get(
+            engine.service,
+            f"{engine.path}/clusters",
+            {"folderId": client.folder_id},
+            page_token=page_token,
+        )
+        if not response.get("success"):
+            return clusters, str(response.get("error", "")), False
+        clusters.extend((response.get("data") or {}).get("clusters") or [])
+        page_token = str((response.get("metadata") or {}).get("next_page_token", "") or "")
+        if not page_token:
+            return clusters, "", True
+    return clusters, "", False
 
 
 def _read_hosts(
@@ -129,15 +153,29 @@ def _read_hosts(
     hosts: list[dict[str, Any]] = []
     errors: list[str] = []
     for collection in engine.host_collections:
-        response = client.get(engine.service, f"{engine.path}/clusters/{cluster_id}/{collection}")
-        if not response.get("success"):
-            errors.append(f"{collection}: {response.get('error', '')}")
-            continue
-        data = response.get("data") or {}
-        # Yandex keys the payload by the collection it served, and the two
-        # Greenplum collections come back under "hosts" all the same.
-        listed = data.get("hosts") or data.get(collection) or []
-        hosts.extend(_summarize_host(host, collection) for host in listed)
+        page_token = ""
+        for _page in range(_MAX_PAGES):
+            response = client.get(
+                engine.service,
+                f"{engine.path}/clusters/{cluster_id}/{collection}",
+                page_token=page_token,
+            )
+            if not response.get("success"):
+                errors.append(f"{collection}: {response.get('error', '')}")
+                break
+            data = response.get("data") or {}
+            # Yandex keys the payload by the collection it served, and the two
+            # Greenplum collections come back under "hosts" all the same.
+            listed = data.get("hosts") or data.get(collection) or []
+            hosts.extend(_summarize_host(host, collection) for host in listed)
+            page_token = str((response.get("metadata") or {}).get("next_page_token", "") or "")
+            if not page_token:
+                break
+        else:
+            # A wide Greenplum cluster really can run more segments than one
+            # page holds, and a silently short host list is how a sick segment
+            # goes unnoticed.
+            errors.append(f"{collection}: more pages than {_MAX_PAGES} were available")
     return hosts, "; ".join(errors)
 
 
@@ -216,6 +254,7 @@ def _map_db_cluster(
     outputs={
         "clusters": "clusters with engine, status, and health",
         "unhealthy": "the subset that is running but not alive",
+        "complete": "false when an engine had more pages than were read",
         "stopped": "the subset somebody switched off, which is not a failure",
         "count": "how many clusters were returned",
     },
@@ -265,16 +304,18 @@ def list_yc_db_clusters(
 
     clusters: list[dict[str, Any]] = []
     errors: list[str] = []
+    unfinished: list[str] = []
     answered = 0
     for candidate in engines:
-        response = _list_clusters(client, candidate, "")
-        if not response.get("success"):
+        raw, failure, complete = _list_clusters(client, candidate)
+        if failure:
             # One engine being unavailable should not hide the others; a folder
             # rarely uses every engine and permissions are often per-service.
-            errors.append(f"{candidate.key}: {response.get('error', '')}")
+            errors.append(f"{candidate.key}: {failure}")
             continue
         answered += 1
-        raw = (response.get("data") or {}).get("clusters") or []
+        if not complete:
+            unfinished.append(candidate.key)
         clusters.extend(_summarize_cluster(cluster, candidate) for cluster in raw)
 
     result: dict[str, Any] = {
@@ -287,7 +328,12 @@ def list_yc_db_clusters(
         "unhealthy": [c for c in clusters if not c["healthy"] and not c["stopped"]],
         "stopped": [c for c in clusters if c["stopped"]],
         "count": len(clusters),
+        "complete": not unfinished,
     }
+    if unfinished:
+        # Named rather than implied: a caller that reads a short count without
+        # this cannot tell it apart from a folder that really holds that many.
+        result["incomplete_engines"] = unfinished
     # An engine answering with nothing is an answer: most folders run one or two
     # engines, so "no clusters" is the common truthful result. Only report the
     # tool as unavailable when no engine could be reached at all.

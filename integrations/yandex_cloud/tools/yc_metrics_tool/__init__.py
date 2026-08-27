@@ -163,6 +163,11 @@ def query_yc_metrics(
 _TRUNCATION_MARKER = "more items truncated"
 
 
+def _has_more_pages(response: dict[str, Any]) -> bool:
+    """Whether Yandex kept a continuation token back for this read."""
+    return bool((response.get("metadata") or {}).get("next_page_token"))
+
+
 def _split_off_truncation(values: list[Any]) -> tuple[list[str], bool]:
     """Return the real entries and whether the sanitizer dropped any."""
     kept = [str(value) for value in values if _TRUNCATION_MARKER not in str(value)]
@@ -279,6 +284,10 @@ def list_yc_metrics(
     names, names_truncated = _split_off_truncation(
         (names_response.get("data") or {}).get("names") or []
     )
+    # Two different ways the answer can be partial, and only one of them leaves a
+    # marker: the sanitizer cuts at a hundred, while Yandex pages independently
+    # and can hand back a short page with a token for the rest.
+    names_truncated = names_truncated or _has_more_pages(names_response)
     listed_before_filter = len(names)
     # Yandex accepts nameFilter and ignores it, so narrowing has to happen here —
     # otherwise every filter returns the same list and the caller retries forever.
@@ -288,6 +297,7 @@ def list_yc_metrics(
     labels, labels_truncated = _split_off_truncation(
         (labels_response.get("data") or {}).get("keys") or []
     )
+    labels_truncated = labels_truncated or _has_more_pages(labels_response)
     result: dict[str, Any] = {
         "source": SOURCE,
         "available": True,
@@ -303,7 +313,7 @@ def list_yc_metrics(
         # false" cannot conclude a metric is missing from this list, which is
         # exactly the wrong turn discovery invites.
         result["truncation_note"] = (
-            f"Only the first {listed_before_filter} names were returned. A metric "
+            f"Only {listed_before_filter} names were returned, and there are more. A metric "
             "absent from this list may still exist and be queryable - narrow with "
             'selectors, e.g. service="managed-postgresql", and search again.'
         )

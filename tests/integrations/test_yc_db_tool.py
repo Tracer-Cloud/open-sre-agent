@@ -425,3 +425,117 @@ class TestHostRolesSurviveEngineDisagreement:
         result = get_yc_db_cluster(cluster_id="c1", engine="storedoc", **_CREDENTIALS)
 
         assert result["hosts"][0]["role"] == "MONGOD"
+
+
+class TestNothingIsDroppedOffTheEndOfAPage:
+    """Yandex answers a hundred at a time, and a quietly short list is the worst kind."""
+
+    def _paged(self, pages: dict[str, dict[str, Any]]) -> Any:
+        """Return a stand-in that serves pages keyed by the token asked for."""
+
+        def _request(_method: str, url: str, **kwargs: Any) -> httpx.Response:
+            if "/clusters/" in url and "/hosts" not in url:
+                return httpx.Response(HTTPStatus.OK, json={"id": "c1", "status": "RUNNING"})
+            if "/operations" in url:
+                return httpx.Response(HTTPStatus.OK, json={"operations": []})
+            token = str((kwargs.get("params") or {}).get("pageToken", ""))
+            return httpx.Response(HTTPStatus.OK, json=pages[token])
+
+        return _request
+
+    def test_a_second_page_of_clusters_is_read(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        monkeypatch.setattr(
+            "integrations.yandex_cloud.rest_client.send_request",
+            self._paged(
+                {
+                    "": {
+                        "clusters": [{"id": "c1", "name": "first", "status": "RUNNING"}],
+                        "nextPageToken": "page-2",
+                    },
+                    "page-2": {"clusters": [{"id": "c2", "name": "second", "status": "STOPPED"}]},
+                }
+            ),
+        )
+
+        result = list_yc_db_clusters(engine="postgresql", **_CREDENTIALS)
+
+        assert [c["name"] for c in result["clusters"]] == ["first", "second"]
+        assert result["count"] == 2
+        assert result["complete"] is True
+
+    def test_the_stopped_cluster_on_the_second_page_is_not_lost(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """Dropping a page drops findings, not just rows."""
+        monkeypatch.setattr(
+            "integrations.yandex_cloud.rest_client.send_request",
+            self._paged(
+                {
+                    "": {
+                        "clusters": [{"id": "c1", "name": "first", "status": "RUNNING"}],
+                        "nextPageToken": "page-2",
+                    },
+                    "page-2": {"clusters": [{"id": "c2", "name": "second", "status": "STOPPED"}]},
+                }
+            ),
+        )
+
+        result = list_yc_db_clusters(engine="postgresql", **_CREDENTIALS)
+
+        assert [c["name"] for c in result["stopped"]] == ["second"]
+
+    def test_more_pages_than_are_read_are_declared(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """The cap is fine; stopping quietly at it is not."""
+        endless = {
+            "": {"clusters": [{"id": "c", "name": "n", "status": "RUNNING"}], "nextPageToken": "t"},
+            "t": {
+                "clusters": [{"id": "c", "name": "n", "status": "RUNNING"}],
+                "nextPageToken": "t",
+            },
+        }
+        monkeypatch.setattr(
+            "integrations.yandex_cloud.rest_client.send_request", self._paged(endless)
+        )
+
+        result = list_yc_db_clusters(engine="postgresql", **_CREDENTIALS)
+
+        assert result["complete"] is False
+        assert result["incomplete_engines"] == ["postgresql"]
+
+    def test_a_wide_greenplum_cluster_reads_every_page_of_segments(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """Greptile did not raise this one, and it is the likelier of the two.
+
+        A hundred segments is an ordinary size for an MPP cluster, and a segment
+        missing from the list is a segment nobody checks the health of.
+        """
+
+        def _request(_method: str, url: str, **kwargs: Any) -> httpx.Response:
+            token = str((kwargs.get("params") or {}).get("pageToken", ""))
+            if "segment-hosts" in url:
+                if not token:
+                    return httpx.Response(
+                        HTTPStatus.OK,
+                        json={
+                            "hosts": [{"name": "seg-1", "health": "ALIVE"}],
+                            "nextPageToken": "more",
+                        },
+                    )
+                return httpx.Response(
+                    HTTPStatus.OK, json={"hosts": [{"name": "seg-2", "health": "DEAD"}]}
+                )
+            if "master-hosts" in url:
+                return httpx.Response(
+                    HTTPStatus.OK, json={"hosts": [{"name": "master-1", "health": "ALIVE"}]}
+                )
+            if "/operations" in url:
+                return httpx.Response(HTTPStatus.OK, json={"operations": []})
+            return httpx.Response(HTTPStatus.OK, json={"id": "c1", "status": "RUNNING"})
+
+        monkeypatch.setattr("integrations.yandex_cloud.rest_client.send_request", _request)
+
+        result = get_yc_db_cluster(cluster_id="c1", engine="greenplum", **_CREDENTIALS)
+
+        assert [host["name"] for host in result["hosts"]] == ["master-1", "seg-1", "seg-2"]
+        assert [host["name"] for host in result["unhealthy_hosts"]] == ["seg-2"]
