@@ -22,17 +22,13 @@ from rich.console import Console
 from rich.text import Text
 
 from core.agent_harness.spi.accounting import SELF_RECORDING_ACTION_TOOL_NAMES
-from core.agent_harness.spi.task_plan import TaskPlan, is_plan_diagnosis_prose
+from core.agent_harness.spi.task_plan import is_plan_diagnosis_prose
 from infrastructure.observability.trace.redaction import redact_sensitive
 from infrastructure.safety.terminal_output import strip_terminal_controls
 from infrastructure.terminal.theme import BOLD_SKILL, BRAND, DIM, HIGHLIGHT
 from surfaces.interactive_shell.runtime import Session
 from surfaces.interactive_shell.runtime.core.state import SpinnerState
 from surfaces.interactive_shell.ui.streaming import render_markdown_block
-from surfaces.interactive_shell.ui.task_plan import (
-    render_plan_updated,
-    render_task_plan,
-)
 from surfaces.shared.terminal.output.console_state import get_investigation_spinner
 from tools.interactive_shell.action_names import ActionToolName
 
@@ -297,8 +293,6 @@ class ActionRenderObserver:
         self.message = message
         self.planned_count = 0
         self._pending_skill_calls: dict[str, str] = {}
-        # (explanation, ((step, status), ...)) — explanation changes must refresh.
-        self._last_plan_signature: tuple[str, tuple[tuple[str, str], ...]] | None = None
 
     def __call__(self, kind: str, data: dict[str, Any]) -> None:
         if kind == "llm_start":
@@ -321,10 +315,9 @@ class ActionRenderObserver:
             name = str(data.get("name", "")).strip()
             if name == ActionToolName.SKILL_VIEW:
                 self._render_skill_end(data)
-            elif name == ActionToolName.UPDATE_PLAN:
-                # Commit lives in the tool; paint only after a successful result
-                # so a rejected call cannot leave session/overlay on a failed plan.
-                self._render_plan_update(data)
+            # update_plan is not painted into the transcript: the plan renders in
+            # the pinned bottom overlay (``task_plan_overlay_ansi``) from session
+            # state the tool committed.
             self._set_spinner_phase(SpinnerState.EXECUTING_PHASE)
             return
         if kind != "tool_start":
@@ -336,7 +329,7 @@ class ActionRenderObserver:
         if name == ActionToolName.SKILL_VIEW:
             self._render_skill_start(data)
         elif name == ActionToolName.UPDATE_PLAN:
-            pass  # render on tool_end after the tool commits session state
+            pass  # no transcript preview; the plan shows in the pinned bottom overlay
         elif _is_internal_choice_command(name, data):
             pass  # private picker plumbing; the menu owns the visible interaction
         elif name in _SELF_RENDERING_TOOLS:
@@ -414,36 +407,6 @@ class ActionRenderObserver:
             line.append(f" {content}", style=str(BRAND))
         self.console.print()
         self.console.print(line)
-
-    def _render_plan_update(self, data: dict[str, Any]) -> None:
-        """Paint the checklist after a successful ``update_plan`` tool result.
-
-        Session state is written by the tool itself — this observer must not
-        commit on ``tool_start``, or a later validation/hook failure would leave
-        the overlay and flush transcript advertising a plan that never landed.
-        """
-        output = data.get("output")
-        if not isinstance(output, dict) or not output.get("ok"):
-            return
-        plan = getattr(self.session, "task_plan", None)
-        if not isinstance(plan, TaskPlan) or not plan.steps:
-            return
-        signature = (
-            plan.explanation,
-            tuple((item.step, str(item.status)) for item in plan.steps),
-        )
-        if signature == self._last_plan_signature:
-            return
-        self._last_plan_signature = signature
-        if plan.all_pending:
-            render_task_plan(self.console, plan)
-            return
-        render_plan_updated(self.console, plan)
-        # Keep the explanation's newlines: it is multi-line markdown (Facts,
-        # hypothesis table) that render_markdown_block lays out line by line.
-        explanation = strip_terminal_controls(plan.explanation, keep_whitespace=True)
-        if explanation:
-            render_markdown_block(self.console, explanation)
 
     def _render_skill_end(self, data: dict[str, Any]) -> None:
         """Print the ``↳`` child line under the skill's ``tool_start`` parent."""

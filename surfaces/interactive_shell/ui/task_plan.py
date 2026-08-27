@@ -1,15 +1,13 @@
-"""Live task-plan checklist for the interactive shell.
+"""Live task-plan overlay for the interactive shell.
 
-The transcript prints a dim toast when the agent revises the plan, and the
-full checklist once when every step is still pending. The live prompt overlay
-is only the header plus the current step — a six-step list in the prompt
-region is reprinted into scrollback on every ``patch_stdout`` tool line.
+The plan renders in one place: an ANSI overlay pinned above the prompt, at the
+bottom of the screen. Before execution the whole checklist is shown; once work
+starts it collapses to the header plus the current step so the prompt region
+stays short while tool output streams above it. The plan is never dumped into
+the transcript.
 """
 
 from __future__ import annotations
-
-from rich.console import Console
-from rich.text import Text
 
 from core.agent_harness.spi.task_plan import (
     PLAN_STATUS_GLYPH,
@@ -19,10 +17,10 @@ from core.agent_harness.spi.task_plan import (
     format_plan_header,
     parse_task_plan,
 )
-from infrastructure.safety.terminal_output import strip_terminal_controls
 from infrastructure.terminal import theme as ui_theme
 from surfaces.interactive_shell.ui.input_prompt.layout import clip_prompt_text, prompt_line_width
-from surfaces.interactive_shell.ui.streaming import render_markdown_block
+
+_STEP_INDENT = "  "
 
 
 def task_plan_from_tool_args(args: dict[str, object]) -> TaskPlan | None:
@@ -31,15 +29,6 @@ def task_plan_from_tool_args(args: dict[str, object]) -> TaskPlan | None:
         return None
     plan, _error = parse_task_plan(args)
     return plan
-
-
-def render_plan_updated(console: Console, plan: TaskPlan | None = None) -> None:
-    """Print the transcript toast: ready (nothing ran) or updated (work underway)."""
-    console.print()
-    if plan is not None and plan.all_pending:
-        console.print(Text("Plan ready — nothing executed", style=str(ui_theme.DIM)))
-        return
-    console.print(Text("Plan updated", style=str(ui_theme.DIM)))
 
 
 def _overlay_line(text: str, style: str, width: int) -> str:
@@ -69,50 +58,29 @@ def _step_overlay_line(item: PlanStep, width: int) -> str:
     return _overlay_line(f"{glyph} {step}", ui_theme.DIM_ANSI, width)
 
 
+def _indented_step_overlay_line(item: PlanStep, width: int) -> str:
+    """A step overlay row indented under the header."""
+    return _STEP_INDENT + _step_overlay_line(item, max(width - len(_STEP_INDENT), 1))
+
+
 def task_plan_overlay_ansi(plan: TaskPlan) -> str:
-    """Two-line ANSI overlay: ``Plan · n/m`` plus the current step."""
+    """ANSI plan overlay pinned above the prompt, indented under its header.
+
+    Before execution (every step pending) the whole checklist is shown so the
+    user reads the plan where it lives — at the bottom, above the action bar.
+    Once work starts it collapses to the header plus the current step to keep
+    the prompt region short while tool output streams above it.
+    """
     width = prompt_line_width()
-    return "\n".join(
-        (
-            _overlay_line(format_plan_header(plan), ui_theme.SECONDARY_ANSI, width),
-            _step_overlay_line(plan.focused_step, width),
-        )
-    )
-
-
-def render_task_plan(console: Console, plan: TaskPlan) -> None:
-    """Print the toast plus the full checklist (ready dump and tests)."""
-    render_plan_updated(console, plan)
-    header = Text()
-    header.append(format_plan_header(plan), style=str(ui_theme.SECONDARY))
-    console.print(header)
-    for item in plan.steps:
-        # Sanitize at this sink: ``PlanStep`` may be built outside parse
-        # (tests, restored payloads that skipped ``parse_task_plan``).
-        glyph = PLAN_STATUS_GLYPH[item.status]
-        step = strip_terminal_controls(item.step)
-        line = Text()
-        if item.status is PlanStepStatus.IN_PROGRESS:
-            line.append(f"{glyph} ", style=f"bold {ui_theme.TEXT}")
-            line.append(step, style=f"bold {ui_theme.TEXT}")
-        elif item.status is PlanStepStatus.COMPLETED:
-            line.append(f"{glyph} ", style=str(ui_theme.HIGHLIGHT))
-            line.append(step, style=str(ui_theme.DIM))
-        else:
-            line.append(f"{glyph} ", style=str(ui_theme.DIM))
-            line.append(step, style=str(ui_theme.DIM))
-        console.print(line)
-    # Keep the explanation's newlines: it is multi-line markdown (Facts,
-    # hypothesis table) that render_markdown_block lays out line by line.
-    explanation = strip_terminal_controls(plan.explanation, keep_whitespace=True)
-    if explanation:
-        render_markdown_block(console, explanation)
-    console.print()
+    header = _overlay_line(format_plan_header(plan), ui_theme.SECONDARY_ANSI, width)
+    if plan.all_pending:
+        rows = [header, *(_indented_step_overlay_line(item, width) for item in plan.steps)]
+    else:
+        rows = [header, _indented_step_overlay_line(plan.focused_step, width)]
+    return "\n".join(rows)
 
 
 __all__ = [
-    "render_plan_updated",
-    "render_task_plan",
     "task_plan_from_tool_args",
     "task_plan_overlay_ansi",
 ]
