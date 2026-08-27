@@ -14,12 +14,15 @@ Rules:
 
 - Pass `pr_url` when the user provides a GitHub pull request URL.
 - Pass `owner`, `repo`, and `pr_number` when the user names a repo and PR number.
-- Pass `branch` when the user asks to fix CI on a branch such as `main`.
+- Pass `branch` (e.g. `branch="main"`) when the user asks to fix a branch's
+  failing CI itself; never combine it with a PR selector. Merged or closed PRs
+  are refused — use `branch` for failures already on the base branch.
 - If no repo is named, omit `owner` and `repo`; the tool uses the current
   checkout's GitHub origin.
 - The tool inspects failing GitHub Actions checks, fixes the local checkout or a
   temporary linked git worktree, commits, pushes the PR branch or fresh repair
-  branch, and waits for the checks triggered by that push.
+  branch, and waits for the checks triggered by that push. It does not open a
+  new PR.
 - Fork PR branches are refused by the tool because OpenSRE only pushes to
   branches in the same repository.
 - Branch targets such as `main` are never pushed directly; OpenSRE pushes a

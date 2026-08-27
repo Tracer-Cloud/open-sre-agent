@@ -1,16 +1,18 @@
-"""Resolve GitHub CI failures into a coding task."""
+"""Resolve GitHub PR or branch CI failures into a coding task."""
 
 from __future__ import annotations
 
 import re
 from dataclasses import dataclass, replace
 from typing import Any, Final
+from urllib.parse import quote
 
 from infrastructure.safety.masking import MaskingPolicy, MaskingRules
 from integrations.github.repo_scope import detect_git_remote_repo_scope
 from integrations.github.tools.ci_fix.errors import (
     ERR_INVALID_INPUT,
     ERR_NO_FAILING_CHECKS,
+    ERR_PR_NOT_OPEN,
     ERR_UNSUPPORTED_PR_BRANCH,
     GitHubCiFixError,
 )
@@ -31,20 +33,6 @@ CI_TARGET_PR: Final = "pr"
 # second root cause for the coding agent to chase.
 _FAILED_CONCLUSIONS = frozenset({"ACTION_REQUIRED", "FAILURE", "STARTUP_FAILURE", "TIMED_OUT"})
 _FAILED_STATES = frozenset({"ERROR", "FAILURE", "FAILED"})
-_BRANCH_RUN_FIELDS = ",".join(
-    [
-        "conclusion",
-        "createdAt",
-        "databaseId",
-        "displayTitle",
-        "headBranch",
-        "headSha",
-        "name",
-        "status",
-        "url",
-        "workflowName",
-    ]
-)
 _PR_FIELDS = ",".join(
     [
         "number",
@@ -60,9 +48,10 @@ _PR_FIELDS = ",".join(
         "statusCheckRollup",
     ]
 )
+_BRANCH_RUN_FIELDS = "databaseId,name,workflowName,conclusion,status,url"
+_BRANCH_RUNS_KEY = "runs"
 _MAX_LOG_CHARS = 7000
 _MAX_TASK_LOG_CHARS = 18000
-_BRANCH_RUN_LIMIT = "20"
 
 
 @dataclass(frozen=True)
@@ -89,7 +78,7 @@ class FailingCheck:
 
 @dataclass(frozen=True)
 class CiFixContext:
-    """Resolved GitHub CI failure and coding-agent task."""
+    """Resolved CI failure (PR or branch target) and coding-agent task."""
 
     owner: str
     repo: str
@@ -104,6 +93,18 @@ class CiFixContext:
     task: str
     target_kind: str = CI_TARGET_PR
     target_branch: str = ""
+
+    @property
+    def is_branch_target(self) -> bool:
+        """True when the fix targets a named branch via a repair worktree, not a PR head."""
+        return self.number is None or self.target_kind == CI_TARGET_BRANCH
+
+    @property
+    def target_label(self) -> str:
+        if self.is_branch_target:
+            branch = self.target_branch or self.base_branch or self.head_branch
+            return f"{self.owner}/{self.repo}@{branch}"
+        return f"{self.owner}/{self.repo}#{self.number}"
 
 
 def parse_pr_url(pr_url: str | None) -> PullRequestRef | None:
@@ -126,16 +127,14 @@ def gather_ci_fix_context(
     repo: str | None = None,
     pr_number: int | None = None,
     pr_url: str | None = None,
-    branch: str | None = None,
     workspace: str | None = None,
     github_token: str | None = None,
 ) -> CiFixContext:
-    """Resolve PR or branch metadata, failing checks, and log snippets."""
+    """Resolve PR metadata, failing checks, and log snippets."""
     parsed_url = parse_pr_url(pr_url)
     repo_owner = (parsed_url.owner if parsed_url else owner or "").strip()
     repo_name = (parsed_url.repo if parsed_url else repo or "").strip().removesuffix(".git")
     number = parsed_url.number if parsed_url else pr_number
-    branch_name = _normalize_branch(branch)
 
     if not repo_owner or not repo_name:
         detected = detect_git_remote_repo_scope(workspace)
@@ -148,14 +147,6 @@ def gather_ci_fix_context(
         )
 
     repo_full_name = f"{repo_owner}/{repo_name}"
-    if number is None and branch_name:
-        return _gather_branch_ci_fix_context(
-            owner=repo_owner,
-            repo=repo_name,
-            branch=branch_name,
-            github_token=github_token,
-        )
-
     pr_selector = str(number) if number is not None else ""
     args = ["pr", "view"]
     if pr_selector:
@@ -168,6 +159,17 @@ def gather_ci_fix_context(
         raise GitHubCiFixError(
             ERR_INVALID_INPUT,
             "GitHub PR metadata did not include a PR number; no push was made.",
+        )
+
+    state = str(pr.get("state") or "").strip().upper()
+    if state and state != "OPEN":
+        raise GitHubCiFixError(
+            ERR_PR_NOT_OPEN,
+            (
+                f"{repo_full_name}#{resolved_number} is {state.lower()}, not open; "
+                "CI fixes push to open PR heads or an explicitly requested branch, "
+                "so no push was made."
+            ),
         )
 
     head_repo = _head_repo_full_name(pr)
@@ -210,157 +212,112 @@ def gather_ci_fix_context(
         skipped_check_names=tuple(_check_name(item) for item in rollup if _is_skipped(item)),
         failing_checks=checks,
         task="",
+        target_kind=CI_TARGET_PR,
         target_branch=head_branch,
     )
     return replace(ctx, task=_build_task(ctx))
 
 
-def _gather_branch_ci_fix_context(
+def gather_branch_ci_fix_context(
     *,
-    owner: str,
-    repo: str,
     branch: str,
-    github_token: str | None,
+    owner: str | None = None,
+    repo: str | None = None,
+    workspace: str | None = None,
+    github_token: str | None = None,
 ) -> CiFixContext:
-    repo_full_name = f"{owner}/{repo}"
+    """Resolve a branch's failing workflow runs and log snippets (no PR involved)."""
+    branch_name = _normalize_branch(branch)
+    if not branch_name:
+        raise GitHubCiFixError(
+            ERR_INVALID_INPUT,
+            "A branch name is required to fix branch CI; no push was made.",
+        )
+    repo_owner = (owner or "").strip()
+    repo_name = (repo or "").strip().removesuffix(".git")
+    if not repo_owner or not repo_name:
+        detected = detect_git_remote_repo_scope(workspace)
+        if detected is not None:
+            repo_owner, repo_name = detected
+    if not repo_owner or not repo_name:
+        raise GitHubCiFixError(
+            ERR_INVALID_INPUT,
+            "owner/repo is required unless the workspace origin identifies a GitHub repo; no push was made.",
+        )
+
+    repo_full_name = f"{repo_owner}/{repo_name}"
+    # Branch names may contain URL-reserved characters (feat/x); escape them so
+    # the REST path keeps the name as a single segment.
+    branch_path = quote(branch_name, safe="")
+    head = run_gh_json(
+        ["api", f"repos/{repo_full_name}/branches/{branch_path}", "--jq", '{"sha": .commit.sha}'],
+        repo=repo_full_name,
+        github_token=github_token,
+        repo_flag=False,
+    )
+    head_sha = str(head.get("sha") or "").strip()
+    if not head_sha:
+        raise GitHubCiFixError(
+            ERR_INVALID_INPUT,
+            f"Could not resolve the head commit of {repo_full_name}@{branch_name}; no push was made.",
+        )
+
     payload = run_gh_json(
         [
             "run",
             "list",
-            "--branch",
-            branch,
+            "--commit",
+            head_sha,
             "--limit",
-            _BRANCH_RUN_LIMIT,
+            "100",
             "--json",
             _BRANCH_RUN_FIELDS,
             "--jq",
-            '{"runs": .}',
+            f'{{"{_BRANCH_RUNS_KEY}": .}}',
         ],
         repo=repo_full_name,
         github_token=github_token,
     )
-    current_runs = _latest_branch_run_group(payload.get("runs"))
-    failing_runs = _failing_runs(current_runs)
-    if not failing_runs:
+    runs = _list_value(payload.get(_BRANCH_RUNS_KEY))
+    checks = tuple(
+        _failing_check_from_run(repo_full_name, run, github_token=github_token)
+        for run in runs
+        if _is_failing_check(run)
+    )
+    if not checks:
         raise GitHubCiFixError(
             ERR_NO_FAILING_CHECKS,
-            f"No failing CI runs found on {repo_full_name} branch {branch}; no push was made.",
+            (
+                f"No failing workflow runs found on {repo_full_name}@{branch_name} "
+                f"(head {head_sha[:12]}); no push was made."
+            ),
         )
 
-    checks: list[FailingCheck] = []
-    skipped_names: list[str] = []
-    for failing_run in failing_runs:
-        run_id = str(failing_run.get("databaseId") or "").strip()
-        workflow_name = str(
-            failing_run.get("workflowName") or failing_run.get("name") or "GitHub Actions"
-        ).strip()
-        run_url = str(
-            failing_run.get("url")
-            or (f"https://github.com/{repo_full_name}/actions/runs/{run_id}" if run_id else "")
-        )
-        run_checks, run_skipped = _checks_from_branch_run(
-            repo_full_name,
-            failing_run=failing_run,
-            run_id=run_id,
-            run_url=run_url,
-            workflow_name=workflow_name,
-            github_token=github_token,
-        )
-        checks.extend(run_checks)
-        skipped_names.extend(run_skipped)
-
-    primary = failing_runs[0]
-    primary_id = str(primary.get("databaseId") or "").strip()
-    primary_workflow = str(
-        primary.get("workflowName") or primary.get("name") or "GitHub Actions"
-    ).strip()
-    url = str(
-        primary.get("url")
-        or (f"https://github.com/{repo_full_name}/actions/runs/{primary_id}" if primary_id else "")
-    )
-    if len(failing_runs) == 1:
-        title = str(primary.get("displayTitle") or primary_workflow or f"CI on {branch}").strip()
-    else:
-        workflow_names = sorted(
-            {
-                str(run.get("workflowName") or run.get("name") or "").strip()
-                for run in failing_runs
-                if str(run.get("workflowName") or run.get("name") or "").strip()
-            }
-        )
-        title = f"{len(failing_runs)} failing workflows on {branch}" + (
-            f" ({', '.join(workflow_names)})" if workflow_names else ""
-        )
     ctx = CiFixContext(
-        owner=owner,
-        repo=repo,
+        owner=repo_owner,
+        repo=repo_name,
         number=None,
-        title=title,
-        url=url or f"https://github.com/{repo_full_name}/tree/{branch}",
-        base_branch=branch,
-        head_branch=branch,
-        head_sha=str(primary.get("headSha") or "").strip(),
-        skipped_check_names=tuple(dict.fromkeys(skipped_names)),
-        failing_checks=tuple(checks),
+        title="",
+        url=f"https://github.com/{repo_full_name}/tree/{branch_name}",
+        base_branch=branch_name,
+        head_branch=branch_name,
+        head_sha=head_sha,
+        skipped_check_names=tuple(_check_name(run) for run in runs if _is_skipped(run)),
+        failing_checks=checks,
         task="",
         target_kind=CI_TARGET_BRANCH,
-        target_branch=branch,
+        target_branch=branch_name,
     )
     return replace(ctx, task=_build_task(ctx))
 
 
-def _failing_runs(value: Any) -> list[dict[str, Any]]:
-    """Return every failing workflow run in the latest-commit group."""
-    return [item for item in _list_value(value) if _is_failing_check(item)]
-
-
-def _latest_branch_run_group(value: Any) -> list[dict[str, Any]]:
-    runs = _list_value(value)
-    if not runs:
-        return []
-    latest_head_sha = str(runs[0].get("headSha") or "").strip()
-    if not latest_head_sha:
-        return runs
-    return [run for run in runs if str(run.get("headSha") or "").strip() == latest_head_sha]
-
-
-def _checks_from_branch_run(
+def _failing_check_from_run(
     repo_full_name: str,
+    run: dict[str, Any],
     *,
-    failing_run: dict[str, Any],
-    run_id: str,
-    run_url: str,
-    workflow_name: str,
     github_token: str | None,
-) -> tuple[tuple[FailingCheck, ...], tuple[str, ...]]:
-    jobs: list[dict[str, Any]] = []
-    if run_id:
-        try:
-            payload = run_gh_json(
-                ["run", "view", run_id, "--json", "jobs"],
-                repo=repo_full_name,
-                github_token=github_token,
-            )
-            jobs = _list_value(payload.get("jobs"))
-        except GitHubCiFixError:
-            jobs = []
-
-    failing_jobs = tuple(
-        _failing_check_from_branch_job(
-            repo_full_name,
-            job,
-            run_id=run_id,
-            run_url=run_url,
-            workflow_name=workflow_name,
-            github_token=github_token,
-        )
-        for job in jobs
-        if _is_failing_check(job)
-    )
-    skipped = tuple(_check_name(job) for job in jobs if _is_skipped(job))
-    if failing_jobs:
-        return failing_jobs, skipped
-
+) -> FailingCheck:
+    run_id = str(run.get("databaseId") or "")
     log_excerpt = ""
     if run_id:
         log_excerpt = _fetch_log_excerpt(
@@ -368,48 +325,14 @@ def _checks_from_branch_run(
             run_id=run_id,
             job_id="",
             github_token=github_token,
-        )
-    return (
-        (
-            FailingCheck(
-                name=workflow_name or str(failing_run.get("name") or "GitHub Actions run"),
-                conclusion=str(failing_run.get("conclusion") or "").lower(),
-                details_url=run_url,
-                workflow_name=workflow_name,
-                run_id=run_id,
-                log_excerpt=log_excerpt,
-            ),
-        ),
-        skipped,
-    )
-
-
-def _failing_check_from_branch_job(
-    repo_full_name: str,
-    job: dict[str, Any],
-    *,
-    run_id: str,
-    run_url: str,
-    workflow_name: str,
-    github_token: str | None,
-) -> FailingCheck:
-    details_url = str(job.get("url") or run_url or "")
-    job_id = str(job.get("databaseId") or job.get("id") or "")
-    log_excerpt = ""
-    if run_id:
-        log_excerpt = _fetch_log_excerpt(
-            repo_full_name,
-            run_id=run_id,
-            job_id=job_id,
-            github_token=github_token,
+            failed_only=True,
         )
     return FailingCheck(
-        name=str(job.get("name") or "unnamed job"),
-        conclusion=str(job.get("conclusion") or job.get("status") or "").lower(),
-        details_url=details_url,
-        workflow_name=workflow_name,
+        name=_check_name(run),
+        conclusion=str(run.get("conclusion") or "").lower(),
+        details_url=str(run.get("url") or ""),
+        workflow_name=str(run.get("workflowName") or run.get("name") or ""),
         run_id=run_id,
-        job_id=job_id,
         log_excerpt=log_excerpt,
     )
 
@@ -447,8 +370,9 @@ def _fetch_log_excerpt(
     run_id: str,
     job_id: str,
     github_token: str | None,
+    failed_only: bool = False,
 ) -> str:
-    args = ["run", "view", run_id, "--log"]
+    args = ["run", "view", run_id, "--log-failed" if failed_only else "--log"]
     if job_id:
         args.extend(["--job", job_id])
     try:
@@ -460,18 +384,27 @@ def _fetch_log_excerpt(
 
 def _log_excerpt(raw: str) -> str:
     lines = raw.splitlines()
-    interesting: list[str] = []
+    include: set[int] = set()
     for index, line in enumerate(lines):
         lowered = line.lower()
         if any(
             marker in lowered
             for marker in ("::error", "error:", "failed", "failure", "traceback", "exception")
         ):
-            start = max(0, index - 3)
-            end = min(len(lines), index + 8)
-            interesting.extend(lines[start:end])
-            interesting.append("")
-    if not interesting:
+            include.update(range(max(0, index - 3), min(len(lines), index + 8)))
+    if include:
+        # Emit each line once, in order, with blank separators between regions.
+        # Overlapping windows used to be appended repeatedly, so a dense error
+        # region near the end of the log could evict the actual failure from
+        # the tail-truncated excerpt.
+        interesting: list[str] = []
+        previous: int | None = None
+        for index in sorted(include):
+            if previous is not None and index > previous + 1:
+                interesting.append("")
+            interesting.append(lines[index])
+            previous = index
+    else:
         interesting = lines[-80:]
     excerpt = "\n".join(interesting).strip()
     return excerpt[-_MAX_LOG_CHARS:]
@@ -479,15 +412,15 @@ def _log_excerpt(raw: str) -> str:
 
 def _build_task(ctx: CiFixContext) -> str:
     masker = MaskingRules(MaskingPolicy.from_env())
-    if ctx.target_kind == CI_TARGET_BRANCH:
-        branch = ctx.target_branch or ctx.base_branch
+    if ctx.is_branch_target:
+        branch = ctx.target_branch or ctx.base_branch or ctx.head_branch
         lines = [
-            f"Fix the failing GitHub Actions CI checks for {ctx.owner}/{ctx.repo} branch {branch}.",
+            f"Fix the failing GitHub Actions workflow runs on {ctx.owner}/{ctx.repo} "
+            f"branch {branch}.",
             "",
             f"Branch: {branch}",
             f"Failing commit SHA: {ctx.head_sha}",
-            f"Primary failing run: {ctx.url}",
-            f"Run summary: {ctx.title}",
+            f"Branch URL: {ctx.url}",
             "The workspace is a fresh OpenSRE repair branch based on the target branch.",
             "Repair every failing check listed below from all failing workflows on that commit.",
             "",
@@ -593,6 +526,7 @@ __all__ = [
     "CiFixContext",
     "FailingCheck",
     "PullRequestRef",
+    "gather_branch_ci_fix_context",
     "gather_ci_fix_context",
     "parse_pr_url",
 ]

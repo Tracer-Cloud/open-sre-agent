@@ -7,6 +7,8 @@ description: "Use OpenSRE to inspect failing GitHub Actions checks on a pull req
 
 OpenSRE can inspect failing GitHub Actions checks on a pull request or named branch, apply a code fix, commit it, push it, and wait for the new checks.
 
+It can also fix failing CI on a branch with no PR — say "fix the CI on main" and OpenSRE inspects the failing workflow runs on that branch's head commit, applies a fix in a linked worktree, and pushes a fresh repair branch.
+
 <Warning>
 This is mutating. OpenSRE asks before checking out or creating a worktree, editing files, committing, and pushing.
 </Warning>
@@ -57,6 +59,7 @@ fix CI on https://github.com/Tracer-Cloud/opensre/pull/4597 and push
 fix failing checks on Tracer-Cloud/opensre#4597
 fix CI on main in Tracer-Cloud/opensre and push
 the current PR CI is failing, fix and push
+fix the CI on main
 ```
 
 ### What happens
@@ -71,7 +74,9 @@ the current PR CI is failing, fix and push
    waits for applicable workflows, and reports whether they passed, failed, were
    superseded by another push, or did not finish within 15 minutes.
 
-If no checks are failing, OpenSRE says so and does not push. It does **not** push directly to protected branches such as `main`.
+If no checks are failing, OpenSRE says so and does not push. It does **not** open a new PR. Merged or closed PRs are refused — if the failure already landed on the base branch, ask for the branch itself ("fix the CI on main").
+
+In branch mode OpenSRE reads the failing workflow runs on the branch's head commit, creates a linked worktree on a fresh `opensre/ci-fix-*` repair branch, pushes that branch, and waits for the pushed commit's own workflow runs. It does **not** push directly to protected branches such as `main`.
 
 ## Verify
 

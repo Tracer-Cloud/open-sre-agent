@@ -53,8 +53,20 @@ def test_spinner_renders_elapsed_seconds_and_cancel_hint() -> None:
 
     rendered = spinner.inline_spinner_ansi()
 
-    assert "(8s)" in rendered
-    assert "esc to cancel" in rendered
+    assert "[ 8s]" in rendered
+    assert "(Press ESC to stop)" in rendered
+    assert SpinnerState.EXECUTING_PHASE in rendered
+
+
+def test_spinner_invoking_tools_phase_matches_factory_copy() -> None:
+    spinner = SpinnerState()
+    spinner.start()
+    spinner.set_phase(SpinnerState.INVOKING_TOOLS_PHASE)
+
+    rendered = spinner.inline_spinner_ansi()
+
+    assert SpinnerState.INVOKING_TOOLS_PHASE in rendered
+    assert "(Press ESC to stop)" in rendered
 
 
 def test_spinner_empty_when_not_streaming() -> None:
@@ -63,3 +75,15 @@ def test_spinner_empty_when_not_streaming() -> None:
     spinner.start()
     spinner.stop()
     assert spinner.inline_spinner_ansi() == ""
+
+
+def test_inline_spinner_clips_a_long_phase_to_one_prompt_row() -> None:
+    """A long phase label must not soft-wrap past the one reserved prompt row."""
+    from surfaces.shared.terminal.prompt_layout import prompt_line_width
+
+    spinner = SpinnerState()
+    spinner.start()
+    spinner.set_phase("X" * 400)
+    rendered = re.sub(r"\x1b\[[0-9;]*m", "", spinner.inline_spinner_ansi())
+
+    assert len(rendered) <= prompt_line_width()

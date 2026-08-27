@@ -9,7 +9,6 @@ from surfaces.shared.llm_setup.auth_service import (
     AuthSetupError,
     AuthStatus,
     configure_api_key_provider,
-    configure_cli_subscription_provider,
     logout_provider,
     provider_status,
 )
@@ -19,7 +18,6 @@ __all__ = [
     "AuthStatus",
     "ProviderAuthProfile",
     "configure_api_key_provider",
-    "configure_cli_subscription_provider",
     "iter_auth_profiles",
     "logout_provider",
     "provider_status",

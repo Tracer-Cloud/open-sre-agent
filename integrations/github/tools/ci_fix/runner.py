@@ -1,4 +1,4 @@
-"""Lifecycle for fixing failing GitHub CI and pushing the repair branch."""
+"""Lifecycle for fixing failing GitHub CI and pushing a repair or PR branch."""
 
 from __future__ import annotations
 
@@ -20,6 +20,7 @@ from integrations.github.repo_scope import detect_git_remote_repo_scope
 from integrations.github.tools.ci_fix.context import (
     CI_TARGET_BRANCH,
     CiFixContext,
+    gather_branch_ci_fix_context,
     gather_ci_fix_context,
 )
 from integrations.github.tools.ci_fix.errors import (
@@ -29,12 +30,13 @@ from integrations.github.tools.ci_fix.errors import (
     ERR_CONFIRMATION_DENIED,
     ERR_EXECUTION,
     ERR_GITHUB_TOKEN,
+    ERR_INVALID_INPUT,
     ERR_REPO_MISMATCH,
     ERR_REPO_SCOPE,
     ERR_TIMEOUT,
     GitHubCiFixError,
 )
-from integrations.github.tools.ci_fix.ship import PushResult, checkout_pr_branch, push_ci_fix
+from integrations.github.tools.ci_fix.ship import PushResult, checkout_target_branch, push_ci_fix
 from integrations.github.tools.ci_fix.verification import (
     DEFAULT_CHECK_WAIT_SECONDS,
     CheckState,
@@ -75,7 +77,7 @@ def ensure_workspace_ready(workspace: str, owner: str, repo: str) -> None:
             ERR_REPO_MISMATCH,
             (
                 f"Workspace origin is {detected_owner}/{detected_repo}, "
-                f"but the CI target belongs to {owner}/{repo}; no push was made."
+                f"but the CI fix targets {owner}/{repo}; no push was made."
             ),
         )
 
@@ -103,7 +105,7 @@ def run_fix(ctx: CiFixContext, workspace: str, model: str | None) -> CodingResul
             success=False,
             summary="",
             error=(
-                f"Found failing CI checks on {_target_label(ctx)}, "
+                f"Found failing CI checks on {ctx.target_label}, "
                 "but no configured coding agent is ready; no push was made."
             ),
             returncode=-1,
@@ -136,9 +138,9 @@ def _base_output(ctx: CiFixContext | None = None) -> dict[str, Any]:
         "owner": ctx.owner if ctx else "",
         "repo": ctx.repo if ctx else "",
         "target_type": ctx.target_kind if ctx else "",
-        "target_branch": ctx.target_branch if ctx else "",
+        "target_branch": ((ctx.target_branch or ctx.base_branch or ctx.head_branch) if ctx else ""),
         "pr_number": ctx.number if ctx else None,
-        "pr_url": ctx.url if ctx and ctx.target_kind != CI_TARGET_BRANCH else "",
+        "pr_url": ctx.url if ctx and ctx.number is not None else "",
         "target_url": ctx.url if ctx else "",
         "base_branch": ctx.base_branch if ctx else "",
         "head_branch": ctx.head_branch if ctx else "",
@@ -181,7 +183,11 @@ def with_push_output(
     repo = str(output.get("repo") or "")
     number = output.get("pr_number")
     target_branch = str(output.get("target_branch") or output.get("base_branch") or "")
-    branch_target = output.get("target_type") == CI_TARGET_BRANCH
+    branch_target = output.get("target_type") == CI_TARGET_BRANCH or number is None
+    target = (
+        f"{owner}/{repo} branch {target_branch}" if branch_target else f"{owner}/{repo}#{number}"
+    )
+    checks_noun = "branch checks" if branch_target else "PR checks"
     result = {
         **output,
         "branch_name": push.branch_name,
@@ -190,31 +196,22 @@ def with_push_output(
         "check_names": list(verification.check_names),
     }
     if verification.state is CheckState.PASSED:
-        if branch_target:
-            return {
-                **result,
-                "response_text": (
-                    f"Fixed failing CI for {owner}/{repo} branch {target_branch}, "
-                    f"pushed {push.branch_name}, and all branch checks passed."
-                ),
-            }
         return {
             **result,
             "response_text": (
-                f"Fixed failing CI for {owner}/{repo}#{number}, pushed {push.branch_name}, "
-                "and all PR checks passed."
+                f"Fixed failing CI for {target}, pushed {push.branch_name}, "
+                f"and all {checks_noun} passed."
             ),
         }
     if verification.state is CheckState.FAILED:
         failing = ", ".join(verification.failing_checks) or "unknown checks"
-        check_label = "branch checks" if branch_target else "PR checks"
         return {
             **result,
             "success": False,
             "error_kind": ERR_CHECKS_FAILED,
-            "error": f"Post-push {check_label} failed: {failing}.",
+            "error": f"Post-push {checks_noun} failed: {failing}.",
             "response_text": (
-                f"Pushed a CI fix to {push.branch_name}, but {check_label} are still failing: "
+                f"Pushed a CI fix to {push.branch_name}, but {checks_noun} are still failing: "
                 f"{failing}."
             ),
         }
@@ -238,13 +235,9 @@ def with_push_output(
         **result,
         "success": False,
         "error_kind": ERR_CHECKS_TIMEOUT,
-        "error": (
-            f"Post-push {'branch checks' if branch_target else 'PR checks'} did not finish "
-            "before the verification timeout."
-        ),
+        "error": (f"Post-push {checks_noun} did not finish before the verification timeout."),
         "response_text": (
-            f"Pushed a CI fix to {push.branch_name}, but "
-            f"{'branch checks' if branch_target else 'PR checks'} did not finish within "
+            f"Pushed a CI fix to {push.branch_name}, but {checks_noun} did not finish within "
             f"{DEFAULT_CHECK_WAIT_SECONDS // 60} minutes."
         ),
     }
@@ -274,17 +267,23 @@ def _result_response_text(ctx: CiFixContext, result: CodingResult) -> str:
     if not result.success:
         return _single_line(result.error or "No CI fix was produced; no push was made.")
     changed = ", ".join(result.changed_files) if result.changed_files else "the workspace"
-    return f"Prepared a CI fix for {_target_label(ctx)}; changed {changed}."
-
-
-def _target_label(ctx: CiFixContext) -> str:
-    if ctx.target_kind == CI_TARGET_BRANCH:
-        return f"{ctx.owner}/{ctx.repo} branch {ctx.target_branch or ctx.base_branch}"
-    return f"{ctx.owner}/{ctx.repo}#{ctx.number}"
+    return f"Prepared a CI fix for {ctx.target_label}; changed {changed}."
 
 
 def _single_line(value: str) -> str:
     return " ".join(value.split())
+
+
+def _confirmation_prompt(ctx: CiFixContext) -> str:
+    if ctx.is_branch_target:
+        return (
+            f"Fix failing CI for {ctx.target_label} in a separate git worktree, "
+            "editing files, committing, and pushing a fresh repair branch? [y/N] "
+        )
+    return (
+        f"Fix failing CI for {ctx.target_label} by checking out "
+        f"{ctx.head_branch}, editing files, committing, and pushing to that branch? [y/N] "
+    )
 
 
 def run_ci_fix(
@@ -300,41 +299,42 @@ def run_ci_fix(
     confirm_fn: Callable[[str], str] | None = None,
 ) -> dict[str, Any]:
     ws = resolve_workspace(workspace)
+    branch_name = (branch or "").strip()
     ctx: CiFixContext | None = None
     worktree: BranchWorktree | None = None
     run_workspace = ws
     try:
-        ctx = gather_ci_fix_context(
-            owner=owner,
-            repo=repo,
-            pr_number=pr_number,
-            pr_url=pr_url,
-            branch=branch,
-            workspace=ws,
-            github_token=github_token,
-        )
+        if branch_name and (pr_number is not None or pr_url):
+            raise GitHubCiFixError(
+                ERR_INVALID_INPUT,
+                "Pass either a PR selector or a branch, not both; no push was made.",
+            )
+        if branch_name:
+            ctx = gather_branch_ci_fix_context(
+                branch=branch_name,
+                owner=owner,
+                repo=repo,
+                workspace=ws,
+                github_token=github_token,
+            )
+        else:
+            ctx = gather_ci_fix_context(
+                owner=owner,
+                repo=repo,
+                pr_number=pr_number,
+                pr_url=pr_url,
+                workspace=ws,
+                github_token=github_token,
+            )
         ensure_workspace_ready(ws, ctx.owner, ctx.repo)
         ensure_push_ready(github_token=github_token)
-        if ctx.target_kind == CI_TARGET_BRANCH:
-            require_confirmation(
-                confirm_fn,
-                (
-                    f"Fix failing CI for {_target_label(ctx)} in a separate git worktree, "
-                    "editing files, committing, and pushing a fresh repair branch? [y/N] "
-                ),
-            )
+        require_confirmation(confirm_fn, _confirmation_prompt(ctx))
+        if ctx.is_branch_target:
             worktree = create_branch_worktree(ws, ctx)
             run_workspace = worktree.path
             ctx = replace(ctx, head_branch=worktree.branch_name)
         else:
-            require_confirmation(
-                confirm_fn,
-                (
-                    f"Fix failing CI for {ctx.owner}/{ctx.repo}#{ctx.number} by checking out "
-                    f"{ctx.head_branch}, editing files, committing, and pushing to that branch? [y/N] "
-                ),
-            )
-            checkout_pr_branch(ws, ctx)
+            checkout_target_branch(ws, ctx)
     except GitHubCiFixError as exc:
         return error_output(exc.kind, exc.message, ctx)
 
@@ -357,11 +357,7 @@ def run_ci_fix(
         except GitHubCiFixError as exc:
             return push_error_output(output, exc)
         try:
-            wait_for_checks = (
-                wait_for_branch_checks
-                if ctx.target_kind == CI_TARGET_BRANCH
-                else wait_for_pr_checks
-            )
+            wait_for_checks = wait_for_branch_checks if ctx.is_branch_target else wait_for_pr_checks
             verification = wait_for_checks(
                 ctx,
                 github_token=github_token,

@@ -294,7 +294,7 @@ def test_run_repl_writes_startup_output_to_the_supplied_console(monkeypatch: Any
     """An embedding caller can capture the shell's output.
 
     The module built one forced-terminal Console at import and used it for the
-    splash and the ready box, so nothing could redirect them.
+    ready box, so nothing could redirect it.
     """
     # Arrange
     from io import StringIO
@@ -304,7 +304,6 @@ def test_run_repl_writes_startup_output_to_the_supplied_console(monkeypatch: Any
     from config.repl_config import ReplConfig
 
     captured = Console(file=StringIO(), force_terminal=False, width=80)
-    monkeypatch.setattr(main_entrypoint, "run_startup_sweep", lambda: None)
     monkeypatch.setattr(main_entrypoint.sys.stdin, "isatty", lambda: True)
 
     def _fake_terminal_ui(console: Any, **_kwargs: Any) -> None:
@@ -335,7 +334,6 @@ def test_run_repl_defaults_to_the_module_console(monkeypatch: Any) -> None:
     """Omitting the console keeps today's behaviour, not a silent no-op."""
     # Arrange
     seen: list[object] = []
-    monkeypatch.setattr(main_entrypoint, "run_startup_sweep", lambda: None)
     monkeypatch.setattr(main_entrypoint.sys.stdin, "isatty", lambda: True)
 
     def _record_console(console: Any, **_kwargs: Any) -> None:
@@ -359,7 +357,7 @@ def test_run_repl_defaults_to_the_module_console(monkeypatch: Any) -> None:
 def test_run_repl_async_routes_the_console_into_resume(monkeypatch: Any, tmp_path: Path) -> None:
     """The async half must use the caller's console too, not the module default.
 
-    ``run_repl`` renders the splash before the event loop; everything after —
+    ``run_repl`` renders the welcome panel before the event loop; everything after —
     resume output and the controller — runs inside ``run_repl_async``, so the
     console has to survive the hand-off.
     """
@@ -408,7 +406,7 @@ def test_run_repl_async_routes_the_console_into_resume(monkeypatch: Any, tmp_pat
 def test_run_repl_hands_its_console_to_the_async_half(monkeypatch: Any) -> None:
     """The console must survive the sync-to-async hand-off.
 
-    ``run_repl`` renders the splash itself and then delegates everything else;
+    ``run_repl`` renders the welcome panel itself and then delegates everything else;
     dropping the argument there would silently return output to the module
     default while the startup renders still looked correct.
     """
@@ -419,7 +417,6 @@ def test_run_repl_hands_its_console_to_the_async_half(monkeypatch: Any) -> None:
 
     from config.repl_config import ReplConfig
 
-    monkeypatch.setattr(main_entrypoint, "run_startup_sweep", lambda: None)
     monkeypatch.setattr(main_entrypoint.sys.stdin, "isatty", lambda: True)
     monkeypatch.setattr(main_entrypoint, "render_terminal_ui", lambda _console, **_kw: None)
 
@@ -477,7 +474,6 @@ def test_console_injection_works_through_the_package_facade(monkeypatch: Any) ->
     from config.repl_config import ReplConfig
     from surfaces.interactive_shell import run_repl as facade
 
-    monkeypatch.setattr(main_entrypoint, "run_startup_sweep", lambda: None)
     monkeypatch.setattr(main_entrypoint.sys.stdin, "isatty", lambda: True)
 
     def _fake_terminal_ui(console: Any, **_kwargs: Any) -> None:
@@ -552,7 +548,7 @@ def test_turn_output_and_prompt_echo_reach_the_supplied_console() -> None:
 
     Startup renders honoured the injected console while the controller and turn
     host built their own force-terminal consoles, so an embedding caller
-    captured the splash and missed every agent response, tool line and prompt
+    captured the welcome panel and missed every agent response, tool line and prompt
     echo — the part it actually wanted.
     """
     # Arrange

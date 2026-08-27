@@ -18,17 +18,13 @@ class PromptBlockId(StrEnum):
 
     # Action envelope.
     ACTION_SYSTEM_BASE = "action-agent-system-base"
-    ACTION_ROUTING_POLICY = "action-agent-routing-policy"
     ACTION_VENDOR_FRAGMENTS = "action-agent-vendor-fragments"
     ACTION_RUNTIME_FACTS = "action-agent-runtime-facts"
     ACTION_SKILLS = "action-agent-skills"
     ACTION_SETUP_STATE = "action-agent-setup-state"
-
-    # Gather envelope.
-    GATHER_SYSTEM_BASE = "gather-system-base"
-    GATHER_VENDOR_FRAGMENTS = "gather-vendor-fragments"
-    GATHER_CONNECTED_INTEGRATIONS = "gather-connected-integrations"
-    GATHER_PRIOR_INVESTIGATION = "gather-prior-investigation"
+    ACTION_PLANNING_INSTRUCTIONS = "action-agent-planning-instructions"
+    ASK_USER_ANSWERED = "ask-user-answered"
+    CURRENT_TASK_PLAN = "current-task-plan"
 
     # Shared across envelopes.
     CONNECTED_INTEGRATIONS = "connected-integrations"

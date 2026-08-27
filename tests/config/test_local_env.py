@@ -15,7 +15,6 @@ def _write_store(path: Path, *, provider: str = "openai", model: str = "gpt-5.5"
                 "targets": {
                     "local": {
                         "provider": provider,
-                        "auth_method": "oauth",
                         "model": model,
                         "model_env": "CODEX_MODEL",
                     }
@@ -44,7 +43,7 @@ def test_frozen_bootstrap_uses_installed_env_and_wizard_store(tmp_path: Path, mo
     assert loaded == env_path
     assert local_env.get_project_env_path() == env_path
     assert local_env.os.environ["LLM_PROVIDER"] == "openai"
-    assert local_env.os.environ["LLM_AUTH_METHOD"] == "oauth"
+    assert "LLM_AUTH_METHOD" not in local_env.os.environ
     assert local_env.os.environ["CODEX_MODEL"] == "gpt-5.5"
 
 

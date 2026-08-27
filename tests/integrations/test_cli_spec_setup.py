@@ -34,9 +34,11 @@ import integrations.coralogix.setup as coralogix_setup
 import integrations.dagster.setup as dagster_setup
 import integrations.datadog.setup as datadog_setup
 import integrations.gitlab.setup as gitlab_setup
+import integrations.google_docs as google_docs_setup
 import integrations.grafana.setup as grafana_setup
 import integrations.groundcover.setup as groundcover_setup
 import integrations.helm.setup as helm_setup
+import integrations.hermes.setup as hermes_setup
 import integrations.honeycomb.setup as honeycomb_setup
 import integrations.incident_io.setup as incident_io_setup
 import integrations.jenkins.setup as jenkins_setup
@@ -92,6 +94,10 @@ _ANSWERS: dict[str, dict[str, str]] = {
         "base_url": "https://gitlab.example.com/api/v4",
         "auth_token": "glpat-gitlab-token",
     },
+    "google_docs": {
+        "credentials_file": "/opt/opensre/google-docs-sa.json",
+        "folder_id": "1BxiMVs0XRA5nFMdKvBdBZjgmUUqptlbs74OgVE2upms",
+    },
     "sentry": {
         "base_url": "https://sentry.example.com",
         "organization_slug": "checkout-org",
@@ -136,6 +142,7 @@ _ANSWERS: dict[str, dict[str, str]] = {
         "kubeconfig": "/home/ci/.kube/config",
         "default_namespace": "checkout",
     },
+    "hermes": {"log_path": "/var/log/hermes/errors.log"},
     "smtp": {
         "host": "smtp.eu.example.com",
         "from_address": "reports@example.com",
@@ -277,6 +284,7 @@ _CASES = [
     pytest.param(coralogix_setup, "CORALOGIX_SETUP", cli._setup_coralogix, id="coralogix"),
     pytest.param(groundcover_setup, "GROUNDCOVER_SETUP", cli._setup_groundcover, id="groundcover"),
     pytest.param(gitlab_setup, "GITLAB_SETUP", cli._setup_gitlab, id="gitlab"),
+    pytest.param(google_docs_setup, "GOOGLE_DOCS_SETUP", cli._setup_google_docs, id="google_docs"),
     pytest.param(sentry_setup, "SENTRY_SETUP", cli._setup_sentry, id="sentry"),
     pytest.param(posthog_setup, "POSTHOG_SETUP", cli._setup_posthog, id="posthog"),
     pytest.param(vercel_setup, "VERCEL_SETUP", cli._setup_vercel, id="vercel"),
@@ -291,6 +299,7 @@ _CASES = [
     pytest.param(dagster_setup, "DAGSTER_SETUP", cli._setup_dagster, id="dagster"),
     pytest.param(temporal_setup, "TEMPORAL_SETUP", cli._setup_temporal, id="temporal"),
     pytest.param(helm_setup, "HELM_SETUP", cli._setup_helm, id="helm"),
+    pytest.param(hermes_setup, "HERMES_SETUP", cli._setup_hermes, id="hermes"),
     pytest.param(smtp_setup, "SMTP_SETUP", cli._setup_smtp, id="smtp"),
     pytest.param(whatsapp_setup, "WHATSAPP_SETUP", cli._setup_whatsapp, id="whatsapp"),
     pytest.param(tempo_setup, "TEMPO_SETUP", cli._setup_tempo, id="tempo"),

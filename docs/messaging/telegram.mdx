@@ -17,19 +17,17 @@ Start the interactive shell with `opensre` (no subcommand). Slash commands below
 
 ## Setup
 
-### Option 1: Onboarding wizard (recommended)
+### Option 1: CLI setup (recommended)
 
 ```bash
-opensre onboard
-# or
 opensre integrations setup telegram
 ```
 
-Interactive shell: `/onboard` or `/integrations setup telegram`.
+Interactive shell: `/integrations setup telegram`.
 
-Choose **Telegram**. The wizard prompts for:
+The setup prompts for:
 
-- **Bot token** (required) — stored in the system keyring (not plain `.env`)
+- **Bot token** (required) — stored as `TELEGRAM_BOT_TOKEN` in `.env` and `~/.opensre/credentials.json`
 - **Default chat ID or `@channelname`** (required) — written to `.env` as `TELEGRAM_DEFAULT_CHAT_ID`
 
 Credentials are also saved to `~/.opensre/integrations.json` via `upsert_integration("telegram", ...)`.
@@ -55,7 +53,7 @@ TELEGRAM_ALLOWED_USERS=123456789   # for two-way gateway chat
 | `TELEGRAM_ALLOWED_USERS` | Comma-separated **numeric** user ids allowed for gateway chat. |
 
 <Note>
-**Credential resolution.** Every Telegram delivery surface — investigations, **background RCA completion notifications**, the scheduler, `/watchdog`, `/hermes watch`, and `/watch` — resolves the bot token the same way: integration store first, then `resolve_env_credential("TELEGRAM_BOT_TOKEN")` (process env, then OS keyring). Chat id is non-secret: `--chat-id` → store `default_chat_id` → `TELEGRAM_DEFAULT_CHAT_ID` env (plain `os.getenv`, never keyring).
+**Credential resolution.** Every Telegram delivery surface — investigations, **background RCA completion notifications**, the scheduler, `/watchdog`, `/hermes watch`, and `/watch` — resolves the bot token the same way: integration store first, then `resolve_env_credential("TELEGRAM_BOT_TOKEN")` (process env, then the credentials file). Chat id is non-secret: `--chat-id` → store `default_chat_id` → `TELEGRAM_DEFAULT_CHAT_ID` env (plain `os.getenv`).
 </Note>
 
 ## Credentials
@@ -289,7 +287,7 @@ Verify only calls `getMe`, so it surfaces token-validity errors but cannot detec
 
 ## Security
 
-- Treat the bot token like a password; prefer OS keyring storage.
+- Treat the bot token like a password; prefer `~/.opensre/credentials.json`.
 - Use **numeric** user ids on the allow-list — never `@username`.
 - Prefer a dedicated bot for OpenSRE.
 - For remote deploy, put secrets in plaintext `.env` on the host (keyring does not travel).

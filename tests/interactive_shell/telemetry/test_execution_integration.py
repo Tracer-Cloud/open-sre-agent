@@ -40,9 +40,6 @@ def test_run_harness_turn_cli_agent_empty_response_is_recorded_empty() -> None:
             handled=False,
         )
 
-    def fake_answer(*_args: object, **_kwargs: object) -> LlmRunInfo:
-        return LlmRunInfo(response_text="")
-
     session = Session()
     output = io.StringIO()
     run_harness_turn(
@@ -53,10 +50,8 @@ def test_run_harness_turn_cli_agent_empty_response_is_recorded_empty() -> None:
         confirm_fn=None,
         is_tty=None,
         execute_actions=fake_execute,
-        gather_evidence=lambda *_args, **_kwargs: None,
-        answer_agent=fake_answer,
     )
 
     assert output.getvalue() == ""
     assert recorder.responses == [""]
-    assert session.last_assistant_intent == "cli_agent_fallback"
+    assert session.last_assistant_intent == "agent_completed"

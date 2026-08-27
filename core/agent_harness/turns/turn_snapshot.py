@@ -17,6 +17,7 @@ from infrastructure.setup_state import cached_setup_state
 
 if TYPE_CHECKING:
     from config.llm_reasoning_effort import ReasoningEffortChoice
+    from core.agent_harness.task_plan.plan import TaskPlan
     from core.messages import RuntimeMessage
 
 RuntimeTool = Any
@@ -187,6 +188,12 @@ class TurnSnapshot:
     the action agent. Consumed from ``session.pending_recovery_note`` (popped:
     the note rides exactly one turn)."""
 
+    task_plan: TaskPlan | None = None
+    """Live ``update_plan`` checklist at turn start (survives transcript drop)."""
+
+    plan_only_until_authorized: bool = False
+    """When true, the user asked for a plan without running it yet."""
+
     @classmethod
     def from_session(
         cls,
@@ -237,6 +244,8 @@ class TurnSnapshot:
             model=getattr(runtime_input, "model", None),
             last_observation=last_observation,
             recovery_note=recovery_note,
+            task_plan=_read_task_plan(session),
+            plan_only_until_authorized=bool(getattr(session, "plan_only_until_authorized", False)),
         )
 
     def render_system_prompt(self) -> str:
@@ -271,6 +280,14 @@ def _pop_recovery_note(session: TurnSnapshotSource) -> str | None:
         return None
     setattr(session, "pending_recovery_note", None)  # noqa: B010 - protocol lacks the optional field
     return note
+
+
+def _read_task_plan(session: TurnSnapshotSource) -> TaskPlan | None:
+    """Copy the live task plan if the source carries one."""
+    from core.agent_harness.task_plan.plan import TaskPlan
+
+    plan = getattr(session, "task_plan", None)
+    return plan if isinstance(plan, TaskPlan) else None
 
 
 def _read_last_observation(session: TurnSnapshotSource, runtime_input: Any | None) -> str | None:

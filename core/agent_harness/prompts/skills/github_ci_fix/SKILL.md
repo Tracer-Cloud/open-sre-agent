@@ -2,7 +2,8 @@
 name: github-ci-fix
 description: >-
   Fix failing GitHub CI / Actions checks via fix_github_pr_ci and push to the
-  existing PR head or a branch repair worktree
+  existing PR head, or fix a branch's failing CI via a linked repair worktree
+demo: Find open PRs with failing CI and fix them
 ---
 ══════════════════════════════════════════════════════════
 GITHUB CI FIX SKILL — interactive-shell action agent:
@@ -14,8 +15,9 @@ WHEN TO USE:
 - The user says "fix CI on this PR", "fix the CI of PR 123 and push", "repair
   the failing checks on owner/repo#123", or provides a GitHub pull request URL
   and asks for CI/check fixes.
-- The user says "fix CI on main", "repair the failing Actions run on main", or
-  "fix CI on the default branch and push".
+- The user asks to fix failing CI on a branch itself — "fix the CI on main",
+  "main is red, fix it", or "fix CI on the default branch and push" — with no
+  PR involved.
 
 USE THIS TOOL:
 - `fix_github_pr_ci`
@@ -31,8 +33,10 @@ HARD RULES:
   `fix_github_pr_ci(pr_url="<url>")`
 - For `owner/repo#123` or "PR 123 in owner/repo", call:
   `fix_github_pr_ci(owner="owner", repo="repo", pr_number=123)`
-- For a named branch like `main`, call:
-  `fix_github_pr_ci(owner="owner", repo="repo", branch="main")`
+- For "fix the CI on main" (or any named branch with no PR), call:
+  `fix_github_pr_ci(branch="main")`
+  Never pass `branch` together with a PR selector, and never invent a branch
+  the user did not name.
 - If no owner/repo is named, omit both and let the tool use the current
   checkout's GitHub origin.
 - Never use `github_cli` or `shell_run` to run raw `gh pr checks`, `gh run view`,
@@ -57,3 +61,5 @@ Compact examples:
    → fix_github_pr_ci(owner="Tracer-Cloud", repo="opensre", branch="main")
 4) "the current PR CI is failing, fix and push"
    → fix_github_pr_ci()
+5) "fix the CI on main"
+   → fix_github_pr_ci(branch="main")

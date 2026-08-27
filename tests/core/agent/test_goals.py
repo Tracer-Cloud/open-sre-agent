@@ -164,10 +164,10 @@ def test_missing_max_iterations_is_not_a_ceiling() -> None:
     assert nudge is not None
 
 
-def test_agent_goal_nudges_then_accepts_at_ceiling() -> None:
-    """Wired path: Agent._should_accept_conclusion consults goals until budget."""
+def test_agent_goal_does_not_block_a_no_tool_reply() -> None:
+    """A no-tool reply ends the turn; the ReAct Goal is not a stop gate."""
     goal = Goal(description="count stars", success_criteria="numeric velocity")
-    llm = _FakeLLM(iter([_text("not yet"), _text("still not")]))
+    llm = _FakeLLM(iter([_text("not yet")]))
     tools = cast("list[RegisteredTool]", [_FakeTool()])
     agent: Agent[RegisteredTool] = Agent(
         llm=llm,
@@ -178,7 +178,7 @@ def test_agent_goal_nudges_then_accepts_at_ceiling() -> None:
         goal=goal,
     )
     result = agent.run([{"role": "user", "content": "stars?"}])
-    assert result.final_text == "still not"
+    assert result.final_text == "not yet"
 
 
 def test_agent_without_goal_accepts_first_conclusion() -> None:

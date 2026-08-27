@@ -1001,10 +1001,10 @@ function Start-OpenSreOnboardingAfterInstall {
         return
     }
 
-    Write-Host "Launching $DisplayName onboard..."
-    & $BinaryPath onboard
+    Write-Host "Launching $DisplayName setup..."
+    & $BinaryPath setup
     if ($LASTEXITCODE -ne 0) {
-        Write-Warning "Onboarding exited before completion. Run '$DisplayName onboard' to retry."
+        Write-Warning "Setup exited before completion. Run '$DisplayName setup' to retry."
     }
 }
 
@@ -1172,8 +1172,8 @@ function Install-OpenSre {
     Write-Host $sep
     Write-Host ""
     Write-Host "Next steps:"
-    Write-Host "  1. Run  $exe onboard"
-    Write-Host "     Set up your LLM provider and any observability integrations."
+    Write-Host "  1. Run  $exe setup"
+    Write-Host "     Sign in with GitHub, add your LLM key, then open the interactive shell."
     Write-Host ""
     Write-Host "  2. Run  $exe  (no subcommand)"
     Write-Host "     From a normal interactive terminal this starts the interactive shell; type a"

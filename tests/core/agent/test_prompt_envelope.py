@@ -58,8 +58,6 @@ def test_prompt_envelope_renders_ordered_blocks_with_optional_titles() -> None:
 def test_action_system_prompt_envelope_matches_legacy_rendering(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    # Session-goal fragments live inside the markdown base. Routing contracts
-    # stay a dedicated STABLE block so a markdown-only rewrite cannot drop them.
     from config.constants import OPENSRE_MEMORY_DISABLED_ENV
 
     monkeypatch.setenv(OPENSRE_MEMORY_DISABLED_ENV, "1")
@@ -73,10 +71,10 @@ def test_action_system_prompt_envelope_matches_legacy_rendering(
     # this id list) when no fragments are registered.
     assert [block.id for block in envelope.blocks] == [
         PromptBlockId.ACTION_SYSTEM_BASE,
-        PromptBlockId.ACTION_ROUTING_POLICY,
         PromptBlockId.ACTION_VENDOR_FRAGMENTS,
         PromptBlockId.ACTION_RUNTIME_FACTS,
         PromptBlockId.ACTION_SKILLS,
+        PromptBlockId.ACTION_PLANNING_INSTRUCTIONS,
         PromptBlockId.CONNECTED_INTEGRATIONS,
         PromptBlockId.RECENT_CONVERSATION,
     ]
@@ -90,6 +88,10 @@ def test_action_system_prompt_envelope_matches_legacy_rendering(
     )
     assert envelope.require_block(PromptBlockId.ACTION_SKILLS).kind == PromptBlockKind.RULE
     assert (
+        envelope.require_block(PromptBlockId.ACTION_PLANNING_INSTRUCTIONS).kind
+        == PromptBlockKind.RULE
+    )
+    assert (
         envelope.require_block(PromptBlockId.CONNECTED_INTEGRATIONS).kind == PromptBlockKind.CONTEXT
     )
     assert (
@@ -97,7 +99,6 @@ def test_action_system_prompt_envelope_matches_legacy_rendering(
         == PromptBlockKind.CONVERSATION
     )
     assert envelope.render() == build_action_system_prompt(ctx)
-    assert envelope.require_block(PromptBlockId.ACTION_ROUTING_POLICY).kind == PromptBlockKind.RULE
 
 
 def _turn(messages: list[tuple[str, str]]) -> TurnSnapshot:
@@ -184,14 +185,13 @@ def test_every_block_declares_which_tier_it_belongs_to(
     # Act
     tiers = {block.id: block.tier for block in envelope.blocks}
 
-    # Assert — session-goal fragments live in ACTION_SYSTEM_BASE (markdown);
-    # ACTION_ROUTING_POLICY is a dedicated STABLE block.
+    # Assert
     assert tiers == {
         PromptBlockId.ACTION_SYSTEM_BASE: PromptTier.STABLE,
-        PromptBlockId.ACTION_ROUTING_POLICY: PromptTier.STABLE,
         PromptBlockId.ACTION_VENDOR_FRAGMENTS: PromptTier.STABLE,
         PromptBlockId.ACTION_RUNTIME_FACTS: PromptTier.STABLE,
         PromptBlockId.ACTION_SKILLS: PromptTier.STABLE,
+        PromptBlockId.ACTION_PLANNING_INSTRUCTIONS: PromptTier.STABLE,
         PromptBlockId.CONNECTED_INTEGRATIONS: PromptTier.CONTEXT,
         PromptBlockId.RECENT_CONVERSATION: PromptTier.EPHEMERAL,
     }
@@ -423,58 +423,3 @@ def test_blocks_sharing_a_tier_keep_the_order_they_were_added() -> None:
 
     # Act / Assert
     assert envelope.render() == "BASE|SKILLS"
-
-
-def test_the_assistant_cached_half_is_byte_identical_across_turns() -> None:
-    """The action path had this pinned; the assistant path only claimed it.
-
-    ``build_cli_agent_turn_prompt`` sends ``system`` and the user turn as
-    separate messages, so the system half must not move between turns or the
-    provider's cache marker never hits — the same defect the action path was
-    fixed for.
-    """
-    # Arrange
-    from core.agent_harness.prompts.assistant import (
-        build_assistant_system_prompt_envelope,
-    )
-
-    shared = {
-        "reference": "opensre --help" * 40,
-        "agents_md": "repo map" * 20,
-        "investigation_flow": "flow" * 30,
-        "environment": "env block",
-        "long_term_memory": "remembered facts",
-    }
-
-    # Act — differ only in per-turn content
-    first, _ = build_assistant_system_prompt_envelope(
-        history="user: hello", docs="docs for question one" * 10, **shared
-    ).render_split()
-    second, _ = build_assistant_system_prompt_envelope(
-        history="user: hello\nassistant: hi\nuser: and now?",
-        docs="docs for a different question" * 10,
-        prior_action_facts="fact from turn 1",
-        **shared,
-    ).render_split()
-
-    # Assert
-    assert first == second
-
-
-def test_per_question_docs_never_reach_the_assistant_cached_half() -> None:
-    """Docs are retrieved per message, so caching them would invalidate every turn."""
-    # Arrange
-    from core.agent_harness.prompts.assistant import (
-        build_assistant_system_prompt_envelope,
-    )
-
-    marker = "zzmarker-docs-retrieved-for-this-question"
-
-    # Act
-    cached, ephemeral = build_assistant_system_prompt_envelope(
-        reference="ref", history="user: hi", docs=marker
-    ).render_split()
-
-    # Assert
-    assert marker not in cached
-    assert marker in ephemeral

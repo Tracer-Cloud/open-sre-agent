@@ -1,10 +1,10 @@
-"""Owner-only local fallback store for secrets, used when no keychain exists.
+"""Owner-only local file store for secrets (``~/.opensre/credentials.json``).
 
 This is the same shape every CLI that must work on a headless box settles on —
 ``~/.aws/credentials``, ``~/.config/gh/hosts.yml``, ``~/.docker/config.json`` —
 a ``0600`` file in the user's home. It is deliberately *not* the project
-``.env``: that file is kept secret-free by ``config.env_file`` and is far more
-likely to be committed, copied into an image, or shared.
+``.env``: that file is more likely to be committed, copied into an image, or
+shared, so this store remains the owner-only fallback.
 
 Encrypting it was considered and rejected: a passphrase prompt defeats the
 headless case this exists for, and a key stored beside the ciphertext protects

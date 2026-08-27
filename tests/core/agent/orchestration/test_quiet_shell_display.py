@@ -14,9 +14,10 @@ from core.llm.types import ToolCall
 
 
 class _ToolResult:
-    def __init__(self, payload: dict[str, Any]) -> None:
+    def __init__(self, payload: dict[str, Any], *, is_error: bool = False) -> None:
         self.content = json.dumps(payload)
-        self.is_error = False
+        self.details = payload
+        self.is_error = is_error
 
 
 class _Result:
@@ -35,6 +36,12 @@ class _Result:
 class _Session:
     def __init__(self) -> None:
         self.history: list[dict[str, Any]] = []
+        self.pending_user_choice: object | None = None
+
+        class _Terminal:
+            pending_choice_response: str | None = None
+
+        self.terminal = _Terminal()
 
 
 def _shell_call(call_id: str, command: str, *, quiet: bool) -> ToolCall:
@@ -45,16 +52,19 @@ def _payload(response_text: str) -> dict[str, Any]:
     return {"ok": True, "response_text": response_text}
 
 
-def _counts(steps: int) -> _TurnCounts:
+def _counts(
+    steps: int,
+    *,
+    executed_entries: list[dict[str, Any]] | None = None,
+) -> _TurnCounts:
     return _TurnCounts(
-        executed_entries=[],
+        executed_entries=executed_entries or [],
         executed_count=steps,
         executed_success_count=steps,
         generic_success_count=0,
         planned_count=steps,
         handled=True,
         investigation_dispatched=False,
-        handoff_contents=(),
     )
 
 
@@ -182,3 +192,228 @@ def test_a_generic_tool_result_is_not_replaced_by_quiet_stdout() -> None:
     shown = "\n".join(display_chunks)
     assert "3 failed, 59 succeeded" in shown
     assert "rate limit 4998" not in shown
+
+
+def test_queued_choice_owns_the_turn_display() -> None:
+    call = ToolCall(
+        id="1",
+        name="ask_user_choice",
+        input={"title": "Deploy how?", "options": ["Canary", "Rolling"]},
+    )
+    result = _Result(
+        tool_results=[
+            (
+                call,
+                _ToolResult(
+                    {
+                        "ok": True,
+                        "menu": "queued",
+                        "summary": "Choose your preferred deployment strategy.",
+                    }
+                ),
+            )
+        ],
+        final_text="Choose your preferred deployment strategy.",
+    )
+    session = _Session()
+    session.pending_user_choice = object()
+
+    response_text, display_chunks, use_final_text = _compose_response(result, session, _counts(1))
+
+    assert response_text == ""
+    assert display_chunks == []
+    assert use_final_text is False
+
+
+def test_queued_choice_preserves_sibling_tool_results() -> None:
+    github = ToolCall(id="1", name="github_cli", input={"command": "run list"})
+    choice = ToolCall(
+        id="2",
+        name="ask_user_choice",
+        input={"title": "Deploy how?", "options": ["Canary", "Rolling"]},
+    )
+    result = _Result(
+        tool_results=[
+            (github, _ToolResult(_payload("3 failed, 59 succeeded"))),
+            (
+                choice,
+                _ToolResult(
+                    {
+                        "ok": True,
+                        "menu": "queued",
+                        "summary": "Choose your preferred deployment strategy.",
+                    }
+                ),
+            ),
+        ],
+        final_text="Choose your preferred deployment strategy.",
+    )
+    session = _Session()
+    session.pending_user_choice = object()
+
+    response_text, display_chunks, use_final_text = _compose_response(result, session, _counts(2))
+
+    assert response_text == "3 failed, 59 succeeded"
+    assert display_chunks == ["3 failed, 59 succeeded"]
+    assert use_final_text is False
+
+
+def test_queued_choice_preserves_substantive_closing_text() -> None:
+    choice = ToolCall(
+        id="1",
+        name="ask_user_choice",
+        input={"title": "Deploy how?", "options": ["Canary", "Rolling"]},
+    )
+    closing = "Choose Canary only if the error rate remains stable."
+    result = _Result(
+        tool_results=[(choice, _ToolResult({"ok": True, "menu": "queued"}))],
+        final_text=closing,
+    )
+    session = _Session()
+    session.pending_user_choice = object()
+
+    response_text, display_chunks, use_final_text = _compose_response(result, session, _counts(1))
+
+    assert response_text == closing
+    assert display_chunks == [closing]
+    assert use_final_text is True
+
+
+def test_queued_choice_preserves_recommendation_using_picker_words() -> None:
+    choice = ToolCall(
+        id="1",
+        name="ask_user_choice",
+        input={
+            "title": "Choose a deployment environment: staging or production",
+            "options": ["Staging", "Production"],
+        },
+    )
+    closing = "Choose staging."
+    result = _Result(
+        tool_results=[(choice, _ToolResult({"ok": True, "menu": "queued"}))],
+        final_text=closing,
+    )
+    session = _Session()
+    session.pending_user_choice = object()
+
+    response_text, display_chunks, use_final_text = _compose_response(result, session, _counts(1))
+
+    assert response_text == closing
+    assert display_chunks == [closing]
+    assert use_final_text is True
+
+
+def test_choice_failure_remains_visible_with_model_closing() -> None:
+    choice = ToolCall(id="1", name="ask_user_choice", input={"title": "", "options": []})
+    result = _Result(
+        tool_results=[
+            (
+                choice,
+                _ToolResult(
+                    {"ok": False, "error": "title is required"},
+                    is_error=True,
+                ),
+            )
+        ],
+        final_text="I could not open the picker.",
+    )
+
+    response_text, display_chunks, use_final_text = _compose_response(
+        result, _Session(), _counts(1)
+    )
+
+    assert response_text == "I could not open the picker.\ntitle is required"
+    assert display_chunks == ["I could not open the picker.", "title is required"]
+    assert use_final_text is True
+
+
+def test_choice_failure_closing_preserves_self_recording_sibling_history() -> None:
+    slash = ToolCall(id="1", name="slash_invoke", input={"command": "/health"})
+    choice = ToolCall(id="2", name="ask_user_choice", input={"title": "", "options": []})
+    result = _Result(
+        tool_results=[
+            (slash, _ToolResult({"ok": True})),
+            (
+                choice,
+                _ToolResult(
+                    {"ok": False, "error": "title is required"},
+                    is_error=True,
+                ),
+            ),
+        ],
+        final_text="I could not open the picker.",
+    )
+    counts = _counts(
+        2,
+        executed_entries=[
+            {
+                "type": "slash",
+                "text": "/health",
+                "ok": True,
+                "response_text": "Health check: degraded",
+            }
+        ],
+    )
+
+    response_text, display_chunks, use_final_text = _compose_response(result, _Session(), counts)
+
+    assert response_text == (
+        "Health check: degraded\nI could not open the picker.\ntitle is required"
+    )
+    assert display_chunks == ["I could not open the picker.", "title is required"]
+    assert use_final_text is True
+
+
+def test_choice_failure_remains_visible_beside_preferred_sibling_response() -> None:
+    github = ToolCall(id="1", name="github_cli", input={"command": "run list"})
+    choice = ToolCall(id="2", name="ask_user_choice", input={"title": "", "options": []})
+    result = _Result(
+        tool_results=[
+            (github, _ToolResult(_payload("3 failed, 59 succeeded"))),
+            (
+                choice,
+                _ToolResult(
+                    {"ok": False, "error": "title is required"},
+                    is_error=True,
+                ),
+            ),
+        ],
+        final_text="I could not open the picker.",
+    )
+
+    response_text, display_chunks, use_final_text = _compose_response(
+        result, _Session(), _counts(2)
+    )
+
+    assert "3 failed, 59 succeeded" in response_text
+    assert "title is required" in response_text
+    assert display_chunks == ["3 failed, 59 succeeded\ntitle is required"]
+    assert use_final_text is False
+
+
+def test_selected_choice_hides_only_a_pure_acknowledgement() -> None:
+    result = _Result(tool_results=[], final_text="Blue-green selected.")
+    session = _Session()
+    session.terminal.pending_choice_response = "Blue-green"
+
+    response_text, display_chunks, use_final_text = _compose_response(result, session, _counts(0))
+
+    assert response_text == ""
+    assert display_chunks == []
+    assert use_final_text is False
+    assert session.terminal.pending_choice_response is None
+
+
+def test_selected_choice_keeps_meaningful_follow_up_response() -> None:
+    result = _Result(
+        tool_results=[],
+        final_text="Blue-green avoids routing a full release to every instance at once.",
+    )
+    session = _Session()
+    session.terminal.pending_choice_response = "Blue-green"
+
+    _response_text, display_chunks, _use_final_text = _compose_response(result, session, _counts(0))
+
+    shown = "\n".join(display_chunks)
+    assert "Blue-green avoids routing" in shown
+    assert session.terminal.pending_choice_response is None

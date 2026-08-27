@@ -8,12 +8,14 @@ compound turns, slash mapping) — not a coding-agent / Codex clone.
 
 from __future__ import annotations
 
-from functools import lru_cache
-from pathlib import Path
-
 from core.agent_harness.prompts.action.multi_step_policy import (
     ACTION_CONVERSATIONAL_SESSION_GOAL_RULE,
     ACTION_LOCAL_SHELL_MULTI_STEP_RULE,
+)
+
+from ..system_prompt import (
+    _PROMPT_FILENAME,
+    OPENSRE_SYSTEM_PROMPT,
 )
 
 # When the planner should offer scheduling, given CONTEXT setup_state.
@@ -30,17 +32,7 @@ ACTION_SETUP_CAPACITY_SCHEDULE_RULE = (
     "/integrations setup.\n"
 )
 
-_PROMPT_FILENAME = "opensre_system_prompt.md"
-
-
-@lru_cache(maxsize=1)
-def _load_system_prompt_base() -> str:
-    """Return the bundled action-agent system prompt markdown."""
-    path = Path(__file__).with_name(_PROMPT_FILENAME)
-    return path.read_text(encoding="utf-8")
-
-
-_SYSTEM_PROMPT_BASE = _load_system_prompt_base()
+_SYSTEM_PROMPT_BASE = OPENSRE_SYSTEM_PROMPT
 
 __all__ = (
     "ACTION_CONVERSATIONAL_SESSION_GOAL_RULE",

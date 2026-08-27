@@ -12,48 +12,59 @@ from infrastructure.harness_providers import resolve_surface_tool_map, resolve_s
 from infrastructure.observability.trace.redaction import redact_sensitive
 
 _ACTION_SESSION_SOURCE = "_action_session"
+_EXCLUDED_CHAT_TOOL_NAMES = frozenset({"run_investigation"})
 
 
-class _IntegrationContextSession(Protocol):
+class _IntegrationsSessionView(Protocol):
+    """Session view exposing configured integrations."""
+
     @property
     def configured_integrations(self) -> Iterable[str]:
-        raise NotImplementedError
+        """Names of configured integration instances."""
 
     @property
     def configured_integrations_known(self) -> bool:
-        raise NotImplementedError
+        """True when the configured integrations set is authoritative."""
 
 
-class IntegrationsContext(Protocol):
+class IntegrationsView(Protocol):
+    """View over resolved session integrations for tool availability."""
+
     @property
-    def session(self) -> _IntegrationContextSession:
-        raise NotImplementedError
+    def session(self) -> _IntegrationsSessionView:
+        """Session instance exposing configured integrations."""
 
 
-def _sources_for_context(
-    ctx: IntegrationsContext,
+def _sources_for_view(
+    view: IntegrationsView,
     resolved_integrations: dict[str, Any] | None,
 ) -> dict[str, dict[str, Any]]:
     raw_sources = availability_view(resolved_integrations or {})
     sources = dict(raw_sources)
     sources[_ACTION_SESSION_SOURCE] = {
-        "session": ctx.session,
-        "configured_integrations": tuple(ctx.session.configured_integrations),
-        "configured_integrations_known": ctx.session.configured_integrations_known,
-        "available_capabilities": getattr(ctx.session, "available_capabilities", {}),
+        "session": view.session,
+        "configured_integrations": tuple(view.session.configured_integrations),
+        "configured_integrations_known": view.session.configured_integrations_known,
+        "available_capabilities": getattr(view.session, "available_capabilities", {}),
     }
     return sources
 
 
-def get_action_tools_from_integrations_context(
-    ctx: IntegrationsContext,
+def get_action_tools_from_integrations_view(
+    view: IntegrationsView,
     *,
     resolved_integrations: dict[str, Any] | None = None,
 ) -> list[RegisteredTool]:
-    """Return canonical registered tools available to the action agent."""
-    sources = _sources_for_context(ctx, resolved_integrations)
+    """Return action and chat tools available to the single turn agent."""
+    sources = _sources_for_view(view, resolved_integrations)
     tools: list[RegisteredTool] = []
-    for candidate in resolve_surface_tools(ToolSurface.ACTION):
+    candidates = {
+        candidate.name: candidate
+        for surface in (ToolSurface.ACTION, ToolSurface.CHAT)
+        for candidate in resolve_surface_tools(surface)
+        if candidate.name not in _EXCLUDED_CHAT_TOOL_NAMES
+    }
+    for candidate in candidates.values():
         try:
             if not candidate.is_available(sources):
                 continue
@@ -76,8 +87,8 @@ def action_tool_names(tools: Iterable[RegisteredTool]) -> tuple[str, ...]:
 
 
 __all__ = [
-    "IntegrationsContext",
+    "IntegrationsView",
     "action_tool_names",
     "get_action_tool",
-    "get_action_tools_from_integrations_context",
+    "get_action_tools_from_integrations_view",
 ]

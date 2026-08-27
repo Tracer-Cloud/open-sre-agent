@@ -138,8 +138,6 @@ def test_run_turn_consumes_pending_schedule_on_yes() -> None:
         "yes",
         session,
         execute_actions=execute_actions,
-        answer=lambda *_a, **_k: None,
-        gather=lambda *_a, **_k: None,
         accounting=NoopTurnAccounting(),
     )
 
@@ -343,8 +341,6 @@ def test_a_failed_schedule_keeps_the_offer_for_a_second_try() -> None:
         "yes",
         session,
         execute_actions=_execute_failing,
-        answer=lambda *_a, **_k: None,
-        gather=lambda *_a, **_k: "",
         accounting=NoopTurnAccounting(),
     )
 
@@ -382,8 +378,6 @@ def test_a_successful_schedule_consumes_the_offer() -> None:
         "yes",
         session,
         execute_actions=_execute_ok,
-        answer=lambda *_a, **_k: None,
-        gather=lambda *_a, **_k: "",
         accounting=NoopTurnAccounting(),
     )
 

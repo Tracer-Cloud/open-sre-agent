@@ -249,6 +249,23 @@ def _path_matches(template: str, actual: str) -> bool:
     )
 
 
+#: Where a tool names a service differently from the index. The tools say "alb",
+#: while the protos - and so the index built from them - say "apploadbalancer".
+#: Without this the gate sees an unknown service and waves the path through.
+_SERVICE_ALIASES: Final[dict[str, str]] = {"alb": "apploadbalancer"}
+
+
+def canonical_service(service: str) -> str:
+    """Return the name the index knows this service by.
+
+    Case-folded because the index is lowercase throughout while host resolution
+    lowercases what it is given: a caller saying "COMPUTE" would otherwise read
+    as an unknown service to the gate and as the real host to the client.
+    """
+    wanted = service.strip().lower()
+    return _SERVICE_ALIASES.get(wanted, wanted)
+
+
 def lookup(service: str, path: str) -> ApiEndpoint | None:
     """Return the indexed read that *path* is, or ``None`` if it is not one.
 
@@ -257,7 +274,7 @@ def lookup(service: str, path: str) -> ApiEndpoint | None:
     convenience for discovery. A concrete path such as
     ``/compute/v1/instances/abc`` matches ``/compute/v1/instances/{instance_id}``.
     """
-    wanted = service.strip()
+    wanted = canonical_service(service)
     if not wanted or not path:
         return None
     for endpoint in _endpoints():

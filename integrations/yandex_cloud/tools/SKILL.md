@@ -39,6 +39,12 @@ instead.
 own separate authentication, and it can mutate. If you catch yourself writing
 `yc ...` to answer a question, use `execute_yc_operation` instead.
 
+**But do write the `yc ...` command out when something should change.** These
+tools only read. When the finding calls for an action — resize, restart,
+rebalance, change a setting — end with the exact `yc ...` command an operator
+can paste, not a description of what to do. Writing the command is correct;
+running it is not.
+
 Everything else reaches Yandex Cloud over its REST API with the configured
 credential. There is no CLI step and no shell step.
 

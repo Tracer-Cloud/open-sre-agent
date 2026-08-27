@@ -92,7 +92,7 @@ After the crashloop pod runs, wait a few minutes, then query logs e.g. `kube_clu
 ### 5. OpenSRE
 
 ```bash
-opensre onboard   # Datadog keys as needed
+opensre integrations setup datadog   # Datadog keys as needed
 opensre investigate -i tests/chaos_engineering/experiments/crashloop/crashloop-demo-alert.json
 ```
 

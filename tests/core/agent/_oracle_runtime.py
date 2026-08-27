@@ -11,12 +11,12 @@ from typing import Any, cast
 import pytest
 from rich.console import Console
 
-import tools.interactive_shell.actions.assistant_handoff as assistant_handoff_tool
 import tools.interactive_shell.actions.cli_command as cli_command_tool
 import tools.interactive_shell.actions.implementation as implementation_tool
 import tools.interactive_shell.actions.investigation as investigation_tool
 import tools.interactive_shell.actions.llm_provider as llm_provider_tool
 import tools.interactive_shell.actions.sample_alert as sample_alert_tool
+import tools.interactive_shell.actions.session_goal as session_goal_tool
 import tools.interactive_shell.actions.shell as shell_tool
 import tools.interactive_shell.actions.slash as slash_tool
 import tools.interactive_shell.actions.synthetic as synthetic_tool
@@ -323,6 +323,8 @@ def normalize_history_for_oracle_match(
     """Collapse known host-loop extras so fixtures pin the user turn under test."""
     filtered = strip_session_goal_continuation_history(actual_history)
     filtered = strip_redundant_integrations_list_history(filtered, expected_actions)
+    if expected_actions:
+        filtered = [entry for entry in filtered if entry.get("type") != "cli_agent"]
     if len(expected_actions) != 1:
         return filtered
     if str(expected_actions[0].get("kind", "")).strip() != "investigation":
@@ -519,8 +521,6 @@ def patch_execution_boundary(
             kind = tool_to_kind.get(tool_name)
             if kind is None:
                 return False
-            if kind == "assistant_handoff":
-                return True
             action_data = dict(args)
             _record_and_print(kind=kind, action=action_data, ctx=ctx)
             return True
@@ -532,11 +532,11 @@ def patch_execution_boundary(
     # mutating registry internals.
     patches = {
         "alert_sample": (sample_alert_tool, "execute_sample_alert_tool"),
-        "assistant_handoff": (assistant_handoff_tool, "execute_assistant_handoff_tool"),
         "cli_exec": (cli_command_tool, "execute_cli_command_tool"),
         "code_implement": (implementation_tool, "execute_implementation_tool"),
         "investigation_start": (investigation_tool, "execute_investigation_tool"),
         "llm_set_provider": (llm_provider_tool, "execute_llm_provider_tool"),
+        "session_goal_set": (session_goal_tool, "execute_session_goal_tool"),
         "shell_run": (shell_tool, "execute_shell_tool"),
         "slash_invoke": (slash_tool, "execute_slash_tool"),
         "synthetic_run": (synthetic_tool, "execute_synthetic_tool"),

@@ -8,7 +8,7 @@ from pathlib import Path
 from typing import Any
 
 import core.agent_harness.session.persistence.paths as storage_paths
-from core.agent_harness.session.persistence.contracts import CHAT_KINDS
+from core.agent_harness.session.persistence.contracts import CHAT_KINDS, RestoreContextKey
 from core.agent_harness.session.persistence.wal_recovery import dangling_tool_intents
 from core.state.transcript_window import SESSION_SUMMARY_PREFIX
 
@@ -79,6 +79,7 @@ class JsonlSessionRepo:
             messages = _messages_for_branch(branch)
             context = _accumulated_context_for_branch(branch)
             goal_state = _session_goal_state_for_branch(branch)
+            plan_state = _task_plan_state_for_branch(branch)
             history = _history_for_branch(branch)
             turn_details = _turn_details_for_branch(branch)
             return {
@@ -87,10 +88,11 @@ class JsonlSessionRepo:
                 "leaf_id": _resolve_entry_id(entries, None),
                 "name": storage_paths.derive_name(_records_to_lines([header, *entries])),
                 "started_at": header.get("created_at"),
-                "cli_agent_messages": messages,
-                "accumulated_context": context,
-                "session_goal_state": goal_state,
-                "history": history,
+                RestoreContextKey.CLI_AGENT_MESSAGES: messages,
+                RestoreContextKey.ACCUMULATED_CONTEXT: context,
+                RestoreContextKey.SESSION_GOAL_STATE: goal_state,
+                RestoreContextKey.TASK_PLAN_STATE: plan_state,
+                RestoreContextKey.HISTORY: history,
                 "turn_details": turn_details,
                 "has_snapshot": False,
                 # WAL sidecars are off-branch, so scan the full entry list:
@@ -373,6 +375,22 @@ def _session_goal_state_for_branch(branch: list[dict[str, Any]]) -> dict[str, An
         if rec.get("type") != "custom_message":
             continue
         if rec.get("custom_type") != SESSION_GOAL_STATE_CUSTOM_TYPE:
+            continue
+        content = rec.get("content")
+        if isinstance(content, dict):
+            latest = content
+    return latest
+
+
+def _task_plan_state_for_branch(branch: list[dict[str, Any]]) -> dict[str, Any] | None:
+    """Return the last ``task_plan_state`` custom message on the branch."""
+    from core.agent_harness.task_plan.persist import TASK_PLAN_STATE_CUSTOM_TYPE
+
+    latest: dict[str, Any] | None = None
+    for rec in branch:
+        if rec.get("type") != "custom_message":
+            continue
+        if rec.get("custom_type") != TASK_PLAN_STATE_CUSTOM_TYPE:
             continue
         content = rec.get("content")
         if isinstance(content, dict):

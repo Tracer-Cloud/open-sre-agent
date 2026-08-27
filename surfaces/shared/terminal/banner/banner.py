@@ -1,23 +1,17 @@
-"""Splash screen and agent ready-state box for the REPL launch banner.
-
-Two exported entry points
--------------------------
-render_splash(console)
-    Branded startup screen with the Braille logomark.
-    Called once when the CLI starts.
+"""Agent ready-state box for the REPL launch banner.
 
 render_ready_box(console, session=None)
     DIM-bordered two-column welcome panel:
       left  → ◉ OpenSRE · provider · model · mode · cwd
       right → "Tips for getting started" + "What's new"
-    Called after the splash and on /clear, /welcome, and greeting aliases.
+    Called at startup and on /clear, /welcome, and greeting aliases.
 
 Rendered output legend (colour roles)
 --------------------------------------
 # [HIGHLIGHT]  ◉ glyph · OpenSRE brand name
 # [BRAND]      version string · model name · section headers
-# [SECONDARY]  Braille logomark · "opensre" product name label · cwd · tip / note body
-# [DIM]        subtitle description · rule lines · box chrome · dividers
+# [SECONDARY]  cwd · tip / note body
+# [DIM]        rule lines · box chrome · dividers
 # [TEXT]       provider/model values · greeting
 # [WARNING]    read-only or trust-mode notice · incomplete-integration marker
 """
@@ -46,7 +40,6 @@ from infrastructure.terminal.theme import (
     WARNING,
 )
 from surfaces.shared.terminal.banner.banner_state import _build_ambient_right_column
-from surfaces.shared.terminal.banner.splash_layout import build_splash_layout
 from surfaces.shared.terminal.tables.provider import detect_provider_model
 
 
@@ -58,38 +51,6 @@ def _is_first_run() -> bool:
         return not get_store_path().exists()
     except Exception:
         return False
-
-
-# ── Splash screen ─────────────────────────────────────────────────────────────
-
-
-def render_splash(console: Console | None = None) -> None:
-    """Print the branded startup splash.
-
-    Responsive layout (see splash_layout.select_splash_mode):
-    ≥ 90 cols — large Braille logo beside the splash content:
-    ┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄ [DIM divider]
-      ⣠⣶⡿…⢶⣄     opensre  ·  v<version>          [SECONDARY logo · BRAND]
-      …            open-source SRE agent …          [DIM]
-    ┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄ [DIM divider]
-    60–89 cols — small Braille logo beside the same condensed content.
-    < 60 cols — stacked subtitle + description only, no logo.
-    """
-    console = console or Console(
-        highlight=False,
-        force_terminal=True,
-        color_system="truecolor",
-        legacy_windows=False,
-    )
-
-    version = get_opensre_version()
-
-    console.print()
-    console.print(Rule(style=DIM))
-    console.print()
-    console.print(build_splash_layout(console.width, version))
-    console.print()
-    console.print(Rule(style=DIM))
 
 
 # ── Agent ready-state box ─────────────────────────────────────────────────────

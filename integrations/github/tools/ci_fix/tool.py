@@ -38,8 +38,11 @@ _INPUT_SCHEMA: dict[str, Any] = {
         "branch": {
             "type": "string",
             "description": (
-                "Optional branch whose failing GitHub Actions checks should be fixed, "
-                "for example main. Used when the request is not for a pull request."
+                "Optional branch whose failing GitHub Actions checks should be fixed "
+                "(e.g. 'main'). Use only when the user asks to fix a branch's CI "
+                "itself; mutually exclusive with the PR selectors. OpenSRE pushes a "
+                "fresh repair branch from a linked worktree — never the protected "
+                "branch directly."
             ),
         },
         "workspace": {
@@ -99,15 +102,16 @@ def _confirm_fn(context: Any) -> Any:
     description=(
         "Inspect failing GitHub Actions checks on a pull request or branch, run "
         "an auto-detected coding agent with the failing log context, commit the "
-        "result, push the PR branch or a fresh repair branch, and wait for the "
-        "new checks to finish. It refuses fork PR branches and never pushes "
-        "directly to protected branches such as main."
+        "result, push the PR branch or a fresh repair branch from a linked "
+        "worktree, and wait for the new checks to finish. It refuses fork PR "
+        "branches and never pushes directly to protected branches such as main."
     ),
     use_cases=[
         "Fix failing CI on a GitHub pull request and push to the PR branch",
         "Fix failing CI on the main branch and push a repair branch",
         "Fix the CI failure for a PR URL",
         "Repair a failing GitHub Actions check on the current branch PR",
+        "Fix failing CI on main and push a repair branch",
     ],
     anti_examples=[
         "Creating or closing ordinary GitHub issues (use github_cli)",
@@ -140,7 +144,7 @@ def fix_github_pr_ci(
     context: Any = None,
     **_kwargs: Any,
 ) -> dict[str, Any]:
-    """Run the GitHub CI remediation flow."""
+    """Run the GitHub CI remediation flow for a PR or an explicit branch target."""
     return run_ci_fix(
         owner=owner,
         repo=repo,
