@@ -330,3 +330,98 @@ class TestTheConnectionHintNamesWhichPortItMeans:
 
         assert connect["port"] == 6432
         assert "port_without_tls" not in connect
+
+
+class TestStoppedIsNotTheSameAsBroken:
+    """A cluster somebody switched off is not an incident, and saying so matters."""
+
+    def _listed(self, monkeypatch: pytest.MonkeyPatch) -> dict[str, Any]:
+        payload = {
+            "clusters": [
+                {"id": "c1", "name": "live", "status": "RUNNING", "health": "ALIVE"},
+                {"id": "c2", "name": "switched-off", "status": "STOPPED", "health": ""},
+                {"id": "c3", "name": "degraded", "status": "RUNNING", "health": "DEGRADED"},
+            ]
+        }
+        monkeypatch.setattr(
+            "integrations.yandex_cloud.rest_client.send_request",
+            _responder({"/managed-postgresql/v1/clusters": payload}),
+        )
+        return list_yc_db_clusters(engine="postgresql", **_CREDENTIALS)
+
+    def test_only_the_broken_one_is_unhealthy(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        result = self._listed(monkeypatch)
+
+        assert [c["name"] for c in result["unhealthy"]] == ["degraded"]
+
+    def test_the_stopped_one_is_still_reported(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """Hiding it would be worse: "unreachable" is often exactly the answer."""
+        result = self._listed(monkeypatch)
+
+        assert [c["name"] for c in result["stopped"]] == ["switched-off"]
+
+
+class TestHostRolesSurviveEngineDisagreement:
+    """Engines name the role field differently, and Greenplum does not have one."""
+
+    def _greenplum_hosts(self, monkeypatch: pytest.MonkeyPatch) -> dict[str, Any]:
+        # Shapes taken from a live cluster: health and zoneId are there, role is not.
+        monkeypatch.setattr(
+            "integrations.yandex_cloud.rest_client.send_request",
+            _responder(
+                {
+                    "/master-hosts": {
+                        "hosts": [
+                            {
+                                "name": "rc1b-master.mdb",
+                                "health": "ALIVE",
+                                "zoneId": "ru-central1-b",
+                            }
+                        ]
+                    },
+                    "/segment-hosts": {
+                        "hosts": [
+                            {"name": "rc1b-seg1.mdb", "health": "ALIVE", "zoneId": "ru-central1-b"},
+                            {"name": "rc1b-seg2.mdb", "health": "ALIVE", "zoneId": "ru-central1-b"},
+                        ]
+                    },
+                    "/operations": {"operations": []},
+                    "/managed-greenplum/v1/clusters/c1": {"id": "c1", "status": "RUNNING"},
+                }
+            ),
+        )
+        return get_yc_db_cluster(cluster_id="c1", engine="greenplum", **_CREDENTIALS)
+
+    def test_the_collection_names_the_role_when_the_payload_does_not(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        result = self._greenplum_hosts(monkeypatch)
+
+        assert [host["role"] for host in result["hosts"]] == ["MASTER", "SEGMENT", "SEGMENT"]
+
+    def test_the_hint_points_at_the_master_on_purpose(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """Not by ordering luck: a failed master-hosts read must not promote a segment."""
+        result = self._greenplum_hosts(monkeypatch)
+
+        assert result["connect"]["host"] == "rc1b-master.mdb"
+
+    def test_a_mongo_shaped_type_field_is_used_as_the_role(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        monkeypatch.setattr(
+            "integrations.yandex_cloud.rest_client.send_request",
+            _responder(
+                {
+                    "/hosts": {
+                        "hosts": [{"name": "rc1b.mdb", "type": "MONGOD", "health": "ALIVE"}]
+                    },
+                    "/operations": {"operations": []},
+                    "/managed-mongodb/v1/clusters/c1": {"id": "c1", "status": "RUNNING"},
+                }
+            ),
+        )
+        result = get_yc_db_cluster(cluster_id="c1", engine="storedoc", **_CREDENTIALS)
+
+        assert result["hosts"][0]["role"] == "MONGOD"

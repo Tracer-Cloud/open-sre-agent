@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Any
+from typing import Any, Final
 
 from core.domain.types.evidence import record_evidence_entry
 from core.domain.types.tools import ToolSurface
@@ -24,6 +24,10 @@ CA_CERTIFICATE_URL = "https://storage.yandexcloud.net/cloud-certs/CA.pem"
 
 _HEALTHY = "ALIVE"
 _RUNNING = "RUNNING"
+#: A cluster somebody switched off. Not a failure, and worth keeping apart from
+#: one: an investigation that treats a stopped cluster as broken goes looking for
+#: a cause, when the answer is that it was stopped on purpose.
+_STOPPED = "STOPPED"
 _RECENT_OPERATIONS = 10
 
 
@@ -41,14 +45,28 @@ def _summarize_cluster(cluster: dict[str, Any], engine: Engine) -> dict[str, Any
         "environment": cluster.get("environment", ""),
         "created_at": cluster.get("createdAt", ""),
         "healthy": cluster.get("status") == _RUNNING and cluster.get("health") == _HEALTHY,
+        "stopped": cluster.get("status") == _STOPPED,
     }
 
 
-def _summarize_host(host: dict[str, Any]) -> dict[str, Any]:
+#: What a host is called when the collection it came from is the only thing
+#: saying so. Greenplum reports no ``role`` at all, so without this its hosts
+#: come back indistinguishable and nothing says which one accepts connections.
+_ROLE_BY_COLLECTION: Final[dict[str, str]] = {
+    "master-hosts": "MASTER",
+    "segment-hosts": "SEGMENT",
+}
+
+
+def _summarize_host(host: dict[str, Any], collection: str) -> dict[str, Any]:
+    # Engines disagree on the field: most say "role", MongoDB-shaped ones say
+    # "type", and Greenplum says neither - it splits the hosts into two
+    # collections and lets the URL carry the meaning.
+    role = host.get("role") or host.get("type") or _ROLE_BY_COLLECTION.get(collection, "")
     return {
         "name": host.get("name", ""),
         "zone": host.get("zoneId", ""),
-        "role": host.get("role", ""),
+        "role": role,
         "health": host.get("health", ""),
         "type": host.get("type", ""),
         "public": bool(host.get("assignPublicIp", False)),
@@ -101,7 +119,7 @@ def _list_clusters(client: YandexCloudClient, engine: Engine, page_token: str) -
 def _read_hosts(
     client: YandexCloudClient, engine: Engine, cluster_id: str
 ) -> tuple[list[dict[str, Any]], str]:
-    """Return every host of *cluster_id*, and why the list is empty if it is.
+    """Return every host of *cluster_id* summarized, and why the list is empty if it is.
 
     Greenplum splits its hosts into two collections and has no ``hosts`` at all,
     so a single hardcoded path answers 404 there - and an empty host list reads
@@ -119,7 +137,7 @@ def _read_hosts(
         # Yandex keys the payload by the collection it served, and the two
         # Greenplum collections come back under "hosts" all the same.
         listed = data.get("hosts") or data.get(collection) or []
-        hosts.extend(listed)
+        hosts.extend(_summarize_host(host, collection) for host in listed)
     return hosts, "; ".join(errors)
 
 
@@ -135,6 +153,9 @@ def _map_db_clusters(
     unhealthy = output.get("unhealthy") or []
     # "0 unhealthy" is a finding, not noise: it is what rules the database out.
     summary = f"{len(clusters)} managed database cluster(s), {len(unhealthy)} unhealthy"
+    stopped = output.get("stopped") or []
+    if stopped:
+        summary += f", {len(stopped)} stopped"
     record_evidence_entry(
         evidence,
         source="yc_db_clusters",
@@ -194,7 +215,8 @@ def _map_db_cluster(
     requires=[],
     outputs={
         "clusters": "clusters with engine, status, and health",
-        "unhealthy": "the subset that is not running and alive",
+        "unhealthy": "the subset that is running but not alive",
+        "stopped": "the subset somebody switched off, which is not a failure",
         "count": "how many clusters were returned",
     },
     input_schema={
@@ -259,7 +281,11 @@ def list_yc_db_clusters(
         "source": SOURCE,
         "available": True,
         "clusters": clusters,
-        "unhealthy": [cluster for cluster in clusters if not cluster["healthy"]],
+        # Stopped is deliberate and degraded is not, so they are listed apart.
+        # Both still answer "the database is unreachable" - the difference is
+        # whether anything went wrong.
+        "unhealthy": [c for c in clusters if not c["healthy"] and not c["stopped"]],
+        "stopped": [c for c in clusters if c["stopped"]],
         "count": len(clusters),
     }
     # An engine answering with nothing is an answer: most folders run one or two
@@ -356,8 +382,7 @@ def get_yc_db_cluster(
             "cluster_id": cluster_id,
         }
 
-    raw_hosts, hosts_error = _read_hosts(client, resolved, cluster_id)
-    hosts = [_summarize_host(host) for host in raw_hosts]
+    hosts, hosts_error = _read_hosts(client, resolved, cluster_id)
 
     operations_response = client.get(
         resolved.service, f"{resolved.path}/clusters/{cluster_id}/operations"
@@ -377,7 +402,7 @@ def get_yc_db_cluster(
         # host read failed" lead an investigation to opposite conclusions.
         "hosts_error": hosts_error,
         "recent_operations": operations,
-        "connect": _connection_hint(resolved, raw_hosts),
+        "connect": _connection_hint(resolved, hosts),
     }
 
 
