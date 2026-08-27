@@ -22,6 +22,7 @@ from __future__ import annotations
 from datetime import UTC, datetime, timedelta
 from typing import Any
 
+from core.domain.types.evidence import record_evidence_entry
 from core.domain.types.incident_window import IncidentWindow
 from core.domain.types.tools import ToolSurface
 from core.tool_framework import tool
@@ -154,6 +155,19 @@ def _is_available(sources: dict[str, dict]) -> bool:
     return bool(github_source_available(sources) and gh.get("owner") and gh.get("repo"))
 
 
+def _map_get_git_deploy_timeline(
+    evidence: dict[str, Any], output: dict[str, Any], _input: dict[str, Any]
+) -> None:
+    timeline = output.get("commits")
+    if isinstance(timeline, list) and timeline:
+        record_evidence_entry(
+            evidence,
+            source="get_git_deploy_timeline",
+            label="Git Deploy Timeline",
+            summary=f"{len(timeline)} deploys",
+        )
+
+
 @tool(
     name="get_git_deploy_timeline",
     source="github",
@@ -207,6 +221,7 @@ def _is_available(sources: dict[str, dict]) -> bool:
     is_available=_is_available,
     extract_params=_extract_params,
     injected_params=GITHUB_INJECTED_PARAMS,
+    evidence_mapper=_map_get_git_deploy_timeline,
 )
 def get_git_deploy_timeline(
     owner: str,

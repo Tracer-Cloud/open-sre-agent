@@ -1032,7 +1032,6 @@ _TOOLS_WITHOUT_DELIBERATE_CATCH: frozenset[str] = frozenset(
         "architecture_clone_repo",
         "architecture_save_observations",
         "ask_user_choice",
-        "assistant_handoff",
         "argocd_application_diff",
         "argocd_application_status",
         "check_s3_marker",
@@ -1255,6 +1254,7 @@ _TOOLS_WITHOUT_DELIBERATE_CATCH: frozenset[str] = frozenset(
         "search_sentry_issues",
         "shell_run",
         "skill_view",
+        "session_goal_set",
         "propose_scheduled_delivery",
         "slack_add_reaction",
         "slack_join_channel",
@@ -1269,6 +1269,9 @@ _TOOLS_WITHOUT_DELIBERATE_CATCH: frozenset[str] = frozenset(
         "summarize_github_pr_status",
         "synthetic_run",
         "task_cancel",
+        # update_plan returns structured invalid-plan dicts; unexpected
+        # exceptions escape to the global wrapper.
+        "update_plan",
         "work_task_add",
         "work_task_complete",
         "work_task_list",

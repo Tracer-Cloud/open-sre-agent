@@ -28,7 +28,7 @@ layers =
 ignore_imports =
     # infrastructure -> integrations (T-4 debt — scheduler / observability)
     infrastructure.analytics.cli -> integrations.github
-    infrastructure.observability.errors.sentry -> integrations.llm_cli.errors
+    infrastructure.observability.errors.sentry -> integrations.llm_cli
     infrastructure.scheduling.scheduler.credentials -> integrations.catalog
     # surfaces -> gateway (cli + repl gateway commands)
     surfaces.cli.commands.gateway -> gateway.core.process
@@ -44,7 +44,6 @@ ignore_imports =
     tools.cross_vendor.fix_sentry_issue.ship -> integrations.git
     tools.cross_vendor.fix_sentry_issue.ship -> integrations.github
     tools.interactive_shell.implementation.claude_code_executor -> integrations.llm_cli
-    tools.interactive_shell.implementation.claude_code_executor -> integrations.llm_cli.subprocess_env
     tools.investigation.reporting.delivery.bootstrap -> integrations.buzz.reporting_adapter
     tools.investigation.reporting.delivery.bootstrap -> integrations.discord.reporting_adapter
     tools.investigation.reporting.delivery.bootstrap -> integrations.grafana.reporting_adapter

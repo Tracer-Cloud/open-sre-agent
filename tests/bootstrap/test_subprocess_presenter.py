@@ -19,7 +19,7 @@ from collections.abc import Iterator
 import pytest
 
 import infrastructure.harness_providers as harness_providers
-from infrastructure.harness_providers import subprocess_presenter
+import infrastructure.harness_providers.subprocess_presenter as subprocess_presenter
 
 
 @pytest.fixture(autouse=True)

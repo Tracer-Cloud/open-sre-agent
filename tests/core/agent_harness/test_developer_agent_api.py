@@ -2,10 +2,6 @@
 
 Pins the documented ladder in ``docs/python-api.mdx`` — two-line start, custom
 sink, custom grounding, multi-turn reuse — without a live LLM provider.
-
-The action planner still talks to the real provider when tools are empty, so
-these scenarios stub ``ActionTurnRunner.run`` and inject a streaming Echo
-client on the reasoning port. That isolates the embedder-facing seams.
 """
 
 from __future__ import annotations
@@ -16,29 +12,14 @@ from typing import Any
 import pytest
 
 from core.agent_harness.harness import AgentSession, SessionConfig
-from core.agent_harness.turns.gather_phase import GATHER_DISABLED
 from core.agent_harness.turns.headless_adapters import (
     BufferOutputSink,
     EmptyPromptContextProvider,
     NullToolProvider,
-    StaticReasoningClientProvider,
 )
 from core.agent_harness.turns.headless_agent import HeadlessAgent
 from core.agent_harness.turns.headless_build import DefaultHeadlessBuild, InMemoryHeadlessBuild
 from core.agent_harness.turns.turn_results import ToolCallingTurnResult, TurnResult
-
-
-class _EchoClient:
-    """Streaming client that mirrors persona markers — no network."""
-
-    def invoke_stream(self, prompt: Any) -> Any:
-        from integrations.llm_cli.text import flatten_messages_to_prompt
-
-        # Answer path passes ``AssistantTurnPrompt.messages()`` (system+user),
-        # not a single joined string — scan content, not list membership.
-        text = flatten_messages_to_prompt(prompt)
-        marker = "CUSTOM PERSONA" if "CUSTOM PERSONA" in text else "ok"
-        yield f"echo:{marker}"
 
 
 class _RecordingPrompts(EmptyPromptContextProvider):
@@ -85,23 +66,26 @@ def _headless_config(**overrides: Any) -> SessionConfig:
 
 
 def _unhandled_actions(*_args: Any, **_kwargs: Any) -> ToolCallingTurnResult:
-    """Leave the turn for the conversational answer path."""
+    """Return one deterministic agent answer."""
     return ToolCallingTurnResult(
         planned_count=0,
         executed_count=0,
         executed_success_count=0,
         has_unhandled_clause=False,
         handled=False,
+        response_text="echo:ok",
     )
 
 
 @pytest.fixture
 def stub_action_planner(monkeypatch: Any) -> None:
-    """Keep the action planner off the network so Echo can answer."""
-    monkeypatch.setattr(
-        "core.agent_harness.turns.headless_agent.ActionTurnRunner.run",
-        lambda _self, *_args, **_kwargs: _unhandled_actions(),
-    )
+    """Keep the agent off the network while preserving output behavior."""
+
+    def _run(runner: Any, *_args: Any, **_kwargs: Any) -> ToolCallingTurnResult:
+        runner.output.stream(label="OpenSRE", chunks=iter(["echo:ok"]))
+        return _unhandled_actions()
+
+    monkeypatch.setattr("core.agent_harness.turns.headless_agent.ActionTurnRunner.run", _run)
 
 
 def _controlled_agent(
@@ -110,12 +94,9 @@ def _controlled_agent(
     prompts: Any | None = None,
 ) -> tuple[HeadlessAgent, Any]:
     sink = output if output is not None else BufferOutputSink()
-    agent = InMemoryHeadlessBuild(
-        output=sink, reasoning=StaticReasoningClientProvider(client=_EchoClient())
-    ).agent(
+    agent = InMemoryHeadlessBuild(output=sink).agent(
         tools=NullToolProvider(),
         prompts=prompts if prompts is not None else EmptyPromptContextProvider(),
-        gather=GATHER_DISABLED,
     )
     return agent, sink
 
@@ -164,8 +145,6 @@ def test_documented_custom_sink_path_captures_streamed_answer(
     sink = BufferOutputSink()
     agent = DefaultHeadlessBuild(session=startup.session, output=sink).agent()
     agent._tools = NullToolProvider()  # noqa: SLF001
-    agent._reasoning = StaticReasoningClientProvider(client=_EchoClient())  # noqa: SLF001
-    agent._gather_phase = GATHER_DISABLED  # noqa: SLF001
     harness.attach_agent(agent)
 
     # Act
@@ -178,23 +157,20 @@ def test_documented_custom_sink_path_captures_streamed_answer(
 
 
 def test_start_honours_caller_grounding_provider(stub_action_planner: None) -> None:
-    """``SessionConfig.prompts`` must be the provider the answer path uses."""
+    """``SessionConfig.prompts`` remains bound to the agent."""
     # Arrange
     prompts = _RecordingPrompts()
     harness = AgentSession.start(_headless_config(prompts=prompts))
     assert harness.agent is not None
     harness.agent._tools = NullToolProvider()  # noqa: SLF001
-    harness.agent._reasoning = StaticReasoningClientProvider(client=_EchoClient())  # noqa: SLF001
-    harness.agent._gather_phase = GATHER_DISABLED  # noqa: SLF001
 
     # Act
     result = harness.chat("what is our on-call policy?")
 
     # Assert
     assert harness.agent._prompts is prompts  # noqa: SLF001
-    assert "agents_md" in prompts.calls
     assert result.answered
-    assert "CUSTOM PERSONA" in (result.primary_response_text or "")
+    assert "echo:ok" in (result.primary_response_text or "")
 
 
 def test_builder_accepts_caller_grounding_on_the_second_path() -> None:

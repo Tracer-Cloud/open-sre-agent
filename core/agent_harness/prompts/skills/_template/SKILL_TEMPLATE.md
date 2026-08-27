@@ -13,9 +13,12 @@ To create a new skill:
    "Multi-step; load before acting." for data-dependent chains.
 5. Add `recurring: <human schedule>` (e.g. "weekdays 09:00") only when the
    skill ends with a propose_scheduled_delivery offer.
-6. Optional report template: a sibling file named <folder>_report.md is
+6. Add `demo: <copy-pasteable user prompt>` when this skill should appear in
+   the "what can you do?" answer. Omit it for prerequisite or generic-tool
+   skills.
+7. Optional report template: a sibling file named <folder>_report.md is
    appended automatically to the body that skill_view returns.
-7. Section order below is the house style (see github_ci_fix for a
+8. Section order below is the house style (see github_ci_fix for a
    single-tool skill, architecture_audit for a multi-pass one). Keep the
    whole body tight — it is loaded into the planner's context on demand.
 -->
@@ -24,6 +27,7 @@ name: <kebab-case-name>
 description: >-
   <One or two lines for the compact index: what the skill does and the main
   tool(s) it uses. Add "Multi-step; load before acting." if data-dependent.>
+demo: <Copy-pasteable prompt a user can send to run this skill. Omit if none.>
 ---
 ══════════════════════════════════════════════════════════
 <UPPERCASE SKILL TITLE> SKILL — interactive-shell action agent:

@@ -15,7 +15,11 @@ from typing import Any
 
 import httpx
 
-from config.constants.slack import SLACK_BOT_TOKEN_ENV
+from config.constants.slack import (
+    SLACK_ACCESS_TOKEN_ENV,
+    SLACK_BOT_TOKEN_ENV,
+    SLACK_USER_TOKEN_PREFIXES,
+)
 from config.llm_credentials import resolve_env_credential
 
 _API_BASE = "https://slack.com/api"
@@ -108,6 +112,43 @@ def bot_token_configured(sources: dict[str, Any] | None = None) -> bool:
     return target is not None
 
 
+_SEARCH_NEEDS_USER_TOKEN = (
+    "Slack search needs a user token: search.messages rejects bot tokens "
+    f"(not_allowed_token_type). Set {SLACK_ACCESS_TOKEN_ENV} to a user token "
+    "(xoxp-…) holding search:read, or read a known channel with "
+    "slack_read_messages instead."
+)
+
+
+def is_user_token(token: str) -> bool:
+    """True when *token* is a Slack user token (``xoxp-``, or rotating ``xoxe.xoxp-``)."""
+    return token.strip().startswith(SLACK_USER_TOKEN_PREFIXES)
+
+
+def resolve_user_token() -> tuple[SlackBotTarget | None, str]:
+    """Resolve a Slack **user** token for ``search.messages``.
+
+    ``SLACK_ACCESS_TOKEN`` first, then the bot-token path when the value found
+    there is itself a user token (a workspace may have only ever configured one
+    Slack credential). A bot token is never returned: Slack refuses it for
+    search, so returning one would guarantee a failed call.
+    """
+    env_token = resolve_env_credential(SLACK_ACCESS_TOKEN_ENV).strip()
+    if is_user_token(env_token):
+        return SlackBotTarget(bot_token=env_token), ""
+
+    target, _error = resolve_bot_token()
+    if target is not None and is_user_token(target.bot_token):
+        return target, ""
+    return None, _SEARCH_NEEDS_USER_TOKEN
+
+
+def user_token_configured() -> bool:
+    """True when a Slack user token is available, so search can actually run."""
+    target, _error = resolve_user_token()
+    return target is not None
+
+
 def _bearer_headers(token: str) -> dict[str, str]:
     # Match delivery.py: Slack wants charset=utf-8 on JSON bodies.
     return {
@@ -152,6 +193,7 @@ def _api_error_hint(error: str, *, context: str) -> str:
             "The Slack app is missing a required OAuth scope. Reinstall after adding scopes.",
         ),
         "thread_not_found": "No thread with this parent ts was found in the channel.",
+        "not_allowed_token_type": _SEARCH_NEEDS_USER_TOKEN,
     }
     return hints.get(error, f"Slack API error: {error}")
 
@@ -686,6 +728,8 @@ def search_messages(
     q = str(query or "").strip()
     if not q:
         return None, "query cannot be empty."
+    if not is_user_token(target.bot_token):
+        return None, _SEARCH_NEEDS_USER_TOKEN
     limit = max(1, min(int(count), 100))
     payload, req_err = _request_json(
         "GET",

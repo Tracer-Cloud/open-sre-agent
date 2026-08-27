@@ -112,6 +112,11 @@ the repository's merge requirements are satisfied: required GitHub checks are
 green, actionable human or automated review feedback (including Greptile) is
 addressed, and resolved conversations are closed out.
 
+Agents: the always-on rule lives in [AGENTS.md — CI failures and tests](AGENTS.md).
+After every push, inspect `gh pr checks` / failing job logs and fix until required
+jobs are green. The Cursor stop hook `.cursor/hooks/check-ci-failures.sh` will
+re-prompt when the open PR still has failing checks.
+
 A green check does not mean review feedback is clear. GitHub Code Quality and
 GitHub Advanced Security can post inline review threads even when their checks
 pass. After checks complete, and again after every push, inspect all unresolved

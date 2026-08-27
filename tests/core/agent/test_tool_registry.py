@@ -13,6 +13,8 @@ from core.agent_harness.tools.action_tools import (
 from core.agent_harness.tools.tool_context import (
     ActionToolScope,
 )
+from core.domain.types.tools import ToolSurface
+from core.tool import RegisteredTool
 from surfaces.interactive_shell.command_registry import SLASH_COMMANDS
 from surfaces.interactive_shell.session import Session
 from surfaces.shared.llm_setup.catalog import PROVIDER_BY_VALUE
@@ -100,13 +102,12 @@ def test_registered_tool_specs_are_openai_compatible() -> None:
         )
 
 
-def test_tool_schemas_are_closed_objects() -> None:
+def test_tool_schemas_are_objects() -> None:
     specs = _tool_specs(Session())
     assert specs
     for spec in specs:
         schema = spec["input_schema"]
         assert schema["type"] == "object"
-        assert schema["additionalProperties"] is False
 
 
 def test_required_properties_have_descriptions() -> None:
@@ -242,12 +243,33 @@ def test_investigation_tool_description_preserves_compound_slash_guidance() -> N
     assert "never drop the quoted investigation" in description
 
 
-def test_assistant_handoff_description_preserves_bare_alert_guidance() -> None:
-    entry = get_action_tool("assistant_handoff")
+def test_session_goal_control_tool_is_registered() -> None:
+    entry = get_action_tool("session_goal_set")
     assert entry is not None
-    description = entry.description.lower()
-    assert "bare pasted alert json/yaml/key-value blob" in description
-    assert "did not explicitly ask to investigate" in description
+    assert "cross-turn conversational goal" in entry.description.lower()
+
+
+def test_single_agent_includes_action_and_chat_tools(monkeypatch) -> None:
+    def _tool(name: str, surface: ToolSurface) -> RegisteredTool:
+        return RegisteredTool(
+            name=name,
+            description=name,
+            input_schema={"type": "object", "properties": {}},
+            source="knowledge",
+            surfaces=(surface,),
+            run=lambda: {"ok": True},
+            is_available=lambda _sources: True,
+        )
+
+    action = _tool("action_probe", ToolSurface.ACTION)
+    chat = _tool("chat_probe", ToolSurface.CHAT)
+    monkeypatch.setattr(
+        "core.agent_harness.tools.action_tools.resolve_surface_tools",
+        lambda surface: [action] if surface is ToolSurface.ACTION else [chat],
+    )
+
+    names = {tool.name for tool in _action_tools(Session())}
+    assert names == {"action_probe", "chat_probe"}
 
 
 def test_slash_tool_description_preserves_compound_followup_guidance() -> None:

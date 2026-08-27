@@ -59,11 +59,11 @@ def _fallback_descriptors() -> tuple[ToolDescriptor, ...]:
             "tools.interactive_shell.actions.ask_choice",
         ),
         ToolDescriptor(
-            "assistant_handoff",
+            "update_plan",
             (ToolSurface.ACTION,),
             "interactive_shell",
             None,
-            "tools.interactive_shell.actions.assistant_handoff",
+            "tools.interactive_shell.actions.update_plan",
         ),
         ToolDescriptor(
             "cli_exec",
@@ -113,6 +113,13 @@ def _fallback_descriptors() -> tuple[ToolDescriptor, ...]:
             "interactive_shell",
             None,
             "tools.interactive_shell.actions.propose_scheduled_delivery",
+        ),
+        ToolDescriptor(
+            "session_goal_set",
+            (ToolSurface.ACTION,),
+            "interactive_shell",
+            None,
+            "tools.interactive_shell.actions.session_goal",
         ),
         ToolDescriptor(
             "skill_view",

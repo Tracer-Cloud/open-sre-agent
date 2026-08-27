@@ -15,7 +15,7 @@ def telegram_action_prompt_fragment() -> str:
   or investigations unless the user specifically asks to send the result to Telegram.
 Delivery tool unavailable for Telegram: do NOT invent a slash/CLI subcommand to
 deliver a Telegram message and do NOT substitute a different channel. When
-telegram_send_message is unavailable, emit assistant_handoff or route to
+telegram_send_message is unavailable, explain that directly or route to
 slash_invoke(command="/integrations", args=["setup", "telegram"])."""
 
 

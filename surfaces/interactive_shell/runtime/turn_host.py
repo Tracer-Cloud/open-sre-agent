@@ -153,6 +153,14 @@ async def run_agent_turn(runtime: AgentTurnResources, text: str) -> None:
         set_investigation_spinner(None)
         runtime.session.terminal.exclusive_stdin_active = False
         runtime.session.terminal.dispatch_active = False
+        # ``set_auto_command`` deliberately avoids submitting while a turn is
+        # active. If the input prompt was already open, wake it again now that
+        # the turn is idle so deferred commands such as ``/choose`` can run.
+        if (
+            runtime.session.terminal.pending_prompt_default
+            and runtime.session.terminal.pending_prompt_autosubmit
+        ):
+            runtime.session.terminal.notify_prompt_changed()
         emit_thread_boundary(
             runtime.session.session_id,
             name="turn_boundary",
@@ -177,6 +185,9 @@ async def _run_agent_turn_loop(
         runtime.state.attach_cancel_event(dispatch_cancel)
 
     await emit(AgentEvent(type="turn_start", text=text))
+    # Repaint the prompt now so the spinner shows the turn is in flight
+    # immediately, instead of waiting for the ticker's next 100 ms tick.
+    runtime.invalidate_prompt()
     try:
         # Imported lazily so constructing the controller (and importing this
         # module) does not pull the harness/turn-execution stack

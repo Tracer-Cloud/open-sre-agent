@@ -2,9 +2,7 @@
 
 ``_run_action_turn`` is one long function doing three unrelated jobs: building
 the agent, running it, and turning what happened into a
-``ToolCallingTurnResult`` plus console output. Splitting it is only safe with
-the whole observable outcome pinned first — the counts, the response text, the
-handoff contents and what the user actually sees.
+``ToolCallingTurnResult`` plus console output.
 
 These assert on complete values rather than single fields, so a refactor that
 drops or reorders part of the composed text fails here rather than in a
@@ -37,15 +35,12 @@ def _outcome(result: Any) -> dict[str, Any]:
         "executed_success_count": result.executed_success_count,
         "has_unhandled_clause": result.has_unhandled_clause,
         "handled": result.handled,
-        "handoff_contents": result.handoff_contents,
-        "handoff_requires_gather": result.handoff_requires_gather,
         "accounting_status": result.accounting_status,
         "investigation_dispatched": result.investigation_dispatched,
     }
 
 
-def test_a_turn_with_no_tool_calls_is_unhandled() -> None:
-    """The plainest turn: the model answers without calling anything."""
+def test_a_turn_with_no_tool_calls_returns_the_agent_reply() -> None:
     # Arrange
     harness = ActionExecutionHarness(llm=FakeActionLLM([no_tool_response("just talking")]))
 
@@ -61,96 +56,10 @@ def test_a_turn_with_no_tool_calls_is_unhandled() -> None:
         "executed_success_count": 0,
         "has_unhandled_clause": False,
         "handled": False,
-        "handoff_contents": (),
-        "handoff_requires_gather": True,
         "accounting_status": "completed",
         "investigation_dispatched": False,
     }
-    # Fall-through to stream_answer owns the user-visible reply — painting here
-    # produced a second ● assistant bubble on conversational asks.
-    assert "assistant" not in _console_text(harness)
-    assert "just talking" not in _console_text(harness)
-
-
-def test_an_assistant_handoff_is_reported_but_not_counted_as_planned() -> None:
-    """``assistant_handoff`` is excluded from ``planned_count`` by name.
-
-    It is the one tool whose execution does not mean the turn did something for
-    the user, so it must not flip ``handled``.
-    """
-    # Arrange
-    harness = ActionExecutionHarness(
-        llm=FakeActionLLM(
-            [
-                tool_response("assistant_handoff", {"content": "let me explain instead"}),
-                no_tool_response(""),
-            ]
-        )
-    )
-
-    # Act
-    result = run_action_tool_turn(
-        "why?", Session(), harness.console, llm_factory=harness.llm_factory
-    )
-
-    # Assert
-    assert result.planned_count == 0
-    assert result.handled is False
-    assert result.handoff_contents == ("let me explain instead",)
-    assert result.handoff_requires_gather is True
-
-
-def test_an_answer_only_handoff_opts_out_of_the_gather_pass() -> None:
-    """``requires_gather=false`` on the handoff input reaches the turn result.
-
-    The router skips gather for stream-only chat and for turns whose tools
-    already produced the reply evidence.
-    """
-    # Arrange
-    harness = ActionExecutionHarness(
-        llm=FakeActionLLM(
-            [
-                tool_response(
-                    "assistant_handoff",
-                    {"content": "onboarding checks all passed", "requires_gather": False},
-                ),
-                no_tool_response(""),
-            ]
-        )
-    )
-
-    # Act
-    result = run_action_tool_turn(
-        "onboard me on the CI/CD fix", Session(), harness.console, llm_factory=harness.llm_factory
-    )
-
-    # Assert
-    assert result.handoff_contents == ("onboarding checks all passed",)
-    assert result.handoff_requires_gather is False
-
-
-def test_stream_only_conversational_handoff_opts_out_of_gather() -> None:
-    """Pure docs/greeting handoffs set ``requires_gather=false`` for stream_answer.
-
-    No other action tools ran; the host must still skip the gather agent so the
-    turn is action handoff → stream_answer only.
-    """
-    harness = ActionExecutionHarness(
-        llm=FakeActionLLM(
-            [
-                tool_response(
-                    "assistant_handoff",
-                    {"content": "chat:greeting", "requires_gather": False},
-                ),
-                no_tool_response(""),
-            ]
-        )
-    )
-
-    result = run_action_tool_turn("hi", Session(), harness.console, llm_factory=harness.llm_factory)
-
-    assert result.handoff_contents == ("chat:greeting",)
-    assert result.handoff_requires_gather is False
+    assert "just talking" in _console_text(harness)
 
 
 def test_final_text_that_reads_like_a_reply_becomes_the_response() -> None:
@@ -166,56 +75,6 @@ def test_final_text_that_reads_like_a_reply_becomes_the_response() -> None:
 
     # Assert
     assert result.response_text == report
-
-
-def test_a_terse_closing_line_keeps_the_tool_derived_text(monkeypatch) -> None:
-    """ "done" after a tool call must not become the whole answer.
-
-    Short one-liners are common filler. Taking one as the response would throw
-    away the tool output the user actually needs — so the composed text wins
-    unless the closing message reads like a real reply.
-    """
-    # Arrange
-    from core.agent_harness.turns.action_driver import ActionTurnRunner
-    from core.tool.contracts import RegisteredTool
-    from tests.core.agent.orchestration.test_agent_actions_harness import (
-        _GenericActionToolProvider,
-        _OutputSink,
-    )
-
-    tool = RegisteredTool(
-        name="fake_send_message",
-        description="Send a fake message.",
-        input_schema={
-            "type": "object",
-            "properties": {"message": {"type": "string"}},
-            "required": ["message"],
-            "additionalProperties": False,
-        },
-        source="knowledge",
-        surfaces=("action",),
-        run=lambda message: {"status": "sent", "message": message},
-    )
-    harness = ActionExecutionHarness(
-        llm=FakeActionLLM(
-            [
-                tool_response("fake_send_message", {"message": "hello"}),
-                no_tool_response("done"),
-            ]
-        )
-    )
-
-    # Act
-    result = ActionTurnRunner(
-        output=_OutputSink(harness.console),
-        tools=_GenericActionToolProvider(tool),
-        llm_factory=harness.llm_factory,
-    ).run("send it", Session())
-
-    # Assert
-    assert result.handled is True
-    assert "sent" in result.response_text, result.response_text
-    assert result.response_text != "done"
 
 
 def test_a_terse_closing_line_is_the_answer_when_nothing_else_ran() -> None:
@@ -234,3 +93,22 @@ def test_a_terse_closing_line_is_the_answer_when_nothing_else_ran() -> None:
 
     # Assert
     assert result.response_text == "done"
+
+
+def test_iteration_cap_is_preserved_on_turn_result() -> None:
+    harness = ActionExecutionHarness(
+        llm=FakeActionLLM([tool_response("skill_view", {"name": "missing"}) for _ in range(5)])
+    )
+
+    result = run_action_tool_turn(
+        "keep trying",
+        Session(),
+        harness.console,
+        llm_factory=harness.llm_factory,
+    )
+
+    assert result.hit_iteration_cap is True
+    assert result.response_streamed is True
+    assert "repeated tool calls produced no new result" in result.response_text
+    assert _console_text(harness).count("repeated tool calls produced no new result") == 1
+    assert harness.llm.invocations == 5

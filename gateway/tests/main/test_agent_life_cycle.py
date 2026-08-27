@@ -146,7 +146,6 @@ def test_gateway_start_returns_running_gateway_handle(monkeypatch) -> None:
             response_text="Hawaii: +25C",
         ),
         assistant_response_text="Hawaii: +25C",
-        llm_run=None,
     )
     callback = background_kwargs["handle_callback_to_gateway_agent"]
     with bound_turn_metering(
@@ -166,10 +165,6 @@ def test_gateway_start_returns_running_gateway_handle(monkeypatch) -> None:
 
     assert isinstance(ctor.kwargs["output"], BindableOutput)
     assert ctor.kwargs["surface"] == "gateway"
-    from core.agent_harness.turns.gather_phase import GatherPhase
-
-    assert isinstance(ctor.kwargs["gather"], GatherPhase)
-    assert ctor.kwargs["gather"].enabled is True
     turn_binding = agent_cls.return_value.bind_turn.call_args.args[0]
     assert turn_binding.is_tty is False
     # The gateway hands the factory its configured tool provider (the bridge

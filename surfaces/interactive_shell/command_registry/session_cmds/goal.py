@@ -1,8 +1,8 @@
 """/goal slash command: show|set|pause|resume|edit|clear.
 
 ``/goal set`` attaches a completion condition and immediately queues that
-condition as the next turn (autosubmit). Status shows the paint progress line
-(``SESSION_GOAL_PAINT_MARK`` + ``/goal active``) with duration, turn budget,
+condition as the next turn (autosubmit). Status shows the progress line
+(``SESSION_GOAL_PROGRESS_MARK`` + ``/goal active``) with duration, turn budget,
 and token delta. User-facing copy never says ``SessionGoal`` — only ``/goal``.
 """
 

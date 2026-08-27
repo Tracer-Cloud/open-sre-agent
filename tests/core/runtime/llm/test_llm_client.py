@@ -1142,7 +1142,6 @@ def test_openai_invoke_stream_does_not_retry_after_yielding(monkeypatch) -> None
 
 def test_create_llm_client_openai_reasoning_sets_toolcall_fallback(monkeypatch) -> None:
     monkeypatch.setenv("LLM_PROVIDER", "openai")
-    monkeypatch.setenv("LLM_AUTH_METHOD", "api_key")
     monkeypatch.setenv("OPENAI_API_KEY", "sk-test")
     monkeypatch.setenv("OPENAI_REASONING_MODEL", "gpt-5.4 mini")
     monkeypatch.setenv("OPENAI_TOOLCALL_MODEL", "gpt-5.4-mini")
@@ -1157,38 +1156,18 @@ def test_create_llm_client_openai_reasoning_sets_toolcall_fallback(monkeypatch) 
         reset_llm_clients()
 
 
-def test_create_llm_client_openai_oauth_routes_to_codex(monkeypatch) -> None:
+def test_create_llm_client_openai_ignores_legacy_oauth_auth_method(monkeypatch) -> None:
+    """A leftover LLM_AUTH_METHOD=oauth must not remap OpenAI onto Codex."""
     monkeypatch.setenv("LLM_PROVIDER", "openai")
     monkeypatch.setenv("LLM_AUTH_METHOD", "oauth")
-    monkeypatch.setenv("CODEX_MODEL", "gpt-5.5")
+    monkeypatch.setenv("OPENAI_API_KEY", "sk-test")
+    monkeypatch.setenv("OPENAI_REASONING_MODEL", "gpt-5.4")
     reset_llm_clients()
     try:
-        from integrations.llm_cli.codex import CodexAdapter
-        from integrations.llm_cli.runner import CLIBackedLLMClient
-
         client = factory.build_llm_client("reasoning")
 
-        assert isinstance(client, CLIBackedLLMClient)
-        assert isinstance(client._adapter, CodexAdapter)
-        assert client._model == "gpt-5.5"
-    finally:
-        reset_llm_clients()
-
-
-def test_create_llm_client_anthropic_oauth_routes_to_claude_code(monkeypatch) -> None:
-    monkeypatch.setenv("LLM_PROVIDER", "anthropic")
-    monkeypatch.setenv("LLM_AUTH_METHOD", "oauth")
-    monkeypatch.setenv("CLAUDE_CODE_MODEL", "claude-opus-4-7")
-    reset_llm_clients()
-    try:
-        from integrations.llm_cli.claude_code import ClaudeCodeAdapter
-        from integrations.llm_cli.runner import CLIBackedLLMClient
-
-        client = factory.build_llm_client("reasoning")
-
-        assert isinstance(client, CLIBackedLLMClient)
-        assert isinstance(client._adapter, ClaudeCodeAdapter)
-        assert client._model == "claude-opus-4-7"
+        assert isinstance(client, sdk_llm.OpenAILLMClient)
+        assert client._model == "gpt-5.4"
     finally:
         reset_llm_clients()
 

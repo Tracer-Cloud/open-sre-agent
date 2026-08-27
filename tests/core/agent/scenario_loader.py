@@ -56,7 +56,6 @@ VALID_ACTION_KINDS = frozenset(
         "task_cancel",
         "cli_command",
         "implementation",
-        "assistant_handoff",
     }
 )
 VALID_ACTION_SOURCES = frozenset({"deterministic", "llm"})
@@ -139,12 +138,9 @@ class AnswerPolicy:
     conversational turns that answer in chat without executing a terminal
     action.
 
-    This flag does NOT describe the conversational data-gathering path
-    (``gather_tool_evidence``), where the assistant may query configured
-    integrations (Sentry, GitHub, PostHog, ...) while composing a chat answer.
-    That path is not modeled as planned/executed actions; it is asserted via
-    ``response_contract`` text and by execution-layer tests. See the ``Answer``
-    docstring for the full two-path model.
+    This flag does not describe investigation-pipeline tool use. Chat turns
+    stream an assistant answer after the action agent; there is no second
+    gather ReAct loop. See the ``Answer`` docstring.
     """
 
     executes_terminal_action: bool
@@ -152,12 +148,11 @@ class AnswerPolicy:
 
 @dataclass(frozen=True)
 class GatheredToolsContract:
-    """Assertions on which registered tools fire during the conversational
-    ``gather_tool_evidence`` loop for a turn.
+    """Assertions on which registered tools fire outside the action-agent surface.
 
-    A turn's conversational data-gathering pass runs the same registered tools
-    the investigation uses. This contract lets a scenario assert that the right
-    tools were (or were not) invoked when grounding a chat answer:
+    Chat turns no longer run a gather ReAct loop, so these contracts typically
+    assert ``not_called``. Investigation / leftover Agent.run tools still
+    record here:
 
     * ``must_call_any`` — at least one of these tool names must be invoked.
     * ``must_call_all`` — every one of these tool names must be invoked.
@@ -195,14 +190,12 @@ class Answer:
     1. Action agent -> AgentTool execution (the "execution" path). Covered by
        ``policy.executes_terminal_action``, ``planned_actions``, and dispatch
        entries in ``tool_actions`` (``surface: dispatch``). An empty
-       ``planned_actions`` means the action agent is expected to hand the turn to
-       the conversational assistant (an ``assistant_handoff``), i.e. no terminal
-       action runs.
+       ``planned_actions`` means the agent answers without calling a tool.
 
-    2. Conversational answer + ``gather_tool_evidence`` tool loop (the "chat"
-       path). Assert gather behaviour via ``tool_actions`` entries with
-       ``surface: gather`` and an ``expect`` mode (``not_called``, ``called``,
-       ``valid_data``, etc.). ``response_contract`` still covers reply text.
+    2. Conversational answer (the "chat" path). ``tool_actions`` entries with
+       ``surface: gather`` are leftover contracts; chat no longer runs that
+       loop, so they should expect ``not_called``. ``response_contract``
+       still covers reply text.
     """
 
     turn: AnswerTurn
@@ -454,7 +447,7 @@ def validate_action_shape(
         msg = f"{prefix} has invalid kind {kind!r}."
         raise ValueError(msg)
 
-    if require_source and kind != "assistant_handoff":
+    if require_source:
         source = str(action.get("source", "")).strip()
         if source not in VALID_ACTION_SOURCES:
             msg = f"{prefix} has invalid source {source!r}."
@@ -502,17 +495,6 @@ def validate_action_shape(
         content = str(action.get("content", "")).strip()
         if content and content != f"{suite}:{scenario}":
             msg = f"{prefix} content must match suite:scenario when set."
-            raise ValueError(msg)
-    elif kind == "assistant_handoff":
-        evidence_kind = action.get("evidence_kind")
-        if evidence_kind is not None:
-            kind_token = str(evidence_kind).strip()
-            if kind_token not in {"metric_read", "incident", "setup", "other"}:
-                msg = f"{prefix} evidence_kind {kind_token!r} is not a closed enum value."
-                raise ValueError(msg)
-        items = action.get("session_goal_items")
-        if items is not None and not isinstance(items, list):
-            msg = f"{prefix} session_goal_items must be a list when set."
             raise ValueError(msg)
     elif kind == "cli_command":
         payload = str(action.get("payload", "")).strip()

@@ -27,7 +27,7 @@ logger = logging.getLogger(__name__)
 # Seconds to wait for the cross-process session lock before giving up. Generous:
 # same-session turns are already serialized in-process, so real contention here
 # is only two tasks racing one session — rare, and pathological beyond this.
-_SESSION_LOCK_TIMEOUT_SECONDS = 10
+_SESSION_LOCK_TIMEOUT_SECONDS: float = 10
 
 
 def _session_file_lock_enabled() -> bool:
@@ -466,6 +466,21 @@ class JsonlSessionStore:
                     session.session_id,
                     custom_type=SESSION_GOAL_STATE_CUSTOM_TYPE,
                     content=goal_state,
+                    display=False,
+                )
+        if hasattr(session, "task_plan"):
+            from core.agent_harness.task_plan.persist import (
+                TASK_PLAN_STATE_CUSTOM_TYPE,
+                should_persist_task_plan_state,
+                task_plan_state_snapshot,
+            )
+
+            plan_state = task_plan_state_snapshot(session)
+            if should_persist_task_plan_state(plan_state, prior_records=records):
+                self.append_custom_message(
+                    session.session_id,
+                    custom_type=TASK_PLAN_STATE_CUSTOM_TYPE,
+                    content=plan_state or {},
                     display=False,
                 )
         if trailing_leaf:

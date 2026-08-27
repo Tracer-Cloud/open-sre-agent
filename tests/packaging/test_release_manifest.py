@@ -4,6 +4,8 @@ from __future__ import annotations
 
 from pathlib import Path
 
+import yaml
+
 from infrastructure.deployment.packaging.release_manifest import (
     infrastructure_data_entries,
     required_skill_files,
@@ -29,8 +31,6 @@ def test_hidden_imports_exclude_non_runtime_discovery_modules() -> None:
     hidden_imports = set(runtime_hidden_imports(_REPO_ROOT))
 
     assert "tools.registry" not in hidden_imports
-    assert "tools.investigation_registry" not in hidden_imports
-    assert "tools.investigation_registry.prioritization" not in hidden_imports
 
 
 def test_hidden_imports_cover_runtime_discovered_integration_verifiers() -> None:
@@ -83,6 +83,18 @@ def test_release_build_uses_checked_in_spec() -> None:
     assert "OPENSRE_PYINSTALLER_MODE: ${{ matrix.pyinstaller_mode }}" in workflow
     assert "release_manifest.py" in spec
     assert "skill_data_entries(ROOT)" in spec
+
+
+def test_release_workflow_does_not_run_on_pull_requests() -> None:
+    workflow = _RELEASE_WORKFLOW.read_text(encoding="utf-8")
+    triggers = yaml.load(workflow, Loader=yaml.BaseLoader)["on"]
+
+    assert isinstance(triggers, dict)
+    assert "pull_request" not in triggers
+    assert triggers["push"]["branches"] == ["main"]
+    assert 'if [ "$EVENT_NAME" = "pull_request" ]; then' not in workflow
+    assert 'echo "channel=pr" >> "$GITHUB_OUTPUT"' not in workflow
+    assert "opensre_pr_" not in workflow
 
 
 def test_infrastructure_data_excludes_the_cloudflare_worker() -> None:

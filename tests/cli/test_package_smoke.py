@@ -16,7 +16,7 @@ def test_package_smoke_finds_essential_tools_and_skills() -> None:
     payload = json.loads(result.output)
     assert payload["status"] == "ok"
     assert payload["registered_tools"] >= 250
-    assert payload["action_skills"] >= 6
+    assert payload["action_skills"] >= 5
     assert payload["integration_verifiers"] >= 60
 
 

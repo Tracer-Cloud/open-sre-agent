@@ -222,5 +222,5 @@ ONBOARD_INTEGRATION_CHOICES: tuple[Choice, ...] = (
 ONBOARD_SKIP_CHOICE = Choice(
     value="skip",
     label="Skip for now",
-    hint="Finish onboarding without configuring an integration",
+    hint="Finish setup without configuring an integration",
 )

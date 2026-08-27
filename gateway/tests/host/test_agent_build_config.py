@@ -70,19 +70,11 @@ def test_a_host_supplies_its_own_tools_prompts_and_gather() -> None:
 
         return DefaultPromptContextProvider(session)
 
-    def build_gather(session: Any, console: Any) -> Any:
-        _ = (session, console)
-        used.append("gather")
-        from core.agent_harness.runtime import GatherPhase
-
-        return GatherPhase()
-
     pool = SessionAgentPool(
         console=Console(force_terminal=False),
         agent_build=AgentBuildConfig(
             build_tools=build_tools,
             build_prompts=build_prompts,
-            build_gather=build_gather,
         ),
     )
 
@@ -90,7 +82,7 @@ def test_a_host_supplies_its_own_tools_prompts_and_gather() -> None:
     pool.agent_for(session=_session(), output=BindableOutput(), logger=_LOGGER)
 
     # Assert — the channel's builders ran, not the gateway defaults
-    assert sorted(used) == ["gather", "prompts", "tools"]
+    assert sorted(used) == ["prompts", "tools"]
 
 
 def test_agent_reuse_stays_the_pool_decision() -> None:

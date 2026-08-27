@@ -34,6 +34,7 @@ import integrations.coralogix.setup as coralogix_setup
 import integrations.dagster.setup as dagster_setup
 import integrations.datadog.setup as datadog_setup
 import integrations.gitlab.setup as gitlab_setup
+import integrations.google_docs as google_docs_setup
 import integrations.grafana.setup as grafana_setup
 import integrations.groundcover.setup as groundcover_setup
 import integrations.helm.setup as helm_setup
@@ -91,6 +92,10 @@ _ANSWERS: dict[str, dict[str, str]] = {
     "gitlab": {
         "base_url": "https://gitlab.example.com/api/v4",
         "auth_token": "glpat-gitlab-token",
+    },
+    "google_docs": {
+        "credentials_file": "/opt/opensre/google-docs-sa.json",
+        "folder_id": "1BxiMVs0XRA5nFMdKvBdBZjgmUUqptlbs74OgVE2upms",
     },
     "sentry": {
         "base_url": "https://sentry.example.com",
@@ -277,6 +282,7 @@ _CASES = [
     pytest.param(coralogix_setup, "CORALOGIX_SETUP", cli._setup_coralogix, id="coralogix"),
     pytest.param(groundcover_setup, "GROUNDCOVER_SETUP", cli._setup_groundcover, id="groundcover"),
     pytest.param(gitlab_setup, "GITLAB_SETUP", cli._setup_gitlab, id="gitlab"),
+    pytest.param(google_docs_setup, "GOOGLE_DOCS_SETUP", cli._setup_google_docs, id="google_docs"),
     pytest.param(sentry_setup, "SENTRY_SETUP", cli._setup_sentry, id="sentry"),
     pytest.param(posthog_setup, "POSTHOG_SETUP", cli._setup_posthog, id="posthog"),
     pytest.param(vercel_setup, "VERCEL_SETUP", cli._setup_vercel, id="vercel"),

@@ -15,7 +15,7 @@ def buzz_action_prompt_fragment() -> str:
   omit `channel` to use the configured default_channel.
 Delivery tool unavailable for Buzz: do NOT invent a slash/CLI subcommand to
 deliver a Buzz message and do NOT substitute a different channel. When
-buzz_send_message is unavailable, emit assistant_handoff or route to
+buzz_send_message is unavailable, explain that directly or route to
 slash_invoke(command="/integrations", args=["setup", "buzz"])."""
 
 

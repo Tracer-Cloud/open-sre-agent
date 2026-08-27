@@ -1,6 +1,6 @@
 ---
 name: opensre-cli-setup
-description: Set up and maintain the OpenSRE CLI (install, onboard, verify, first investigation)
+description: Set up and maintain the OpenSRE CLI (install, setup, verify, first investigation)
 user-invocable: true
 allowed-tools: Bash(command:*), Bash(brew:*), Bash(curl:*), Bash(opensre:*)
 metadata:
@@ -37,7 +37,7 @@ If `opensre` is missing, install with one of these methods. Prefer the one-line 
 curl -fsSL https://install.opensre.com | OPENSRE_AUTO_LAUNCH=0 bash
 ```
 
-`OPENSRE_AUTO_LAUNCH=0` skips auto-starting the onboard wizard so you can run the remaining steps yourself.
+`OPENSRE_AUTO_LAUNCH=0` skips auto-starting setup so you can run the remaining steps yourself.
 
 2. macOS (Homebrew):
 
@@ -72,19 +72,20 @@ Confirm it runs:
 opensre --help
 ```
 
-## Step 2: Onboard
+## Step 2: Setup
 
-Onboard is interactive and needs a TTY. Do not try to fake the wizard. Run it and prompt the user when it asks for input:
+Setup is interactive and needs a TTY. Do not try to fake the wizard. Run it and prompt the user when it asks for input:
 
 ```bash
-opensre onboard
+opensre setup
 ```
 
 The wizard asks for:
 
-1. **An LLM** — OpenAI, Anthropic, a local model (Ollama), or another provider they already use. They need an API key, or they can leave the key blank and add it later with `opensre auth login <provider>`.
-2. **Tools** — whatever investigations should query (Datadog, Grafana, Slack, and so on). Skip any they do not have.
-3. **Optional extras** — masking and messaging.
+1. **GitHub sign-in** — browser device authorization (required).
+2. **An LLM** — OpenAI, Anthropic, a local model (Ollama), or another provider they already use. They need an API key, or they can leave the key blank and add it later with `opensre auth login <provider>`.
+
+When setup finishes, it opens the interactive shell. Add tools later with `opensre integrations setup <service>` when investigations should query them.
 
 Zero-config local LLM (Ollama, no API key):
 
@@ -92,7 +93,13 @@ Zero-config local LLM (Ollama, no API key):
 opensre onboard local_llm
 ```
 
-To add or change only the LLM later:
+To change only the LLM later (without GitHub again):
+
+```bash
+opensre onboard
+```
+
+Or:
 
 ```bash
 opensre auth login
@@ -106,7 +113,7 @@ opensre integrations setup <service>
 
 Replace `<service>` with a slug such as `datadog`, `grafana`, or `slack`.
 
-If onboard cannot reach the LLM provider (firewall, proxy, offline), tell the user they can **Save anyway without validating** and continue. If it cannot persist the key, they can **Continue without saving (this session only)** and re-enter it next time.
+If setup cannot reach the LLM provider (firewall, proxy, offline), tell the user they can **Save anyway without validating** and continue. If it cannot persist the key, they can **Continue without saving (this session only)** and re-enter it next time.
 
 ## Step 3: Verify
 
@@ -120,7 +127,7 @@ One tool only:
 opensre integrations verify datadog
 ```
 
-If verify fails, check the printed error. Common causes: missing or expired credential, wrong URL, or the tool was skipped during onboard. Re-run `opensre integrations setup <service>` for that tool.
+If verify fails, check the printed error. Common causes: missing or expired credential, wrong URL, or a skipped setup step. Re-run `opensre integrations setup <service>` for that tool.
 
 ## Step 4: Suggest a first run
 
@@ -149,9 +156,9 @@ opensre investigate -i <alert.json>
 ## Gotchas
 
 - **`opensre: command not found`** — new terminal, or add the bin directory the installer printed (often `~/.local/bin` on macOS/Linux).
-- **Onboard blocks or looks hung** — it is waiting on the user. Show them the prompt; do not kill it.
-- **Installer started onboard on its own** — that is expected without `OPENSRE_AUTO_LAUNCH=0`. Let the user finish it, then continue from Step 3.
-- **Investigations need a configured LLM** — `opensre investigate` fails at startup without `LLM_PROVIDER` and a matching key. Finish onboard or `opensre auth login <provider>` first.
+- **Setup blocks or looks hung** — it is waiting on the user (GitHub browser approval or LLM key). Show them the prompt; do not kill it.
+- **Installer started setup on its own** — that is expected without `OPENSRE_AUTO_LAUNCH=0`. Let the user finish it, then continue from Step 3.
+- **Investigations need a configured LLM** — `opensre investigate` fails at startup without `LLM_PROVIDER` and a matching key. Finish `opensre setup` / `opensre onboard` or `opensre auth login <provider>` first.
 - **Only connected tools are queried** — a Datadog alert cannot be investigated if Datadog was never set up. Run `opensre integrations verify` before a production run.
 
 Human docs: https://opensre.com/docs/install and https://opensre.com/docs/quickstart

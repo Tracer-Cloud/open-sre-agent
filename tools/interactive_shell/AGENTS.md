@@ -11,7 +11,7 @@ tools listed in `core/agent_harness/tools/action_tools.py`:
 
 - `actions/` — the action tools themselves (`shell_run`, `cli_exec`,
   `slash_invoke`, `code_implement`, `investigation_start`, `alert_sample`,
-  `assistant_handoff`, `llm_set_provider`, `synthetic_run`, `task_cancel`).
+  `session_goal_set`, `llm_set_provider`, `synthetic_run`, `task_cancel`).
 - `shell/` — shell command parsing, execution policy, and the
   `run_shell_command`/`run_cd`/`run_pwd` runner behind `actions/shell.py`.
 - `synthetic/` — the synthetic-test runner behind `actions/synthetic.py`.

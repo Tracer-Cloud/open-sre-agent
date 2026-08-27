@@ -9,21 +9,17 @@ set -euo pipefail
 
 if [ -t 1 ]; then
   COLOR_RESET=$'\033[0m'
-  COLOR_BOLD=$'\033[1m'
-  COLOR_DIM=$'\033[2m'
   COLOR_RED=$'\033[31m'
   COLOR_GREEN=$'\033[32m'
   COLOR_YELLOW=$'\033[33m'
-  COLOR_CYAN=$'\033[36m'
+  COLOR_GRAY=$'\033[90m'
   SUCCESS_MARK="✓"
 else
   COLOR_RESET=""
-  COLOR_BOLD=""
-  COLOR_DIM=""
   COLOR_RED=""
   COLOR_GREEN=""
   COLOR_YELLOW=""
-  COLOR_CYAN=""
+  COLOR_GRAY=""
   SUCCESS_MARK="Success:"
 fi
 
@@ -38,7 +34,6 @@ INSTALL_CHANNEL_EXPLICIT=0
 [ -n "${OPENSRE_INSTALL_CHANNEL:-}" ] && INSTALL_CHANNEL_EXPLICIT=1
 MAIN_RELEASE_TAG="${OPENSRE_MAIN_RELEASE_TAG:-main-build}"
 BIN_NAME="opensre"
-PROGRESS_PID=""
 requested_version="${OPENSRE_VERSION:-}"
 
 [ -n "$INSTALL_DIR" ] && INSTALL_DIR_OVERRIDE=1
@@ -46,6 +41,10 @@ requested_version="${requested_version#v}"
 
 log() {
   printf '%s\n' "$*"
+}
+
+muted() {
+  printf '%s%s%s\n' "${COLOR_GRAY:-}" "$*" "${COLOR_RESET:-}"
 }
 
 warn() {
@@ -61,10 +60,6 @@ success() {
   printf '%s%s %s%s\n' "${COLOR_GREEN:-}" "${SUCCESS_MARK:-Success:}" "$*" "${COLOR_RESET:-}"
 }
 
-step() {
-  printf '%s%s%s\n' "${COLOR_CYAN:-}" "$*" "${COLOR_RESET:-}"
-}
-
 install_verbose() {
   case "${OPENSRE_INSTALL_VERBOSE:-}" in
     1|true|TRUE|yes|YES)
@@ -76,354 +71,66 @@ install_verbose() {
   esac
 }
 
-is_interactive_terminal() {
-  [ -t 1 ] && [ "${TERM:-}" != "dumb" ] && ! install_verbose
+is_interactive_status_terminal() {
+  [ -t 2 ] && [ "${TERM:-}" != "dumb" ] && ! install_verbose
 }
 
-terminal_supports_unicode() {
-  local locale_value="${LC_ALL:-${LC_CTYPE:-${LANG:-}}}"
-
-  case "$locale_value" in
-    *UTF-8*|*utf-8*|*UTF8*|*utf8*)
-      return 0
-      ;;
-  esac
-
-  case "${TERM_PROGRAM:-}" in
-    Apple_Terminal|iTerm.app|vscode|WezTerm)
-      return 0
-      ;;
-  esac
-
-  return 1
-}
-
-terminal_columns() {
-  local cols=""
-
-  if command -v tput >/dev/null 2>&1; then
-    cols="$(tput cols 2>/dev/null || true)"
-  fi
-  if [ -z "$cols" ]; then
-    cols="${COLUMNS:-}"
-  fi
-
-  case "$cols" in
-    ''|*[!0-9]*)
-      cols=80
-      ;;
-  esac
-  if [ "$cols" -lt 20 ]; then
-    cols=20
-  fi
-
-  printf '%s\n' "$cols"
-}
-
-truncate_text() {
-  local value="$1"
-  local max_width="$2"
-
-  value="${value//$'\r'/ }"
-  value="${value//$'\n'/ }"
-
-  if [ "$max_width" -le 0 ]; then
-    return
-  fi
-  if [ "${#value}" -le "$max_width" ]; then
-    printf '%s' "$value"
-    return
-  fi
-  if [ "$max_width" -le 3 ]; then
-    printf '%.*s' "$max_width" "$value"
-    return
-  fi
-
-  printf '%.*s...' "$((max_width - 3))" "$value"
-}
-
-friendly_progress_label() {
+animate_dots() {
   local label="$1"
-
-  case "$label" in
-    *Fetching\ latest\ main\ build\ metadata*|*Fetching\ latest\ release\ version*|*Fetching\ release\ metadata*)
-      printf 'fetching metadata'
-      ;;
-    *Preparing\ opensre*)
-      printf 'resolving build'
-      ;;
-    *Downloading\ release\ archive*)
-      printf 'downloading archive'
-      ;;
-    *Downloading\ and\ verifying\ checksum*|*Verifying\ release\ archive*)
-      printf 'verifying checksum'
-      ;;
-    *Extracting\ and\ verifying\ binary*)
-      printf 'verifying binary'
-      ;;
-    *Installing\ *opensre*)
-      printf 'installing binary'
-      ;;
-    *)
-      label="${label#*\] }"
-      printf '%s' "$label"
-      ;;
-  esac
-}
-
-progress_frame() {
-  local step_count="$1"
-
-  if terminal_supports_unicode; then
-    case $((step_count % 10)) in
-      0) printf '⠋' ;;
-      1) printf '⠙' ;;
-      2) printf '⠹' ;;
-      3) printf '⠸' ;;
-      4) printf '⠼' ;;
-      5) printf '⠴' ;;
-      6) printf '⠦' ;;
-      7) printf '⠧' ;;
-      8) printf '⠇' ;;
-      *) printf '⠏' ;;
-    esac
-    return
-  fi
-
-  case $((step_count % 4)) in
-    0) printf '-' ;;
-    1) printf '\\' ;;
-    2) printf '|' ;;
-    *) printf '/' ;;
-  esac
-}
-
-draw_progress() {
-  local label="$1"
-  local step_count="$2"
-  local title="${3:-Installing OpenSRE}"
-  local frame
-  local columns
-  local reserve
-  local available
-  local width
-  local label_width
-  local short_label
-  local trail=8
-  local head
-  local bar=""
-  local i=0
-
-  columns="$(terminal_columns)"
-  if [ "$columns" -lt 56 ]; then
-    title="OpenSRE"
-  fi
-
-  reserve=$((2 + 1 + 1 + 1 + ${#title} + 1))
-  available=$((columns - reserve))
-  if [ "$available" -lt 12 ]; then
-    width=4
-  else
-    width=$((available / 2))
-    if [ "$width" -gt 28 ]; then
-      width=28
-    fi
-    if [ "$width" -lt 8 ]; then
-      width=8
-    fi
-  fi
-
-  label_width=$((columns - reserve - width))
-  if [ "$label_width" -lt 8 ] && [ "$width" -gt 4 ]; then
-    width=$((columns - reserve - 8))
-    if [ "$width" -lt 4 ]; then
-      width=4
-    fi
-    label_width=$((columns - reserve - width))
-  fi
-  if [ "$label_width" -lt 0 ]; then
-    label_width=0
-  fi
-
-  short_label="$(truncate_text "$(friendly_progress_label "$label")" "$label_width")"
-  frame="$(progress_frame "$step_count")"
-  head=$((step_count % (width + trail)))
-
-  while [ "$i" -lt "$width" ]; do
-    local age=$((head - i))
-    if [ "$age" -ge 0 ] && [ "$age" -lt "$trail" ]; then
-      if terminal_supports_unicode; then
-        case "$age" in
-          0|1) bar="${bar}${COLOR_GREEN:-}█${COLOR_RESET:-}" ;;
-          2|3) bar="${bar}${COLOR_CYAN:-}█${COLOR_RESET:-}" ;;
-          4|5) bar="${bar}${COLOR_RED:-}█${COLOR_RESET:-}" ;;
-          *) bar="${bar}${COLOR_YELLOW:-}█${COLOR_RESET:-}" ;;
-        esac
-      else
-        bar="${bar}#"
-      fi
-    else
-      if terminal_supports_unicode; then
-        bar="${bar}${COLOR_DIM:-}░${COLOR_RESET:-}"
-      else
-        bar="${bar}-"
-      fi
-    fi
-    i=$((i + 1))
-  done
-
-  printf '\r\033[K  %s%s%s %s %s%s%s %s' \
-    "${COLOR_YELLOW:-}" "$frame" "${COLOR_RESET:-}" \
-    "$bar" "${COLOR_BOLD:-}" "$title" "${COLOR_RESET:-}" "$short_label"
-}
-
-animate_progress() {
-  local label="$1"
-  local step_count=0
+  local dot_count=1
+  local dots
 
   while :; do
-    draw_progress "$label" "$step_count"
-    step_count=$((step_count + 1))
-    sleep 0.08
+    case "$dot_count" in
+      1) dots="." ;;
+      2) dots=".." ;;
+      *) dots="..." ;;
+    esac
+    printf '\r\033[K%s%s%s%s' \
+      "${COLOR_GRAY:-}" "$label" "$dots" "${COLOR_RESET:-}" >&2
+    dot_count=$((dot_count % 3 + 1))
+    sleep 0.4
   done
 }
 
-finish_progress() {
-  local progress_pid="${1:-}"
+finish_dots() {
+  local dots_pid="$1"
+  local label="$2"
 
-  if [ -n "$progress_pid" ]; then
-    kill "$progress_pid" 2>/dev/null || true
-    wait "$progress_pid" 2>/dev/null || true
-  fi
-  printf '\r\033[K\033[?25h'
+  kill "$dots_pid" 2>/dev/null || true
+  wait "$dots_pid" 2>/dev/null || true
+  printf '\r\033[K%s%s...%s\n\033[?25h' \
+    "${COLOR_GRAY:-}" "$label" "${COLOR_RESET:-}" >&2
 }
 
-run_with_progress() {
+run_with_dots() {
   local label="$1"
   shift
 
-  if ! is_interactive_terminal; then
-    step "$label"
+  if ! is_interactive_status_terminal; then
+    printf '%s%s...%s\n' \
+      "${COLOR_GRAY:-}" "$label" "${COLOR_RESET:-}" >&2
     "$@"
     return
   fi
 
-  local log_file
-  local command_pid
+  local dots_pid
   local status
-  log_file="$(mktemp "${TMPDIR:-/tmp}/opensre-install-progress.XXXXXX")"
 
-  "$@" >"$log_file" 2>&1 &
-  command_pid=$!
+  printf '\033[?25l' >&2
+  animate_dots "$label" &
+  dots_pid=$!
+  trap 'finish_dots "$dots_pid" "$label"; exit 130' INT TERM
 
-  printf '\033[?25l'
-  animate_progress "$label" &
-  PROGRESS_PID=$!
-  trap 'kill "$command_pid" 2>/dev/null || true; finish_progress "$PROGRESS_PID"; rm -f "$log_file"; exit 130' INT TERM
-
-  if wait "$command_pid"; then
+  if "$@"; then
     status=0
   else
     status=$?
   fi
 
-  finish_progress "$PROGRESS_PID"
-  PROGRESS_PID=""
+  finish_dots "$dots_pid" "$label"
   trap - INT TERM
-
-  if [ "$status" -ne 0 ]; then
-    printf '%sError:%s %s failed (exit %s).%s\n' "${COLOR_RED:-}" "${COLOR_RESET:-}" "$label" "$status" "${COLOR_RESET:-}" >&2
-    if [ "$status" -gt 128 ]; then
-      printf 'Process was terminated by signal %s (e.g. killed by the OS, possibly out-of-memory).\n' "$((status - 128))" >&2
-    fi
-    if [ -s "$log_file" ]; then
-      cat "$log_file" >&2
-    else
-      printf '(no output was captured before the process ended)\n' >&2
-    fi
-    rm -f "$log_file"
-    return "$status"
-  fi
-
-  rm -f "$log_file"
-  printf '  %s%s%s %s\n' "${COLOR_GREEN:-}" "${SUCCESS_MARK:-ok}" "${COLOR_RESET:-}" "$label"
-}
-
-capture_with_progress() {
-  local __result_var="$1"
-  local label="$2"
-  shift 2
-
-  if ! is_interactive_terminal; then
-    step "$label"
-    local captured
-    local status
-    if captured="$("$@")"; then
-      printf -v "$__result_var" '%s' "$captured"
-      return
-    else
-      status=$?
-    fi
-
-    if [ -n "$captured" ]; then
-      printf '%s\n' "$captured" >&2
-    fi
-    return "$status"
-  fi
-
-  local stdout_file
-  local stderr_file
-  local command_pid
-  local status
-  stdout_file="$(mktemp "${TMPDIR:-/tmp}/opensre-install-stdout.XXXXXX")"
-  stderr_file="$(mktemp "${TMPDIR:-/tmp}/opensre-install-stderr.XXXXXX")"
-
-  "$@" >"$stdout_file" 2>"$stderr_file" &
-  command_pid=$!
-
-  printf '\033[?25l'
-  animate_progress "$label" &
-  PROGRESS_PID=$!
-  trap 'kill "$command_pid" 2>/dev/null || true; finish_progress "$PROGRESS_PID"; rm -f "$stdout_file" "$stderr_file"; exit 130' INT TERM
-
-  if wait "$command_pid"; then
-    status=0
-  else
-    status=$?
-  fi
-
-  finish_progress "$PROGRESS_PID"
-  PROGRESS_PID=""
-  trap - INT TERM
-
-  if [ "$status" -ne 0 ]; then
-    printf '%sError:%s %s failed (exit %s).%s\n' "${COLOR_RED:-}" "${COLOR_RESET:-}" "$label" "$status" "${COLOR_RESET:-}" >&2
-    if [ "$status" -gt 128 ]; then
-      printf 'Process was terminated by signal %s (e.g. killed by the OS, possibly out-of-memory).\n' "$((status - 128))" >&2
-    fi
-    if [ ! -s "$stdout_file" ] && [ ! -s "$stderr_file" ]; then
-      printf '(no output was captured before the process ended)\n' >&2
-    else
-      cat "$stdout_file" >&2
-      cat "$stderr_file" >&2
-    fi
-    rm -f "$stdout_file" "$stderr_file"
-    return "$status"
-  fi
-
-  printf -v "$__result_var" '%s' "$(cat "$stdout_file")"
-  rm -f "$stdout_file" "$stderr_file"
-  printf '  %s%s%s %s\n' "${COLOR_GREEN:-}" "${SUCCESS_MARK:-ok}" "${COLOR_RESET:-}" "$label"
-}
-
-print_installer_header() {
-  if ! is_interactive_terminal; then
-    return
-  fi
-
-  log "${COLOR_BOLD:-}${COLOR_CYAN:-}OpenSRE Installer${COLOR_RESET:-}"
-  log "${COLOR_BOLD:-}Installing the OpenSRE CLI${COLOR_RESET:-}"
-  log ""
+  return "$status"
 }
 
 usage() {
@@ -525,10 +232,8 @@ ensure_github_cli() {
     return 0
   fi
 
-  step "Installing GitHub CLI (gh) for OpenSRE GitHub tools"
-
   if command -v brew >/dev/null 2>&1; then
-    if brew install gh; then
+    if run_with_dots "Installing GitHub CLI (gh) for OpenSRE GitHub tools" brew install gh; then
       success "Installed GitHub CLI (gh) via Homebrew"
       return 0
     fi
@@ -905,36 +610,47 @@ download_and_verify_checksum() {
   verify_checksum "$checksum_path" "$archive_path"
 }
 
+prepare_and_verify_binary() {
+  local binary_path="$1"
+  local extraction_dir="$2"
+  local expected_version="${3:-}"
+
+  # macOS: clear quarantine and re-adhoc-sign onedir libs+binary. Stale or
+  # post-mutation signatures otherwise SIGKILL --version (exit 137,
+  # CODESIGNING / Invalid Page) on consumer Macs.
+  clear_macos_quarantine "$extraction_dir"
+  resign_macos_onedir_adhoc "$binary_path"
+
+  if [ -n "$expected_version" ]; then
+    verify_binary_version "$binary_path" "$expected_version"
+  else
+    verify_binary_version "$binary_path"
+  fi
+}
+
 extract_and_verify_binary() {
   local archive_path="$1"
   local extraction_dir="$2"
   local extracted_binary_path
   local extracted_version
-  local extract_status
 
-  printf 'Extracting %s into %s...\n' "$archive_path" "$extraction_dir" >&2
-  set +e
-  extract_archive "$archive_path" "$extraction_dir"
-  extract_status=$?
-  set -e
-  if [ "$extract_status" -ne 0 ]; then
-    printf 'Archive extraction failed (exit %s).\n' "$extract_status" >&2
-    return "$extract_status"
-  fi
-  printf 'Extraction finished, locating %s binary...\n' "$BIN_NAME" >&2
+  run_with_dots "Extracting OpenSRE" extract_archive "$archive_path" "$extraction_dir" \
+    || return "$?"
 
-  extracted_binary_path="$(get_binary_path_from_archive "$extraction_dir" "$BIN_NAME")"
-  printf 'Found binary at %s, verifying it runs...\n' "$extracted_binary_path" >&2
-  # macOS: clear quarantine and re-adhoc-sign onedir libs+binary. Stale or
-  # post-mutation signatures otherwise SIGKILL --version (exit 137,
-  # CODESIGNING / Invalid Page) on consumer Macs.
-  clear_macos_quarantine "$extraction_dir"
-  resign_macos_onedir_adhoc "$extracted_binary_path"
-
+  extracted_binary_path="$(
+    run_with_dots "Locating ${BIN_NAME} binary" \
+      get_binary_path_from_archive "$extraction_dir" "$BIN_NAME"
+  )" || return "$?"
   if [ "$INSTALL_CHANNEL" = "main" ]; then
-    extracted_version="$(verify_binary_version "$extracted_binary_path")" || return "$?"
+    extracted_version="$(
+      run_with_dots "Found ${BIN_NAME} binary, verifying it runs" \
+        prepare_and_verify_binary "$extracted_binary_path" "$extraction_dir"
+    )" || return "$?"
   else
-    extracted_version="$(verify_binary_version "$extracted_binary_path" "$version")" || return "$?"
+    extracted_version="$(
+      run_with_dots "Found ${BIN_NAME} binary, verifying it runs" \
+        prepare_and_verify_binary "$extracted_binary_path" "$extraction_dir" "$version"
+    )" || return "$?"
   fi
 
   printf '%s\n%s\n' "$extracted_binary_path" "$extracted_version"
@@ -1114,8 +830,7 @@ configure_path() {
       path_line="fish_add_path \"${INSTALL_DIR}\""
       ;;
     *)
-      log "Add the following line to your shell profile to use ${BIN_NAME:-opensre}:"
-      log "  export PATH=\"${INSTALL_DIR}:\$PATH\""
+      log "Add ${INSTALL_DIR} to PATH to run ${BIN_NAME:-opensre} from any terminal."
       return
       ;;
   esac
@@ -1124,124 +839,31 @@ configure_path() {
   [ "$rc_dir" != "$rc_file" ] && [ ! -d "$rc_dir" ] && mkdir -p "$rc_dir"
 
   if [ -f "$rc_file" ] && grep -qF "${INSTALL_DIR}" "$rc_file"; then
+    muted "PATH already configured in ${rc_file}"
     return
   fi
 
   local marker="# Added by opensre installer"
   if [ -f "$rc_file" ] && grep -qF "$marker" "$rc_file" && grep -qF "${INSTALL_DIR}" "$rc_file"; then
+    muted "PATH already configured in ${rc_file}"
     return
   fi
 
   printf '\n%s\n%s\n' "$marker" "$path_line" >> "$rc_file"
-
-  log ""
-  log "${BIN_NAME:-opensre} has been added to PATH in ${rc_file}."
-  log "To apply now, run:  source \"${rc_file}\""
-  log "Or open a new terminal."
+  muted "PATH configured in ${rc_file}"
 }
 
 ensure_on_path() {
-  # A child process cannot edit the parent shell's PATH, so when the install
-  # dir is not already on PATH, link the binary into a user-writable directory
-  # that is — no sudo, and `opensre` works in this terminal immediately. Only
-  # when no PATH directory is writable fall back to the shell rc update.
-  local link_dir
+  run_with_dots "Checking PATH configuration" ensure_on_path_impl
+}
 
-  if [ "$platform" != "windows" ] && ! path_has_dir "$INSTALL_DIR"; then
-    if link_dir="$(select_writable_path_candidate_from_list "$PATH")" \
-      && mkdir -p "$link_dir" 2>/dev/null \
-      && ln -sf "${INSTALL_DIR}/${BIN_NAME}" "${link_dir}/${BIN_NAME}" 2>/dev/null; then
-      success "Linked ${BIN_NAME} into ${link_dir} — ready to run in this terminal."
-      return
-    fi
+ensure_on_path_impl() {
+  if path_has_dir "$INSTALL_DIR"; then
+    muted "PATH already configured"
+    return
   fi
 
   configure_path
-}
-
-print_success_screen() {
-  local version="$1"
-  local sep="────────────────────────────────────────────"
-
-  if [ ! -t 1 ]; then
-    sep="--------------------------------------------"
-  fi
-
-  log ""
-  log "$sep"
-  success "Welcome to OpenSRE"
-  if [ "$version" = "main" ]; then
-    log "  ${COLOR_BOLD:-}opensre (main build) installed successfully${COLOR_RESET:-}"
-  else
-    log "  ${COLOR_BOLD:-}opensre v${version} installed successfully${COLOR_RESET:-}"
-  fi
-  log "$sep"
-  log ""
-  log "Next steps:"
-  log "  1. Run  ${BIN_NAME:-opensre} onboard"
-  log "     Set up your LLM provider and add your observability integrations."
-  log ""
-  log "  2. Run  ${BIN_NAME:-opensre}  (no subcommand)"
-  log "     From a normal interactive terminal this starts the interactive shell — type a"
-  log "     prompt or incident description at the prompt to investigate."
-  log ""
-  log "  3. Optional — one-shot RCA from a file:"
-  log "     ${BIN_NAME:-opensre} investigate -i path/to/alert.json"
-  log ""
-  log "Docs: https://www.opensre.com/docs"
-  log ""
-}
-
-auto_launch_disabled() {
-  case "${OPENSRE_AUTO_LAUNCH:-}" in
-    0|false|FALSE|no|NO|off|OFF)
-      return 0
-      ;;
-    *)
-      return 1
-      ;;
-  esac
-}
-
-controlling_tty_usable() {
-  # The onboarding wizard needs a terminal it can actually control: it calls
-  # tcgetattr/tcsetattr on its stdin. `stty -g` performs the same tcgetattr,
-  # so where it fails, launching the wizard would die with a "terminal I/O
-  # error" mid-render (issue #3273). Only offer /dev/tty when it passes.
-  command -v stty >/dev/null 2>&1 || return 1
-  [ -r /dev/tty ] && [ -w /dev/tty ] || return 1
-  stty -g </dev/tty >/dev/null 2>&1
-}
-
-run_onboarding() {
-  # Uses the caller's `installed_binary` (bash dynamic scoping); any redirect
-  # on the call applies to the wizard.
-  log "Launching ${BIN_NAME} onboard..."
-  "$installed_binary" onboard || \
-    warn "Onboarding exited before completion. Run '${BIN_NAME} onboard' to retry."
-}
-
-launch_onboarding_after_install() {
-  local installed_binary="${INSTALL_DIR}/${BIN_NAME}"
-
-  # The full-screen wizard needs a real terminal on stdout to render.
-  if auto_launch_disabled || [ ! -t 1 ]; then
-    return
-  fi
-  if [ ! -x "$installed_binary" ]; then
-    warn "Could not auto-launch onboarding; ${installed_binary} is not executable."
-    return
-  fi
-
-  if [ -t 0 ]; then
-    run_onboarding
-  elif [ "$platform" != "windows" ] && controlling_tty_usable; then
-    # Piped install (the documented `curl … | bash`): stdin is the curl pipe,
-    # so hand the wizard the controlling terminal instead. Git Bash on Windows
-    # emulates /dev/tty in ways the wizard cannot control, so the piped
-    # auto-launch stays darwin/linux-only.
-    run_onboarding </dev/tty
-  fi
 }
 
 cleanup() {
@@ -1291,15 +913,7 @@ resolve_release_metadata() {
   version="$requested_version"
   release_tag=""
 
-  if [ "$INSTALL_CHANNEL" = "main" ]; then
-    metadata_step="[1/6] Fetching latest main build metadata"
-  elif [ -n "$version" ]; then
-    metadata_step="[1/6] Fetching release metadata for v${version}"
-  else
-    metadata_step="[1/6] Fetching latest release version"
-  fi
-
-  capture_with_progress release_json "$metadata_step" fetch_release_json "$version" || {
+  release_json="$(fetch_release_json "$version")" || {
     if [ "$INSTALL_CHANNEL" = "main" ]; then
       die "Failed to query main build metadata from GitHub."
     fi
@@ -1355,11 +969,6 @@ prepare_download() {
   checksum_asset="${archive}.sha256"
   checksum_url="${download_url}.sha256"
 
-  if [ "$INSTALL_CHANNEL" = "main" ]; then
-    step "[2/6] Preparing opensre main build (${platform}/${target_arch})"
-  else
-    step "[2/6] Preparing opensre v${version} (${platform}/${target_arch})"
-  fi
   if [ "$asset_arch" != "$target_arch" ]; then
     log "Using release asset built for ${platform}/${asset_arch}."
   fi
@@ -1415,8 +1024,16 @@ create_temp_workspace() {
 }
 
 download_release_archive() {
+  local download_label
+
   archive_path="${tmp_dir}/${archive}"
-  run_with_progress "[3/6] Downloading release archive (${archive})" download_to "$download_url" "$archive_path" \
+  if [ "$INSTALL_CHANNEL" = "main" ]; then
+    download_label="Downloading OpenSRE main build for ${platform}-${asset_arch}"
+  else
+    download_label="Downloading OpenSRE v${version} for ${platform}-${asset_arch}"
+  fi
+
+  run_with_dots "$download_label" download_to "$download_url" "$archive_path" \
     || die "Failed to download '${archive}'."
 }
 
@@ -1425,9 +1042,10 @@ verify_release_checksum() {
 
   if release_has_asset "$release_json" "$checksum_asset"; then
     checksum_path="${tmp_dir}/${checksum_asset}"
-    run_with_progress "[4/6] Downloading and verifying checksum (${checksum_asset})" \
+    run_with_dots "Fetching and verifying checksum" \
       download_and_verify_checksum "$checksum_url" "$checksum_path" "$archive_path" \
       || die "Failed to download or verify checksum '${checksum_asset}'."
+    muted "Checksum verification passed"
     return
   fi
 
@@ -1441,24 +1059,23 @@ verify_release_checksum() {
 extract_release_binary() {
   local verified_binary
 
-  capture_with_progress verified_binary "[5/6] Extracting and verifying binary" extract_and_verify_binary "$archive_path" "$tmp_dir"
+  verified_binary="$(extract_and_verify_binary "$archive_path" "$tmp_dir")" \
+    || die "Failed to extract or verify '${archive}'."
   binary_path="${verified_binary%%$'\n'*}"
   installed_version="${verified_binary#*$'\n'}"
 }
 
 install_release_binary() {
-  run_with_progress "[6/6] Installing ${BIN_NAME} to ${INSTALL_DIR}" install_verified_binary "$binary_path" "${INSTALL_DIR}/${BIN_NAME}"
+  run_with_dots "Installing OpenSRE" \
+    install_verified_binary "$binary_path" "${INSTALL_DIR}/${BIN_NAME}" \
+    || die "Failed to install ${BIN_NAME} to '${INSTALL_DIR}'."
 }
 
 print_install_confirmation() {
-  if [ "$INSTALL_CHANNEL" = "main" ]; then
-    if [ "$installed_version" = "main" ]; then
-      success "Installed ${BIN_NAME} main build to ${INSTALL_DIR}/${BIN_NAME}"
-    else
-      success "Installed ${BIN_NAME} main build (${installed_version}) to ${INSTALL_DIR}/${BIN_NAME}"
-    fi
+  if [ "$installed_version" = "main" ]; then
+    muted "OpenSRE main build installed successfully to ${INSTALL_DIR}/${BIN_NAME}"
   else
-    success "Installed ${BIN_NAME} v${installed_version} to ${INSTALL_DIR}/${BIN_NAME}"
+    muted "OpenSRE v${installed_version} installed successfully to ${INSTALL_DIR}/${BIN_NAME}"
   fi
 }
 
@@ -1466,8 +1083,7 @@ finish_install() {
   print_install_confirmation
   ensure_on_path
   ensure_github_cli
-  print_success_screen "$installed_version"
-  launch_onboarding_after_install
+  log "${COLOR_YELLOW:-}Run '${BIN_NAME}' to get started!${COLOR_RESET:-}"
 }
 
 main() {
@@ -1475,7 +1091,6 @@ main() {
   require_prerequisites
   detect_platform
   resolve_install_dir
-  print_installer_header
   resolve_release_metadata
   select_archive_asset
   prepare_download

@@ -108,7 +108,6 @@ def apply_wizard_store_env_defaults(*, path: Path | None = None) -> None:
         return
 
     _set_if_unset(LLM_PROVIDER_ENV, provider)
-    _set_if_unset("LLM_AUTH_METHOD", local.get("auth_method"))
 
     model_env = str(local.get("model_env") or "").strip()
     if model_env:

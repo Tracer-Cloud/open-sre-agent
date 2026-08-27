@@ -113,7 +113,7 @@ def test_render_integrations_table_empty_shows_hint() -> None:
     buf = io.StringIO()
     console = Console(file=buf, force_terminal=False)
     render_integrations_table(console, [])
-    assert "opensre onboard" in buf.getvalue()
+    assert "opensre integrations setup" in buf.getvalue()
 
 
 def test_repl_print_resets_before_each_line(monkeypatch) -> None:
@@ -223,11 +223,11 @@ def test_repl_render_launch_poster_uses_crlf_on_tty(monkeypatch: pytest.MonkeyPa
     assert "blue" in written
     assert "38;2;168;212;255" in written
     assert "185;237;175" not in written
-    assert "opensre" in written
+    assert "OpenSRE" in written
     # Greeting wording varies by first-run state; only the salutation root is stable.
     assert "Welcome" in written
     assert "\r\n" in written
-    # REPL path must not emit bare \\n (causes double-spaced splash under patch_stdout).
+    # REPL path must not emit bare \\n (causes double-spaced output under patch_stdout).
     assert "\r" not in written.replace("\r\n", "")
 
 

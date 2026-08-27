@@ -15,10 +15,9 @@ from dataclasses import dataclass
 from typing import Any, Protocol, runtime_checkable
 
 from config.llm_reasoning_effort import ReasoningEffortChoice
-from core.agent_harness.accounting.token_accounting import LlmRunInfo
 from core.agent_harness.turns.gather_observation import GatheredEvidence
 from core.agent_harness.turns.turn_results import ToolCallingTurnResult, TurnResult
-from core.llm.types import AgentLLMClient, StreamingReasoningClient
+from core.llm.types import AgentLLMClient
 from core.tool.execution import ToolExecutionHooks
 
 # A tool-loop event callback: ``(kind, data)`` where kind is e.g. "tool_start".
@@ -223,74 +222,8 @@ class PromptContextProvider(Protocol):
     def setup_state(self) -> str:
         """The operator's connected integrations and schedules, as a fact block."""
 
-    def suggested_synthetic_prompt(self) -> str:
-        raise NotImplementedError
-
     def log_diagnostics(self, reason: str) -> None:
         raise NotImplementedError
-
-
-@runtime_checkable
-class ReasoningClientProvider(Protocol):
-    """Provides the streaming reasoning LLM client for the assistant answer."""
-
-    def get(self) -> StreamingReasoningClient | None:
-        """Return the reasoning client, or ``None`` when one cannot be built."""
-
-
-@runtime_checkable
-class RunRecordFactory(Protocol):
-    """Builds the opaque per-answer LLM-run record (telemetry) from raw inputs."""
-
-    def build(
-        self,
-        *,
-        client: StreamingReasoningClient | None,
-        prompt: str,
-        response_text: str,
-        started: float,
-    ) -> LlmRunInfo:
-        """Build the run record for one streamed answer."""
-
-
-@dataclass(frozen=True)
-class AnswerRequest:
-    """Per-turn inputs for the direct-answer (no tools) path.
-
-    Surface-bound ports (session, output, prompts, …) live on the caller;
-    only what varies per turn goes here. Confirm/TTY stay on the action path —
-    the direct answer never prompts or branches on them.
-    """
-
-    tool_observation: str | None = None
-    tool_observation_on_screen: bool = True
-    handoff_contents: tuple[str, ...] = ()
-    # ``Any`` rather than ``TurnPlan``: that type imports ``SessionState`` from
-    # here, so naming it — even under ``TYPE_CHECKING`` — closes an import cycle
-    # this repo's check rejects.
-    turn_plan: Any = None
-    # Gather answers defer Want-me-to paint until the harness normalizes the
-    # closer (dual paste/integrations menus must not be what the user sees).
-    defer_want_me_to_closer: bool = False
-
-
-class StreamAnswerFn(Protocol):
-    """Bound direct-answer callable (no tools) handed to ``run_turn``."""
-
-    def __call__(self, text: str, request: AnswerRequest) -> LlmRunInfo | None:
-        """Stream one grounded answer; return the LLM-run record or None."""
-
-
-class EvidenceGatherer(Protocol):
-    """Bound evidence-gather callable handed to ``run_turn``."""
-
-    def __call__(self, text: str, *, turn_plan: Any = None) -> str | GatheredEvidence | None:
-        """Gather read-only evidence for ``text``, or return None.
-
-        Prefer :class:`~core.agent_harness.turns.gather_observation.GatheredEvidence`
-        (observation text + structured tool payloads). Legacy ``str`` return
-        values are still accepted by the orchestrator.
-        """
 
 
 class ExecuteActions(Protocol):
@@ -340,13 +273,10 @@ class TurnBinding:
 
 
 __all__ = [
-    "AnswerRequest",
     "CancelCapableConsole",
-    "StreamAnswerFn",
     "ConfirmFn",
     "ConsoleBindable",
     "ErrorReporter",
-    "EvidenceGatherer",
     "ExecuteActions",
     "GatheredEvidence",
     "InvestigationPortsFactory",
@@ -355,8 +285,6 @@ __all__ = [
     "OutputBindable",
     "OutputSink",
     "PromptContextProvider",
-    "ReasoningClientProvider",
-    "RunRecordFactory",
     "SessionBindable",
     "SessionState",
     "SlashPortsFactory",

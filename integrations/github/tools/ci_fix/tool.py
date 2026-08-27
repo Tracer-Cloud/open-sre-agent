@@ -35,6 +35,14 @@ _INPUT_SCHEMA: dict[str, Any] = {
             "type": "string",
             "description": "Optional GitHub pull request URL.",
         },
+        "branch": {
+            "type": "string",
+            "description": (
+                "Branch whose failing CI should be fixed by pushing directly to it "
+                "(e.g. 'main'). Use only when the user asks to fix a branch's CI "
+                "itself; mutually exclusive with the PR selectors."
+            ),
+        },
         "workspace": {
             "type": "string",
             "description": "Absolute path to the local checkout to edit. Defaults to CODING_WORKSPACE or cwd.",
@@ -94,12 +102,14 @@ def _confirm_fn(context: Any) -> Any:
         "auto-detected coding agent with the failing log context, commit the "
         "result, push it to the pull request's existing head branch, and wait "
         "for the new checks to finish. It does not open a new PR and refuses "
-        "fork PR branches."
+        "fork PR branches. With branch= it instead fixes the failing workflow "
+        "runs on that branch (e.g. main) and pushes directly to it."
     ),
     use_cases=[
         "Fix failing CI on a GitHub pull request and push to the PR branch",
         "Fix the CI failure for a PR URL",
         "Repair a failing GitHub Actions check on the current branch PR",
+        "Fix failing CI on main and push the fix straight to main",
     ],
     anti_examples=[
         "Creating or closing ordinary GitHub issues (use github_cli)",
@@ -110,8 +120,9 @@ def _confirm_fn(context: Any) -> Any:
     side_effect_level=SideEffectLevel.MUTATING,
     requires_approval=True,
     approval_reason=(
-        "Checks out the PR branch, edits files, commits, pushes to that branch, "
-        "and waits for the resulting checks."
+        "Checks out the target branch, edits files, commits, pushes to that "
+        "branch (directly to the base branch in branch mode), and waits for "
+        "the resulting checks."
     ),
     parallel_safe=False,
     accepts_runtime_context=True,
@@ -125,18 +136,20 @@ def fix_github_pr_ci(
     repo: str | None = None,
     pr_number: int | None = None,
     pr_url: str | None = None,
+    branch: str | None = None,
     workspace: str | None = None,
     model: str | None = None,
     github_token: str | None = None,
     context: Any = None,
     **_kwargs: Any,
 ) -> dict[str, Any]:
-    """Run the GitHub PR CI remediation flow."""
+    """Run the GitHub CI remediation flow for a PR or an explicit branch target."""
     return run_ci_fix(
         owner=owner,
         repo=repo,
         pr_number=pr_number,
         pr_url=pr_url,
+        branch=branch,
         workspace=workspace,
         model=model,
         github_token=github_token,

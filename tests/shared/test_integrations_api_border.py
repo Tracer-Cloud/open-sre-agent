@@ -27,11 +27,7 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 _ALLOWED: dict[str, frozenset[str]] = {
     "core": frozenset(),
     "config": frozenset(),
-    "infrastructure": frozenset(
-        {
-            "integrations.llm_cli.errors",
-        }
-    ),
+    "infrastructure": frozenset({}),
     "gateway": frozenset(
         {
             "integrations.telegram.delivery",
@@ -42,7 +38,6 @@ _ALLOWED: dict[str, frozenset[str]] = {
         {
             "integrations.buzz.background_adapter",
             "integrations.discord.scheduled_delivery",
-            "integrations.llm_cli.auth_check",
             "integrations.rocketchat.background_adapter",
             "integrations.rocketchat.scheduled_delivery",
             "integrations.slack.scheduled_delivery",
@@ -58,7 +53,6 @@ _ALLOWED: dict[str, frozenset[str]] = {
             "integrations.datadog.correlation.registration",
             "integrations.discord.reporting_adapter",
             "integrations.grafana.reporting_adapter",
-            "integrations.llm_cli.subprocess_env",
             "integrations.openclaw.reporting_adapter",
             "integrations.opensre.llm_eval_judge",
             "integrations.rocketchat.alarms",
@@ -78,13 +72,8 @@ _ALLOWED: dict[str, frozenset[str]] = {
             "integrations.betterstack.setup",
             "integrations.buzz.alarms",
             "integrations.dagster.setup",
-            "integrations.github.mcp",
-            "integrations.github.mcp_oauth",
             "integrations.github.setup",
             "integrations.jenkins.setup",
-            "integrations.llm_cli.binary_resolver",
-            "integrations.llm_cli.codex_oauth",
-            "integrations.llm_cli.errors",
             "integrations.openclaw.setup",
             "integrations.posthog.report_prerequisites",
             "integrations.posthog.setup",

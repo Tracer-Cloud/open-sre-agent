@@ -4,6 +4,7 @@ description: >-
   Weather + news morning briefing: fetch live weather and headlines, compose
   a plain-text briefing, deliver it. Multi-step; load before acting.
 recurring: weekdays 08:00
+demo: Set up a weekday morning briefing with weather and news
 ---
 ══════════════════════════════════════════════════════════
 MORNING REPORT SKILL #1 — weather + daily news briefing:
@@ -13,8 +14,8 @@ briefing", "daily brief", "give me my morning update", "weather and news
 summary", or similar — as a weather+news briefing YOU own end-to-end. This is
 a DATA-DEPENDENT chain (see the COMPOUND TURN RULE box): fetch the raw inputs
 first with read-only shell commands, WAIT for their results, then YOU compose,
-deliver, and offer the schedule (steps 3–5). Do NOT call assistant_handoff and
-do NOT start an investigation/gather for this request — that produces a second,
+deliver, and offer the schedule (steps 3–5). Do NOT start an investigation for
+this request — that produces a second,
 unrelated "status report" after the briefing. Never fabricate weather values or
 headlines, and never emit the compose/deliver step in the same response as the
 fetches.

@@ -13,14 +13,6 @@ class Event(StrEnum):
     USER_ID_LOAD_FAILED = "user_id_load_failed"
     SENTRY_INIT_SKIPPED = "sentry_init_skipped"
 
-    # GitHub first-launch login (A/B: control allows skip, forced does not)
-    GITHUB_LOGIN_GATE_SHOWN = "github_login_gate_shown"
-    GITHUB_LOGIN_PROMPTED = "github_login_prompted"  # legacy alias; prefer GATE_SHOWN
-    GITHUB_LOGIN_SKIPPED = "github_login_skipped"
-    GITHUB_LOGIN_ABANDONED = "github_login_abandoned"
-    GITHUB_LOGIN_FAILED = "github_login_failed"
-    GITHUB_LOGIN_COMPLETED = "github_login_completed"
-
     # Onboarding
     ONBOARD_STARTED = "onboard_started"
     ONBOARD_COMPLETED = "onboard_completed"

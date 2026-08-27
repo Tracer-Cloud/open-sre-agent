@@ -30,7 +30,7 @@ on:
         type: string
 
 permissions:
-  contents: write
+  contents: read
   actions: read
 
 concurrency:
@@ -500,6 +500,9 @@ jobs:
   publish-release:
     if: needs.prepare.outputs.channel == 'release'
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      actions: read
     needs:
       - prepare
       - build-python-dist
@@ -702,6 +705,9 @@ jobs:
   publish-main-release:
     if: always() && needs.prepare.outputs.channel == 'main' && needs.build-binaries.result == 'success'
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      actions: read
     needs:
       - prepare
       - build-binaries

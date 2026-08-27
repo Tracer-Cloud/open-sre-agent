@@ -25,15 +25,7 @@ opensre integrations setup slack
 
 Choose **webhook**, **Socket Mode**, or **both**. Credentials are persisted to `~/.opensre/integrations.json` (and can be merged on re-run). Picking one mode clears the other when you intentionally switch.
 
-### Option 2: Onboarding wizard
-
-```bash
-opensre onboard
-```
-
-Select **Slack** and choose webhook / Socket Mode / both. The wizard validates the webhook when configured, then persists credentials to the integration store. Socket Mode tokens are dual-written to the OS keyring; the webhook URL is not.
-
-### Option 3: Environment variables
+### Option 2: Environment variables
 
 ```bash
 SLACK_WEBHOOK_URL=https://hooks.slack.com/services/<workspace-id>/<binding-id>/<secret>
@@ -51,11 +43,12 @@ SLACK_ALLOWED_USERS=U0123ABCD
 | `SLACK_BOT_TOKEN` | Bot token (`xoxb-…`) for the two-way Slack bot. Env or integration store. |
 | `SLACK_DEFAULT_CHAT_ID` | Default channel (`C…`) for scheduled delivery when using a bot token. Env or integration store; pair it with the same source as the bot token. |
 | `SLACK_APP_TOKEN` | App-level token (`xapp-…`) for Socket Mode. Env or integration store. |
+| `SLACK_ACCESS_TOKEN` | User token (`xoxp-…`) with `search:read`. Required only for `slack_search_messages` — Slack rejects bot tokens there. |
 | `SLACK_ALLOWED_USERS` | Comma-separated Slack user IDs allowed to talk to the bot (required unless open workspace). |
 | `SLACK_ALLOW_OPEN_WORKSPACE` | Set to `1` to allow any workspace member (dogfood escape hatch). |
 | `SLACK_TEAM_TASKS_LIST_ID` | Optional Slack List id (`F…`) for `slack_read_list` without a name search. |
 
-OpenSRE reads env as a fallback when no Slack entry exists in `~/.opensre/integrations.json`. Bot / app tokens use `resolve_env_credential` (process env, then OS keyring). `SLACK_WEBHOOK_URL` is store/env only — never keyring.
+OpenSRE reads env as a fallback when no Slack entry exists in `~/.opensre/integrations.json`. Bot / app tokens use `resolve_env_credential` (process env, then the credentials file). `SLACK_WEBHOOK_URL` is store/env only.
 
 <Note>
 **Credential resolution.** Store first when present. Then: `SLACK_BOT_TOKEN` / `SLACK_APP_TOKEN` → env then keyring; `SLACK_WEBHOOK_URL` → plain env only (never keyring).
@@ -103,12 +96,6 @@ Treat this URL like a password — anyone holding it can post to your channel. I
 | `files:read` | Inbound file-attachment downloads + discover Slack Lists (`files.list`) |
 | `files:write` | Upload files as the bot |
 | `lists:read` | `slack_read_list` — read Slack List rows (`slackLists.items.list`) |
-| `search:read.public` | `slack_search_messages` in public channels |
-| `search:read.private` | Search private channels |
-| `search:read.im` | Search DMs |
-| `search:read.mpim` | Search group DMs |
-| `search:read.files` | Search files |
-| `search:read.users` | Search users |
 | `usergroups:read` | View workspace user groups |
 | `users.profile:read` | Speaker profile details |
 | `users:read` | `slack_list_team_members` + user lookup |
@@ -118,6 +105,10 @@ Add these only if you use the feature — they are not in the current app config
 </Note>
 
 Reinstall the app after adding scopes so the bot token picks them up. Invite the bot (`/invite @OpenSRE`) to private channels it should read or post in.
+
+<Note>
+`slack_search_messages` is the one tool a bot token can never run — Slack refuses bot tokens for workspace message search, no matter which scopes you grant. To enable search, add `search:read` under **OAuth & Permissions → User Token Scopes**, reinstall, and set `SLACK_ACCESS_TOKEN` to the resulting user token (`xoxp-…`). Leave it unset and search simply stays hidden from the agent; every other Slack tool works on the bot token alone.
+</Note>
 
 ### Allow your Slack user
 
@@ -158,7 +149,7 @@ Teammate tools (bot token) plus webhook blast. Credentials resolve inside the to
 | `slack_send_message` | Post to the webhook's fixed channel | `SLACK_WEBHOOK_URL` | Yes |
 | `slack_reply_message` | Post to any channel/thread (`C…` or `#name`) | bot token, `chat:write` | Yes |
 | `slack_read_messages` | Read channel history or a thread (`thread_ts`) | bot token, history + list scopes | No |
-| `slack_search_messages` | Workspace message search | bot token, `search:read` | No |
+| `slack_search_messages` | Workspace message search | **user** token (`SLACK_ACCESS_TOKEN`), `search:read` | No |
 | `slack_list_team_members` | List workspace members | bot token, `users:read` | No |
 | `slack_join_channel` | Join a public channel | bot token, `channels:join` | Yes |
 | `slack_add_reaction` | React to a message ts | bot token, `reactions:write` | No |

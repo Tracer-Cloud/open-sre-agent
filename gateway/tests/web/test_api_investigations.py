@@ -8,6 +8,7 @@ from unittest.mock import AsyncMock
 import pytest
 from fastapi.testclient import TestClient
 
+from config.constants.http import MAX_REQUEST_BODY_BYTES
 from gateway.web import webapp
 from infrastructure.safety.auth.jwt_auth import JWTClaims
 
@@ -288,3 +289,19 @@ def test_cancel_investigation_writes_security_audit(
     actions = [line for line in lines if '"investigation.cancel"' in line]
     assert actions
     assert investigation_id in actions[-1]
+
+
+def test_oversized_create_body_is_rejected_before_auth() -> None:
+    """The cap sits above routing, so it holds on the Clerk route with no token.
+
+    Authenticating first would mean buffering the payload to find out who sent
+    it, which is the memory cost the cap exists to avoid.
+    """
+    client = TestClient(webapp.app)
+
+    resp = client.post(
+        "/api/investigations",
+        json={"raw_alert": {"text": "x" * (MAX_REQUEST_BODY_BYTES + 1)}},
+    )
+
+    assert resp.status_code == HTTPStatus.REQUEST_ENTITY_TOO_LARGE

@@ -16,7 +16,6 @@ from surfaces.cli.ask.service import AskExitCode, AskSignal, AskStatus
 def _turn(
     response: str = "answer",
     *,
-    answered: bool = True,
     cancelled: bool = False,
 ) -> TurnResult:
     return TurnResult(
@@ -29,7 +28,6 @@ def _turn(
             handled=False,
         ),
         assistant_response_text=response,
-        llm_run=object() if answered else None,
     )
 
 
@@ -182,7 +180,7 @@ def test_run_ask_maps_incomplete_and_cancelled_turns(monkeypatch) -> None:
     monkeypatch.setattr(
         service,
         "_run_agent_turn",
-        lambda _prompt, _hooks: _turn("", answered=False),
+        lambda _prompt, _hooks: _turn(""),
     )
     incomplete = service.run_ask("prompt", allowed_tools=(), bypass_approvals=False)
 

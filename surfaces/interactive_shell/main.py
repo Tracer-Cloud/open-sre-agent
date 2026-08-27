@@ -15,14 +15,10 @@ from infrastructure.logging import install_shell_log_handler, quiet_noisy_third_
 from infrastructure.terminal.theme import set_active_theme
 from surfaces.interactive_shell.controller import InteractiveShellController
 from surfaces.interactive_shell.runtime.context import create_repl_runtime
-from surfaces.interactive_shell.runtime.startup.first_launch_github import (
-    require_startup_github_login,
-)
 from surfaces.interactive_shell.runtime.startup.initial_input import run_initial_input
 from surfaces.interactive_shell.runtime.startup.loop_suggestions import offer_loop_suggestions
 from surfaces.interactive_shell.ui.input_prompt import build_prompt_session
 from surfaces.interactive_shell.ui.terminal_ui import render_terminal_ui
-from tools.system.fleet_monitoring.sweep import run_startup_sweep
 
 # Fallback when a caller does not supply one. Forces a terminal because the
 # shell owns the screen; an embedding caller passes its own instead.
@@ -114,13 +110,9 @@ def run_repl(
     if not sys.stdin.isatty() and initial_input is None:
         return 0
 
-    run_startup_sweep()
-
     try:
         if not initial_input:
             render_terminal_ui(out)
-            if not require_startup_github_login(out):
-                return 0
 
         return asyncio.run(
             run_repl_async(
