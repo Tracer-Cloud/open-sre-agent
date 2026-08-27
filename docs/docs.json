@@ -191,6 +191,7 @@
                   "aws_lambda",
                   "cloudtrail_events",
                   "ec2",
+                  "eks",
                   "elb",
                   "helm",
                   "kubernetes",
