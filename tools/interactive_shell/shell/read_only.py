@@ -5,10 +5,10 @@ segments is on a curated allowlist and nothing writes to a file. The classifier
 is deliberately conservative: anything it cannot prove safe (command
 substitution, heredocs, output redirects, unknown executables, command-runners
 like ``xargs``/``sudo``, or a read-only tool invoked with a write flag such as
-``find -delete``, ``sort -o``, or ``rg --pre``) returns ``False`` so the
-execution gate still asks. A read-only command may then run without approval,
-matching how coding agents let inspection commands through while still gating
-mutations.
+``find -delete``, ``sort -o``, ``rg --pre``, or a git diff-family command that
+can run a configured helper) returns ``False`` so the execution gate still
+asks. A read-only command may then run without approval, matching how coding
+agents let inspection commands through while still gating mutations.
 """
 
 from __future__ import annotations
@@ -109,14 +109,12 @@ _READ_ONLY_COMMANDS: frozenset[str] = frozenset(
 )
 # git subcommands that only read. Mutation-capable ones (remote/branch/tag/config/
 # symbolic-ref/reflog) are handled separately: read-only only without a write
-# verb, positional, or flag.
+# verb, positional, or flag. Diff-family porcelain (diff/show/whatchanged/blame)
+# is not in this set: helpers can run with no extra flag.
 _GIT_READ_ONLY_SUBCOMMANDS: frozenset[str] = frozenset(
     {
         "status",
         "log",
-        "diff",
-        "show",
-        "blame",
         "ls-files",
         "rev-parse",
         "rev-list",
@@ -130,7 +128,6 @@ _GIT_READ_ONLY_SUBCOMMANDS: frozenset[str] = frozenset(
         "name-rev",
         "merge-base",
         "count-objects",
-        "whatchanged",
         "verify-commit",
         "verify-tag",
         "grep",
@@ -194,6 +191,24 @@ _GIT_REFLOG_READ_VERBS: frozenset[str] = frozenset({"show", "list", "exists"})
 # ``show``, ``whatchanged``, and other porcelain that reuses the diff options —
 # not just ``git diff``.
 _GIT_OUTPUT_WRITE_FLAGS: frozenset[str] = frozenset({"--output", "-o"})
+# Porcelain that runs the diff machinery. Gitattributes diff drivers and
+# textconv filters are on by default here, so these are read-only only when
+# both ``--no-ext-diff`` and ``--no-textconv`` are present.
+_GIT_DIFF_FAMILY_SUBCOMMANDS: frozenset[str] = frozenset({"diff", "show", "whatchanged", "blame"})
+_GIT_DIFF_HELPER_DISABLE_FLAGS: frozenset[str] = frozenset({"--no-ext-diff", "--no-textconv"})
+# ``git log`` only invokes that machinery when producing a patch.
+_GIT_LOG_PATCH_FLAGS: frozenset[str] = frozenset(
+    {
+        "-p",
+        "-u",
+        "-U",
+        "--patch",
+        "--unified",
+        "--raw",
+        "--patch-with-stat",
+        "--patch-with-raw",
+    }
+)
 
 
 def _token_is_write_flag(token: str, write_flags: frozenset[str]) -> bool:
@@ -213,6 +228,11 @@ def _token_is_write_flag(token: str, write_flags: frozenset[str]) -> bool:
     )
 
 
+def _git_diff_helpers_disabled(flags: list[str]) -> bool:
+    """True when argv opted out of both external diff drivers and textconv."""
+    return all(name in flags for name in _GIT_DIFF_HELPER_DISABLE_FLAGS)
+
+
 def _git_is_read_only(rest: list[str]) -> bool:
     positional = [tok for tok in rest if not tok.startswith("-")]
     subcommand = positional[0] if positional else None
@@ -224,6 +244,14 @@ def _git_is_read_only(rest: list[str]) -> bool:
     # ``git {diff,log,show,reflog,…} --output=<file>`` overwrites a file.
     if any(_token_is_write_flag(flag, _GIT_OUTPUT_WRITE_FLAGS) for flag in flags_after):
         return False
+    # Diff-family porcelain runs configured textconv / diff.*.command helpers
+    # with no extra flag. Require an explicit opt-out before auto-allowing.
+    if subcommand in _GIT_DIFF_FAMILY_SUBCOMMANDS:
+        return _git_diff_helpers_disabled(flags_after)
+    if subcommand == "log" and any(
+        _token_is_write_flag(flag, _GIT_LOG_PATCH_FLAGS) for flag in flags_after
+    ):
+        return _git_diff_helpers_disabled(flags_after)
     if subcommand in _GIT_READ_ONLY_SUBCOMMANDS:
         return True
     if subcommand == "symbolic-ref":
@@ -347,6 +375,9 @@ _GIT_HELPER_EXEC_FLAGS: frozenset[str] = frozenset(
 # Diff-family helpers. ``--ext-diff`` runs ``diff.external``; ``--textconv`` runs
 # attribute/config converters. ``-c`` already covers process-local config of either.
 _GIT_DIFF_HELPER_FLAGS: frozenset[str] = frozenset({"--ext-diff", "--textconv"})
+_GIT_UNSAFE_ARGV_FLAGS: frozenset[str] = (
+    _GIT_CONFIG_INJECT_FLAGS | _GIT_HELPER_EXEC_FLAGS | _GIT_DIFF_HELPER_FLAGS
+)
 # ``rg --pre`` / ``--pre=`` runs a preprocessor per matched file. ``--hostname-bin``
 # runs an arbitrary hostname helper when hyperlinks are on. Matched with
 # ``_token_is_write_flag`` so ``--pretty`` / ``--pre-glob`` stay ordinary reads.
@@ -361,17 +392,11 @@ _HOSTNAME_WRITE_FLAGS: frozenset[str] = frozenset({"-F", "--file", "-b", "--boot
 
 def _git_argv_is_unsafe(rest: list[str]) -> bool:
     """True when argv enables helper execution or process-local config injection."""
-    for tok in rest:
-        lowered = tok.lower()
-        if lowered.startswith(_DANGEROUS_TRANSPORTS):
-            return True
-        if _token_is_write_flag(tok, _GIT_CONFIG_INJECT_FLAGS):
-            return True
-        if _token_is_write_flag(tok, _GIT_HELPER_EXEC_FLAGS):
-            return True
-        if _token_is_write_flag(tok, _GIT_DIFF_HELPER_FLAGS):
-            return True
-    return False
+    return any(
+        tok.lower().startswith(_DANGEROUS_TRANSPORTS)
+        or _token_is_write_flag(tok, _GIT_UNSAFE_ARGV_FLAGS)
+        for tok in rest
+    )
 
 
 def _date_is_read_only(rest: list[str]) -> bool:

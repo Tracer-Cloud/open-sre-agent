@@ -32,6 +32,10 @@ _READ_ONLY = [
     "rg needle file",
     "rg --pretty needle",  # --pretty is display, not the --pre preprocessor
     "rg --pre-glob '*.pdf' needle",  # glob-only; no preprocessor without --pre
+    "git diff --no-ext-diff --no-textconv",  # helpers explicitly disabled
+    "git show --no-ext-diff --no-textconv HEAD",
+    "git log -p --no-ext-diff --no-textconv",
+    "git blame --no-ext-diff --no-textconv file",
 ]
 
 _MUTATING = [
@@ -88,6 +92,13 @@ _MUTATING = [
     "git log --ext-diff",
     "git show --textconv HEAD",
     "git diff --textconv",
+    "git diff",  # default-on textconv / gitattributes diff drivers
+    "git diff --no-ext-diff",  # textconv still default-on without --no-textconv
+    "git diff --no-textconv",  # external diff drivers still default-on
+    "git show HEAD",
+    "git log -p",
+    "git whatchanged",
+    "git blame file",
     "rg --pre python pattern",  # preprocessor runs per matched file
     "rg --pre=python pattern",
     "rg --pre=/tmp/evil.sh pattern",
@@ -158,6 +169,9 @@ def test_git_output_write_bypasses_neither_auto_nor_plan_only_gates(command: str
         "git ls-remote ext::evil",
         "git diff --ext-diff",
         "git show --textconv HEAD",
+        "git diff",
+        "git show HEAD",
+        "git log -p",
     ],
 )
 def test_mutation_and_helper_forms_bypass_neither_auto_nor_plan_only_gates(
@@ -205,6 +219,25 @@ def test_git_ref_mutations_bypass_neither_auto_nor_plan_only_gates(command: str)
 
     They must stay ``unrestricted`` so low-auto and plan-only still ask.
     """
+    result = evaluate_shell_command(command)
+    assert result.shell_classification == "unrestricted"
+    assert apply_auto_level(result, AutoLevel.LOW).verdict == "ask"
+    assert apply_plan_only_gate(result, plan_only_active=True).verdict == "ask"
+
+
+@pytest.mark.parametrize(
+    "command",
+    [
+        "git diff --ext-diff",
+        "git diff --textconv",
+        "git diff",
+        "git show HEAD",
+        "git log -p",
+        "git blame file",
+    ],
+)
+def test_git_diff_helpers_bypass_neither_auto_nor_plan_only_gates(command: str) -> None:
+    """Diff-family porcelain runs configured helpers unless both drivers are opted out."""
     result = evaluate_shell_command(command)
     assert result.shell_classification == "unrestricted"
     assert apply_auto_level(result, AutoLevel.LOW).verdict == "ask"
