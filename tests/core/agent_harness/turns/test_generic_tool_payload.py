@@ -48,3 +48,14 @@ def test_a_real_summary_is_still_shown() -> None:
 def test_plain_text_output_is_still_shown() -> None:
     shown = _format_generic_tool_payload(_call("shell"), _result("build succeeded"))
     assert "build succeeded" in shown
+
+
+def test_json_stdout_is_suppressed_but_plain_stdout_is_shown() -> None:
+    # A gh-api-style JSON stdout floods the transcript; suppress it. Plain-text
+    # command output (ls, git) is the user's real result and must still show.
+    json_stdout = _result({"ok": True, "stdout": '{"id": 18260225, "name": "main"}'})
+    assert _format_generic_tool_payload(_call("github_cli"), json_stdout) == ""
+
+    plain_stdout = _result({"ok": True, "stdout": "total 56\ndrwxr-xr-x  15 user"})
+    shown = _format_generic_tool_payload(_call("shell"), plain_stdout)
+    assert "drwxr-xr-x" in shown

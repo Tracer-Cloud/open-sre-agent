@@ -40,6 +40,10 @@ _MUTATING = [
     "cd /tmp && rm -rf x",
     "git remote add origin url",
     "git branch -d feature",
+    "git branch --set-upstream-to=origin/main",
+    "git branch -u origin/main",
+    "git diff --output=/tmp/patch.diff",
+    "git diff -o/tmp/patch.diff",
     "git config user.name Bob",
 ]
 

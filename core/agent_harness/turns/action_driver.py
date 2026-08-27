@@ -337,6 +337,19 @@ def _generic_tool_results(result: Any) -> list[tuple[ToolCall, Any]]:
     ]
 
 
+def _visible_stdout(stdout: str) -> str:
+    """Plain-text stdout is shown; a raw JSON payload (e.g. a ``gh api`` response)
+    is for the model only and must not flood the transcript."""
+    stripped = stdout.strip()
+    if not stripped:
+        return ""
+    try:
+        json.loads(stripped)
+    except (TypeError, ValueError, json.JSONDecodeError):
+        return stripped
+    return ""
+
+
 def _format_generic_tool_payload(tool_call: ToolCall, tool_result: Any) -> str:
     """Build a user-visible summary for one non-self-recording tool result."""
     if tool_call.name in _HOST_RENDERED_TOOL_NAMES and not getattr(tool_result, "is_error", False):
@@ -351,7 +364,7 @@ def _format_generic_tool_payload(tool_call: ToolCall, tool_result: Any) -> str:
             return summary.strip()
         stdout = details.get("stdout")
         if details.get("ok") and isinstance(stdout, str) and stdout.strip():
-            return stdout.strip()
+            return _visible_stdout(stdout)
         error = details.get("error")
         if error:
             return str(error).strip()
@@ -373,7 +386,7 @@ def _format_generic_tool_payload(tool_call: ToolCall, tool_result: Any) -> str:
         if isinstance(summary, str) and summary.strip():
             return summary.strip()
         if parsed.get("ok") and isinstance(parsed.get("stdout"), str) and parsed["stdout"].strip():
-            return str(parsed["stdout"]).strip()
+            return _visible_stdout(str(parsed["stdout"]))
         if parsed.get("error"):
             return str(parsed["error"]).strip()
     if parsed is not None:

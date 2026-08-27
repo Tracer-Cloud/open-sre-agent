@@ -256,6 +256,27 @@ class TestSchedule:
         )
         assert order == ["extract:2"]
 
+    def test_wait_for_completion_waits_past_a_slow_extraction(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """Close-path extraction must not abandon a slow worker (silent data loss)."""
+        import time
+
+        done = threading.Event()
+
+        def _extract(messages: list[tuple[str, str]]) -> None:
+            time.sleep(0.4)
+            done.set()
+
+        monkeypatch.setattr(extraction, "_extract_memories_safe", _extract)
+        started = time.monotonic()
+        extraction.schedule_memory_extraction(
+            [("user", "hi"), ("assistant", "hello")],
+            wait_for_completion=True,
+        )
+        assert done.is_set()
+        assert time.monotonic() - started >= 0.35
+
     def test_async_schedule_coalesces_to_latest_snapshot(
         self, monkeypatch: pytest.MonkeyPatch
     ) -> None:

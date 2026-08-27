@@ -182,24 +182,54 @@ _GIT_CONFIG_WRITE_FLAGS: frozenset[str] = frozenset(
 )
 
 
+# Write flags for otherwise read-only subcommands (e.g. ``git diff --output=``).
+_GIT_DIFF_WRITE_FLAGS: frozenset[str] = frozenset({"--output", "-o"})
+
+
+def _git_token_is_write_flag(token: str, write_flags: frozenset[str]) -> bool:
+    """True when ``token`` is a write flag, including ``--flag=value`` / ``-uupstream``."""
+    if token in write_flags:
+        return True
+    if token.startswith("--") and "=" in token:
+        return token.split("=", 1)[0] in write_flags
+    # Short option with an attached value (``-uupstream`` for ``-u``).
+    return any(
+        len(flag) == 2
+        and flag.startswith("-")
+        and not flag.startswith("--")
+        and token.startswith(flag)
+        and len(token) > 2
+        for flag in write_flags
+    )
+
+
 def _git_is_read_only(rest: list[str]) -> bool:
     positional = [tok for tok in rest if not tok.startswith("-")]
     subcommand = positional[0] if positional else None
     if subcommand is None:
         return True  # bare `git`, `git --version`, `git -h`
-    if subcommand in _GIT_READ_ONLY_SUBCOMMANDS:
-        return True
-    after = rest[rest.index(subcommand) + 1 :]
-    positional_after = [tok for tok in after if not tok.startswith("-")]
+    after = rest[rest.index(subcommand) + 1 :] if subcommand in rest else []
     flags_after = [tok for tok in after if tok.startswith("-")]
+    if subcommand in _GIT_READ_ONLY_SUBCOMMANDS:
+        # ``git diff --output=<file>`` overwrites a file — never treat as read-only.
+        return not (
+            subcommand == "diff"
+            and any(
+                _git_token_is_write_flag(flag, _GIT_DIFF_WRITE_FLAGS) for flag in flags_after
+            )
+        )
+    positional_after = [tok for tok in after if not tok.startswith("-")]
     if subcommand == "remote":
         return not any(tok in _GIT_REMOTE_WRITE_VERBS for tok in positional_after)
     if subcommand in ("branch", "tag"):
         write_flags = _GIT_BRANCH_WRITE_FLAGS if subcommand == "branch" else _GIT_TAG_WRITE_FLAGS
         # List forms carry only read flags and no positional (create/delete) name.
-        return not positional_after and not any(flag in write_flags for flag in flags_after)
+        # ``--set-upstream-to=<upstream>`` must match even with ``=value`` attached.
+        return not positional_after and not any(
+            _git_token_is_write_flag(flag, write_flags) for flag in flags_after
+        )
     if subcommand == "config":
-        if any(flag in _GIT_CONFIG_WRITE_FLAGS for flag in flags_after):
+        if any(_git_token_is_write_flag(flag, _GIT_CONFIG_WRITE_FLAGS) for flag in flags_after):
             return False
         return len(positional_after) <= 1  # `--get key` reads; `key value` writes
     return False
