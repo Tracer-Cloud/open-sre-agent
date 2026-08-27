@@ -52,9 +52,13 @@ def _payload(response_text: str) -> dict[str, Any]:
     return {"ok": True, "response_text": response_text}
 
 
-def _counts(steps: int) -> _TurnCounts:
+def _counts(
+    steps: int,
+    *,
+    executed_entries: list[dict[str, Any]] | None = None,
+) -> _TurnCounts:
     return _TurnCounts(
-        executed_entries=[],
+        executed_entries=executed_entries or [],
         executed_count=steps,
         executed_success_count=steps,
         generic_success_count=0,
@@ -319,6 +323,43 @@ def test_choice_failure_remains_visible_with_model_closing() -> None:
     )
 
     assert response_text == "I could not open the picker.\ntitle is required"
+    assert display_chunks == ["I could not open the picker.", "title is required"]
+    assert use_final_text is True
+
+
+def test_choice_failure_closing_preserves_self_recording_sibling_history() -> None:
+    slash = ToolCall(id="1", name="slash_invoke", input={"command": "/health"})
+    choice = ToolCall(id="2", name="ask_user_choice", input={"title": "", "options": []})
+    result = _Result(
+        tool_results=[
+            (slash, _ToolResult({"ok": True})),
+            (
+                choice,
+                _ToolResult(
+                    {"ok": False, "error": "title is required"},
+                    is_error=True,
+                ),
+            ),
+        ],
+        final_text="I could not open the picker.",
+    )
+    counts = _counts(
+        2,
+        executed_entries=[
+            {
+                "type": "slash",
+                "text": "/health",
+                "ok": True,
+                "response_text": "Health check: degraded",
+            }
+        ],
+    )
+
+    response_text, display_chunks, use_final_text = _compose_response(result, _Session(), counts)
+
+    assert response_text == (
+        "Health check: degraded\nI could not open the picker.\ntitle is required"
+    )
     assert display_chunks == ["I could not open the picker.", "title is required"]
     assert use_final_text is True
 

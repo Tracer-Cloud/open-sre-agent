@@ -898,7 +898,7 @@ def _compose_response(
         if chunk
     ]
     use_final_text = bool(final_text_chunk)
-    response_text = "\n".join(display_chunks) if use_final_text else "\n".join(response_chunks)
+    response_text = "\n".join(response_chunks)
     return response_text, display_chunks, use_final_text
 
 
@@ -1119,8 +1119,9 @@ def _run_action_turn(
         _show_response(
             args.output,
             handled=counts.handled,
-            # use_final_text means the composed text *is* the closing message.
-            final_text=response_text if use_final_text else "",
+            # Stream only terminal-visible chunks. ``response_text`` may also
+            # contain self-recording history for persistence/headless surfaces.
+            final_text="\n".join(display_chunks) if use_final_text else "",
             display_chunks=display_chunks,
         )
 
