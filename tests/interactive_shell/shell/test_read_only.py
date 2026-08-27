@@ -28,6 +28,7 @@ _READ_ONLY = [
     "git reflog show",
     "git reflog list",
     "git reflog exists HEAD",
+    "git reflog HEAD",
 ]
 
 _MUTATING = [

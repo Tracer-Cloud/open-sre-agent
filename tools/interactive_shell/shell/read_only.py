@@ -182,8 +182,10 @@ _GIT_CONFIG_WRITE_FLAGS: frozenset[str] = frozenset(
 # `git symbolic-ref <name>` reads; `--delete` / `-m` always write (including
 # the attached ``-mreason`` form, which is not a separate positional).
 _GIT_SYMBOLIC_REF_WRITE_FLAGS: frozenset[str] = frozenset({"-d", "--delete", "-m"})
-# `git reflog` read verbs. Anything else (`expire`, `delete`, `drop`, `write`,
-# unknown future verbs) mutates refs — fail closed.
+# `git reflog` / `show` / `list` / `exists` read. Any other verb (`expire`,
+# `delete`, `drop`, `write`, unknown future verbs) mutates refs — fail closed.
+# A first positional that looks like a ref (`HEAD`, `refs/…`, `name@{1}`) is
+# implicit `show`, not a verb.
 _GIT_REFLOG_READ_VERBS: frozenset[str] = frozenset({"show", "list", "exists"})
 
 
@@ -229,8 +231,13 @@ def _git_is_read_only(rest: list[str]) -> bool:
             return False
         return len(positional_after) <= 1
     if subcommand == "reflog":
-        verb = positional_after[0] if positional_after else "show"
-        return verb in _GIT_REFLOG_READ_VERBS
+        if not positional_after:
+            return True  # implicit `show`
+        verb = positional_after[0]
+        if verb in _GIT_REFLOG_READ_VERBS:
+            return True
+        # `git reflog HEAD` / `git reflog refs/heads/foo` — implicit show.
+        return verb.upper() == "HEAD" or any(char in verb for char in "/@:")
     if subcommand == "remote":
         return not any(tok in _GIT_REMOTE_WRITE_VERBS for tok in positional_after)
     if subcommand in ("branch", "tag"):
