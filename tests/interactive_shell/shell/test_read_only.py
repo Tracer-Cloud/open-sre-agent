@@ -75,3 +75,24 @@ def test_mutating_shell_still_asks_when_gated() -> None:
     assert result.shell_classification == "unrestricted"
     assert apply_auto_level(result, AutoLevel.MED).verdict == "ask"
     assert apply_plan_only_gate(result, plan_only_active=True).verdict == "ask"
+
+
+@pytest.mark.parametrize(
+    "command",
+    [
+        "git diff --output=/tmp/patch.diff",
+        "git log --output=/tmp/history.txt",
+        "git log --output /tmp/history.txt",
+        "git show --output=/tmp/commit.patch HEAD",
+        "git show -o/tmp/commit.patch HEAD",
+    ],
+)
+def test_git_output_write_bypasses_neither_auto_nor_plan_only_gates(command: str) -> None:
+    """``--output`` / ``-o`` write a file for diff-family porcelain, not only ``diff``.
+
+    Those commands must stay ``unrestricted`` so low-auto and plan-only still ask.
+    """
+    result = evaluate_shell_command(command)
+    assert result.shell_classification == "unrestricted"
+    assert apply_auto_level(result, AutoLevel.LOW).verdict == "ask"
+    assert apply_plan_only_gate(result, plan_only_active=True).verdict == "ask"
