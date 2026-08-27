@@ -182,8 +182,9 @@ _GIT_CONFIG_WRITE_FLAGS: frozenset[str] = frozenset(
 # `git symbolic-ref <name>` reads; `--delete` / `-m` always write (including
 # the attached ``-mreason`` form, which is not a separate positional).
 _GIT_SYMBOLIC_REF_WRITE_FLAGS: frozenset[str] = frozenset({"-d", "--delete", "-m"})
-# `git reflog` / `show` / `list` / `exists` read; these verbs mutate refs.
-_GIT_REFLOG_WRITE_VERBS: frozenset[str] = frozenset({"expire", "delete", "drop"})
+# `git reflog` read verbs. Anything else (`expire`, `delete`, `drop`, `write`,
+# unknown future verbs) mutates refs — fail closed.
+_GIT_REFLOG_READ_VERBS: frozenset[str] = frozenset({"show", "list", "exists"})
 
 
 # Diff-family ``--output`` / ``-o`` write a file. Shared by ``diff``, ``log``,
@@ -229,7 +230,7 @@ def _git_is_read_only(rest: list[str]) -> bool:
         return len(positional_after) <= 1
     if subcommand == "reflog":
         verb = positional_after[0] if positional_after else "show"
-        return verb not in _GIT_REFLOG_WRITE_VERBS
+        return verb in _GIT_REFLOG_READ_VERBS
     if subcommand == "remote":
         return not any(tok in _GIT_REMOTE_WRITE_VERBS for tok in positional_after)
     if subcommand in ("branch", "tag"):
@@ -331,7 +332,10 @@ _DANGEROUS_TRANSPORTS = ("ext::", "fd::")
 # for a single invocation — never auto-allow when present anywhere on the argv.
 _GIT_CONFIG_INJECT_FLAGS: frozenset[str] = frozenset({"-c", "--config", "--config-env"})
 # Helper-path overrides run an attacker-chosen executable (default Git config).
-_GIT_HELPER_EXEC_FLAGS: frozenset[str] = frozenset({"--upload-pack", "--receive-pack", "--exec"})
+# ``--exec-path`` relocates the git-core helper directory for this process.
+_GIT_HELPER_EXEC_FLAGS: frozenset[str] = frozenset(
+    {"--upload-pack", "--receive-pack", "--exec", "--exec-path"}
+)
 # ``date -s`` / ``date --set=`` set the system clock.
 _DATE_WRITE_FLAGS: frozenset[str] = frozenset({"-s", "--set"})
 # Linux ``hostname -F <file>`` / ``-b`` write the kernel hostname from a file.

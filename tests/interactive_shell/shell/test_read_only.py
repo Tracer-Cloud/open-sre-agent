@@ -27,6 +27,7 @@ _READ_ONLY = [
     "git reflog",
     "git reflog show",
     "git reflog list",
+    "git reflog exists HEAD",
 ]
 
 _MUTATING = [
@@ -61,6 +62,9 @@ _MUTATING = [
     "git reflog expire --all",
     "git reflog delete HEAD@{1}",
     "git reflog drop --all",
+    "git reflog write HEAD old new msg",
+    "git --exec-path=/tmp/evil status",
+    "git --exec-path /tmp/evil status",
     "ls -la\nrm -rf /tmp/x",  # newline separates a mutation — must gate
     'date -s "2020-01-01"',  # sets system clock
     "date -s2026-08-27",  # attached short-option value also sets the clock
@@ -159,10 +163,12 @@ def test_mutation_and_helper_forms_bypass_neither_auto_nor_plan_only_gates(
         "git reflog expire --all",
         "git reflog delete HEAD@{1}",
         "git reflog drop --all",
+        "git reflog write HEAD old new msg",
+        "git --exec-path=/tmp/evil status",
     ],
 )
 def test_git_ref_mutations_bypass_neither_auto_nor_plan_only_gates(command: str) -> None:
-    """``symbolic-ref`` set/delete and ``reflog expire|delete|drop`` mutate refs.
+    """``symbolic-ref`` set/delete, ``reflog`` write verbs, and ``--exec-path`` mutate.
 
     They must stay ``unrestricted`` so low-auto and plan-only still ask.
     """
