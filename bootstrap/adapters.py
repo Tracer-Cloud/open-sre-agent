@@ -136,7 +136,7 @@ def install_cli_auth_checker() -> None:
     from config.llm_auth.cli_auth import CliAuthChecker, CliAuthState
 
     def check(provider: str) -> CliAuthState | None:
-        from integrations.llm_cli.auth_check import check_cli_auth
+        from integrations.llm_cli import check_cli_auth
 
         return check_cli_auth(provider)
 

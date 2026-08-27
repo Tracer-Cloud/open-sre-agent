@@ -148,6 +148,12 @@ class TestErrorPaths:
         assert result.get("records") == []
         assert result["cursor"].endswith(f"@{ghost}")
 
+    def test_directory_log_path_returns_an_error(self, tmp_path: Path) -> None:
+        result = get_hermes_logs(op="scan", log_path=str(tmp_path))
+
+        assert result["records"] == []
+        assert "not a regular file" in result["error"]
+
 
 class TestLogPathValidation:
     def test_rejects_path_outside_allowed_dirs(
@@ -206,8 +212,9 @@ class TestAvailabilityGate:
         sources = {"datadog": {"connection_verified": True}}
         assert self._registered().is_available(sources) is False
 
-    def test_available_when_hermes_connected(self) -> None:
-        sources = {"hermes": {"connection_verified": True}}
+    def test_available_when_hermes_connected(self, tmp_path: Path) -> None:
+        log_path = _write_log(tmp_path, _LINES)
+        sources = {"hermes": {"connection_verified": True, "log_path": str(log_path)}}
         assert self._registered().is_available(sources) is True
 
     def test_available_with_injected_backend(self) -> None:

@@ -26,10 +26,6 @@ from core.events import (
 
 logger = logging.getLogger(__name__)
 
-# Pure routing marker with no side effects: not worth an fsync, and a dangling
-# handoff intent after a crash would tell recovery nothing actionable.
-_UNLOGGED_TOOLS: frozenset[str] = frozenset({"assistant_handoff"})
-
 _COMMIT_RESULT_MAX_CHARS = 2_000
 
 # Marks WAL commit records so readers can tell them apart from the
@@ -62,8 +58,6 @@ def wal_event_recorder(session: Any, *, user_text: str | None = None) -> Runtime
             return
         try:
             if isinstance(event, ToolExecutionStartEvent):
-                if event.tool_name in _UNLOGGED_TOOLS:
-                    return
                 store.append_tool_intent(
                     session_id,
                     tool=event.tool_name,
@@ -73,8 +67,6 @@ def wal_event_recorder(session: Any, *, user_text: str | None = None) -> Runtime
                     user_text=user_text,
                 )
             elif isinstance(event, ToolExecutionEndEvent):
-                if event.tool_name in _UNLOGGED_TOOLS:
-                    return
                 store.append_tool_call(
                     session_id,
                     tool=event.tool_name,

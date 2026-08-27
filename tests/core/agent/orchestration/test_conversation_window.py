@@ -10,7 +10,9 @@ from __future__ import annotations
 
 from core.agent_harness.prompts.memory.conversation import format_recent_conversation
 from core.agent_harness.turns.action_driver import _persist_tool_calling_error
-from core.agent_harness.turns.orchestrator import _record_answer_turn
+from core.agent_harness.turns.conversation_recording import (
+    record_conversation_turn as _record_answer_turn,
+)
 from core.state import MAX_CONVERSATION_MESSAGES, MutableAgentState
 from core.state.transcript_window import SESSION_SUMMARY_PREFIX
 

@@ -94,7 +94,6 @@ def test_primary_response_text_prefers_assistant() -> None:
             response_text="from action",
         ),
         assistant_response_text=" from assistant ",
-        llm_run=object(),
     )
     assert result.primary_response_text == "from assistant"
     empty_assistant = TurnResult(
@@ -108,29 +107,8 @@ def test_primary_response_text_prefers_assistant() -> None:
             response_text=" from action ",
         ),
         assistant_response_text="",
-        llm_run=object(),
     )
     assert empty_assistant.primary_response_text == "from action"
-
-
-def test_default_headless_build_supplies_the_reasoning_client_factory(monkeypatch) -> None:
-    """The default family injects ``default_reasoning_llm_factory`` into the provider."""
-    sentinel = object()
-
-    def _factory() -> object:
-        return sentinel
-
-    monkeypatch.setattr(
-        "core.agent_harness.turns.headless_build.default_reasoning_llm_factory",
-        _factory,
-    )
-    session = SimpleNamespace(
-        configured_integrations=[],
-        resolved_integrations_cache={},
-        session_id="s1",
-    )
-    provider = DefaultHeadlessBuild(session=session, output=BufferOutputSink()).reasoning()
-    assert provider.get() is sentinel
 
 
 def test_default_headless_build_takes_the_hosts_tool_provider_and_forwards_the_llm_factory() -> (
@@ -170,12 +148,7 @@ def test_default_headless_build_takes_the_hosts_tool_provider_and_forwards_the_l
     assert isinstance(bare._tools, DefaultToolProvider)  # noqa: SLF001
 
 
-def test_a_stage_override_replaces_only_that_stage() -> None:
-    """A host or test may swap one stage; the other two keep the port-driven default.
-
-    This is the seam every turn test drives (98 sites inject a single stage);
-    it is part of the host contract, so it lives on the agent explicitly.
-    """
+def test_a_stage_override_replaces_the_agent_stage() -> None:
     calls: list[str] = []
 
     def _fake_execute(text: str, *, confirm_fn=None, is_tty=None, turn_plan=None):  # type: ignore[no-untyped-def]
@@ -195,21 +168,18 @@ def test_a_stage_override_replaces_only_that_stage() -> None:
     agent.bind_stages(execute_actions=_fake_execute)
     result = agent.dispatch("hello")
 
-    # Assert — the override ran and handled the turn; answer/gather defaults untouched
+    # Assert — the override ran and handled the turn.
     assert calls == ["execute:hello"]
     assert isinstance(result, TurnResult)
-    assert agent._answer_override is None  # noqa: SLF001
-    assert agent._gather_override is None  # noqa: SLF001
 
 
 def test_resolve_agent_ports_uses_hooks_when_present() -> None:
     """Each provided build hook is called with the session/console and returned."""
     # Arrange
     from core.agent_harness.agent_build_config import AgentBuildConfig
-    from core.agent_harness.turns.gather_phase import GatherPhase
     from core.agent_harness.turns.headless_build import resolve_agent_ports
 
-    tools_obj, prompts_obj, gather_obj = object(), object(), GatherPhase()
+    tools_obj, prompts_obj = object(), object()
     console = object()
     seen: dict[str, object] = {}
 
@@ -220,39 +190,35 @@ def test_resolve_agent_ports_uses_hooks_when_present() -> None:
     config = AgentBuildConfig(
         build_tools=build_tools,
         build_prompts=lambda _session: prompts_obj,
-        build_gather=lambda _session, _console: gather_obj,
     )
 
     # Act
-    tools, prompts, gather = resolve_agent_ports(
+    tools, prompts = resolve_agent_ports(
         config, session="S", console=console, logger=logging.getLogger("t")
     )
 
     # Assert
-    assert (tools, prompts, gather) == (tools_obj, prompts_obj, gather_obj)
+    assert (tools, prompts) == (tools_obj, prompts_obj)
     assert seen["tools_args"] == ("S", console, None)
 
 
 def test_resolve_agent_ports_falls_back_when_hooks_omitted() -> None:
-    """An empty config yields the caller's default tools/gather and no prompts."""
+    """An empty config yields the caller's default tools and no prompts."""
     # Arrange
     from core.agent_harness.agent_build_config import AgentBuildConfig
-    from core.agent_harness.turns.gather_phase import GatherPhase
     from core.agent_harness.turns.headless_build import resolve_agent_ports
 
-    default_tools_obj, default_gather = object(), GatherPhase()
+    default_tools_obj = object()
 
     # Act
-    tools, prompts, gather = resolve_agent_ports(
+    tools, prompts = resolve_agent_ports(
         AgentBuildConfig(),
         session="S",
         console=object(),
         logger=logging.getLogger("t"),
         default_tools=lambda: default_tools_obj,
-        default_gather=default_gather,
     )
 
     # Assert
     assert tools is default_tools_obj
     assert prompts is None
-    assert gather is default_gather

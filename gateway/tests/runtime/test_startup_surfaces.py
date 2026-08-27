@@ -64,7 +64,18 @@ def test_start_gateway_boots_web_and_transports(monkeypatch: pytest.MonkeyPatch)
     assert captured["handler"] is handler
 
 
-def test_channels_handle_stop_stops_web_and_transports() -> None:
+def test_channels_handle_stop_stops_web_and_transports(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    # Freeze the shutdown clock: on a loaded CI runner, real time elapsing
+    # between budget creation and the worker stop call shrinks the remaining
+    # timeout below the asserted 1.5s.
+    clock = _Clock()
+
+    def _budget(seconds: float) -> ShutdownBudget:
+        return ShutdownBudget(seconds, clock=clock)
+
+    monkeypatch.setattr("gateway.startup.ShutdownBudget", _budget)
     web = MagicMock()
     w1 = MagicMock()
     w1.stop.return_value = True

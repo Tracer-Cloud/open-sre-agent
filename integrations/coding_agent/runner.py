@@ -2,9 +2,9 @@
 
 Resolves the configured backend (``CODING_AGENT``, default ``auto``) and
 dispatches to it. ``auto`` picks the first *ready* backend in ``_AUTO_ORDER``
-(installed and not explicitly unauthenticated), so a machine with Claude Code or
-Codex — but not Pi — still gets a working coding agent without configuration.
-New backends register in ``_BACKENDS`` and every caller keeps using
+(installed and not explicitly unauthenticated), so a machine with Claude Code,
+Codex, or Cursor — but not Pi — still gets a working coding agent without
+configuration. New backends register in ``_BACKENDS`` and every caller keeps using
 :func:`run_coding_task` / :func:`verify_coding_agent` unchanged.
 """
 
@@ -17,6 +17,8 @@ from integrations.coding_agent.claude_code_backend import verify as _claude_code
 from integrations.coding_agent.codex_backend import run as _codex_run
 from integrations.coding_agent.codex_backend import verify as _codex_verify
 from integrations.coding_agent.config import coding_agent_provider
+from integrations.coding_agent.cursor_backend import run as _cursor_run
+from integrations.coding_agent.cursor_backend import verify as _cursor_verify
 from integrations.coding_agent.models import CodingResult
 from integrations.coding_agent.pi_backend import run as _pi_run
 from integrations.coding_agent.pi_backend import verify as _pi_verify
@@ -32,10 +34,11 @@ _BACKENDS: dict[str, _Backend] = {
     "pi": (_pi_run, _pi_verify),
     "claude-code": (_claude_code_run, _claude_code_verify),
     "codex": (_codex_run, _codex_verify),
+    "cursor": (_cursor_run, _cursor_verify),
 }
 # Detection order for CODING_AGENT=auto: Pi first for backward compatibility with
 # existing Pi setups, then the most widely installed general coding CLIs.
-_AUTO_ORDER: tuple[str, ...] = ("pi", "claude-code", "codex")
+_AUTO_ORDER: tuple[str, ...] = ("pi", "claude-code", "codex", "cursor")
 _ALIASES: dict[str, str] = {
     "claude": "claude-code",
     "claude_code": "claude-code",

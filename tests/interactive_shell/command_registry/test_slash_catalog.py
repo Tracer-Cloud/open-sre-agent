@@ -50,7 +50,7 @@ def test_slash_invoke_description_is_not_a_natural_language_router() -> None:
 
     assert "explicit slash-command operations" in description
     assert "do not use this as a natural-language router" in description
-    assert "assistant_handoff" in description
+    assert "answer those directly" in description
     assert "read-only discovery" in description
 
 
@@ -83,7 +83,7 @@ def test_model_catalog_excludes_natural_language_status_questions() -> None:
     assert "which model is being used now" in anti_examples
     assert "what model/provider" in anti_examples
     assert "openai is configured" in anti_examples
-    assert "assistant_handoff" in anti_examples
+    assert "answer directly" in anti_examples
 
 
 def test_status_and_tools_catalog_exclude_natural_language_status_questions() -> None:
@@ -93,10 +93,10 @@ def test_status_and_tools_catalog_exclude_natural_language_status_questions() ->
     assert "explicit /status command operation" in status.llm_description.lower()
     assert "explicitly types /status" in " ".join(status.use_cases).lower()
     assert "current session status" in " ".join(status.anti_examples).lower()
-    assert "assistant_handoff" in " ".join(status.anti_examples).lower()
+    assert "answer directly" in " ".join(status.anti_examples).lower()
 
     tools = specs["/tools"]
     assert "explicit /tools command operation" in tools.llm_description.lower()
     assert "explicitly types /tools" in " ".join(tools.use_cases).lower()
     assert "what tools or capabilities" in " ".join(tools.anti_examples).lower()
-    assert "assistant_handoff" in " ".join(tools.anti_examples).lower()
+    assert "answer directly" in " ".join(tools.anti_examples).lower()

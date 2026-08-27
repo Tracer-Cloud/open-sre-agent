@@ -11,6 +11,7 @@ import io
 
 from rich.console import Console
 
+from config.constants.repl_autonomy import AutoLevel
 from surfaces.interactive_shell.session import Session
 from surfaces.interactive_shell.ui.execution_confirm import execution_allowed
 from tools.interactive_shell.shared import (
@@ -139,7 +140,9 @@ def test_explicit_ask_tty_accepts_empty_confirmation() -> None:
         confirm_fn=_confirm,
         is_tty=True,
     )
-    assert captured == ["Proceed? [Y/n] "]
+    assert captured == ["Yes, allow? [Y/n] "]
+    assert "Command to approve" in buf.getvalue()
+    assert "Why this needs approval:" in buf.getvalue()
 
 
 def test_explicit_ask_tty_rejects_explicit_no() -> None:
@@ -155,3 +158,149 @@ def test_explicit_ask_tty_rejects_explicit_no() -> None:
         is_tty=True,
     )
     assert "cancelled" in buf.getvalue()
+
+
+def test_auto_med_prompts_before_mutating_shell() -> None:
+    session = Session()
+    session.terminal.auto_level = AutoLevel.MED
+    buf = io.StringIO()
+    console = Console(file=buf, force_terminal=False)
+    prompted = {"asked": False}
+
+    def _confirm(_: str) -> str:
+        prompted["asked"] = True
+        return "n"
+
+    # Med must not silently run a mutation-capable shell command.
+    assert not execution_allowed(
+        allow_tool("shell"),
+        session=session,
+        console=console,
+        action_summary="!pytest",
+        confirm_fn=_confirm,
+        is_tty=True,
+    )
+    assert prompted["asked"] is True
+    assert "Command to approve" in buf.getvalue()
+
+
+def test_auto_med_prompts_before_agent_slash_mutation() -> None:
+    """Med must ask before agent-selected mutating slash (e.g. integrations remove)."""
+    session = Session()
+    session.terminal.auto_level = AutoLevel.MED
+    buf = io.StringIO()
+    console = Console(file=buf, force_terminal=False)
+    prompted = {"asked": False}
+
+    def _confirm(_: str) -> str:
+        prompted["asked"] = True
+        return "n"
+
+    assert not execution_allowed(
+        allow_tool("slash"),
+        session=session,
+        console=console,
+        action_summary="/integrations remove posthog",
+        confirm_fn=_confirm,
+        is_tty=True,
+    )
+    assert prompted["asked"] is True
+
+
+def test_auto_med_prompts_before_sentry_issue_fix() -> None:
+    """Med must ask before a Sentry issue-fix that can edit, commit, and open a PR."""
+    session = Session()
+    session.terminal.auto_level = AutoLevel.MED
+    buf = io.StringIO()
+    console = Console(file=buf, force_terminal=False)
+    prompted = {"asked": False}
+
+    def _confirm(_: str) -> str:
+        prompted["asked"] = True
+        return "n"
+
+    assert not execution_allowed(
+        allow_tool("sentry_issue_fix"),
+        session=session,
+        console=console,
+        action_summary="fix Sentry issue https://acme.sentry.io/issues/1/ and open a pull request",
+        confirm_fn=_confirm,
+        is_tty=True,
+    )
+    assert prompted["asked"] is True
+    assert "Command to approve" in buf.getvalue()
+
+
+def test_auto_off_shows_command_to_approve() -> None:
+    session = Session()
+    session.terminal.auto_level = AutoLevel.OFF
+    buf = io.StringIO()
+    console = Console(file=buf, force_terminal=False)
+    assert execution_allowed(
+        allow_tool("slash"),
+        session=session,
+        console=console,
+        action_summary="/status",
+        confirm_fn=lambda _: "y",
+        is_tty=True,
+    )
+    assert "Command to approve" in buf.getvalue()
+    assert "Why this needs approval:" in buf.getvalue()
+
+
+# --- plan-only execution gate (integration + latch clearing) -----------------
+
+
+def test_plan_only_guard_prompts_then_clears_on_a_confirmed_mutating_step() -> None:
+    session = Session()
+    session.plan_only_until_authorized = True
+    buf = io.StringIO()
+    console = Console(file=buf, force_terminal=False)
+
+    # A mutating step under a standing plan-only request must prompt...
+    assert execution_allowed(
+        allow_tool("shell"),
+        session=session,
+        console=console,
+        action_summary="!deploy",
+        confirm_fn=lambda _: "y",
+        is_tty=True,
+    )
+    assert "Command to approve" in buf.getvalue()
+    # ...and confirming it is the explicit authorization that lifts the guard.
+    assert session.plan_only_until_authorized is False
+
+
+def test_plan_only_guard_survives_a_declined_confirmation() -> None:
+    session = Session()
+    session.plan_only_until_authorized = True
+    buf = io.StringIO()
+    console = Console(file=buf, force_terminal=False)
+
+    assert not execution_allowed(
+        allow_tool("shell"),
+        session=session,
+        console=console,
+        action_summary="!deploy",
+        confirm_fn=lambda _: "n",
+        is_tty=True,
+    )
+    # Declining does not authorize; the guard still stands for the next step.
+    assert session.plan_only_until_authorized is True
+
+
+def test_plan_only_guard_is_not_cleared_by_a_read_only_step() -> None:
+    session = Session()
+    session.plan_only_until_authorized = True
+    buf = io.StringIO()
+    console = Console(file=buf, force_terminal=False)
+
+    # A read-only tool runs without a prompt and must NOT lift the plan-only latch.
+    assert execution_allowed(
+        allow_tool("investigation"),
+        session=session,
+        console=console,
+        action_summary="investigate the 502s",
+        is_tty=True,
+    )
+    assert session.plan_only_until_authorized is True

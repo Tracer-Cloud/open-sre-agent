@@ -55,7 +55,12 @@ def test_prompt_envelope_renders_ordered_blocks_with_optional_titles() -> None:
         envelope.require_block("missing")
 
 
-def test_action_system_prompt_envelope_matches_legacy_rendering() -> None:
+def test_action_system_prompt_envelope_matches_legacy_rendering(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from config.constants import OPENSRE_MEMORY_DISABLED_ENV
+
+    monkeypatch.setenv(OPENSRE_MEMORY_DISABLED_ENV, "1")
     ctx = _ctx()
     envelope = build_action_system_prompt_envelope(ctx)
 
@@ -70,6 +75,7 @@ def test_action_system_prompt_envelope_matches_legacy_rendering() -> None:
         PromptBlockId.ACTION_RUNTIME_FACTS,
         PromptBlockId.ACTION_SKILLS,
         PromptBlockId.CONNECTED_INTEGRATIONS,
+        PromptBlockId.TURN_INTERACTION,
         PromptBlockId.RECENT_CONVERSATION,
     ]
     assert (
@@ -162,8 +168,13 @@ def test_the_split_halves_reassemble_into_the_unchanged_render() -> None:
     assert rejoined == envelope.render()
 
 
-def test_every_block_declares_which_tier_it_belongs_to() -> None:
+def test_every_block_declares_which_tier_it_belongs_to(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     """A block with no tier would silently land in the cached prefix."""
+    from config.constants import OPENSRE_MEMORY_DISABLED_ENV
+
+    monkeypatch.setenv(OPENSRE_MEMORY_DISABLED_ENV, "1")
     # Arrange
     envelope = build_action_system_prompt_envelope(_turn([("user", "hello")]))
 
@@ -177,6 +188,7 @@ def test_every_block_declares_which_tier_it_belongs_to() -> None:
         PromptBlockId.ACTION_RUNTIME_FACTS: PromptTier.STABLE,
         PromptBlockId.ACTION_SKILLS: PromptTier.STABLE,
         PromptBlockId.CONNECTED_INTEGRATIONS: PromptTier.CONTEXT,
+        PromptBlockId.TURN_INTERACTION: PromptTier.EPHEMERAL,
         PromptBlockId.RECENT_CONVERSATION: PromptTier.EPHEMERAL,
     }
 
@@ -407,58 +419,3 @@ def test_blocks_sharing_a_tier_keep_the_order_they_were_added() -> None:
 
     # Act / Assert
     assert envelope.render() == "BASE|SKILLS"
-
-
-def test_the_assistant_cached_half_is_byte_identical_across_turns() -> None:
-    """The action path had this pinned; the assistant path only claimed it.
-
-    ``build_cli_agent_turn_prompt`` sends ``system`` and the user turn as
-    separate messages, so the system half must not move between turns or the
-    provider's cache marker never hits — the same defect the action path was
-    fixed for.
-    """
-    # Arrange
-    from core.agent_harness.prompts.assistant import (
-        build_assistant_system_prompt_envelope,
-    )
-
-    shared = {
-        "reference": "opensre --help" * 40,
-        "agents_md": "repo map" * 20,
-        "investigation_flow": "flow" * 30,
-        "environment": "env block",
-        "long_term_memory": "remembered facts",
-    }
-
-    # Act — differ only in per-turn content
-    first, _ = build_assistant_system_prompt_envelope(
-        history="user: hello", docs="docs for question one" * 10, **shared
-    ).render_split()
-    second, _ = build_assistant_system_prompt_envelope(
-        history="user: hello\nassistant: hi\nuser: and now?",
-        docs="docs for a different question" * 10,
-        prior_action_facts="fact from turn 1",
-        **shared,
-    ).render_split()
-
-    # Assert
-    assert first == second
-
-
-def test_per_question_docs_never_reach_the_assistant_cached_half() -> None:
-    """Docs are retrieved per message, so caching them would invalidate every turn."""
-    # Arrange
-    from core.agent_harness.prompts.assistant import (
-        build_assistant_system_prompt_envelope,
-    )
-
-    marker = "zzmarker-docs-retrieved-for-this-question"
-
-    # Act
-    cached, ephemeral = build_assistant_system_prompt_envelope(
-        reference="ref", history="user: hi", docs=marker
-    ).render_split()
-
-    # Assert
-    assert marker not in cached
-    assert marker in ephemeral

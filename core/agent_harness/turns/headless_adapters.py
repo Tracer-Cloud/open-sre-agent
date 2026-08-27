@@ -10,7 +10,6 @@ from collections.abc import Iterable, Mapping
 from dataclasses import dataclass, field
 from typing import Any
 
-from core.agent_harness.accounting.token_accounting import LlmRunInfo
 from core.agent_harness.ports import (
     CancelCapableConsole,
     ConfirmFn,
@@ -25,7 +24,6 @@ from core.agent_harness.turns.turn_results import (
     ToolCallingTurnResult,
     TurnResult,
 )
-from core.llm.types import StreamingReasoningClient
 
 
 @dataclass
@@ -146,9 +144,6 @@ class EmptyPromptContextProvider:
     def setup_state(self) -> str:
         return ""
 
-    def suggested_synthetic_prompt(self) -> str:
-        return ""
-
     def log_diagnostics(self, reason: str) -> None:
         _ = reason
 
@@ -201,40 +196,3 @@ class NoopErrorReporter:
 
     def report(self, exc: BaseException, *, context: str, expected: bool = False) -> None:
         _ = (exc, context, expected)
-
-
-class SimpleRunRecordFactory:
-    """Builds :class:`LlmRunInfo` values for headless runs."""
-
-    def bind_session(self, session: Any) -> None:
-        """Records are ephemeral — no session handle to update."""
-        _ = session
-
-    def build(
-        self,
-        *,
-        client: StreamingReasoningClient | None,
-        prompt: str,
-        response_text: str,
-        started: float,
-    ) -> LlmRunInfo:
-        _ = (client, prompt, started)
-        return LlmRunInfo(response_text=response_text)
-
-
-@dataclass
-class StaticReasoningClientProvider:
-    """Provides a fixed reasoning client (or None to skip the assistant)."""
-
-    client: StreamingReasoningClient | None = None
-
-    def bind_session(self, session: Any) -> None:
-        """Client is fixed at construction — ignore session retargets."""
-        _ = session
-
-    def bind_output(self, output: Any) -> None:
-        """No sink of its own — accept rebind for :class:`OutputBindable` parity."""
-        _ = output
-
-    def get(self) -> StreamingReasoningClient | None:
-        return self.client

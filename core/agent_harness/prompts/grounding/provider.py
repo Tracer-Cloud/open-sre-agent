@@ -5,11 +5,10 @@ from __future__ import annotations
 from collections.abc import Mapping
 from typing import Any
 
-from config.constants.prompts import SUGGESTED_PROMPT_AFTER_FAILED_SYNTHETIC_TEST
 from core.agent_harness.grounding.investigation_flow_reference import (
     build_investigation_flow_reference_text,
 )
-from core.agent_harness.prompts.assistant.environment import build_environment_block
+from core.agent_harness.prompts.grounding.environment import build_environment_block
 from core.agent_harness.prompts.kernel.surfaces import profile_for
 from core.llm.provider_models import resolve_provider_models
 from infrastructure.observability.trace.spans import component_span
@@ -152,9 +151,6 @@ class DefaultPromptContextProvider:
         if not profile.setup_state:
             return ""
         return cached_setup_state(self._visible_integrations())
-
-    def suggested_synthetic_prompt(self) -> str:
-        return SUGGESTED_PROMPT_AFTER_FAILED_SYNTHETIC_TEST
 
     def log_diagnostics(self, reason: str) -> None:
         self._session.grounding.log_cache_diagnostics(reason)

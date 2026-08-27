@@ -11,10 +11,15 @@ from rich.console import Console
 import surfaces.interactive_shell.runtime.slash_adapter as slash_adapter
 from core.llm.types import AgentLLMResponse, ToolCall
 from surfaces.interactive_shell.runtime import input_policy as loop_input_policy
+from surfaces.interactive_shell.runtime.core.state import ReplState, SpinnerState
 from surfaces.interactive_shell.runtime.core.turn_accounting import (
     ToolCallingTurnResult,
 )
-from surfaces.interactive_shell.runtime.turn_host import run_agent_turn_queue
+from surfaces.interactive_shell.runtime.turn_host import (
+    AgentTurnResources,
+    run_agent_turn,
+    run_agent_turn_queue,
+)
 from surfaces.interactive_shell.session import Session
 from tests.core.agent.orchestration.action_execution_test_harness import (
     FakeActionLLM,
@@ -181,6 +186,7 @@ def test_turn_needs_exclusive_stdin_for_onboard(
     session = Session()
 
     assert loop_input_policy.turn_needs_exclusive_stdin("/onboard", session) is True
+    assert loop_input_policy.turn_needs_exclusive_stdin("/setup", session) is True
     # Args don't change the exclusive-stdin requirement.
     assert loop_input_policy.turn_needs_exclusive_stdin("/onboard local_llm", session) is True
     # Bare command words are not recognized under literal-/slash gating.
@@ -237,6 +243,40 @@ def test_queued_literal_quit_requests_runtime_exit() -> None:
     asyncio.run(_scenario())
 
 
+def test_turn_end_retries_auto_command_deferred_during_dispatch(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """An ask-user ``/choose`` queued mid-turn must wake the open prompt."""
+
+    async def _scenario() -> None:
+        from surfaces.interactive_shell.runtime import shell_turn_execution
+
+        session = Session()
+        refresh_dispatch_states: list[bool] = []
+        session.terminal.prompt_refresh_fn = lambda: refresh_dispatch_states.append(
+            session.terminal.dispatch_active
+        )
+
+        def _queue_choose(*_args: object, **_kwargs: object) -> None:
+            session.terminal.set_auto_command("/choose")
+
+        monkeypatch.setattr(shell_turn_execution, "execute_shell_turn", _queue_choose)
+        runtime = AgentTurnResources(
+            session=session,
+            state=ReplState(),
+            spinner=SpinnerState(),
+            invalidate_prompt=lambda: None,
+            console=Console(file=io.StringIO(), force_terminal=False, highlight=False),
+        )
+
+        await run_agent_turn(runtime, "ask me to choose")
+
+        assert session.terminal.pending_prompt_default == "/choose"
+        assert refresh_dispatch_states == [True, False]
+
+    asyncio.run(_scenario())
+
+
 def test_run_harness_turn_nitro_prompt_uses_cli_agent_actions(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -245,7 +285,6 @@ def test_run_harness_turn_nitro_prompt_uses_cli_agent_actions(
         'it an investigation. Can you please deploy the instance and send it "hello world"?'
     )
     action_calls: list[str] = []
-    llm_calls: list[str] = []
 
     def _fake_execute_cli_actions(
         text: str,
@@ -262,14 +301,6 @@ def test_run_harness_turn_nitro_prompt_uses_cli_agent_actions(
             handled=True,
         )
 
-    def _fake_answer_shell_question(
-        text: str,
-        _session: Session,
-        _console: Console,
-        **kwargs: object,
-    ) -> None:
-        llm_calls.append(text)
-
     session = Session()
     console = Console(file=io.StringIO(), force_terminal=False, highlight=False)
     run_harness_turn(
@@ -280,11 +311,9 @@ def test_run_harness_turn_nitro_prompt_uses_cli_agent_actions(
         confirm_fn=None,
         is_tty=None,
         execute_actions=_fake_execute_cli_actions,
-        answer_agent=_fake_answer_shell_question,
     )
 
     assert action_calls == [nitro_prompt]
-    assert llm_calls == []
 
 
 def test_run_harness_turn_nitro_prompt_executes_remote_then_investigation(

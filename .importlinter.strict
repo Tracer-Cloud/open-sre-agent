@@ -27,8 +27,8 @@ layers =
     config
 ignore_imports =
     # infrastructure -> integrations (T-4 debt — scheduler / observability)
-    infrastructure.analytics.cli -> integrations.github.identity
-    infrastructure.observability.errors.sentry -> integrations.llm_cli.errors
+    infrastructure.analytics.cli -> integrations.github
+    infrastructure.observability.errors.sentry -> integrations.llm_cli
     infrastructure.scheduling.scheduler.credentials -> integrations.catalog
     # surfaces -> gateway (cli + repl gateway commands)
     surfaces.cli.commands.gateway -> gateway.core.process
@@ -39,13 +39,11 @@ ignore_imports =
     tools.cross_vendor.fix_sentry_issue.context -> integrations.sentry.issue_url
     tools.cross_vendor.fix_sentry_issue.runner -> integrations.coding_agent
     tools.cross_vendor.fix_sentry_issue.runner -> integrations.git
-    tools.cross_vendor.fix_sentry_issue.runner -> integrations.github.client
+    tools.cross_vendor.fix_sentry_issue.runner -> integrations.github
     tools.cross_vendor.fix_sentry_issue.ship -> integrations.coding_agent
     tools.cross_vendor.fix_sentry_issue.ship -> integrations.git
-    tools.cross_vendor.fix_sentry_issue.ship -> integrations.github.client
-    tools.cross_vendor.fix_sentry_issue.ship -> integrations.github.pull_requests
-    tools.interactive_shell.implementation.claude_code_executor -> integrations.llm_cli.claude_code
-    tools.interactive_shell.implementation.claude_code_executor -> integrations.llm_cli.subprocess_env
+    tools.cross_vendor.fix_sentry_issue.ship -> integrations.github
+    tools.interactive_shell.implementation.claude_code_executor -> integrations.llm_cli
     tools.investigation.reporting.delivery.bootstrap -> integrations.buzz.reporting_adapter
     tools.investigation.reporting.delivery.bootstrap -> integrations.discord.reporting_adapter
     tools.investigation.reporting.delivery.bootstrap -> integrations.grafana.reporting_adapter
@@ -60,8 +58,7 @@ ignore_imports =
     tools.investigation.reporting.gitlab_writeback -> integrations.gitlab
     tools.investigation.reporting.upstream_correlation.registry -> integrations.datadog.correlation.registration
     tools.investigation.state_factory -> integrations.opensre
-    tools.system.python_execution_tool.credentials -> integrations.github.client
-    tools.system.python_execution_tool.credentials -> integrations.github.helpers
+    tools.system.python_execution_tool.credentials -> integrations.github
     tools.system.watch_dog.runner -> integrations.buzz
     tools.system.watch_dog.runner -> integrations.buzz.alarms
     tools.system.watch_dog.runner -> integrations.rocketchat

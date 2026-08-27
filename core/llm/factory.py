@@ -57,13 +57,7 @@ def resolve_llm_route() -> LLMRoute:
     """Resolve settings + runtime provider + transport once (the single routing decision)."""
     settings = _resolve_settings_or_raise()
 
-    from config.llm_auth.auth_method import (
-        effective_llm_provider,
-        get_configured_llm_auth_method,
-    )
-
-    provider = settings.provider
-    runtime_provider = effective_llm_provider(provider, get_configured_llm_auth_method(provider))
+    runtime_provider = settings.provider
     return LLMRoute(
         settings=settings,
         provider=runtime_provider,

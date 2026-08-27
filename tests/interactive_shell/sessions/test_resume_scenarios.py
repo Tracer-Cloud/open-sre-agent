@@ -510,10 +510,6 @@ class TestResumeLiveRepl:
         _write_finalized_session(sessions_dir, target_id, chat_text="live redis investigation")
 
         with ReplDriver(home=home, startup_wait=10.0) as repl:
-            if repl.contains("Press Enter to continue"):
-                repl.send("", wait=3.0)
-                repl.reset_output()
-
             repl.send("/sessions", wait=1.0)
             assert repl.wait_until_contains("live9999", "live redis", timeout=60.0)
 

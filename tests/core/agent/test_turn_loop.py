@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import io
-from typing import Any
 
 from rich.console import Console
 
@@ -41,15 +40,12 @@ def _unhandled_turn(*_args: object, **_kwargs: object) -> ToolCallingTurnResult:
         executed_success_count=0,
         has_unhandled_clause=False,
         handled=False,
+        response_text="answered",
     )
 
 
-def test_recorder_flushes_once_for_chat_fallback() -> None:
+def test_recorder_flushes_once_for_agent_answer() -> None:
     recorder = _Recorder()
-    run_info = LlmRunInfo(response_text="answered")
-
-    def _answer(*_args: Any, **_kwargs: Any) -> LlmRunInfo:
-        return run_info
 
     result = run_harness_turn(
         "question",
@@ -57,13 +53,11 @@ def test_recorder_flushes_once_for_chat_fallback() -> None:
         _console(),
         recorder=recorder,  # type: ignore[arg-type]
         execute_actions=_unhandled_turn,
-        gather_evidence=lambda *_a, **_k: None,
-        answer_agent=_answer,
     )
 
     assert result.answered is True
     assert result.assistant_response_text == "answered"
-    assert recorder.responses == [("answered", run_info)]
+    assert recorder.responses == [("answered", None)]
     assert recorder.flush_count == 1
 
 
@@ -87,12 +81,10 @@ def test_recorder_flushes_once_for_silent_handled_turn() -> None:
         _console(),
         recorder=recorder,  # type: ignore[arg-type]
         execute_actions=_handled,
-        gather_evidence=lambda *_a, **_k: None,
-        answer_agent=lambda *_a, **_k: None,
     )
 
-    assert result.answered is False
-    assert result.final_intent == "cli_agent_handled"
+    assert result.answered is True
+    assert result.final_intent == "agent_completed"
     assert recorder.responses == [("command output", None)]
     assert recorder.flush_count == 1
     assert session.cli_agent_messages[-2:] == [
@@ -120,15 +112,13 @@ def test_default_turn_accounting_persists_action_only_context() -> None:
         "weather in Hawaii",
         session,
         execute_actions=_handled,
-        gather=lambda *_args, **_kwargs: None,
-        answer=lambda *_args, **_kwargs: None,
         accounting=DefaultTurnAccounting(session, "weather in Hawaii"),
     )
 
     records = storage.read(session.session_id)
     messages = [record for record in records if record.get("type") == "message"]
 
-    assert result.final_intent == "cli_agent_handled"
+    assert result.final_intent == "agent_completed"
     assert session.cli_agent_messages[-2:] == [
         ("user", "weather in Hawaii"),
         ("assistant", "Hawaii: +28C"),

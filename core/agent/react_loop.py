@@ -2,7 +2,7 @@
 
 ``ReactLoop`` runs the loop. Each pass asks the LLM what to do (reason); if it
 requests tools, they run and their results are fed back in (act + observe); this
-repeats until the LLM answers with no tool calls or an iteration cap is hit. The
+repeats until the LLM answers with no tool calls or a safety limit is hit. The
 loop knows nothing about ``Agent`` — it takes an ``AgentRunInput``
 (``core.agent.run_io``, the resolved inputs) and a ``LoopHost``
 (``core.agent.loop_host``, the callbacks it needs), so anything implementing that
@@ -13,11 +13,11 @@ from __future__ import annotations
 
 import logging
 import uuid
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
+from hashlib import sha256
 from typing import Any
 
 from core.agent.cancel import tool_resources_cancel_requested
-from core.agent.conclusion_parser import ConclusionParser
 from core.agent.loop_host import LoopHost
 from core.agent.run_io import AgentRunInput, AgentRunResult
 from core.context_budget import (
@@ -39,7 +39,7 @@ from core.events import (
     TurnStartEvent,
 )
 from core.llm.types import ToolCall
-from core.messages import MessageMapper
+from core.messages import AssistantRuntimeMessage, MessageMapper, UserRuntimeMessage
 from core.provider import ProviderRequest
 from core.tool.contracts import RuntimeTool
 from core.tool.execution import (
@@ -59,6 +59,67 @@ from infrastructure.observability.trace.spans import (
 )
 
 logger = logging.getLogger(__name__)
+
+_SAFETY_HANDOFF_PROMPT = """\
+The tool loop has stopped for safety ({reason}). Tools are disabled for this response.
+Give the user a concise final handoff based only on the work and tool results above:
+summarize useful partial results, state what prevented completion, and give the next
+practical step. Do not claim the task completed and do not request or describe another
+tool call.
+"""
+_ITERATION_CAP_FALLBACK = (
+    "I reached the emergency tool-iteration ceiling. Partial results are preserved, "
+    "but I could not complete the request. Continue with a narrower next step."
+)
+_STAGNATION_FALLBACK = (
+    "I stopped after repeated tool calls produced no new result. Partial results are "
+    "preserved, but I could not complete the request. Change the inputs or tool strategy "
+    "before continuing."
+)
+
+
+def _update_fingerprint(digest: Any, value: Any) -> None:
+    """Feed a stable, bounded-memory representation of a tool value into ``digest``."""
+    if isinstance(value, dict):
+        digest.update(b"{")
+        for key in sorted(value, key=repr):
+            _update_fingerprint(digest, key)
+            _update_fingerprint(digest, value[key])
+        digest.update(b"}")
+        return
+    if isinstance(value, (list, tuple)):
+        digest.update(b"[")
+        for item in value:
+            _update_fingerprint(digest, item)
+        digest.update(b"]")
+        return
+    if isinstance(value, (set, frozenset)):
+        digest.update(b"<")
+        for item in sorted(value, key=repr):
+            _update_fingerprint(digest, item)
+        digest.update(b">")
+        return
+    digest.update(type(value).__qualname__.encode("utf-8", errors="replace"))
+    digest.update(b":")
+    digest.update(repr(value).encode("utf-8", errors="replace"))
+    digest.update(b";")
+
+
+def _observation_fingerprint(
+    tool_calls: list[ToolCall],
+    results: list[ToolExecutionResult],
+) -> bytes:
+    """Identify one tool batch by public inputs and the observations it produced."""
+    digest = sha256()
+    for tool_call, result in zip(tool_calls, results, strict=True):
+        _update_fingerprint(digest, tool_call.name)
+        _update_fingerprint(digest, public_tool_input(tool_call.input))
+        _update_fingerprint(digest, result.is_error)
+        # Repeating a failed call with identical input is not progress even when
+        # the provider decorates each error with a fresh request id or timestamp.
+        if not result.is_error:
+            _update_fingerprint(digest, result.provider_content())
+    return digest.digest()
 
 
 @dataclass(frozen=True, slots=True)
@@ -92,6 +153,7 @@ class ReactLoop[RuntimeToolT: RuntimeTool]:
         self._resolved = run_input.resolved
         self._tool_resources = run_input.tool_resources
         self._max_iterations = run_input.max_iterations
+        self._max_stagnant_iterations = run_input.max_stagnant_iterations
         self._messages = run_input.messages
         self._msg_formatter = MessageMapper(self._llm)
         self._runtime_tools = list(host._filter_tools(run_input.tools))
@@ -108,8 +170,10 @@ class ReactLoop[RuntimeToolT: RuntimeTool]:
         self._cancelled = False
         self._iterations_used = 0
         self._stop_reason = "iteration_cap"
+        self._seen_observations: set[bytes] = set()
+        self._stagnant_iterations = 0
+        self._safety_handoff_attempted = False
         self._operation_run_id = uuid.uuid4().hex[:12]
-        self._conclusion = ConclusionParser(host, self._messages, self._runtime_tools)
 
     def run(self) -> AgentRunResult:
         """Drive the loop to completion and return its outcome."""
@@ -143,6 +207,11 @@ class ReactLoop[RuntimeToolT: RuntimeTool]:
                         iteration_result = self._run_iteration(iteration)
                         if iteration_result.should_stop:
                             break
+                if self._hit_cap and not self._cancelled and not self._terminated_by_tool:
+                    if self._cancel_requested():
+                        self._mark_cancelled()
+                    else:
+                        self._run_safety_handoff()
                 run_result = self._finalize()
                 self._mark_loop_span(loop_attrs)
                 self._record_loop_finished()
@@ -250,14 +319,19 @@ class ReactLoop[RuntimeToolT: RuntimeTool]:
             )
         self._messages.append(assistant_message)
 
-        # A no-tool response is a candidate conclusion; the conclusion handler
-        # may still append a nudge or queued follow-up and continue the loop.
         if not response.has_tool_calls:
             return self._handle_conclusion(response, assistant_message, iteration)
         return self._observe(response, assistant_message, iteration)
 
-    def _think(self, iteration: int) -> Any:
+    def _think(
+        self,
+        iteration: int,
+        *,
+        tool_schemas: list[dict[str, Any]] | None = None,
+        request_kind: str = "work",
+    ) -> Any:
         """Build the request, apply the provider hooks, and call the LLM."""
+        request_tools = self._tool_schemas if tool_schemas is None else tool_schemas
         transformed_messages = self._host._transform_messages(self._messages)
         llm_messages = self._host._convert_to_llm(self._llm, transformed_messages)
         enforce_context_budget(
@@ -268,10 +342,14 @@ class ReactLoop[RuntimeToolT: RuntimeTool]:
         provider_request = ProviderRequest(
             messages=llm_messages,
             system=self._system,
-            tools=self._tool_schemas,
-            metadata={"iteration": iteration},
+            tools=request_tools,
+            metadata={"iteration": iteration, "request_kind": request_kind},
         )
         provider_request = self._host._before_request(provider_request)
+        if tool_schemas is not None:
+            # A provider hook may normally add tools. The safety handoff is the
+            # one exception: it must be incapable of starting more work.
+            provider_request = replace(provider_request, tools=list(tool_schemas))
         self._final_system_prompt = provider_request.system or self._system
         self._host._emit_runtime(
             ProviderRequestStartEvent(
@@ -316,19 +394,29 @@ class ReactLoop[RuntimeToolT: RuntimeTool]:
     def _handle_conclusion(
         self, response: Any, assistant_message: Any, iteration: int
     ) -> _IterationResult:
-        """No tool calls: accept the answer (maybe after a follow-up) or nudge and continue."""
-        accepted = self._conclusion.handle(
-            response,
-            assistant_message,
-            iteration,
-            evidence_count=len(self._executed),
+        """Accept a no-tool reply unless a follow-up is already queued."""
+        follow_up = self._host._pop_follow_up_message()
+        if follow_up is not None:
+            self._messages.append(UserRuntimeMessage(content=follow_up))
+            self._host._emit_runtime(
+                TurnEndEvent(
+                    iteration=iteration,
+                    message=assistant_message,
+                    data={"accepted": False, "queued_follow_up": True},
+                )
+            )
+            return _IterationResult(should_stop=False, outcome="conclusion_deferred")
+        self._host._emit_runtime(
+            TurnEndEvent(
+                iteration=iteration,
+                message=assistant_message,
+                data={"accepted": True},
+            )
         )
-        if accepted:
-            self._final_text = response.content or ""
-            self._hit_cap = False
-            self._stop_reason = "no_tools_needed" if not self._executed else "completed"
-            return _IterationResult(should_stop=True, outcome=self._stop_reason)
-        return _IterationResult(should_stop=False, outcome="conclusion_deferred")
+        self._final_text = response.content or ""
+        self._hit_cap = False
+        self._stop_reason = "no_tools_needed" if not self._executed else "completed"
+        return _IterationResult(should_stop=True, outcome=self._stop_reason)
 
     def _observe(self, response: Any, assistant_message: Any, iteration: int) -> _IterationResult:
         """Execute the requested tools, record results, and emit events."""
@@ -419,12 +507,101 @@ class ReactLoop[RuntimeToolT: RuntimeTool]:
                 tool_error_count=tool_error_count,
                 terminated_tool_count=terminated_tool_count,
             )
+        fingerprint = _observation_fingerprint(response.tool_calls, results)
+        if fingerprint in self._seen_observations:
+            self._stagnant_iterations += 1
+        else:
+            self._seen_observations.add(fingerprint)
+            self._stagnant_iterations = 0
+        if (
+            self._max_stagnant_iterations is not None
+            and self._stagnant_iterations >= self._max_stagnant_iterations
+        ):
+            self._stop_reason = "stagnation_limit"
+            return _IterationResult(
+                should_stop=True,
+                outcome=self._stop_reason,
+                requested_tool_count=requested_tool_count,
+                tool_error_count=tool_error_count,
+                terminated_tool_count=0,
+            )
         return _IterationResult(
             should_stop=False,
             outcome="tool_observed",
             requested_tool_count=requested_tool_count,
             tool_error_count=tool_error_count,
             terminated_tool_count=0,
+        )
+
+    def _run_safety_handoff(self) -> None:
+        """Make one tool-disabled call that turns a hard stop into a visible handoff."""
+        self._safety_handoff_attempted = True
+        iteration = self._iterations_used
+        reason = self._stop_reason.replace("_", " ")
+        self._messages.append(
+            UserRuntimeMessage(content=_SAFETY_HANDOFF_PROMPT.format(reason=reason))
+        )
+        self._host._emit_runtime(
+            TurnStartEvent(
+                iteration=iteration,
+                data={"safety_handoff": True, "stop_reason": self._stop_reason},
+            )
+        )
+        try:
+            response = self._think(
+                iteration,
+                tool_schemas=[],
+                request_kind="safety_handoff",
+            )
+            content = str(response.content or "").strip()
+            if content:
+                # Do not retain tool calls a non-conforming provider may emit
+                # despite the empty schema: the handoff never executes them.
+                assistant_message = AssistantRuntimeMessage(
+                    content=content,
+                    metadata={"safety_handoff": True, "stop_reason": self._stop_reason},
+                )
+            else:
+                assistant_message = self._fallback_handoff_message()
+        except Exception:  # noqa: BLE001 - the deterministic handoff must survive provider failure
+            logger.debug(
+                "Safety handoff request failed; using deterministic fallback", exc_info=True
+            )
+            assistant_message = self._fallback_handoff_message()
+
+        self._messages.append(assistant_message)
+        self._final_text = str(assistant_message.content or "").strip()
+        self._host._emit_runtime(MessageStartEvent(message=assistant_message, iteration=iteration))
+        self._host._emit_runtime(
+            MessageUpdateEvent(
+                message=assistant_message,
+                delta=self._final_text,
+                iteration=iteration,
+                data={"has_tool_calls": False, "safety_handoff": True},
+            )
+        )
+        self._host._emit_runtime(
+            TurnEndEvent(
+                iteration=iteration,
+                message=assistant_message,
+                data={
+                    "accepted": True,
+                    "safety_handoff": True,
+                    "stop_reason": self._stop_reason,
+                },
+            )
+        )
+
+    def _fallback_handoff_message(self) -> AssistantRuntimeMessage:
+        """Build the deterministic handoff used when final sampling cannot answer."""
+        content = (
+            _STAGNATION_FALLBACK
+            if self._stop_reason == "stagnation_limit"
+            else _ITERATION_CAP_FALLBACK
+        )
+        return AssistantRuntimeMessage(
+            content=content,
+            metadata={"safety_handoff": True, "stop_reason": self._stop_reason},
         )
 
     def _emit_tool_update(
@@ -469,6 +646,7 @@ class ReactLoop[RuntimeToolT: RuntimeTool]:
                     "final_text": self._final_text,
                     "stop_reason": self._stop_reason,
                     "hit_iteration_cap": self._hit_cap,
+                    "safety_handoff_attempted": self._safety_handoff_attempted,
                     "terminated_by_tool": self._terminated_by_tool,
                     "cancelled": self._cancelled,
                     "llm_iterations_used": self._iterations_used,

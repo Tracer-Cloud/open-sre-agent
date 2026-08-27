@@ -1,11 +1,9 @@
 """Session goal — cross-turn continuation (distinct from ReAct Goal).
 
-Attach via an explicit host call (:func:`attach_session_goal`) or from a
-structured action-agent handoff tag ``session_goal:…``. Do not detect goals by
-scanning user prose (no keyword / regex intent routing).
+Attach via an explicit host call (:func:`attach_session_goal`) or the structured
+``session_goal`` action tool. Do not detect goals by scanning user prose.
 
-Checklist success criteria use ``session_goal_item:…`` handoffs; progress uses
-``session_goal:done=<indices>`` in the assistant reply.
+Progress uses ``session_goal:done=<indices>`` in the assistant reply.
 
 The host loop (:mod:`core.agent_harness.session_goal.run_until`) calls ``chat``
 until the goal is achieved, cleared, cancelled, or hits ``max_outer_turns``.
@@ -25,15 +23,10 @@ from __future__ import annotations
 
 import re
 import time
-from collections.abc import Sequence
 from dataclasses import dataclass, replace
-from typing import TYPE_CHECKING, Any
+from typing import Any
 
-from core.agent_harness.turns.handoff_tag_parse import find_tag_suffix, handoff_has_tag
 from infrastructure.evidence.evidence_compaction import truncate_message
-
-if TYPE_CHECKING:
-    from core.agent_harness.turns.assistant_handoff import AssistantHandoff
 
 
 class SessionGoalStatus:
@@ -48,10 +41,10 @@ class SessionGoalStatus:
 
 
 class SessionGoalReason:
-    """Stable host reason strings for evaluate, paint, and LLM confirm.
+    """Stable host reason strings for evaluate and LLM confirm.
 
     Call sites compare with ``==`` / helpers — do not invent parallel phrases.
-    Never embed ``session_goal:…`` tag grammar here: painted reasons can land in
+    Never embed ``session_goal:…`` tag grammar here: progress reasons can land in
     captured reply text and must not look like progress claims.
     """
 
@@ -138,7 +131,7 @@ class SessionGoal:
     step_count: int | None = None
     checklist: tuple[str, ...] = ()
     completed: frozenset[int] = frozenset()
-    # Last host/evaluator reason shown in progress paint and continuation nudges.
+    # Last host/evaluator reason shown in progress output and continuation nudges.
     last_reason: str = ""
     # What earlier turns established, oldest first. Continuations are fresh
     # ``chat`` calls and history carries prose only, so without this a later
@@ -151,15 +144,15 @@ class SessionGoal:
     # the number by another route and reported a different one with no mention
     # of the first.
     last_answer: str = ""
-    # Wall-clock start for ``/goal`` duration paint (``time.time()``).
+    # Wall-clock start for ``/goal`` duration progress (``time.time()``).
     started_at: float | None = None
     # Session token totals when the goal was attached — delta is goal spend.
     token_baseline_input: int = 0
     token_baseline_output: int = 0
-    # True when attached via ``/goal set``. While ACTIVE or PAUSED, handoff
+    # True when attached via ``/goal set``. While ACTIVE or PAUSED, a new goal
     # must not replace it. Host-owned condition-only goals may achieve on the
     # ``session_goal:achieved`` tag without tool evidence (product rule for the
-    # slash path — handoff goals still require tools).
+    # slash path — agent-attached goals still require tools).
     host_owned: bool = False
 
     def with_status(self, status: str) -> SessionGoal:
@@ -207,135 +200,28 @@ class SessionGoal:
         return unfinished[0] if unfinished else None
 
 
-def _checklist_from_handoffs(handoff_contents: Sequence[str]) -> tuple[str, ...]:
-    items: list[str] = []
-    for raw in handoff_contents:
-        item = find_tag_suffix(raw, "session_goal_item")
-        if item:
-            items.append(item)
-    return tuple(items)
-
-
-def session_goal_from_handoffs(
-    handoff_contents: Sequence[str],
+def build_session_goal(
+    condition: str,
     *,
-    condition: str = "",
-) -> SessionGoal | None:
-    """Build a :class:`SessionGoal` from action ``session_goal`` handoff tags.
-
-    Accepted forms (structured; not fuzzy user-text matching). ``:`` and ``=``
-    separators are both accepted (schema docs use ``=``; content tags often use
-    ``:``):
-
-    - ``session_goal:continue`` — attach an session goal
-    - ``session_goal_max_turns:<n>`` — session-goal turn cap (typed on the tool schema)
-    - ``session_goal_item:<text>`` / ``session_goal_item=<text>``
-    - ``session_goal:achieved`` / ``session_goal:done=…`` — progress tags, not
-      attach tags.
-    """
-    checklist = _checklist_from_handoffs(handoff_contents)
-    attach_tag: str | None = None
-    for raw in handoff_contents:
-        body = find_tag_suffix(raw, "session_goal")
-        if body is None:
-            continue
-        # Progress tags use the same key; never treat them as attach.
-        if body == "achieved" or body.startswith("done="):
-            continue
-        attach_tag = body
-        break
-
-    if attach_tag is None and not checklist:
-        return None
-
-    max_turns = _DEFAULT_MAX_OUTER_TURNS
-    explicit_cap = False
-    step_count: int | None = None
-    body = attach_tag or "continue"
-    for raw in handoff_contents:
-        cap = find_tag_suffix(raw, "session_goal_max_turns")
-        if cap is None:
-            continue
-        try:
-            max_turns = max(1, int(cap.strip()))
-            explicit_cap = True
-        except ValueError:
-            continue
-        break
-
-    if checklist and step_count is None:
-        step_count = len(checklist)
-        # Default budget may stretch to fit a checklist; an explicit typed cap
-        # is a hard ceiling (budget_exhausted if items remain).
-        if not explicit_cap:
-            max_turns = max(max_turns, step_count)
-
-    goal_condition = strip_shell_prompt_chrome(condition) or body
-    goal_condition = truncate_message(goal_condition, MAX_GOAL_CONDITION_CHARS)
+    checklist: tuple[str, ...] = (),
+    max_outer_turns: int | None = None,
+) -> SessionGoal:
+    """Build an active agent-attached goal from structured tool input."""
+    clean_items = tuple(item.strip() for item in checklist if item.strip())
+    max_turns = max(1, max_outer_turns) if max_outer_turns is not None else _DEFAULT_MAX_OUTER_TURNS
+    if clean_items and max_outer_turns is None:
+        max_turns = max(max_turns, len(clean_items))
+    goal_condition = truncate_message(
+        strip_shell_prompt_chrome(condition),
+        MAX_GOAL_CONDITION_CHARS,
+    )
     return SessionGoal(
         condition=goal_condition,
         max_outer_turns=max_turns,
         status=SessionGoalStatus.ACTIVE,
-        step_count=step_count,
-        checklist=checklist,
+        step_count=len(clean_items) or None,
+        checklist=clean_items,
     )
-
-
-def session_goal_from_assistant_handoffs(
-    handoffs: Sequence[AssistantHandoff],
-    *,
-    condition: str = "",
-) -> SessionGoal | None:
-    """Build a :class:`SessionGoal` from typed :class:`AssistantHandoff` fields.
-
-    ``database_query:*`` handoffs never attach a host loop — missing DB
-    connectivity is explained in one reply (connect/setup guidance). A planner
-    that still sets ``session_goal=true`` on those handoffs is ignored here.
-    """
-    # Reuse the tag body parser by projecting fields to clean content tags —
-    # ontology fields are already validated at decode time.
-    projected: list[str] = []
-    for handoff in handoffs:
-        if handoff_has_tag(handoff.content, "database_query"):
-            continue
-        if handoff.session_goal:
-            projected.append("session_goal:continue")
-            if handoff.session_goal_max_turns is not None:
-                projected.append(f"session_goal_max_turns:{handoff.session_goal_max_turns}")
-        for item in handoff.session_goal_items:
-            projected.append(f"session_goal_item:{item}")
-    if not projected:
-        return None
-    return session_goal_from_handoffs(projected, condition=condition)
-
-
-def attach_session_goal_from_handoffs(
-    session: Any,
-    handoff_contents: Sequence[str],
-    *,
-    condition: str = "",
-    handoffs: Sequence[AssistantHandoff] = (),
-) -> SessionGoal | None:
-    """Attach a goal from typed handoffs (preferred) or legacy tag strings.
-
-    An **attached** goal (``active`` or ``paused``, including host-owned
-    ``/goal set``) stays authoritative — handoff must not replace it
-    mid-flight. Terminal goals (achieved / cleared / …) may be replaced so a
-    later handoff can start fresh work.
-    """
-    existing = getattr(session, "session_goal", None)
-    if session_goal_is_attached(session):
-        return existing if isinstance(existing, SessionGoal) else None
-    detected = None
-    if handoffs:
-        detected = session_goal_from_assistant_handoffs(handoffs, condition=condition)
-    if detected is None and not any(
-        handoff_has_tag(content, "database_query") for content in handoff_contents
-    ):
-        detected = session_goal_from_handoffs(handoff_contents, condition=condition)
-    if detected is None:
-        return None
-    return attach_session_goal(session, detected)
 
 
 def _session_token_totals(session: Any | None) -> tuple[int, int]:
@@ -518,7 +404,7 @@ def strip_shell_prompt_chrome(text: str) -> str:
 def derive_session_goal_reason(goal: SessionGoal) -> str:
     """Structured reason from goal state (no LLM).
 
-    Used by evaluate/paint/nudge so hosts stay honest and cheap. Returns a
+    Used by evaluate/progress/nudge so hosts stay honest and cheap. Returns a
     :class:`SessionGoalReason` string — never tag grammar.
     """
     if goal.status == SessionGoalStatus.ACHIEVED:
@@ -557,14 +443,12 @@ __all__ = [
     "SessionGoalStatus",
     "apply_session_goal_progress",
     "attach_session_goal",
-    "attach_session_goal_from_handoffs",
+    "build_session_goal",
     "clear_session_goal",
     "derive_session_goal_reason",
     "mark_session_goal_started",
     "refresh_session_goal_reason",
     "session_goal_elapsed_seconds",
-    "session_goal_from_assistant_handoffs",
-    "session_goal_from_handoffs",
     "session_goal_is_active",
     "session_goal_is_attached",
     "session_goal_is_paused",

@@ -425,7 +425,7 @@ def _init_sentry_once(
     """
     import sentry_sdk
 
-    from integrations.llm_cli.errors import (
+    from integrations.llm_cli import (
         CLIAuthenticationRequired,
         CLIInterruptedError,
         CLITimeoutError,

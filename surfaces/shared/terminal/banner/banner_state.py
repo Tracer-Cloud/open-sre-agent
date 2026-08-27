@@ -132,7 +132,7 @@ def _build_ambient_right_column(session: object = None) -> Text:
         if any(status == "incomplete" for _name, status in entries):
             parts.append(Text("⚠ incomplete — run /integrations verify", style=WARNING))
     else:
-        parts.append(Text("run /onboard to connect tools", style=DIM))
+        parts.append(Text("add tools later with /integrations setup", style=DIM))
 
     parts.append(Text("───", style=DIM))
 

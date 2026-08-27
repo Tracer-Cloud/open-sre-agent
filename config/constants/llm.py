@@ -18,6 +18,10 @@ from typing import Final
 
 LLM_PROVIDER_ENV: Final[str] = "LLM_PROVIDER"
 
+#: Legacy key from the removed OAuth auth method. API keys are the only LLM
+#: auth path now; env sync strips this from existing ``.env`` files.
+LLM_AUTH_METHOD_ENV: Final[str] = "LLM_AUTH_METHOD"
+
 AZURE_OPENAI_BASE_URL_ENV: Final[str] = "AZURE_OPENAI_BASE_URL"
 AZURE_OPENAI_API_VERSION_ENV: Final[str] = "AZURE_OPENAI_API_VERSION"
 AZURE_OPENAI_API_KEY_ENV: Final[str] = "AZURE_OPENAI_API_KEY"

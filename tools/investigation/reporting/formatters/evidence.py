@@ -6,6 +6,7 @@ from typing import Any
 
 from tools.investigation.reporting.context import ReportContext
 from tools.investigation.reporting.formatters.base import (
+    escape_slack_mrkdwn,
     format_html_link,
     format_slack_link,
     shorten_text,
@@ -270,14 +271,18 @@ def format_cited_evidence_section(ctx: ReportContext) -> str:
             summary = entry.get("summary")
             snippet = entry.get("snippet")
             provenance = entry.get("provenance")
+            # label/url are escaped inside format_slack_link; summary, provenance,
+            # and snippet are free text from tool output (including third-party
+            # data like issue titles or incident names) and need the same
+            # treatment here so they can't inject a live link or mention.
             link = format_slack_link(label, url or None)
             line = f"- {display_id} — {link}"
             if summary:
-                line += f" — {summary}"
+                line += f" — {escape_slack_mrkdwn(str(summary))}"
             if provenance:
-                line += f" — provenance: {provenance}"
+                line += f" — provenance: {escape_slack_mrkdwn(str(provenance))}"
             if snippet:
-                line += f" — {shorten_text(snippet, max_chars=100)}"
+                line += f" — {escape_slack_mrkdwn(shorten_text(str(snippet), max_chars=100))}"
             lines.append(line)
 
     tool_calls_line = _format_tool_calls_line(ctx)

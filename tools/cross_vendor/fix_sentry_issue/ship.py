@@ -31,14 +31,14 @@ from integrations.git import (
     push_branch,
     short_head,
 )
-from integrations.github.client import resolve_github_token
-from integrations.github.pull_requests import (
+from integrations.github import (
     ERR_GITHUB_TOKEN as GH_PR_ERR_GITHUB_TOKEN,
 )
-from integrations.github.pull_requests import (
+from integrations.github import (
     GitHubPullRequestError,
     PullRequest,
     open_pull_request,
+    resolve_github_token,
 )
 from tools.cross_vendor.fix_sentry_issue.errors import (
     ERR_GITHUB_TOKEN,

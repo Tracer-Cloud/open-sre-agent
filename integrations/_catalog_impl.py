@@ -84,6 +84,10 @@ from config.constants.github import (
     GITHUB_MCP_URL_ENV,
 )
 from config.constants.gitlab import GITLAB_AUTH_TOKEN_ENV, GITLAB_BASE_URL_ENV
+from config.constants.google_docs import (
+    GOOGLE_CREDENTIALS_FILE_ENV,
+    GOOGLE_DRIVE_FOLDER_ID_ENV,
+)
 from config.constants.grafana import (
     GRAFANA_CA_BUNDLE_ENV,
     GRAFANA_INSTANCE_URL_ENV,
@@ -105,6 +109,7 @@ from config.constants.helm import (
     HELM_PATH_ENV,
     OSRE_HELM_INTEGRATION_ENV,
 )
+from config.constants.hermes import HERMES_LOG_PATH_ENV
 from config.constants.honeycomb import (
     HONEYCOMB_API_KEY_ENV,
     HONEYCOMB_BASE_URL_ENV,
@@ -277,6 +282,7 @@ from integrations.config_models import (
     CoralogixIntegrationConfig,
     DatadogIntegrationConfig,
     DiscordBotConfig,
+    GoogleDocsIntegrationConfig,
     GrafanaIntegrationConfig,
     HelmIntegrationConfig,
     IncidentIoIntegrationConfig,
@@ -309,6 +315,7 @@ from integrations.grafana import classify as _classify_grafana
 from integrations.groundcover import classify as _classify_groundcover
 from integrations.groundcover.config import GroundcoverIntegrationConfig
 from integrations.helm import classify as _classify_helm
+from integrations.hermes.config import classify as _classify_hermes
 from integrations.honeycomb import classify as _classify_honeycomb
 from integrations.honeycomb.config import HoneycombIntegrationConfig
 from integrations.incident_io import classify as _classify_incident_io
@@ -542,6 +549,7 @@ _CLASSIFIERS: dict[str, _ClassifyFn] = {
     "kubernetes": _classify_kubernetes,
     "argocd": _classify_argocd,
     "helm": _classify_helm,
+    "hermes": _classify_hermes,
     "victoria_logs": _classify_victoria_logs,
     "bitbucket": _classify_bitbucket,
     "snowflake": _classify_snowflake,
@@ -1211,6 +1219,10 @@ def load_env_integrations() -> list[dict[str, Any]]:
                 )
             )
 
+    hermes_log_path = os.getenv(HERMES_LOG_PATH_ENV, "").strip()
+    if hermes_log_path:
+        integrations.append(_active_env_record("hermes", {"log_path": hermes_log_path}))
+
     vercel_api_token = resolve_env_credential(VERCEL_API_TOKEN_ENV)
     if vercel_api_token:
         try:
@@ -1307,6 +1319,29 @@ def load_env_integrations() -> list[dict[str, Any]]:
                 _active_env_record(
                     "jira",
                     jira_config.model_dump(exclude={"integration_id"}),
+                )
+            )
+
+    google_docs_credentials_file = os.getenv(GOOGLE_CREDENTIALS_FILE_ENV, "").strip()
+    google_docs_folder_id = os.getenv(GOOGLE_DRIVE_FOLDER_ID_ENV, "").strip()
+    if google_docs_credentials_file and google_docs_folder_id:
+        try:
+            google_docs_config = GoogleDocsIntegrationConfig.model_validate(
+                {
+                    "credentials_file": google_docs_credentials_file,
+                    "folder_id": google_docs_folder_id,
+                }
+            )
+        except Exception as exc:
+            _report_env_loader_failure(exc, integration="google_docs")
+        else:
+            integrations.append(
+                _active_env_record(
+                    "google_docs",
+                    {
+                        "credentials_file": google_docs_config.credentials_file,
+                        "folder_id": str(google_docs_config.folder_id).strip(),
+                    },
                 )
             )
 
@@ -2382,8 +2417,8 @@ def resolve_effective_integrations(
             },
         )
     else:
-        credentials_file = os.getenv("GOOGLE_CREDENTIALS_FILE", "").strip()
-        folder_id = os.getenv("GOOGLE_DRIVE_FOLDER_ID", "").strip()
+        credentials_file = os.getenv(GOOGLE_CREDENTIALS_FILE_ENV, "").strip()
+        folder_id = os.getenv(GOOGLE_DRIVE_FOLDER_ID_ENV, "").strip()
         if credentials_file and folder_id:
             effective["google_docs"] = _effective_entry(
                 "local env",

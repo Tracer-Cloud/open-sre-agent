@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from collections import Counter
 from datetime import UTC, date, datetime, time, timedelta
+from http import HTTPStatus
 from math import ceil
 from typing import Any
 
@@ -83,12 +84,16 @@ def _daily_rows(start_day: date, days: int, counts: Counter[date]) -> list[dict[
 
 def _github_stargazer_listing_error(exc: GitHubApiError) -> str:
     message = str(exc)
-    if exc.status_code == 401:
+    if exc.status_code == HTTPStatus.UNAUTHORIZED:
         return (
             "GitHub authentication is required to read timestamped stargazer history; "
             "the current repository star count is still available from public metadata."
         )
-    if exc.status_code in {403, 404, 422}:
+    if exc.status_code in {
+        HTTPStatus.FORBIDDEN,
+        HTTPStatus.NOT_FOUND,
+        HTTPStatus.UNPROCESSABLE_ENTITY,
+    }:
         return (
             f"{message}. GitHub stargazer timestamp listings may require repository "
             "admin/collaborator access or token access for this endpoint; current "

@@ -11,7 +11,6 @@ from __future__ import annotations
 import logging
 
 from core.agent_harness import AgentSession, TurnResult
-from core.agent_harness.runtime import MAX_REPORT_GATHER_ITERATIONS, GatherPhase
 from infrastructure.scheduling.scheduler.agent_runner import AgentPayload
 from integrations.posthog.report_prerequisites import (
     DEFAULT_POSTHOG_PERIOD,
@@ -57,9 +56,6 @@ def _dispatch_headless_turn(message: str) -> TurnResult:
     return AgentSession.run_headless_turn(
         message,
         logger=logger,
-        # Schema discover + one HogQL call per metric needs more than the
-        # default chat gather budget (4), or later funnel rows never run.
-        gather=GatherPhase(max_iterations=MAX_REPORT_GATHER_ITERATIONS),
         is_tty=False,
     )
 

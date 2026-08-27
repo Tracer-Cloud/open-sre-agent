@@ -5,6 +5,7 @@ public surfaces:
 
   - :func:`tools.investigation.capability.run_investigation`
   - :func:`tools.investigation.lifecycle.run_connected_investigation`
+    (deprecated facade over :func:`tools.investigation.agent_pipeline.run_agent_investigation`)
 
 The parameter MUST thread cleanly from the outer ``run_investigation``
 all the way to where the agent is constructed, so callers (e.g. test
@@ -81,7 +82,7 @@ def test_run_connected_investigation_uses_agent_class_when_provided() -> None:
     from tools.investigation.state_factory import make_initial_state
 
     state = make_initial_state(raw_alert="alert text")
-    with _stubbed_stages():
+    with _stubbed_stages(), pytest.warns(DeprecationWarning, match="deprecated"):
         run_connected_investigation(state, agent_class=_SentinelAgent)
 
     assert len(_SentinelAgent.instances_constructed) == 1
@@ -101,6 +102,7 @@ def test_run_connected_investigation_picks_default_policy_from_routing(cli_backe
     # agent ran.
     with (
         _stubbed_stages(),
+        pytest.warns(DeprecationWarning, match="deprecated"),
         patch(
             "core.agent_harness.runtime.agent_llm_is_cli_backed",
             return_value=cli_backed,
@@ -156,8 +158,8 @@ async def test_astream_investigation_picks_default_policy_from_routing(cli_backe
 def test_run_investigation_forwards_agent_class_to_pipeline() -> None:
     """End-to-end: passing ``agent_class`` to the outermost
     :func:`run_investigation` MUST reach the agent constructor — proves
-    the parameter threads through ``runners.run_investigation`` →
-    ``pipeline.run_connected_investigation`` → ``ConnectedInvestigationAgent``.
+    the parameter threads through ``capability.run_investigation`` →
+    ``agent_pipeline.run_agent_investigation`` → investigation agent.
     """
     _reset_sentinel()
     from tools.investigation.capability import run_investigation
@@ -211,6 +213,7 @@ def test_run_connected_investigation_runs_plan_actions_before_agent() -> None:
             return_value={},
         ),
         patch("tools.investigation.reporting.deliver", return_value={}),
+        pytest.warns(DeprecationWarning, match="deprecated"),
     ):
         run_connected_investigation(state, agent_class=_OrderAgent)
 

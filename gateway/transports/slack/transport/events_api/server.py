@@ -38,6 +38,7 @@ from gateway.transports.slack.transport.events_api.receiver import (
     admit_slack_http_request,
     admit_slack_interactivity_request,
 )
+from infrastructure.request_body_limit import RequestBodyLimitMiddleware
 
 #: Starts a turn for one inbound message without blocking the request.
 SubmitTurn = Callable[[SlackInboundMessage], None]
@@ -110,6 +111,9 @@ def build_slack_http_app(
     without blocking — the route must answer Slack first.
     """
     app = FastAPI()
+    # Slack's signature covers the raw body, so both routes must read it before
+    # they can authenticate the caller. Bound the read itself.
+    app.add_middleware(RequestBodyLimitMiddleware)
 
     async def _admit(request: Request) -> Response:
         if not gate.accepting:

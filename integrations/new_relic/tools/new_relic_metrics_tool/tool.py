@@ -8,6 +8,7 @@ from config.constants.new_relic import (
     NEW_RELIC_DEFAULT_INCIDENT_LIMIT,
     NEW_RELIC_DEFAULT_WINDOW_MINUTES,
 )
+from core.domain.types.evidence import record_evidence_entry
 from core.tool import BaseTool, EvidenceType, SideEffectLevel
 from core.tool_framework import tool
 from core.tool_framework.utils import tool_unavailable
@@ -50,11 +51,32 @@ def _extract_params(sources: dict[str, dict[str, Any]]) -> dict[str, Any]:
     }
 
 
+def _map_query_new_relic_metrics(
+    evidence: dict[str, Any], output: dict[str, Any], _tool_input: dict[str, Any]
+) -> None:
+    """Cite the returned row count, noting when the fetch was truncated."""
+    if not output.get("available"):
+        return
+    results = output.get("results") or []
+    if not results:
+        return
+    summary = f"{len(results)} row(s)"
+    if output.get("truncated"):
+        summary += " (truncated)"
+    record_evidence_entry(
+        evidence,
+        source="query_new_relic_metrics",
+        label="New Relic Metrics",
+        summary=summary,
+    )
+
+
 class NewRelicMetricsTool(BaseTool):
     """Run a model-supplied NRQL query through NerdGraph and return raw rows."""
 
     name = "query_new_relic_metrics"
     source = _SOURCE
+    evidence_mapper = _map_query_new_relic_metrics
     description = (
         "Run an NRQL SELECT query against the configured New Relic account and return "
         "normalized metric rows. Accepts the nrqlQuery field returned by "

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from typing import Any
 
+from core.domain.types.evidence import record_evidence_entry
 from core.domain.types.tools import ToolSurface
 from core.tool import SideEffectLevel, report_run_error
 from core.tool_framework import tool
@@ -59,6 +60,20 @@ def _normalize_repository(repo: dict[str, Any], *, owner: str, repo_name: str) -
     }
 
 
+def _map_get_github_repository(
+    evidence: dict[str, Any], output: dict[str, Any], _input: dict[str, Any]
+) -> None:
+    if output.get("repository"):
+        owner = output.get("owner") or _input.get("owner", "unknown")
+        repo = output.get("repo") or _input.get("repo", "unknown")
+        record_evidence_entry(
+            evidence,
+            source="get_github_repository",
+            label="GitHub Repository Info",
+            summary=f"{owner}/{repo}",
+        )
+
+
 @tool(
     name="get_github_repository",
     source="github",
@@ -90,6 +105,7 @@ def _normalize_repository(repo: dict[str, Any], *, owner: str, repo_name: str) -
     is_available=_github_repository_available,
     extract_params=_github_repository_extract_params,
     injected_params=GITHUB_INJECTED_PARAMS,
+    evidence_mapper=_map_get_github_repository,
 )
 def get_github_repository(
     owner: str,

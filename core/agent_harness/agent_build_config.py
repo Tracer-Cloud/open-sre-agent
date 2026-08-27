@@ -18,7 +18,6 @@ from core.agent_harness.ports import (
     ToolEventObserver,
     ToolProvider,
 )
-from core.agent_harness.turns.gather_phase import GatherPhase
 
 
 class BuildTools(Protocol):
@@ -45,13 +44,6 @@ class BuildPrompts(Protocol):
 
     def __call__(self, session: SessionState, /) -> PromptContextProvider:
         """Return the prompt context for this session."""
-
-
-class BuildGather(Protocol):
-    """``(session, console) -> GatherPhase``."""
-
-    def __call__(self, session: SessionState, console: Any, /) -> GatherPhase:
-        """Return how this host runs the gather phase."""
 
 
 class DescribeTool(Protocol):
@@ -84,7 +76,6 @@ class AgentBuildConfig:
 
     build_tools: BuildTools | None = None
     build_prompts: BuildPrompts | None = None
-    build_gather: BuildGather | None = None
     error_reporter: ErrorReporter | None = None
     apply_capability_policy: ApplyCapabilityPolicy | None = None
     #: Live tool-status wording and subprocess rendering. Both reach the tool
@@ -96,7 +87,6 @@ class AgentBuildConfig:
 __all__ = [
     "AgentBuildConfig",
     "ApplyCapabilityPolicy",
-    "BuildGather",
     "BuildPrompts",
     "BuildTools",
     "DescribeTool",
