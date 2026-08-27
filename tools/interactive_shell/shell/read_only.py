@@ -319,7 +319,11 @@ _DATE_WRITE_FLAGS: frozenset[str] = frozenset({"-s", "--set"})
 
 
 def _executable_is_read_only(exe: str, rest: list[str]) -> bool:
-    name = exe.rsplit("/", 1)[-1]
+    if "/" in exe:
+        # A path-qualified executable (./ls, /tmp/git, /usr/bin/…) runs that exact
+        # file, not the allowlisted command resolved on PATH; never trust it.
+        return False
+    name = exe
     if name == "git":
         if any(tok.startswith(_DANGEROUS_TRANSPORTS) for tok in rest):
             return False
@@ -361,7 +365,9 @@ def is_read_only_shell_command(command: str) -> bool:
     text = command.strip()
     if not text:
         return False
-    if "$(" in text or "`" in text or _HEREDOC_RE.search(text):
+    # Any construct that can run a nested command: command substitution ``$(``,
+    # backticks, and process substitution ``<(`` / ``>(``. Fail closed.
+    if any(token in text for token in ("$(", "`", "<(", ">(")) or _HEREDOC_RE.search(text):
         return False
     if _has_file_write_redirect(text):
         return False

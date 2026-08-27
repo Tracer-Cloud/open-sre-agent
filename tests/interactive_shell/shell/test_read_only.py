@@ -54,6 +54,9 @@ _MUTATING = [
     "hostname newname",  # sets kernel hostname
     "LD_PRELOAD=/evil.so ls",  # env prefix can inject code
     "git ls-remote ext::evil",  # ext:: transport runs a helper
+    "./ls",  # path-qualified executable is not the allowlisted command
+    "/tmp/git status",  # attacker-controlled path
+    "diff <(rm /tmp/x) file",  # process substitution runs a nested command
 ]
 
 
