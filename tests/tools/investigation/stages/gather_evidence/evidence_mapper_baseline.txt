@@ -162,7 +162,6 @@ query_datadog_events
 query_datadog_logs
 query_datadog_metrics
 query_datadog_monitors
-query_grafana_annotations
 query_groundcover_logs
 query_groundcover_traces
 query_splunk_logs
