@@ -18,6 +18,8 @@ def test_system_prompt_base_comes_from_markdown_file() -> None:
 
 def test_system_prompt_runs_explicit_commands_without_repository_probe() -> None:
     assert "execute it directly with the matching tool" in _SYSTEM_PROMPT_BASE
+    assert "call `cli_exec` with the leading `opensre` prefix removed" in _SYSTEM_PROMPT_BASE
+    assert "do not route it through `shell_run`" in _SYSTEM_PROMPT_BASE
     assert "Do not search for AGENTS.md files or inspect the repository first" in (
         _SYSTEM_PROMPT_BASE
     )
