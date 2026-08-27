@@ -67,3 +67,12 @@ def test_frozen_bundle_ships_the_shared_system_prompt() -> None:
     assert '"core.agent_harness.prompts"' in spec
     assert 'includes=["opensre_system_prompt.md"]' in spec
     assert (REPO_ROOT / "core/agent_harness/prompts/opensre_system_prompt.md").is_file()
+
+
+def test_release_artifacts_ship_the_planning_instructions() -> None:
+    """The task-plan prompt loader reads its adjacent Markdown at runtime."""
+    pyproject = tomllib.loads((REPO_ROOT / "pyproject.toml").read_text(encoding="utf-8"))
+    package_data = pyproject["tool"]["setuptools"]["package-data"]
+
+    assert package_data["core.agent_harness.task_plan"] == ["planning_instructions.md"]
+    assert (REPO_ROOT / "core/agent_harness/task_plan/planning_instructions.md").is_file()

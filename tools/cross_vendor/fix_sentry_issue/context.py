@@ -8,6 +8,7 @@ to the coding agent, which adds its own safety rules + prompt-injection guard.
 from __future__ import annotations
 
 from dataclasses import dataclass
+from http import HTTPStatus
 
 import httpx
 
@@ -99,11 +100,11 @@ def _fetch_issue(config: SentryConfig, issue_id: str) -> dict:
         issue = get_sentry_issue(config=config, issue_id=issue_id)
     except httpx.HTTPStatusError as exc:
         status = exc.response.status_code
-        if status == 404:
+        if status == HTTPStatus.NOT_FOUND:
             raise FixIssueError(
                 ERR_ISSUE_NOT_FOUND, f"Sentry issue {issue_id} not found (404). Check the URL."
             ) from exc
-        if status in (401, 403):
+        if status in (HTTPStatus.UNAUTHORIZED, HTTPStatus.FORBIDDEN):
             raise FixIssueError(
                 ERR_SENTRY_UNAVAILABLE,
                 f"Sentry rejected the request ({status}); check SENTRY_AUTH_TOKEN access.",

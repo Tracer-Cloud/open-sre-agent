@@ -79,7 +79,9 @@ def test_rds_storage_fixture_metrics_have_compact_summaries() -> None:
 def test_run_no_client() -> None:
     mock_client = MagicMock()
     mock_client.is_configured = False
-    with patch("integrations.grafana.tools._resolve_grafana_client", return_value=mock_client):
+    with patch(
+        "integrations.grafana.tools._helpers._resolve_grafana_client", return_value=mock_client
+    ):
         result = query_grafana_metrics(metric_name="cpu_usage", grafana_endpoint="http://grafana")
     assert result["available"] is False
 
@@ -88,7 +90,9 @@ def test_run_no_mimir_datasource() -> None:
     mock_client = MagicMock()
     mock_client.is_configured = True
     mock_client.mimir_datasource_uid = None
-    with patch("integrations.grafana.tools._resolve_grafana_client", return_value=mock_client):
+    with patch(
+        "integrations.grafana.tools._helpers._resolve_grafana_client", return_value=mock_client
+    ):
         result = query_grafana_metrics(metric_name="cpu_usage", grafana_endpoint="http://grafana")
     assert result["available"] is False
     assert "Mimir" in result["error"]
@@ -104,7 +108,9 @@ def test_run_happy_path() -> None:
         "metrics": [{"name": "pipeline_runs_total"}],
         "total_series": 1,
     }
-    with patch("integrations.grafana.tools._resolve_grafana_client", return_value=mock_client):
+    with patch(
+        "integrations.grafana.tools._helpers._resolve_grafana_client", return_value=mock_client
+    ):
         result = query_grafana_metrics(
             metric_name="pipeline_runs_total", grafana_endpoint="http://grafana"
         )

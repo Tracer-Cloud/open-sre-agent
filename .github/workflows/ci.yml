@@ -68,6 +68,10 @@ jobs:
         if: steps.changes.outputs.source == 'true' || github.event_name == 'push'
         run: make verify-integrations-smoke
 
+      - name: Verify tool registry index
+        if: steps.changes.outputs.source == 'true' || github.event_name == 'push'
+        run: uv run pytest -q tests/tools/test_registry_index.py
+
       - name: Import graph
         if: steps.changes.outputs.source == 'true' || github.event_name == 'push'
         run: uv run python .github/ci/check_imports.py --strict
@@ -125,11 +129,15 @@ jobs:
         if: steps.changes.outputs.source == 'true' || github.event_name == 'push'
         run: uv run python -m mypy $PYTHON_SOURCE_PATHS
 
+      - name: Verify typed tool contracts
+        if: steps.changes.outputs.source == 'true' || github.event_name == 'push'
+        run: uv run pytest -q tests/core/tool/test_contracts.py
+
   test:
     name: test (${{ matrix.shard }})
     strategy:
       fail-fast: false
-      max-parallel: 14
+      max-parallel: 23
       matrix:
         include:
           - os: ubuntu-latest
@@ -138,8 +146,10 @@ jobs:
             # which pins openai for its live action-planning oracles.
             extra_pytest_args: >-
               --ignore=tests/core/agent
+              --ignore=tests/core/tool/test_contracts.py
+              --ignore=tests/tools/test_registry_index.py
             split_args: >-
-              --ci-splits=4 --ci-group=1
+              --ci-splits=6 --ci-group=1
               --ci-durations-path=.github/ci/pytest-file-durations.json
             pytest_paths: >-
               tests/tools
@@ -153,8 +163,10 @@ jobs:
             shard: tools-runtime-2
             extra_pytest_args: >-
               --ignore=tests/core/agent
+              --ignore=tests/core/tool/test_contracts.py
+              --ignore=tests/tools/test_registry_index.py
             split_args: >-
-              --ci-splits=4 --ci-group=2
+              --ci-splits=6 --ci-group=2
               --ci-durations-path=.github/ci/pytest-file-durations.json
             pytest_paths: >-
               tests/tools
@@ -168,8 +180,10 @@ jobs:
             shard: tools-runtime-3
             extra_pytest_args: >-
               --ignore=tests/core/agent
+              --ignore=tests/core/tool/test_contracts.py
+              --ignore=tests/tools/test_registry_index.py
             split_args: >-
-              --ci-splits=4 --ci-group=3
+              --ci-splits=6 --ci-group=3
               --ci-durations-path=.github/ci/pytest-file-durations.json
             pytest_paths: >-
               tests/tools
@@ -183,8 +197,44 @@ jobs:
             shard: tools-runtime-4
             extra_pytest_args: >-
               --ignore=tests/core/agent
+              --ignore=tests/core/tool/test_contracts.py
+              --ignore=tests/tools/test_registry_index.py
             split_args: >-
-              --ci-splits=4 --ci-group=4
+              --ci-splits=6 --ci-group=4
+              --ci-durations-path=.github/ci/pytest-file-durations.json
+            pytest_paths: >-
+              tests/tools
+              tests/core
+              tests/infrastructure
+              tests/filestorage
+              tests/utils
+              tests/masking
+              tests/watch_dog
+          - os: ubuntu-latest
+            shard: tools-runtime-5
+            extra_pytest_args: >-
+              --ignore=tests/core/agent
+              --ignore=tests/core/tool/test_contracts.py
+              --ignore=tests/tools/test_registry_index.py
+            split_args: >-
+              --ci-splits=6 --ci-group=5
+              --ci-durations-path=.github/ci/pytest-file-durations.json
+            pytest_paths: >-
+              tests/tools
+              tests/core
+              tests/infrastructure
+              tests/filestorage
+              tests/utils
+              tests/masking
+              tests/watch_dog
+          - os: ubuntu-latest
+            shard: tools-runtime-6
+            extra_pytest_args: >-
+              --ignore=tests/core/agent
+              --ignore=tests/core/tool/test_contracts.py
+              --ignore=tests/tools/test_registry_index.py
+            split_args: >-
+              --ci-splits=6 --ci-group=6
               --ci-durations-path=.github/ci/pytest-file-durations.json
             pytest_paths: >-
               tests/tools
@@ -206,8 +256,11 @@ jobs:
             # plus the static ``test_import_boundaries`` guard the surfaces
             # restructure (#3299) added.
             llm_provider: openai
+            extra_pytest_args: >-
+              --ignore=tests/core/agent/test_turn_scenarios.py
+              --ignore=tests/cli/test_smoke.py
             split_args: >-
-              --ci-splits=4 --ci-group=1
+              --ci-splits=6 --ci-group=1
               --ci-durations-path=.github/ci/pytest-file-durations.json
             pytest_paths: >-
               tests/cli
@@ -224,8 +277,11 @@ jobs:
           - os: ubuntu-latest
             shard: cli-runtime-2
             llm_provider: openai
+            extra_pytest_args: >-
+              --ignore=tests/core/agent/test_turn_scenarios.py
+              --ignore=tests/cli/test_smoke.py
             split_args: >-
-              --ci-splits=4 --ci-group=2
+              --ci-splits=6 --ci-group=2
               --ci-durations-path=.github/ci/pytest-file-durations.json
             pytest_paths: >-
               tests/cli
@@ -242,8 +298,11 @@ jobs:
           - os: ubuntu-latest
             shard: cli-runtime-3
             llm_provider: openai
+            extra_pytest_args: >-
+              --ignore=tests/core/agent/test_turn_scenarios.py
+              --ignore=tests/cli/test_smoke.py
             split_args: >-
-              --ci-splits=4 --ci-group=3
+              --ci-splits=6 --ci-group=3
               --ci-durations-path=.github/ci/pytest-file-durations.json
             pytest_paths: >-
               tests/cli
@@ -260,8 +319,11 @@ jobs:
           - os: ubuntu-latest
             shard: cli-runtime-4
             llm_provider: openai
+            extra_pytest_args: >-
+              --ignore=tests/core/agent/test_turn_scenarios.py
+              --ignore=tests/cli/test_smoke.py
             split_args: >-
-              --ci-splits=4 --ci-group=4
+              --ci-splits=6 --ci-group=4
               --ci-durations-path=.github/ci/pytest-file-durations.json
             pytest_paths: >-
               tests/cli
@@ -276,9 +338,82 @@ jobs:
               tests/sandbox
               tests/hermes
           - os: ubuntu-latest
+            shard: cli-runtime-5
+            llm_provider: openai
+            extra_pytest_args: >-
+              --ignore=tests/core/agent/test_turn_scenarios.py
+              --ignore=tests/cli/test_smoke.py
+            split_args: >-
+              --ci-splits=6 --ci-group=5
+              --ci-durations-path=.github/ci/pytest-file-durations.json
+            pytest_paths: >-
+              tests/cli
+              tests/interactive_shell
+              tests/surfaces
+              tests/agent
+              tests/core/agent
+              tests/fleet_monitoring
+              tests/analytics
+              tests/tools/investigation
+              tests/delivery
+              tests/sandbox
+              tests/hermes
+          - os: ubuntu-latest
+            shard: cli-runtime-6
+            llm_provider: openai
+            extra_pytest_args: >-
+              --ignore=tests/core/agent/test_turn_scenarios.py
+              --ignore=tests/cli/test_smoke.py
+            split_args: >-
+              --ci-splits=6 --ci-group=6
+              --ci-durations-path=.github/ci/pytest-file-durations.json
+            pytest_paths: >-
+              tests/cli
+              tests/interactive_shell
+              tests/surfaces
+              tests/agent
+              tests/core/agent
+              tests/fleet_monitoring
+              tests/analytics
+              tests/tools/investigation
+              tests/delivery
+              tests/sandbox
+              tests/hermes
+          - os: ubuntu-latest
+            shard: cli-live-agent
+            llm_provider: openai
+            pytest_paths: tests/core/agent/test_turn_scenarios.py
+          # This subprocess-heavy file dominated a whole duration-balanced
+          # shard. Run complementary selections independently so its tests can
+          # use four runner cores without changing or dropping coverage.
+          - os: ubuntu-latest
+            shard: cli-smoke-1
+            llm_provider: openai
+            pytest_paths: tests/cli/test_smoke.py
+            extra_pytest_args: >-
+              -k 'test_opensre_landing_page_smoke or
+              test_opensre_help_smoke or
+              test_investigate_print_template_new_relic_smoke or
+              test_integrations_list_and_show_smoke or
+              test_tests_inventory_commands_smoke or
+              (test_onboard_interactive_smoke and not
+              test_onboard_interactive_smoke_cli_provider)'
+          - os: ubuntu-latest
+            shard: cli-smoke-2
+            llm_provider: openai
+            pytest_paths: tests/cli/test_smoke.py
+            extra_pytest_args: >-
+              -k 'not (test_opensre_landing_page_smoke or
+              test_opensre_help_smoke or
+              test_investigate_print_template_new_relic_smoke or
+              test_integrations_list_and_show_smoke or
+              test_tests_inventory_commands_smoke or
+              (test_onboard_interactive_smoke and not
+              test_onboard_interactive_smoke_cli_provider))'
+          - os: ubuntu-latest
             shard: integrations-and-misc-1
             split_args: >-
-              --ci-splits=4 --ci-group=1
+              --ci-splits=6 --ci-group=1
               --ci-durations-path=.github/ci/pytest-file-durations.json
             pytest_paths: >-
               tests/integrations
@@ -295,7 +430,7 @@ jobs:
           - os: ubuntu-latest
             shard: integrations-and-misc-2
             split_args: >-
-              --ci-splits=4 --ci-group=2
+              --ci-splits=6 --ci-group=2
               --ci-durations-path=.github/ci/pytest-file-durations.json
             pytest_paths: >-
               tests/integrations
@@ -312,7 +447,7 @@ jobs:
           - os: ubuntu-latest
             shard: integrations-and-misc-3
             split_args: >-
-              --ci-splits=4 --ci-group=3
+              --ci-splits=6 --ci-group=3
               --ci-durations-path=.github/ci/pytest-file-durations.json
             pytest_paths: >-
               tests/integrations
@@ -329,7 +464,41 @@ jobs:
           - os: ubuntu-latest
             shard: integrations-and-misc-4
             split_args: >-
-              --ci-splits=4 --ci-group=4
+              --ci-splits=6 --ci-group=4
+              --ci-durations-path=.github/ci/pytest-file-durations.json
+            pytest_paths: >-
+              tests/integrations
+              tests/bootstrap
+              tests/benchmarks
+              tests/chaos_engineering
+              tests/shared
+              tests/config
+              tests/github_ci
+              tests/quality
+              tests/packaging
+              tests/scheduler
+              gateway/tests
+          - os: ubuntu-latest
+            shard: integrations-and-misc-5
+            split_args: >-
+              --ci-splits=6 --ci-group=5
+              --ci-durations-path=.github/ci/pytest-file-durations.json
+            pytest_paths: >-
+              tests/integrations
+              tests/bootstrap
+              tests/benchmarks
+              tests/chaos_engineering
+              tests/shared
+              tests/config
+              tests/github_ci
+              tests/quality
+              tests/packaging
+              tests/scheduler
+              gateway/tests
+          - os: ubuntu-latest
+            shard: integrations-and-misc-6
+            split_args: >-
+              --ci-splits=6 --ci-group=6
               --ci-durations-path=.github/ci/pytest-file-durations.json
             pytest_paths: >-
               tests/integrations

@@ -60,9 +60,10 @@ def test_required_skill_data_covers_action_and_tool_guidance() -> None:
     )
 
 
-def test_required_data_covers_tool_data_files_that_are_not_documents() -> None:
-    """A tool reading a data file degrades silently when it is left out of the build.
+def test_required_data_covers_runtime_files_that_are_not_skill_documents() -> None:
+    """Runtime file loading breaks or degrades when data is left out of the build.
 
+    The task-plan loader requires adjacent Markdown or fails the turn outright.
     ``find_yc_api`` reads its endpoint index from a JSON file rather than a
     document, so the ``SKILL.md`` globs above do not reach it. Left out, the
     tool reports no endpoints at all instead of failing to import, which reads
@@ -72,6 +73,7 @@ def test_required_data_covers_tool_data_files_that_are_not_documents() -> None:
         path.relative_to(_REPO_ROOT).as_posix() for path in required_skill_files(_REPO_ROOT)
     }
 
+    assert "core/agent_harness/task_plan/planning_instructions.md" in relative_paths
     assert "integrations/yandex_cloud/api_index.json" in relative_paths
 
 

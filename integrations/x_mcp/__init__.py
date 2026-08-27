@@ -35,6 +35,7 @@ import os
 from collections.abc import AsyncIterator, Coroutine, Mapping
 from contextlib import AsyncExitStack, asynccontextmanager
 from dataclasses import dataclass
+from http import HTTPStatus
 from typing import Any, cast
 
 import httpx
@@ -342,7 +343,10 @@ def describe_x_mcp_error(err: BaseException, config: XMCPConfig) -> str:
     detail = _root_cause_message(err)
     hints: list[str] = []
 
-    if isinstance(err, httpx.HTTPStatusError) and err.response.status_code in (401, 403):
+    if isinstance(err, httpx.HTTPStatusError) and err.response.status_code in (
+        HTTPStatus.UNAUTHORIZED,
+        HTTPStatus.FORBIDDEN,
+    ):
         hints.append(
             "Authentication failed. If the endpoint is tunneled behind an "
             "authenticating proxy, set X_MCP_AUTH_TOKEN; otherwise check the "
