@@ -102,7 +102,9 @@ def render_task_plan(console: Console, plan: TaskPlan) -> None:
             line.append(f"{glyph} ", style=str(ui_theme.DIM))
             line.append(step, style=str(ui_theme.DIM))
         console.print(line)
-    explanation = strip_terminal_controls(plan.explanation)
+    # Keep the explanation's newlines: it is multi-line markdown (Facts,
+    # hypothesis table) that render_markdown_block lays out line by line.
+    explanation = strip_terminal_controls(plan.explanation, keep_whitespace=True)
     if explanation:
         render_markdown_block(console, explanation)
     console.print()

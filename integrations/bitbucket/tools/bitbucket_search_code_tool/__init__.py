@@ -14,6 +14,9 @@ from integrations.bitbucket.config import (
     build_bitbucket_config,
 )
 from integrations.bitbucket.tools.availability import bitbucket_available_or_backend
+from integrations.bitbucket.tools.bitbucket_search_code_tool._evidence import (
+    map_search_bitbucket_code,
+)
 
 
 def _resolve_config(
@@ -92,6 +95,7 @@ def _search_bitbucket_code_available(sources: dict[str, dict]) -> bool:
     },
     is_available=_search_bitbucket_code_available,
     extract_params=_search_bitbucket_code_extract_params,
+    evidence_mapper=map_search_bitbucket_code,
 )
 def search_bitbucket_code(
     query: str,

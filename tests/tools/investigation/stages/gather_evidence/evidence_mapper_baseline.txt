@@ -24,7 +24,6 @@ check_s3_marker
 create_google_docs_incident_report
 describe_eks_addon
 describe_eks_cluster
-ec2_instances_by_tag
 execute_python_code
 execute_yc_operation
 fetch_failed_run
@@ -39,7 +38,6 @@ get_azure_sql_server_status
 get_azure_sql_slow_queries
 get_azure_sql_wait_stats
 get_batch_statistics
-get_bitbucket_file_contents
 get_cloudwatch_batch_metrics
 get_cloudwatch_logs
 get_eks_deployment_status
@@ -47,7 +45,6 @@ get_eks_events
 get_eks_node_health
 get_eks_nodegroup_health
 get_eks_pod_logs
-get_elb_target_health
 get_error_logs
 get_failed_jobs
 get_failed_tools
@@ -126,7 +123,6 @@ kubernetes_list_nodes
 kubernetes_list_pods
 kubernetes_list_services
 kubernetes_list_statefulsets
-list_bitbucket_commits
 list_eks_clusters
 list_eks_deployments
 list_eks_namespaces
@@ -167,7 +163,6 @@ redeploy_railway_service
 replay_slack_thread_locally
 rocketchat_send_message
 scan_redis_keys
-search_bitbucket_code
 search_github_code
 search_github_issues
 search_openclaw_conversations
@@ -184,8 +179,6 @@ summarize_community_followups
 summarize_github_pr_status
 telegram_send_message
 twilio_notify
-vercel_deployment_logs
-vercel_deployment_status
 victoria_logs_query
 work_task_add
 work_task_complete

@@ -99,7 +99,10 @@ disable-model-invocation: false   # optional — set true to suppress attachment
 
 ### Files usually involved
 
-- `integrations/<name>/__init__.py` — config builders, validators, selectors, normalization helpers
+- `integrations/<name>/__init__.py` — package facade: a docstring, plus re-exports of the
+  public API when callers need them (see the `__init__.py` rule in [AGENTS.md](../AGENTS.md))
+- `integrations/<name>/config.py` — config model, `classify()`, validators, selectors,
+  normalization helpers
 - `integrations/<name>/client.py` — a dedicated API client, when the integration makes direct remote calls
 - `integrations/<name>/verifier.py` — local verification logic
 - `integrations/<name>/tools/<tool_name>_tool/` — the vendor's agent-callable tools (see §1)
@@ -116,10 +119,11 @@ disable-model-invocation: false   # optional — set true to suppress attachment
 - Datadog: `integrations/datadog/` (with `integrations/datadog/tools/`), `integrations/catalog.py`, tests under `tests/integrations/datadog/` and `tests/tools/test_datadog_*.py`.
 - Grafana: `integrations/grafana/` (with `integrations/grafana/tools/`), `integrations/catalog.py`, `surfaces/cli/wizard/local_grafana_stack/`, tests under `tests/integrations/grafana/` and `tests/tools/test_grafana_*.py`.
 - Hermes: `integrations/hermes/` (with `integrations/hermes/tools/hermes_logs_tool/` and `.../hermes_session_evidence_tool/`), `surfaces/cli/commands/hermes.py`, `tests/hermes/`, `tests/synthetic/hermes/`.
+- Bitbucket: `integrations/bitbucket/` shows the facade layout — a one-line `__init__.py` beside `config.py`, `client.py`, `verifier.py`, and `tools/`.
 
 ### Core completeness
 
-- [ ] Config, normalization, and validators are in place under `integrations/<name>/__init__.py`
+- [ ] Config, normalization, validators, and `classify()` are in place under `integrations/<name>/config.py`, leaving `__init__.py` a facade
 - [ ] Catalog resolution / env loading is wired correctly
 - [ ] Verification path is wired in `integrations/verify.py` and adapters/registry as needed
 - [ ] Integration-local client added under `integrations/<name>/client.py` (only if it makes direct remote calls)

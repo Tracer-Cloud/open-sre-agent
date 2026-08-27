@@ -18,6 +18,9 @@ from integrations.aws.topology_helper import (
     build_ec2_summary,
     extract_ec2_instances_params,
 )
+from integrations.ec2.tools.ec2_instances_by_tag_tool._evidence import (
+    map_ec2_instances_by_tag,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -88,6 +91,7 @@ def _summarize_instance(raw: dict[str, Any]) -> dict[str, Any]:
     },
     is_available=_is_available,
     extract_params=extract_ec2_instances_params,
+    evidence_mapper=map_ec2_instances_by_tag,
 )
 def ec2_instances_by_tag(
     tier: str = "",

@@ -31,16 +31,41 @@ def test_is_plan_diagnosis_prose_ignores_short_explanation() -> None:
     assert is_plan_diagnosis_prose("Revised after deploy window narrowed.") is False
 
 
-def test_promote_first_pending_step() -> None:
-    plan, _error = parse_task_plan(
+def test_is_plan_diagnosis_prose_ignores_empty() -> None:
+    assert is_plan_diagnosis_prose("") is False
+    assert is_plan_diagnosis_prose("   ") is False
+
+
+def test_is_plan_diagnosis_prose_detects_facts_and_leading_hypothesis() -> None:
+    text = "Facts: p99 only.\nLeading hypothesis: a queue knee after deploy."
+    assert is_plan_diagnosis_prose(text) is True
+
+
+def test_promote_first_pending_step_is_noop_when_work_already_started() -> None:
+    plan, error = parse_task_plan(
         {
             "plan": [
-                {"step": "First", "status": "pending"},
+                {"step": "First", "status": "in_progress"},
                 {"step": "Verify", "status": "pending"},
             ]
         }
     )
-    assert plan is not None
+    assert error is None and plan is not None
+    assert promote_first_pending_step(plan) is plan
+
+
+def test_promote_first_pending_step_preserves_explanation() -> None:
+    plan, error = parse_task_plan(
+        {
+            "plan": [
+                {"step": "First", "status": "pending"},
+                {"step": "Verify", "status": "pending"},
+            ],
+            "explanation": "### Facts\n- gradual",
+        }
+    )
+    assert error is None and plan is not None
     promoted = promote_first_pending_step(plan)
+    assert promoted.explanation == plan.explanation
+    assert "gradual" in promoted.explanation
     assert promoted.steps[0].status is PlanStepStatus.IN_PROGRESS
-    assert promoted.steps[1].status is PlanStepStatus.PENDING

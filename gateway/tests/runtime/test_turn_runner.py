@@ -86,7 +86,7 @@ def test_turn_runner_resolves_action_tools_from_live_session(monkeypatch: Any) -
         return [MagicMock(name="slack_send_message")]
 
     monkeypatch.setattr(
-        "core.agent_harness.tools.tool_provider.get_action_tools_from_integrations_context",
+        "core.agent_harness.tools.tool_provider.get_action_tools_from_integrations_view",
         _fake_get_tools,
     )
 

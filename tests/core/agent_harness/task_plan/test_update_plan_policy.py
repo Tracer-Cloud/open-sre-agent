@@ -108,3 +108,29 @@ def test_update_plan_tool_end_to_end_after_ask_user() -> None:
     assert session.plan_only_until_authorized is False
     assert session.task_plan is not None
     assert session.task_plan.steps[0].status is PlanStepStatus.IN_PROGRESS
+
+
+def test_normal_turn_honors_requested_plan_only() -> None:
+    session = Session()
+    plan, _error = parse_task_plan({"plan": _PLAN})
+    assert plan is not None
+    normalized, plan_only = apply_update_plan_host_policy(
+        plan,
+        plan_only_requested=True,
+        turn_user_message="plan this, do not run yet",
+        session=session,
+    )
+    assert plan_only is True
+    assert normalized.all_pending is True
+
+
+def test_apply_update_plan_session_is_set_only_for_the_latch() -> None:
+    from core.agent_harness.task_plan.update_plan_policy import apply_update_plan_session
+
+    session = Session()
+    session.plan_only_until_authorized = True
+    plan, _error = parse_task_plan({"plan": _PLAN})
+    assert plan is not None
+    apply_update_plan_session(session, plan, plan_only=False)
+    assert session.task_plan is plan
+    assert session.plan_only_until_authorized is True

@@ -439,7 +439,9 @@ class ActionRenderObserver:
             render_task_plan(self.console, plan)
             return
         render_plan_updated(self.console, plan)
-        explanation = strip_terminal_controls(plan.explanation)
+        # Keep the explanation's newlines: it is multi-line markdown (Facts,
+        # hypothesis table) that render_markdown_block lays out line by line.
+        explanation = strip_terminal_controls(plan.explanation, keep_whitespace=True)
         if explanation:
             render_markdown_block(self.console, explanation)
 
