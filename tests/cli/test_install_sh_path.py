@@ -124,13 +124,13 @@ def test_install_sh_styles_details_gray_and_get_started_yellow() -> None:
         COLOR_YELLOW=$'\\033[33m'
         BIN_NAME="opensre"
         muted "Checksum verification passed"
-        log "${COLOR_YELLOW}Run '${BIN_NAME}' to get started!${COLOR_RESET}"
+        log "${COLOR_YELLOW}Run 'uv run ${BIN_NAME}' to get started!${COLOR_RESET}"
         """
     )
 
     assert result.returncode == 0, result.stderr
     assert "\x1b[90mChecksum verification passed\x1b[0m" in result.stdout
-    assert "\x1b[33mRun 'opensre' to get started!\x1b[0m" in result.stdout
+    assert "\x1b[33mRun 'uv run opensre' to get started!\x1b[0m" in result.stdout
 
 
 def test_install_sh_prints_concise_install_confirmation() -> None:
@@ -278,7 +278,7 @@ def test_install_sh_uses_concise_unnumbered_install_messages() -> None:
     assert 'run_with_dots "Installing OpenSRE"' in source
     assert 'run_with_dots "Checking PATH configuration"' in source
     assert 'muted "Checksum verification passed"' in source
-    assert "Run '${BIN_NAME}' to get started!" in source
+    assert "Run 'uv run ${BIN_NAME}' to get started!" in source
     assert re.search(r"\[[0-9]+/[0-9]+\]", source) is None
     assert "Extracting %s into %s" not in source
     assert "Found binary at %s" not in source
@@ -308,7 +308,7 @@ def test_install_sh_concise_output_sequence() -> None:
         verify_release_checksum
         print_install_confirmation
         ensure_on_path
-        log "Run '${BIN_NAME}' to get started!"
+        log "Run 'uv run ${BIN_NAME}' to get started!"
         """
     )
 
@@ -317,7 +317,7 @@ def test_install_sh_concise_output_sequence() -> None:
         "Checksum verification passed",
         "OpenSRE v2026.8.26 installed successfully to /tmp/bin/opensre",
         "PATH already configured",
-        "Run 'opensre' to get started!",
+        "Run 'uv run opensre' to get started!",
     ]
     assert result.stderr.splitlines() == [
         "Downloading OpenSRE main build for darwin-arm64...",
