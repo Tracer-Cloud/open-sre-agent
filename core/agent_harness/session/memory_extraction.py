@@ -34,6 +34,10 @@ logger = logging.getLogger(__name__)
 
 MIN_CHAT_MESSAGES = 2
 MAX_MEMORIES_PER_SESSION = 5
+# Upper bound on how long session-close extraction may delay shutdown. The
+# blocking LLM call runs off the main thread and is abandoned past this, so a
+# slow provider cannot hang exit or force the user to Ctrl+C out.
+_CLOSE_EXTRACTION_TIMEOUT_SECONDS = 5.0
 _MAX_TRANSCRIPT_TURNS = 30
 
 _FENCED_JSON_RE = re.compile(r"```(?:json)?\s*(\[.*?\])\s*```", re.DOTALL)
@@ -159,7 +163,19 @@ def schedule_memory_extraction(
         with _worker_lock:
             _pending_messages = None
             _pending_context = None
-        _extract_memories_safe(snapshot)
+        # Run the blocking extraction off the main thread and wait a bounded time
+        # for it. Shutdown never hangs on a slow LLM call, and the interruptible
+        # join keeps a Ctrl+C during exit from raising a stray SystemExit through
+        # the network read. The daemon thread is abandoned if it overruns.
+        ctx = contextvars.copy_context()
+        worker = threading.Thread(
+            target=ctx.run,
+            args=(_extract_memories_safe, snapshot),
+            name="opensre-memory-extraction-close",
+            daemon=True,
+        )
+        worker.start()
+        worker.join(timeout=_CLOSE_EXTRACTION_TIMEOUT_SECONDS)
         return
     _schedule_coalesced(snapshot)
 

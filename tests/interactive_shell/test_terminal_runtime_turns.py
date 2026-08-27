@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import io
 
 import pytest
@@ -213,34 +214,48 @@ def test_turn_needs_exclusive_stdin_for_config(
     )
 
 
-def test_queued_literal_quit_requests_runtime_exit() -> None:
-    async def _scenario() -> None:
-        from surfaces.interactive_shell.runtime.core.state import ReplState
+@pytest.mark.asyncio
+async def test_queued_literal_quit_requests_runtime_exit(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Queued ``/quit`` must set ``exit_requested`` without blocking on analytics I/O."""
+    # Match ``test_commands.py``: real ``/quit`` can flush PostHog; under xdist +
+    # coverage that network drain has hung CI workers for the full job timeout.
+    monkeypatch.setattr(
+        "surfaces.interactive_shell.command_registry.system._flush_analytics_on_exit",
+        lambda _console: None,
+    )
+    from surfaces.interactive_shell.runtime.core.state import ReplState
 
-        state = ReplState()
-        session = Session()
-        console = Console(file=io.StringIO(), force_terminal=False, highlight=False)
+    state = ReplState()
+    session = Session()
+    console = Console(file=io.StringIO(), force_terminal=False, highlight=False)
 
-        async def _run_turn(text: str) -> None:
-            await asyncio.to_thread(
-                run_harness_turn,
-                text,
-                session,
-                console,
-                recorder=None,
-                confirm_fn=None,
-                is_tty=None,
-                request_exit=state.request_exit,
-            )
+    async def _run_turn(text: str) -> None:
+        await asyncio.to_thread(
+            run_harness_turn,
+            text,
+            session,
+            console,
+            recorder=None,
+            confirm_fn=None,
+            is_tty=None,
+            request_exit=state.request_exit,
+        )
 
-        worker = asyncio.create_task(run_agent_turn_queue(state=state, run_turn=_run_turn))
+    worker = asyncio.create_task(run_agent_turn_queue(state=state, run_turn=_run_turn))
+    try:
         await state.queue.put("/quit")
-        await asyncio.wait_for(state.queue.join(), timeout=1)
-        await asyncio.wait_for(worker, timeout=1)
+        # Generous under loaded test-cov + xdist (see test_terminal_runtime.py).
+        await asyncio.wait_for(state.queue.join(), timeout=5.0)
+        await asyncio.wait_for(worker, timeout=5.0)
+    finally:
+        if not worker.done():
+            worker.cancel()
+            with contextlib.suppress(asyncio.CancelledError):
+                await worker
 
-        assert state.exit_requested is True
-
-    asyncio.run(_scenario())
+    assert state.exit_requested is True
 
 
 def test_turn_end_retries_auto_command_deferred_during_dispatch(

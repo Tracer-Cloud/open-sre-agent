@@ -204,6 +204,9 @@ def test_slash_tool_rebuild_keeps_cron_expression_for_dispatch() -> None:
         def command_exists(self, name: str) -> bool:
             return name == "/cron"
 
+        def command_is_mutating(self, _name: str) -> bool:
+            return True
+
         def tty_interactive(self) -> bool:
             return False
 

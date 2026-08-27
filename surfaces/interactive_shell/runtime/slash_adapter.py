@@ -26,6 +26,9 @@ class SlashPorts(ExecutionGate, Protocol):
     def command_exists(self, name: str) -> bool:
         raise NotImplementedError
 
+    def command_is_mutating(self, name: str) -> bool:
+        """Whether running command ``name`` can change state (control commands cannot)."""
+
     def tool_description(self) -> str:
         raise NotImplementedError
 
@@ -59,6 +62,10 @@ class SlashPorts(ExecutionGate, Protocol):
 class ReplSlashPorts:
     def command_exists(self, name: str) -> bool:
         return name in SLASH_COMMANDS
+
+    def command_is_mutating(self, name: str) -> bool:
+        command = SLASH_COMMANDS.get(name)
+        return command.mutating if command is not None else True
 
     def tool_description(self) -> str:
         return slash_invoke_tool_description()

@@ -260,7 +260,10 @@ def dispatch_slash(
                         record_slash(ok=False)
                         console.print(validation_error)
                         return True
-                if policy_precleared:
+                # Control commands (exit/quit) never mutate state, so they skip
+                # the execution gate entirely — a standing plan-only request must
+                # not block the user from leaving the shell.
+                if policy_precleared or not cmd.mutating:
                     if name not in _DEFER_SLASH_RECORDING:
                         record_slash(ok=True)
                     return cmd.handler(session, console, args)

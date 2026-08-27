@@ -79,7 +79,9 @@ def render_prompt_region(session: Session, state: ReplState, spinner: SpinnerSta
     plan = session.task_plan
     if plan is not None and plan.steps:
         overlay = strip_cpr_sequences(task_plan_overlay_ansi(plan))
-        return ANSI(f"\n{overlay}\n{prefix}\n{auto_line}\n{base}")
+        # A blank row separates the plan block from the status line so the
+        # checklist reads as its own element, not flush against the prompt.
+        return ANSI(f"\n{overlay}\n\n{prefix}\n{auto_line}\n{base}")
     return ANSI(f"\n{prefix}\n{auto_line}\n{base}")
 
 

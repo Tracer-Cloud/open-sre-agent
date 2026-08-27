@@ -104,8 +104,8 @@ def _cmd_version(_session: Session, console: Console, _args: list[str]) -> bool:
 
 
 COMMANDS: list[SlashCommand] = [
-    SlashCommand("/exit", "Exit the interactive shell.", _cmd_exit),
-    SlashCommand("/quit", "Alias for /exit.", _cmd_exit),
+    SlashCommand("/exit", "Exit the interactive shell.", _cmd_exit, mutating=False),
+    SlashCommand("/quit", "Alias for /exit.", _cmd_exit, mutating=False),
     SlashCommand("/health", "Show integration and agent health.", _cmd_health),
     SlashCommand("/doctor", "Run full environment diagnostic.", _cmd_doctor),
     SlashCommand("/version", "Print version, Python, and OS info.", _cmd_version),
