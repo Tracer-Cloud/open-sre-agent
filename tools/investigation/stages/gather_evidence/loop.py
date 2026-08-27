@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import json
 from collections import OrderedDict
-from collections.abc import Callable, Sequence
+from collections.abc import Callable, Hashable, Sequence
 from dataclasses import dataclass
 from threading import Lock
 from typing import Any
@@ -28,13 +28,48 @@ from infrastructure.text.truncation import truncate
 _MAX_CACHED_RESULT_CHARS = 8_000
 
 
-def tool_call_signature(tool_call: ToolCall) -> str:
+_ToolCallSignature = tuple[str, Hashable]
+
+
+def _canonicalize_args(value: Any) -> Hashable:
+    """Recursively convert a value into a hashable fingerprint."""
+    value_type = type(value)
+    if value_type is dict:
+        return frozenset((str(key), _canonicalize_args(item)) for key, item in value.items())
+    if value_type is list or value_type is tuple:
+        return tuple(_canonicalize_args(item) for item in value)
+    if value_type is str:
+        return str.__str__(value)
+    if value is None:
+        return None
+    if value_type is bool:
+        return (bool, value)
+    if value_type is int:
+        return (int, value)
+    if value_type is float:
+        return (float, float.hex(value))
+
+    # Provider-decoded arguments use exact JSON scalar/container types. Keep
+    # programmatic seed calls compatible without paying these checks normally.
+    if isinstance(value, dict):
+        return frozenset((str(key), _canonicalize_args(item)) for key, item in value.items())
+    if isinstance(value, (list, tuple)):
+        return tuple(_canonicalize_args(item) for item in value)
+    if isinstance(value, bool):
+        return (bool, bool(value))
+    if isinstance(value, int):
+        return (int, int.__index__(value))
+    if isinstance(value, float):
+        return (float, float.hex(value))
+    if isinstance(value, str):
+        return str.__str__(value)
+    return str(value)
+
+
+def tool_call_signature(tool_call: ToolCall) -> _ToolCallSignature:
     """Stable identity for a tool call: ``name`` + canonicalised arguments."""
-    try:
-        args = json.dumps(tool_call.input, sort_keys=True, default=str)
-    except (TypeError, ValueError):
-        args = repr(tool_call.input)
-    return f"{tool_call.name}::{args}"
+    args_fingerprint = _canonicalize_args(tool_call.input)
+    return (tool_call.name, args_fingerprint)
 
 
 @dataclass(frozen=True)
@@ -46,6 +81,7 @@ class CachedToolResult:
 @dataclass(frozen=True)
 class _CallOccurrence:
     tool_call: ToolCall
+    signature: _ToolCallSignature
     iteration: int
     order: int
     cached: CachedToolResult | None
@@ -78,11 +114,11 @@ class InvestigationToolCallCache:
             raise ValueError("max_total_chars must be >= 1")
         self._max_entries = max_entries
         self._max_total_chars = max_total_chars
-        self._entries: OrderedDict[str, CachedToolResult] = OrderedDict()
-        self._entry_chars: dict[str, int] = {}
+        self._entries: OrderedDict[_ToolCallSignature, CachedToolResult] = OrderedDict()
+        self._entry_chars: dict[_ToolCallSignature, int] = {}
         self._total_chars = 0
 
-    def store(self, signature: str, result: Any, *, loop_iteration: int) -> None:
+    def store(self, signature: _ToolCallSignature, result: Any, *, loop_iteration: int) -> None:
         if signature in self._entries:
             return
         stored = result
@@ -112,7 +148,7 @@ class InvestigationToolCallCache:
         self._entry_chars[signature] = size
         self._total_chars += size
 
-    def lookup(self, signature: str) -> CachedToolResult | None:
+    def lookup(self, signature: _ToolCallSignature) -> CachedToolResult | None:
         cached = self._entries.get(signature)
         if cached is not None:
             self._entries.move_to_end(signature)
@@ -229,9 +265,11 @@ class InvestigationLoopController:
         fresh_names: list[str] = []
         duplicate_count = 0
         for tool_call in tool_calls:
-            cached = self._cache.lookup(tool_call_signature(tool_call))
+            signature = tool_call_signature(tool_call)
+            cached = self._cache.lookup(signature)
             occurrence = _CallOccurrence(
                 tool_call=tool_call,
+                signature=signature,
                 iteration=call_iteration,
                 order=self._next_call_order,
                 cached=cached,
@@ -333,7 +371,7 @@ class InvestigationLoopController:
                 return
             self._recorded_occurrences.add(occurrence_key)
             self._cache.store(
-                tool_call_signature(occurrence.tool_call),
+                occurrence.signature,
                 payload,
                 loop_iteration=occurrence.iteration,
             )

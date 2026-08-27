@@ -17,7 +17,7 @@ from core.agent_harness.prompts import (
     build_action_system_prompt,
     build_action_user_message,
 )
-from core.agent_harness.tools.action_tools import get_action_tools_from_integrations_context
+from core.agent_harness.tools.action_tools import get_action_tools_from_integrations_view
 from core.agent_harness.tools.tool_context import ActionToolScope
 from core.agent_harness.turns.action_driver import _MAX_TOOL_CALLING_ITERATIONS
 from core.llm.shared.llm_retry import LLMCreditExhaustedError
@@ -448,7 +448,7 @@ def _assert_live_action_planning_once(case: ScenarioCase) -> None:
     ctx = ActionToolScope(
         session=session, console=Console(file=io.StringIO(), force_terminal=False)
     )
-    tools = get_action_tools_from_integrations_context(ctx, resolved_integrations=resolved_override)
+    tools = get_action_tools_from_integrations_view(ctx, resolved_integrations=resolved_override)
     from core.llm.factory import LLMRole, get_llm
 
     llm = get_llm(LLMRole.AGENT)

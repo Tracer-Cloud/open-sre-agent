@@ -246,3 +246,61 @@ def test_auto_off_shows_command_to_approve() -> None:
     )
     assert "Command to approve" in buf.getvalue()
     assert "Why this needs approval:" in buf.getvalue()
+
+
+# --- plan-only execution gate (integration + latch clearing) -----------------
+
+
+def test_plan_only_guard_prompts_then_clears_on_a_confirmed_mutating_step() -> None:
+    session = Session()
+    session.plan_only_until_authorized = True
+    buf = io.StringIO()
+    console = Console(file=buf, force_terminal=False)
+
+    # A mutating step under a standing plan-only request must prompt...
+    assert execution_allowed(
+        allow_tool("shell"),
+        session=session,
+        console=console,
+        action_summary="!deploy",
+        confirm_fn=lambda _: "y",
+        is_tty=True,
+    )
+    assert "Command to approve" in buf.getvalue()
+    # ...and confirming it is the explicit authorization that lifts the guard.
+    assert session.plan_only_until_authorized is False
+
+
+def test_plan_only_guard_survives_a_declined_confirmation() -> None:
+    session = Session()
+    session.plan_only_until_authorized = True
+    buf = io.StringIO()
+    console = Console(file=buf, force_terminal=False)
+
+    assert not execution_allowed(
+        allow_tool("shell"),
+        session=session,
+        console=console,
+        action_summary="!deploy",
+        confirm_fn=lambda _: "n",
+        is_tty=True,
+    )
+    # Declining does not authorize; the guard still stands for the next step.
+    assert session.plan_only_until_authorized is True
+
+
+def test_plan_only_guard_is_not_cleared_by_a_read_only_step() -> None:
+    session = Session()
+    session.plan_only_until_authorized = True
+    buf = io.StringIO()
+    console = Console(file=buf, force_terminal=False)
+
+    # A read-only tool runs without a prompt and must NOT lift the plan-only latch.
+    assert execution_allowed(
+        allow_tool("investigation"),
+        session=session,
+        console=console,
+        action_summary="investigate the 502s",
+        is_tty=True,
+    )
+    assert session.plan_only_until_authorized is True

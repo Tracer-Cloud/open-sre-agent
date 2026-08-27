@@ -84,6 +84,7 @@ class EffectiveIntegrations(StrictConfigModel):
     airflow: dict[str, Any] | None = None
     argocd: EffectiveIntegrationEntry | None = None
     helm: EffectiveIntegrationEntry | None = None
+    hermes: EffectiveIntegrationEntry | None = None
     victoria_logs: EffectiveIntegrationEntry | None = None
     alicloud: EffectiveIntegrationEntry | None = None
     signoz: EffectiveIntegrationEntry | None = None

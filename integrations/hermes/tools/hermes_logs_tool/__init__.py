@@ -44,17 +44,13 @@ from dataclasses import replace
 from pathlib import Path
 from typing import Any
 
+from config.constants.hermes import HERMES_LOG_PATH_ENV
 from core.tool_framework import tool
 from integrations.hermes.availability import hermes_available_or_backend
 from integrations.hermes.classifier import IncidentClassifier
+from integrations.hermes.config import default_hermes_log_path
 from integrations.hermes.incident import HermesIncident, LogLevel, LogRecord
 from integrations.hermes.poller import HermesLogCursor, HermesLogPoll, poll_hermes_logs
-
-# Default location of Hermes' own error log. The agent tool resolves
-# this lazily so a non-default ``$HERMES_HOME`` is respected without
-# import-time side effects.
-_ENV_LOG_PATH: str = "HERMES_LOG_PATH"
-_DEFAULT_LOG_RELATIVE: tuple[str, ...] = (".hermes", "logs", "errors.log")
 
 # Cap how many records the tool will serialise into a single
 # response. The poller has its own byte budget; this is the
@@ -64,15 +60,7 @@ _MAX_INCIDENTS_PER_CALL: int = 50
 _VALID_OPS = ("scan", "tail")
 
 
-def _default_log_path() -> Path:
-    """Resolve the Hermes log file path with environment override."""
-    override = os.environ.get(_ENV_LOG_PATH, "").strip()
-    if override:
-        return Path(override).expanduser()
-    return Path.home().joinpath(*_DEFAULT_LOG_RELATIVE)
-
-
-def _allowed_log_dirs() -> tuple[Path, ...]:
+def _allowed_log_dirs(configured_log_path: str | None = None) -> tuple[Path, ...]:
     """Directories the tool is permitted to read from.
 
     By default this is ``~/.hermes`` — the directory tree that the
@@ -81,13 +69,15 @@ def _allowed_log_dirs() -> tuple[Path, ...]:
     operators with non-standard log locations don't need extra config.
     """
     dirs: list[Path] = [Path.home() / ".hermes"]
-    override = os.environ.get(_ENV_LOG_PATH, "").strip()
+    override = os.environ.get(HERMES_LOG_PATH_ENV, "").strip()
     if override:
         dirs.append(Path(override).expanduser().resolve(strict=False).parent)
+    if configured_log_path:
+        dirs.append(Path(configured_log_path).expanduser().resolve(strict=False).parent)
     return tuple(dirs)
 
 
-def _validate_log_path(path: Path) -> None:
+def _validate_log_path(path: Path, *, configured_log_path: str | None = None) -> None:
     """Raise ``ValueError`` if *path* is outside the allowed log directories.
 
     The ``log_path`` parameter is LLM-supplied and therefore untrusted.
@@ -97,7 +87,7 @@ def _validate_log_path(path: Path) -> None:
     missing files are still validated) before comparing.
     """
     resolved = path.expanduser().resolve(strict=False)
-    for allowed in _allowed_log_dirs():
+    for allowed in _allowed_log_dirs(configured_log_path):
         try:
             resolved.relative_to(allowed.resolve(strict=False))
             return
@@ -107,6 +97,12 @@ def _validate_log_path(path: Path) -> None:
         f"log_path {str(path)!r} is outside the permitted log directories; "
         "set HERMES_LOG_PATH to allow a custom location"
     )
+
+
+def _extract_params(sources: dict[str, dict]) -> dict[str, Any]:
+    """Inject the catalog-resolved log path as the runtime default."""
+    hermes = sources.get("hermes", {})
+    return {"configured_log_path": hermes.get("log_path")}
 
 
 def _serialise_record(record: LogRecord) -> dict[str, Any]:
@@ -239,6 +235,8 @@ def _resolve_cursor(
     ],
     tags=("safe", "fast", "no-credentials"),
     is_available=hermes_available_or_backend,
+    injected_params=("configured_log_path",),
+    extract_params=_extract_params,
     input_schema={
         "type": "object",
         "properties": {
@@ -308,6 +306,7 @@ def get_hermes_logs(
     tail_lines: int = 200,
     max_records: int = _MAX_RECORDS_PER_CALL,
     levels: list[str] | None = None,
+    configured_log_path: str | None = None,
 ) -> dict[str, Any]:
     """Read Hermes log activity. See module docstring for op semantics."""
     if op not in _VALID_OPS:
@@ -323,12 +322,20 @@ def get_hermes_logs(
     except ValueError as exc:
         return {"error": str(exc), "records": [], "incidents": []}
 
-    resolved_path = Path(log_path).expanduser() if log_path else _default_log_path()
+    selected_path = log_path or configured_log_path
+    resolved_path = Path(selected_path).expanduser() if selected_path else default_hermes_log_path()
 
     try:
-        _validate_log_path(resolved_path)
+        _validate_log_path(resolved_path, configured_log_path=configured_log_path)
     except ValueError as exc:
         return {"error": str(exc), "records": [], "incidents": []}
+
+    if resolved_path.exists() and not resolved_path.is_file():
+        return {
+            "error": f"log_path {str(resolved_path)!r} is not a regular file",
+            "records": [],
+            "incidents": [],
+        }
 
     try:
         resolved_cursor, bounded_max = _resolve_cursor(

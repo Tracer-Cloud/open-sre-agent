@@ -171,3 +171,64 @@ def test_ask_user_answered_plan_only_guidance_does_not_authorize_execute() -> No
     assert ASK_USER_ANSWERED_PLAN_ONLY_GUIDANCE in block.content
     assert "do not pass plan_only=false" in block.content.lower()
     assert "in_progress and execute it now" not in block.content.lower()
+
+
+def test_current_task_plan_block_is_empty_without_steps() -> None:
+    from core.agent_harness.task_plan.prompt import current_task_plan_block
+
+    assert current_task_plan_block(None) == ""
+    empty, error = parse_task_plan({"plan": [{"step": "x", "status": "pending"}]})
+    assert error is not None
+    assert current_task_plan_block(empty) == ""
+
+
+def test_current_task_plan_block_plan_only_does_not_authorize_execution() -> None:
+    from core.agent_harness.task_plan.prompt import current_task_plan_block
+
+    plan, error = parse_task_plan(
+        {
+            "plan": [
+                {"step": "Inspect the failing job", "status": "pending"},
+                {"step": "Confirm the workflow is green", "status": "pending"},
+            ],
+            "explanation": "do not run yet",
+        }
+    )
+    assert error is None and plan is not None
+    block = current_task_plan_block(plan, plan_only=True)
+    assert "CURRENT PLAN (ready, nothing executed" in block
+    assert "explanation: do not run yet" in block
+    assert "Execution is authorized" not in block
+
+
+def test_current_task_plan_block_all_pending_without_latch_authorizes() -> None:
+    from core.agent_harness.task_plan.prompt import current_task_plan_block
+
+    plan, error = parse_task_plan(
+        {
+            "plan": [
+                {"step": "Inspect the failing job", "status": "pending"},
+                {"step": "Confirm the workflow is green", "status": "pending"},
+            ]
+        }
+    )
+    assert error is None and plan is not None
+    block = current_task_plan_block(plan, plan_only=False)
+    assert "Execution is authorized" in block
+
+
+def test_current_task_plan_block_completed_status() -> None:
+    from core.agent_harness.task_plan.prompt import current_task_plan_block
+
+    plan, error = parse_task_plan(
+        {
+            "plan": [
+                {"step": "Inspect the failing job", "status": "completed"},
+                {"step": "Confirm the workflow is green", "status": "completed"},
+            ]
+        }
+    )
+    assert error is None and plan is not None
+    block = current_task_plan_block(plan)
+    assert "CURRENT PLAN (complete" in block
+    assert "in_progress" not in block
