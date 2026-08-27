@@ -63,3 +63,15 @@ def test_environment_path_resolves_as_an_effective_integration(
     assert effective["hermes"]["config"]["log_path"] == str(log_path)
     assert isinstance(registered, RegisteredTool)
     assert registered.is_available(availability_view(runtime_sources)) is True
+
+
+def test_environment_directory_does_not_expose_the_log_tool(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    monkeypatch.setenv(HERMES_LOG_PATH_ENV, str(tmp_path))
+
+    runtime_sources = classify_integrations(load_env_integrations())
+    registered = getattr(get_hermes_logs, REGISTERED_TOOL_ATTR)
+
+    assert isinstance(registered, RegisteredTool)
+    assert registered.is_available(availability_view(runtime_sources)) is False

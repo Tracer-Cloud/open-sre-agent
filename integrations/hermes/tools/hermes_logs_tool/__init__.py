@@ -318,6 +318,13 @@ def get_hermes_logs(
     except ValueError as exc:
         return {"error": str(exc), "records": [], "incidents": []}
 
+    if resolved_path.exists() and not resolved_path.is_file():
+        return {
+            "error": f"log_path {str(resolved_path)!r} is not a regular file",
+            "records": [],
+            "incidents": [],
+        }
+
     try:
         resolved_cursor, bounded_max = _resolve_cursor(
             op=op,
