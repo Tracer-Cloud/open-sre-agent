@@ -13,9 +13,7 @@ _ACTION_SKILLS_DIR = Path("core/agent_harness/prompts/skills")
 _SKILL_DATA_ROOTS = (Path("integrations"), Path("tools"))
 #: Data files read at runtime that are not skill documents. Without an entry
 #: here a file can be absent from both the wheel and the frozen binary.
-_RUNTIME_DATA_FILES = (
-    Path("integrations/yandex_cloud/api_index.json"),
-)
+_RUNTIME_DATA_FILES = (Path("integrations/yandex_cloud/api_index.json"),)
 _RUNTIME_DISCOVERY_EXCLUSIONS = frozenset({"registry.py"})
 #: Non-Python trees under ``infrastructure/`` that never run from the frozen
 #: binary (e.g. a Cloudflare Worker deployed separately via ``wrangler``).
