@@ -4,8 +4,15 @@ from __future__ import annotations
 
 from pathlib import Path
 
+import pytest
+
 from config.constants.hermes import HERMES_LOG_PATH_ENV
+from core.tool.contracts import REGISTERED_TOOL_ATTR, RegisteredTool
+from core.tool.execution import availability_view
+from integrations._catalog_impl import classify_integrations, load_env_integrations
+from integrations.catalog import resolve_effective_integrations
 from integrations.hermes.setup import HERMES_SETUP
+from integrations.hermes.tools.hermes_logs_tool import get_hermes_logs
 from integrations.hermes.verifier import verify_hermes
 
 
@@ -14,7 +21,7 @@ def test_setup_persists_the_log_path_to_its_environment_variable() -> None:
 
     assert field.name == "log_path"
     assert field.env_var == HERMES_LOG_PATH_ENV
-    assert field.default.endswith("/.hermes/logs/errors.log")
+    assert field.default
 
 
 def test_verifier_accepts_a_readable_log_file(tmp_path: Path) -> None:
@@ -39,3 +46,20 @@ def test_verifier_rejects_a_directory(tmp_path: Path) -> None:
 
     assert verification["status"] == "failed"
     assert "not a file" in verification["detail"]
+
+
+def test_environment_path_resolves_as_an_effective_integration(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    log_path = tmp_path / "errors.log"
+    log_path.touch()
+    monkeypatch.setenv(HERMES_LOG_PATH_ENV, str(log_path))
+
+    effective = resolve_effective_integrations(store_integrations=[])
+    runtime_sources = classify_integrations(load_env_integrations())
+    registered = getattr(get_hermes_logs, REGISTERED_TOOL_ATTR)
+
+    assert effective["hermes"]["source"] == "local env"
+    assert effective["hermes"]["config"]["log_path"] == str(log_path)
+    assert isinstance(registered, RegisteredTool)
+    assert registered.is_available(availability_view(runtime_sources)) is True

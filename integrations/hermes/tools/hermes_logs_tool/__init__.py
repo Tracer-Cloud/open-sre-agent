@@ -44,17 +44,13 @@ from dataclasses import replace
 from pathlib import Path
 from typing import Any
 
+from config.constants.hermes import HERMES_LOG_PATH_ENV
 from core.tool_framework import tool
 from integrations.hermes.availability import hermes_available_or_backend
 from integrations.hermes.classifier import IncidentClassifier
+from integrations.hermes.config import default_hermes_log_path
 from integrations.hermes.incident import HermesIncident, LogLevel, LogRecord
 from integrations.hermes.poller import HermesLogCursor, HermesLogPoll, poll_hermes_logs
-
-# Default location of Hermes' own error log. The agent tool resolves
-# this lazily so a non-default ``$HERMES_HOME`` is respected without
-# import-time side effects.
-_ENV_LOG_PATH: str = "HERMES_LOG_PATH"
-_DEFAULT_LOG_RELATIVE: tuple[str, ...] = (".hermes", "logs", "errors.log")
 
 # Cap how many records the tool will serialise into a single
 # response. The poller has its own byte budget; this is the
@@ -62,14 +58,6 @@ _DEFAULT_LOG_RELATIVE: tuple[str, ...] = (".hermes", "logs", "errors.log")
 _MAX_RECORDS_PER_CALL: int = 200
 _MAX_INCIDENTS_PER_CALL: int = 50
 _VALID_OPS = ("scan", "tail")
-
-
-def _default_log_path() -> Path:
-    """Resolve the Hermes log file path with environment override."""
-    override = os.environ.get(_ENV_LOG_PATH, "").strip()
-    if override:
-        return Path(override).expanduser()
-    return Path.home().joinpath(*_DEFAULT_LOG_RELATIVE)
 
 
 def _allowed_log_dirs() -> tuple[Path, ...]:
@@ -81,7 +69,7 @@ def _allowed_log_dirs() -> tuple[Path, ...]:
     operators with non-standard log locations don't need extra config.
     """
     dirs: list[Path] = [Path.home() / ".hermes"]
-    override = os.environ.get(_ENV_LOG_PATH, "").strip()
+    override = os.environ.get(HERMES_LOG_PATH_ENV, "").strip()
     if override:
         dirs.append(Path(override).expanduser().resolve(strict=False).parent)
     return tuple(dirs)
@@ -323,7 +311,7 @@ def get_hermes_logs(
     except ValueError as exc:
         return {"error": str(exc), "records": [], "incidents": []}
 
-    resolved_path = Path(log_path).expanduser() if log_path else _default_log_path()
+    resolved_path = Path(log_path).expanduser() if log_path else default_hermes_log_path()
 
     try:
         _validate_log_path(resolved_path)
