@@ -8,8 +8,9 @@ from http import HTTPStatus
 import pytest
 from fastapi.testclient import TestClient
 
+from config.constants.http import MAX_REQUEST_BODY_BYTES
 from core.domain.alerts.inbox import AlertInbox, set_current_inbox
-from infrastructure.alert_intake import MAX_ALERT_BODY_BYTES, build_alert_intake_app
+from infrastructure.alert_intake import build_alert_intake_app
 
 _LOOPBACK = ("127.0.0.1", 40000)
 _REMOTE = ("203.0.113.9", 40000)
@@ -46,7 +47,7 @@ def test_post_alert_queues_into_the_shared_inbox(client: TestClient, inbox: Aler
 
 
 def test_oversized_body_returns_413(client: TestClient) -> None:
-    resp = client.post("/alerts", json={"text": "x" * (MAX_ALERT_BODY_BYTES + 1)})
+    resp = client.post("/alerts", json={"text": "x" * (MAX_REQUEST_BODY_BYTES + 1)})
     assert resp.status_code == HTTPStatus.REQUEST_ENTITY_TOO_LARGE
 
 

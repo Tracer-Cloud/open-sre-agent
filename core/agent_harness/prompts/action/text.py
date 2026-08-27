@@ -12,7 +12,8 @@ from core.agent_harness.prompts.action.multi_step_policy import (
     ACTION_CONVERSATIONAL_SESSION_GOAL_RULE,
     ACTION_LOCAL_SHELL_MULTI_STEP_RULE,
 )
-from core.agent_harness.prompts.system_prompt import (
+
+from ..system_prompt import (
     _PROMPT_FILENAME,
     OPENSRE_SYSTEM_PROMPT,
 )

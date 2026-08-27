@@ -24,7 +24,6 @@ check_s3_marker
 create_google_docs_incident_report
 describe_eks_addon
 describe_eks_cluster
-ec2_instances_by_tag
 execute_python_code
 execute_yc_operation
 fetch_failed_run
@@ -39,7 +38,6 @@ get_azure_sql_server_status
 get_azure_sql_slow_queries
 get_azure_sql_wait_stats
 get_batch_statistics
-get_bitbucket_file_contents
 get_cloudwatch_batch_metrics
 get_cloudwatch_logs
 get_dagster_run_logs
@@ -48,7 +46,6 @@ get_eks_events
 get_eks_node_health
 get_eks_nodegroup_health
 get_eks_pod_logs
-get_elb_target_health
 get_error_logs
 get_failed_jobs
 get_failed_tools
@@ -112,7 +109,6 @@ helm_list_releases
 helm_release_history
 helm_release_status
 inspect_lambda_function
-inspect_railway_deployment
 inspect_s3_object
 jira_add_comment
 jira_create_issue
@@ -128,7 +124,6 @@ kubernetes_list_nodes
 kubernetes_list_pods
 kubernetes_list_services
 kubernetes_list_statefulsets
-list_bitbucket_commits
 list_dagster_assets
 list_dagster_runs
 list_dagster_schedule_ticks
@@ -156,12 +151,7 @@ list_yc_log_groups
 list_yc_metrics
 memory_recall
 memory_remember
-opsgenie_alert_detail
-opsgenie_alerts
 pi_coding_task
-prefect_flow_runs
-prefect_worker_health
-query_coralogix_logs
 query_datadog_all
 query_datadog_events
 query_datadog_logs
@@ -170,7 +160,6 @@ query_datadog_monitors
 query_grafana_annotations
 query_groundcover_logs
 query_groundcover_traces
-query_openobserve_logs
 query_splunk_logs
 query_yc_metrics
 read_yc_logs
@@ -178,7 +167,6 @@ redeploy_railway_service
 replay_slack_thread_locally
 rocketchat_send_message
 scan_redis_keys
-search_bitbucket_code
 search_github_code
 search_github_issues
 search_openclaw_conversations
@@ -194,13 +182,7 @@ slack_send_message
 summarize_community_followups
 summarize_github_pr_status
 telegram_send_message
-temporal_namespace_info
-temporal_task_queue
-temporal_workflow_history
-temporal_workflows
 twilio_notify
-vercel_deployment_logs
-vercel_deployment_status
 victoria_logs_query
 work_task_add
 work_task_complete

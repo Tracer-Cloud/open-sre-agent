@@ -24,6 +24,7 @@ from core.agent_harness.session.integration_resolution import (
     resolve_and_cache_integrations,
 )
 from core.agent_harness.turns.turn_snapshot import TurnSnapshot
+from infrastructure.harness_providers import enrich_resolved_with_repo_scopes
 
 
 @dataclass(frozen=True)
@@ -60,6 +61,25 @@ def build_turn_plan(snapshot: TurnSnapshot, session: SessionState) -> TurnPlan:
     """
     if not has_resolved_integrations(snapshot.resolved_integrations):
         snapshot = replace(snapshot, resolved_integrations=resolve_and_cache_integrations(session))
+
+    def _set_cached_scope(vendor: str, scope: tuple[str, ...] | None) -> None:
+        scopes = dict(session.vcs_repo_scopes)
+        if scope is None:
+            scopes.pop(vendor, None)
+        else:
+            scopes[vendor] = scope
+        session.vcs_repo_scopes = scopes
+
+    enriched = enrich_resolved_with_repo_scopes(
+        resolved=snapshot.resolved_integrations,
+        message=snapshot.text,
+        conversation_messages=snapshot.conversation_messages,
+        env=None,
+        cwd=snapshot.working_directory,
+        cached_scopes=session.vcs_repo_scopes,
+        set_cached_scope=_set_cached_scope,
+    )
+    snapshot = replace(snapshot, resolved_integrations=enriched)
     return TurnPlan(snapshot=snapshot)
 
 

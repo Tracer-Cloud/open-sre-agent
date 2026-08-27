@@ -35,19 +35,19 @@ slug: "quickstart"
 
   </Step>
 
-  <Step title="Onboard">
-    Run the onboarding wizard to configure your LLM provider and connect your integrations (Grafana, Datadog, Honeycomb, Coralogix, Slack, AWS, GitHub MCP, Sentry):
+  <Step title="Setup">
+    Run first-run setup to sign in with GitHub and configure the LLM provider OpenSRE uses to reason:
 
     ```bash
-    opensre onboard
+    opensre setup
     ```
 
-    After you pick a provider and a model, the wizard sends one tiny request to that provider with the credential you just entered — so a typo, an expired key, or an Ollama model you have not pulled yet is caught here, not on your first investigation.
+    After GitHub authorization, you pick a provider and a model. The wizard sends one tiny request to that provider with the credential you just entered — so a typo, an expired key, or an Ollama model you have not pulled yet is caught here, not on your first investigation. When setup finishes, OpenSRE opens the interactive shell. Add integrations later with `opensre integrations setup <service>` when you want OpenSRE to query a specific tool.
 
     <Tabs>
       <Tab title="macOS / Linux">
         <Frame>
-          ![Onboarding OpenSRE with the setup wizard to configure your LLM provider and integrations](/images/quickstart-onboard.gif)
+          ![Onboarding OpenSRE with the setup wizard to configure your LLM provider](/images/quickstart-onboard.gif)
         </Frame>
       </Tab>
       <Tab title="Windows">

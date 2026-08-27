@@ -5,6 +5,7 @@ from __future__ import annotations
 import io
 import json
 import os
+from collections.abc import Sequence
 from pathlib import Path
 from typing import Any, NotRequired, TypedDict, cast
 
@@ -16,7 +17,7 @@ from core.agent_harness.prompts import (
     build_action_system_prompt,
     build_action_user_message,
 )
-from core.agent_harness.tools.action_tools import get_action_tools_from_integrations_context
+from core.agent_harness.tools.action_tools import get_action_tools_from_integrations_view
 from core.agent_harness.tools.tool_context import ActionToolScope
 from core.agent_harness.turns.action_driver import _MAX_TOOL_CALLING_ITERATIONS
 from core.llm.shared.llm_retry import LLMCreditExhaustedError
@@ -46,7 +47,7 @@ from tests.core.agent.scenario_loader import (
     select_cases,
     select_representative,
 )
-from tools.interactive_shell.action_names import TOOL_KIND_TO_NAME, ToolKind
+from tools.interactive_shell.action_names import TOOL_KIND_TO_NAME, ActionToolName, ToolKind
 from tools.interactive_shell.actions.investigation import normalize_investigation_alert_text
 
 
@@ -74,6 +75,15 @@ _ALL_CASES = load_all_scenarios()
 _DEFAULT_GATE_CASES = select_representative(_ALL_CASES)
 _LIVE_CASES = iter_scenarios_for_shard(_DEFAULT_GATE_CASES)
 _NAME_TO_TOOL_KIND = {tool: kind for kind, tool in TOOL_KIND_TO_NAME.items()}
+# Playbook / session-meta tools the live planner may emit before a scenario
+# kind. They are not ToolKind members, so fixtures never list them.
+_PLANNING_PRELUDE_TOOL_NAMES: frozenset[str] = frozenset(
+    {
+        ActionToolName.ASK_USER_CHOICE,
+        ActionToolName.SKILL_VIEW,
+        ActionToolName.UPDATE_PLAN,
+    }
+)
 # Mirror the production action loop budget so live planning can exercise the same
 # multi-step, data-dependent compound chains the real gateway/REPL turns allow,
 # instead of drifting from a stale hardcoded cap.
@@ -186,6 +196,11 @@ def _build_actual_action(action: ToolCall) -> ExpectedAction:
             str(template_value).strip() if isinstance(template_value, str) else content
         )
     return expected
+
+
+def _scenario_tool_calls(actions: Sequence[ToolCall]) -> list[ToolCall]:
+    """Drop playbook/session-meta calls before matching fixture planned_actions."""
+    return [action for action in actions if action.name not in _PLANNING_PRELUDE_TOOL_NAMES]
 
 
 def _planning_probe_tool(tool: AgentTool) -> AgentTool:
@@ -433,7 +448,7 @@ def _assert_live_action_planning_once(case: ScenarioCase) -> None:
     ctx = ActionToolScope(
         session=session, console=Console(file=io.StringIO(), force_terminal=False)
     )
-    tools = get_action_tools_from_integrations_context(ctx, resolved_integrations=resolved_override)
+    tools = get_action_tools_from_integrations_view(ctx, resolved_integrations=resolved_override)
     from core.llm.factory import LLMRole, get_llm
 
     llm = get_llm(LLMRole.AGENT)
@@ -448,7 +463,7 @@ def _assert_live_action_planning_once(case: ScenarioCase) -> None:
         resolved_integrations={},
         max_iterations=_LIVE_PLANNING_MAX_ITERATIONS,
     ).run([{"role": "user", "content": build_action_user_message(prompt)}])
-    actions = [tool_call for tool_call, _output in result.executed]
+    actions = _scenario_tool_calls([tool_call for tool_call, _output in result.executed])
     actual_actions = [_build_actual_action(action) for action in actions]
     actual_actions_for_match = _planning_actions_for_match(actual_actions, expected_actions)
 
@@ -567,6 +582,35 @@ def test_live_turn_execution_oracle(
         f"oracle case {live_oracle_case.scenario.id!r} failed {runs - passed_count}/{runs} runs; "
         f"artifact: {artifact_file}; failed_details={json.dumps(failed_details, ensure_ascii=True)}"
     )
+
+
+def test_planning_match_strips_skill_view_prelude() -> None:
+    """skill_view loads a playbook; fixtures pin the following scenario kind."""
+    skill = ToolCall(id="t1", name=ActionToolName.SKILL_VIEW, input={"name": "github-cli"})
+    cli = ToolCall(
+        id="t2",
+        name=ActionToolName.CLI_EXEC,
+        input={"payload": "integrations verify --dry-run"},
+    )
+    expected = cast(
+        "list[ExpectedAction]",
+        [
+            {
+                "kind": "cli_command",
+                "content": "integrations verify --dry-run",
+                "source": "llm",
+                "target_surface": "terminal",
+                "payload": "integrations verify --dry-run",
+            }
+        ],
+    )
+    actual = [_build_actual_action(action) for action in _scenario_tool_calls([skill, cli])]
+    _assert_planned_actions_match(actual, expected)
+
+
+def test_unknown_action_tool_still_fails_planning_match() -> None:
+    with pytest.raises(AssertionError, match="Unexpected action tool call"):
+        _build_actual_action(ToolCall(id="t1", name="not_a_registered_action", input={}))
 
 
 def test_planning_match_strips_redundant_integrations_list_for_investigation() -> None:

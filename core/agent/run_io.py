@@ -49,6 +49,7 @@ class AgentRunInput[RuntimeToolT: RuntimeTool]:
     tool_resources: dict[str, Any]
     max_iterations: int
     messages: list[RuntimeMessage]
+    max_stagnant_iterations: int | None = None
 
     @classmethod
     def from_runtime_request(cls, request: Any, *, llm: Any) -> AgentRunInput[RuntimeToolT]:
@@ -70,6 +71,7 @@ class AgentRunInput[RuntimeToolT: RuntimeTool]:
             tool_resources=dict(getattr(request, "tool_resources", {}) or {}),
             max_iterations=request.max_iterations,
             messages=messages,
+            max_stagnant_iterations=getattr(request, "max_stagnant_iterations", None),
         )
 
     @classmethod
@@ -83,6 +85,7 @@ class AgentRunInput[RuntimeToolT: RuntimeTool]:
         resolved: dict[str, Any] | None,
         tool_resources: dict[str, Any],
         max_iterations: int,
+        max_stagnant_iterations: int | None = None,
     ) -> AgentRunInput[RuntimeToolT]:
         """Build from raw messages and a caller's construction-time config."""
         return cls(
@@ -93,6 +96,7 @@ class AgentRunInput[RuntimeToolT: RuntimeTool]:
             tool_resources=dict(tool_resources),
             max_iterations=max_iterations,
             messages=MessageMapper.to_runtime_messages(messages),
+            max_stagnant_iterations=max_stagnant_iterations,
         )
 
 

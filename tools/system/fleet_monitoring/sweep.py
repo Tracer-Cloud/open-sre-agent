@@ -1,9 +1,8 @@
-"""Startup orphan / stale-lockfile sweep for the local agent registry.
+"""Orphan and stale-lockfile cleanup for the local agent registry.
 
-Run once at REPL boot. Idempotent — running twice in a row is a no-op
-the second time. Removes ``AgentRegistry`` entries whose PIDs no longer
-exist plus lockfiles in ``~/.opensre/agents/`` that correspond
-to dead PIDs.
+Idempotent — running twice in a row is a no-op the second time. Removes
+``AgentRegistry`` entries whose PIDs no longer exist plus lockfiles in
+``~/.opensre/agents/`` that correspond to dead PIDs.
 
 Liveness is checked via ``pid_exists`` rather than ``probe()``
 because ``probe()`` returns ``None`` for two distinct reasons —
@@ -13,11 +12,6 @@ or with a hardened ``/proc``). Treating both cases as "dead" would
 silently delete records and lockfiles for live processes owned by
 other users. ``pid_exists`` is the right primitive: it does an
 OS-level existence check that doesn't traverse the access boundary.
-
-The function is split from the boot wiring so it stays unit-testable
-without spinning up the REPL: the loop.py side just calls
-``run_startup_sweep()`` and lets this module handle path defaults and
-error suppression.
 """
 
 from __future__ import annotations
@@ -95,32 +89,6 @@ def sweep(
     )
 
 
-def run_startup_sweep() -> SweepResult:
-    """Convenience wrapper for the REPL boot path.
-
-    Constructs an ``AgentRegistry`` at the default location, runs
-    ``sweep()`` against the default lockfile dir, and swallows any
-    exception so a sweep failure never prevents the REPL from
-    starting. Returns an empty ``SweepResult`` on error.
-    """
-    try:
-        registry = AgentRegistry()
-        result = sweep(registry)
-    except Exception:
-        # Pinned by ``test_run_startup_sweep_swallows_exceptions`` which
-        # mocks ``AgentRegistry()`` to raise. The REPL must boot even if
-        # the sweep is broken; logging is the only side effect.
-        logger.warning("agent sweep failed at REPL boot", exc_info=True)
-        return SweepResult()
-    if result.total > 0:
-        logger.debug(
-            "agent sweep removed %d records and %d lockfiles",
-            len(result.removed_records),
-            len(result.removed_locks),
-        )
-    return result
-
-
 def _sweep_registry(registry: AgentRegistry) -> list[AgentRecord]:
     """Prune dead-PID records in a single batched rewrite.
 
@@ -179,4 +147,4 @@ def _sweep_locks(lock_dir: Path) -> list[Path]:
     return removed
 
 
-__all__ = ["DEFAULT_LOCK_DIR", "SweepResult", "run_startup_sweep", "sweep"]
+__all__ = ["DEFAULT_LOCK_DIR", "SweepResult", "sweep"]

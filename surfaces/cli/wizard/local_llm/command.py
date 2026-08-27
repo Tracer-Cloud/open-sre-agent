@@ -109,5 +109,5 @@ def run_local_llm_setup() -> int:
     _console.print(
         "  [bold]opensre investigate[/bold]   — launches interactive mode, try a sample alert"
     )
-    _console.print("  [bold]opensre onboard[/bold]       — configure observability integrations")
+    _console.print("  [bold]opensre integrations setup[/bold] — add tools when you need them")
     return 0

@@ -808,6 +808,23 @@ class TestSpecificListCommands:
         dispatch_slash("/model show", Session(), console)
         assert "LLM settings unavailable" in buf.getvalue()
 
+    def test_model_provider_menu_starts_focused_then_other(self, monkeypatch: object) -> None:
+        from surfaces.interactive_shell.command_registry.model import command as model_cmd
+        from surfaces.shared.llm_setup.provider_choices import FOCUSED_SETUP_PROVIDER_VALUES
+
+        monkeypatch.setenv("LLM_PROVIDER", "anthropic")
+
+        primary_values = [value for value, _label in model_cmd._provider_menu_choices()]
+        other_values = [value for value, _label in model_cmd._other_provider_menu_choices()]
+
+        assert primary_values == [
+            *FOCUSED_SETUP_PROVIDER_VALUES,
+            model_cmd.OTHER_PROVIDER_SELECTION,
+        ]
+        assert "anthropic" not in primary_values
+        assert "anthropic" in other_values
+        assert not set(FOCUSED_SETUP_PROVIDER_VALUES).intersection(other_values)
+
     def test_integrations_list_empty_prints_onboarding_hint(self, monkeypatch: object) -> None:
         monkeypatch.setattr(
             repl_data_module,
@@ -816,7 +833,7 @@ class TestSpecificListCommands:
         )
         console, buf = _capture()
         dispatch_slash("/integrations list", Session(), console)
-        assert "opensre onboard" in buf.getvalue()
+        assert "opensre integrations setup" in buf.getvalue()
 
     def test_tools_list_prints_registered_tools(self, monkeypatch: object) -> None:
         from surfaces.interactive_shell.command_registry import tools_cmds as tools_cmd_module
@@ -1156,7 +1173,9 @@ class TestModelCommand:
         monkeypatch.setattr(env_sync, "PROJECT_ENV_PATH", env_path)
         monkeypatch.setattr("config.env_file.PROJECT_ENV_PATH", env_path)
         monkeypatch.setattr(model_cmd, "repl_tty_interactive", lambda: True)
-        selections = iter(["set", "anthropic", "__provider_default__"])
+        selections = iter(
+            ["set", model_cmd.OTHER_PROVIDER_SELECTION, "anthropic", "__provider_default__"]
+        )
         monkeypatch.setattr(model_cmd, "repl_choose_one", lambda **_: next(selections))
         monkeypatch.setenv("ANTHROPIC_API_KEY", "sk-test")
 
@@ -1195,6 +1214,7 @@ class TestModelCommand:
         selections = iter(
             [
                 "set",  # root -> set
+                model_cmd.OTHER_PROVIDER_SELECTION,  # provider submenu selected
                 "anthropic",  # provider selected
                 None,  # Esc from model selection -> back to provider list
                 None,  # Esc from provider list -> back to root action list

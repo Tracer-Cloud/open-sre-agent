@@ -281,12 +281,18 @@ class InteractiveShellController:
                 self.state.deliver_confirmation(text)
                 return True
             case SubmitTurn(text=text, wait_until_idle=wait, warning=warning):
-                # Read before render_submitted_prompt — that clears the flag.
+                # Read before render_submitted_prompt — that clears the autosubmit
+                # and handoff-answer flags.
+                autosubmitted = bool(self.session.terminal.last_input_autosubmitted)
+                ask_user_answers = bool(self.session.terminal.awaiting_handoff_answer)
+                if not autosubmitted and not ask_user_answers:
+                    # A genuine typed turn starts a new workload: reset the ask-user
+                    # round counter so the two-round cap is per-request, not per-session.
+                    self.session.ask_user_rounds = 0
+                    self.session.terminal.pending_choice_response = None
                 wait_for_turn = _should_wait_until_turn_finishes(
                     exclusive_stdin=wait,
-                    goal_condition_autosubmitted=bool(
-                        self.session.terminal.last_input_autosubmitted
-                    ),
+                    goal_condition_autosubmitted=autosubmitted and not ask_user_answers,
                 )
                 if warning:
                     self.echo_console.print(warning)

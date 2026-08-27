@@ -15,11 +15,14 @@ from integrations.coding_agent import CodingResult
 from integrations.github.tools.ci_fix.context import (
     CiFixContext,
     FailingCheck,
+    gather_branch_ci_fix_context,
     gather_ci_fix_context,
     parse_pr_url,
 )
 from integrations.github.tools.ci_fix.errors import (
+    ERR_INVALID_INPUT,
     ERR_NO_FAILING_CHECKS,
+    ERR_PR_NOT_OPEN,
     ERR_UNSUPPORTED_PR_BRANCH,
     GitHubCiFixError,
 )
@@ -84,6 +87,30 @@ _CTX = CiFixContext(
         ),
     ),
     task="Fix CI.",
+)
+
+
+_BRANCH_CTX = CiFixContext(
+    owner="Tracer-Cloud",
+    repo="opensre",
+    number=None,
+    title="",
+    url="https://github.com/Tracer-Cloud/opensre/tree/main",
+    base_branch="main",
+    head_branch="main",
+    head_sha="abc123",
+    skipped_check_names=(),
+    failing_checks=(
+        FailingCheck(
+            name="CI",
+            conclusion="failure",
+            details_url="https://github.com/Tracer-Cloud/opensre/actions/runs/9",
+            workflow_name="CI",
+            run_id="9",
+            log_excerpt="pytest failed",
+        ),
+    ),
+    task="Fix CI on main.",
 )
 
 
@@ -326,7 +353,7 @@ def test_run_fix_without_coding_agent_is_backend_neutral() -> None:
 )
 @patch("integrations.github.tools.ci_fix.runner.run_fix")
 @patch("integrations.github.tools.ci_fix.runner.pre_coding_changes", return_value={})
-@patch("integrations.github.tools.ci_fix.runner.checkout_pr_branch")
+@patch("integrations.github.tools.ci_fix.runner.checkout_target_branch")
 @patch("integrations.github.tools.ci_fix.runner.ensure_push_ready")
 @patch("integrations.github.tools.ci_fix.runner.ensure_workspace_ready")
 @patch("integrations.github.tools.ci_fix.runner.gather_ci_fix_context", return_value=_CTX)
@@ -399,7 +426,7 @@ def test_run_ci_fix_success_pushes_existing_pr_branch(
     ),
 )
 @patch("integrations.github.tools.ci_fix.runner.pre_coding_changes", return_value={})
-@patch("integrations.github.tools.ci_fix.runner.checkout_pr_branch")
+@patch("integrations.github.tools.ci_fix.runner.checkout_target_branch")
 @patch("integrations.github.tools.ci_fix.runner.ensure_push_ready")
 @patch("integrations.github.tools.ci_fix.runner.ensure_workspace_ready")
 @patch("integrations.github.tools.ci_fix.runner.gather_ci_fix_context", return_value=_CTX)
@@ -482,6 +509,271 @@ def test_registry_discovers_ci_fix_on_action_surface() -> None:
     assert tool.side_effect_level == "mutating"
     assert "fix_github_pr_ci" not in investigation
     assert "fix_github_pr_ci" not in chat
+
+
+def test_log_excerpt_dedups_overlapping_error_windows() -> None:
+    # A dense error-marked region near the end of a log (e.g. a CI gate script
+    # echoing ::error lines) used to append one ±window per marker line, so the
+    # duplicated tail evicted the actual test failure from the truncated
+    # excerpt handed to the coding agent.
+    from integrations.github.tools.ci_fix.context import _log_excerpt
+
+    failure = "FAILED tests/x.py::test_real_bug - AssertionError: assert 1 == 2"
+    dense_tail = [f"::error gate script line {i} " + "x" * 40 for i in range(40)]
+    raw = "\n".join(["setup ok", failure, *dense_tail])
+
+    excerpt = _log_excerpt(raw)
+
+    assert "test_real_bug" in excerpt
+    assert excerpt.count("gate script line 39") == 1
+
+
+def test_gather_ci_fix_context_refuses_merged_pr() -> None:
+    # The regression that motivated the guard: a merged Dependabot PR whose
+    # head branch was already deleted was accepted and then failed on fetch.
+    payload = {**_PR_PAYLOAD, "state": "MERGED"}
+
+    with patch("integrations.github.tools.ci_fix.context.run_gh_json", return_value=payload):
+        try:
+            gather_ci_fix_context(
+                owner="Tracer-Cloud",
+                repo="opensre",
+                pr_number=4597,
+                github_token="tok",
+            )
+        except GitHubCiFixError as exc:
+            assert exc.kind == ERR_PR_NOT_OPEN
+            assert "is merged, not open" in exc.message
+            assert "no push was made" in exc.message
+        else:
+            raise AssertionError("expected pr_not_open")
+
+
+def test_gather_branch_ci_fix_context_builds_task_from_failing_runs() -> None:
+    branch_payload = {"sha": "deadbeef1234"}
+    runs_payload = {
+        "runs": [
+            {
+                "databaseId": 9,
+                "name": "CI",
+                "workflowName": "CI",
+                "conclusion": "failure",
+                "status": "completed",
+                "url": "https://github.com/Tracer-Cloud/opensre/actions/runs/9",
+            },
+            {
+                "databaseId": 10,
+                "name": "CodeQL",
+                "workflowName": "CodeQL",
+                "conclusion": "success",
+                "status": "completed",
+                "url": "https://github.com/Tracer-Cloud/opensre/actions/runs/10",
+            },
+        ]
+    }
+
+    with (
+        patch(
+            "integrations.github.tools.ci_fix.context.run_gh_json",
+            side_effect=[branch_payload, runs_payload],
+        ),
+        patch(
+            "integrations.github.tools.ci_fix.context.run_gh_text",
+            return_value="Error: pytest failed",
+        ) as log_view,
+    ):
+        ctx = gather_branch_ci_fix_context(
+            branch="main",
+            owner="Tracer-Cloud",
+            repo="opensre",
+            github_token="tok",
+        )
+
+    assert ctx.number is None
+    assert ctx.is_branch_target is True
+    assert ctx.head_branch == "main"
+    assert ctx.base_branch == "main"
+    assert ctx.head_sha == "deadbeef1234"
+    assert [check.name for check in ctx.failing_checks] == ["CI"]
+    assert "branch main" in ctx.task
+    assert "pytest failed" in ctx.task
+    assert log_view.call_args.args[0] == ["run", "view", "9", "--log-failed"]
+
+
+def test_gather_branch_ci_fix_context_escapes_slashed_branch() -> None:
+    runs_payload = {
+        "runs": [
+            {
+                "databaseId": 9,
+                "name": "CI",
+                "workflowName": "CI",
+                "conclusion": "failure",
+                "status": "completed",
+                "url": "https://github.com/Tracer-Cloud/opensre/actions/runs/9",
+            }
+        ]
+    }
+
+    with (
+        patch(
+            "integrations.github.tools.ci_fix.context.run_gh_json",
+            side_effect=[{"sha": "deadbeef1234"}, runs_payload],
+        ) as gh,
+        patch(
+            "integrations.github.tools.ci_fix.context.run_gh_text",
+            return_value="Error: pytest failed",
+        ),
+    ):
+        ctx = gather_branch_ci_fix_context(
+            branch="feat/x",
+            owner="Tracer-Cloud",
+            repo="opensre",
+            github_token="tok",
+        )
+
+    assert ctx.head_branch == "feat/x"
+    assert gh.call_args_list[0].args[0][1] == "repos/Tracer-Cloud/opensre/branches/feat%2Fx"
+
+
+def test_checkout_target_branch_refuses_moved_branch_head() -> None:
+    from integrations.github.tools.ci_fix.ship import checkout_target_branch
+
+    with (
+        patch("integrations.github.tools.ci_fix.ship.ensure_git_repo"),
+        patch("integrations.github.tools.ci_fix.ship.current_branch", return_value="main"),
+        patch("integrations.github.tools.ci_fix.ship._fast_forward_to_origin"),
+        patch("integrations.github.tools.ci_fix.ship._head_sha", return_value="other-sha"),
+    ):
+        try:
+            checkout_target_branch("/workspace", _BRANCH_CTX)
+        except GitHubCiFixError as exc:
+            assert "moved from" in exc.message
+            assert exc.branch_name == "main"
+        else:
+            raise AssertionError("expected moved-branch refusal")
+
+
+def test_gather_branch_ci_fix_context_reports_no_failing_runs() -> None:
+    with patch(
+        "integrations.github.tools.ci_fix.context.run_gh_json",
+        side_effect=[{"sha": "deadbeef1234"}, {"runs": []}],
+    ):
+        try:
+            gather_branch_ci_fix_context(
+                branch="main",
+                owner="Tracer-Cloud",
+                repo="opensre",
+                github_token="tok",
+            )
+        except GitHubCiFixError as exc:
+            assert exc.kind == ERR_NO_FAILING_CHECKS
+            assert "Tracer-Cloud/opensre@main" in exc.message
+        else:
+            raise AssertionError("expected no_failing_checks")
+
+
+def test_run_ci_fix_rejects_branch_and_pr_selector_together() -> None:
+    result = run_ci_fix(branch="main", pr_number=4597)
+
+    assert result["success"] is False
+    assert result["error_kind"] == ERR_INVALID_INPUT
+    assert "not both" in result["error"]
+
+
+@patch(
+    "integrations.github.tools.ci_fix.runner.push_ci_fix",
+    return_value=PushResult(
+        branch_name="main",
+        head_sha="new-sha",
+        changed_files=["pricing.py"],
+    ),
+)
+@patch(
+    "integrations.github.tools.ci_fix.runner.wait_for_branch_checks",
+    return_value=CheckVerification(state=CheckState.PASSED, check_names=("CI",)),
+)
+@patch("integrations.github.tools.ci_fix.runner.wait_for_pr_checks")
+@patch(
+    "integrations.github.tools.ci_fix.runner.run_fix",
+    return_value=CodingResult(
+        success=True,
+        summary="Aligned pricing fallback.",
+        changed_files=["pricing.py"],
+        diff="diff",
+    ),
+)
+@patch("integrations.github.tools.ci_fix.runner.pre_coding_changes", return_value={})
+@patch("integrations.github.tools.ci_fix.runner.checkout_target_branch")
+@patch("integrations.github.tools.ci_fix.runner.ensure_push_ready")
+@patch("integrations.github.tools.ci_fix.runner.ensure_workspace_ready")
+@patch(
+    "integrations.github.tools.ci_fix.runner.gather_branch_ci_fix_context",
+    return_value=_BRANCH_CTX,
+)
+def test_run_ci_fix_branch_mode_pushes_directly_to_branch(
+    _gather: MagicMock,
+    _workspace: MagicMock,
+    _push_ready: MagicMock,
+    _checkout: MagicMock,
+    _pre: MagicMock,
+    _run_fix: MagicMock,
+    mock_pr_wait: MagicMock,
+    mock_branch_wait: MagicMock,
+    mock_push: MagicMock,
+) -> None:
+    prompts: list[str] = []
+
+    result = run_ci_fix(
+        branch="main",
+        github_token="tok",
+        confirm_fn=lambda prompt: prompts.append(prompt) or "y",
+    )
+
+    assert result["success"] is True
+    assert result["pr_number"] is None
+    assert result["pr_url"] == ""
+    assert result["branch_name"] == "main"
+    assert result["checks_state"] == "passed"
+    assert result["response_text"] == (
+        "Fixed failing CI for Tracer-Cloud/opensre@main, pushed main, "
+        "and all the checks on main passed."
+    )
+    assert "pushing directly to main" in prompts[0]
+    mock_push.assert_called_once()
+    mock_branch_wait.assert_called_once_with(
+        _BRANCH_CTX,
+        github_token="tok",
+        expected_head_sha="new-sha",
+    )
+    mock_pr_wait.assert_not_called()
+
+
+def test_push_ci_fix_branch_mode_pushes_protected_branch_with_opt_in() -> None:
+    coding_result = CodingResult(success=True, summary="Fix CI.", changed_files=["pricing.py"])
+
+    with (
+        patch("integrations.github.tools.ci_fix.ship.resolve_github_token", return_value="tok"),
+        patch("integrations.github.tools.ci_fix.ship.ensure_git_repo"),
+        patch("integrations.github.tools.ci_fix.ship.current_branch", return_value="main"),
+        patch(
+            "integrations.github.tools.ci_fix.ship._changed_since_baseline",
+            return_value=["pricing.py"],
+        ),
+        patch("integrations.github.tools.ci_fix.ship.commit_paths") as commit,
+        patch("integrations.github.tools.ci_fix.ship._head_sha", return_value="new-sha"),
+        patch("integrations.github.tools.ci_fix.ship.push_branch") as push,
+    ):
+        result = push_ci_fix(
+            "/workspace",
+            ctx=_BRANCH_CTX,
+            result=coding_result,
+            github_token="tok",
+        )
+
+    assert result.branch_name == "main"
+    assert push.call_args.kwargs["allow_protected"] is True
+    assert push.call_args.kwargs["base_default"] == ""
+    assert commit.call_args.args[2].splitlines()[0].startswith("fix: repair CI for main - ")
 
 
 def test_skill_guidance_attaches_to_ci_fix_tool() -> None:

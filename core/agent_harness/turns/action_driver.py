@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import json
 import logging
+import re
 import shlex
 from collections.abc import Sequence
 from dataclasses import dataclass
@@ -37,6 +38,7 @@ from core.agent_harness.prompts import (
     build_action_user_message,
 )
 from core.agent_harness.session.integration_resolution import resolve_and_cache_integrations
+from core.agent_harness.session.pending_choice import parse_ask_user_answers
 from core.agent_harness.session.terminal_access import execute_cli_onboard_on_missing_key
 from core.agent_harness.session_goal.goal import strip_session_goal_progress_tags
 from core.agent_harness.turns.conversation_recording import record_conversation_turn
@@ -204,14 +206,11 @@ def with_duplicate_action_call_guard(
     )
 
 
-# Some hosted tool-calling models emit one tool call per assistant turn even when
-# parallel tool calls are enabled. Keep the tool-calling loop bounded, but leave
-# enough headroom for a *data-dependent* compound request that must run
-# sequentially: each step waits for the previous tool's result before the next
-# call can be emitted (e.g. "look up the weather and then send it to Slack" =
-# Architecture audit needs headroom for clone + ≤3 agent-scan probes +
-# 4 heuristic shells + cleanup + save observations (then a no-tool report).
-_MAX_TOOL_CALLING_ITERATIONS = 13
+# This is an emergency ceiling, not the normal workflow budget. Productive
+# action turns may need many sequential calls; repeated observations are stopped
+# independently by the stagnation guard below.
+_MAX_TOOL_CALLING_ITERATIONS = 64
+_MAX_STAGNANT_TOOL_ITERATIONS = 3
 _EXECUTED_HISTORY_TYPES = {
     "slash",
     "shell",
@@ -223,11 +222,10 @@ _EXECUTED_HISTORY_TYPES = {
 INVESTIGATION_DISPATCH_TOOL_NAMES: frozenset[str] = frozenset(
     {"investigation_start", "alert_sample"}
 )
-# Tools whose user-facing event is rendered live by the surface's tool-event
-# observer (``tool_start``/``tool_end``), so the end-of-turn generic formatter
-# must stay silent for them: repeating their summary would double-print, and
-# their payload (e.g. the full skill body) is for the model only.
-_OBSERVER_RENDERED_TOOL_NAMES: frozenset[str] = frozenset({"skill_view"})
+# Tools whose user-facing event is owned by the host UI, so the end-of-turn
+# generic formatter must stay silent: repeating their summary would double-print,
+# and their payload (e.g. the full skill body) is for the model only.
+_HOST_RENDERED_TOOL_NAMES: frozenset[str] = frozenset({"ask_user_choice", "skill_view"})
 
 
 @dataclass(frozen=True)
@@ -338,7 +336,7 @@ def _generic_tool_results(result: Any) -> list[tuple[ToolCall, Any]]:
 
 def _format_generic_tool_payload(tool_call: ToolCall, tool_result: Any) -> str:
     """Build a user-visible summary for one non-self-recording tool result."""
-    if tool_call.name in _OBSERVER_RENDERED_TOOL_NAMES:
+    if tool_call.name in _HOST_RENDERED_TOOL_NAMES and not getattr(tool_result, "is_error", False):
         return ""
     preferred_response = _preferred_tool_response_text(tool_result)
     if preferred_response:
@@ -699,7 +697,11 @@ def _build_action_agent(
         # The reviewer reads executed tool names from the shared list the
         # event tap below fills, so it can stand down on handoff/dispatch
         # turns whose outcome is not reviewable at conclusion time.
-        goal = build_goal_reviewer(llm, message, executed_tool_names)
+        goal = build_goal_reviewer(
+            llm,
+            _goal_review_user_request(message, turn_snapshot),
+            executed_tool_names,
+        )
 
     # WAL first, observer second: the tool intent must be on disk before
     # any surface side effect reacts to the same event.
@@ -717,6 +719,7 @@ def _build_action_agent(
         tools=tuple(agent_tools),
         resolved_integrations=resolved_integrations,
         max_iterations=_MAX_TOOL_CALLING_ITERATIONS,
+        max_stagnant_iterations=_MAX_STAGNANT_TOOL_ITERATIONS,
         tool_resources=tool_resources,
         tool_hooks=tool_hooks,
         on_runtime_event=on_runtime_event,
@@ -728,6 +731,19 @@ def _build_action_agent(
         llm=llm,
         max_iterations=_MAX_TOOL_CALLING_ITERATIONS,
     )
+
+
+def _goal_review_user_request(message: str, turn_snapshot: TurnSnapshot | None) -> str:
+    """Recover the original user request when this turn contains Ask User answers."""
+    if turn_snapshot is None or not parse_ask_user_answers(message):
+        return message
+    for role, content in reversed(turn_snapshot.conversation_messages):
+        if role.casefold() != "user" or not content.strip():
+            continue
+        if parse_ask_user_answers(content):
+            continue
+        return content
+    return message
 
 
 @dataclass(frozen=True)
@@ -834,9 +850,17 @@ def _compose_response(
     Consumes the session's pending outcome hint.
     """
     final_text = str(getattr(result, "final_text", "") or "").strip()
+    waiting_for_choice = getattr(session, "pending_user_choice", None) is not None
     generic_text = _response_text_from_generic_results(result)
     hint = _pop_turn_outcome_hint(session)
     prefer_tool_response_text = _has_preferred_tool_response_text(result)
+    terminal = getattr(session, "terminal", None)
+    pending_choice_response = getattr(terminal, "pending_choice_response", None)
+    selected_choice = (
+        pending_choice_response.strip() if isinstance(pending_choice_response, str) else ""
+    )
+    if selected_choice and terminal is not None:
+        terminal.pending_choice_response = None
     # Self-recording tools (slash/shell/…) already rendered the real output.
     # Drop model closings so they cannot contradict what the user just saw
     # (classic failure: inventing "health check passed" after a failed /health).
@@ -845,11 +869,16 @@ def _compose_response(
     # question, which seeks direction instead of restating output; and any
     # quiet ``shell_run``, which withheld live stdout so the closing *is*
     # the turn's display.
-    suppress_final = prefer_tool_response_text or (
-        _self_recording_tools_only(result)
-        and not _multi_step_grounded_chain(result)
-        and not _asks_the_user(final_text)
-        and not _has_quiet_shell_run(result)
+    suppress_final = (
+        (waiting_for_choice and _is_redundant_choice_invitation(result, final_text))
+        or _is_choice_acknowledgement(final_text, selected_choice)
+        or prefer_tool_response_text
+        or (
+            _self_recording_tools_only(result)
+            and not _multi_step_grounded_chain(result)
+            and not _asks_the_user(final_text)
+            and not _has_quiet_shell_run(result)
+        )
     )
     final_text_chunk = "" if suppress_final else final_text
     display_final = final_text_chunk
@@ -869,8 +898,52 @@ def _compose_response(
         if chunk
     ]
     use_final_text = bool(final_text_chunk)
-    response_text = final_text if use_final_text else "\n".join(response_chunks)
+    response_text = "\n".join(response_chunks)
     return response_text, display_chunks, use_final_text
+
+
+def _is_redundant_choice_invitation(result: Any, final_text: str) -> bool:
+    """True when a single-choice closing repeats the title or tool summary."""
+    final_tokens = _choice_invitation_tokens(final_text)
+    if not final_tokens:
+        return True
+    for tool_call, tool_result in getattr(result, "tool_results", []):
+        if tool_call.name != "ask_user_choice":
+            continue
+        args = public_tool_input(tool_call.input)
+        if args.get("questions"):
+            return False
+        picker_copy = {_choice_invitation_tokens(str(args.get("title", "")))}
+        details = getattr(tool_result, "details", None)
+        if isinstance(details, dict):
+            picker_copy.add(_choice_invitation_tokens(str(details.get("summary", ""))))
+        picker_copy.discard(())
+        return final_tokens in picker_copy
+    return False
+
+
+def _choice_invitation_tokens(text: str) -> tuple[str, ...]:
+    """Normalize picker copy while allowing an optional polite prefix."""
+    tokens = tuple(re.findall(r"[a-z0-9]+", text.casefold()))
+    if tokens[:1] == ("please",):
+        return tokens[1:]
+    return tokens
+
+
+def _is_choice_acknowledgement(text: str, selected_choice: str) -> bool:
+    """True only for a bare restatement of the selected picker label."""
+    if not text or not selected_choice:
+        return False
+    choice = " ".join(selected_choice.casefold().split())
+    response = " ".join(text.casefold().strip().rstrip(".!?").split())
+    return response in {
+        choice,
+        f"{choice} selected",
+        f"{choice} was selected",
+        f"selected {choice}",
+        f"selected: {choice}",
+        f"you selected {choice}",
+    }
 
 
 def _show_response(
@@ -1046,8 +1119,9 @@ def _run_action_turn(
         _show_response(
             args.output,
             handled=counts.handled,
-            # use_final_text means the composed text *is* the closing message.
-            final_text=response_text if use_final_text else "",
+            # Stream only terminal-visible chunks. ``response_text`` may also
+            # contain self-recording history for persistence/headless surfaces.
+            final_text="\n".join(display_chunks) if use_final_text else "",
             display_chunks=display_chunks,
         )
 
@@ -1066,7 +1140,7 @@ def _run_action_turn(
         False,
         False if cancelled else counts.handled,
         response_text="" if cancelled else response_text,
-        response_streamed=bool(use_final_text and not result.hit_iteration_cap and not cancelled),
+        response_streamed=bool(use_final_text and not cancelled),
         investigation_dispatched=(False if cancelled else counts.investigation_dispatched),
         hit_iteration_cap=bool(result.hit_iteration_cap and not cancelled),
         cancelled=cancelled,

@@ -20,7 +20,10 @@ skill_data_entries = manifest["skill_data_entries"]
 infrastructure_data_entries = manifest["infrastructure_data_entries"]
 
 datas = list(infrastructure_data_entries(ROOT))
-datas += collect_data_files("core.agent_harness.prompts.action")
+datas += collect_data_files(
+    "core.agent_harness.prompts",
+    includes=["opensre_system_prompt.md"],
+)
 datas += collect_data_files("surfaces.cli")
 datas += collect_data_files("surfaces.shared")
 datas += collect_data_files("config")

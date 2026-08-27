@@ -33,6 +33,7 @@ class AgentConfig(Generic[RuntimeToolT]):  # noqa: UP046
     tools: tuple[RuntimeToolT, ...]
     resolved_integrations: ResolvedIntegrations
     max_iterations: int
+    max_stagnant_iterations: int | None = None
     tool_resources: dict[str, Any] = field(default_factory=dict)
     tool_hooks: ToolExecutionHooks | None = None
     provider_hooks: ProviderHooks | None = None
@@ -54,6 +55,7 @@ def build_agent(  # noqa: UP047
         tools=config.tools,
         resolved_integrations=config.resolved_integrations,
         max_iterations=config.max_iterations,
+        max_stagnant_iterations=config.max_stagnant_iterations,
         tool_resources=config.tool_resources,
         tool_hooks=config.tool_hooks,
         provider_hooks=config.provider_hooks,

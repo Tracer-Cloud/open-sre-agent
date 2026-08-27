@@ -105,6 +105,27 @@ runs the repository test suite in parallel shards.
 List the focused tests you ran in the PR description. CI is the authoritative
 repository-wide test result.
 
+## 4) Pull-request latency and post-merge validation
+
+The required automated pull-request execution gate has a p90 target of 90
+seconds. Static checks, cached typechecking, duration-balanced pytest shards,
+synthetic tests, and interactive-shell checks run concurrently. Automated and
+human review completion, including Greptile, remains a separate merge
+requirement and is not part of that execution-time SLO.
+
+Pull requests run the complete test selection without coverage instrumentation;
+the same matrix produces and combines the full coverage report on `main`.
+
+Full CodeQL `security-and-quality` analysis runs after every merge to `main` and
+on the weekly schedule, not on ordinary pull requests. A production-only,
+default-query profile is available through the CodeQL workflow's manual
+`pr-fast` input for benchmarking. Do not make that profile required unless at
+least ten representative runs demonstrate p90 at or below 75 seconds.
+
+Post-merge validation is part of delivery. Monitor the `main` CI, CodeQL, and
+release workflows for the merge commit; a failure requires an immediate fix or
+revert and must not be reported as successful delivery.
+
 ## 8) Post-PR follow-through
 
 Opening a pull request does not end the validation cycle. Follow it through until
@@ -112,14 +133,16 @@ the repository's merge requirements are satisfied: required GitHub checks are
 green, actionable human or automated review feedback (including Greptile) is
 addressed, and resolved conversations are closed out.
 
-A green check does not mean review feedback is clear. GitHub Code Quality and
-GitHub Advanced Security can post inline review threads even when their checks
-pass. After checks complete, and again after every push, inspect all unresolved
-conversations and latest reviews, including feedback from
-`github-code-quality` and `github-advanced-security`. Validate each finding. For
-actionable feedback, push an appropriate fix, reply, and resolve the addressed
-thread. For an incorrect or non-actionable finding, reply with the rationale
-and resolve the thread without changing code.
+Agents: the always-on rule lives in [AGENTS.md — CI failures and tests](AGENTS.md).
+After every push, inspect `gh pr checks` / failing job logs and fix until required
+jobs are green. The Cursor stop hook `.cursor/hooks/check-ci-failures.sh` will
+re-prompt when the open PR still has failing checks.
+
+A green check does not mean review feedback is clear. After checks complete,
+and again after every push, inspect all unresolved conversations and latest
+reviews. Validate each finding. For actionable feedback, push an appropriate
+fix, reply, and resolve the addressed thread. For an incorrect or non-actionable
+finding, reply with the rationale and resolve the thread without changing code.
 
 After each completed PR update, once commits are pushed, the PR description is
 current, and addressed threads are resolved, trigger a Greptile re-review by

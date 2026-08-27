@@ -51,7 +51,8 @@ def _configure_grafana_local() -> tuple[str, str]:
     if ping.returncode != 0:
         console.print(f"[{ERROR}]Docker is not running.[/]")
         console.print(
-            f"[{SECONDARY}]Start Docker Desktop, then run [bold]opensre onboard[/bold] again.[/]"
+            f"[{SECONDARY}]Start Docker Desktop, then run "
+            "[bold]opensre integrations setup grafana[/bold] again.[/]"
         )
         return "Grafana Local (skipped)", ""
 
