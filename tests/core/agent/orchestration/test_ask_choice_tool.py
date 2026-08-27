@@ -60,6 +60,10 @@ def test_ask_user_choice_tool_is_action_surface_read_only() -> None:
     assert "action" in ask_user_choice_tool.surfaces
     assert ask_user_choice_tool.side_effect_level == "read_only"
     assert ask_user_choice_tool.parallel_safe is False
+    assert any(
+        "headless, scheduled, gateway, or /goal" in example
+        for example in ask_user_choice_tool.anti_examples
+    )
 
 
 def test_interactive_repl_defers_menu_to_choose_turn() -> None:

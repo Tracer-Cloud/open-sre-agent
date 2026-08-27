@@ -254,6 +254,7 @@ ask_user_choice_tool = RegisteredTool(
         "Open-ended questions with no fixed option set (ask in plain text)",
         "Yes/no confirmations already covered by the execution confirmation flow",
         "Presenting information that requires no decision",
+        "Optional end-of-turn follow-up on a headless, scheduled, gateway, or /goal turn",
         "One ask_user_choice call per question when several facts block the same job",
         "Calling update_plan before the Ask User answers arrive",
     ],

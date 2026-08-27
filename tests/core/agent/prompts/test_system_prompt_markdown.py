@@ -21,3 +21,18 @@ def test_system_prompt_runs_explicit_commands_without_repository_probe() -> None
     assert "Do not search for AGENTS.md files or inspect the repository first" in (
         _SYSTEM_PROMPT_BASE
     )
+
+
+def test_ask_user_choice_is_for_blocking_decisions_not_automated_follow_ups() -> None:
+    """Optional next-step menus must not stall headless, scheduled, or /goal turns."""
+    text = _SYSTEM_PROMPT_BASE
+    collapsed = " ".join(text.split())
+    assert "before work can continue" in collapsed
+    assert (
+        "Do **not** call `ask_user_choice` just to park an optional follow-up"
+        in collapsed
+    )
+    assert "headless, scheduled, or gateway" in collapsed
+    assert "when a `/goal` is attached" in collapsed
+    assert "Always leave the user a selectable next step" not in text
+    assert "Skip the menu on headless, scheduled, gateway, or" in collapsed
