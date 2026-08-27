@@ -20,7 +20,6 @@ call_openclaw_tool
 call_posthog_tool
 call_sentry_tool
 call_x_tool
-check_s3_marker
 create_google_docs_incident_report
 describe_eks_addon
 describe_eks_cluster
@@ -96,7 +95,6 @@ get_redis_list_depth
 get_redis_replication
 get_redis_server_info
 get_redis_slowlog
-get_s3_object
 get_sqs_queue_attributes
 get_sre_guidance
 get_tracer_run
@@ -109,7 +107,6 @@ helm_list_releases
 helm_release_history
 helm_release_status
 inspect_lambda_function
-inspect_s3_object
 jira_add_comment
 jira_create_issue
 kubernetes_describe_pod
@@ -143,7 +140,6 @@ list_jenkins_jobs
 list_jenkins_running_builds
 list_openclaw_tools
 list_posthog_tools
-list_s3_objects
 list_sentry_tools
 list_x_tools
 list_yc_instances
