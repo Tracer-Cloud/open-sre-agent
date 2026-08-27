@@ -115,6 +115,19 @@ def _select_runtime_request_input(text: str, source: Any) -> Any | None:
     return None
 
 
+def _interactive_choice_available(session: Any, surface: str | None) -> bool:
+    """True when this turn can open the Ask User / ``/choose`` picker.
+
+    Gateway and headless sessions have no terminal facet. An interactive-shell
+    session with a terminal facet can queue the menu (the tool still checks TTY).
+    """
+    if surface == "gateway":
+        return False
+    if surface not in (None, "interactive_shell"):
+        return False
+    return getattr(session, "terminal", None) is not None
+
+
 @dataclass(frozen=True)
 class TurnSnapshot:
     """Immutable per-turn snapshot and optional runtime request.
@@ -194,6 +207,15 @@ class TurnSnapshot:
     plan_only_until_authorized: bool = False
     """When true, the user asked for a plan without running it yet."""
 
+    prompt_surface: str | None = None
+    """``interactive_shell``, ``gateway``, or ``None`` when the host did not say."""
+
+    session_goal_attached: bool = False
+    """True when a ``/goal`` (SessionGoal) is attached for this turn."""
+
+    interactive_choice_available: bool = False
+    """True when ``ask_user_choice`` can open a keyboard menu on this surface."""
+
     @classmethod
     def from_session(
         cls,
@@ -246,6 +268,9 @@ class TurnSnapshot:
             recovery_note=recovery_note,
             task_plan=_read_task_plan(session),
             plan_only_until_authorized=bool(getattr(session, "plan_only_until_authorized", False)),
+            prompt_surface=surface,
+            session_goal_attached=getattr(session, "session_goal", None) is not None,
+            interactive_choice_available=_interactive_choice_available(session, surface),
         )
 
     def render_system_prompt(self) -> str:

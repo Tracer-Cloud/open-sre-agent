@@ -25,6 +25,7 @@ class PromptBlockId(StrEnum):
     ACTION_PLANNING_INSTRUCTIONS = "action-agent-planning-instructions"
     ASK_USER_ANSWERED = "ask-user-answered"
     CURRENT_TASK_PLAN = "current-task-plan"
+    TURN_INTERACTION = "turn-interaction"
 
     # Shared across envelopes.
     CONNECTED_INTEGRATIONS = "connected-integrations"

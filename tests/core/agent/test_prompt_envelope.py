@@ -76,6 +76,7 @@ def test_action_system_prompt_envelope_matches_legacy_rendering(
         PromptBlockId.ACTION_SKILLS,
         PromptBlockId.ACTION_PLANNING_INSTRUCTIONS,
         PromptBlockId.CONNECTED_INTEGRATIONS,
+        PromptBlockId.TURN_INTERACTION,
         PromptBlockId.RECENT_CONVERSATION,
     ]
     assert (
@@ -193,6 +194,7 @@ def test_every_block_declares_which_tier_it_belongs_to(
         PromptBlockId.ACTION_SKILLS: PromptTier.STABLE,
         PromptBlockId.ACTION_PLANNING_INSTRUCTIONS: PromptTier.STABLE,
         PromptBlockId.CONNECTED_INTEGRATIONS: PromptTier.CONTEXT,
+        PromptBlockId.TURN_INTERACTION: PromptTier.EPHEMERAL,
         PromptBlockId.RECENT_CONVERSATION: PromptTier.EPHEMERAL,
     }
 

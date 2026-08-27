@@ -26,19 +26,17 @@ question per turn. Ask a SECOND scoped round ONLY IF the first answers open new
 discriminating questions — round 1 fixes the shape, round 2 narrows within it
 (which operation, what changed near onset, traffic mix, persistent vs peak).
 TWO rounds is the hard maximum: if you have already asked two rounds (see the
-Ask User Q&A above), you MUST write the diagnosis and plan now — never ask a
-third round. If facts still feel thin, commit with your best hypothesis anyway.
+Ask User Q&A above), you MUST write the plan now — never ask a third round.
+If facts still feel thin, commit with your best reading anyway.
 Do NOT call update_plan until facts are in. After answers: continue (another
 round, or a written plan). Answering is the go-ahead to continue the
 original request. Do not invent a pause. If the user said not to run
 yet, pass plan_only_after=true on ask_user_choice, then after answers call
 update_plan with plan_only=true and every step pending, and STOP. Otherwise
 set the first step in_progress and execute. Do not restate the checklist in prose —
-it already sits above the prompt. After the answers, write the diagnosis in
-structured sections, never one dense paragraph: Facts (short bullets), "What the
-signature tells us" (for each fact, what it RULES OUT — not just what it is), and
-a Hypothesis-ranking table with columns # | Hypothesis | Why it fits |
-Discriminator (the one observation that confirms or rules each out vs the others).
+it already sits above the prompt. After the answers, put the diagnosis in
+``explanation`` (see EXPLANATION below) — incident workloads use the dense
+Facts / signature / hypothesis table; ordinary implementation work does not.
 Skip Ask User when you already have enough to plan.
 
 WHEN TO PLAN
@@ -76,19 +74,28 @@ STRUCTURE
 
 HOW TO CALL
 update_plan(plan=[{step, status}, …], explanation?, plan_only?)
-The checklist steps stay short (5–10 words). Put the readable diagnosis in
-``explanation`` — the UI renders it as markdown under the checklist:
-Facts (bullets), "What the signature tells us", hypothesis-ranking table,
-and for plan-only workloads optional phased narrative (Phase 1 — …) plus
-"Biggest risk". Do not repeat that prose in the assistant closing reply.
-explanation is optional on revisions; include it when the plan or diagnosis
-changes. The steps are terse on purpose — the explanation is where the detail
-lives, so make it substantive: every Fact names a specific signal (route,
-number, span, revision), every "what it rules out" line eliminates an
-alternative, and every hypothesis row carries a discriminator (the one
-observation that separates it from the others). A one-line or vague
-explanation is not acceptable.
-plan_only is optional; true only for an explicit "don't run yet" request.
+The checklist steps stay short (5–10 words). Put the readable rationale in
+``explanation`` — the UI renders it as markdown under the checklist. Do not
+repeat that prose in the assistant closing reply. explanation is optional on
+revisions; include it when the plan or diagnosis changes. plan_only is optional;
+true only for an explicit "don't run yet" request.
+
+EXPLANATION — match the workload (do not invent incident analysis)
+Pick the shape that fits. Never force Facts / signature / hypothesis prose onto
+an ordinary implementation or plan-only task that has no incident signals and
+no competing causal hypotheses.
+
+Incident / investigation (errors, regressions, outages, competing causes):
+use the dense template — Facts (bullets), "What the signature tells us", and a
+hypothesis-ranking table (# | Hypothesis | Why it fits | Discriminator). Every
+Fact names a specific signal (route, number, span, revision); every "what it
+rules out" line eliminates an alternative; every hypothesis row carries a
+discriminator. A one-line or vague explanation is not acceptable here.
+
+Ordinary implementation or plan-only (feature work, refactor, CI fix, docs —
+no incident signals): a short substantive explanation is enough — goal, ordered
+approach, and biggest risk (optionally Phase 1 — …). Do not fabricate telemetry,
+onset signatures, or ranked causal hypotheses.
 
 GOOD PLAN — checkout 502s (last step verifies):
 1. pending         Capture 502 samples from checkout
@@ -101,8 +108,9 @@ GOOD PLAN — plan-only (user said do not execute yet):
 2. pending         Patch the workflow from the error
 3. pending         Confirm the workflow run is green
 
-GOOD EXPLANATION — the diagnosis rendered under the checkout 502s plan.
-Match this depth; terse steps above, specifics here:
+GOOD EXPLANATION — incident diagnosis under the checkout 502s plan.
+Use this depth only when the workload is an investigation; terse steps above,
+specifics here:
 
 ### Facts
 - 502s on POST /checkout/submit only; other checkout routes stay healthy.
@@ -122,6 +130,19 @@ Match this depth; terse steps above, specifics here:
 | 2 | A new synchronous call on submit exhausts the pool | Submit-only; saturation-shaped | Pool metrics plus the added call in the diff |
 | 3 | The payments dependency itself degraded | Timeout signature | Its own health and error budget over the window |
 
+GOOD EXPLANATION — ordinary plan-only (CI workflow fix; no incident signals):
+
+### Goal
+Unblock the failing GitHub Actions job so main is green again.
+
+### Approach
+1. Read the failing job log and isolate the first hard error.
+2. Patch the workflow or script that produces that error.
+3. Re-run and confirm the job is green.
+
+### Biggest risk
+Patching the wrong step leaves the same failure on the next push.
+
 BAD PLANS (never do these)
 - A single step ("fix it").
 - Last step is "make the change" with no check.
@@ -130,5 +151,8 @@ BAD PLANS (never do these)
 - Calling update_plan before Ask User when missing facts still block.
 - Leaving every step pending after answers when the user asked to execute.
 - Treating /work or /goal as a substitute for this live checklist.
-- A one-line or vague explanation ("investigating the issue"): it must carry
-  specific Facts, what they rule out, and a ranked hypothesis table.
+- On an incident workload: a one-line or vague explanation ("investigating the
+  issue") — it must carry specific Facts, what they rule out, and a ranked
+  hypothesis table.
+- On an ordinary implementation workload: inventing Facts / signature /
+  hypothesis prose when there are no incident signals to diagnose.

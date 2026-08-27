@@ -29,7 +29,7 @@ def _ctx(*, plan=None) -> TurnSnapshot:
 def test_planning_instructions_carry_the_dense_diagnosis_exemplar() -> None:
     text = load_planning_instructions()
     lines = text.splitlines()
-    assert 60 <= len(lines) <= 160
+    assert 60 <= len(lines) <= 200
     assert "update_plan" in text
     assert "ASK THEN PLAN" in text
     assert "ask_user_choice" in text
@@ -39,11 +39,15 @@ def test_planning_instructions_carry_the_dense_diagnosis_exemplar() -> None:
     assert "Confirm checkout returns 2xx" in text
     assert "work_task_*" in text
     assert "/goal" in text
-    # The worked explanation exemplar is what drives dense diagnoses; guard it so
-    # the density guidance cannot be silently thinned back to a one-liner.
+    # Dense diagnosis is required for incident workloads; guard the exemplar
+    # and the scope fence so ordinary implementation work is not forced into
+    # fabricated Facts / hypothesis prose.
     assert "GOOD EXPLANATION" in text
     assert "What the signature tells us" in text
     assert "Discriminator" in text
+    assert "EXPLANATION — match the workload" in text
+    assert "Do not fabricate telemetry" in text
+    assert "ordinary plan-only" in text.lower()
 
 
 def test_composed_prompt_includes_planning_instructions() -> None:
@@ -116,6 +120,18 @@ def test_ask_user_answered_guidance_defaults_to_execute_not_pause() -> None:
     assert "do not invent a plan-only pause" in text
     assert "plan_only_after=true" in text
     assert "in_progress and execute it now" in text
+
+
+def test_ask_user_answered_guidance_scopes_diagnosis_shape_to_incidents() -> None:
+    from core.agent_harness.task_plan.prompt import (
+        ASK_USER_ANSWERED_GUIDANCE,
+        ASK_USER_ANSWERED_PLAN_ONLY_GUIDANCE,
+    )
+
+    for text in (ASK_USER_ANSWERED_GUIDANCE, ASK_USER_ANSWERED_PLAN_ONLY_GUIDANCE):
+        assert "If this is a diagnosis" in text
+        assert "If this is implementation or plan-only coding work" in text
+        assert "do not invent telemetry" in text.lower()
 
 
 def test_ask_user_answers_preserve_original_repo_and_all_requested_metrics() -> None:

@@ -7,6 +7,7 @@ import re
 from typing import TYPE_CHECKING
 
 from core.agent_harness.prompts.action.text import _SYSTEM_PROMPT_BASE
+from core.agent_harness.prompts.action.turn_interaction import turn_interaction_facts_block
 from core.agent_harness.prompts.kernel.envelope import (
     PromptBlock,
     PromptBlockId,
@@ -179,6 +180,15 @@ def build_action_system_prompt_envelope(turn_snapshot: TurnSnapshot) -> PromptEn
             ),
             provenance="core.agent_harness.task_plan.prompt",
             suffix="\n\n",
+        )
+    )
+    blocks.append(
+        PromptBlock(
+            id=PromptBlockId.TURN_INTERACTION,
+            kind=PromptBlockKind.CONTEXT,
+            tier=PromptTier.EPHEMERAL,
+            content=turn_interaction_facts_block(turn_snapshot),
+            provenance="core.agent_harness.prompts.action.turn_interaction",
         )
     )
     blocks.append(

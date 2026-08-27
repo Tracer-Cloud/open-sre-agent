@@ -102,10 +102,12 @@ update_plan_tool = RegisteredTool(
         properties={
             "explanation": string_property(
                 description=(
-                    "Markdown diagnosis rendered under the checklist: Facts, "
-                    "What the signature tells us, hypothesis-ranking table; "
-                    "for plan-only requests add phased narrative and biggest "
-                    "risk. Do not repeat in assistant closing prose."
+                    "Markdown rationale under the checklist. For incident/"
+                    "investigation workloads: Facts, what the signature tells "
+                    "us, hypothesis-ranking table. For ordinary implementation "
+                    "or plan-only with no incident signals: goal, approach, "
+                    "biggest risk — do not invent causal hypotheses. Do not "
+                    "repeat in assistant closing prose."
                 ),
             ),
             "plan": {

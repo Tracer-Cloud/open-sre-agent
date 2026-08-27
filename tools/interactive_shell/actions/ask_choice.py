@@ -38,9 +38,10 @@ _CHOOSE_COMMAND = "/choose"
 _DEFAULT_HEADER = "Ask User"
 
 _FALLBACK_INSTRUCTION = (
-    "No interactive selection menu is available on this surface. Present the "
-    "options as a short numbered list instead and ask the user to reply with "
-    "the number or the option text."
+    "No interactive selection menu is available on this surface. If the choice "
+    "is required for work to continue, present a short numbered list and ask "
+    "the user to reply. If this was only an optional follow-up, do NOT park a "
+    "numbered question — finish with one sentence of instructions."
 )
 _QUEUED_INSTRUCTION = (
     "The selection menu opens after this turn ends. End the turn now without a "
