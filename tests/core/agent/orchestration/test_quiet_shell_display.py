@@ -275,6 +275,54 @@ def test_queued_choice_preserves_substantive_closing_text() -> None:
     assert use_final_text is True
 
 
+def test_queued_choice_preserves_recommendation_using_picker_words() -> None:
+    choice = ToolCall(
+        id="1",
+        name="ask_user_choice",
+        input={
+            "title": "Choose a deployment environment: staging or production",
+            "options": ["Staging", "Production"],
+        },
+    )
+    closing = "Choose staging."
+    result = _Result(
+        tool_results=[(choice, _ToolResult({"ok": True, "menu": "queued"}))],
+        final_text=closing,
+    )
+    session = _Session()
+    session.pending_user_choice = object()
+
+    response_text, display_chunks, use_final_text = _compose_response(result, session, _counts(1))
+
+    assert response_text == closing
+    assert display_chunks == [closing]
+    assert use_final_text is True
+
+
+def test_choice_failure_remains_visible_with_model_closing() -> None:
+    choice = ToolCall(id="1", name="ask_user_choice", input={"title": "", "options": []})
+    result = _Result(
+        tool_results=[
+            (
+                choice,
+                _ToolResult(
+                    {"ok": False, "error": "title is required"},
+                    is_error=True,
+                ),
+            )
+        ],
+        final_text="I could not open the picker.",
+    )
+
+    response_text, display_chunks, use_final_text = _compose_response(
+        result, _Session(), _counts(1)
+    )
+
+    assert response_text == "I could not open the picker.\ntitle is required"
+    assert display_chunks == ["I could not open the picker.", "title is required"]
+    assert use_final_text is True
+
+
 def test_choice_failure_remains_visible_beside_preferred_sibling_response() -> None:
     github = ToolCall(id="1", name="github_cli", input={"command": "run list"})
     choice = ToolCall(id="2", name="ask_user_choice", input={"title": "", "options": []})

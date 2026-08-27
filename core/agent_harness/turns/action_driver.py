@@ -226,25 +226,6 @@ INVESTIGATION_DISPATCH_TOOL_NAMES: frozenset[str] = frozenset(
 # generic formatter must stay silent: repeating their summary would double-print,
 # and their payload (e.g. the full skill body) is for the model only.
 _HOST_RENDERED_TOOL_NAMES: frozenset[str] = frozenset({"ask_user_choice", "skill_view"})
-_CHOICE_INVITATION_WORDS: frozenset[str] = frozenset(
-    {
-        "a",
-        "an",
-        "choose",
-        "following",
-        "from",
-        "of",
-        "one",
-        "option",
-        "options",
-        "pick",
-        "please",
-        "preferred",
-        "select",
-        "the",
-        "your",
-    }
-)
 
 
 @dataclass(frozen=True)
@@ -917,14 +898,14 @@ def _compose_response(
         if chunk
     ]
     use_final_text = bool(final_text_chunk)
-    response_text = final_text if use_final_text else "\n".join(response_chunks)
+    response_text = "\n".join(display_chunks) if use_final_text else "\n".join(response_chunks)
     return response_text, display_chunks, use_final_text
 
 
 def _is_redundant_choice_invitation(result: Any, final_text: str) -> bool:
-    """True when a single-choice closing adds no words beyond picker context."""
-    final_words = set(re.findall(r"[a-z0-9]+", final_text.casefold()))
-    if not final_words:
+    """True when a single-choice closing repeats the title or tool summary."""
+    final_tokens = _choice_invitation_tokens(final_text)
+    if not final_tokens:
         return True
     for tool_call, tool_result in getattr(result, "tool_results", []):
         if tool_call.name != "ask_user_choice":
@@ -932,14 +913,21 @@ def _is_redundant_choice_invitation(result: Any, final_text: str) -> bool:
         args = public_tool_input(tool_call.input)
         if args.get("questions"):
             return False
-        picker_words = set(re.findall(r"[a-z0-9]+", str(args.get("title", "")).casefold()))
+        picker_copy = {_choice_invitation_tokens(str(args.get("title", "")))}
         details = getattr(tool_result, "details", None)
         if isinstance(details, dict):
-            picker_words.update(
-                re.findall(r"[a-z0-9]+", str(details.get("summary", "")).casefold())
-            )
-        return final_words <= picker_words | _CHOICE_INVITATION_WORDS
+            picker_copy.add(_choice_invitation_tokens(str(details.get("summary", ""))))
+        picker_copy.discard(())
+        return final_tokens in picker_copy
     return False
+
+
+def _choice_invitation_tokens(text: str) -> tuple[str, ...]:
+    """Normalize picker copy while allowing an optional polite prefix."""
+    tokens = tuple(re.findall(r"[a-z0-9]+", text.casefold()))
+    if tokens[:1] == ("please",):
+        return tokens[1:]
+    return tokens
 
 
 def _is_choice_acknowledgement(text: str, selected_choice: str) -> bool:
