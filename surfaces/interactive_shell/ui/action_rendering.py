@@ -13,7 +13,7 @@ binding core ports while terminal formatting stays in ``ui/``.
 from __future__ import annotations
 
 import contextlib
-import json
+import shlex
 from typing import Any
 
 from rich.console import Console
@@ -21,6 +21,7 @@ from rich.text import Text
 
 from core.agent_harness.spi.accounting import SELF_RECORDING_ACTION_TOOL_NAMES
 from core.agent_harness.spi.task_plan import TaskPlan, is_plan_diagnosis_prose
+from infrastructure.observability.trace.redaction import redact_sensitive
 from infrastructure.safety.terminal_output import strip_terminal_controls
 from infrastructure.terminal.theme import BOLD_SKILL, BRAND, DIM, HIGHLIGHT
 from surfaces.interactive_shell.runtime import Session
@@ -39,6 +40,18 @@ from tools.interactive_shell.action_names import ActionToolName
 # in :func:`tool_call_display`.
 # The spinner's thinking verb re-rolls once per this many agent-loop steps.
 _VERB_ROTATION_STEP_INTERVAL = 2
+_TOOL_PREVIEW_MAX_CHARS = 180
+_TOOL_VALUE_MAX_CHARS = 64
+_GH_VERBOSE_VALUE_FLAGS = frozenset({"--jq", "--template", "-t"})
+_GENERIC_EXECUTION_KEYS = frozenset({"runtime_metadata", "timeout"})
+_SENSITIVE_KEY_PARTS = (
+    "api_key",
+    "authorization",
+    "credential",
+    "password",
+    "secret",
+    "token",
+)
 
 _SIMPLE_TOOL_LABELS: dict[str, tuple[str, str]] = {
     ActionToolName.LLM_SET_PROVIDER: ("LLM provider", "target"),
@@ -69,13 +82,108 @@ def _is_internal_choice_command(name: str, data: dict[str, Any]) -> bool:
     return isinstance(args, dict) and str(args.get("command", "")).strip() == "/choose"
 
 
+def _bounded_preview(value: str, *, limit: int = _TOOL_PREVIEW_MAX_CHARS) -> str:
+    """Keep live progress on one useful terminal line."""
+    collapsed = " ".join(value.split())
+    if len(collapsed) <= limit:
+        return collapsed
+    return collapsed[: limit - 1].rstrip() + "…"
+
+
+def _is_sensitive_key(key: object) -> bool:
+    normalized = str(key).casefold().replace("-", "_")
+    return any(part in normalized for part in _SENSITIVE_KEY_PARTS)
+
+
+def _compact_gh_args(raw_args: object) -> list[str]:
+    """Retain the command shape while hiding verbose expression bodies."""
+    if not isinstance(raw_args, list):
+        return []
+    tokens = [strip_terminal_controls(str(item).strip()) for item in raw_args]
+    compact: list[str] = []
+    index = 0
+    while index < len(tokens):
+        token = tokens[index]
+        compact.append(token)
+        if token in _GH_VERBOSE_VALUE_FLAGS and index + 1 < len(tokens):
+            compact.append("…")
+            index += 2
+            continue
+        if token in {"-H", "--header"} and index + 1 < len(tokens):
+            header = tokens[index + 1]
+            compact.append("…" if _is_sensitive_key(header) else _bounded_preview(header, limit=40))
+            index += 2
+            continue
+        if index + 1 < len(tokens) and token in {"-f", "-F", "--field", "--raw-field"}:
+            compact.append(_bounded_preview(tokens[index + 1], limit=_TOOL_VALUE_MAX_CHARS))
+            index += 2
+            continue
+        index += 1
+    return compact
+
+
+def _github_cli_display(args: dict[str, Any]) -> tuple[str, str]:
+    command = ["gh"]
+    repo = strip_terminal_controls(str(args.get("repo", "")).strip())
+    if repo:
+        command.extend(["-R", repo])
+    command.extend(_compact_gh_args(args.get("args")))
+    preview = shlex.join(command).replace("'…'", "…")
+    return "GitHub CLI", _bounded_preview(preview)
+
+
+def _python_execution_display(args: dict[str, Any]) -> tuple[str, str]:
+    details = ["run analysis"]
+    if args.get("allow_network") is True:
+        details.append("network enabled")
+    inputs = args.get("inputs")
+    if isinstance(inputs, dict):
+        names = sorted(
+            str(key) for key in inputs if key != "opensre_runtime" and not _is_sensitive_key(key)
+        )
+        if names:
+            details.append(f"inputs: {', '.join(names)}")
+    return "Python", _bounded_preview(" · ".join(details))
+
+
+def _generic_tool_display(tool_name: str, args: dict[str, Any]) -> tuple[str, str]:
+    safe_args = {
+        str(key): value
+        for key, value in args.items()
+        if key not in _GENERIC_EXECUTION_KEYS and not _is_sensitive_key(key)
+    }
+    redacted = redact_sensitive(safe_args)
+    content = " · ".join(
+        f"{key}: {_generic_value_preview(value)}" for key, value in sorted(redacted.items())
+    )
+    return tool_name.replace("_", " "), _bounded_preview(content)
+
+
+def _generic_value_preview(value: Any) -> str:
+    if isinstance(value, dict):
+        keys = [str(key) for key in value if not _is_sensitive_key(key)]
+        return f"fields {', '.join(keys[:4])}" + (f" +{len(keys) - 4}" if len(keys) > 4 else "")
+    if isinstance(value, (list, tuple)):
+        items = [_bounded_preview(str(item), limit=24) for item in value[:4]]
+        return ", ".join(items) + (f" +{len(value) - 4}" if len(value) > 4 else "")
+    if value is None:
+        return "none"
+    if isinstance(value, bool):
+        return "true" if value else "false"
+    return _bounded_preview(str(value), limit=_TOOL_VALUE_MAX_CHARS)
+
+
 def tool_call_display(tool_name: str, args: dict[str, Any]) -> tuple[str, str]:
     """Return a ``(label, content)`` pair describing a planned tool call.
 
     Both strings are stripped of terminal controls: callers append them to a
     raw Rich line, and the tool name and args are model-supplied.
     """
-    if tool_name == ActionToolName.SLASH_INVOKE:
+    if tool_name == "github_cli":
+        label, content = _github_cli_display(args)
+    elif tool_name == "execute_python_code":
+        label, content = _python_execution_display(args)
+    elif tool_name == ActionToolName.SLASH_INVOKE:
         command = str(args.get("command", "")).strip()
         raw_args = args.get("args")
         parsed_args = [str(item).strip() for item in raw_args] if isinstance(raw_args, list) else []
@@ -90,7 +198,7 @@ def tool_call_display(tool_name: str, args: dict[str, Any]) -> tuple[str, str]:
             key_label, arg_key = simple
             label, content = key_label, str(args.get(arg_key, "")).strip()
         else:
-            label, content = tool_name, json.dumps(args, default=str, sort_keys=True)
+            label, content = _generic_tool_display(tool_name, args)
     return strip_terminal_controls(label), strip_terminal_controls(content)
 
 

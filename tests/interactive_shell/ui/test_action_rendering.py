@@ -202,6 +202,85 @@ def test_tool_call_display_strips_terminal_controls_from_model_args() -> None:
     assert content == "ls[2Krm"
 
 
+def test_github_cli_tool_call_display_uses_sdk_arguments_without_runtime_details() -> None:
+    label, content = tool_call_display(
+        "github_cli",
+        {
+            "args": [
+                "search",
+                "prs",
+                "-H",
+                "Authorization: Bearer should-not-render",
+                "--repo",
+                "react/react",
+                "--merged",
+                "--merged-at",
+                "2026-08-01..2026-08-26",
+                "--jq",
+                ".[] | [.createdAt, .closedAt] | @tsv",
+            ],
+            "repo": "facebook/react",
+            "timeout": 120,
+        },
+    )
+
+    assert label == "GitHub CLI"
+    assert content.startswith("gh -R facebook/react search prs")
+    assert "-H …" in content
+    assert "should-not-render" not in content
+    assert "--repo react/react" in content
+    assert "--merged-at 2026-08-01..2026-08-26" in content
+    assert "--jq …" in content
+    assert ".createdAt" not in content
+    assert "timeout" not in content
+    assert "120" not in content
+
+
+def test_python_tool_call_display_summarizes_execution_without_source_or_values() -> None:
+    label, content = tool_call_display(
+        "execute_python_code",
+        {
+            "allow_network": True,
+            "code": "print(inputs['github_token'])",
+            "inputs": {
+                "owner": "react",
+                "repo": "react",
+                "week_start_local": "2026-08-24T00:00:00+01:00",
+            },
+            "timeout": 60,
+        },
+    )
+
+    assert label == "Python"
+    assert content == "run analysis · network enabled · inputs: owner, repo, week_start_local"
+    assert "print" not in content
+    assert "react" not in content
+    assert "timeout" not in content
+    assert "60" not in content
+
+
+def test_generic_tool_call_display_is_bounded_and_omits_execution_controls() -> None:
+    label, content = tool_call_display(
+        "custom_registry_tool",
+        {
+            "query": "x" * 400,
+            "limit": 25,
+            "timeout": 120,
+            "api_token": "secret-token",
+        },
+    )
+
+    assert label == "custom registry tool"
+    assert len(content) <= 180
+    assert content.endswith("…")
+    assert not content.startswith("{")
+    assert "limit: 25" in content
+    assert "query:" in content
+    assert "timeout" not in content
+    assert "api_token" not in content
+    assert "secret-token" not in content
+
+
 def test_intermediate_message_strips_terminal_controls_before_markdown() -> None:
     # Arrange: a real terminal, where Rich would otherwise pass the model's
     # control bytes straight through (a non-terminal console strips them anyway,

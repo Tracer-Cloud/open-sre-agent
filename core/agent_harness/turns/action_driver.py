@@ -204,14 +204,11 @@ def with_duplicate_action_call_guard(
     )
 
 
-# Some hosted tool-calling models emit one tool call per assistant turn even when
-# parallel tool calls are enabled. Keep the tool-calling loop bounded, but leave
-# enough headroom for a *data-dependent* compound request that must run
-# sequentially: each step waits for the previous tool's result before the next
-# call can be emitted (e.g. "look up the weather and then send it to Slack" =
-# Architecture audit needs headroom for clone + ≤3 agent-scan probes +
-# 4 heuristic shells + cleanup + save observations (then a no-tool report).
-_MAX_TOOL_CALLING_ITERATIONS = 13
+# This is an emergency ceiling, not the normal workflow budget. Productive
+# action turns may need many sequential calls; repeated observations are stopped
+# independently by the stagnation guard below.
+_MAX_TOOL_CALLING_ITERATIONS = 64
+_MAX_STAGNANT_TOOL_ITERATIONS = 3
 _EXECUTED_HISTORY_TYPES = {
     "slash",
     "shell",
@@ -716,6 +713,7 @@ def _build_action_agent(
         tools=tuple(agent_tools),
         resolved_integrations=resolved_integrations,
         max_iterations=_MAX_TOOL_CALLING_ITERATIONS,
+        max_stagnant_iterations=_MAX_STAGNANT_TOOL_ITERATIONS,
         tool_resources=tool_resources,
         tool_hooks=tool_hooks,
         on_runtime_event=on_runtime_event,
@@ -1094,7 +1092,7 @@ def _run_action_turn(
         False,
         False if cancelled else counts.handled,
         response_text="" if cancelled else response_text,
-        response_streamed=bool(use_final_text and not result.hit_iteration_cap and not cancelled),
+        response_streamed=bool(use_final_text and not cancelled),
         investigation_dispatched=(False if cancelled else counts.investigation_dispatched),
         hit_iteration_cap=bool(result.hit_iteration_cap and not cancelled),
         cancelled=cancelled,
