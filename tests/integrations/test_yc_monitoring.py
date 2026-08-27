@@ -135,12 +135,18 @@ class TestMetricReads:
         assert called["n"] == 0
 
 
-def _discovery_responder(names: list[str], keys: list[str]) -> Any:
-    """Return a request stand-in answering the two discovery endpoints."""
+def _discovery_responder(
+    names: list[str], keys: list[str], series: list[dict[str, Any]] | None = None
+) -> Any:
+    """Return a request stand-in answering the three discovery endpoints."""
 
     def _request(_method: str, url: str, **_kwargs: Any) -> httpx.Response:
         if "/names" in url:
             return httpx.Response(HTTPStatus.OK, json={"names": names})
+        if "/labels" in url:
+            return httpx.Response(HTTPStatus.OK, json={"keys": keys})
+        if url.rstrip("/").endswith("/metrics"):
+            return httpx.Response(HTTPStatus.OK, json={"metrics": series or []})
         return httpx.Response(HTTPStatus.OK, json={"keys": keys})
 
     return _request
@@ -221,3 +227,64 @@ class TestTheQueryLanguageIsDocumented:
 
         assert "folder_id" in description
         assert "folderId" in description
+
+
+class TestDiscoveryShowsWhatALabelActuallyHolds:
+    """Label keys alone are not enough to build a query, and guessing costs a turn.
+
+    The folder-wide key list holds every key any service uses, so a caller
+    reasonably picks ``cluster_id`` for a managed database - which publishes
+    under ``resource_id``. The query then matches nothing, and matching nothing
+    is indistinguishable from the metric not being collected.
+    """
+
+    _SERIES = [
+        {
+            "name": "cpu.idle",
+            "labels": {
+                "service": "managed-postgresql",
+                "resource_id": "highload-demo",
+                "host": "rc1a-aaa.mdb.yandexcloud.net",
+                "node": "primary",
+            },
+        },
+        {
+            "name": "disk.wal_size",
+            "labels": {"service": "managed-postgresql", "resource_id": "highload-demo"},
+        },
+    ]
+
+    def test_real_series_come_back_with_their_labels(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        monkeypatch.setattr(
+            "integrations.yandex_cloud.rest_client.send_request",
+            _discovery_responder(["cpu.idle"], ["service", "cluster_id"], self._SERIES),
+        )
+
+        result = list_yc_metrics(selectors='service="managed-postgresql"', **_CREDENTIALS)
+
+        assert result["series_sample"][0]["name"] == "cpu.idle"
+        assert result["series_sample"][0]["labels"]["resource_id"] == "highload-demo"
+
+    def test_the_sample_is_bounded(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """A folder holds thousands of series; the point is the shape, not the list."""
+        many = [{"name": f"m{index}", "labels": {"host": "h"}} for index in range(50)]
+        monkeypatch.setattr(
+            "integrations.yandex_cloud.rest_client.send_request",
+            _discovery_responder(["m0"], ["host"], many),
+        )
+
+        result = list_yc_metrics(**_CREDENTIALS)
+
+        assert len(result["series_sample"]) == 5
+
+    def test_a_service_with_no_series_says_so_with_an_empty_sample(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        monkeypatch.setattr(
+            "integrations.yandex_cloud.rest_client.send_request",
+            _discovery_responder(["cpu.idle"], ["service"], []),
+        )
+
+        result = list_yc_metrics(selectors='service="managed-redis"', **_CREDENTIALS)
+
+        assert result["series_sample"] == []

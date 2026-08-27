@@ -155,25 +155,53 @@ def query_yc_metrics(
     }
 
 
+#: Enough to show the shape of a selector without filling the prompt.
+_SERIES_SAMPLE_SIZE = 5
+
+
+def _series_sample(client: YandexMonitoringClient, selectors: str) -> list[dict[str, Any]]:
+    """Return a few real series so a selector can be copied rather than guessed.
+
+    Label keys alone are not enough to build a query: the folder-wide key list
+    holds every key any service uses, so a caller reasonably picks ``cluster_id``
+    for a managed database - which publishes under ``resource_id`` instead. The
+    query then matches nothing, and matching nothing looks exactly like the
+    metric not being collected.
+    """
+    response = client.metrics(selectors)
+    if not response.get("success"):
+        return []
+    listed = (response.get("data") or {}).get("metrics") or []
+    return [
+        {"name": entry.get("name", ""), "labels": entry.get("labels") or {}}
+        for entry in listed[:_SERIES_SAMPLE_SIZE]
+    ]
+
+
 @tool(
     name="list_yc_metrics",
     surfaces=(ToolSurface.INVESTIGATION, ToolSurface.ACTION),
     display_name="Yandex Monitoring",
     source=SOURCE,
     description=(
-        "Discover what metrics exist in the folder and which labels they carry. "
-        "Call before query_yc_metrics rather than guessing a metric name — "
-        "a query that matches nothing returns no series, not an error."
+        "Discover what metrics exist in the folder, which labels they carry, and "
+        "what those labels actually hold. Call before query_yc_metrics rather "
+        "than guessing — a query that matches nothing returns no series, not an "
+        "error, which reads exactly like the metric not being collected. Scope "
+        "with a service selector: managed databases publish under names and "
+        "labels of their own, so a name learned from one service rarely works "
+        "for another."
     ),
     use_cases=[
         "Finding the metric name for a resource type",
-        "Discovering which labels a metric can be filtered by",
+        "Discovering which labels a metric can be filtered by, and their values",
         "Checking whether a service reports metrics at all",
     ],
     requires=[],
     outputs={
         "names": "matching metric names",
         "labels": "label keys available under the given selectors",
+        "series_sample": "real series with their labels, to copy a selector from",
     },
     input_schema={
         "type": "object",
@@ -236,6 +264,7 @@ def list_yc_metrics(
         "scope": selectors or 'default (Yandex services; excludes service="custom")',
         "names": names,
         "labels": labels,
+        "series_sample": _series_sample(client, selectors),
         "name_count": len(names),
     }
     if not names and not selectors:
