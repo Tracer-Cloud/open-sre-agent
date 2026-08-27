@@ -11,12 +11,18 @@ from __future__ import annotations
 from typing import Any
 
 from integrations.tracer.tools.tracer_airflow_dag_tool import (
-    _map_get_airflow_dag_runs,
-    _map_get_airflow_task_instances,
-    _map_get_recent_airflow_failures,
     get_airflow_dag_runs,
     get_airflow_task_instances,
     get_recent_airflow_failures,
+)
+from integrations.tracer.tools.tracer_airflow_dag_tool._evidence import (
+    map_get_airflow_dag_runs as _map_get_airflow_dag_runs,
+)
+from integrations.tracer.tools.tracer_airflow_dag_tool._evidence import (
+    map_get_airflow_task_instances as _map_get_airflow_task_instances,
+)
+from integrations.tracer.tools.tracer_airflow_dag_tool._evidence import (
+    map_get_recent_airflow_failures as _map_get_recent_airflow_failures,
 )
 
 
