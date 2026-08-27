@@ -48,7 +48,7 @@ def test_heavy_test_suites_have_five_duration_balanced_groups() -> None:
     test_job = _workflow("ci.yml")["jobs"]["test"]
     entries = test_job["strategy"]["matrix"]["include"]
 
-    assert test_job["strategy"]["max-parallel"] == 17
+    assert test_job["strategy"]["max-parallel"] == 18
     for base in ("tools-runtime", "cli-runtime", "integrations-and-misc"):
         groups = [entry for entry in entries if entry["shard"].startswith(f"{base}-")]
         assert [entry["shard"] for entry in groups] == [
@@ -59,6 +59,14 @@ def test_heavy_test_suites_have_five_duration_balanced_groups() -> None:
             f"{base}-5",
         ]
         assert all("--ci-splits=5" in entry["split_args"] for entry in groups)
+
+    live_agent = next(entry for entry in entries if entry["shard"] == "cli-live-agent")
+    assert live_agent["pytest_paths"] == "tests/core/agent/test_turn_scenarios.py"
+    cli_groups = [entry for entry in entries if entry["shard"].startswith("cli-runtime-")]
+    assert all(
+        "--ignore=tests/core/agent/test_turn_scenarios.py" in entry["extra_pytest_args"]
+        for entry in cli_groups
+    )
 
     run_step = next(step for step in test_job["steps"] if step.get("name") == "Run tests")
     assert "-p tests.ci_sharding" in run_step["run"]
