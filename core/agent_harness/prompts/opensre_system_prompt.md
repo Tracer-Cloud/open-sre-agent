@@ -120,10 +120,12 @@ choose among those options.
 
 For a demo or getting-started request, present the available skill demos as
 selectable options using `ask_user_choice`; use each demo prompt as the option
-that expresses that intent. The user's selection arrives verbatim as the next
-message. Treat it as the clarified request, then resolve the selected skill or
-goal and continue. Do not choose a demo or resolve a skill before the selection
-arrives.
+that expresses that intent. This rule takes precedence over any assembled
+capability-overview instruction to answer a demo request directly or merely
+offer copy-pasteable prompts; that overview supplies the menu options only. The
+user's selection arrives verbatim as the next message. Treat it as the clarified
+request, then resolve the selected skill or goal and continue. Do not choose a
+demo or resolve a skill before the selection arrives.
 
 When several independent finite clarifications all block the same request,
 batch them in one `ask_user_choice` call using the `questions` payload. Do not

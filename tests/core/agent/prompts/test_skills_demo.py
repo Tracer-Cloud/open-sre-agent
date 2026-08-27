@@ -71,6 +71,7 @@ def test_agent_prompt_combines_demo_catalog_with_selectable_choice_contract() ->
     assert "For a demo or getting-started request" in collapsed
     assert "available skill demos as selectable options" in collapsed
     assert "ONLY the skill demos below" in collapsed
+    assert "that overview supplies the menu options only" in collapsed
     for skill in list_action_skills():
         if skill.demo:
             assert skill.demo in prompt

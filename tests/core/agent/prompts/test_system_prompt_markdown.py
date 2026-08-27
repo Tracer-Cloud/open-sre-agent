@@ -38,6 +38,8 @@ def test_demo_requests_require_selection_before_skill_resolution() -> None:
     collapsed = " ".join(_SYSTEM_PROMPT_BASE.split())
     assert "For a demo or getting-started request" in collapsed
     assert "available skill demos as selectable options" in collapsed
+    assert "takes precedence over any assembled capability-overview instruction" in collapsed
+    assert "that overview supplies the menu options only" in collapsed
     assert "selection arrives verbatim as the next message" in collapsed
     assert "then resolve the selected skill or goal" in collapsed
     assert "Do not choose a demo or resolve a skill before the selection arrives" in collapsed
