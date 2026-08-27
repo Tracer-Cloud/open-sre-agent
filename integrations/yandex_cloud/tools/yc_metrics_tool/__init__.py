@@ -170,7 +170,7 @@ def _split_off_truncation(values: list[Any]) -> tuple[list[str], bool]:
 
 
 #: Enough to show the shape of a selector without filling the prompt.
-_SERIES_SAMPLE_SIZE = 5
+_SERIES_SAMPLE_SIZE = 3
 
 
 def _series_sample(client: YandexMonitoringClient, selectors: str) -> list[dict[str, Any]]:
@@ -181,7 +181,14 @@ def _series_sample(client: YandexMonitoringClient, selectors: str) -> list[dict[
     for a managed database - which publishes under ``resource_id`` instead. The
     query then matches nothing, and matching nothing looks exactly like the
     metric not being collected.
+
+    Only for a scoped call. Unscoped, Yandex answers with whichever series come
+    first across the whole folder, so a question about one service is shown
+    another one's labels - noise on every call, and misleading on the call where
+    the caller is deciding what to trust.
     """
+    if not selectors.strip():
+        return []
     response = client.metrics(selectors)
     if not response.get("success"):
         return []
@@ -215,7 +222,7 @@ def _series_sample(client: YandexMonitoringClient, selectors: str) -> list[dict[
     outputs={
         "names": "matching metric names",
         "labels": "label keys available under the given selectors",
-        "series_sample": "real series with their labels, to copy a selector from",
+        "series_sample": "real series with their labels, when the call was scoped",
         "complete": "false when the list was cut short, so absence proves nothing",
     },
     input_schema={
@@ -229,7 +236,10 @@ def _series_sample(client: YandexMonitoringClient, selectors: str) -> list[dict[
             "selectors": {
                 "type": "string",
                 "description": (
-                    "Scope the search, e.g. 'service=\"compute\"'. Metrics the user "
+                    "Scope the search, e.g. 'service=\"compute\"' or "
+                    "'service=\"managed-greenplum\"'. Scoping is worth a call of its "
+                    "own: it is the only way to see which labels the service really "
+                    "uses. Metrics the user "
                     "pushes themselves live under 'service=\"custom\"' and are NOT in "
                     "the default listing — search there before concluding a metric "
                     "does not exist."

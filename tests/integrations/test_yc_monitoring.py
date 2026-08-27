@@ -273,9 +273,26 @@ class TestDiscoveryShowsWhatALabelActuallyHolds:
             _discovery_responder(["m0"], ["host"], many),
         )
 
-        result = list_yc_metrics(**_CREDENTIALS)
+        result = list_yc_metrics(selectors='service="managed-greenplum"', **_CREDENTIALS)
 
-        assert len(result["series_sample"]) == 5
+        assert len(result["series_sample"]) == 3
+
+    def test_an_unscoped_call_samples_nothing(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """Unscoped, the series come from whatever service answers first.
+
+        Showing a Valkey series to a question about Greenplum is worse than
+        showing none: it is noise on every call, and misleading on the call
+        where the caller is deciding which labels to trust.
+        """
+        elsewhere = [{"name": "n_users", "labels": {"service": "managed-redis"}}]
+        monkeypatch.setattr(
+            "integrations.yandex_cloud.rest_client.send_request",
+            _discovery_responder(["cpu.idle"], ["host"], elsewhere),
+        )
+
+        result = list_yc_metrics(name_filter="greenplum", **_CREDENTIALS)
+
+        assert result["series_sample"] == []
 
     def test_a_service_with_no_series_says_so_with_an_empty_sample(
         self, monkeypatch: pytest.MonkeyPatch
