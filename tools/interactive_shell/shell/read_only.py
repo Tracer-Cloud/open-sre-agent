@@ -106,8 +106,9 @@ _READ_ONLY_COMMANDS: frozenset[str] = frozenset(
         "false",
     }
 )
-# git subcommands that only read. Mutation-capable ones (remote/branch/tag/config)
-# are handled separately: read-only only without a write verb or flag.
+# git subcommands that only read. Mutation-capable ones (remote/branch/tag/config/
+# symbolic-ref/reflog) are handled separately: read-only only without a write
+# verb, positional, or flag.
 _GIT_READ_ONLY_SUBCOMMANDS: frozenset[str] = frozenset(
     {
         "status",
@@ -124,9 +125,7 @@ _GIT_READ_ONLY_SUBCOMMANDS: frozenset[str] = frozenset(
         "ls-remote",
         "cat-file",
         "for-each-ref",
-        "reflog",
         "show-ref",
-        "symbolic-ref",
         "name-rev",
         "merge-base",
         "count-objects",
@@ -180,6 +179,11 @@ _GIT_CONFIG_WRITE_FLAGS: frozenset[str] = frozenset(
         "--remove-section",
     }
 )
+# `git symbolic-ref <name>` reads; `--delete` / `-m` always write (including
+# the attached ``-mreason`` form, which is not a separate positional).
+_GIT_SYMBOLIC_REF_WRITE_FLAGS: frozenset[str] = frozenset({"-d", "--delete", "-m"})
+# `git reflog` / `show` / `list` / `exists` read; these verbs mutate refs.
+_GIT_REFLOG_WRITE_VERBS: frozenset[str] = frozenset({"expire", "delete", "drop"})
 
 
 # Diff-family ``--output`` / ``-o`` write a file. Shared by ``diff``, ``log``,
@@ -212,11 +216,20 @@ def _git_is_read_only(rest: list[str]) -> bool:
         return True  # bare `git`, `git --version`, `git -h`
     after = rest[rest.index(subcommand) + 1 :] if subcommand in rest else []
     flags_after = [tok for tok in after if tok.startswith("-")]
-    if subcommand in _GIT_READ_ONLY_SUBCOMMANDS:
-        # ``git {diff,log,show,…} --output=<file>`` overwrites a file — never
-        # treat as read-only (fail closed for any allowlisted subcommand).
-        return not any(_token_is_write_flag(flag, _GIT_OUTPUT_WRITE_FLAGS) for flag in flags_after)
     positional_after = [tok for tok in after if not tok.startswith("-")]
+    # ``git {diff,log,show,reflog,…} --output=<file>`` overwrites a file.
+    if any(_token_is_write_flag(flag, _GIT_OUTPUT_WRITE_FLAGS) for flag in flags_after):
+        return False
+    if subcommand in _GIT_READ_ONLY_SUBCOMMANDS:
+        return True
+    if subcommand == "symbolic-ref":
+        # ``HEAD`` reads; ``HEAD refs/heads/foo`` / ``--delete`` / ``-m`` write.
+        if any(_token_is_write_flag(flag, _GIT_SYMBOLIC_REF_WRITE_FLAGS) for flag in flags_after):
+            return False
+        return len(positional_after) <= 1
+    if subcommand == "reflog":
+        verb = positional_after[0] if positional_after else "show"
+        return verb not in _GIT_REFLOG_WRITE_VERBS
     if subcommand == "remote":
         return not any(tok in _GIT_REMOTE_WRITE_VERBS for tok in positional_after)
     if subcommand in ("branch", "tag"):
@@ -314,8 +327,48 @@ def _is_redirect_token(token: str) -> bool:
 # git transports that run a helper program (``git ls-remote ext::<cmd>``); these
 # execute code regardless of the read-only subcommand, so always gate them.
 _DANGEROUS_TRANSPORTS = ("ext::", "fd::")
+# Process-local config (``git -c`` / ``--config``) can re-enable those transports
+# for a single invocation — never auto-allow when present anywhere on the argv.
+_GIT_CONFIG_INJECT_FLAGS: frozenset[str] = frozenset({"-c", "--config", "--config-env"})
+# Helper-path overrides run an attacker-chosen executable (default Git config).
+_GIT_HELPER_EXEC_FLAGS: frozenset[str] = frozenset(
+    {"--upload-pack", "--receive-pack", "--exec"}
+)
 # ``date -s`` / ``date --set=`` set the system clock.
 _DATE_WRITE_FLAGS: frozenset[str] = frozenset({"-s", "--set"})
+# Linux ``hostname -F <file>`` / ``-b`` write the kernel hostname from a file.
+_HOSTNAME_WRITE_FLAGS: frozenset[str] = frozenset({"-F", "--file", "-b", "--boot"})
+
+
+def _git_argv_is_unsafe(rest: list[str]) -> bool:
+    """True when argv enables helper execution or process-local config injection."""
+    for tok in rest:
+        lowered = tok.lower()
+        if lowered.startswith(_DANGEROUS_TRANSPORTS):
+            return True
+        if _token_is_write_flag(tok, _GIT_CONFIG_INJECT_FLAGS):
+            return True
+        if _token_is_write_flag(tok, _GIT_HELPER_EXEC_FLAGS):
+            return True
+    return False
+
+
+def _date_is_read_only(rest: list[str]) -> bool:
+    """``date`` is read-only only for display forms.
+
+    ``date -s`` / ``--set`` and the legacy positional ``MMDDhhmm[[CC]YY][.ss]``
+    form set the clock. A leading ``+`` starts an output format string only.
+    """
+    if any(_token_is_write_flag(tok, _DATE_WRITE_FLAGS) for tok in rest):
+        return False
+    return not any(not tok.startswith(("-", "+")) for tok in rest)
+
+
+def _hostname_is_read_only(rest: list[str]) -> bool:
+    """``hostname`` is read-only with display flags only — never a new name or ``-F``."""
+    if any(_token_is_write_flag(tok, _HOSTNAME_WRITE_FLAGS) for tok in rest):
+        return False
+    return not any(not tok.startswith("-") for tok in rest)
 
 
 def _executable_is_read_only(exe: str, rest: list[str]) -> bool:
@@ -325,7 +378,7 @@ def _executable_is_read_only(exe: str, rest: list[str]) -> bool:
         return False
     name = exe
     if name == "git":
-        if any(tok.startswith(_DANGEROUS_TRANSPORTS) for tok in rest):
+        if _git_argv_is_unsafe(rest):
             return False
         return _git_is_read_only(rest)
     if name == "find":
@@ -333,11 +386,9 @@ def _executable_is_read_only(exe: str, rest: list[str]) -> bool:
     if name == "sort":
         return not any(tok.startswith("-o") or tok.startswith("--output") for tok in rest)
     if name == "date":
-        # ``date -s`` / ``date -s<value>`` / ``date --set=`` changes the clock.
-        return not any(_token_is_write_flag(tok, _DATE_WRITE_FLAGS) for tok in rest)
+        return _date_is_read_only(rest)
     if name == "hostname":
-        # A positional argument sets the hostname; only flags read.
-        return not any(not tok.startswith("-") for tok in rest)
+        return _hostname_is_read_only(rest)
     if name in ("yq", "sed", "perl", "awk"):
         # These can edit files in place / run programs; only ever gate them.
         return False

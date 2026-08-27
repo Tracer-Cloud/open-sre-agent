@@ -22,6 +22,11 @@ _READ_ONLY = [
     "git remote -v",
     "git branch -a",
     "cd /x && git status | head; git remote -v; git branch -a",
+    "git symbolic-ref HEAD",
+    "git symbolic-ref --short HEAD",
+    "git reflog",
+    "git reflog show",
+    "git reflog list",
 ]
 
 _MUTATING = [
@@ -49,6 +54,13 @@ _MUTATING = [
     "git show --output=/tmp/commit.patch HEAD",
     "git show -o/tmp/commit.patch HEAD",
     "git config user.name Bob",
+    "git symbolic-ref HEAD refs/heads/foo",
+    "git symbolic-ref --delete HEAD",
+    "git symbolic-ref -d HEAD",
+    "git symbolic-ref -mreason HEAD refs/heads/foo",
+    "git reflog expire --all",
+    "git reflog delete HEAD@{1}",
+    "git reflog drop --all",
     "ls -la\nrm -rf /tmp/x",  # newline separates a mutation — must gate
     'date -s "2020-01-01"',  # sets system clock
     "date -s2026-08-27",  # attached short-option value also sets the clock
@@ -103,6 +115,27 @@ def test_git_output_write_bypasses_neither_auto_nor_plan_only_gates(command: str
     """``--output`` / ``-o`` write a file for diff-family porcelain, not only ``diff``.
 
     Those commands must stay ``unrestricted`` so low-auto and plan-only still ask.
+    """
+    result = evaluate_shell_command(command)
+    assert result.shell_classification == "unrestricted"
+    assert apply_auto_level(result, AutoLevel.LOW).verdict == "ask"
+    assert apply_plan_only_gate(result, plan_only_active=True).verdict == "ask"
+
+
+@pytest.mark.parametrize(
+    "command",
+    [
+        "git symbolic-ref HEAD refs/heads/foo",
+        "git symbolic-ref --delete HEAD",
+        "git reflog expire --all",
+        "git reflog delete HEAD@{1}",
+        "git reflog drop --all",
+    ],
+)
+def test_git_ref_mutations_bypass_neither_auto_nor_plan_only_gates(command: str) -> None:
+    """``symbolic-ref`` set/delete and ``reflog expire|delete|drop`` mutate refs.
+
+    They must stay ``unrestricted`` so low-auto and plan-only still ask.
     """
     result = evaluate_shell_command(command)
     assert result.shell_classification == "unrestricted"
