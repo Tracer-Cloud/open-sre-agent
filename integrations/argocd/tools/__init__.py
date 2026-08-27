@@ -6,9 +6,29 @@ from __future__ import annotations
 
 from typing import Any
 
+from core.domain.types.evidence import record_evidence_entry
 from core.tool import BaseTool
 from core.tool_framework.utils import tool_unavailable
 from integrations.argocd.client import make_argocd_client
+
+
+def _map_argocd_application_diff(
+    evidence: dict[str, Any], output: dict[str, Any], _input: dict[str, Any]
+) -> None:
+    diffs = output.get("diffs", [])
+    drift = output.get("drift_detected", False)
+    app_name = output.get("application_name", "unknown")
+    if diffs or drift:
+        record_evidence_entry(
+            evidence,
+            source="argocd_application_diff",
+            label="Argo CD Application Diff",
+            summary=(
+                f"{app_name}: {len(diffs)} drifted resources"
+                if diffs
+                else f"{app_name}: drift detected (no resource-level diffs)"
+            ),
+        )
 
 
 class ArgoCDApplicationDiffTool(BaseTool):
@@ -16,6 +36,7 @@ class ArgoCDApplicationDiffTool(BaseTool):
 
     name = "argocd_application_diff"
     source = "argocd"
+    evidence_mapper = _map_argocd_application_diff
     description = (
         "Fetch Argo CD server-side diff output and report whether live cluster state "
         "has drifted from the desired GitOps state."
@@ -143,11 +164,37 @@ argocd_application_diff = ArgoCDApplicationDiffTool()
 from core.tool import BaseTool
 
 
+def _map_argocd_application_status(
+    evidence: dict[str, Any], output: dict[str, Any], _input: dict[str, Any]
+) -> None:
+    app = output.get("application")
+    if isinstance(app, dict) and app.get("name"):
+        sync = app.get("sync_status", "unknown")
+        health = app.get("health_status", "unknown")
+        record_evidence_entry(
+            evidence,
+            source="argocd_application_status",
+            label="Argo CD Application Status",
+            summary=f"{app['name']}: sync={sync}, health={health}",
+        )
+        return
+
+    apps = output.get("applications", [])
+    if apps:
+        record_evidence_entry(
+            evidence,
+            source="argocd_application_status",
+            label="Argo CD Application Status",
+            summary=f"{len(apps)} applications",
+        )
+
+
 class ArgoCDApplicationStatusTool(BaseTool):
     """Fetch Argo CD application sync and health status."""
 
     name = "argocd_application_status"
     source = "argocd"
+    evidence_mapper = _map_argocd_application_status
     description = (
         "Fetch Argo CD application sync status, health status, current revision, "
         "and recent deployment history."
