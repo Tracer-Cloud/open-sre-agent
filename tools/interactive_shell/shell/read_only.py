@@ -182,8 +182,10 @@ _GIT_CONFIG_WRITE_FLAGS: frozenset[str] = frozenset(
 )
 
 
-# Write flags for otherwise read-only subcommands (e.g. ``git diff --output=``).
-_GIT_DIFF_WRITE_FLAGS: frozenset[str] = frozenset({"--output", "-o"})
+# Diff-family ``--output`` / ``-o`` write a file. Shared by ``diff``, ``log``,
+# ``show``, ``whatchanged``, and other porcelain that reuses the diff options —
+# not just ``git diff``.
+_GIT_OUTPUT_WRITE_FLAGS: frozenset[str] = frozenset({"--output", "-o"})
 
 
 def _git_token_is_write_flag(token: str, write_flags: frozenset[str]) -> bool:
@@ -211,12 +213,10 @@ def _git_is_read_only(rest: list[str]) -> bool:
     after = rest[rest.index(subcommand) + 1 :] if subcommand in rest else []
     flags_after = [tok for tok in after if tok.startswith("-")]
     if subcommand in _GIT_READ_ONLY_SUBCOMMANDS:
-        # ``git diff --output=<file>`` overwrites a file — never treat as read-only.
-        return not (
-            subcommand == "diff"
-            and any(
-                _git_token_is_write_flag(flag, _GIT_DIFF_WRITE_FLAGS) for flag in flags_after
-            )
+        # ``git {diff,log,show,…} --output=<file>`` overwrites a file — never
+        # treat as read-only (fail closed for any allowlisted subcommand).
+        return not any(
+            _git_token_is_write_flag(flag, _GIT_OUTPUT_WRITE_FLAGS) for flag in flags_after
         )
     positional_after = [tok for tok in after if not tok.startswith("-")]
     if subcommand == "remote":

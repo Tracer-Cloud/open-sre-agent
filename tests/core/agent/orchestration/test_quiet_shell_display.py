@@ -417,3 +417,24 @@ def test_selected_choice_keeps_meaningful_follow_up_response() -> None:
     shown = "\n".join(display_chunks)
     assert "Blue-green avoids routing" in shown
     assert session.terminal.pending_choice_response is None
+
+
+def test_bulky_tool_output_is_capped_and_fenced_for_display() -> None:
+    # A large tool result must not flood the transcript or blend into the report:
+    # it is capped and shown in its own fenced code block for the console.
+    github = ToolCall(id="1", name="github_cli", input={"command": "run list"})
+    bulky = "\n".join(f"run {i} failure 2026-08-01T09:11:00Z" for i in range(30))
+    result = _Result(
+        tool_results=[(github, _ToolResult(_payload(bulky)))],
+        final_text="Here is the run history.",
+    )
+
+    response_text, display_chunks, _use_final = _compose_response(result, _Session(), _counts(1))
+    joined = "\n".join(display_chunks)
+
+    # Display: capped + fenced. Model/history: full, unfenced.
+    assert "```text" in joined
+    assert "… (output truncated)" in joined
+    assert joined.count("run ") <= 12
+    assert "```text" not in response_text
+    assert response_text.count("run ") == 30

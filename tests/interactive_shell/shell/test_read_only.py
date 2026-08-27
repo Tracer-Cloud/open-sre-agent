@@ -44,6 +44,9 @@ _MUTATING = [
     "git branch -u origin/main",
     "git diff --output=/tmp/patch.diff",
     "git diff -o/tmp/patch.diff",
+    "git log --output=/tmp/history.txt",
+    "git show --output=/tmp/commit.patch HEAD",
+    "git show -o/tmp/commit.patch HEAD",
     "git config user.name Bob",
 ]
 

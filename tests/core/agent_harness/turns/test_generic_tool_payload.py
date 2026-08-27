@@ -59,3 +59,22 @@ def test_json_stdout_is_suppressed_but_plain_stdout_is_shown() -> None:
     plain_stdout = _result({"ok": True, "stdout": "total 56\ndrwxr-xr-x  15 user"})
     shown = _format_generic_tool_payload(_call("shell"), plain_stdout)
     assert "drwxr-xr-x" in shown
+
+
+def test_verbose_output_is_capped_for_display_only() -> None:
+    from core.agent_harness.turns.action_driver import _cap_for_display
+
+    big = "\n".join(f"run {i} failure 2026-08-01T09:11:00Z" for i in range(50))
+    capped = _cap_for_display(big)
+
+    # Display is bounded with a truncation marker; the full text is untouched.
+    assert capped.count("\n") + 1 <= 13
+    assert capped.endswith("… (output truncated)")
+    assert big.count("\n") + 1 == 50  # source unchanged
+
+
+def test_short_output_is_not_truncated() -> None:
+    from core.agent_harness.turns.action_driver import _cap_for_display
+
+    text = "total 56\ndrwxr-xr-x  15 user"
+    assert _cap_for_display(text) == text

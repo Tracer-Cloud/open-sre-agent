@@ -337,6 +337,26 @@ def _generic_tool_results(result: Any) -> list[tuple[ToolCall, Any]]:
     ]
 
 
+_DISPLAY_OUTPUT_MAX_LINES = 12
+_DISPLAY_OUTPUT_MAX_CHARS = 800
+_OUTPUT_TRUNCATED_MARKER = "… (output truncated)"
+
+
+def _cap_for_display(text: str) -> str:
+    """Cap verbose tool output for the console so a large result cannot flood the
+    transcript. The model and persisted history keep the full text; only the
+    user-facing preview is truncated."""
+    if not text:
+        return text
+    lines = text.splitlines()
+    capped = "\n".join(lines[:_DISPLAY_OUTPUT_MAX_LINES])
+    truncated = len(lines) > _DISPLAY_OUTPUT_MAX_LINES
+    if len(capped) > _DISPLAY_OUTPUT_MAX_CHARS:
+        capped = capped[:_DISPLAY_OUTPUT_MAX_CHARS].rstrip()
+        truncated = True
+    return f"{capped}\n{_OUTPUT_TRUNCATED_MARKER}" if truncated else capped
+
+
 def _visible_stdout(stdout: str) -> str:
     """Plain-text stdout is shown; a raw JSON payload (e.g. a ``gh api`` response)
     is for the model only and must not flood the transcript."""
@@ -903,7 +923,14 @@ def _compose_response(
     # Console display uses final_text + generic results + hints only so users see
     # github_cli / other registry tools without double-printing shell output.
     # response_text still includes history for persistence / non-TTY surfaces.
-    display_chunks = [chunk for chunk in (display_final, generic_text, hint) if chunk]
+    display_generic = _cap_for_display(generic_text)
+    bulky = display_generic.count("\n") >= 4 or display_generic.endswith(_OUTPUT_TRUNCATED_MARKER)
+    if display_generic and bulky:
+        # Bulky tool output (raw data, long command results) reads as code: put it
+        # in its own fenced block below a blank line so it never blends with the
+        # report prose above it. Short summaries stay inline.
+        display_generic = f"\n```text\n{display_generic}\n```"
+    display_chunks = [chunk for chunk in (display_final, display_generic, hint) if chunk]
     response_chunks = [
         chunk
         for chunk in (
