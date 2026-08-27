@@ -18,10 +18,24 @@ from __future__ import annotations
 
 from typing import Any
 
+from core.domain.types.evidence import record_evidence_entry
 from core.domain.types.tools import ToolSurface
 from core.tool import BaseTool
 from core.tool_framework.utils import tool_unavailable
 from integrations.victoria_logs.client import make_victoria_logs_client
+
+
+def _map_victoria_logs_query(
+    evidence: dict[str, Any], output: dict[str, Any], _input: dict[str, Any]
+) -> None:
+    rows = output.get("rows", [])
+    if rows:
+        record_evidence_entry(
+            evidence,
+            source="victoria_logs_query",
+            label="VictoriaLogs",
+            summary=f"{len(rows)} log entries",
+        )
 
 
 class VictoriaLogsTool(BaseTool):
@@ -29,6 +43,7 @@ class VictoriaLogsTool(BaseTool):
 
     name = "victoria_logs_query"
     source = "victoria_logs"
+    evidence_mapper = _map_victoria_logs_query
     description = (
         "Query structured logs from VictoriaLogs using LogsQL to investigate "
         "application errors, request anomalies, or other log-correlated signals."

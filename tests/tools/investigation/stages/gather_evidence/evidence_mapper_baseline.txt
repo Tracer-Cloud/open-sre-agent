@@ -191,7 +191,6 @@ telegram_send_message
 twilio_notify
 vercel_deployment_logs
 vercel_deployment_status
-victoria_logs_query
 work_task_add
 work_task_complete
 work_task_list
