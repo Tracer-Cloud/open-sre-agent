@@ -16,6 +16,7 @@ _READ_ONLY = [
     "git log --oneline | head",
     "cat file | grep needle | wc -l",
     "sort file | uniq",
+    'grep -E "(foo|bar)" file | head',  # quoted regex parens are safe
     'cd /Users/x/repo && git status --short --branch | head -5; echo "==="; grep -Ei foo Makefile',
     "cd /tmp && ls",
     "git remote -v",
@@ -57,6 +58,8 @@ _MUTATING = [
     "./ls",  # path-qualified executable is not the allowlisted command
     "/tmp/git status",  # attacker-controlled path
     "diff <(rm /tmp/x) file",  # process substitution runs a nested command
+    "(rm /tmp/x) && true",  # bare subshell
+    'echo "$(rm /tmp/x)"',  # $() expands inside double quotes
 ]
 
 

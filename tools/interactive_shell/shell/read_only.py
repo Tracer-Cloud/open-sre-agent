@@ -360,14 +360,42 @@ def _segment_is_read_only(segment: str) -> bool:
     return False
 
 
+def _has_dangerous_shell_construct(text: str) -> bool:
+    """True if the command carries a substitution or subshell that can expand to
+    or run a command. Allow-list of characters: fail closed on ``$`` / backtick
+    (expansion, even inside double quotes) and on an unquoted ``(`` / ``)``
+    (subshell). Quoted parentheses (regex groups) and ordinary args pass."""
+    quote: str | None = None
+    index = 0
+    length = len(text)
+    while index < length:
+        char = text[index]
+        if char == "\\" and index + 1 < length:
+            index += 2
+            continue
+        if quote is not None:
+            if char == quote:
+                quote = None
+            elif quote == '"' and char in "$`":
+                return True  # $ and backtick still expand inside double quotes
+            index += 1
+            continue
+        if char in ("'", '"'):
+            quote = char
+        elif char in "$`()":
+            return True  # substitution or subshell outside any quoting
+        index += 1
+    return False
+
+
 def is_read_only_shell_command(command: str) -> bool:
     """True when every segment of ``command`` only reads state (see module docs)."""
     text = command.strip()
     if not text:
         return False
-    # Any construct that can run a nested command: command substitution ``$(``,
-    # backticks, and process substitution ``<(`` / ``>(``. Fail closed.
-    if any(token in text for token in ("$(", "`", "<(", ">(")) or _HEREDOC_RE.search(text):
+    # Fail closed on anything that can expand to or run a nested command
+    # (substitution, subshell, heredoc) — the whole class, not one syntax at a time.
+    if _has_dangerous_shell_construct(text) or _HEREDOC_RE.search(text):
         return False
     if _has_file_write_redirect(text):
         return False
