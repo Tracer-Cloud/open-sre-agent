@@ -13,6 +13,7 @@ from typing import Literal
 
 from pydantic import Field, ValidationError, field_validator, model_validator
 
+from config.constants.clerk import CLERK_ISSUER_ENV, CLERK_JWKS_URL_ENV
 from config.constants.llm import (
     AZURE_OPENAI_API_VERSION_ENV,
     AZURE_OPENAI_BASE_URL_ENV,
@@ -235,8 +236,7 @@ CLERK_CONFIG_PROD = ClerkConfig(
 
 # Env vars injected by the org-silo infra (ECS task definition) to point JWT
 # verification at the silo's own Clerk instance instead of the defaults above.
-CLERK_ISSUER_ENV = "CLERK_ISSUER"
-CLERK_JWKS_URL_ENV = "CLERK_JWKS_URL"
+# Names live in ``config.constants.clerk`` (re-exported below for callers).
 
 
 def get_clerk_config_override() -> ClerkConfig | None:

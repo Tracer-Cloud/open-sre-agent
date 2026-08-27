@@ -430,7 +430,7 @@ def test_execute_tools_uses_availability_view_for_classified_integrations() -> N
     tool_calls = [ToolCall(id="tc1", name="query_grafana_logs", input={"service_name": "checkout"})]
 
     with patch(
-        "integrations.grafana.tools.get_grafana_client_from_credentials",
+        "integrations.grafana.tools._helpers.get_grafana_client_from_credentials",
         return_value=mock_client,
     ) as mock_factory:
         results = execute_tools(tool_calls, [rt], resolved)

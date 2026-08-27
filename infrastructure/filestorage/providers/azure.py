@@ -7,6 +7,7 @@ import os
 import subprocess
 import xml.etree.ElementTree as ET
 from datetime import UTC, datetime
+from http import HTTPStatus
 from urllib.parse import quote
 
 import httpx
@@ -261,7 +262,7 @@ def check_public_access(
         )
         response.raise_for_status()
     except httpx.HTTPStatusError as exc:
-        if exc.response.status_code in (401, 403):
+        if exc.response.status_code in (HTTPStatus.UNAUTHORIZED, HTTPStatus.FORBIDDEN):
             return PublicAccessStatus(
                 BucketExposure.UNKNOWN, "missing permission to read container properties"
             )
