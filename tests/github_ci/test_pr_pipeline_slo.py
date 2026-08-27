@@ -44,19 +44,20 @@ def test_full_codeql_is_post_merge_and_pr_profile_is_manual() -> None:
     assert "queries" not in benchmark_init["with"]
 
 
-def test_heavy_test_suites_have_three_duration_balanced_groups() -> None:
+def test_heavy_test_suites_have_four_duration_balanced_groups() -> None:
     test_job = _workflow("ci.yml")["jobs"]["test"]
     entries = test_job["strategy"]["matrix"]["include"]
 
-    assert test_job["strategy"]["max-parallel"] == 11
+    assert test_job["strategy"]["max-parallel"] == 14
     for base in ("tools-runtime", "cli-runtime", "integrations-and-misc"):
         groups = [entry for entry in entries if entry["shard"].startswith(f"{base}-")]
         assert [entry["shard"] for entry in groups] == [
             f"{base}-1",
             f"{base}-2",
             f"{base}-3",
+            f"{base}-4",
         ]
-        assert all("--ci-splits=3" in entry["split_args"] for entry in groups)
+        assert all("--ci-splits=4" in entry["split_args"] for entry in groups)
 
     run_step = next(step for step in test_job["steps"] if step.get("name") == "Run tests")
     assert "-p tests.ci_sharding" in run_step["run"]

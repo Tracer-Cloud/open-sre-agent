@@ -129,7 +129,7 @@ jobs:
     name: test (${{ matrix.shard }})
     strategy:
       fail-fast: false
-      max-parallel: 11
+      max-parallel: 14
       matrix:
         include:
           - os: ubuntu-latest
@@ -139,7 +139,7 @@ jobs:
             extra_pytest_args: >-
               --ignore=tests/core/agent
             split_args: >-
-              --ci-splits=3 --ci-group=1
+              --ci-splits=4 --ci-group=1
               --ci-durations-path=.github/ci/pytest-file-durations.json
             pytest_paths: >-
               tests/tools
@@ -154,7 +154,7 @@ jobs:
             extra_pytest_args: >-
               --ignore=tests/core/agent
             split_args: >-
-              --ci-splits=3 --ci-group=2
+              --ci-splits=4 --ci-group=2
               --ci-durations-path=.github/ci/pytest-file-durations.json
             pytest_paths: >-
               tests/tools
@@ -169,7 +169,22 @@ jobs:
             extra_pytest_args: >-
               --ignore=tests/core/agent
             split_args: >-
-              --ci-splits=3 --ci-group=3
+              --ci-splits=4 --ci-group=3
+              --ci-durations-path=.github/ci/pytest-file-durations.json
+            pytest_paths: >-
+              tests/tools
+              tests/core
+              tests/infrastructure
+              tests/filestorage
+              tests/utils
+              tests/masking
+              tests/watch_dog
+          - os: ubuntu-latest
+            shard: tools-runtime-4
+            extra_pytest_args: >-
+              --ignore=tests/core/agent
+            split_args: >-
+              --ci-splits=4 --ci-group=4
               --ci-durations-path=.github/ci/pytest-file-durations.json
             pytest_paths: >-
               tests/tools
@@ -192,7 +207,7 @@ jobs:
             # restructure (#3299) added.
             llm_provider: openai
             split_args: >-
-              --ci-splits=3 --ci-group=1
+              --ci-splits=4 --ci-group=1
               --ci-durations-path=.github/ci/pytest-file-durations.json
             pytest_paths: >-
               tests/cli
@@ -210,7 +225,7 @@ jobs:
             shard: cli-runtime-2
             llm_provider: openai
             split_args: >-
-              --ci-splits=3 --ci-group=2
+              --ci-splits=4 --ci-group=2
               --ci-durations-path=.github/ci/pytest-file-durations.json
             pytest_paths: >-
               tests/cli
@@ -228,7 +243,25 @@ jobs:
             shard: cli-runtime-3
             llm_provider: openai
             split_args: >-
-              --ci-splits=3 --ci-group=3
+              --ci-splits=4 --ci-group=3
+              --ci-durations-path=.github/ci/pytest-file-durations.json
+            pytest_paths: >-
+              tests/cli
+              tests/interactive_shell
+              tests/surfaces
+              tests/agent
+              tests/core/agent
+              tests/fleet_monitoring
+              tests/analytics
+              tests/tools/investigation
+              tests/delivery
+              tests/sandbox
+              tests/hermes
+          - os: ubuntu-latest
+            shard: cli-runtime-4
+            llm_provider: openai
+            split_args: >-
+              --ci-splits=4 --ci-group=4
               --ci-durations-path=.github/ci/pytest-file-durations.json
             pytest_paths: >-
               tests/cli
@@ -245,7 +278,7 @@ jobs:
           - os: ubuntu-latest
             shard: integrations-and-misc-1
             split_args: >-
-              --ci-splits=3 --ci-group=1
+              --ci-splits=4 --ci-group=1
               --ci-durations-path=.github/ci/pytest-file-durations.json
             pytest_paths: >-
               tests/integrations
@@ -262,7 +295,7 @@ jobs:
           - os: ubuntu-latest
             shard: integrations-and-misc-2
             split_args: >-
-              --ci-splits=3 --ci-group=2
+              --ci-splits=4 --ci-group=2
               --ci-durations-path=.github/ci/pytest-file-durations.json
             pytest_paths: >-
               tests/integrations
@@ -279,7 +312,24 @@ jobs:
           - os: ubuntu-latest
             shard: integrations-and-misc-3
             split_args: >-
-              --ci-splits=3 --ci-group=3
+              --ci-splits=4 --ci-group=3
+              --ci-durations-path=.github/ci/pytest-file-durations.json
+            pytest_paths: >-
+              tests/integrations
+              tests/bootstrap
+              tests/benchmarks
+              tests/chaos_engineering
+              tests/shared
+              tests/config
+              tests/github_ci
+              tests/quality
+              tests/packaging
+              tests/scheduler
+              gateway/tests
+          - os: ubuntu-latest
+            shard: integrations-and-misc-4
+            split_args: >-
+              --ci-splits=4 --ci-group=4
               --ci-durations-path=.github/ci/pytest-file-durations.json
             pytest_paths: >-
               tests/integrations
