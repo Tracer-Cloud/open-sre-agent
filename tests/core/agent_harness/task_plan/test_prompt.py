@@ -113,6 +113,35 @@ def test_ask_user_answered_guidance_defaults_to_execute_not_pause() -> None:
     assert "in_progress and execute it now" in text
 
 
+def test_ask_user_answers_preserve_original_repo_and_all_requested_metrics() -> None:
+    from core.agent_harness.session.pending_choice import (
+        AskUserQuestion,
+        format_ask_user_answers,
+    )
+
+    original = "For facebook/react, return merged PR count, median time-to-merge, and star gain."
+    answers = format_ask_user_answers(
+        (AskUserQuestion(label="Window", title="Which date window?", options=("7d", "30d")),),
+        ("7d",),
+    )
+    snapshot = TurnSnapshot(
+        text=answers,
+        conversation_messages=(("user", original),),
+        configured_integrations=(),
+        configured_integrations_known=True,
+        last_state=None,
+        last_synthetic_observation_path=None,
+        reasoning_effort=None,
+    )
+
+    rendered = build_action_system_prompt_envelope(snapshot).render()
+
+    assert original in rendered
+    assert "preserve the original target repository" in rendered
+    assert "every requested output or metric" in rendered
+    assert "Q&A answers refine that request; they never replace it" in rendered
+
+
 def test_ask_user_answered_plan_only_guidance_does_not_authorize_execute() -> None:
     from core.agent_harness.session.pending_choice import (
         AskUserQuestion,

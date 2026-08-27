@@ -126,9 +126,11 @@ subpackage. Default port implementations live with the concern they serve, not i
        Want-me-to, stream flush). Stream rewrite locals
        (`text_changed_after_streaming`) stay inside finalize and must **never**
        gate route selection.
-    Resolves integrations **once** at the top of the turn onto the frozen
-    `turn_snapshot`, so `turn_snapshot.resolved_integrations` is the single
-    source of truth for what the turn knows. Downstream components (e.g.
+    Resolves base integrations **once** at the top of the turn, enriches that
+    per-turn copy with repository scopes from the frozen message/history, and
+    stores it on `turn_snapshot`, so `turn_snapshot.resolved_integrations` is
+    the single source of truth for what the turn knows without mutating the
+    session's base integration cache. Downstream components (e.g.
     `action_driver._resolved_integrations_for_turn`) read it from there rather
     than re-resolving. Do NOT reintroduce per-component integration resolution.
   - `turn_route.py` / `answer_finalize.py` / `handoff_policy.py` — the seams

@@ -219,14 +219,21 @@ def test_run_turn_builds_turn_plan_for_action_path(
 
     session = Session(store=InMemorySessionStore())
     run_turn(
-        "hi",
+        "check facebook/react",
         session,
         execute_actions=execute_actions,
         accounting=_Accounting(),
     )
 
     assert captured, "execute_actions was never called"
-    assert captured[0].resolved_integrations == resolved
+    assert captured[0].resolved_integrations == {
+        "github": {
+            "configured": True,
+            "owner": "facebook",
+            "repo": "react",
+        }
+    }
+    assert resolved == {"github": {"configured": True}}
 
 
 def test_action_tools_uses_passed_resolved_integrations(

@@ -30,6 +30,9 @@ ASK_USER_ANSWERED_GUIDANCE = (
     "Put that analysis in update_plan(..., explanation=...) — the UI renders it "
     "under the checklist. Use headers and a table, never one dense paragraph. "
     "Do not repeat it in the assistant closing reply. "
+    "Treat RECENT CONVERSATION as authoritative: preserve the original target "
+    "repository and every requested output or metric. The Q&A answers refine "
+    "that request; they never replace it. "
     "Answering is the go-ahead to continue the original request. "
     "Do not invent a plan-only pause. Set ask_user_choice(plan_only_after=true) "
     "only when the original request asked not to run yet; then after answers "
@@ -47,8 +50,11 @@ ASK_USER_ANSWERED_PLAN_ONLY_GUIDANCE = (
     "- Facts: the answers as short bullets.\n"
     "- What the signature tells us: for each fact state what it RULES OUT.\n"
     "- Hypothesis ranking: # | Hypothesis | Why it fits | Discriminator.\n"
-    "Put that analysis in update_plan(..., explanation=...). Do not pass "
-    "plan_only=false; the host keeps the plan-only latch until the user "
+    "Put that analysis in update_plan(..., explanation=...). "
+    "Treat RECENT CONVERSATION as authoritative: preserve the original target "
+    "repository and every requested output or metric. The Q&A answers refine "
+    "that request; they never replace it. "
+    "Do not pass plan_only=false; the host keeps the plan-only latch until the user "
     "confirms a mutating step at the execution gate."
 )
 
