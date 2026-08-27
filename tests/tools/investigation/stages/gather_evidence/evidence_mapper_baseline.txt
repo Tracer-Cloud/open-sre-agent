@@ -52,7 +52,6 @@ get_elb_target_health
 get_error_logs
 get_failed_jobs
 get_failed_tools
-get_gitlab_file
 get_groundcover_query_reference
 get_hermes_adapter_catalog
 get_hermes_approval_events
