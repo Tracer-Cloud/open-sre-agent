@@ -24,10 +24,6 @@ datas += collect_data_files(
     "core.agent_harness.prompts",
     includes=["opensre_system_prompt.md"],
 )
-datas += collect_data_files(
-    "core.agent_harness.task_plan",
-    includes=["planning_instructions.md"],
-)
 datas += collect_data_files("surfaces.cli")
 datas += collect_data_files("surfaces.shared")
 datas += collect_data_files("config")

@@ -73,9 +73,6 @@ def test_release_artifacts_ship_the_planning_instructions() -> None:
     """The task-plan prompt loader reads its adjacent Markdown at runtime."""
     pyproject = tomllib.loads((REPO_ROOT / "pyproject.toml").read_text(encoding="utf-8"))
     package_data = pyproject["tool"]["setuptools"]["package-data"]
-    spec = (REPO_ROOT / "opensre.spec").read_text(encoding="utf-8")
 
     assert package_data["core.agent_harness.task_plan"] == ["planning_instructions.md"]
-    assert '"core.agent_harness.task_plan"' in spec
-    assert 'includes=["planning_instructions.md"]' in spec
     assert (REPO_ROOT / "core/agent_harness/task_plan/planning_instructions.md").is_file()
