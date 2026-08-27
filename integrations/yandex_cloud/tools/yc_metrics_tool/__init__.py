@@ -155,6 +155,20 @@ def query_yc_metrics(
     }
 
 
+#: The shared response sanitizer caps any list at MAX_LIST_ITEMS and appends a
+#: sentence saying so as the final element. Harmless in a cluster listing;
+#: corrosive here, because discovery is the one place where absence is read as
+#: proof - and because Yandex ignores nameFilter, so the narrowing happens after
+#: the cut and cannot see what was removed.
+_TRUNCATION_MARKER = "more items truncated"
+
+
+def _split_off_truncation(values: list[Any]) -> tuple[list[str], bool]:
+    """Return the real entries and whether the sanitizer dropped any."""
+    kept = [str(value) for value in values if _TRUNCATION_MARKER not in str(value)]
+    return kept, len(kept) != len(values)
+
+
 #: Enough to show the shape of a selector without filling the prompt.
 _SERIES_SAMPLE_SIZE = 5
 
@@ -202,6 +216,7 @@ def _series_sample(client: YandexMonitoringClient, selectors: str) -> list[dict[
         "names": "matching metric names",
         "labels": "label keys available under the given selectors",
         "series_sample": "real series with their labels, to copy a selector from",
+        "complete": "false when the list was cut short, so absence proves nothing",
     },
     input_schema={
         "type": "object",
@@ -251,13 +266,18 @@ def list_yc_metrics(
         }
     labels_response = client.label_keys(selectors)
 
-    names = (names_response.get("data") or {}).get("names") or []
+    names, names_truncated = _split_off_truncation(
+        (names_response.get("data") or {}).get("names") or []
+    )
+    listed_before_filter = len(names)
     # Yandex accepts nameFilter and ignores it, so narrowing has to happen here —
     # otherwise every filter returns the same list and the caller retries forever.
     needle = name_filter.strip().lower()
     if needle:
         names = [name for name in names if needle in name.lower()]
-    labels = (labels_response.get("data") or {}).get("keys") or []
+    labels, labels_truncated = _split_off_truncation(
+        (labels_response.get("data") or {}).get("keys") or []
+    )
     result: dict[str, Any] = {
         "source": SOURCE,
         "available": True,
@@ -266,7 +286,17 @@ def list_yc_metrics(
         "labels": labels,
         "series_sample": _series_sample(client, selectors),
         "name_count": len(names),
+        "complete": not (names_truncated or labels_truncated),
     }
+    if names_truncated or labels_truncated:
+        # Said as a field and not only in prose: a caller that reads "complete:
+        # false" cannot conclude a metric is missing from this list, which is
+        # exactly the wrong turn discovery invites.
+        result["truncation_note"] = (
+            f"Only the first {listed_before_filter} names were returned. A metric "
+            "absent from this list may still exist and be queryable - narrow with "
+            'selectors, e.g. service="managed-postgresql", and search again.'
+        )
     if not names and not selectors:
         # The most common reason for an empty result is scope, not absence.
         result["note"] = (

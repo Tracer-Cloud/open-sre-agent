@@ -288,3 +288,65 @@ class TestDiscoveryShowsWhatALabelActuallyHolds:
         result = list_yc_metrics(selectors='service="managed-redis"', **_CREDENTIALS)
 
         assert result["series_sample"] == []
+
+
+class TestDiscoverySaysWhenItWasCutShort:
+    """Discovery is the one place where absence gets read as proof.
+
+    The shared sanitizer caps any list at a hundred and appends a sentence
+    saying so. That sentence then sits in ``names`` looking like a metric, the
+    count is off by one, and - because Yandex ignores ``nameFilter`` and the
+    narrowing happens locally, after the cut - a search cannot see what was
+    removed. So a metric that exists and is queryable reads as missing.
+    """
+
+    _CUT = [f"metric.{index}" for index in range(100)] + ["... (413 more items truncated)"]
+
+    def test_the_marker_is_not_offered_as_a_metric_name(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        monkeypatch.setattr(
+            "integrations.yandex_cloud.rest_client.send_request",
+            _discovery_responder(self._CUT, ["host"]),
+        )
+
+        result = list_yc_metrics(**_CREDENTIALS)
+
+        assert all("truncated" not in name for name in result["names"])
+        assert result["name_count"] == 100
+
+    def test_an_incomplete_list_says_so(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        monkeypatch.setattr(
+            "integrations.yandex_cloud.rest_client.send_request",
+            _discovery_responder(self._CUT, ["host"]),
+        )
+
+        result = list_yc_metrics(**_CREDENTIALS)
+
+        assert result["complete"] is False
+        assert "may still exist" in result["truncation_note"]
+
+    def test_a_filtered_search_over_a_cut_list_still_warns(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """The filter runs after the cut, so a match count says nothing about the rest."""
+        monkeypatch.setattr(
+            "integrations.yandex_cloud.rest_client.send_request",
+            _discovery_responder(self._CUT, ["host"]),
+        )
+
+        result = list_yc_metrics(name_filter="metric.9", **_CREDENTIALS)
+
+        assert result["complete"] is False
+        assert result["names"]
+
+    def test_a_complete_list_makes_no_excuses(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        monkeypatch.setattr(
+            "integrations.yandex_cloud.rest_client.send_request",
+            _discovery_responder(["cpu.idle"], ["host"]),
+        )
+
+        result = list_yc_metrics(**_CREDENTIALS)
+
+        assert result["complete"] is True
+        assert "truncation_note" not in result
