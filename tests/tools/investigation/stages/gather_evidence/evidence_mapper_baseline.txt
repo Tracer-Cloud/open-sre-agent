@@ -48,7 +48,6 @@ get_error_logs
 get_failed_jobs
 get_failed_tools
 get_github_star_history
-get_groundcover_query_reference
 get_hermes_adapter_catalog
 get_hermes_approval_events
 get_hermes_audit_trail
@@ -156,8 +155,6 @@ query_datadog_logs
 query_datadog_metrics
 query_datadog_monitors
 query_grafana_annotations
-query_groundcover_logs
-query_groundcover_traces
 query_splunk_logs
 query_yc_metrics
 read_yc_logs
