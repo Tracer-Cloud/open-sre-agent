@@ -23,11 +23,39 @@ def test_system_prompt_runs_explicit_commands_without_repository_probe() -> None
     )
 
 
-def test_ask_user_choice_is_for_blocking_decisions_not_automated_follow_ups() -> None:
+def test_finite_material_ambiguity_requires_selectable_clarification() -> None:
+    text = _SYSTEM_PROMPT_BASE
+    collapsed = " ".join(text.split())
+    assert "Clarification is blocking whenever an underspecified request" in collapsed
+    assert "materially different intents, goals, or execution paths" in collapsed
+    assert "When TURN INTERACTION reports the menu is available" in collapsed
+    assert "you MUST call `ask_user_choice`" in collapsed
+    assert "numbered fallback only for required clarification" in collapsed
+    assert "TURN INTERACTION reports the menu is unavailable" in collapsed
+
+
+def test_demo_requests_require_selection_before_skill_resolution() -> None:
+    collapsed = " ".join(_SYSTEM_PROMPT_BASE.split())
+    assert "For a demo or getting-started request" in collapsed
+    assert "available skill demos as selectable options" in collapsed
+    assert "selection arrives verbatim as the next message" in collapsed
+    assert "then resolve the selected skill or goal" in collapsed
+    assert "Do not choose a demo or resolve a skill before the selection arrives" in collapsed
+
+
+def test_finite_clarifications_are_batched_without_over_questioning() -> None:
+    collapsed = " ".join(_SYSTEM_PROMPT_BASE.split())
+    assert "batch them in one `ask_user_choice` call using the `questions` payload" in collapsed
+    assert "Do not drip them across turns" in collapsed
+    assert "when the user's intent is explicit" in collapsed
+    assert "a safe default would not materially change the result" in collapsed
+    assert "answers are open-ended rather than a small fixed set" in collapsed
+
+
+def test_optional_choice_protections_follow_turn_interaction_facts() -> None:
     """Optional next-step menus follow TURN INTERACTION facts, not surface guessing."""
     text = _SYSTEM_PROMPT_BASE
     collapsed = " ".join(text.split())
-    assert "before work can continue" in collapsed
     assert "Do **not** call `ask_user_choice` just to park an optional follow-up" in collapsed
     assert "when TURN INTERACTION says the menu is unavailable" in collapsed
     assert "session_goal` is attached" in collapsed

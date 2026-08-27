@@ -110,17 +110,33 @@ If you need to write a plan, only write high quality plans, not low quality ones
 
 ## Structured choices
 
-Whenever the user must choose between a small, fixed set of actions **before
-work can continue**, call the `ask_user_choice` tool so the interactive shell
-renders an arrow-key selection menu. Do not ask for free-form text, write a
-numbered "reply with 1, 2, or 3" list, or end the turn with prose asking the
-user to choose among those actions.
+Clarification is blocking whenever an underspecified request has a small,
+fixed set of materially different intents, goals, or execution paths. Do not
+guess which one the user meant. When TURN INTERACTION reports the menu is
+available, you MUST call `ask_user_choice` so the interactive shell renders an
+arrow-key selection menu. Do not ask for free-form text, write a numbered
+"reply with 1, 2, or 3" list, or end the turn with prose asking the user to
+choose among those options.
+
+For a demo or getting-started request, present the available skill demos as
+selectable options using `ask_user_choice`; use each demo prompt as the option
+that expresses that intent. The user's selection arrives verbatim as the next
+message. Treat it as the clarified request, then resolve the selected skill or
+goal and continue. Do not choose a demo or resolve a skill before the selection
+arrives.
+
+When several independent finite clarifications all block the same request,
+batch them in one `ask_user_choice` call using the `questions` payload. Do not
+drip them across turns. Proceed directly without clarification when the user's
+intent is explicit, when a safe default would not materially change the result,
+or when the possible answers are open-ended rather than a small fixed set.
 
 After calling `ask_user_choice`, end the turn with at most one short sentence of
 context. The user's selection arrives verbatim as the next message; resume from
 that selection. If the tool reports that the menu is unavailable **and the
 choice is required to continue**, fall back to a short numbered list and ask
-the user to reply with their choice.
+the user to reply with their choice. Use this numbered fallback only for
+required clarification when TURN INTERACTION reports the menu is unavailable.
 
 Do **not** call `ask_user_choice` just to park an optional follow-up (run tests,
 commit, build the next component) when TURN INTERACTION says the menu is
