@@ -56,6 +56,7 @@ class ReplState:
     confirm_response: list[str] = field(default_factory=list)
     confirm_prompt_text: str = ""
     phase: TurnPhase = TurnPhase.IDLE
+    ctrl_c_exit_hint_until: float = 0.0
 
     def is_dispatch_running(self) -> bool:
         return self.current_task is not None and not self.current_task.done()
@@ -77,6 +78,18 @@ class ReplState:
 
     def request_exit(self) -> None:
         self.exit_requested = True
+
+    def arm_ctrl_c_exit_hint(self, duration_seconds: float) -> None:
+        """Show the double-press exit hint without restarting the prompt."""
+        self.ctrl_c_exit_hint_until = time.monotonic() + duration_seconds
+
+    def clear_ctrl_c_exit_hint(self) -> None:
+        """Remove the transient Ctrl-C exit hint."""
+        self.ctrl_c_exit_hint_until = 0.0
+
+    def is_ctrl_c_exit_hint_visible(self) -> bool:
+        """Return whether the transient Ctrl-C exit hint is still active."""
+        return time.monotonic() <= self.ctrl_c_exit_hint_until
 
     def begin_confirmation(self, event: threading.Event, prompt_text: str = "") -> None:
         # Reset the response list BEFORE publishing ``confirm_event`` so a
