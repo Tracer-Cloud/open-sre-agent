@@ -9,6 +9,7 @@ import pytest
 from click.testing import CliRunner
 
 import integrations.setup_flow as setup_flow
+from config.constants import INTEGRATIONS_STORE_PATH_ENV
 from integrations.cli import _github_browser_auth_token, _setup_github, cmd_setup
 from integrations.github.mcp import GitHubMCPValidationResult
 from surfaces.cli.app import cli
@@ -271,9 +272,13 @@ def test_cmd_setup_github_skips_saved_line_on_validation_failure(
 def test_cmd_setup_github_prints_saved_after_success(
     monkeypatch: pytest.MonkeyPatch,
     capsys: pytest.CaptureFixture[str],
+    tmp_path: Path,
 ) -> None:
     """Full cmd_setup('github') prints validation, Saved line, and does not duplicate handlers."""
 
+    store_path = tmp_path / "integrations.json"
+    monkeypatch.setenv(INTEGRATIONS_STORE_PATH_ENV, str(store_path))
+    monkeypatch.setattr("integrations.store.STORE_PATH", None)
     answers = iter(["https://api.githubcopilot.com/mcp/", "repos"])
 
     def fake_p(_label: str, default: str = "", secret: bool = False) -> str:
@@ -304,7 +309,7 @@ def test_cmd_setup_github_prints_saved_after_success(
     out = capsys.readouterr().out
     assert "Configuration validation: succeeded" in out
     assert "@u" in out
-    assert "Saved" in out
+    assert f"Saved → {store_path}" in out
 
 
 def test_integrations_setup_github_cli_invokes_cmd_setup() -> None:

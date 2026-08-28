@@ -86,8 +86,6 @@ get_redis_replication
 get_redis_server_info
 get_redis_slowlog
 get_s3_object
-get_sentry_issue_details
-get_sqs_queue_attributes
 get_sre_guidance
 get_tracer_run
 get_tracer_tasks
