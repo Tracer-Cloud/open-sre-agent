@@ -89,8 +89,15 @@ function Get-OpenSreMainArtifact {
 
     $archivePath = Join-Path $Destination $archiveName
     $checksumPath = "$archivePath.sha256"
-    Invoke-WebRequest -Uri $archiveAsset.browser_download_url -Headers $headers -OutFile $archivePath
-    Invoke-WebRequest -Uri $checksumAsset.browser_download_url -Headers $headers -OutFile $checksumPath
+    $assetHeaders = @{
+        "Accept" = "application/octet-stream"
+        "User-Agent" = "opensre-windows-startup-investigation"
+    }
+    if ($headers.ContainsKey("Authorization")) {
+        $assetHeaders["Authorization"] = $headers["Authorization"]
+    }
+    Invoke-WebRequest -Uri $archiveAsset.url -Headers $assetHeaders -OutFile $archivePath
+    Invoke-WebRequest -Uri $checksumAsset.url -Headers $assetHeaders -OutFile $checksumPath
 
     $checksumLine = Get-Content -LiteralPath $checksumPath | Where-Object { $_ -match '^[A-Fa-f0-9]{64}\s+' } | Select-Object -First 1
     if (-not $checksumLine) {
@@ -112,6 +119,9 @@ function Get-OpenSreMainArtifact {
     return [ordered]@{
         binary_path = [string]$binaries[0].FullName
         artifact_name = $archiveName
+        artifact_id = [Int64]$archiveAsset.id
+        checksum_id = [Int64]$checksumAsset.id
+        release_id = [Int64]$release.id
         release_published_at = [string]$release.published_at
     }
 }
@@ -121,6 +131,9 @@ New-Item -ItemType Directory -Path $benchmarkRoot | Out-Null
 
 $installDurationMs = $null
 $artifactName = ""
+$artifactId = $null
+$checksumId = $null
+$releaseId = $null
 $releasePublishedAt = ""
 $installMethod = ""
 $binaryPath = ""
@@ -154,6 +167,9 @@ try {
         $artifact = Get-OpenSreMainArtifact -RepositoryName $Repository -Destination $benchmarkRoot
         $binaryPath = [string]$artifact.binary_path
         $artifactName = [string]$artifact.artifact_name
+        $artifactId = [Int64]$artifact.artifact_id
+        $checksumId = [Int64]$artifact.checksum_id
+        $releaseId = [Int64]$artifact.release_id
         $releasePublishedAt = [string]$artifact.release_published_at
         $installMethod = "download and extract main-build artifact without executing it"
     }
@@ -178,6 +194,9 @@ try {
         second_help_ms = $secondHelpMs
         binary_size_bytes = $binarySizeBytes
         artifact_name = $artifactName
+        artifact_id = $artifactId
+        checksum_id = $checksumId
+        release_id = $releaseId
         release_published_at = $releasePublishedAt
         packaging_mode = "PyInstaller onefile"
         windows = $facts
