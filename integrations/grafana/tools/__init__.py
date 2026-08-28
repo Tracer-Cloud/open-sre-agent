@@ -189,10 +189,25 @@ def _iso_to_epoch_ms(value: str) -> int:
     return int(dt.timestamp() * 1000)
 
 
+def _map_grafana_annotations(
+    evidence: dict[str, Any], output: dict[str, Any], _input: dict[str, Any]
+) -> None:
+    annotations = output.get("annotations", [])
+    evidence["grafana_annotations"] = annotations
+    if annotations:
+        record_evidence_entry(
+            evidence,
+            source="grafana_annotations",
+            label="Grafana Annotations",
+            summary=f"{len(annotations)} annotations",
+        )
+
+
 @tool(
     name="query_grafana_annotations",
     display_name="Grafana annotations",
     source="grafana",
+    evidence_mapper=_map_grafana_annotations,
     description=(
         "Query Grafana deployment/config-change annotations to correlate changes with "
         "an incident — the source-agnostic 'what changed and when' marker."
@@ -289,6 +304,22 @@ def query_grafana_annotations(
         "from": _epoch_ms_to_iso(from_ts),
         "to": _epoch_ms_to_iso(to_ts),
     }
+
+
+def _map_grafana_annotations(
+    evidence: dict[str, Any], output: dict[str, Any], _input: dict[str, Any]
+) -> None:
+    annotations = output.get("annotations", [])
+    evidence["grafana_annotations"] = annotations
+    if annotations:
+        record_evidence_entry(
+            evidence,
+            source="grafana_annotations",
+            label="Grafana Annotations",
+            summary=f"{len(annotations)} annotations",
+        )
+
+
 
 
 # ======== from tools/grafana_logs_tool/ ========
