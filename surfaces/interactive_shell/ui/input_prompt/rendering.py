@@ -181,10 +181,6 @@ def resolve_idle_hint_ansi(session: Session) -> str:
 
 def resolve_prompt_placeholder(session: Session) -> ANSI:
     """Contextual ghost text when the input buffer is empty."""
-    if session.terminal.awaiting_confirmation:
-        # A y/n confirmation owns the input row: the free-text ghost must not
-        # render beside the pending choice.
-        return ANSI("")
     parts: list[str] = []
     if session.terminal.trust_mode:
         parts.append("trust on")

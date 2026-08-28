@@ -65,6 +65,32 @@ def test_draw_menu_multi_select_checkboxes(monkeypatch) -> None:
     assert "Submit" in plain
 
 
+def test_pick_multi_select_returns_values_not_labels(monkeypatch) -> None:
+    """Checked rows must emit choice values even when labels differ."""
+    out = io.StringIO()
+    actions = iter([" ", "down", " ", "down", "down", "enter"])
+    monkeypatch.setattr(sys, "stdout", out)
+    monkeypatch.setattr(choice_menu, "_cols", lambda: 80)
+    monkeypatch.setattr(
+        "surfaces.shared.terminal.components.key_reader.read_menu_or_char",
+        lambda **_kwargs: next(actions),
+    )
+    monkeypatch.setattr(
+        "surfaces.shared.terminal.components.key_reader.restore_stdin_terminal",
+        lambda: None,
+    )
+    monkeypatch.setattr(choice_menu, "repl_tty_interactive", lambda: True)
+
+    result = choice_menu._pick(
+        title="Extras",
+        crumb="",
+        labels=["Unit tests", "Dockerfile", "Or type…"],
+        multi_select=True,
+        values=["tests", "docker", "custom"],
+    )
+    assert result == "tests\ndocker"
+
+
 def test_draw_menu_strips_control_characters_from_title_and_labels(monkeypatch) -> None:
     out = io.StringIO()
     monkeypatch.setattr(sys, "stdout", out)

@@ -81,22 +81,18 @@ class AgentTurnResources:
 
 
 def _confirm_via_prompt(runtime: AgentTurnResources, prompt: str) -> str:
-    """Park for a y/n answer with the input row switched to confirmation mode.
+    """Park for a y/n answer; hide the free-text box via ReplState confirmation phase.
 
-    The terminal flag drives the prompt to hide the free-text box and its ghost
-    placeholder for the duration of the wait; it is cleared and redrawn on the
-    way out so the normal ``[N] ❯`` box returns immediately.
+    ``begin_confirmation`` flips ``state.is_awaiting_confirmation()``, which
+    ``typing_box_hidden`` / ``render_prompt_region`` already honor. ``redraw``
+    invalidates the live prompt immediately so the box hides and restores
+    without waiting for the next refresh tick.
     """
-    runtime.session.terminal.awaiting_confirmation = True
-    try:
-        return request_confirmation_via_prompt(
-            runtime.state,
-            prompt,
-            redraw=runtime.invalidate_prompt,
-        )
-    finally:
-        runtime.session.terminal.awaiting_confirmation = False
-        runtime.invalidate_prompt()
+    return request_confirmation_via_prompt(
+        runtime.state,
+        prompt,
+        redraw=runtime.invalidate_prompt,
+    )
 
 
 def _streaming_console(

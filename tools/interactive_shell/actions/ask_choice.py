@@ -125,6 +125,22 @@ def _options_error(options: list[str]) -> str | None:
     return None
 
 
+def _parse_bool(value: object, *, default: bool = False) -> bool:
+    """Coerce tool args to bool without treating the string ``\"false\"`` as True."""
+    if value is None:
+        return default
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, str):
+        lowered = value.strip().lower()
+        if lowered in {"1", "true", "yes", "on"}:
+            return True
+        if lowered in {"0", "false", "no", "off", ""}:
+            return False
+        return default
+    return default
+
+
 def _parse_questions(raw: object) -> tuple[list[AskUserQuestion] | None, str | None]:
     """Return ``(questions, error)``. Absent/empty ``raw`` yields ``([], None)``."""
     if raw is None:
@@ -147,7 +163,7 @@ def _parse_questions(raw: object) -> tuple[list[AskUserQuestion] | None, str | N
         option_error = _options_error(options)
         if option_error is not None:
             return None, f"questions[{index}]: {option_error}"
-        multi_select = bool(item.get("multi_select", False))
+        multi_select = _parse_bool(item.get("multi_select"), default=False)
         parsed.append(
             AskUserQuestion(
                 label=label,
@@ -203,7 +219,7 @@ def execute_ask_user_choice_tool(args: dict[str, Any], ctx: ActionToolScope) -> 
         option_error = _options_error(options)
         if option_error is not None:
             return {"ok": False, "error": option_error}
-        multi_select = bool(args.get("multi_select", False))
+        multi_select = _parse_bool(args.get("multi_select"), default=False)
         pending = PendingUserChoice(
             title=title,
             options=tuple(options),
@@ -235,9 +251,14 @@ def run_ask_user_choice(
     title: str = "",
     options: list[str] | None = None,
     questions: list[dict[str, Any]] | None = None,
+    multi_select: bool = False,
     context: Any,
 ) -> dict[str, Any]:
-    payload: dict[str, Any] = {"title": title, "options": options or []}
+    payload: dict[str, Any] = {
+        "title": title,
+        "options": options or [],
+        "multi_select": multi_select,
+    }
     if questions is not None:
         payload["questions"] = questions
     return execute_with_action_context(

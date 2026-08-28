@@ -105,12 +105,6 @@ class TerminalSession:
     Set by ``ask_user_choice`` (and the ``/choose`` pick). Cleared when the
     submitted prompt is painted so the answer uses the brand colour."""
 
-    awaiting_confirmation: bool = False
-    """True while a y/n execution confirmation owns the input row.
-
-    Set around the confirmation wait so the prompt hides the free-text typing
-    box and its ghost placeholder, leaving only the pending choice."""
-
     pending_choice_response: str | None = None
     """Selected label while its synthetic answer turn awaits a response.
 

@@ -277,6 +277,7 @@ def _pick(
     initial_index: int = 0,
     custom_label: str | None = None,
     multi_select: bool = False,
+    values: list[str] | None = None,
 ) -> int | str | None:
     """Draw an inline menu; return index, custom typed string, or None on Esc.
 
@@ -284,13 +285,17 @@ def _pick(
     row in place (Droid-style) and Enter returns the typed string.
 
     When ``multi_select`` is True, return a newline-joined string of checked
-    labels (Submit commits). Space/Enter/1-9 toggle checkboxes.
+    **values** (``values[i]`` when provided, else ``labels[i]``). Submit commits.
+    Space/Enter/1-9 toggle checkboxes.
     """
     from surfaces.shared.terminal.components.key_reader import read_menu_or_char
 
     if not labels:
         return None
     title, crumb, labels = _sanitize_menu(title, crumb, labels)
+    selected_values = list(values) if values is not None else list(labels)
+    if len(selected_values) != len(labels):
+        selected_values = list(labels)
     idx = initial_index % len(labels)
     height = _menu_height(crumb, labels, multi_select=multi_select)
     draft = ""
@@ -361,8 +366,8 @@ def _pick(
                         if text:
                             parts.append(text)
                         continue
-                    if 0 <= index < len(labels):
-                        parts.append(labels[index])
+                    if 0 <= index < len(selected_values):
+                        parts.append(selected_values[index])
                 if not parts:
                     continue
                 _erase_menu(crumb, display, multi_select=True)
@@ -410,7 +415,7 @@ def repl_choose_one(
     row in place (same option array) instead of opening a separate prompt.
 
     When ``multi_select`` is True, checkboxes appear and the return value is a
-    newline-joined string of selected labels.
+    newline-joined string of selected **values** (``choices[i][0]``).
     """
     from surfaces.shared.terminal.components.cpr_stdin import drain_stale_cpr_bytes
 
@@ -419,28 +424,33 @@ def repl_choose_one(
     _clear_prompt_toolkit_paint()
     drain_stale_cpr_bytes()
     hide_terminal_cursor()
-    crumb = breadcrumb
-    labels = [label for _value, label in choices]
-    initial_index = 0
-    if initial_value is not None:
-        for index, (value, _label) in enumerate(choices):
-            if value == initial_value:
-                initial_index = index
-                break
-    picked = _pick(
-        title=title,
-        crumb=crumb,
-        labels=labels,
-        initial_index=initial_index,
-        custom_label=custom_label,
-        multi_select=multi_select,
-    )
-    if picked is None:
-        return None
-    if isinstance(picked, str):
-        return picked
-    value = choices[picked][0]
-    return value if isinstance(value, str) else None
+    try:
+        crumb = breadcrumb
+        labels = [label for _value, label in choices]
+        values = [value for value, _label in choices]
+        initial_index = 0
+        if initial_value is not None:
+            for index, (value, _label) in enumerate(choices):
+                if value == initial_value:
+                    initial_index = index
+                    break
+        picked = _pick(
+            title=title,
+            crumb=crumb,
+            labels=labels,
+            initial_index=initial_index,
+            custom_label=custom_label,
+            multi_select=multi_select,
+            values=values,
+        )
+        if picked is None:
+            return None
+        if isinstance(picked, str):
+            return picked
+        value = choices[picked][0]
+        return value if isinstance(value, str) else None
+    finally:
+        show_terminal_cursor()
 
 
 def print_valid_choice_list(

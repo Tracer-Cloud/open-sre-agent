@@ -27,6 +27,7 @@ from surfaces.shared.terminal.components.choice_menu import (
     leave_inline_menu,
     menu_columns,
     repl_tty_interactive,
+    show_terminal_cursor,
     write_menu_line,
 )
 from surfaces.shared.terminal.components.key_reader import (
@@ -242,6 +243,15 @@ def repl_ask_user(
     clear_live_prompt_paint()
     drain_stale_cpr_bytes()
     hide_terminal_cursor()
+    try:
+        return _run_ask_user(items)
+    finally:
+        show_terminal_cursor()
+
+
+def _run_ask_user(
+    items: tuple[AskUserQuestion, ...],
+) -> tuple[str, ...] | None:
     flush_pending_input()
     answers: list[str | None] = [None] * len(items)
     drafts: list[str] = [""] * len(items)
@@ -386,66 +396,8 @@ def repl_ask_user(
         # ignore / unmapped
 
 
-def edit_custom_option_in_menu(
-    *,
-    title: str,
-    choices: list[tuple[str, str]],
-    custom_index: int,
-    initial_draft: str = "",
-) -> str | None:
-    """Type on the custom row of an OpenSRE option array (same panel, Droid-style)."""
-    labels = [label for _value, label in choices]
-    draft = initial_draft
-    height = 0
-    first = True
-    while True:
-        display = list(labels)
-        display[custom_index] = f"{draft}{_CURSOR}"
-        width = menu_columns()
-        if not first:
-            erase_menu_lines(height)
-        write_menu_line(
-            f"{ui_theme.PROMPT_ACCENT_ANSI}{strip_terminal_controls(title)}{ui_theme.ANSI_RESET}"
-        )
-        write_menu_line(f"{ui_theme.DIM_COUNTER_ANSI}{'─' * width}{ui_theme.ANSI_RESET}")
-        for position, label in enumerate(display):
-            numbered = f"{position + 1}. {label}"
-            selected = position == custom_index
-            marker = "❯" if selected else " "
-            _write_option_row(
-                prefix=marker,
-                label=numbered,
-                width=width,
-                selected=selected,
-            )
-        write_menu_line(f"{ui_theme.DIM_COUNTER_ANSI}{_HINT_TYPING}{ui_theme.ANSI_RESET}")
-        sys.stdout.flush()
-        first = False
-        height = 1 + 1 + len(display) + 1
-        key = read_menu_or_char(allow_chars=True)
-        if key == "enter":
-            text = draft.strip()
-            if text:
-                erase_menu_lines(height)
-                leave_inline_menu()
-                return text
-            continue
-        if key in ("cancel", "eof"):
-            erase_menu_lines(height)
-            leave_inline_menu()
-            return None
-        if key == "backspace":
-            draft = draft[:-1]
-            continue
-        if key in ("up", "down", "tab", "shift_tab", "left", "right", "ignore"):
-            continue
-        if len(key) == 1 and key.isprintable():
-            draft += key
-
-
 __all__ = [
     "CUSTOM_OPTION",
-    "edit_custom_option_in_menu",
     "format_ask_user_breadcrumb",
     "repl_ask_user",
 ]
