@@ -10,6 +10,11 @@ from prompt_toolkit.filters import has_completions
 from prompt_toolkit.key_binding import KeyBindings, merge_key_bindings
 from prompt_toolkit.key_binding.key_processor import KeyPressEvent
 
+from infrastructure.terminal.prompt_support import (
+    CTRL_C_DOUBLE_PRESS_WINDOW_S,
+    repl_prompt_ctrl_c_should_exit,
+)
+
 
 class _DispatchCancelState(Protocol):
     def is_dispatch_running(self) -> bool:
@@ -17,6 +22,15 @@ class _DispatchCancelState(Protocol):
 
     def cancel_current_dispatch(self) -> None:
         raise NotImplementedError
+
+    def request_exit(self) -> None:
+        """Request an orderly exit from the interactive shell."""
+
+    def arm_ctrl_c_exit_hint(self, duration_seconds: float) -> None:
+        """Show the transient double-press exit hint."""
+
+    def clear_ctrl_c_exit_hint(self) -> None:
+        """Clear the transient double-press exit hint."""
 
 
 # Keystroke escape (xterm modifyOtherKeys for Shift+Enter), not a colour code.
@@ -51,11 +65,11 @@ def _build_prompt_key_bindings() -> KeyBindings:
     bindings = KeyBindings()
 
     @bindings.add("c-m")
-    def _accept_turn(event: object) -> None:
-        if event.data == _SHIFT_ENTER_SEQUENCE:  # type: ignore[attr-defined]
-            event.current_buffer.newline(copy_margin=False)  # type: ignore[attr-defined]
+    def _accept_turn(event: KeyPressEvent) -> None:
+        if event.data == _SHIFT_ENTER_SEQUENCE:
+            event.current_buffer.newline(copy_margin=False)
             return
-        event.current_buffer.validate_and_handle()  # type: ignore[attr-defined]
+        event.current_buffer.validate_and_handle()
 
     @bindings.add("tab")
     def _tab_complete(event: object) -> None:
@@ -82,6 +96,22 @@ def _build_prompt_key_bindings() -> KeyBindings:
 
 def build_cancel_key_bindings(state: _DispatchCancelState) -> KeyBindings:
     kb = KeyBindings()
+
+    @kb.add("c-c", eager=True)
+    def _on_ctrl_c(event: KeyPressEvent) -> None:
+        event.current_buffer.reset()
+        if state.is_dispatch_running():
+            state.clear_ctrl_c_exit_hint()
+            state.cancel_current_dispatch()
+            event.app.invalidate()
+            return
+        if repl_prompt_ctrl_c_should_exit():
+            state.clear_ctrl_c_exit_hint()
+            state.request_exit()
+            event.app.exit(result="")
+            return
+        state.arm_ctrl_c_exit_hint(CTRL_C_DOUBLE_PRESS_WINDOW_S)
+        event.app.invalidate()
 
     @kb.add("escape", eager=True)
     def _on_escape(event: KeyPressEvent) -> None:

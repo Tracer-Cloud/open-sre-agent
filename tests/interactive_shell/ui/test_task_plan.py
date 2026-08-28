@@ -97,12 +97,12 @@ def test_prompt_region_keeps_the_checklist_above_invoking_tools() -> None:
     assert rendered.index(SpinnerState.INVOKING_TOOLS_PHASE) < rendered.index("Auto (High)")
 
 
-def test_idle_prompt_region_shows_ready_not_thinking() -> None:
+def test_idle_prompt_region_keeps_status_spacer_not_thinking() -> None:
     session = Session()
     session.task_plan = _sample_plan()
     rendered = _strip_ansi(render_prompt_region(session, ReplState(), SpinnerState()).value)
-    assert "Ready" in rendered
+    assert "Ready" not in rendered
     assert "Thinking" not in rendered
     assert SpinnerState.EXECUTING_PHASE not in rendered
     assert "Plan · 2/3" in rendered
-    assert rendered.index("Ready") < rendered.index("Auto (High)")
+    assert rendered.index("Plan · 2/3") < rendered.index("Auto (High)")

@@ -2,9 +2,9 @@
 
 The terminal UI has three pieces, all composed from this module:
 
-1. welcome panel (identity column + tips/ambient status)
-2. hint/spinner line above the prompt rule
-3. prompt rule + ``[n] ❯`` input line
+1. compact launch banner (overlapping-ring mark + capability status)
+2. hint/spinner and autonomy status above the composer
+3. bordered ``>`` composer + help footer
 
 Piece 1 is static chrome printed once by :func:`render_terminal_ui`.
 Pieces 2–3 form the live prompt region: prompt-toolkit re-evaluates them on
@@ -26,7 +26,7 @@ from surfaces.interactive_shell.ui.prompt_visibility import (
     typing_box_hidden,
 )
 from surfaces.interactive_shell.ui.task_plan import task_plan_overlay_ansi
-from surfaces.shared.terminal.banner import render_ready_box
+from surfaces.shared.terminal.banner import render_launch_banner
 from surfaces.shared.terminal.components.cpr_stdin import strip_cpr_sequences
 from surfaces.shared.terminal.prompt_layout import clip_prompt_text, prompt_line_width
 
@@ -40,14 +40,14 @@ def render_terminal_ui(
     *,
     session: object = None,
 ) -> None:
-    """Render the static terminal chrome: the welcome panel."""
+    """Render the static terminal chrome: the compact launch banner."""
     console = console or Console(
         highlight=False,
         force_terminal=True,
         color_system="truecolor",
         legacy_windows=False,
     )
-    render_ready_box(console, session=session)
+    render_launch_banner(console, session=session)
 
 
 def render_prompt_region(session: Session, state: ReplState, spinner: SpinnerState) -> ANSI:
@@ -77,9 +77,11 @@ def render_prompt_region(session: Session, state: ReplState, spinner: SpinnerSta
     # The confirmation prompt takes the prefix row so every state renders the
     # same rows (blank, prefix, auto status, input) — no height delta on redraw.
     if state.is_awaiting_confirmation():
-        # Same one-row budget as the spinner/idle hint: a long confirm string
+        # Same one-row budget as the spinner/idle spacer: a long confirm string
         # must not soft-wrap when the spinner path is clipped to width.
         prefix = clip_prompt_text(state.confirm_prompt_text, prompt_line_width())
+    elif state.is_ctrl_c_exit_hint_visible():
+        prefix = prompt_rendering.ctrl_c_exit_hint_ansi()
     else:
         prefix = strip_cpr_sequences(
             prompt_rendering.resolve_prompt_prefix_ansi(

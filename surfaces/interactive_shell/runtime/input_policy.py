@@ -36,9 +36,9 @@ _EXCLUSIVE_STDIN_MENU_COMMANDS: frozenset[str] = frozenset(
         "/trust",
         "/verbose",
         "/?",
-        # Table-outputting commands must complete before the next prompt_async()
-        # starts, otherwise patch_stdout redraws trigger ESC[6n DSR queries whose
-        # CPR responses land as literal keystrokes in the incoming prompt buffer.
+        # Table-outputting commands must suspend the persistent prompt first;
+        # otherwise redraws trigger ESC[6n DSR queries whose CPR responses land
+        # as literal keystrokes in the input buffer.
         "/doctor",
         "/version",
         "/verify",
@@ -66,7 +66,7 @@ _EXCLUSIVE_STDIN_SUBCOMMANDS: frozenset[tuple[str, str]] = frozenset(
     {
         ("/integrations", "setup"),
         # ``remove`` drives a native inline arrow-key picker (raw os.read on
-        # stdin). Without exclusive stdin the concurrent prompt_async() steals
+        # stdin). Without exclusive stdin the active prompt application steals
         # keystrokes and CPR responses leak into the next prompt buffer.
         ("/integrations", "remove"),
         ("/mcp", "connect"),
