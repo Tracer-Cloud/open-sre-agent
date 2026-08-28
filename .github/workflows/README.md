@@ -8,6 +8,7 @@ Internal notes for repository automation under `.github/workflows/`. Not publish
 | -------- | ------- |
 | [`ci.yml`](ci.yml) | PR/push quality gates and sharded pytest |
 | [`ci-labels-windows.yml`](ci-labels-windows.yml) | Optional Windows CI (`ci:windows` label) |
+| [`windows-startup-investigation.yml`](windows-startup-investigation.yml) | Manual and change-scoped Windows binary startup measurements |
 | [`codeql.yml`](codeql.yml) | Full post-merge CodeQL and manual PR-profile benchmarks |
 | [`greptile-pr-reminder.yml`](greptile-pr-reminder.yml) | Greptile review nudge on PR open |
 | [`celebrate-merged-pr.yml`](celebrate-merged-pr.yml) | Post-merge celebration comment |

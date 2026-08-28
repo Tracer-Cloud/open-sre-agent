@@ -1,0 +1,46 @@
+name: Windows Startup Investigation
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - ".github/scripts/measure-windows-startup.ps1"
+      - ".github/workflows/windows-startup-investigation.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
+
+concurrency:
+  group: windows-startup-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  measure:
+    name: ${{ matrix.mode }}
+    runs-on: windows-latest
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        mode: [readme-install, raw-artifact]
+
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Measure startup
+        shell: pwsh
+        run: >-
+          ./.github/scripts/measure-windows-startup.ps1
+          -Mode "${{ matrix.mode }}"
+          -OutputPath "startup-${{ matrix.mode }}.json"
+
+      - name: Upload measurements
+        uses: actions/upload-artifact@v4
+        with:
+          name: windows-startup-${{ matrix.mode }}
+          path: startup-${{ matrix.mode }}.json
+          if-no-files-found: error
