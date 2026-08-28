@@ -163,3 +163,65 @@ def test_expanded_long_plan_shows_every_step() -> None:
     assert lines[5] == "  ○ Confirm green"
     assert "earlier" not in overlay
     assert "Ctrl+P" not in overlay
+
+
+def _other_long_plan():
+    plan, error = parse_task_plan(
+        {
+            "plan": [
+                {"step": "Map the services", "status": "completed"},
+                {"step": "Pull the traces", "status": "completed"},
+                {"step": "Find the timeout", "status": "in_progress"},
+                {"step": "Raise the limit", "status": "pending"},
+                {"step": "Verify p99", "status": "pending"},
+            ]
+        }
+    )
+    assert error is None and plan is not None
+    return plan
+
+
+def test_replacing_a_plan_resets_expanded_state() -> None:
+    # Ctrl+P on plan A must not stick when plan B is assigned without a
+    # None/empty gap — the replacement should open in its collapsed window.
+    session = Session()
+    session.task_plan = _long_plan()
+    state = ReplState()
+    state.plan_expanded = True
+    first = _strip_ansi(render_prompt_region(session, state, SpinnerState()).value)
+    assert state.plan_expanded is True
+    assert "Inspect the repo" in first
+
+    session.task_plan = _other_long_plan()
+    second = _strip_ansi(render_prompt_region(session, state, SpinnerState()).value)
+    assert state.plan_expanded is False
+    assert "Ctrl+P for full plan" in second
+    assert "Map the services" not in second
+    assert "Verify p99" not in second
+
+
+def test_updating_plan_status_keeps_expanded_state() -> None:
+    # Status-only updates are the same checklist; an open overlay stays open.
+    session = Session()
+    session.task_plan = _long_plan()
+    state = ReplState()
+    _ = render_prompt_region(session, state, SpinnerState())
+    state.plan_expanded = True
+
+    updated, error = parse_task_plan(
+        {
+            "plan": [
+                {"step": "Inspect the repo", "status": "completed"},
+                {"step": "Read the config", "status": "completed"},
+                {"step": "Patch the bug", "status": "completed"},
+                {"step": "Run the tests", "status": "in_progress"},
+                {"step": "Confirm green", "status": "pending"},
+            ]
+        }
+    )
+    assert error is None and updated is not None
+    session.task_plan = updated
+    rendered = _strip_ansi(render_prompt_region(session, state, SpinnerState()).value)
+    assert state.plan_expanded is True
+    assert "Inspect the repo" in rendered
+    assert "Confirm green" in rendered

@@ -57,6 +57,8 @@ class ReplState:
     confirm_prompt_text: str = ""
     confirm_selected: int = 0
     plan_expanded: bool = False
+    # Checklist identity for ``plan_expanded`` — step texts, ignoring status.
+    plan_step_texts: tuple[str, ...] | None = None
     phase: TurnPhase = TurnPhase.IDLE
     ctrl_c_exit_hint_until: float = 0.0
 

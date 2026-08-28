@@ -81,8 +81,14 @@ def render_prompt_region(session: Session, state: ReplState, spinner: SpinnerSta
         # Drop expand so the next plan opens collapsed rather than inheriting
         # a sticky Ctrl+P from a previous checklist.
         state.plan_expanded = False
+        state.plan_step_texts = None
         plan_overlay = ""
     else:
+        # Status-only updates keep expand; a different checklist must not.
+        step_texts = tuple(item.step for item in plan.steps)
+        if state.plan_step_texts is not None and state.plan_step_texts != step_texts:
+            state.plan_expanded = False
+        state.plan_step_texts = step_texts
         plan_overlay = strip_cpr_sequences(
             task_plan_overlay_ansi(plan, expanded=state.plan_expanded)
         )

@@ -225,7 +225,6 @@ def test_run_repl_async_identifies_saved_github_username(monkeypatch: Any) -> No
         lambda **_kwargs: SimpleNamespace(session=Session(), inbox=None),
     )
 
-
     import asyncio
 
     asyncio.run(main_entrypoint.run_repl_async(initial_input="hello"))
