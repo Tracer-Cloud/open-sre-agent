@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import pytest
+
 from core.agent_harness.session.pending_choice import (
     AskUserQuestion,
     format_ask_user_answers,
@@ -164,6 +166,31 @@ def test_wizard_multi_select_toggles_and_submits(monkeypatch) -> None:
     )
     picked = repl_ask_user(questions)
     assert picked == ("Unit tests\nDockerfile", "Python")
+
+
+def test_wizard_restores_terminal_when_draw_raises(monkeypatch) -> None:
+    restored: list[bool] = []
+
+    def _restore() -> None:
+        restored.append(True)
+
+    def _boom(**_kwargs: object) -> None:
+        raise RuntimeError("draw failed")
+
+    _patch_wizard(monkeypatch, [])
+    monkeypatch.setattr(
+        "surfaces.interactive_shell.ui.ask_user._draw_ask_user",
+        _boom,
+    )
+    monkeypatch.setattr(
+        "surfaces.shared.terminal.components.key_reader.restore_stdin_terminal",
+        _restore,
+    )
+
+    with pytest.raises(RuntimeError, match="draw failed"):
+        repl_ask_user(_QUESTIONS)
+
+    assert restored == [True]
 
 
 def test_draw_ask_user_multi_uses_checkboxes(monkeypatch) -> None:

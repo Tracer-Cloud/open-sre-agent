@@ -24,12 +24,12 @@ def test_typing_box_hidden_while_awaiting_confirmation() -> None:
     session = Session()
     confirming = ReplState()
     confirming.phase = TurnPhase.AWAITING_CONFIRMATION
-    confirming.confirm_prompt_text = "Yes, allow? [Y/n] "
+    confirming.confirm_prompt_text = "Approve this action?"
 
     assert typing_box_hidden(session, confirming) is True
     rendered = _plain(render_prompt_region(session, confirming, SpinnerState()).value)
     assert ">" not in rendered
-    assert "Yes, allow? [Y/n]" in rendered
+    assert "Approve this action?" in rendered
 
 
 def test_typing_box_hidden_while_ask_user_options_pending() -> None:
@@ -89,17 +89,42 @@ def test_idle_prompt_still_shows_typing_box() -> None:
     assert ">" in rendered
 
 
-def test_prompt_region_height_stable_when_typing_box_hides() -> None:
+def test_confirmation_region_height_is_stable_across_selection_changes() -> None:
+    # Confirmation is a taller modal block than the idle prompt, so entering it
+    # shifts height once. What must stay constant is height WHILE confirming —
+    # moving the arrow selection (Yes -> No) must not resize the region.
     session = Session()
     spinner = SpinnerState()
-    idle_rows = render_prompt_region(session, ReplState(), spinner).value.count("\n")
 
-    confirming = ReplState()
-    confirming.phase = TurnPhase.AWAITING_CONFIRMATION
-    confirming.confirm_prompt_text = "Proceed? [Y/n]"
-    confirm_rows = render_prompt_region(session, confirming, spinner).value.count("\n")
+    yes_state = ReplState()
+    yes_state.phase = TurnPhase.AWAITING_CONFIRMATION
+    yes_state.confirm_prompt_text = "Approve this action?"
+    yes_state.confirm_selected = 0
+    yes_rows = render_prompt_region(session, yes_state, spinner).value.count("\n")
 
-    assert idle_rows == confirm_rows
+    no_state = ReplState()
+    no_state.phase = TurnPhase.AWAITING_CONFIRMATION
+    no_state.confirm_prompt_text = "Approve this action?"
+    no_state.confirm_selected = 1
+    no_rows = render_prompt_region(session, no_state, spinner).value.count("\n")
+
+    assert yes_rows == no_rows
+
+
+def test_confirmation_region_shows_stacked_yes_no_choice() -> None:
+    session = Session()
+    state = ReplState()
+    state.phase = TurnPhase.AWAITING_CONFIRMATION
+    state.confirm_prompt_text = "Approve this action?"
+    state.confirm_selected = 1
+
+    rendered = _plain(render_prompt_region(session, state, SpinnerState()).value)
+
+    assert "[a] Yes" in rendered
+    assert "[b] No" in rendered
+    # The selected row (No) carries the arrow; the typing box is hidden.
+    assert "❯ [b] No" in rendered
+    assert ">" not in rendered
 
 
 def test_clear_live_prompt_paint_erases_only_the_app_region() -> None:

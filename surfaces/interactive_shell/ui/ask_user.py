@@ -27,7 +27,6 @@ from surfaces.shared.terminal.components.choice_menu import (
     leave_inline_menu,
     menu_columns,
     repl_tty_interactive,
-    show_terminal_cursor,
     write_menu_line,
 )
 from surfaces.shared.terminal.components.key_reader import (
@@ -186,14 +185,13 @@ def _erase_ask_user(question: AskUserQuestion) -> None:
 
 
 def _leave_ask_user(question: AskUserQuestion) -> None:
-    """Erase the menu and restore TTY so the next Rich line starts at column 0.
+    """Erase the menu so the next Rich line is not painted over leftover rows.
 
-    Menu rows are padded to the full terminal width; without a column reset,
-    later prints (``Selection cancelled``, ``/exit`` resume hint) stagger
-    diagonally across the screen.
+    Menu rows are padded to the full terminal width. TTY recook and column
+    reset belong in :func:`repl_ask_user`'s ``finally`` so exceptions still
+    restore cooked stdin.
     """
     _erase_ask_user(question)
-    leave_inline_menu()
 
 
 def _next_unanswered(answers: list[str | None], start: int) -> int:
@@ -246,7 +244,7 @@ def repl_ask_user(
     try:
         return _run_ask_user(items)
     finally:
-        show_terminal_cursor()
+        leave_inline_menu()
 
 
 def _run_ask_user(

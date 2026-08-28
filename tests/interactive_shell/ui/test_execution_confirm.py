@@ -140,7 +140,7 @@ def test_explicit_ask_tty_accepts_empty_confirmation() -> None:
         confirm_fn=_confirm,
         is_tty=True,
     )
-    assert captured == ["Yes, allow? [Y/n] "]
+    assert captured == ["Approve this action?"]
     assert "Command to approve" in buf.getvalue()
     assert "Why this needs approval:" in buf.getvalue()
 

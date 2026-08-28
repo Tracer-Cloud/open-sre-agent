@@ -55,11 +55,17 @@ class ReplState:
     confirm_event: threading.Event | None = None
     confirm_response: list[str] = field(default_factory=list)
     confirm_prompt_text: str = ""
+    confirm_selected: int = 0
+    plan_expanded: bool = False
     phase: TurnPhase = TurnPhase.IDLE
     ctrl_c_exit_hint_until: float = 0.0
 
     def is_dispatch_running(self) -> bool:
         return self.current_task is not None and not self.current_task.done()
+
+    def toggle_plan_expanded(self) -> None:
+        """Flip the collapsed/expanded state of the pinned plan overlay."""
+        self.plan_expanded = not self.plan_expanded
 
     def is_awaiting_confirmation(self) -> bool:
         return self.phase is TurnPhase.AWAITING_CONFIRMATION
@@ -98,6 +104,8 @@ class ReplState:
         # as awaiting confirmation the instant the event is visible.
         self.confirm_response = []
         self.confirm_prompt_text = prompt_text
+        # Default the arrow selection to Yes (the allow row) each time.
+        self.confirm_selected = 0
         self.phase = TurnPhase.AWAITING_CONFIRMATION
         self.confirm_event = event
 

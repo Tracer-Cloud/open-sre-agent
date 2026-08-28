@@ -7,6 +7,8 @@ import re
 import sys
 from types import SimpleNamespace
 
+import pytest
+
 from surfaces.shared.terminal.components import choice_menu
 
 _ANSI_RE = re.compile(r"\x1b\[[0-9;:]*[A-Za-z]")
@@ -75,10 +77,6 @@ def test_pick_multi_select_returns_values_not_labels(monkeypatch) -> None:
     monkeypatch.setattr(
         "surfaces.shared.terminal.components.key_reader.read_menu_or_char",
         lambda **_kwargs: next(actions),
-    )
-    monkeypatch.setattr(
-        "surfaces.shared.terminal.components.key_reader.restore_stdin_terminal",
-        lambda: None,
     )
     monkeypatch.setattr(choice_menu, "repl_tty_interactive", lambda: True)
 
@@ -220,6 +218,65 @@ def test_repl_choose_one_starts_at_initial_value(monkeypatch) -> None:
     assert result == "blue"
     plain = _ANSI_RE.sub("", out.getvalue())
     assert "❯ 2. blue (current)" in plain
+
+
+def test_repl_choose_one_restores_terminal_when_menu_raises(monkeypatch) -> None:
+    """Exceptions during draw/read still recook stdin and reset the column."""
+    restored: list[bool] = []
+    out = io.StringIO()
+
+    def _restore() -> None:
+        restored.append(True)
+
+    def _boom(**_kwargs: object) -> None:
+        raise RuntimeError("menu failed")
+
+    monkeypatch.setattr(choice_menu, "repl_tty_interactive", lambda: True)
+    monkeypatch.setattr(
+        "surfaces.shared.terminal.components.cpr_stdin.drain_stale_cpr_bytes",
+        lambda: None,
+    )
+    monkeypatch.setattr(
+        "surfaces.shared.terminal.components.key_reader.restore_stdin_terminal",
+        _restore,
+    )
+    monkeypatch.setattr(sys, "stdout", out)
+    monkeypatch.setattr(choice_menu, "_pick", _boom)
+
+    with pytest.raises(RuntimeError, match="menu failed"):
+        choice_menu.repl_choose_one(title="theme", choices=[("green", "green")])
+
+    assert restored == [True]
+    assert "\r\n" in out.getvalue()
+    assert out.getvalue().endswith("\r")
+
+
+def test_repl_choose_one_restores_terminal_once_on_success(monkeypatch) -> None:
+    restored: list[bool] = []
+
+    def _restore() -> None:
+        restored.append(True)
+
+    monkeypatch.setattr(choice_menu, "repl_tty_interactive", lambda: True)
+    monkeypatch.setattr(
+        "surfaces.shared.terminal.components.cpr_stdin.drain_stale_cpr_bytes",
+        lambda: None,
+    )
+    monkeypatch.setattr(
+        "surfaces.shared.terminal.components.key_reader.restore_stdin_terminal",
+        _restore,
+    )
+    monkeypatch.setattr(sys, "stdout", io.StringIO())
+    monkeypatch.setattr(choice_menu, "_cols", lambda: 80)
+    monkeypatch.setattr(choice_menu, "_read_action", lambda: "enter")
+
+    result = choice_menu.repl_choose_one(
+        title="theme",
+        choices=[("green", "green")],
+    )
+
+    assert result == "green"
+    assert restored == [True]
 
 
 def test_read_action_ignores_left_arrow(monkeypatch) -> None:

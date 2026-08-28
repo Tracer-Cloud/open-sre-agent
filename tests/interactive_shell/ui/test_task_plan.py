@@ -106,3 +106,47 @@ def test_idle_prompt_region_keeps_status_spacer_not_thinking() -> None:
     assert SpinnerState.EXECUTING_PHASE not in rendered
     assert "Plan · 2/3" in rendered
     assert rendered.index("Plan · 2/3") < rendered.index("Auto (High)")
+
+
+def _long_plan():
+    plan, error = parse_task_plan(
+        {
+            "plan": [
+                {"step": "Inspect the repo", "status": "completed"},
+                {"step": "Read the config", "status": "completed"},
+                {"step": "Patch the bug", "status": "in_progress"},
+                {"step": "Run the tests", "status": "pending"},
+                {"step": "Confirm green", "status": "pending"},
+            ]
+        }
+    )
+    assert error is None and plan is not None
+    return plan
+
+
+def test_long_plan_collapses_to_a_window_around_the_current_step() -> None:
+    # A 5-step plan folds to the current step plus one neighbour each side,
+    # with count markers for the hidden ranges and a hint to expand.
+    overlay = _strip_ansi(task_plan_overlay_ansi(_long_plan()))
+    lines = overlay.splitlines()
+
+    assert lines[0].startswith("Plan · 3/5")
+    assert lines[1] == "  … 1 earlier"
+    assert lines[2] == "  ✓ Read the config"
+    assert lines[3] == "  ● Patch the bug"
+    assert lines[4] == "  ○ Run the tests"
+    assert lines[5] == "  … 1 more · Ctrl+P for full plan"
+    # The collapsed view hides the far ends.
+    assert "Inspect the repo" not in overlay
+    assert "Confirm green" not in overlay
+
+
+def test_expanded_long_plan_shows_every_step() -> None:
+    overlay = _strip_ansi(task_plan_overlay_ansi(_long_plan(), expanded=True))
+    lines = overlay.splitlines()
+
+    assert lines[0].startswith("Plan · 3/5")
+    assert lines[1] == "  ✓ Inspect the repo"
+    assert lines[5] == "  ○ Confirm green"
+    assert "earlier" not in overlay
+    assert "Ctrl+P" not in overlay

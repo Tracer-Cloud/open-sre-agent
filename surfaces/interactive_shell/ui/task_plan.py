@@ -21,6 +21,10 @@ from infrastructure.terminal import theme as ui_theme
 from surfaces.interactive_shell.ui.input_prompt.layout import clip_prompt_text, prompt_line_width
 
 _STEP_INDENT = "  "
+# Steps shown before the plan collapses; a longer plan folds to a window
+# around the current step until the user expands it.
+_COLLAPSED_MAX_STEPS = 3
+_EXPAND_HINT = "Ctrl+P for full plan"
 
 
 def task_plan_from_tool_args(args: dict[str, object]) -> TaskPlan | None:
@@ -63,16 +67,48 @@ def _indented_step_overlay_line(item: PlanStep, width: int) -> str:
     return _STEP_INDENT + _step_overlay_line(item, max(width - len(_STEP_INDENT), 1))
 
 
-def task_plan_overlay_ansi(plan: TaskPlan) -> str:
-    """ANSI plan overlay pinned above the prompt: the whole checklist, indented
-    under its header, with ✓ done / ● current / ○ pending.
+def _focus_index(plan: TaskPlan) -> int:
+    """Index the collapsed window centers on: the current step (else next up)."""
+    for index, item in enumerate(plan.steps):
+        if item.status is PlanStepStatus.IN_PROGRESS:
+            return index
+    for index, item in enumerate(plan.steps):
+        if item.status is PlanStepStatus.PENDING:
+            return index
+    return len(plan.steps) - 1
 
-    Every step is shown at all times — before and during execution — so the user
-    always sees progress across the full plan, at the bottom above the action bar.
+
+def _collapsed_window(plan: TaskPlan) -> tuple[int, int]:
+    """``[start, end)`` slice of steps to show when the plan is collapsed."""
+    total = len(plan.steps)
+    half = _COLLAPSED_MAX_STEPS // 2
+    start = max(0, min(_focus_index(plan) - half, total - _COLLAPSED_MAX_STEPS))
+    return start, start + _COLLAPSED_MAX_STEPS
+
+
+def task_plan_overlay_ansi(plan: TaskPlan, *, expanded: bool = False) -> str:
+    """ANSI plan overlay pinned above the prompt: a checklist indented under its
+    header, with ✓ done / ● current / ○ pending.
+
+    A short plan (or ``expanded``) shows every step. A longer one collapses to a
+    window around the current step with ``… N earlier`` / ``… N more`` markers
+    and a hint to expand, so the prompt region stays short while output streams.
     """
     width = prompt_line_width()
     header = _overlay_line(format_plan_header(plan), ui_theme.SECONDARY_ANSI, width)
-    rows = [header, *(_indented_step_overlay_line(item, width) for item in plan.steps)]
+    total = len(plan.steps)
+    if expanded or total <= _COLLAPSED_MAX_STEPS:
+        rows = [header, *(_indented_step_overlay_line(item, width) for item in plan.steps)]
+        return "\n".join(rows)
+
+    start, end = _collapsed_window(plan)
+    rows = [header]
+    if start > 0:
+        rows.append(_overlay_line(f"{_STEP_INDENT}… {start} earlier", ui_theme.DIM_ANSI, width))
+    rows.extend(_indented_step_overlay_line(item, width) for item in plan.steps[start:end])
+    hidden_after = total - end
+    tail = f"… {hidden_after} more · {_EXPAND_HINT}" if hidden_after else _EXPAND_HINT
+    rows.append(_overlay_line(f"{_STEP_INDENT}{tail}", ui_theme.DIM_ANSI, width))
     return "\n".join(rows)
 
 

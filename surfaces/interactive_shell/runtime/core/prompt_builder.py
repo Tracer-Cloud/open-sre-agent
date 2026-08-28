@@ -18,6 +18,10 @@ from surfaces.interactive_shell.runtime.core.state import (
 )
 from surfaces.interactive_shell.session import Session
 from surfaces.interactive_shell.ui import input_prompt
+from surfaces.interactive_shell.ui.hooks import (
+    install_confirmation_key_bindings,
+    install_plan_expand_key_bindings,
+)
 from surfaces.interactive_shell.ui.input_prompt import rendering as prompt_rendering
 from surfaces.interactive_shell.ui.input_prompt.key_bindings import (
     build_cancel_key_bindings,
@@ -56,7 +60,10 @@ class PromptBuilder:
 
     def setup(self) -> None:
         if self.pt_session is None:
-            self.pt_session = input_prompt.build_prompt_session(self.session)
+            self.pt_session = input_prompt.build_prompt_session(
+                self.session,
+                hide_composer=lambda: typing_box_hidden(self.session, self.state),
+            )
             self.session.terminal.prompt_history_backend = self.pt_session.history
 
         cancel_kb = build_cancel_key_bindings(self.state)
@@ -69,6 +76,18 @@ class PromptBuilder:
         self.session.terminal.main_loop = self.loop
         self.state.bind_loop(self.loop)
         self._invalidate_prompt = wire_prompt_refresh(self.session, self.pt_app, self.loop)
+        # Arrow-navigable Yes/No for the execution-confirmation gate: ↑/↓ move the
+        # selection, Enter (or a/b/y/n) delivers it. Installed after the redraw
+        # hook so a selection change repaints immediately.
+        confirm_kb = install_confirmation_key_bindings(self.state, self._invalidate_prompt)
+        install_session_key_bindings(self.pt_session, confirm_kb)
+        # Ctrl+P expands/collapses the pinned plan while one is on screen.
+        plan_kb = install_plan_expand_key_bindings(
+            self.state,
+            lambda: self.session.task_plan is not None and bool(self.session.task_plan.steps),
+            self._invalidate_prompt,
+        )
+        install_session_key_bindings(self.pt_session, plan_kb)
 
     @property
     def invalidate_prompt(self) -> Callable[[], None]:

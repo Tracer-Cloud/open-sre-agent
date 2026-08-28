@@ -47,7 +47,7 @@ def _default_confirm_fn(prompt: str) -> str:
 
 
 DEFAULT_CONFIRM_FN: Callable[[str], str] = _default_confirm_fn
-_APPROVE_PROMPT = "Yes, allow? [Y/n] "
+_APPROVE_PROMPT = "Approve this action?"
 
 
 def _render_command_to_approve(
@@ -73,7 +73,6 @@ def _render_command_to_approve(
     why.append("Why this needs approval: ", style=str(DIM))
     why.append(reason, style=str(SECONDARY))
     console.print(why)
-    console.print(Text("Yes, allow  ·  No, cancel", style=str(DIM)))
     console.print()
 
 

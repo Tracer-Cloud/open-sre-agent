@@ -175,9 +175,10 @@ def show_terminal_cursor() -> None:
 def leave_inline_menu() -> None:
     """Restore cooked stdin and start the next Rich line at column zero.
 
-    Call after every inline menu exits (select or Esc). Without this, padded
-    menu rows leave the cursor mid-line and later prints (cancelled notice,
-    ``/exit`` resume hint) stagger diagonally.
+    Pair with :func:`hide_terminal_cursor` in a ``finally`` so select, Esc,
+    and exceptions all recook stdin. Without this, padded menu rows leave the
+    cursor mid-line and an inherited non-canonical or no-echo TTY breaks later
+    shell input.
     """
     from surfaces.shared.terminal.components.key_reader import restore_stdin_terminal
 
@@ -388,11 +389,9 @@ def _pick(
                 if not parts:
                     continue
                 _erase_menu(crumb, display, multi_select=True, header=header)
-                leave_inline_menu()
                 return "\n".join(parts)
             if action in ("cancel", "eof"):
                 _erase_menu(crumb, display, multi_select=True, header=header)
-                leave_inline_menu()
                 return None
             continue
         if (not on_custom) and len(action) == 1 and action.isdigit():
@@ -402,7 +401,6 @@ def _pick(
                     idx = picked
                     continue
                 _erase_menu(crumb, labels, header=header)
-                leave_inline_menu()
                 return picked
             continue
         if action == "enter":
@@ -411,14 +409,11 @@ def _pick(
                 if not text:
                     continue
                 _erase_menu(crumb, display, header=header)
-                leave_inline_menu()
                 return text
             _erase_menu(crumb, labels, header=header)
-            leave_inline_menu()
             return idx
         if action in ("cancel", "eof"):
             _erase_menu(crumb, display if on_custom else labels, header=header)
-            leave_inline_menu()
             return None
         if action == "ignore":
             continue
@@ -482,7 +477,7 @@ def repl_choose_one(
         value = choices[picked][0]
         return value if isinstance(value, str) else None
     finally:
-        show_terminal_cursor()
+        leave_inline_menu()
 
 
 def print_valid_choice_list(
