@@ -35,13 +35,14 @@ def test_draw_menu_uses_carriage_return_newlines(monkeypatch) -> None:
     plain = _ANSI_RE.sub("", rendered)
     assert "\n" in rendered
     assert all(rendered[index - 1] == "\r" for index, char in enumerate(rendered) if char == "\n")
-    assert "\rintegrations" in plain
-    assert "\r/integrations" in plain
-    assert "\r ❯ 1. /integrations list" in plain
-    assert "\r   2. /integrations verify" in plain
-    # Tight layout: rule is immediately followed by the first option (no blank row).
-    assert "\r\n\r\n ❯ 1." not in plain
-    assert "\r\n\r ❯ 1." in plain
+    assert "\r  integrations" in plain
+    assert "\r  /integrations" in plain
+    assert "\r  ❯ 1. /integrations list" in plain
+    assert "\r    2. /integrations verify" in plain
+    # Airy layout: a blank row separates the question block from the options,
+    # and there is no full-width rule.
+    assert "\r  /integrations\r\n\r\n\r  ❯ 1." in plain
+    assert "─" not in plain
 
 
 def test_draw_menu_multi_select_checkboxes(monkeypatch) -> None:

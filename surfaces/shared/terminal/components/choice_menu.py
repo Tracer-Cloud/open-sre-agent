@@ -22,8 +22,10 @@ import infrastructure.terminal.theme as ui_theme
 from infrastructure.safety.terminal_output import strip_terminal_controls
 from surfaces.shared.terminal.components.key_reader import read_key_unix, read_key_windows
 
-_HINT = "↑↓ Navigate    Enter/1-9 Select    Esc cancel"
-_HINT_MULTI = "↑↓ Navigate    Space/Enter/1-9 Toggle    Submit to confirm    Esc cancel"
+_HINT = "↑↓ Navigate • Enter/1-9 Select • Esc cancel"
+_HINT_MULTI = "↑↓ Navigate • Space/Enter/1-9 Toggle • Submit to confirm • Esc cancel"
+# Airy block indent so the panel is not flush against the left margin.
+_BLOCK_INDENT = "  "
 _SUBMIT = "Submit"
 _CHECKED = "[x]"
 _UNCHECKED = "[ ]"
@@ -97,13 +99,9 @@ def menu_columns() -> int:
     return _cols()
 
 
-def _rule(width: int) -> str:
-    return "─" * width
-
-
 def _write_option_row(*, prefix: str, label: str, width: int, selected: bool) -> None:
     """Accent only the content; pad with plain spaces (avoids a full-width bar)."""
-    content = f" {prefix} {label}"
+    content = f"{_BLOCK_INDENT}{prefix} {label}"
     pad = max(0, width - len(content))
     style = ui_theme.PROMPT_ACCENT_ANSI if selected else ui_theme.DIM_COUNTER_ANSI
     write_menu_line(f"{style}{content}{ui_theme.ANSI_RESET}{' ' * pad}")
@@ -125,10 +123,10 @@ def _sanitize_menu(
 def _menu_height(
     crumb: str, labels: list[str], *, multi_select: bool = False, header: str = ""
 ) -> int:
-    # [header], title, [crumb], rule, choices, [Submit], hint — no blank gaps
+    # [header], title, [crumb], blank, choices, [Submit], blank, hint (airy)
     submit = 1 if multi_select else 0
     lead = _MENU_LEADING_LINES + (1 if header else 0)
-    return lead + 1 + (1 if crumb else 0) + 1 + len(labels) + submit + 1
+    return lead + 1 + (1 if crumb else 0) + 1 + len(labels) + submit + 1 + 1
 
 
 def write_menu_line(text: str = "") -> None:
@@ -238,13 +236,16 @@ def _draw_menu(
     # title reads as the plain question below it; otherwise the title is the
     # accent header (slash-command pickers).
     if header:
-        write_menu_line(f"{ui_theme.PROMPT_ACCENT_ANSI}{header}{ui_theme.ANSI_RESET}")
-        write_menu_line(f"{ui_theme.TEXT_ANSI}{title}{ui_theme.ANSI_RESET}")
+        write_menu_line(
+            f"{_BLOCK_INDENT}{ui_theme.PROMPT_ACCENT_ANSI}{header}{ui_theme.ANSI_RESET}"
+        )
+        write_menu_line(f"{_BLOCK_INDENT}{ui_theme.TEXT_ANSI}{title}{ui_theme.ANSI_RESET}")
     else:
-        write_menu_line(f"{ui_theme.PROMPT_ACCENT_ANSI}{title}{ui_theme.ANSI_RESET}")
+        write_menu_line(f"{_BLOCK_INDENT}{ui_theme.PROMPT_ACCENT_ANSI}{title}{ui_theme.ANSI_RESET}")
     if crumb:
-        write_menu_line(f"{ui_theme.DIM_COUNTER_ANSI}{crumb}{ui_theme.ANSI_RESET}")
-    write_menu_line(f"{ui_theme.DIM_COUNTER_ANSI}{_rule(w)}{ui_theme.ANSI_RESET}")
+        write_menu_line(f"{_BLOCK_INDENT}{ui_theme.DIM_COUNTER_ANSI}{crumb}{ui_theme.ANSI_RESET}")
+    # Airy: a blank line instead of a full-width rule between question and options.
+    write_menu_line()
     for i, label in enumerate(labels):
         here = i == index
         if multi_select:
@@ -265,7 +266,8 @@ def _draw_menu(
         hint = _HINT_MULTI
     else:
         hint = _HINT
-    write_menu_line(f"{ui_theme.DIM_COUNTER_ANSI}{hint}{ui_theme.ANSI_RESET}")
+    write_menu_line()
+    write_menu_line(f"{_BLOCK_INDENT}{ui_theme.DIM_COUNTER_ANSI}{hint}{ui_theme.ANSI_RESET}")
     out.flush()
 
 
