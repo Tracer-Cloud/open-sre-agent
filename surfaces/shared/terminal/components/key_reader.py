@@ -309,7 +309,7 @@ def _read_menu_or_char_windows(*, allow_chars: bool) -> str:
         except UnicodeDecodeError:
             return "ignore"
         if text.isprintable() and text != "\t":
-            return text
+            return str(text)
     return "ignore"
 
 
@@ -367,7 +367,7 @@ def _read_typing_key_windows() -> str:
     except UnicodeDecodeError:
         return "ignore"
     if text.isprintable() and text != "\t":
-        return text
+        return str(text)
     return "ignore"
 
 

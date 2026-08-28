@@ -36,7 +36,7 @@ def _patch_wizard(monkeypatch, actions: list[str]) -> None:
     )
     monkeypatch.setattr(
         "surfaces.interactive_shell.ui.ask_user.read_menu_or_char",
-        lambda allow_chars=False: next(keys),
+        lambda **_kwargs: next(keys),
     )
     monkeypatch.setattr(
         "surfaces.interactive_shell.ui.ask_user._draw_ask_user",

@@ -309,9 +309,7 @@ def repl_ask_user(
 
         if multi:
             toggle_index: int | None = None
-            if action == " " and opt_idx < len(labels):
-                toggle_index = opt_idx
-            elif action == "enter" and opt_idx < len(labels):
+            if action in (" ", "enter") and opt_idx < len(labels):
                 toggle_index = opt_idx
             elif (not on_custom) and len(action) == 1 and action.isdigit():
                 picked = int(action) - 1

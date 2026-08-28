@@ -48,6 +48,32 @@ def test_typing_box_hidden_while_ask_user_options_pending() -> None:
     assert "❯" not in rendered
 
 
+def test_typing_box_hidden_during_plan_with_ask_user_pending() -> None:
+    """Plan overlay may stay; the free-text composer must not compete with Ask User."""
+    from core.agent_harness.task_plan.plan import PlanStep, PlanStepStatus, TaskPlan
+
+    session = Session()
+    session.task_plan = TaskPlan(
+        steps=(
+            PlanStep(step="Clarify blockers", status=PlanStepStatus.IN_PROGRESS),
+            PlanStep(step="Write diagnosis", status=PlanStepStatus.PENDING),
+        )
+    )
+    session.pending_user_choice = PendingUserChoice(
+        title="Ask User",
+        options=("A", "B"),
+        questions=(
+            AskUserQuestion(label="Shape", title="Which shape?", options=("A", "B")),
+            AskUserQuestion(label="Scope", title="Which scope?", options=("C", "D")),
+        ),
+    )
+
+    assert typing_box_hidden(session, ReplState()) is True
+    rendered = _plain(render_prompt_region(session, ReplState(), SpinnerState()).value)
+    assert "❯" not in rendered
+    assert "Clarify blockers" in rendered or "Plan" in rendered
+
+
 def test_typing_box_hidden_while_exclusive_stdin_menu_active() -> None:
     session = Session()
     session.terminal.exclusive_stdin_active = True
