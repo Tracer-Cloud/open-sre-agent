@@ -11,12 +11,12 @@ import click
 
 from config.constants.investigation import ALERT_TEMPLATE_CHOICES
 from config.version import get_opensre_version
-from infrastructure.analytics.investigation_tracker import track_investigation
 from infrastructure.analytics.capture import (
     capture_update_completed,
     capture_update_failed,
     capture_update_started,
 )
+from infrastructure.analytics.investigation_tracker import track_investigation
 from infrastructure.analytics.source import EntrypointSource, TriggerMode
 from infrastructure.process.exit_codes import ERROR, SUCCESS
 from infrastructure.process.runtime_flags import is_json_output, is_yes

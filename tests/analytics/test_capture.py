@@ -2,7 +2,12 @@ from __future__ import annotations
 
 import pytest
 
-from infrastructure.analytics import capture, event_properties, github_identity, investigation_tracker
+from infrastructure.analytics import (
+    capture,
+    event_properties,
+    github_identity,
+    investigation_tracker,
+)
 from infrastructure.analytics.events import Event
 from infrastructure.analytics.source import EntrypointSource, TriggerMode
 

@@ -5,10 +5,6 @@ from __future__ import annotations
 from collections.abc import Mapping
 from typing import Final
 
-from infrastructure.analytics.events import Event
-from infrastructure.analytics.provider import Properties, get_analytics
-from infrastructure.observability.errors.sentry import capture_exception
-from infrastructure.analytics.investigation_tracker import InvestigationTracker
 from infrastructure.analytics.event_properties import (
     _bucket_duration_ms,
     _bucket_percentage,
@@ -19,6 +15,10 @@ from infrastructure.analytics.event_properties import (
     _onboard_completed_properties,
     _with_investigation_loop_metrics,
 )
+from infrastructure.analytics.events import Event
+from infrastructure.analytics.investigation_tracker import InvestigationTracker
+from infrastructure.analytics.provider import Properties, get_analytics
+from infrastructure.observability.errors.sentry import capture_exception
 
 EVAL_AND_TERMINAL_KPI_QUERIES: Final[dict[str, str]] = {
     "terminal_action_execution_success_rate": """

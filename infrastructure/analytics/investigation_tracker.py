@@ -112,14 +112,14 @@ def track_investigation(
     session: SessionCore | None = None,
 ) -> Generator[InvestigationTracker]:
     """Capture investigation lifecycle once, with nested-call dedupe."""
-    from infrastructure.analytics.usage_context import bound_usage_context
-    from infrastructure.analytics.event_properties import _investigation_started_properties
     from infrastructure.analytics.capture import (
         _capture,
         capture_investigation_completed,
         capture_investigation_failed,
     )
+    from infrastructure.analytics.event_properties import _investigation_started_properties
     from infrastructure.analytics.events import Event
+    from infrastructure.analytics.usage_context import bound_usage_context
 
     depth = _INVESTIGATION_TRACKING_DEPTH.get()
     token = _INVESTIGATION_TRACKING_DEPTH.set(depth + 1)

@@ -1,0 +1,11 @@
+{
+  "alert_name": "High error rate in payments ETL",
+  "pipeline_name": "payments_etl",
+  "severity": "critical",
+  "alert_source": "generic",
+  "message": "payments_etl is failing with repeated database connection errors",
+  "commonAnnotations": {
+    "summary": "payments_etl is failing with repeated database connection errors",
+    "correlation_id": "replace-me"
+  }
+}

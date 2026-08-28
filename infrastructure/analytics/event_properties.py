@@ -8,12 +8,13 @@ from collections.abc import Mapping
 from config.constants.investigation import MAX_INVESTIGATION_LOOPS
 from config.constants.llm import LLM_PROVIDER_ENV
 from config.llm_auth.provider_catalog import provider_spec
-from infrastructure.analytics.provider import Properties
-from infrastructure.analytics.repl_context import get_cli_session_id
 from infrastructure.analytics.investigation_tracker import (
     InvestigationTracker,
     _with_investigation_loop_metrics,
 )
+from infrastructure.analytics.provider import Properties
+from infrastructure.analytics.repl_context import get_cli_session_id
+
 
 def _string_value(value: object) -> str | None:
     return value if isinstance(value, str) and value else None
