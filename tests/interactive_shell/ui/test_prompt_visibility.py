@@ -28,7 +28,7 @@ def test_typing_box_hidden_while_awaiting_confirmation() -> None:
 
     assert typing_box_hidden(session, confirming) is True
     rendered = _plain(render_prompt_region(session, confirming, SpinnerState()).value)
-    assert "❯" not in rendered
+    assert ">" not in rendered
     assert "Yes, allow? [Y/n]" in rendered
 
 
@@ -45,7 +45,7 @@ def test_typing_box_hidden_while_ask_user_options_pending() -> None:
 
     assert typing_box_hidden(session, ReplState()) is True
     rendered = _plain(render_prompt_region(session, ReplState(), SpinnerState()).value)
-    assert "❯" not in rendered
+    assert ">" not in rendered
 
 
 def test_typing_box_hidden_during_plan_with_ask_user_pending() -> None:
@@ -70,7 +70,7 @@ def test_typing_box_hidden_during_plan_with_ask_user_pending() -> None:
 
     assert typing_box_hidden(session, ReplState()) is True
     rendered = _plain(render_prompt_region(session, ReplState(), SpinnerState()).value)
-    assert "❯" not in rendered
+    assert ">" not in rendered
     assert "Clarify blockers" in rendered or "Plan" in rendered
 
 
@@ -79,14 +79,14 @@ def test_typing_box_hidden_while_exclusive_stdin_menu_active() -> None:
     session.terminal.exclusive_stdin_active = True
     assert typing_box_hidden(session, ReplState()) is True
     rendered = _plain(render_prompt_region(session, ReplState(), SpinnerState()).value)
-    assert "❯" not in rendered
+    assert ">" not in rendered
 
 
 def test_idle_prompt_still_shows_typing_box() -> None:
     session = Session()
     assert typing_box_hidden(session, ReplState()) is False
     rendered = _plain(render_prompt_region(session, ReplState(), SpinnerState()).value)
-    assert "❯" in rendered
+    assert ">" in rendered
 
 
 def test_prompt_region_height_stable_when_typing_box_hides() -> None:

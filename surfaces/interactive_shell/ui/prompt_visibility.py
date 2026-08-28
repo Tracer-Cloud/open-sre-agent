@@ -18,10 +18,10 @@ if TYPE_CHECKING:
     from surfaces.interactive_shell.runtime.core.state import ReplState
     from surfaces.interactive_shell.session import Session
 
-# ``_prompt_message`` is ``rule\\n[N] ❯ `` — one embedded newline (two rows).
-# Keep the same newline count when the box is hidden so confirmation redraws
-# do not shift the region height (see test_prompt_region_height_is_constant_*).
-_HIDDEN_TYPING_BOX_PAD = "\n"
+# ``_prompt_message`` is a single ``> `` row (no embedded newline). Keep the
+# same newline count when the box is hidden so confirmation redraws do not
+# shift the region height (see test_prompt_region_height_stable_*).
+_HIDDEN_TYPING_BOX_PAD = ""
 
 
 def typing_box_hidden(session: Session, state: ReplState) -> bool:

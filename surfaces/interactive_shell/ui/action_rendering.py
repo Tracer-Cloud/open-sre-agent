@@ -33,6 +33,7 @@ from surfaces.interactive_shell.runtime.core.state import SpinnerState
 from surfaces.interactive_shell.ui.streaming import render_markdown_block
 from surfaces.shared.terminal.output.console_state import get_investigation_spinner
 from tools.interactive_shell.action_names import ActionToolName
+from tools.interactive_shell.shell.display import format_shell_command_for_display
 
 # Tool labels whose payload is a runnable command: render it as a highlighted
 # shell code block rather than plain inline text.
@@ -281,7 +282,15 @@ def tool_call_display(tool_name: str, args: dict[str, Any]) -> tuple[str, str]:
             label, content = key_label, str(args.get(arg_key, "")).strip()
         else:
             label, content = _generic_tool_display(tool_name, args)
-    return strip_terminal_controls(label), strip_terminal_controls(content)
+    label = strip_terminal_controls(label)
+    if label in _COMMAND_TOOL_LABELS:
+        # A runnable command renders as a shell block: keep newlines and collapse
+        # heredoc bodies to ``… (N lines)`` so a multi-line command reads as code
+        # instead of a flattened wall.
+        return label, format_shell_command_for_display(
+            strip_terminal_controls(content, keep_whitespace=True)
+        )
+    return label, strip_terminal_controls(content)
 
 
 class ActionRenderObserver:
