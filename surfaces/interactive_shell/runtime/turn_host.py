@@ -99,10 +99,11 @@ def _confirm_via_prompt(runtime: AgentTurnResources, prompt: str) -> str:
     options = terminal.pending_confirm_options
     terminal.pending_confirm_options = None
     app = terminal.prompt_app
-    if app is None or not getattr(app, "is_running", False):
-        # The live prompt app is suspended (an exclusive-stdin / subprocess turn
-        # owns the terminal). Parking on it would hang while the cooked terminal
-        # echoes the arrow keys, so read a plain line instead.
+    prompt_running = app is not None and getattr(app, "is_running", False)
+    if terminal.exclusive_stdin_active or not prompt_running:
+        # Exclusive-stdin / subprocess turns own the TTY (and ``is_running`` can
+        # still be true). Parking on the prompt app hangs while the cooked
+        # terminal echoes the arrow keys, so read a plain line instead.
         return _confirm_via_readline(prompt, options)
     return request_confirmation_via_prompt(
         runtime.state,
@@ -117,16 +118,20 @@ def _confirm_via_readline(prompt: str, options: tuple[tuple[str, str], ...] | No
     """Cooked-stdin confirmation for when the arrow-nav prompt app is unavailable.
 
     Prints the rows and reads one line; a row tag, digit, or answer key resolves
-    to that row's answer, which the execution gate interprets.
+    to that row's answer, which the execution gate interprets. An empty line
+    matches the arrow-nav default: the last row (cancel).
     """
     rows = options or DEFAULT_CONFIRM_OPTIONS
     for index, (_answer, label) in enumerate(rows):
         print(f"  [{chr(ord('a') + index)}] {label}")
     tags = "/".join(chr(ord("a") + index) for index in range(len(rows)))
+    cancel = rows[-1][0]
     try:
         raw = input(f"{prompt} [{tags}] ").strip().lower()
     except (EOFError, KeyboardInterrupt):
-        return "n"
+        return cancel
+    if not raw:
+        return cancel
     for index, (answer, _label) in enumerate(rows):
         if raw in {chr(ord("a") + index), str(index + 1), answer}:
             return answer

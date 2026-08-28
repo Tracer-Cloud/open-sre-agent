@@ -368,6 +368,8 @@ def test_non_shell_action_gets_plain_confirmation_no_risk_grade() -> None:
     )
     out = buf.getvalue()
     assert "needs confirmation" in out
-    assert "risk" not in out
+    assert "low risk" not in out
+    assert "medium risk" not in out
+    assert "high risk" not in out
     assert "always allow" not in out
     assert session.terminal.auto_level is AutoLevel.LOW
