@@ -18,10 +18,15 @@ from prompt_toolkit.key_binding import KeyBindings
 from prompt_toolkit.key_binding.key_processor import KeyPressEvent
 
 from infrastructure.terminal import theme as ui_theme
+from surfaces.shared.terminal.prompt_layout import prompt_line_width
 
 # Rows are supplied per confirmation via ``ReplState.confirm_options``. The gate
 # reads "", "y", "yes" as allow; "always" as allow-and-raise-auto; else cancel.
 _MAX_TAGGED = 9
+_BOX_MIN_INNER = 24
+# Leave room for the ``│ `` / ` │`` box chrome plus one spare column so the
+# border never reaches the last cell and soft-wraps.
+_BOX_CHROME = 5
 
 
 class ConfirmChoiceState(Protocol):
@@ -38,18 +43,30 @@ class ConfirmChoiceState(Protocol):
 
 
 def confirmation_choice_overlay_ansi(selected: int, options: tuple[tuple[str, str], ...]) -> str:
-    """Stacked ``❯ [a] …`` rows for ``options``, accenting the selected one."""
+    """Bordered ``❯ [a] …`` rows for ``options``, accenting the selected one.
+
+    The options sit inside a dim box (like the composer frame) so the pending
+    decision reads as its own panel; the selected row carries the accent arrow.
+    """
     if not options:
         return ""
     index = selected % len(options)
-    rows: list[str] = []
-    for position, (_answer, label) in enumerate(options):
-        tag = chr(ord("a") + position)
-        chosen = position == index
-        marker = "❯" if chosen else " "
-        style = ui_theme.PROMPT_ACCENT_ANSI if chosen else ui_theme.DIM_COUNTER_ANSI
-        rows.append(f"{style} {marker} [{tag}] {label}{ui_theme.ANSI_RESET}")
-    return "\n".join(rows)
+    contents = [
+        f"{'❯' if position == index else ' '} [{chr(ord('a') + position)}] {label}"
+        for position, (_answer, label) in enumerate(options)
+    ]
+    inner = min(
+        max(_BOX_MIN_INNER, *(len(row) for row in contents)), prompt_line_width() - _BOX_CHROME
+    )
+    border = ui_theme.PROMPT_FRAME_ANSI
+    reset = ui_theme.ANSI_RESET
+    lines = [f"{border}┌{'─' * (inner + 2)}┐{reset}"]
+    for position, content in enumerate(contents):
+        style = ui_theme.PROMPT_ACCENT_ANSI if position == index else ui_theme.DIM_COUNTER_ANSI
+        padded = content[:inner].ljust(inner)
+        lines.append(f"{border}│{reset} {style}{padded}{reset} {border}│{reset}")
+    lines.append(f"{border}└{'─' * (inner + 2)}┘{reset}")
+    return "\n".join(lines)
 
 
 def install_confirmation_key_bindings(state: ConfirmChoiceState, redraw: object) -> KeyBindings:
