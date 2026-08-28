@@ -1591,6 +1591,43 @@ class TestRequestConfirmationViaPrompt:
         assert state.confirm_response == []
 
 
+def test_reset_prompt_buffer_schedules_on_the_ui_loop() -> None:
+    """Confirmation parks on a worker thread; buffer.reset must not run there."""
+    from surfaces.interactive_shell.runtime.turn_host import _reset_prompt_buffer
+
+    scheduled: list[object] = []
+
+    class _Loop:
+        def call_soon_threadsafe(self, fn: object, *args: object) -> None:
+            scheduled.append((fn, args))
+
+    class _Buffer:
+        def __init__(self) -> None:
+            self.resets = 0
+
+        def reset(self) -> None:
+            self.resets += 1
+
+    class _App:
+        def __init__(self) -> None:
+            self.current_buffer = _Buffer()
+
+    session = Session()
+    app = _App()
+    session.terminal.prompt_app = app
+    session.terminal.main_loop = _Loop()
+
+    _reset_prompt_buffer(session)
+
+    assert app.current_buffer.resets == 0
+    assert len(scheduled) == 1
+    fn, args = scheduled[0]
+    assert args == ()
+    assert callable(fn)
+    fn()
+    assert app.current_buffer.resets == 1
+
+
 class TestExecutionAllowedRespectsDispatchCancelled:
     """End-to-end contract: cancelling during ``Proceed? [Y/n]`` must
     actually STOP the in-flight action — not just stop the spinner.

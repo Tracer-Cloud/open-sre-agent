@@ -104,8 +104,8 @@ class ReplState:
         # as awaiting confirmation the instant the event is visible.
         self.confirm_response = []
         self.confirm_prompt_text = prompt_text
-        # Default the arrow selection to Yes (the allow row) each time.
-        self.confirm_selected = 0
+        # Default the arrow on No so a stray Enter cancels instead of approving.
+        self.confirm_selected = 1
         self.phase = TurnPhase.AWAITING_CONFIRMATION
         self.confirm_event = event
 

@@ -30,6 +30,10 @@ from surfaces.interactive_shell.ui.input_prompt.rendering import (
 )
 from surfaces.interactive_shell.ui.input_prompt.style import _build_prompt_style
 
+# Frame (height 3) plus the help/status footer (height 1): the blank stand-in
+# shown while the composer is hidden must match this so the region height holds.
+_COMPOSER_ROWS = 4
+
 
 def _install_prompt_frame(
     session: PromptSession[str],
@@ -63,14 +67,22 @@ def _install_prompt_frame(
         dont_extend_height=True,
         style="class:composer-footer",
     )
+    box_rows: list[AnyContainer] = [composer, footer]
     if hide_composer is not None:
         shown = Condition(lambda: not hide_composer())
-        composer = ConditionalContainer(composer, filter=shown)
-        footer = ConditionalContainer(footer, filter=shown)
+        # Swap the box for a blank pad of the SAME height while structured input
+        # owns the keyboard. Collapsing to zero height shrinks the region, and a
+        # shrinking prompt under patch_stdout leaves stale border fragments — a
+        # constant-height stand-in overwrites the box cleanly instead.
+        box_rows = [
+            ConditionalContainer(composer, filter=shown),
+            ConditionalContainer(footer, filter=shown),
+            ConditionalContainer(Window(height=_COMPOSER_ROWS, char=" "), filter=~shown),
+        ]
     # Keep the final terminal column empty. Painting a frame border there puts
     # the cursor in pending-wrap, which makes patch_stdout redraws jump and
     # leaves stale composer fragments after output or a terminal resize.
-    chrome = HSplit([before_input, composer, footer], width=prompt_line_width)
+    chrome = HSplit([before_input, *box_rows], width=prompt_line_width)
     framed_input = FloatContainer(
         chrome,
         floats=main_input.floats,

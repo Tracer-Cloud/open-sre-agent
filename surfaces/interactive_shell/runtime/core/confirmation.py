@@ -23,15 +23,19 @@ def request_confirmation_via_prompt(
     prompt_text: str,
     *,
     redraw: Callable[[], None] | None = None,
+    prepare_ui: Callable[[], None] | None = None,
 ) -> str:
     """Park until the prompt loop delivers a y/n answer.
 
-    ``redraw`` (typically prompt invalidate) runs after confirmation begins and
-    again after it clears so the free-text typing box hides and restores
+    ``prepare_ui`` runs once after confirmation begins (clear typeahead under
+    the hidden composer). ``redraw`` (typically prompt invalidate) runs after
+    begin and again after clear so the typing box hides and restores
     immediately rather than waiting for the next refresh tick.
     """
     response_event = threading.Event()
     state.begin_confirmation(response_event, prompt_text)
+    if prepare_ui is not None:
+        prepare_ui()
     if redraw is not None:
         redraw()
     try:

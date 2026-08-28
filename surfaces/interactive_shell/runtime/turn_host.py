@@ -86,13 +86,40 @@ def _confirm_via_prompt(runtime: AgentTurnResources, prompt: str) -> str:
     ``begin_confirmation`` flips ``state.is_awaiting_confirmation()``, which
     ``typing_box_hidden`` / ``render_prompt_region`` already honor. ``redraw``
     invalidates the live prompt immediately so the box hides and restores
-    without waiting for the next refresh tick.
+    without waiting for the next refresh tick. ``prepare_ui`` clears any
+    typeahead that landed in the (hidden) composer before the gate opened.
     """
     return request_confirmation_via_prompt(
         runtime.state,
         prompt,
         redraw=runtime.invalidate_prompt,
+        prepare_ui=lambda: _reset_prompt_buffer(runtime.session),
     )
+
+
+def _reset_prompt_buffer(session: Session) -> None:
+    """Empty the live prompt buffer so hidden typeahead cannot submit later.
+
+    Confirmation parks on a worker thread; prompt-toolkit buffer mutations must
+    run on the UI loop (same rule as ``invalidate_prompt`` / refresh prefill).
+    """
+    terminal = getattr(session, "terminal", None)
+    if terminal is None:
+        return
+    app = getattr(terminal, "prompt_app", None)
+    if app is None:
+        return
+
+    def _reset() -> None:
+        buffer = getattr(app, "current_buffer", None)
+        if buffer is not None:
+            buffer.reset()
+
+    loop = getattr(terminal, "main_loop", None)
+    if loop is not None:
+        loop.call_soon_threadsafe(_reset)
+        return
+    _reset()
 
 
 def _streaming_console(

@@ -2,7 +2,7 @@
 
 This module owns the *user-facing* half of the execution gate: it renders the
 policy decision (``Action blocked``, the non-TTY warning, the
-``Command to approve`` card, the ``Yes, allow? [Y/n]`` prompt), reads the
+``Command to approve`` card, the arrow Yes/No choice), reads the
 user's confirmation, and emits analytics. The pure decision
 itself is computed by
 :func:`tools.interactive_shell.shared.resolve_confirmation`,

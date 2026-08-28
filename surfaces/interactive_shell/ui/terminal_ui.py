@@ -77,11 +77,15 @@ def render_prompt_region(session: Session, state: ReplState, spinner: SpinnerSta
         base = prompt_rendering._prompt_message(session).value
     auto_line = strip_cpr_sequences(auto_status_ansi(session))
     plan = session.task_plan
-    plan_overlay = (
-        strip_cpr_sequences(task_plan_overlay_ansi(plan, expanded=state.plan_expanded))
-        if plan is not None and plan.steps
-        else ""
-    )
+    if plan is None or not plan.steps:
+        # Drop expand so the next plan opens collapsed rather than inheriting
+        # a sticky Ctrl+P from a previous checklist.
+        state.plan_expanded = False
+        plan_overlay = ""
+    else:
+        plan_overlay = strip_cpr_sequences(
+            task_plan_overlay_ansi(plan, expanded=state.plan_expanded)
+        )
     plan_prefix = f"{plan_overlay}\n\n" if plan_overlay else ""
 
     # A pending confirmation renders a stacked, arrow-navigable Yes/No choice

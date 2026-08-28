@@ -108,6 +108,19 @@ def test_idle_prompt_region_keeps_status_spacer_not_thinking() -> None:
     assert rendered.index("Plan · 2/3") < rendered.index("Auto (High)")
 
 
+def test_clearing_the_plan_resets_expanded_state() -> None:
+    session = Session()
+    session.task_plan = _sample_plan()
+    state = ReplState()
+    state.plan_expanded = True
+    _ = render_prompt_region(session, state, SpinnerState())
+    assert state.plan_expanded is True
+
+    session.task_plan = None
+    _ = render_prompt_region(session, state, SpinnerState())
+    assert state.plan_expanded is False
+
+
 def _long_plan():
     plan, error = parse_task_plan(
         {

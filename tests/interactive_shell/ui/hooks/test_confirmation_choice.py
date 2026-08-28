@@ -7,7 +7,9 @@ execution gate reads (allow vs cancel).
 from __future__ import annotations
 
 import re
+import threading
 
+from surfaces.interactive_shell.runtime.core.state import ReplState
 from surfaces.interactive_shell.ui.hooks import (
     confirmation_choice_overlay_ansi,
     confirmation_option_count,
@@ -82,3 +84,16 @@ def test_arrow_keys_move_and_wrap_the_selection_then_enter_delivers_it() -> None
     assert state.delivered == ["n"]
     # Every movement repainted the prompt.
     assert redraws == [True, True, True]
+
+
+def test_enter_on_default_selection_cancels() -> None:
+    # Production begin_confirmation defaults the arrow to No so a stray Enter
+    # cancels instead of approving.
+    state = ReplState()
+    state.begin_confirmation(threading.Event(), "Proceed?")
+    assert state.confirm_selected == 1
+
+    bindings = install_confirmation_key_bindings(state, lambda: None)
+    by_key = {str(b.keys[0]): b.handler for b in bindings.bindings}
+    by_key["Keys.ControlM"](None)
+    assert state.confirm_response == ["n"]
