@@ -39,6 +39,30 @@ def test_draw_menu_uses_carriage_return_newlines(monkeypatch) -> None:
     assert "\r/integrations" in plain
     assert "\r ❯ 1. /integrations list" in plain
     assert "\r   2. /integrations verify" in plain
+    # Tight layout: rule is immediately followed by the first option (no blank row).
+    assert "\r\n\r\n ❯ 1." not in plain
+    assert "\r\n\r ❯ 1." in plain
+
+
+def test_draw_menu_multi_select_checkboxes(monkeypatch) -> None:
+    out = io.StringIO()
+    monkeypatch.setattr(sys, "stdout", out)
+    monkeypatch.setattr(choice_menu, "_cols", lambda: 80)
+
+    choice_menu._draw_menu(
+        title="Extras",
+        crumb="",
+        labels=["Unit tests", "Dockerfile"],
+        index=0,
+        erase_lines=0,
+        multi_select=True,
+        checked={1},
+    )
+
+    plain = _ANSI_RE.sub("", out.getvalue())
+    assert "[ ] Unit tests" in plain
+    assert "[x] Dockerfile" in plain
+    assert "Submit" in plain
 
 
 def test_draw_menu_strips_control_characters_from_title_and_labels(monkeypatch) -> None:

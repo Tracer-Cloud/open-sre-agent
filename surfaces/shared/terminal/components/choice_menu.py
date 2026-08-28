@@ -23,9 +23,13 @@ from infrastructure.safety.terminal_output import strip_terminal_controls
 from surfaces.shared.terminal.components.key_reader import read_key_unix, read_key_windows
 
 _HINT = "↑↓ navigate    Enter select    Esc cancel"
+_HINT_MULTI = "↑↓ Navigate    Space/Enter/1-9 Toggle    Submit to confirm    Esc cancel"
+_SUBMIT = "Submit"
+_CHECKED = "[x]"
+_UNCHECKED = "[ ]"
 CRUMB_SEP = "  ›  "
-# Blank line after the submitted slash line before the menu header (all pickers).
-_MENU_LEADING_LINES = 1
+# Tight Droid-style panel: no blank line above the title.
+_MENU_LEADING_LINES = 0
 _TERMINAL_NEWLINE = "\r\n"
 MenuAction = Literal["up", "down", "enter", "cancel", "eof", "ignore"]
 
@@ -97,10 +101,12 @@ def _rule(width: int) -> str:
     return "─" * width
 
 
-def _pad(sym: str, label: str, width: int) -> str:
-    content = f" {sym} {label}"
-    pad = width - len(content)
-    return content + (" " * pad if pad > 0 else "")
+def _write_option_row(*, prefix: str, label: str, width: int, selected: bool) -> None:
+    """Accent only the content; pad with plain spaces (avoids a full-width bar)."""
+    content = f" {prefix} {label}"
+    pad = max(0, width - len(content))
+    style = ui_theme.PROMPT_ACCENT_ANSI if selected else ui_theme.DIM_COUNTER_ANSI
+    write_menu_line(f"{style}{content}{ui_theme.ANSI_RESET}{' ' * pad}")
 
 
 def _sanitize_menu(
@@ -116,9 +122,10 @@ def _sanitize_menu(
     )
 
 
-def _menu_height(crumb: str, labels: list[str]) -> int:
-    # leading, title, [crumb], rule, blank, choices, blank, hint
-    return _MENU_LEADING_LINES + 1 + (1 if crumb else 0) + 1 + 1 + len(labels) + 1 + 1
+def _menu_height(crumb: str, labels: list[str], *, multi_select: bool = False) -> int:
+    # title, [crumb], rule, choices, [Submit], hint — no blank gaps
+    submit = 1 if multi_select else 0
+    return _MENU_LEADING_LINES + 1 + (1 if crumb else 0) + 1 + len(labels) + submit + 1
 
 
 def write_menu_line(text: str = "") -> None:
@@ -146,6 +153,24 @@ def reset_tty_column() -> None:
     sys.stdout.flush()
 
 
+def hide_terminal_cursor() -> None:
+    """Hide the hardware cursor while an inline menu owns the screen.
+
+    Arrow-key menus draw their own selection marker; the parked hardware cursor
+    would otherwise sit on its own row below the hint as a stray block.
+    """
+    if repl_tty_interactive():
+        sys.stdout.write("\x1b[?25l")
+        sys.stdout.flush()
+
+
+def show_terminal_cursor() -> None:
+    """Restore the hardware cursor after an inline menu exits."""
+    if repl_tty_interactive():
+        sys.stdout.write("\x1b[?25h")
+        sys.stdout.flush()
+
+
 def leave_inline_menu() -> None:
     """Restore cooked stdin and start the next Rich line at column zero.
 
@@ -155,6 +180,7 @@ def leave_inline_menu() -> None:
     """
     from surfaces.shared.terminal.components.key_reader import restore_stdin_terminal
 
+    show_terminal_cursor()
     restore_stdin_terminal()
     prepare_repl_output_line()
 
@@ -193,41 +219,49 @@ def _draw_menu(
     labels: list[str],
     index: int,
     erase_lines: int,
+    multi_select: bool = False,
+    checked: set[int] | None = None,
 ) -> None:
     out = sys.stdout
     w = _cols()
     title, crumb, labels = _sanitize_menu(title, crumb, labels)
+    checked = checked or set()
     if erase_lines:
         _erase_menu_block(erase_lines)
     for _ in range(_MENU_LEADING_LINES):
         write_menu_line()
-    # title
     write_menu_line(f"{ui_theme.PROMPT_ACCENT_ANSI}{title}{ui_theme.ANSI_RESET}")
-    # breadcrumb path
     if crumb:
         write_menu_line(f"{ui_theme.DIM_COUNTER_ANSI}{crumb}{ui_theme.ANSI_RESET}")
-    # separator below header
     write_menu_line(f"{ui_theme.DIM_COUNTER_ANSI}{_rule(w)}{ui_theme.ANSI_RESET}")
-    write_menu_line()
-    # choices
     for i, label in enumerate(labels):
         here = i == index
-        numbered = f"{i + 1}. {label}"
-        sym = "❯" if here else " "
-        padded = _pad(sym, numbered, w)
-        if here:
-            write_menu_line(f"{ui_theme.PROMPT_ACCENT_ANSI}{padded}{ui_theme.ANSI_RESET}")
+        if multi_select:
+            box = _CHECKED if i in checked else _UNCHECKED
+            _write_option_row(prefix=box, label=label, width=w, selected=here)
         else:
-            write_menu_line(f"{ui_theme.DIM_COUNTER_ANSI}{padded}{ui_theme.ANSI_RESET}")
-    write_menu_line()
-    write_menu_line(f"{ui_theme.DIM_COUNTER_ANSI}{_HINT}{ui_theme.ANSI_RESET}")
+            numbered = f"{i + 1}. {label}"
+            sym = "❯" if here else " "
+            _write_option_row(prefix=sym, label=numbered, width=w, selected=here)
+    if multi_select:
+        submit_selected = index == len(labels)
+        _write_option_row(
+            prefix="❯" if submit_selected else " ",
+            label=_SUBMIT,
+            width=w,
+            selected=submit_selected,
+        )
+        hint = _HINT_MULTI
+    else:
+        hint = _HINT
+    write_menu_line(f"{ui_theme.DIM_COUNTER_ANSI}{hint}{ui_theme.ANSI_RESET}")
     out.flush()
 
 
-def _erase_menu(crumb: str, labels: list[str]) -> None:
+def _erase_menu(crumb: str, labels: list[str], *, multi_select: bool = False) -> None:
     """Move cursor up to the start of this menu block and wipe it."""
     _, crumb, labels = _sanitize_menu("", crumb, labels)
-    height = _menu_height(crumb, labels)
+    height = _menu_height(crumb, labels, multi_select=multi_select)
     _erase_menu_block(height)
     sys.stdout.flush()
 
@@ -242,11 +276,15 @@ def _pick(
     labels: list[str],
     initial_index: int = 0,
     custom_label: str | None = None,
+    multi_select: bool = False,
 ) -> int | str | None:
     """Draw an inline menu; return index, custom typed string, or None on Esc.
 
     When ``custom_label`` matches the focused row, printable keys type on that
     row in place (Droid-style) and Enter returns the typed string.
+
+    When ``multi_select`` is True, return a newline-joined string of checked
+    labels (Submit commits). Space/Enter/1-9 toggle checkboxes.
     """
     from surfaces.shared.terminal.components.key_reader import read_menu_or_char
 
@@ -254,11 +292,14 @@ def _pick(
         return None
     title, crumb, labels = _sanitize_menu(title, crumb, labels)
     idx = initial_index % len(labels)
-    height = _menu_height(crumb, labels)
+    height = _menu_height(crumb, labels, multi_select=multi_select)
     draft = ""
     first = True
+    checked: set[int] = set()
+    custom_index = labels.index(custom_label) if custom_label in labels else -1
+    row_count = len(labels) + (1 if multi_select else 0)
     while True:
-        on_custom = custom_label is not None and labels[idx] == custom_label
+        on_custom = custom_label is not None and idx < len(labels) and labels[idx] == custom_label
         display = list(labels)
         if on_custom:
             display[idx] = f"{draft}█"
@@ -268,17 +309,69 @@ def _pick(
             labels=display,
             index=idx,
             erase_lines=0 if first else height,
+            multi_select=multi_select,
+            checked=checked if multi_select else None,
         )
         first = False
-        height = _menu_height(crumb, display)
+        height = _menu_height(crumb, display, multi_select=multi_select)
         action = (
-            read_menu_or_char(allow_chars=True) if on_custom else _read_action()
+            read_menu_or_char(allow_chars=True)
+            if on_custom
+            else (read_menu_or_char(allow_chars=False) if multi_select else _read_action())
         )
         if on_custom and action == "backspace":
             draft = draft[:-1]
+            if multi_select and custom_index >= 0 and not draft.strip():
+                checked.discard(custom_index)
             continue
         if on_custom and len(action) == 1 and action.isprintable() and action not in "\t\n\r":
             draft += action
+            if multi_select and custom_index >= 0 and draft.strip():
+                checked.add(custom_index)
+            continue
+        if action == "up":
+            idx = (idx - 1) % row_count
+            continue
+        if action == "down":
+            idx = (idx + 1) % row_count
+            continue
+        if multi_select:
+            toggle_index: int | None = None
+            if action in (" ", "enter") and idx < len(labels):
+                toggle_index = idx
+            elif len(action) == 1 and action.isdigit():
+                picked = int(action) - 1
+                if 0 <= picked < len(labels):
+                    toggle_index = picked
+            if toggle_index is not None:
+                if toggle_index == custom_index and not draft.strip():
+                    idx = toggle_index
+                    continue
+                if toggle_index in checked:
+                    checked.discard(toggle_index)
+                else:
+                    checked.add(toggle_index)
+                idx = toggle_index
+                continue
+            if action == "enter" and idx == len(labels):
+                parts: list[str] = []
+                for index in sorted(checked):
+                    if index == custom_index:
+                        text = draft.strip()
+                        if text:
+                            parts.append(text)
+                        continue
+                    if 0 <= index < len(labels):
+                        parts.append(labels[index])
+                if not parts:
+                    continue
+                _erase_menu(crumb, display, multi_select=True)
+                leave_inline_menu()
+                return "\n".join(parts)
+            if action in ("cancel", "eof"):
+                _erase_menu(crumb, display, multi_select=True)
+                leave_inline_menu()
+                return None
             continue
         if action == "enter":
             if on_custom:
@@ -297,10 +390,6 @@ def _pick(
             return None
         if action == "ignore":
             continue
-        if action == "up":
-            idx = (idx - 1) % len(labels)
-        elif action == "down":
-            idx = (idx + 1) % len(labels)
 
 
 def repl_choose_one(
@@ -310,6 +399,7 @@ def repl_choose_one(
     breadcrumb: str = "",
     initial_value: str | None = None,
     custom_label: str | None = None,
+    multi_select: bool = False,
 ) -> str | None:
     """Show an inline erasing arrow-key menu; return selected value or None on Esc.
 
@@ -318,6 +408,9 @@ def repl_choose_one(
 
     When ``custom_label`` is set and that row is focused, the user types on that
     row in place (same option array) instead of opening a separate prompt.
+
+    When ``multi_select`` is True, checkboxes appear and the return value is a
+    newline-joined string of selected labels.
     """
     from surfaces.shared.terminal.components.cpr_stdin import drain_stale_cpr_bytes
 
@@ -325,6 +418,7 @@ def repl_choose_one(
         return None
     _clear_prompt_toolkit_paint()
     drain_stale_cpr_bytes()
+    hide_terminal_cursor()
     crumb = breadcrumb
     labels = [label for _value, label in choices]
     initial_index = 0
@@ -339,6 +433,7 @@ def repl_choose_one(
         labels=labels,
         initial_index=initial_index,
         custom_label=custom_label,
+        multi_select=multi_select,
     )
     if picked is None:
         return None
@@ -367,6 +462,7 @@ def print_valid_choice_list(
 __all__ = [
     "CRUMB_SEP",
     "erase_menu_lines",
+    "hide_terminal_cursor",
     "leave_inline_menu",
     "menu_columns",
     "print_valid_choice_list",
@@ -377,5 +473,6 @@ __all__ = [
     "repl_section_break",
     "repl_tty_interactive",
     "reset_tty_column",
+    "show_terminal_cursor",
     "write_menu_line",
 ]

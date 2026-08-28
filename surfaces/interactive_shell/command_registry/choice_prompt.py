@@ -67,6 +67,7 @@ def _cmd_choose(session: Session, console: Console, args: list[str]) -> bool:
         title=items[0].title,
         choices=option_choices,
         custom_label=CUSTOM_OPTION,
+        multi_select=items[0].multi_select,
     )
     if picked_one is None:
         leave_inline_menu()

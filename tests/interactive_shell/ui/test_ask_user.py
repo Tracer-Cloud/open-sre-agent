@@ -140,3 +140,57 @@ def test_wizard_types_on_custom_row_in_place(monkeypatch) -> None:
         "Last 7 days",
     )
     assert "Or type your own" not in "".join(picked)
+
+
+def test_wizard_multi_select_toggles_and_submits(monkeypatch) -> None:
+    """Checkboxes: Space toggles; Submit commits newline-joined labels."""
+    questions = (
+        AskUserQuestion(
+            label="Extras",
+            title="Which extras?",
+            options=("Unit tests", "Dockerfile", "CI workflow"),
+            multi_select=True,
+        ),
+        AskUserQuestion(
+            label="Lang",
+            title="Language?",
+            options=("Python", "Go"),
+        ),
+    )
+    # Toggle option 0 and 1, down to Submit, Enter; then Enter on Q2 default.
+    _patch_wizard(
+        monkeypatch,
+        [" ", "down", " ", "down", "down", "down", "enter", "enter"],
+    )
+    picked = repl_ask_user(questions)
+    assert picked == ("Unit tests\nDockerfile", "Python")
+
+
+def test_draw_ask_user_multi_uses_checkboxes(monkeypatch) -> None:
+    import io
+    import re
+    import sys
+
+    from surfaces.interactive_shell.ui import ask_user
+
+    out = io.StringIO()
+    monkeypatch.setattr(sys, "stdout", out)
+    monkeypatch.setattr(ask_user, "menu_columns", lambda: 80)
+    question = AskUserQuestion(
+        label="Extras",
+        title="Which extras?",
+        options=("Unit tests", "Dockerfile"),
+        multi_select=True,
+    )
+    ask_user._draw_ask_user(
+        questions=(question, question),
+        current=0,
+        answers=[None, None],
+        option_index=0,
+        erase_lines=0,
+        checked={0},
+    )
+    plain = re.sub(r"\x1b\[[0-9;:]*[A-Za-z]", "", out.getvalue())
+    assert "[x] Unit tests" in plain
+    assert "[ ] Dockerfile" in plain
+    assert "1. Unit tests" not in plain

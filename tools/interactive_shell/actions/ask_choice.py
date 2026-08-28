@@ -80,6 +80,13 @@ _QUESTION_ITEM_SCHEMA = {
                 "The selected label is echoed back verbatim."
             ),
         ),
+        "multi_select": {
+            "type": "boolean",
+            "description": (
+                "When true, the shell shows checkboxes and the user may toggle "
+                "several options (Space/Enter). Default false = single choice."
+            ),
+        },
     },
 }
 
@@ -140,7 +147,15 @@ def _parse_questions(raw: object) -> tuple[list[AskUserQuestion] | None, str | N
         option_error = _options_error(options)
         if option_error is not None:
             return None, f"questions[{index}]: {option_error}"
-        parsed.append(AskUserQuestion(label=label, title=title, options=tuple(options)))
+        multi_select = bool(item.get("multi_select", False))
+        parsed.append(
+            AskUserQuestion(
+                label=label,
+                title=title,
+                options=tuple(options),
+                multi_select=multi_select,
+            )
+        )
     if len(parsed) > _MAX_QUESTIONS:
         return None, f"at most {_MAX_QUESTIONS} questions are supported"
     return parsed, None
@@ -188,7 +203,12 @@ def execute_ask_user_choice_tool(args: dict[str, Any], ctx: ActionToolScope) -> 
         option_error = _options_error(options)
         if option_error is not None:
             return {"ok": False, "error": option_error}
-        pending = PendingUserChoice(title=title, options=tuple(options))
+        multi_select = bool(args.get("multi_select", False))
+        pending = PendingUserChoice(
+            title=title,
+            options=tuple(options),
+            multi_select=multi_select,
+        )
         queued = _QUEUED_INSTRUCTION
         summary = f"selection menu queued: {title}"
 
@@ -283,10 +303,18 @@ ask_user_choice_tool = RegisteredTool(
                 "type": "array",
                 "description": (
                     "Two to six blockers to ask in one Ask User wizard. Each "
-                    "item is {label, title, options}. Prefer this over several "
-                    "turns when missing facts block a plan."
+                    "item is {label, title, options, multi_select?}. Prefer "
+                    "this over several turns when missing facts block a plan."
                 ),
                 "items": _QUESTION_ITEM_SCHEMA,
+            },
+            "multi_select": {
+                "type": "boolean",
+                "description": (
+                    "For a single title/options decision: when true, the shell "
+                    "shows checkboxes and the user may toggle several options. "
+                    "Ignored when questions is set (use per-question multi_select)."
+                ),
             },
         },
         required=(),

@@ -256,6 +256,9 @@ def _read_menu_or_char_unix(*, allow_chars: bool) -> str:
                         arr = os.read(fd, 1)
                     return "ignore"
             return "cancel"
+        # Space: printable when typing; otherwise a distinct toggle key for multi-select.
+        if b == 32:
+            return " "
         if allow_chars and 32 <= b <= 126:
             return chr(b)
         return "ignore"
@@ -298,6 +301,8 @@ def _read_menu_or_char_windows(*, allow_chars: bool) -> str:
         if ch2 == b"\x0f":
             return "shift_tab"
         return "ignore"
+    if ch == b" ":
+        return " "
     if allow_chars:
         try:
             text = ch.decode("ascii")
