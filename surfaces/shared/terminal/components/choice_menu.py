@@ -22,7 +22,7 @@ import infrastructure.terminal.theme as ui_theme
 from infrastructure.safety.terminal_output import strip_terminal_controls
 from surfaces.shared.terminal.components.key_reader import read_key_unix, read_key_windows
 
-_HINT = "↑↓ navigate    Enter select    Esc cancel"
+_HINT = "↑↓ Navigate    Enter/1-9 Select    Esc cancel"
 _HINT_MULTI = "↑↓ Navigate    Space/Enter/1-9 Toggle    Submit to confirm    Esc cancel"
 _SUBMIT = "Submit"
 _CHECKED = "[x]"
@@ -122,10 +122,13 @@ def _sanitize_menu(
     )
 
 
-def _menu_height(crumb: str, labels: list[str], *, multi_select: bool = False) -> int:
-    # title, [crumb], rule, choices, [Submit], hint — no blank gaps
+def _menu_height(
+    crumb: str, labels: list[str], *, multi_select: bool = False, header: str = ""
+) -> int:
+    # [header], title, [crumb], rule, choices, [Submit], hint — no blank gaps
     submit = 1 if multi_select else 0
-    return _MENU_LEADING_LINES + 1 + (1 if crumb else 0) + 1 + len(labels) + submit + 1
+    lead = _MENU_LEADING_LINES + (1 if header else 0)
+    return lead + 1 + (1 if crumb else 0) + 1 + len(labels) + submit + 1
 
 
 def write_menu_line(text: str = "") -> None:
@@ -221,6 +224,7 @@ def _draw_menu(
     erase_lines: int,
     multi_select: bool = False,
     checked: set[int] | None = None,
+    header: str = "",
 ) -> None:
     out = sys.stdout
     w = _cols()
@@ -230,7 +234,14 @@ def _draw_menu(
         _erase_menu_block(erase_lines)
     for _ in range(_MENU_LEADING_LINES):
         write_menu_line()
-    write_menu_line(f"{ui_theme.PROMPT_ACCENT_ANSI}{title}{ui_theme.ANSI_RESET}")
+    # With a header (e.g. "Ask User") the accent goes to the header and the
+    # title reads as the plain question below it; otherwise the title is the
+    # accent header (slash-command pickers).
+    if header:
+        write_menu_line(f"{ui_theme.PROMPT_ACCENT_ANSI}{header}{ui_theme.ANSI_RESET}")
+        write_menu_line(f"{ui_theme.TEXT_ANSI}{title}{ui_theme.ANSI_RESET}")
+    else:
+        write_menu_line(f"{ui_theme.PROMPT_ACCENT_ANSI}{title}{ui_theme.ANSI_RESET}")
     if crumb:
         write_menu_line(f"{ui_theme.DIM_COUNTER_ANSI}{crumb}{ui_theme.ANSI_RESET}")
     write_menu_line(f"{ui_theme.DIM_COUNTER_ANSI}{_rule(w)}{ui_theme.ANSI_RESET}")
@@ -258,10 +269,12 @@ def _draw_menu(
     out.flush()
 
 
-def _erase_menu(crumb: str, labels: list[str], *, multi_select: bool = False) -> None:
+def _erase_menu(
+    crumb: str, labels: list[str], *, multi_select: bool = False, header: str = ""
+) -> None:
     """Move cursor up to the start of this menu block and wipe it."""
     _, crumb, labels = _sanitize_menu("", crumb, labels)
-    height = _menu_height(crumb, labels, multi_select=multi_select)
+    height = _menu_height(crumb, labels, multi_select=multi_select, header=header)
     _erase_menu_block(height)
     sys.stdout.flush()
 
@@ -278,6 +291,7 @@ def _pick(
     custom_label: str | None = None,
     multi_select: bool = False,
     values: list[str] | None = None,
+    header: str = "",
 ) -> int | str | None:
     """Draw an inline menu; return index, custom typed string, or None on Esc.
 
@@ -297,7 +311,7 @@ def _pick(
     if len(selected_values) != len(labels):
         selected_values = list(labels)
     idx = initial_index % len(labels)
-    height = _menu_height(crumb, labels, multi_select=multi_select)
+    height = _menu_height(crumb, labels, multi_select=multi_select, header=header)
     draft = ""
     first = True
     checked: set[int] = set()
@@ -316,9 +330,10 @@ def _pick(
             erase_lines=0 if first else height,
             multi_select=multi_select,
             checked=checked if multi_select else None,
+            header=header,
         )
         first = False
-        height = _menu_height(crumb, display, multi_select=multi_select)
+        height = _menu_height(crumb, display, multi_select=multi_select, header=header)
         action = (
             read_menu_or_char(allow_chars=True)
             if on_custom
@@ -370,27 +385,37 @@ def _pick(
                         parts.append(selected_values[index])
                 if not parts:
                     continue
-                _erase_menu(crumb, display, multi_select=True)
+                _erase_menu(crumb, display, multi_select=True, header=header)
                 leave_inline_menu()
                 return "\n".join(parts)
             if action in ("cancel", "eof"):
-                _erase_menu(crumb, display, multi_select=True)
+                _erase_menu(crumb, display, multi_select=True, header=header)
                 leave_inline_menu()
                 return None
+            continue
+        if (not on_custom) and len(action) == 1 and action.isdigit():
+            picked = int(action) - 1
+            if 0 <= picked < len(labels):
+                if picked == custom_index:
+                    idx = picked
+                    continue
+                _erase_menu(crumb, labels, header=header)
+                leave_inline_menu()
+                return picked
             continue
         if action == "enter":
             if on_custom:
                 text = draft.strip()
                 if not text:
                     continue
-                _erase_menu(crumb, display)
+                _erase_menu(crumb, display, header=header)
                 leave_inline_menu()
                 return text
-            _erase_menu(crumb, labels)
+            _erase_menu(crumb, labels, header=header)
             leave_inline_menu()
             return idx
         if action in ("cancel", "eof"):
-            _erase_menu(crumb, display if on_custom else labels)
+            _erase_menu(crumb, display if on_custom else labels, header=header)
             leave_inline_menu()
             return None
         if action == "ignore":
@@ -405,11 +430,15 @@ def repl_choose_one(
     initial_value: str | None = None,
     custom_label: str | None = None,
     multi_select: bool = False,
+    header: str = "",
 ) -> str | None:
     """Show an inline erasing arrow-key menu; return selected value or None on Esc.
 
     ``breadcrumb`` is a slash-separated path shown dimly below the title, e.g.
     ``/model › set``.  Only call when :func:`repl_tty_interactive` is True.
+
+    ``header`` (e.g. ``Ask User``) renders as an accent line above the title,
+    which then reads as the plain question; omit it for slash-command pickers.
 
     When ``custom_label`` is set and that row is focused, the user types on that
     row in place (same option array) instead of opening a separate prompt.
@@ -442,6 +471,7 @@ def repl_choose_one(
             custom_label=custom_label,
             multi_select=multi_select,
             values=values,
+            header=header,
         )
         if picked is None:
             return None

@@ -276,9 +276,11 @@ ask_user_choice_tool = RegisteredTool(
         "job, pass ALL of them in questions (label, title, options) in ONE "
         "call, then end the turn — do not drip questions and do not call "
         "update_plan until the answers arrive. A single decision uses title "
-        "and options. The menu opens after the turn ends; answers arrive "
-        "verbatim as the next user message. If the result says the menu is "
-        "unavailable, fall back to a numbered list."
+        "and options. Precede the call with one short sentence telling the "
+        "user what you are about to ask and that they can type their own "
+        "answer if none fit. The menu opens after the turn ends; answers "
+        "arrive verbatim as the next user message. If the result says the "
+        "menu is unavailable, fall back to a numbered list."
     ),
     use_cases=[
         (
