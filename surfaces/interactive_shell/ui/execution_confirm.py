@@ -49,6 +49,9 @@ def _default_confirm_fn(prompt: str) -> str:
 
 DEFAULT_CONFIRM_FN: Callable[[str], str] = _default_confirm_fn
 _APPROVE_PROMPT = "Approve this action?"
+# Only shell commands get a per-command risk grade; matches ``tool_type`` set by
+# ``tools.interactive_shell.shell.policy``.
+_SHELL_TOOL_TYPE = "shell"
 
 
 _ALWAYS_ALLOW_LABEL = {
@@ -80,17 +83,24 @@ def _render_command_to_approve(
     console: Console,
     *,
     summary: str,
-    risk: CommandRisk,
+    risk: CommandRisk | None,
     why: str,
     action_already_listed: bool,
 ) -> None:
-    """Approval card: header with the risk level, the command, and its impact."""
+    """Approval card: header with the risk level (shell only), command, and impact.
+
+    ``risk`` is ``None`` for non-shell actions (slash commands, tools), which get
+    a plain "needs confirmation" header instead of a risk grade.
+    """
     header = Text()
     header.append("Command to approve", style=str(HIGHLIGHT))
     header.append(" · ", style=str(DIM))
-    header.append(
-        f"{risk.value} risk", style=str(WARNING if risk is CommandRisk.HIGH else SECONDARY)
-    )
+    if risk is None:
+        header.append("needs confirmation", style=str(SECONDARY))
+    else:
+        header.append(
+            f"{risk.value} risk", style=str(WARNING if risk is CommandRisk.HIGH else SECONDARY)
+        )
     console.print()
     console.print(header)
     if summary and not action_already_listed:
@@ -192,11 +202,22 @@ def execution_allowed(
 
     # NEEDS_CONFIRMATION
     summary = action_summary.strip()
-    risk, impact = classify_command_risk(summary)
-    # The classifier's impact replaces only the generic auto-level reason; a
-    # specific policy reason (e.g. a fleet-scan explanation, plan-only) wins.
     policy_reason = (result.reason or "").strip()
-    why = impact if (not policy_reason or policy_reason.startswith("Auto (")) else policy_reason
+    if result.tool_type == _SHELL_TOOL_TYPE:
+        # Only shell commands carry a per-command risk grade and an "always allow
+        # reversible" row. The classifier's impact replaces the generic auto-level
+        # reason; a specific policy reason still wins.
+        risk: CommandRisk | None
+        risk, impact = classify_command_risk(summary)
+        why = impact if (not policy_reason or policy_reason.startswith("Auto (")) else policy_reason
+        options, always_target = _confirm_options_and_target(risk, plan_only_active)
+    else:
+        # Slash commands and other tools are not shell mutations: no risk grade,
+        # no "always allow" row — a plain Yes/No with the policy reason.
+        risk = None
+        why = policy_reason or "this action"
+        options = (("y", "Yes, allow"), ("n", "No, cancel"))
+        always_target = None
     _render_command_to_approve(
         console,
         summary=summary,
@@ -204,7 +225,6 @@ def execution_allowed(
         why=why,
         action_already_listed=action_already_listed,
     )
-    options, always_target = _confirm_options_and_target(risk, plan_only_active)
     terminal = getattr(session, "terminal", None)
     if terminal is not None:
         terminal.pending_confirm_options = options
