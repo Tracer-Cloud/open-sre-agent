@@ -1,7 +1,9 @@
-"""Quiet ``shell_run`` keeps the model closing — it withheld live stdout.
+"""A ``shell_run`` turn keeps the model's grounded closing.
 
-Loud single ``shell_run`` still suppresses closings (output is already on
-screen). Quiet probes never enter display_chunks; the composed closing does.
+Quiet ``shell_run`` withheld live stdout, so its closing *is* the display. A
+loud ``shell_run`` also keeps its closing (grounded in the stdout/exit the model
+observed), but its already-painted stdout is not reprinted under it. Raw command
+output never enters display_chunks; the composed closing does.
 """
 
 from __future__ import annotations
@@ -88,8 +90,9 @@ def test_single_quiet_shell_run_keeps_the_model_closing() -> None:
     assert "Amsterdam: +18C" not in shown
 
 
-def test_quiet_string_false_still_suppresses_loud_closing() -> None:
-    # Arrange: models sometimes emit quiet as a string; "false" must not keep closings.
+def test_quiet_string_false_is_coerced_to_loud() -> None:
+    # Arrange: models sometimes emit quiet as a string; "false" must read as loud
+    # (already-on-screen stdout), not as a quiet probe.
     call = ToolCall(
         id="1",
         name="shell_run",
@@ -105,8 +108,10 @@ def test_quiet_string_false_still_suppresses_loud_closing() -> None:
         result, _Session(), _counts(1)
     )
 
-    # Assert: treated as loud — closing suppressed, no stdout reprint.
-    assert "\n".join(display_chunks) == ""
+    # Assert: the grounded closing shows; the loud stdout is not reprinted under it.
+    shown = "\n".join(display_chunks)
+    assert "done" in shown
+    assert "hi" not in shown
 
 
 def test_quiet_probes_stay_hidden_when_a_composed_closing_is_shown() -> None:
@@ -138,7 +143,7 @@ def test_quiet_probes_stay_hidden_when_a_composed_closing_is_shown() -> None:
     assert "Markets open higher" not in shown
 
 
-def test_loud_shell_run_does_not_reprint_stdout_in_display_chunks() -> None:
+def test_loud_shell_run_keeps_closing_without_reprinting_stdout() -> None:
     # Arrange: a non-quiet step, whose stdout the runner already painted.
     call = _shell_call("1", "echo hi", quiet=False)
     result = _Result(
@@ -151,8 +156,10 @@ def test_loud_shell_run_does_not_reprint_stdout_in_display_chunks() -> None:
         result, _Session(), _counts(1)
     )
 
-    # Assert: nothing to show, so the turn cannot print stdout twice.
-    assert "\n".join(display_chunks) == ""
+    # Assert: the grounded closing is shown; stdout is not reprinted under it.
+    shown = "\n".join(display_chunks)
+    assert "done" in shown
+    assert "hi" not in shown
 
 
 def test_silent_tool_turn_prints_a_blank_line() -> None:

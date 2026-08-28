@@ -484,27 +484,27 @@ def _self_recording_tools_only(result: Any) -> bool:
 
 # Self-recording tools whose result payload carries the real command output
 # back to the model (shell: stdout/stderr/exit_code; slash: the captured
-# console output read back from the history row). A closing summary after a
-# chain of these is grounded in observed output, unlike the bare success flags
-# most self-recording tools return.
-_GROUNDED_CHAIN_TOOL_NAMES: frozenset[str] = frozenset({"shell_run", "slash_invoke"})
+# console output read back from the history row). A closing summary after these
+# is grounded in observed output, unlike the bare success flags most
+# self-recording tools return.
+_GROUNDED_OUTPUT_TOOL_NAMES: frozenset[str] = frozenset({"shell_run", "slash_invoke"})
 
 
-def _multi_step_grounded_chain(result: Any) -> bool:
-    """True when the turn chained two or more output-carrying tool steps.
+def _grounded_output_tools_only(result: Any) -> bool:
+    """True when every tool this turn carried its real output back to the model.
 
     ``_self_recording_tools_only`` suppresses model closings because most
     self-recording tools hand the model a bare success flag, so closing prose
     would be invented. ``shell_run`` and ``slash_invoke`` are the exceptions —
-    their tool results carry the real output back to the model — so after a
-    multi-step chain the completion summary is grounded in output the model
-    actually observed, and dropping it left workflow turns ending on raw step
-    output with no wrap-up. Single commands keep the suppression: their one
-    output block is already on screen, and a paraphrase only adds
-    contradiction risk.
+    their tool results carry the real stdout/exit (or captured console output)
+    back to the model — so their closing summary is grounded in output the model
+    actually observed. That holds whether the turn ran one command or a chain:
+    keeping the closing lets the agent report what a command did (result, exit,
+    any skipped step) instead of ending on raw output, matching how a teammate
+    would confirm the outcome.
     """
     names = [tool_call.name for tool_call, _tool_result in getattr(result, "tool_results", [])]
-    return len(names) >= 2 and all(name in _GROUNDED_CHAIN_TOOL_NAMES for name in names)
+    return bool(names) and all(name in _GROUNDED_OUTPUT_TOOL_NAMES for name in names)
 
 
 def _asks_the_user(final_text: str) -> bool:
@@ -927,18 +927,18 @@ def _compose_response(
     # Self-recording tools (slash/shell/…) already rendered the real output.
     # Drop model closings so they cannot contradict what the user just saw
     # (classic failure: inventing "health check passed" after a failed /health).
-    # Exceptions: a multi-step shell/slash chain, whose closing summary is
-    # grounded in the output the model observed between steps; a closing
-    # question, which seeks direction instead of restating output; and any
-    # quiet ``shell_run``, which withheld live stdout so the closing *is*
-    # the turn's display.
+    # Exceptions: a shell/slash command, whose closing summary is grounded in the
+    # output the model observed (so the agent can confirm the outcome, one command
+    # or a chain); a closing question, which seeks direction instead of restating
+    # output; and any quiet ``shell_run``, which withheld live stdout so the
+    # closing *is* the turn's display.
     suppress_final = (
         (waiting_for_choice and _is_redundant_choice_invitation(result, final_text))
         or _is_choice_acknowledgement(final_text, selected_choice)
         or prefer_tool_response_text
         or (
             _self_recording_tools_only(result)
-            and not _multi_step_grounded_chain(result)
+            and not _grounded_output_tools_only(result)
             and not _asks_the_user(final_text)
             and not _has_quiet_shell_run(result)
         )
