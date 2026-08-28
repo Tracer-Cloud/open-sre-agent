@@ -288,6 +288,11 @@ ask_user_choice_tool = RegisteredTool(
             "fixed set of actions (e.g. stash vs commit vs worktree)"
         ),
         (
+            "A prior selection or free-text answer is still ambiguous and the "
+            "next step is itself a choice among a small fixed set — offer "
+            "another menu rather than an open-ended 'tell me more' question"
+        ),
+        (
             "Triage is blocked on several facts the user must supply (where a "
             "service lives, how to get metrics, the time window) and there is "
             "no investigate/RCA verb with a concrete alert payload yet — one "
