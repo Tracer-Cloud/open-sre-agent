@@ -51,11 +51,11 @@ def _check_llm_provider() -> tuple[bool, str]:
 
 
 def _check_integrations() -> tuple[bool, str]:
-    from integrations.store import STORE_PATH, list_integrations
+    from integrations.store import list_integrations, resolve_store_path
 
-    path = Path(str(STORE_PATH))
+    path = resolve_store_path()
     if not path.exists():
-        return False, f"{STORE_PATH} not found — run 'opensre integrations setup'"
+        return False, f"{path} not found — run 'opensre integrations setup'"
     items = list_integrations()
     if not items:
         return False, "no integrations configured"

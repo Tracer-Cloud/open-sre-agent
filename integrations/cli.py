@@ -35,10 +35,10 @@ if TYPE_CHECKING:
 
 from integrations.registry import SUPPORTED_SETUP_SERVICES, resolve_management_service
 from integrations.store import (
-    STORE_PATH,
     get_integration,
     list_integrations,
     remove_integration,
+    resolve_store_path,
 )
 from integrations.verify import (
     SUPPORTED_VERIFY_SERVICES,
@@ -909,7 +909,7 @@ def cmd_setup(service: str | None) -> str:
         _die(f"Usage: setup <service>. Supported: {', '.join(available)}")
     print(f"\n  Setting up {_B}{service}{_R}\n")
     _HANDLERS[service]()
-    print(f"\n  {GLYPH_SUCCESS} Saved → {STORE_PATH}\n")
+    print(f"\n  {GLYPH_SUCCESS} Saved → {resolve_store_path()}\n")
     return service
 
 
