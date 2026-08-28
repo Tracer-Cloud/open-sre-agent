@@ -44,7 +44,7 @@ def _identify_github_user(credentials: dict[str, str | None]) -> str:
     username = (credentials.get(USERNAME_FIELD) or "").strip()
     if not username:
         return ""
-    from infrastructure.analytics.cli import identify_github_username
+    from infrastructure.analytics.github_identity import identify_github_username
 
     identify_github_username(username)
     return ""

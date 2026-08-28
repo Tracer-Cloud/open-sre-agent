@@ -222,7 +222,7 @@ def _record_investigation_turn(
 
 def _cmd_investigate_file(session: Session, console: Console, args: list[str]) -> bool:
     from config.constants.investigation import ALERT_TEMPLATE_CHOICES
-    from infrastructure.analytics.cli import track_investigation
+    from infrastructure.analytics.investigation_tracker import track_investigation
     from infrastructure.analytics.source import EntrypointSource, TriggerMode
     from surfaces.interactive_shell.runtime.investigation_adapter import (
         run_investigation_for_session,

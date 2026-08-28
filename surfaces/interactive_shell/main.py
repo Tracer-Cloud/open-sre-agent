@@ -10,7 +10,7 @@ from rich.console import Console
 
 from config.repl_config import ReplConfig
 from core.agent_harness import SessionManager
-from infrastructure.analytics.cli import identify_saved_github_username
+from infrastructure.analytics.github_identity import identify_saved_github_username
 from infrastructure.logging import install_shell_log_handler, quiet_noisy_third_party_loggers
 from infrastructure.terminal.theme import set_active_theme
 from surfaces.interactive_shell.controller import InteractiveShellController

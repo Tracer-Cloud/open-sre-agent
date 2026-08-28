@@ -10,7 +10,7 @@ from rich.console import Console
 from rich.text import Text
 
 from core.domain.stream import StreamEvent
-from infrastructure.analytics.cli import capture_investigation_lifecycle_event
+from infrastructure.analytics.capture import capture_investigation_lifecycle_event
 from infrastructure.analytics.events import Event
 from infrastructure.observability.trace.redaction import format_json_preview
 from surfaces.shared.terminal.output import (

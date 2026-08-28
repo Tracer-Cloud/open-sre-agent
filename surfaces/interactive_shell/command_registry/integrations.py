@@ -91,7 +91,7 @@ def _configured_service_choices() -> list[tuple[str, str]]:
 
 def _handle_remove(session: Session, console: Console, service: str | None) -> bool:
     """Remove an integration with a native inline-picker confirmation (no subprocess)."""
-    from infrastructure.analytics.cli import capture_integration_removed
+    from infrastructure.analytics.capture import capture_integration_removed
     from integrations.registry import resolve_management_service
     from integrations.store import remove_integration
     from integrations.webapp_vault import delete_webapp_org_integration

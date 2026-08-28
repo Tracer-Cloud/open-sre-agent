@@ -20,7 +20,7 @@ from core.agent.run_io import AgentRunResult
 from core.agent_harness.ports import SessionState
 from core.agent_harness.spi.accounting import resolve_model_name, resolve_provider_name
 from core.messages import RuntimeMessageLike
-from infrastructure.analytics.cli import capture_react_turn_completed
+from infrastructure.analytics.capture import capture_react_turn_completed
 from infrastructure.analytics.investigation_loop import bound_loop_metrics
 from infrastructure.analytics.repl_context import (
     get_cli_session_id,

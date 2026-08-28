@@ -13,7 +13,7 @@ from core.domain.types.upstream import (
     TopologyHint,
     UpstreamEvidenceBundle,
 )
-from infrastructure.analytics.cli import (
+from infrastructure.analytics.capture import (
     capture_test_run_completed,
     capture_test_run_failed,
     capture_test_run_started,

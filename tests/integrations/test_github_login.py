@@ -30,7 +30,7 @@ def test_authenticate_and_configure_github_happy_path(monkeypatch: pytest.Monkey
     )
     identified: list[str] = []
     monkeypatch.setattr(
-        "infrastructure.analytics.cli.identify_github_username",
+        "infrastructure.analytics.capture.identify_github_username",
         lambda username: identified.append(username),
     )
 

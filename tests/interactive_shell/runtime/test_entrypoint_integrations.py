@@ -251,7 +251,7 @@ def test_run_repl_async_failed_resume_flushes_starter_session(
     monkeypatch.setattr("config.constants.OPENSRE_HOME_DIR", tmp_path)
     monkeypatch.setattr("config.constants.paths.OPENSRE_HOME_DIR", tmp_path)
     monkeypatch.setattr(
-        "infrastructure.analytics.cli.identify_saved_github_username",
+        "infrastructure.analytics.capture.identify_saved_github_username",
         lambda: None,
     )
     monkeypatch.setattr(
@@ -369,7 +369,7 @@ def test_run_repl_async_routes_the_console_into_resume(monkeypatch: Any, tmp_pat
 
     monkeypatch.setattr("config.constants.OPENSRE_HOME_DIR", tmp_path)
     monkeypatch.setattr("config.constants.paths.OPENSRE_HOME_DIR", tmp_path)
-    monkeypatch.setattr("infrastructure.analytics.cli.identify_saved_github_username", lambda: None)
+    monkeypatch.setattr("infrastructure.analytics.capture.identify_saved_github_username", lambda: None)
 
     seen: list[object] = []
 
@@ -510,7 +510,7 @@ def test_initial_input_replay_uses_the_supplied_console(monkeypatch: Any) -> Non
 
     from surfaces.interactive_shell.runtime.startup import initial_input as replay
 
-    monkeypatch.setattr("infrastructure.analytics.cli.identify_saved_github_username", lambda: None)
+    monkeypatch.setattr("infrastructure.analytics.capture.identify_saved_github_username", lambda: None)
 
     def _fake_terminal_ui(console: Any, **_kwargs: Any) -> None:
         console.print("REPLAY-SPLASH")

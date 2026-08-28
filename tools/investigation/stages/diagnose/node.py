@@ -49,7 +49,7 @@ def diagnose(state: InvestigationState) -> dict[str, Any]:
     if str(state.get("root_cause") or "").strip():
         return {}
 
-    from infrastructure.analytics.cli import capture_diagnosis_category_mismatch
+    from infrastructure.analytics.capture import capture_diagnosis_category_mismatch
     from infrastructure.observability import get_progress_tracker
 
     tracker = get_progress_tracker()

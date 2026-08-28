@@ -26,7 +26,7 @@ def capture_first_run_if_needed() -> None:
 
 
 def capture_cli_invoked(properties: Properties | None = None) -> None:
-    from infrastructure.analytics.cli import capture_cli_invoked as _capture
+    from infrastructure.analytics.capture import capture_cli_invoked as _capture
 
     _capture(properties)
 
@@ -56,7 +56,7 @@ def build_cli_invoked_properties(
     yes: bool,
     interactive: bool,
 ) -> Properties:
-    from infrastructure.analytics.cli import build_cli_invoked_properties as _build
+    from infrastructure.analytics.event_properties import build_cli_invoked_properties as _build
 
     return _build(
         entrypoint=entrypoint,

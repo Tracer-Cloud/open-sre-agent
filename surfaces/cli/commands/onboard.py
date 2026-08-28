@@ -9,7 +9,7 @@ from typing import Any
 
 import click
 
-from infrastructure.analytics.cli import (
+from infrastructure.analytics.capture import (
     capture_onboard_completed,
     capture_onboard_failed,
     capture_onboard_started,

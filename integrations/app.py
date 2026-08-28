@@ -13,7 +13,8 @@ from collections.abc import Callable
 
 from dotenv import load_dotenv
 
-from infrastructure.analytics.cli import build_cli_invoked_properties, capture_cli_invoked
+from infrastructure.analytics.event_properties import build_cli_invoked_properties
+from infrastructure.analytics.capture import capture_cli_invoked
 from infrastructure.analytics.provider import capture_first_run_if_needed, shutdown_analytics
 from infrastructure.observability.errors.sentry import init_sentry
 from infrastructure.terminal.prompt_support import install_questionary_escape_cancel

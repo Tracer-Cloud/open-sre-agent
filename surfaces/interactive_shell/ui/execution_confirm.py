@@ -25,7 +25,7 @@ from rich.text import Text
 
 from config.constants.repl_autonomy import DEFAULT_AUTO_LEVEL
 from core.agent_harness.spi.session_state import trust_mode_enabled
-from infrastructure.analytics.cli import capture_repl_execution_policy_decision
+from infrastructure.analytics.capture import capture_repl_execution_policy_decision
 from infrastructure.analytics.provider import Properties
 from infrastructure.terminal.theme import DIM, HIGHLIGHT, SECONDARY, TEXT, WARNING
 from tools.interactive_shell.shared import (
