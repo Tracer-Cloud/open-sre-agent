@@ -1,23 +1,17 @@
-"""Splash screen and agent ready-state box for the REPL launch banner.
-
-Two exported entry points
--------------------------
-render_splash(console, first_run=False)
-    Branded startup screen with the Braille logomark and optional security gate.
-    Called once when the CLI starts.
+"""Agent ready-state box for the REPL launch banner.
 
 render_ready_box(console, session=None)
     DIM-bordered two-column welcome panel:
       left  → ◉ OpenSRE · provider · model · mode · cwd
       right → "Tips for getting started" + "What's new"
-    Called after the splash and on /clear, /welcome, and greeting aliases.
+    Called at startup and on /clear, /welcome, and greeting aliases.
 
 Rendered output legend (colour roles)
 --------------------------------------
 # [HIGHLIGHT]  ◉ glyph · OpenSRE brand name
 # [BRAND]      version string · model name · section headers
-# [SECONDARY]  Braille logomark · "opensre" product name label · cwd · tip / note body
-# [DIM]        subtitle description · rule lines · box chrome · dividers
+# [SECONDARY]  cwd · tip / note body
+# [DIM]        rule lines · box chrome · dividers
 # [TEXT]       provider/model values · greeting
 # [WARNING]    read-only or trust-mode notice · incomplete-integration marker
 """
@@ -27,7 +21,6 @@ from __future__ import annotations
 import getpass
 import math
 import os
-import sys
 
 from rich import box
 from rich.console import Console, Group
@@ -47,7 +40,6 @@ from infrastructure.terminal.theme import (
     WARNING,
 )
 from surfaces.shared.terminal.banner.banner_state import _build_ambient_right_column
-from surfaces.shared.terminal.banner.splash_layout import build_splash_layout
 from surfaces.shared.terminal.tables.provider import detect_provider_model
 
 
@@ -59,66 +51,6 @@ def _is_first_run() -> bool:
         return not get_store_path().exists()
     except Exception:
         return False
-
-
-# ── Splash screen ─────────────────────────────────────────────────────────────
-
-
-def render_splash(console: Console | None = None, *, first_run: bool | None = None) -> None:
-    """Print the branded startup splash.
-
-    Responsive layout (see splash_layout.select_splash_mode):
-    ≥ 90 cols — large Braille logo beside the splash content:
-    ┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄ [DIM divider]
-      ⣠⣶⡿…⢶⣄     opensre  ·  v<version>          [SECONDARY logo · BRAND]
-      …            open-source SRE agent …          [DIM]
-    ┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄ [DIM divider]
-    60–89 cols — small Braille logo beside the same condensed content.
-    < 60 cols — stacked subtitle + description only, no logo.
-
-    If first_run (or not set and wizard has never run):
-      ⚠  This tool runs AI-powered commands …      [WARNING]
-         Press Enter to continue…                   [SECONDARY]
-    """
-    console = console or Console(
-        highlight=False,
-        force_terminal=True,
-        color_system="truecolor",
-        legacy_windows=False,
-    )
-    if first_run is None:
-        first_run = _is_first_run()
-
-    version = get_opensre_version()
-
-    console.print()
-    console.print(Rule(style=DIM))
-    console.print()
-    console.print(build_splash_layout(console.width, version))
-    console.print()
-    console.print(Rule(style=DIM))
-
-    if first_run:
-        console.print()
-        notice = Text()
-        notice.append("  ")
-        notice.append("⚠  ", style=f"bold {WARNING}")
-        notice.append(
-            "This tool executes AI-powered commands against your infrastructure.\n"
-            "     Review the documentation before connecting production systems.\n"
-            "     Source: https://github.com/opensre-dev/opensre",
-            style=SECONDARY,
-        )
-        console.print(notice)
-        console.print()
-        if sys.stdin.isatty():
-            try:
-                console.print(f"  [{SECONDARY}]Press Enter to continue…[/]", end="")
-                sys.stdin.readline()
-            except (EOFError, KeyboardInterrupt, OSError):
-                # Non-interactive stdin or user abort — skip blocking and continue startup.
-                pass
-        console.print()
 
 
 # ── Agent ready-state box ─────────────────────────────────────────────────────
@@ -156,7 +88,7 @@ def _github_username() -> str:
     integration store is unreadable or GitHub is not configured.
     """
     try:
-        from integrations.github.identity import saved_github_username
+        from integrations.github import saved_github_username
 
         return saved_github_username()
     except Exception:

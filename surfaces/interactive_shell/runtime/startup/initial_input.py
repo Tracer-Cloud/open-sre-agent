@@ -7,9 +7,9 @@ from rich.console import Console
 from infrastructure.analytics.repl_context import bound_repl_turn_context
 from infrastructure.analytics.usage_context import UsageSurface, bound_usage_context
 from surfaces.interactive_shell.session import Session
+from surfaces.interactive_shell.telemetry import PromptRecorder
 from surfaces.interactive_shell.ui.input_prompt.rendering import render_submitted_prompt
 from surfaces.interactive_shell.ui.terminal_ui import render_terminal_ui
-from surfaces.interactive_shell.utils.telemetry import PromptRecorder
 
 _TURN_KIND = "agent"
 

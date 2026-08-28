@@ -16,7 +16,7 @@ def rocketchat_action_prompt_fragment() -> str:
   destination is fixed, so omit `channel`.
 Delivery tool unavailable for Rocket.Chat: do NOT invent a slash/CLI subcommand
 to deliver a Rocket.Chat message and do NOT substitute a different channel.
-When rocketchat_send_message is unavailable, emit assistant_handoff or route to
+When rocketchat_send_message is unavailable, explain that directly or route to
 slash_invoke(command="/integrations", args=["setup", "rocketchat"])."""
 
 

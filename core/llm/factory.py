@@ -57,13 +57,7 @@ def resolve_llm_route() -> LLMRoute:
     """Resolve settings + runtime provider + transport once (the single routing decision)."""
     settings = _resolve_settings_or_raise()
 
-    from config.llm_auth.auth_method import (
-        effective_llm_provider,
-        get_configured_llm_auth_method,
-    )
-
-    provider = settings.provider
-    runtime_provider = effective_llm_provider(provider, get_configured_llm_auth_method(provider))
+    runtime_provider = settings.provider
     return LLMRoute(
         settings=settings,
         provider=runtime_provider,
@@ -75,7 +69,7 @@ def resolve_llm_route() -> LLMRoute:
 def _resolve_settings_or_raise() -> Any:
     from pydantic import ValidationError
 
-    from config.config import resolve_llm_settings
+    from config.llm_settings import resolve_llm_settings
 
     try:
         return resolve_llm_settings()
@@ -114,7 +108,8 @@ def get_llm(role: LLMRole) -> Any:
 
 def get_llm(role: LLMRole) -> Any:
     """Return the cached LLM client for *role*, building it once per config."""
-    cached = _cache.get(role, current_llm_client_cache_key())
+    config_key = current_llm_client_cache_key()
+    cached = _cache.get(role, config_key)
     if cached is not None:
         return cached
 
@@ -123,7 +118,7 @@ def get_llm(role: LLMRole) -> Any:
         client = client_builders.build_agent_client(route)
     else:
         client = client_builders.build_reasoning_client(route, _MODEL_TYPE_BY_ROLE[role])
-    _cache.store(role, client)
+    _cache.store(role, client, config_key)
     return client
 
 

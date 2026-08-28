@@ -257,7 +257,7 @@ class ReplInvestigationLaunchPorts:
         exception_context: str,
         target: str,
     ) -> ForegroundInvestigationResult:
-        from surfaces.interactive_shell.utils.telemetry.investigation_analytics import (
+        from surfaces.interactive_shell.telemetry.investigation_analytics import (
             publish_investigation_outcome_analytics,
         )
 

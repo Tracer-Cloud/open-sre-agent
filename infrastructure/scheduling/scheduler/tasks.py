@@ -16,9 +16,8 @@ from __future__ import annotations
 import logging
 from datetime import UTC, datetime, timedelta
 
-from infrastructure.scheduling.scheduler.agent_runner import invoke_agent_runner
-from infrastructure.scheduling.scheduler.investigation_runner import invoke_investigation_runner
 from infrastructure.scheduling.scheduler.loop_constants import LOOP_PROMPT_PARAM
+from infrastructure.scheduling.scheduler.runners import SchedulerRunners
 from infrastructure.scheduling.scheduler.types import ScheduledTask, TaskKind
 
 logger = logging.getLogger(__name__)
@@ -27,7 +26,7 @@ logger = logging.getLogger(__name__)
 _CREDENTIAL_KEYS = frozenset({"bot_token", "access_token", "api_key", "webhook_url", "secret"})
 
 
-def build_message(task: ScheduledTask) -> str:
+def build_message(task: ScheduledTask, runners: SchedulerRunners) -> str:
     """Build the report message for a scheduled task based on its kind.
 
     Returns the formatted message string. Raises RuntimeError on unrecoverable
@@ -49,10 +48,10 @@ def build_message(task: ScheduledTask) -> str:
     builder = builders.get(task.kind)
     if builder is None:
         return f"⚠️ Unknown task kind: {task.kind}"
-    return builder(task)
+    return builder(task, runners)
 
 
-def _build_daily_summary(task: ScheduledTask) -> str:
+def _build_daily_summary(task: ScheduledTask, runners: SchedulerRunners) -> str:
     """Build a daily reliability digest by running the investigation pipeline.
 
     Queries the pipeline with a 'daily_summary' source over the configured
@@ -71,7 +70,7 @@ def _build_daily_summary(task: ScheduledTask) -> str:
             "window_start": window_start.isoformat(),
             "window_end": now.isoformat(),
         }
-        result = invoke_investigation_runner(alert_payload)
+        result = runners.investigation(alert_payload)
         if result and result.get("report"):
             return str(result["report"])
         # Pipeline ran successfully but returned no report — genuinely quiet
@@ -91,7 +90,7 @@ def _build_daily_summary(task: ScheduledTask) -> str:
     )
 
 
-def _build_weekly_audit(task: ScheduledTask) -> str:
+def _build_weekly_audit(task: ScheduledTask, runners: SchedulerRunners) -> str:
     """Build a weekly noisy-alert audit by running the investigation pipeline.
 
     Queries the pipeline with a 'weekly_audit' source over the configured
@@ -110,7 +109,7 @@ def _build_weekly_audit(task: ScheduledTask) -> str:
             "window_start": window_start.isoformat(),
             "window_end": now.isoformat(),
         }
-        result = invoke_investigation_runner(alert_payload)
+        result = runners.investigation(alert_payload)
         if result and result.get("report"):
             return str(result["report"])
     except Exception as exc:
@@ -128,7 +127,7 @@ def _build_weekly_audit(task: ScheduledTask) -> str:
     )
 
 
-def _build_incident_window_replay(task: ScheduledTask) -> str:
+def _build_incident_window_replay(task: ScheduledTask, runners: SchedulerRunners) -> str:
     """Build an incident window replay report.
 
     Attempts to run the investigation pipeline over the configured window.
@@ -142,7 +141,7 @@ def _build_incident_window_replay(task: ScheduledTask) -> str:
             "window_hours": task.window_hours,
             "kind": task.kind.value,
         }
-        result = invoke_investigation_runner(alert_payload)
+        result = runners.investigation(alert_payload)
         if result and result.get("report"):
             return str(result["report"])
         return (
@@ -158,7 +157,7 @@ def _build_incident_window_replay(task: ScheduledTask) -> str:
         ) from exc
 
 
-def _build_synthetic_run(task: ScheduledTask) -> str:
+def _build_synthetic_run(task: ScheduledTask, runners: SchedulerRunners) -> str:
     """Build a synthetic test run summary by executing the synthetic suite.
 
     Runs the synthetic test suite and reports results. On failure, raises
@@ -174,7 +173,7 @@ def _build_synthetic_run(task: ScheduledTask) -> str:
             "kind": task.kind.value,
             "window_hours": task.window_hours,
         }
-        result = invoke_investigation_runner(alert_payload)
+        result = runners.investigation(alert_payload)
         if result and result.get("report"):
             return str(result["report"])
     except Exception as exc:
@@ -192,7 +191,7 @@ def _build_synthetic_run(task: ScheduledTask) -> str:
     )
 
 
-def _build_sentry_morning_digest(task: ScheduledTask) -> str:
+def _build_sentry_morning_digest(task: ScheduledTask, runners: SchedulerRunners) -> str:
     """Build a Sentry morning digest via the headless sentry-summary skill path."""
     try:
         safe_params = {k: v for k, v in task.params.items() if k not in _CREDENTIAL_KEYS}
@@ -203,7 +202,7 @@ def _build_sentry_morning_digest(task: ScheduledTask) -> str:
             "source": "scheduled_sentry_morning_digest",
             "task_id": task.id,
         }
-        return invoke_agent_runner(payload)
+        return runners.agent(payload)
     except Exception as exc:
         logger.error("Sentry morning digest failed for task %s: %s", task.id, exc)
         raise RuntimeError(
@@ -211,7 +210,7 @@ def _build_sentry_morning_digest(task: ScheduledTask) -> str:
         ) from exc
 
 
-def _build_sentry_uptime_watch(task: ScheduledTask) -> str:
+def _build_sentry_uptime_watch(task: ScheduledTask, runners: SchedulerRunners) -> str:
     """Poll Sentry uptime monitors; return a notify body only on transitions.
 
     Quiet ticks return an empty string so the executor skips delivery (#4032 v1).
@@ -225,7 +224,7 @@ def _build_sentry_uptime_watch(task: ScheduledTask) -> str:
             "source": "scheduled_sentry_uptime_watch",
             "task_id": task.id,
         }
-        return invoke_agent_runner(payload)
+        return runners.agent(payload)
     except Exception as exc:
         logger.error("Sentry uptime watch failed for task %s: %s", task.id, exc)
         raise RuntimeError(
@@ -233,7 +232,7 @@ def _build_sentry_uptime_watch(task: ScheduledTask) -> str:
         ) from exc
 
 
-def _build_github_pr_sweep(task: ScheduledTask) -> str:
+def _build_github_pr_sweep(task: ScheduledTask, runners: SchedulerRunners) -> str:
     """Build a GitHub PR sweep digest via the headless agent path."""
     try:
         safe_params = {k: v for k, v in task.params.items() if k not in _CREDENTIAL_KEYS}
@@ -242,7 +241,7 @@ def _build_github_pr_sweep(task: ScheduledTask) -> str:
             "source": "scheduled_github_pr_sweep",
             "task_id": task.id,
         }
-        return invoke_agent_runner(payload)
+        return runners.agent(payload)
     except Exception as exc:
         logger.error("GitHub PR sweep failed for task %s: %s", task.id, exc)
         raise RuntimeError(
@@ -250,7 +249,7 @@ def _build_github_pr_sweep(task: ScheduledTask) -> str:
         ) from exc
 
 
-def _build_posthog_metric_report(task: ScheduledTask) -> str:
+def _build_posthog_metric_report(task: ScheduledTask, runners: SchedulerRunners) -> str:
     """Build a PostHog per-metric report via the headless posthog-summary skill path."""
     try:
         safe_params = {k: v for k, v in task.params.items() if k not in _CREDENTIAL_KEYS}
@@ -260,7 +259,7 @@ def _build_posthog_metric_report(task: ScheduledTask) -> str:
             "source": "scheduled_posthog_metric_report",
             "task_id": task.id,
         }
-        return invoke_agent_runner(payload)
+        return runners.agent(payload)
     except Exception as exc:
         logger.error("PostHog metric report failed for task %s: %s", task.id, exc)
         raise RuntimeError(
@@ -268,7 +267,7 @@ def _build_posthog_metric_report(task: ScheduledTask) -> str:
         ) from exc
 
 
-def _build_work_item_reminder(task: ScheduledTask) -> str:
+def _build_work_item_reminder(task: ScheduledTask, _runners: SchedulerRunners) -> str:
     """Build a one-shot reminder for a durable work item.
 
     Missing or already-completed work items produce a quiet tick so stale
@@ -294,7 +293,7 @@ def _build_work_item_reminder(task: ScheduledTask) -> str:
     return build_work_item_reminder_message(item)
 
 
-def _build_work_item_checkin(task: ScheduledTask) -> str:
+def _build_work_item_checkin(task: ScheduledTask, _runners: SchedulerRunners) -> str:
     """Build a recurring prioritization check-in for durable work items."""
     from pathlib import Path
 
@@ -312,7 +311,7 @@ def _build_work_item_checkin(task: ScheduledTask) -> str:
     return build_work_item_checkin_message(active_items, project=project, limit=limit)
 
 
-def _build_custom_investigation(task: ScheduledTask) -> str:
+def _build_custom_investigation(task: ScheduledTask, runners: SchedulerRunners) -> str:
     """Run a custom investigation and return the report.
 
     On failure, raises RuntimeError so the executor records the failure
@@ -323,7 +322,7 @@ def _build_custom_investigation(task: ScheduledTask) -> str:
         safe_params = {k: v for k, v in task.params.items() if k not in _CREDENTIAL_KEYS}
         prompt = safe_params.get(LOOP_PROMPT_PARAM, "").strip()
         if prompt:
-            return _build_manual_prompt_loop(task, safe_params, prompt)
+            return _build_manual_prompt_loop(task, safe_params, prompt, runners)
         alert_payload = {
             "source": "scheduled_custom",
             "task_id": task.id,
@@ -332,7 +331,7 @@ def _build_custom_investigation(task: ScheduledTask) -> str:
             "kind": task.kind.value,
             **safe_params,
         }
-        result = invoke_investigation_runner(alert_payload)
+        result = runners.investigation(alert_payload)
         if result and result.get("report"):
             return str(result["report"])
         title = task.name or "Custom Investigation"
@@ -354,6 +353,7 @@ def _build_manual_prompt_loop(
     task: ScheduledTask,
     safe_params: dict[str, str],
     prompt: str,
+    runners: SchedulerRunners,
 ) -> str:
     """Build a manual loop report via the headless assistant path, not RCA."""
     payload = {
@@ -365,7 +365,7 @@ def _build_manual_prompt_loop(
         "loop_prompt": prompt,
         "window_hours": task.window_hours,
     }
-    return invoke_agent_runner(payload)
+    return runners.agent(payload)
 
 
 __all__ = ["build_message"]

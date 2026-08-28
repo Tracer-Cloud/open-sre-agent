@@ -11,44 +11,19 @@ from core.agent_harness.session_goal.goal import (
     SessionGoalStatus,
     apply_session_goal_progress,
     attach_session_goal,
-    session_goal_from_assistant_handoffs,
-    session_goal_from_handoffs,
+    build_session_goal,
 )
 from core.agent_harness.session_goal.run_until import run_until_session_goal
-from core.agent_harness.turns.assistant_handoff import AssistantHandoff
 from core.agent_harness.turns.turn_results import ToolCallingTurnResult, TurnResult
 
 
-def test_checklist_items_from_structured_handoff_tags() -> None:
-    goal = session_goal_from_handoffs(
-        (
-            "session_goal:max_turns=5;steps=3",
-            "session_goal_item:List the goal",
-            "session_goal_item:Name step one",
-            "session_goal_item:Confirm done",
-        ),
+def test_build_session_goal_preserves_structured_checklist() -> None:
+    goal = build_session_goal(
         condition="run the checklist",
+        checklist=("List the goal", "Name step one", "Confirm done"),
+        max_outer_turns=5,
     )
 
-    assert goal is not None
-    assert goal.checklist == ("List the goal", "Name step one", "Confirm done")
-    assert goal.completed == frozenset()
-    assert goal.max_outer_turns == 5
-
-
-def test_checklist_items_from_typed_assistant_handoff_fields() -> None:
-    goal = session_goal_from_assistant_handoffs(
-        (
-            AssistantHandoff(
-                content="run the checklist",
-                session_goal="max_turns=5;steps=3",
-                session_goal_items=("List the goal", "Name step one", "Confirm done"),
-            ),
-        ),
-        condition="run the checklist",
-    )
-
-    assert goal is not None
     assert goal.checklist == ("List the goal", "Name step one", "Confirm done")
     assert goal.max_outer_turns == 5
     assert goal.step_count == 3
@@ -216,7 +191,6 @@ def test_outer_loop_achieves_via_checklist_without_achieved_tag() -> None:
                 handled=True,
             ),
             assistant_response_text=body,
-            llm_run=None,
         )
 
     outcome = run_until_session_goal(_chat, session, "go", goal=goal)
@@ -226,8 +200,8 @@ def test_outer_loop_achieves_via_checklist_without_achieved_tag() -> None:
     assert outcome.goal.completed == frozenset({0, 1, 2})
 
 
-def test_nudge_lists_unfinished_checklist_items() -> None:
-    from core.agent_harness.session_goal.continuation import continuation_nudge
+def test_prompt_lists_unfinished_checklist_items() -> None:
+    from core.agent_harness.session_goal.continuation import continuation_prompt
 
     goal = SessionGoal(
         condition="x",
@@ -235,14 +209,14 @@ def test_nudge_lists_unfinished_checklist_items() -> None:
         completed=frozenset({0}),
         last_reason="checklist 1/3 done — next: B",
     )
-    nudge = continuation_nudge(goal)
+    prompt = continuation_prompt(goal)
 
-    assert "B" in nudge and "C" in nudge
-    assert "session_goal:done=" in nudge
-    assert "Last progress: checklist 1/3 done — next: B" in nudge
+    assert "B" in prompt and "C" in prompt
+    assert "session_goal:done=" in prompt
+    assert "Last progress: checklist 1/3 done — next: B" in prompt
 
 
-def test_outer_loop_nudge_carries_reason_after_partial_progress() -> None:
+def test_outer_loop_prompt_carries_reason_after_partial_progress() -> None:
     session = SessionCore()
     turns: list[str] = []
     goal = SessionGoal(
@@ -266,7 +240,6 @@ def test_outer_loop_nudge_carries_reason_after_partial_progress() -> None:
                 handled=True,
             ),
             assistant_response_text=body,
-            llm_run=None,
         )
 
     run_until_session_goal(_chat, session, "go", goal=goal)
@@ -330,18 +303,18 @@ def test_attach_session_goal_strips_prompt_chrome_from_condition() -> None:
     assert attached.condition == ("what windows users number did open opensre during last 7 days?")
 
 
-def test_is_session_goal_progress_paint_uses_paint_constants() -> None:
+def test_is_session_goal_progress_text_uses_progress_constants() -> None:
     from core.agent_harness.session_goal.goal import SessionGoalReason
     from core.agent_harness.session_goal.progress import (
-        SESSION_GOAL_PAINT_MARK,
+        SESSION_GOAL_PROGRESS_MARK,
         SESSION_GOAL_USER_WORD,
-        is_session_goal_progress_paint,
+        is_session_goal_progress_text,
     )
 
-    paint = (
-        f"{SESSION_GOAL_PAINT_MARK} {SESSION_GOAL_USER_WORD} active · 0s · turn 0/4\n"
+    progress_text = (
+        f"{SESSION_GOAL_PROGRESS_MARK} {SESSION_GOAL_USER_WORD} active · 0s · turn 0/4\n"
         f"  reason: {SessionGoalReason.WAITING_HOST_SIGNAL}"
     )
-    assert is_session_goal_progress_paint(paint) is True
-    assert is_session_goal_progress_paint(SessionGoalReason.WAITING_HOST_SIGNAL) is True
-    assert is_session_goal_progress_paint("272 Windows users last 7 days.") is False
+    assert is_session_goal_progress_text(progress_text) is True
+    assert is_session_goal_progress_text(SessionGoalReason.WAITING_HOST_SIGNAL) is True
+    assert is_session_goal_progress_text("272 Windows users last 7 days.") is False

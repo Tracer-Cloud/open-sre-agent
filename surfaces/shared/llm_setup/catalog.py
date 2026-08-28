@@ -6,7 +6,18 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from enum import StrEnum
 
-from config.config import (
+from config.constants.llm import (
+    AZURE_OPENAI_API_KEY_ENV,
+    AZURE_OPENAI_API_VERSION_ENV,
+    AZURE_OPENAI_BASE_URL_ENV,
+    CUSTOM_ANTHROPIC_API_KEY_ENV,
+    CUSTOM_ANTHROPIC_BASE_URL_ENV,
+    CUSTOM_OPENAI_API_KEY_ENV,
+    CUSTOM_OPENAI_BASE_URL_ENV,
+    TRUSTEDROUTER_API_KEY_ENV,
+)
+from config.llm_auth.provider_catalog import CredentialKind, require_provider_spec
+from config.llm_models import (
     ANTHROPIC_REASONING_MODEL,
     AZURE_OPENAI_REASONING_MODEL,
     BEDROCK_REASONING_MODEL,
@@ -22,20 +33,9 @@ from config.config import (
     TRUSTEDROUTER_REASONING_MODEL,
     VERTEX_AI_REASONING_MODEL,
 )
-from config.constants.llm import (
-    AZURE_OPENAI_API_KEY_ENV,
-    AZURE_OPENAI_API_VERSION_ENV,
-    AZURE_OPENAI_BASE_URL_ENV,
-    CUSTOM_ANTHROPIC_API_KEY_ENV,
-    CUSTOM_ANTHROPIC_BASE_URL_ENV,
-    CUSTOM_OPENAI_API_KEY_ENV,
-    CUSTOM_OPENAI_BASE_URL_ENV,
-    TRUSTEDROUTER_API_KEY_ENV,
-)
-from config.llm_auth.provider_catalog import CredentialKind, require_provider_spec
 from config.local_env import PROJECT_ROOT as PROJECT_ROOT
 from config.local_env import get_project_env_path
-from integrations.llm_cli.base import LLMCLIAdapter
+from integrations.llm_cli import LLMCLIAdapter
 
 PROJECT_ENV_PATH = get_project_env_path()
 
@@ -477,55 +477,55 @@ CURSOR_MODELS = (
 
 
 def _codex_adapter_factory() -> LLMCLIAdapter:
-    from integrations.llm_cli.codex import CodexAdapter
+    from integrations.llm_cli import CodexAdapter
 
     return CodexAdapter()
 
 
 def _cursor_adapter_factory() -> LLMCLIAdapter:
-    from integrations.llm_cli.cursor import CursorAdapter
+    from integrations.llm_cli import CursorAdapter
 
     return CursorAdapter()
 
 
 def _claude_code_adapter_factory() -> LLMCLIAdapter:
-    from integrations.llm_cli.claude_code import ClaudeCodeAdapter
+    from integrations.llm_cli import ClaudeCodeAdapter
 
     return ClaudeCodeAdapter()
 
 
 def _gemini_cli_adapter_factory() -> LLMCLIAdapter:
-    from integrations.llm_cli.gemini_cli import GeminiCLIAdapter
+    from integrations.llm_cli import GeminiCLIAdapter
 
     return GeminiCLIAdapter()
 
 
 def _antigravity_cli_adapter_factory() -> LLMCLIAdapter:
-    from integrations.llm_cli.antigravity_cli import AntigravityCLIAdapter
+    from integrations.llm_cli import AntigravityCLIAdapter
 
     return AntigravityCLIAdapter()
 
 
 def _opencode_adapter_factory() -> LLMCLIAdapter:
-    from integrations.llm_cli.opencode import OpenCodeAdapter
+    from integrations.llm_cli import OpenCodeAdapter
 
     return OpenCodeAdapter()
 
 
 def _kimi_adapter_factory() -> LLMCLIAdapter:
-    from integrations.llm_cli.kimi import KimiAdapter
+    from integrations.llm_cli import KimiAdapter
 
     return KimiAdapter()
 
 
 def _copilot_adapter_factory() -> LLMCLIAdapter:
-    from integrations.llm_cli.copilot import CopilotAdapter
+    from integrations.llm_cli import CopilotAdapter
 
     return CopilotAdapter()
 
 
 def _grok_cli_adapter_factory() -> LLMCLIAdapter:
-    from integrations.llm_cli.grok_cli import GrokCLIAdapter
+    from integrations.llm_cli import GrokCLIAdapter
 
     return GrokCLIAdapter()
 
@@ -544,7 +544,7 @@ GROK_CLI_MODELS = (
 
 
 def _pi_adapter_factory() -> LLMCLIAdapter:
-    from integrations.llm_cli.pi_cli import PiAdapter
+    from integrations.llm_cli import PiAdapter
 
     return PiAdapter()
 

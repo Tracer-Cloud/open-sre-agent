@@ -8,9 +8,9 @@ OpenSRE can **watch the log file written by a [Hermes](https://github.com/NousRe
 
 OpenSRE can watch the log file written by a [Hermes](https://github.com/NousResearch/hermes-agent) deployment (typically `errors.log`), classify new lines into structured incidents, optionally deduplicate and escalate them, and deliver alerts to Telegram.
 
-This page covers the **log watch + classifier + Telegram** path and the investigation tool `get_hermes_logs`. It is **not** a normal `opensre integrations setup` / `verify` service.
+This page covers the **log watch + classifier + Telegram** path and the investigation tool `get_hermes_logs`. Configure the investigation tool with `opensre integrations setup hermes` and check the saved path with `opensre integrations verify hermes`.
 <Note>
-Delivery uses the same credential model as the rest of OpenSRE, for either provider. Telegram: configure once with `opensre integrations setup telegram` (or `opensre onboard`) — `hermes watch` resolves the token from the integration store, environment, or keyring; set `TELEGRAM_BOT_TOKEN` / `TELEGRAM_DEFAULT_CHAT_ID` directly, or pass `--chat-id`. Rocket.Chat: pass `--provider rocketchat` and configure via `opensre integrations setup rocketchat` or `ROCKETCHAT_*` env vars. See [Telegram](/messaging/telegram) and [Rocket.Chat](/messaging/rocketchat).
+Delivery uses the same credential model as the rest of OpenSRE, for either provider. Telegram: configure once with `opensre integrations setup telegram` — `hermes watch` resolves the token from the integration store, environment, or keyring; set `TELEGRAM_BOT_TOKEN` / `TELEGRAM_DEFAULT_CHAT_ID` directly, or pass `--chat-id`. Rocket.Chat: pass `--provider rocketchat` and configure via `opensre integrations setup rocketchat` or `ROCKETCHAT_*` env vars. See [Telegram](/messaging/telegram) and [Rocket.Chat](/messaging/rocketchat).
 </Note>
 
 | Item | Default |
@@ -29,6 +29,17 @@ The watcher uses a rotation-safe tailer. If the file is missing at startup, it w
 - For `--investigate`: LLM and integrations configured as for any OpenSRE investigation ([quickstart](/quickstart))
 
 ## Setup
+
+Configure the log file used by investigations:
+
+```bash
+uv run opensre integrations setup hermes
+uv run opensre integrations verify hermes
+```
+
+Setup defaults to `~/.hermes/logs/errors.log` and only saves a readable regular file. It also sets `HERMES_LOG_PATH`, which defines the tool's default path and permitted custom-log directory.
+
+To run the long-lived watcher, use:
 
 ```bash
 uv run opensre hermes watch
@@ -53,7 +64,7 @@ Stop with **Ctrl+C** or **SIGTERM** (for example under systemd).
 
 | Variable | Role |
 |----------|------|
-| `TELEGRAM_BOT_TOKEN` | Bot token, unless already configured via setup / onboard (see [Telegram](/messaging/telegram)) |
+| `TELEGRAM_BOT_TOKEN` | Bot token, unless already configured via `opensre integrations setup telegram` (see [Telegram](/messaging/telegram)) |
 | `TELEGRAM_DEFAULT_CHAT_ID` | Default destination when `--chat-id` is omitted |
 | `HERMES_LOG_PATH` | Default path and path sandbox for `get_hermes_logs` (absolute path if Hermes writes elsewhere) |
 | `OPENSRE_HERMES_INVESTIGATE` | If `1` / `true` / `yes` / `on`, enables investigation when the CLI does not pass `--investigate` / `--no-investigate` |
@@ -91,7 +102,7 @@ Correlator **dedup** can also reduce multiple deliveries (either provider) for t
 
 ## Credentials
 
-Telegram uses the same credential model as the rest of OpenSRE. Configure once with `opensre integrations setup telegram` (or `opensre onboard`). `hermes watch` resolves the token from the integration store, environment, or keyring. You can also set `TELEGRAM_BOT_TOKEN` / `TELEGRAM_DEFAULT_CHAT_ID`, or pass `--chat-id`. See [Telegram](/messaging/telegram).
+Telegram uses the same credential model as the rest of OpenSRE. Configure once with `opensre integrations setup telegram`. `hermes watch` resolves the token from the integration store, environment, or keyring. You can also set `TELEGRAM_BOT_TOKEN` / `TELEGRAM_DEFAULT_CHAT_ID`, or pass `--chat-id`. See [Telegram](/messaging/telegram).
 | Flag | Purpose |
 |------|---------|
 | `--log-path PATH` | Hermes log file (defaults to `HERMES_LOG_PATH` expansion or `~/.hermes/logs/errors.log`) |
@@ -109,7 +120,7 @@ Telegram uses the same credential model as the rest of OpenSRE. Configure once w
 During an investigation, the planner can call `get_hermes_logs`:
 | Variable | Role |
 |----------|------|
-| `TELEGRAM_BOT_TOKEN` | Bot token, unless already configured via `opensre integrations setup telegram` / `onboard` (see [Telegram](/messaging/telegram)) |
+| `TELEGRAM_BOT_TOKEN` | Bot token, unless already configured via `opensre integrations setup telegram` (see [Telegram](/messaging/telegram)) |
 | `TELEGRAM_DEFAULT_CHAT_ID` | Default Telegram destination when `--chat-id` is omitted |
 | `ROCKETCHAT_*` | Rocket.Chat token or webhook credentials, used when `--provider rocketchat` (see [Rocket.Chat](/messaging/rocketchat)) |
 | `ROCKETCHAT_DEFAULT_CHANNEL` | Default Rocket.Chat destination when `--chat-id` is omitted |

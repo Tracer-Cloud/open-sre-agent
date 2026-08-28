@@ -19,6 +19,8 @@ from typing import Any
 
 from integrations._validation_helpers import report_classify_failure
 from integrations.config_models import GrafanaIntegrationConfig
+from integrations.grafana.client import get_grafana_client_from_credentials
+from integrations.grafana.setup import GRAFANA_SETUP
 
 logger = logging.getLogger(__name__)
 
@@ -51,3 +53,6 @@ def classify(
     if cfg.has_token:
         return cfg, "grafana"
     return None, None
+
+
+__all__ = ["GRAFANA_SETUP", "classify", "get_grafana_client_from_credentials"]

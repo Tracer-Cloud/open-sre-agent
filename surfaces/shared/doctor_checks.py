@@ -38,8 +38,8 @@ def _check_env_file() -> tuple[bool, str]:
 
 
 def _check_llm_provider() -> tuple[bool, str]:
-    from config.config import get_configured_llm_provider
     from config.llm_auth.credentials import status as credential_status
+    from config.llm_settings import get_configured_llm_provider
 
     provider = get_configured_llm_provider()
     auth = credential_status(provider)
@@ -70,7 +70,7 @@ def _check_buzz_cli() -> tuple[bool, str]:
     distribution (cargo build only), so this check would otherwise warn every
     user who has never touched Buzz.
     """
-    from integrations.buzz.client import resolve_buzz_binary
+    from integrations.buzz import resolve_buzz_binary
     from integrations.catalog import resolve_effective_integrations
 
     if not resolve_effective_integrations().get("buzz"):

@@ -159,7 +159,7 @@ CODEX_BIN=
 - Implement `detect()` with `--version` + auth status checks; follow the three-state `logged_in` pattern above.
 - Write `_classify_<name>_auth` — test against a real logged-in **and** logged-out session before merging.
 - If the CLI reads custom env vars (e.g. `GEMINI_*`), add the prefix to `_SAFE_SUBPROCESS_ENV_PREFIXES` in `subprocess_env.py`.
-- Register the provider in `registry.py` and add the same `LLM_PROVIDER` value in `config/config.py`.
+- Register the provider in `registry.py` and add the same `LLM_PROVIDER` value in `config/llm_settings.py`.
 - (Optional) Add wizard onboarding option in `surfaces/shared/llm_setup/catalog.py`.
 - Add tests under `tests/integrations/llm_cli/` for detect/build/failure paths, including env forwarding.
 

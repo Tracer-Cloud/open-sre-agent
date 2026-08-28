@@ -19,29 +19,27 @@ from fastapi.responses import JSONResponse
 from pydantic import BaseModel, ValidationError
 
 from bootstrap.process import WEB_PROFILE, configure_process
-from config.config import LLMSettings, get_environment
+from config.environment import get_environment
+from config.llm_settings import LLMSettings
 from config.version import get_opensre_version
 from core.agent_harness import AgentSession
 from gateway.core.process.readiness import is_gateway_ready
 from gateway.core.storage import open_database
 from gateway.core.storage.investigations.repository import investigation_repository
 from gateway.web.investigations import router as investigations_router
-from infrastructure.alert_intake import (
-    MAX_ALERT_BODY_BYTES,
-    require_local_or_token,
-)
+from infrastructure.alert_intake import require_local_or_token
 from infrastructure.alert_intake import router as alert_router
 from infrastructure.observability.errors.sentry import capture_exception
 from infrastructure.process.turn_capacity import turn_slot
-from tools.investigation.capability import resolve_investigation_context
+from infrastructure.request_body_limit import RequestBodyLimitMiddleware
+from tools.investigation.capability import resolve_investigation_context, run_investigation_payload
 
 # Standalone uvicorn and in-process gateway both need adapters for /investigate.
 configure_process(WEB_PROFILE)  # env → sentry → adapters
 
 logger = logging.getLogger(__name__)
 
-# Re-exported so callers and tests keep one name for the shared alert-body cap.
-__all__ = ["MAX_ALERT_BODY_BYTES", "app"]
+__all__ = ["app"]
 
 
 class HealthResponse(BaseModel):
@@ -52,6 +50,8 @@ class HealthResponse(BaseModel):
 
 
 app = FastAPI()
+# Above routing: every mutating route is bounded before FastAPI buffers a body.
+app.add_middleware(RequestBodyLimitMiddleware)
 app.state.investigations = investigation_repository(open_database())
 app.include_router(investigations_router)
 # Health liveness (/healthz) and alert intake (/alerts) live in the shared
@@ -142,6 +142,7 @@ def _run_investigation(req: InvestigateRequest) -> InvestigateResponse | JSONRes
     try:
         result = AgentSession().investigate(
             req.raw_alert,
+            runner=run_investigation_payload,
             investigation_metadata=investigation_metadata,
         )
         return InvestigateResponse(**result.as_dict())

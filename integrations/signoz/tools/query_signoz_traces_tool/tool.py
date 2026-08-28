@@ -4,11 +4,57 @@ from __future__ import annotations
 
 from typing import Any
 
+from core.domain.types.evidence import record_evidence_entry
 from core.tool_framework import tool
 from core.tool_framework.utils import tool_unavailable
-from integrations.signoz import SigNozConfig, signoz_extract_params
+from integrations.signoz import (
+    SigNozConfig,
+    signoz_count_label,
+    signoz_effective_limit,
+    signoz_extract_params,
+)
 from integrations.signoz.availability import signoz_available_or_backend
 from integrations.signoz.client import SigNozClient
+
+
+def _map_query_signoz_traces(
+    evidence: dict[str, Any], output: dict[str, Any], tool_input: dict[str, Any]
+) -> None:
+    """Cite the aggregate span/error/latency summary, or the raw trace count as a fallback.
+
+    ``summary`` comes from a scalar aggregation query (``count()``, ``p99(...)``)
+    over the full time window, not a capped row fetch -- it's the true total,
+    unlike ``traces`` (a row-limited list). Prefer it whenever it succeeded.
+    """
+    if not output.get("available"):
+        return
+    summary = output.get("summary") or {}
+    if summary.get("available"):
+        total_spans = summary.get("total_spans", 0)
+        if not total_spans:
+            return
+        record_evidence_entry(
+            evidence,
+            source="query_signoz_traces",
+            label="SigNoz Traces",
+            summary=(
+                f"{total_spans} span(s), {summary.get('error_spans', 0)} error(s), "
+                f"p99 {summary.get('p99_ms', 0)}ms"
+            ),
+        )
+        return
+    traces = output.get("traces") or []
+    if not traces:
+        return
+    label = signoz_count_label(
+        output.get("total", len(traces)), signoz_effective_limit(output, tool_input)
+    )
+    record_evidence_entry(
+        evidence,
+        source="query_signoz_traces",
+        label="SigNoz Traces",
+        summary=f"{label} trace(s)",
+    )
 
 
 def _traces_is_available(sources: dict[str, dict]) -> bool:
@@ -53,6 +99,7 @@ def _traces_extract_params(sources: dict[str, dict]) -> dict[str, Any]:
     },
     is_available=_traces_is_available,
     extract_params=_traces_extract_params,
+    evidence_mapper=_map_query_signoz_traces,
 )
 def query_signoz_traces(
     service: str | None = None,

@@ -1,0 +1,96 @@
+"""Auto (Off|Low|Med|High) autonomy levels for the REPL.
+
+Default is High: alpha still allows every action without a prompt. Lower
+levels opt into the existing ``ask`` confirmation hook — they are not a
+shell-command allowlist.
+"""
+
+from __future__ import annotations
+
+from enum import StrEnum
+from typing import Final
+
+
+class AutoLevel(StrEnum):
+    """Autonomy shown on the status line above the input."""
+
+    OFF = "off"
+    LOW = "low"
+    MED = "med"
+    HIGH = "high"
+
+
+DEFAULT_AUTO_LEVEL: Final[AutoLevel] = AutoLevel.HIGH
+
+AUTO_LEVEL_CAPTIONS: Final[dict[AutoLevel, str]] = {
+    AutoLevel.OFF: "all actions require approval",
+    AutoLevel.LOW: "edits and read-only commands",
+    AutoLevel.MED: "allow reversible commands",
+    AutoLevel.HIGH: "all actions allowed",
+}
+
+# Display title inside ``Auto (Med)`` — Factory uses Med, not medium.
+AUTO_LEVEL_TITLES: Final[dict[AutoLevel, str]] = {
+    AutoLevel.OFF: "Off",
+    AutoLevel.LOW: "Low",
+    AutoLevel.MED: "Med",
+    AutoLevel.HIGH: "High",
+}
+
+# tool_type values that still need confirmation at this level (High: none).
+# Mutation-capable agent tools ask at Med+ — including synthetic_test (spawns a
+# mutation-classified subprocess), slash/CLI, and Sentry issue-fix (edits the
+# working tree and can commit/push/open a PR) — otherwise those run without
+# the confirmation promised by ``/auto med``.
+_MUTATING_AGENT_TOOL_TYPES: Final[frozenset[str]] = frozenset(
+    {
+        "shell",
+        "code_agent",
+        "slash",
+        "cli_command",
+        "opensre_cli",
+        "switch_llm_provider",
+        "synthetic_test",
+        "sentry_issue_fix",
+    }
+)
+
+AUTO_LEVEL_ASK_TOOL_TYPES: Final[dict[AutoLevel, frozenset[str] | None]] = {
+    AutoLevel.HIGH: frozenset(),
+    # Med "allow reversible commands": read-only work runs, but mutation-capable
+    # tool types still need confirmation.
+    AutoLevel.MED: _MUTATING_AGENT_TOOL_TYPES,
+    # Low also asks before starting a full investigation — including the
+    # sample-alert path, which uses tool_type ``sample_alert`` (not
+    # ``investigation``) but still launches an investigation with side effects.
+    AutoLevel.LOW: _MUTATING_AGENT_TOOL_TYPES | frozenset({"investigation", "sample_alert"}),
+    AutoLevel.OFF: None,  # ask every tool type
+}
+
+
+def parse_auto_level(raw: str) -> AutoLevel | None:
+    """Parse a user-facing auto level, or ``None`` when unknown."""
+    token = raw.strip().lower()
+    aliases = {"medium": AutoLevel.MED, "off": AutoLevel.OFF}
+    if token in aliases:
+        return aliases[token]
+    try:
+        return AutoLevel(token)
+    except ValueError:
+        return None
+
+
+def format_auto_status_plain(level: AutoLevel) -> str:
+    """``Auto (Med) · allow reversible commands`` without ANSI."""
+    return f"Auto ({AUTO_LEVEL_TITLES[level]}) · {AUTO_LEVEL_CAPTIONS[level]}"
+
+
+__all__ = [
+    "AUTO_LEVEL_ASK_TOOL_TYPES",
+    "AUTO_LEVEL_CAPTIONS",
+    "AUTO_LEVEL_TITLES",
+    "AutoLevel",
+    "DEFAULT_AUTO_LEVEL",
+    "format_auto_status_plain",
+    "parse_auto_level",
+]

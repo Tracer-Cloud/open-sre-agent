@@ -21,7 +21,6 @@ from core.agent_harness import (
     SessionManager,
     TurnResult,
 )
-from core.agent_harness.runtime import GatherPhase
 from core.agent_harness.spi.cancel import ensure_turn_cancel
 from core.tool import ToolExecutionHooks
 from infrastructure.errors import OpenSREError
@@ -170,15 +169,13 @@ def _run_agent_turn(prompt: str, hooks: ToolExecutionHooks) -> TurnResult:
                 ),
                 output=output,
                 prepare_session=_restrict_ask_capabilities,
-                gather=GatherPhase(),
                 console=console,
                 is_tty=False,
                 tool_hooks=hooks,
             )
             session = agent_session.bound_session
-            # chat_until_goal, not chat: a multi-step ask can attach a session
-            # goal via an assistant_handoff, and it must run to completion rather
-            # than stop after the first turn.
+            # chat_until_goal, not chat: the agent can attach a session goal,
+            # which must run to completion rather than stop after one turn.
             return agent_session.chat_until_goal(prompt).last_result
     finally:
         if session is not None:
@@ -190,10 +187,14 @@ def _successful_turn(result: TurnResult) -> bool:
     action_ok = (
         action.handled
         and not action.has_unhandled_clause
+        and not action.hit_iteration_cap
         and action.accounting_status == "completed"
     )
     return bool(
-        (result.answered or action_ok) and not result.cancelled and result.primary_response_text
+        (result.answered or action_ok)
+        and not action.hit_iteration_cap
+        and not result.cancelled
+        and result.primary_response_text
     )
 
 

@@ -129,7 +129,7 @@ def validate_servicenow_integration(
     *, instance_url: str, username: str, password: str
 ) -> IntegrationHealthResult:
     """Validate ServiceNow connectivity with a minimal authenticated table read."""
-    from integrations.servicenow.verifier import build_servicenow_config, validate_servicenow_config
+    from integrations.servicenow import build_servicenow_config, validate_servicenow_config
 
     outcome = validate_servicenow_config(
         build_servicenow_config(

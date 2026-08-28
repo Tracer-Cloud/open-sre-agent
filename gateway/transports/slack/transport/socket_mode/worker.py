@@ -11,7 +11,10 @@ from slack_sdk.socket_mode.client import BaseSocketModeClient
 from slack_sdk.socket_mode.request import SocketModeRequest
 from slack_sdk.socket_mode.response import SocketModeResponse
 
+from config.constants.gateway import DEFAULT_STOP_TIMEOUT_SECONDS
+from config.constants.slack import SLACK_HEARTBEAT_STOP_TIMEOUT_SECONDS
 from gateway.core.lifecycle.errors import GatewayConfigurationError
+from gateway.core.process.shutdown_budget import ShutdownBudget
 from gateway.core.storage.session.binding_store import BindingStore
 from gateway.transports.slack.delivery.approvals import handle_block_actions_payload
 from gateway.transports.slack.delivery.feedback import record_feedback_payload
@@ -44,9 +47,12 @@ class SlackGatewayBackground:
         self._bindings = bindings
         self._heartbeat = heartbeat
 
-    def stop(self, *, timeout: float = 8.0) -> bool:
+    def stop(self, *, timeout: float = DEFAULT_STOP_TIMEOUT_SECONDS) -> bool:
         """Disconnect from Slack, wait up to ``timeout`` for in-flight turns, and clean up."""
-        self._heartbeat.stop()
+        budget = ShutdownBudget(timeout)
+        started = budget.mark()
+        self._heartbeat.stop(timeout=budget.take(SLACK_HEARTBEAT_STOP_TIMEOUT_SECONDS))
+        budget.consume(started)
         try:
             self._socket_client.close()
         except Exception:
@@ -58,7 +64,7 @@ class SlackGatewayBackground:
             daemon=True,
         )
         waiter.start()
-        waiter.join(timeout)
+        waiter.join(budget.remaining)
         stopped = not waiter.is_alive()
         try:
             self._bindings.close()

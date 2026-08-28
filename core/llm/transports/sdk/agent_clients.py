@@ -54,9 +54,6 @@ from core.llm.types import AgentLLMResponse, ModelType, SchemaDescribedTool, Too
 
 logger = logging.getLogger(__name__)
 
-_ASSISTANT_HANDOFF_TOOL_NAME = "assistant_handoff"
-_CLI_PLAIN_TEXT_HANDOFF_CHAR_LIMIT = 360
-
 
 def _anthropic_tool_schema(tool: Any) -> dict[str, Any]:
     return {
@@ -784,9 +781,6 @@ class CLIBackedAgentClient:
         ' "input": {<args>}}]}\n'
         "  (b) A concise plain-text final answer only after tool use is complete "
         "or when no suitable tool exists.\n"
-        "If a tool named assistant_handoff is available and the System instructions "
-        "say to hand off the request, emit an assistant_handoff JSON tool call. "
-        "Do not answer that request in prose during the tool-selection turn. "
         "Respond with JSON only when calling tools; respond with plain text only "
         "for the final answer."
     )
@@ -836,12 +830,7 @@ class CLIBackedAgentClient:
         instruction = self._TOOL_CALL_INSTRUCTION + tool_block
         prompt = f"{system_block}{instruction}\n\n{flatten_cli_messages_to_prompt(messages)}"
 
-        text, force_handoff = self._invoke_cli_for_tool_selection(
-            prompt,
-            handoff_on_plain_text=_should_handoff_initial_cli_prose(messages, tools),
-        )
-        if force_handoff:
-            return _assistant_handoff_response()
+        text = self._cli_client.invoke(prompt).content.strip()
 
         # Try to parse a JSON tool call response.
         tool_calls: list[ToolCall] = []
@@ -875,36 +864,6 @@ class CLIBackedAgentClient:
             raw_content=None,  # None so _build_assistant_msg falls through to build_assistant_message
         )
 
-    def _invoke_cli_for_tool_selection(
-        self,
-        prompt: str,
-        *,
-        handoff_on_plain_text: bool,
-    ) -> tuple[str, bool]:
-        if not handoff_on_plain_text:
-            response = self._cli_client.invoke(prompt)
-            return response.content.strip(), False
-
-        chunks: list[str] = []
-        stream = self._cli_client.invoke_stream(prompt)
-        for chunk in stream:
-            chunks.append(chunk)
-            text = "".join(chunks)
-            if _should_force_cli_plain_text_handoff(text):
-                close = getattr(stream, "close", None)
-                if callable(close):
-                    close()
-                return "", True
-
-        text = "".join(chunks).strip()
-        if (
-            text
-            and _try_parse_tool_call_json(text) is None
-            and not _looks_like_cli_structured_response(text)
-        ):
-            return "", True
-        return text, False
-
     @staticmethod
     def build_tool_result_message(tool_calls: list[ToolCall], results: list[Any]) -> dict[str, Any]:
         parts = [
@@ -927,74 +886,6 @@ class CLIBackedAgentClient:
                 return {"role": "assistant", "content": f"{content.strip()}\n\n{tool_json}"}
             return {"role": "assistant", "content": tool_json}
         return {"role": "assistant", "content": content}
-
-
-def _assistant_handoff_response() -> AgentLLMResponse:
-    return AgentLLMResponse(
-        content="",
-        tool_calls=[
-            ToolCall(
-                id="cli_plain_text_handoff_0",
-                name=_ASSISTANT_HANDOFF_TOOL_NAME,
-                input={"content": "chat:conversation"},
-            )
-        ],
-        stop_reason="tool_use",
-        raw_content=None,
-    )
-
-
-def _tool_name(tool: dict[str, Any]) -> str:
-    name = tool.get("name")
-    if isinstance(name, str):
-        return name
-    function = tool.get("function")
-    if isinstance(function, dict):
-        function_name = function.get("name")
-        if isinstance(function_name, str):
-            return function_name
-    return ""
-
-
-def _has_tool_named(tools: list[dict[str, Any]] | None, name: str) -> bool:
-    return any(_tool_name(tool) == name for tool in tools or [])
-
-
-def _messages_have_tool_observation(messages: list[dict[str, Any]]) -> bool:
-    for message in messages:
-        role = message.get("role")
-        if role in {"tool", "toolResult", "tool_result"}:
-            return True
-        content = message.get("content")
-        if role == "user" and isinstance(content, str) and content.startswith("Tool result for "):
-            return True
-    return False
-
-
-def _should_handoff_initial_cli_prose(
-    messages: list[dict[str, Any]],
-    tools: list[dict[str, Any]] | None,
-) -> bool:
-    return _has_tool_named(tools, _ASSISTANT_HANDOFF_TOOL_NAME) and not (
-        _messages_have_tool_observation(messages)
-    )
-
-
-def _looks_like_cli_structured_response(text: str) -> bool:
-    stripped = text.lstrip()
-    return (
-        stripped.startswith("{")
-        or stripped.startswith("```")
-        or '"tool_calls"' in stripped
-        or "'tool_calls'" in stripped
-    )
-
-
-def _should_force_cli_plain_text_handoff(text: str) -> bool:
-    stripped = text.lstrip()
-    if len(stripped) < _CLI_PLAIN_TEXT_HANDOFF_CHAR_LIMIT:
-        return False
-    return not _looks_like_cli_structured_response(stripped)
 
 
 def _try_parse_tool_call_json(text: str) -> dict[str, Any] | None:

@@ -65,7 +65,14 @@ async def test_astream_delivers_stream_error_when_deferred_import_fails(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """A failing deferred stage import must still reach the consumer as a wrapped error."""
-    monkeypatch.delattr("core.state.updates.apply_state_updates")
+
+    def _boom(*_args: object, **_kwargs: object) -> object:
+        raise ImportError("simulated deferred stage import failure")
+
+    monkeypatch.setattr(
+        "tools.investigation.stages.resolve_integrations.resolve_integrations",
+        _boom,
+    )
 
     with pytest.raises(InvestigationPipelineStreamError) as exc_info:
         async for _event in astream_investigation("alert text"):

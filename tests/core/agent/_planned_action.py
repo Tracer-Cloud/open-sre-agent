@@ -13,7 +13,7 @@ TargetSurface = Literal["slash", "terminal", "investigation", "implementation"]
 
 def default_target_surface(kind: ToolKind) -> TargetSurface | None:
     """Return the canonical execution surface for a given action kind."""
-    if kind == "assistant_handoff":
+    if kind == "session_goal":
         return None
     if kind in {"slash", "llm_provider", "task_cancel"}:
         return "slash"

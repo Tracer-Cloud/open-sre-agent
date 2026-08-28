@@ -12,7 +12,8 @@ description: "What OpenSRE does between an alert and a root-cause report."
 | Output | Root-cause report in the terminal; optional chat delivery | See [Investigations overview](/investigation-overview) |
 | Export | Single JSON for automation | `opensre investigate -i <file> --output ./rca.json` |
 
-**Config:** `LLM_PROVIDER` plus a matching API key; integrations via `opensre onboard` or `opensre integrations setup`. See [Environment variables](/configuration/environment-variables).
+**Config:** `LLM_PROVIDER` plus a matching API key from `opensre onboard`;
+integrations via `opensre integrations setup`. See [Environment variables](/configuration/environment-variables).
 
 **If something goes wrong:** no integrations → thin evidence; LLM misconfigured → run fails at start; tool cap or stagnation breaker → early stop with a partial report (see stages below).
 

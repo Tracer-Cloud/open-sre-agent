@@ -56,7 +56,6 @@ htmlcov/
 .tox/
 .nox/
 .hypothesis/
-.pytest_cache/
 nosetests.xml
 coverage.xml
 *.cover
@@ -194,3 +193,7 @@ factory-ai-extract/
 
 # Local checkout of opensre-infra-aws — separate repo, never track here
 infrastructure/deployment_multi_tenant/
+
+# Smoke-test temp home dirs — hold real credentials/keys, never commit
+.tmp-home-smoke/
+.tmp-opensre-home/

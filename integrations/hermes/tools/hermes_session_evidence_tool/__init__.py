@@ -7,6 +7,14 @@ from typing import Any, cast
 from core.domain.types.tools import ToolSurface
 from core.tool_framework import tool
 from core.tool_framework.utils import tool_unavailable
+from integrations.hermes.tools.hermes_session_evidence_tool._evidence import (
+    map_get_hermes_adapter_catalog,
+    map_get_hermes_approval_events,
+    map_get_hermes_audit_trail,
+    map_get_hermes_config,
+    map_get_hermes_credential_state,
+    map_get_hermes_cron_state,
+)
 
 
 def _extract_params(sources: dict[str, dict]) -> dict[str, Any]:
@@ -87,6 +95,7 @@ def get_hermes_provider_traffic(
 @tool(
     name="get_hermes_adapter_catalog",
     source="hermes",
+    evidence_mapper=map_get_hermes_adapter_catalog,
     description="Get Hermes adapter catalog and registered surface families.",
     use_cases=[
         "Identify messaging adapters, LLM providers, execution backends, and unknown adapter attribution"
@@ -114,6 +123,7 @@ def get_hermes_adapter_catalog(
 @tool(
     name="get_hermes_config",
     source="hermes",
+    evidence_mapper=map_get_hermes_config,
     description="Get resolved Hermes provider, model, region, and transport configuration.",
     use_cases=[
         "Diagnose provider selection, Bedrock IMDS overrides, transport limits, and adapter config mismatches"
@@ -216,6 +226,7 @@ def get_hermes_runtime_state(
 @tool(
     name="get_hermes_cron_state",
     source="hermes",
+    evidence_mapper=map_get_hermes_cron_state,
     description="Get Hermes cron execution and delivery timing state.",
     use_cases=["Differentiate agent completion from downstream delivery hangs"],
     surfaces=(ToolSurface.INVESTIGATION,),
@@ -366,6 +377,7 @@ def get_hermes_filesystem_state(
 @tool(
     name="get_hermes_audit_trail",
     source="hermes",
+    evidence_mapper=map_get_hermes_audit_trail,
     description="Get Hermes audit policy and observed audit-chain/signature state.",
     use_cases=["Diagnose missing cryptographic audit trails and broken hash chains"],
     surfaces=(ToolSurface.INVESTIGATION,),
@@ -391,6 +403,7 @@ def get_hermes_audit_trail(
 @tool(
     name="get_hermes_approval_events",
     source="hermes",
+    evidence_mapper=map_get_hermes_approval_events,
     description="Get Hermes approval prompts and destructive-command approval outcomes.",
     use_cases=["Diagnose destructive commands that ran without explicit approval"],
     surfaces=(ToolSurface.INVESTIGATION,),
@@ -441,6 +454,7 @@ def get_hermes_rbac_state(
 @tool(
     name="get_hermes_credential_state",
     source="hermes",
+    evidence_mapper=map_get_hermes_credential_state,
     description="Get Hermes credential isolation mode and outbound credential usage.",
     use_cases=["Diagnose in-process credential exposure and missing credential proxy isolation"],
     surfaces=(ToolSurface.INVESTIGATION,),

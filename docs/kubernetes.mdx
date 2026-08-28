@@ -97,6 +97,229 @@ OpenSRE will:
 3. Call `kubernetes_get_events` with `involvedObject.name=payments-api` to surface Warning events
 4. Correlate the evidence into a root-cause summary
 
+### Local verification recipe
+
+Verified all 12 registered tools live against a real local `kind` cluster with a
+representative workload -- a Deployment, StatefulSet, DaemonSet, Service, Ingress,
+ConfigMap, and a deliberately crash-looping bare pod.
+
+```bash
+kind create cluster --name opensre-k8s-demo
+
+cat > /tmp/k8s-demo-workload.yaml << 'YAML'
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: demo
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: demo-config
+  namespace: demo
+data:
+  APP_MODE: "verify"
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: demo-web
+  namespace: demo
+spec:
+  replicas: 2
+  selector:
+    matchLabels: {app: demo-web}
+  template:
+    metadata:
+      labels: {app: demo-web}
+    spec:
+      containers:
+      - name: nginx
+        image: nginx:alpine
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: demo-cache
+  namespace: demo
+spec:
+  serviceName: demo-cache
+  replicas: 1
+  selector:
+    matchLabels: {app: demo-cache}
+  template:
+    metadata:
+      labels: {app: demo-cache}
+    spec:
+      containers:
+      - name: redis
+        image: redis:alpine
+---
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  name: demo-agent
+  namespace: demo
+spec:
+  selector:
+    matchLabels: {app: demo-agent}
+  template:
+    metadata:
+      labels: {app: demo-agent}
+    spec:
+      containers:
+      - name: agent
+        image: busybox
+        command: ["sh", "-c", "while true; do sleep 3600; done"]
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: demo-web
+  namespace: demo
+spec:
+  selector: {app: demo-web}
+  ports:
+  - {port: 80, targetPort: 80}
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: demo-ingress
+  namespace: demo
+spec:
+  rules:
+  - host: demo.local
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service: {name: demo-web, port: {number: 80}}
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: demo-crashloop
+  namespace: demo
+spec:
+  restartPolicy: Always
+  containers:
+  - name: crasher
+    image: busybox
+    command: ["sh", "-c", "echo 'payment-service: connection refused to billing-api'; exit 1"]
+YAML
+
+i=0
+until kubectl apply -f /tmp/k8s-demo-workload.yaml; do
+  i=$((i + 1))
+  if [ "$i" -ge 10 ]; then
+    echo "workload apply never succeeded; check: kubectl get events -n demo" >&2
+    break
+  fi
+  sleep 2
+done
+```
+
+<Warning>
+The bare pod's `apply` can fail on the first attempt with `error looking up service
+account demo/default: serviceaccount "default" not found` -- the Namespace's default
+ServiceAccount is created asynchronously by a controller shortly after the Namespace
+itself, so a Pod in the same `kubectl apply` batch can race it. Retrying the whole
+apply (already-created objects are simply reported `unchanged`) is simpler than adding
+a separate wait step, and resolves on the very next attempt once the ServiceAccount
+controller catches up.
+</Warning>
+
+```bash
+export KUBECONFIG_CONTENT="$(cat ~/.kube/config)"
+export KUBECONFIG_CONTEXT="kind-opensre-k8s-demo"
+export KUBECONFIG_NAMESPACE="demo"
+```
+
+`opensre integrations verify` checks a saved store record before env vars, and
+`opensre investigate` only falls through to env vars when the store has no records at
+all -- any existing record, for any service, blocks env-var resolution entirely. Point
+`OPENSRE_INTEGRATIONS_STORE_PATH` at a path inside a fresh empty directory before
+verifying, so a real saved record can't shadow the `KUBECONFIG_*` vars above for either
+command, and your real config is never read or written:
+
+```bash
+export OPENSRE_DEMO_STORE_DIR="$(mktemp -d /tmp/opensre-k8s-demo.XXXXXX)"
+export OPENSRE_INTEGRATIONS_STORE_PATH="$OPENSRE_DEMO_STORE_DIR/integrations.json"
+```
+
+Verify:
+
+```bash
+opensre integrations verify kubernetes
+```
+
+```
+SERVICE    │ SOURCE    │ STATUS   │ DETAIL
+kubernetes │ local env │ ✓ passed │ Connected to Kubernetes cluster
+           │           │          │ namespace 'demo' accessible (1 pod(s)
+           │           │          │ visible).
+```
+
+Trigger a real investigation against the crash-looping pod:
+
+```bash
+opensre investigate --input-json '{
+  "alert_name": "KubePodCrashLooping",
+  "severity": "critical",
+  "labels": {
+    "namespace": "demo",
+    "pod": "demo-crashloop"
+  },
+  "annotations": {
+    "summary": "Pod demo-crashloop is in CrashLoopBackOff"
+  }
+}'
+```
+
+Real output from a run against this exact local cluster (edited for length). Another
+integration resolved from your own env/keyring can ride along harmlessly, since the store
+has no records to block fallback for any service:
+
+```
+Loading integrations: kubernetes, telegram
+↳ Kubernetes · kubernetes list pods
+↳ Kubernetes · kubernetes list deployments
+↳ Kubernetes · kubernetes list statefulsets
+↳ Kubernetes · kubernetes list daemonsets
+↳ Kubernetes · kubernetes list services
+↳ Kubernetes · kubernetes list ingresses
+↳ Kubernetes · kubernetes list configmaps
+↳ Kubernetes · kubernetes describe pod
+↳ Kubernetes · kubernetes get events
+↳ Kubernetes · kubernetes get resource
+
+Triage complete: One standalone pod demo/demo-crashloop is in
+CrashLoopBackOff (6 restarts, back-off 5m); blast radius limited to that
+pod, all other demo workloads healthy, no Service selects the crasher so
+user traffic is unaffected.
+
+root_cause: The standalone pod demo/demo-crashloop runs a busybox
+container whose command is hardcoded to sh -c "echo 'payment-service:
+connection refused to billing-api'; exit 1", causing it to exit
+non-zero on every start and enter CrashLoopBackOff. The pod has no
+owner reference and is not selected by any Service, so it is almost
+certainly a demo/training fixture with no production impact.
+```
+
+10 of the 12 registered tools were exercised in this single turn; the remaining two
+(`kubernetes_get_pod_logs`, `kubernetes_list_nodes`) were confirmed separately via direct
+tool calls, both returning real data.
+
+Teardown:
+
+```bash
+kind delete cluster --name opensre-k8s-demo
+rm -rf "$OPENSRE_DEMO_STORE_DIR"
+unset OPENSRE_DEMO_STORE_DIR OPENSRE_INTEGRATIONS_STORE_PATH KUBECONFIG_CONTENT KUBECONFIG_CONTEXT KUBECONFIG_NAMESPACE
+```
+
 ## Verify
 
 ```bash

@@ -15,6 +15,11 @@ from infrastructure.errors import OpenSREError
 from infrastructure.observability.trace.spans import mark_span_outcome, traced_session
 from infrastructure.scheduling.task_types import TaskKind, TaskRecord
 from infrastructure.terminal.theme import DIM, ERROR, WARNING
+from surfaces.interactive_shell.telemetry.investigation_llm_usage import (
+    InvestigationLlmUsage,
+    observe_investigation_llm_usage,
+    resolve_configured_llm_identity,
+)
 from surfaces.interactive_shell.ui.investigation_outcome import (
     ForegroundInvestigationStatus,
     InvestigationOutcome,
@@ -22,11 +27,6 @@ from surfaces.interactive_shell.ui.investigation_outcome import (
     failure_detail_from_exception,
     normalize_investigation_target,
     user_facing_error_message,
-)
-from surfaces.interactive_shell.utils.telemetry.investigation_llm_usage import (
-    InvestigationLlmUsage,
-    observe_investigation_llm_usage,
-    resolve_configured_llm_identity,
 )
 from surfaces.shared.error_handling.exception_reporting import report_exception
 

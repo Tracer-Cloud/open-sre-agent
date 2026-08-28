@@ -3,6 +3,7 @@ name: github-security-fix
 description: >-
   Remediate GitHub security / Dependabot / CodeQL / code-quality alerts via
   fix_github_security_alert
+demo: Remediate the open Dependabot and CodeQL alerts
 ---
 ══════════════════════════════════════════════════════════
 GITHUB SECURITY AND QUALITY FIX SKILL — interactive-shell action agent:

@@ -86,7 +86,7 @@ def test_turn_runner_resolves_action_tools_from_live_session(monkeypatch: Any) -
         return [MagicMock(name="slack_send_message")]
 
     monkeypatch.setattr(
-        "core.agent_harness.tools.tool_provider.get_action_tools_from_integrations_context",
+        "core.agent_harness.tools.tool_provider.get_action_tools_from_integrations_view",
         _fake_get_tools,
     )
 
@@ -117,7 +117,7 @@ def test_turn_runner_resolves_action_tools_from_live_session(monkeypatch: Any) -
     assert recorded == [chat_integrations]
 
 
-def _empty_turn_result(*, llm_run: Any = None) -> TurnResult:
+def _empty_turn_result(*, streamed: bool = False) -> TurnResult:
     return TurnResult(
         final_intent="cli_agent_handled",
         action_result=ToolCallingTurnResult(
@@ -127,9 +127,25 @@ def _empty_turn_result(*, llm_run: Any = None) -> TurnResult:
             has_unhandled_clause=False,
             handled=True,
             response_text="",
+            response_streamed=streamed,
         ),
         assistant_response_text="",
-        llm_run=llm_run,
+    )
+
+
+def _turn_result_with_text(text: str) -> TurnResult:
+    """A handled turn whose primary response is ``text`` (not streamed, not answered)."""
+    return TurnResult(
+        final_intent="cli_agent_handled",
+        action_result=ToolCallingTurnResult(
+            planned_count=0,
+            executed_count=0,
+            executed_success_count=0,
+            has_unhandled_clause=False,
+            handled=True,
+            response_text=text,
+        ),
+        assistant_response_text=text,
     )
 
 
@@ -265,7 +281,7 @@ def test_turn_runner_finalizes_fallback_on_empty_response(monkeypatch: Any) -> N
 
 def test_turn_runner_skips_finalize_when_answer_was_streamed(monkeypatch: Any) -> None:
     """A streamed answer (llm_run set) already resolved the status; do not re-finalize."""
-    result = _empty_turn_result(llm_run=MagicMock())  # answered=True
+    result = _empty_turn_result(streamed=True)
     _patch_headless_agent(monkeypatch, result)
     sink = MagicMock()
     handler = TurnRunner(console=Console(force_terminal=False))
@@ -563,10 +579,15 @@ def test_run_returns_none_and_says_at_capacity_when_the_gate_refuses(monkeypatch
     # Arrange
     from infrastructure.turn_host.concurrency import AT_CAPACITY_MESSAGE, TurnConcurrencyGate
 
-    _patch_headless_agent(monkeypatch, _empty_turn_result())
+    factory = _patch_headless_agent(monkeypatch, _empty_turn_result())
     gate = TurnConcurrencyGate(1)
     assert gate.try_acquire() is True  # the only slot is taken
-    handler = TurnRunner(console=Console(force_terminal=False), gate=gate)
+    admission_check = MagicMock(return_value=True)
+    handler = TurnRunner(
+        console=Console(force_terminal=False),
+        gate=gate,
+        admission_check=admission_check,
+    )
     sink = RecordingTurnOutput()
 
     # Act
@@ -577,3 +598,259 @@ def test_run_returns_none_and_says_at_capacity_when_the_gate_refuses(monkeypatch
     # Assert
     assert returned is None
     assert sink.finalized == AT_CAPACITY_MESSAGE
+    admission_check.assert_not_called()
+    factory.assert_not_called()
+
+
+def test_run_rejected_by_admission_never_starts_agent_work(monkeypatch: Any) -> None:
+    """A billing denial owns its response and never constructs an agent."""
+    factory = _patch_headless_agent(monkeypatch, _empty_turn_result())
+    handler = TurnRunner(
+        console=Console(force_terminal=False),
+        admission_check=MagicMock(return_value=False),
+    )
+
+    returned = handler.run(
+        "hello",
+        SessionCore(store=InMemorySessionStore()),
+        RecordingTurnOutput(),
+        logging.getLogger("t"),
+    )
+
+    assert returned is None
+    factory.assert_not_called()
+
+
+def test_run_cancelled_before_admission_is_never_charged(monkeypatch: Any) -> None:
+    """A turn stopped while queued must not reach a metering hook that debits."""
+    factory = _patch_headless_agent(monkeypatch, _empty_turn_result())
+    sink = RecordingTurnOutput()
+    sink.turn_cancel = threading.Event()
+    sink.turn_cancel.set()
+    admission_check = MagicMock(return_value=True)
+
+    returned = TurnRunner(
+        console=Console(force_terminal=False),
+        admission_check=admission_check,
+    ).run(
+        "hello",
+        SessionCore(store=InMemorySessionStore()),
+        sink,
+        logging.getLogger("t"),
+    )
+
+    assert returned is None
+    admission_check.assert_not_called()
+    factory.assert_not_called()
+    # The cancelling host owns the terminal message; the runner adds none.
+    assert sink.finalized is None
+
+
+def test_run_cancelled_during_successful_admission_still_starts_turn(
+    monkeypatch: Any,
+) -> None:
+    """Once admission may debit, cancellation must not detach work from billing."""
+    factory = _patch_headless_agent(monkeypatch, _empty_turn_result())
+    sink = RecordingTurnOutput()
+    sink.turn_cancel = threading.Event()
+
+    def _admit_after_timeout() -> bool:
+        sink.turn_cancel.set()
+        return True
+
+    handler = TurnRunner(
+        console=Console(force_terminal=False),
+        admission_check=_admit_after_timeout,
+    )
+
+    returned = handler.run(
+        "hello",
+        SessionCore(store=InMemorySessionStore()),
+        sink,
+        logging.getLogger("t"),
+    )
+
+    assert returned is not None
+    factory.assert_called_once()
+
+
+# ---------------------------------------------------------------------------
+# Concurrency tests — ported up from test_session_agents.py to the door every
+# host actually goes through.  The pool tests prove the lock works when the pool
+# is called correctly; these prove TurnRunner calls it correctly.
+# ---------------------------------------------------------------------------
+
+
+def test_turn_runner_concurrent_sessions_do_not_bleed(monkeypatch: Any) -> None:
+    """Two sessions through TurnRunner run concurrently; each sink gets only its own text.
+
+    Port of ``test_session_agents.test_different_sessions_still_run_concurrently``
+    up one layer.  Different sessions take different per-session locks, so with a
+    raised capacity gate both turns must overlap inside dispatch — proved by a
+    controllable Event neither dispatch can pass until the test releases it.
+    """
+    release = threading.Event()
+    entered_alpha = threading.Event()
+    entered_beta = threading.Event()
+
+    def _dispatch(message: str) -> TurnResult:
+        if message == "alpha":
+            entered_alpha.set()
+        else:
+            entered_beta.set()
+        release.wait(timeout=10)
+        return _turn_result_with_text(f"reply-{message}")
+
+    factory = _patch_headless_agent(monkeypatch, _turn_result_with_text(""))
+    factory.return_value.dispatch.side_effect = _dispatch
+
+    from infrastructure.turn_host.concurrency import TurnConcurrencyGate
+
+    handler = TurnRunner(
+        console=Console(force_terminal=False),
+        gate=TurnConcurrencyGate(4),
+    )
+    session_a = SessionCore(store=InMemorySessionStore())
+    session_b = SessionCore(store=InMemorySessionStore())
+    sink_a = RecordingTurnOutput()
+    sink_b = RecordingTurnOutput()
+    logger = logging.getLogger("test.concurrent.sessions")
+
+    results: dict[str, TurnResult | None] = {}
+    errors: list[Exception] = []
+
+    def _run(message: str, session: SessionCore, sink: Any) -> None:
+        try:
+            results[message] = handler.run(message, session, sink, logger)
+        except Exception as exc:
+            errors.append(exc)
+
+    t_a = threading.Thread(target=_run, args=("alpha", session_a, sink_a))
+    t_b = threading.Thread(target=_run, args=("beta", session_b, sink_b))
+
+    # Act — both threads must reach dispatch before either can proceed.
+    t_a.start()
+    t_b.start()
+    assert entered_alpha.wait(timeout=10), "session A never entered dispatch"
+    assert entered_beta.wait(timeout=10), "session B never entered dispatch"
+    release.set()
+    t_a.join(timeout=10)
+    t_b.join(timeout=10)
+
+    # Assert — both returned, and neither sink received the other session's text.
+    assert not errors, errors
+    assert results.get("alpha") is not None
+    assert results.get("beta") is not None
+    assert sink_a.finalized == "reply-alpha"
+    assert sink_b.finalized == "reply-beta"
+
+
+def test_turn_runner_same_session_turns_do_not_interleave(monkeypatch: Any) -> None:
+    """Two turns for one session through TurnRunner must serialize.
+
+    Port of ``test_session_agents.test_same_session_turns_do_not_interleave``
+    up one layer.  The per-session lock is held for the whole turn so a second
+    turn cannot rebind the pooled ``BindableOutput`` while the first is still
+    dispatching — without it, the first turn's remaining write lands on the
+    second turn's sink.
+
+    Serialization is pinned by the overlap / second-entered handshake.
+    Sink isolation is pinned by writing through the pooled ``BindableOutput``
+    (not ``TurnRunner``'s stack-local ``output.finalize``): that local finalize
+    still hits the per-call sink even when the lock is gone, so it cannot
+    detect the bleed #5493 named.
+    """
+    release = threading.Event()
+    first_entered = threading.Event()
+    second_started = threading.Event()
+    second_entered = threading.Event()
+    overlapped = threading.Event()
+    call_lock = threading.Lock()
+    call_count = 0
+
+    from infrastructure.turn_host.concurrency import TurnConcurrencyGate
+
+    handler = TurnRunner(
+        console=Console(force_terminal=False),
+        gate=TurnConcurrencyGate(4),
+    )
+    session = SessionCore(store=InMemorySessionStore())
+    sink_1 = RecordingTurnOutput()
+    sink_2 = RecordingTurnOutput()
+    logger = logging.getLogger("test.serialize.same_session")
+
+    def _write_through_bound_output(message: str) -> None:
+        # The real agent writes through this BindableOutput; rebinding it mid-
+        # turn is the bleed path.  TurnRunner's stack-local finalize is not.
+        bound = handler._pool._outputs[session.session_id]  # noqa: SLF001
+        bound.print(message)
+
+    def _dispatch(message: str) -> TurnResult:
+        nonlocal call_count
+        with call_lock:
+            call_count += 1
+            n = call_count
+        if n == 1:
+            first_entered.set()
+            release.wait(timeout=10)
+            _write_through_bound_output(message)
+            return _turn_result_with_text(message)
+        second_entered.set()
+        if not release.is_set():
+            overlapped.set()
+        release.wait(timeout=10)
+        _write_through_bound_output(message)
+        return _turn_result_with_text(message)
+
+    factory = _patch_headless_agent(monkeypatch, _turn_result_with_text(""))
+    factory.return_value.dispatch.side_effect = _dispatch
+
+    results: dict[str, TurnResult | None] = {}
+    errors: list[Exception] = []
+
+    def _run(message: str, sink: Any) -> None:
+        if message == "beta":
+            second_started.set()
+        try:
+            results[message] = handler.run(message, session, sink, logger)
+        except Exception as exc:
+            errors.append(exc)
+
+    t1 = threading.Thread(target=_run, args=("alpha", sink_1))
+    t2 = threading.Thread(target=_run, args=("beta", sink_2))
+
+    # Act — the first dispatch holds the lock while blocked on ``release``.
+    t1.start()
+    assert first_entered.wait(timeout=5), "first turn never entered dispatch"
+    t2.start()
+    # Handshake: the second thread is running and heading for the lock.
+    assert second_started.wait(timeout=5), "second thread never started"
+
+    # If the lock works, the second is blocked and ``second_entered`` is
+    # never set.  If the lock is bypassed, the second enters dispatch almost
+    # immediately and sets ``second_entered`` (and ``overlapped``).
+    try:
+        assert not second_entered.wait(timeout=0.5), (
+            "second dispatch entered while first still held the lock"
+        )
+        assert not overlapped.is_set(), "turns interleaved"
+    finally:
+        release.set()
+
+    t1.join(timeout=5)
+    t2.join(timeout=5)
+
+    # Assert — no overlap, and each bound-output write hit its own sink.
+    assert not errors, errors
+    assert not overlapped.is_set(), "turns interleaved"
+    assert second_entered.is_set(), "second dispatch never ran after first released"
+    assert results.get("alpha") is not None
+    assert results.get("beta") is not None
+    assert sink_1.lines == ["alpha"], (
+        "first turn's bound-output write must stay on sink_1 "
+        f"(got {sink_1.lines!r}; sink_2={sink_2.lines!r})"
+    )
+    assert sink_2.lines == ["beta"], (
+        "second turn's bound-output write must stay on sink_2 "
+        f"(got {sink_2.lines!r}; sink_1={sink_1.lines!r})"
+    )

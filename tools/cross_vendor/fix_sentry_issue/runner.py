@@ -26,7 +26,7 @@ from integrations.git import (
     file_fingerprints,
     is_git_repo,
 )
-from integrations.github.client import resolve_github_token
+from integrations.github import resolve_github_token
 from tools.cross_vendor.fix_sentry_issue.context import IssueContext
 from tools.cross_vendor.fix_sentry_issue.errors import (
     ERR_CLI_UNAVAILABLE,

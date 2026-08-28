@@ -8,16 +8,13 @@ All configuration options for OpenSRE can be set via environment variables. This
 ## Secret storage
 
 Environment variables are checked first. Credentials you enter through
-`opensre onboard` or `opensre integrations setup` are written to an
-owner-only file at `~/.opensre/credentials.json` (mode `0600`). OpenSRE
-does not write new secrets to the OS keychain, so first-run setup does
-not trigger a keychain prompt.
+`opensre onboard` for LLM setup, or through `opensre integrations setup` for
+tools, are written to `.env` and to an owner-only file at
+`~/.opensre/credentials.json` (mode `0600`). OpenSRE
+does not write secrets to the OS keychain.
 
 A value in the process environment or a local `.env` file wins over the
-local file. Keep `.env` out of source control and never commit real secrets.
-
-Secrets stored in the OS keychain by an earlier OpenSRE version are copied
-into that local file once, then the keychain copies are removed.
+credentials file. Keep `.env` out of source control.
 
 Want credentials only from the environment, never on disk? Set
 `OPENSRE_DISABLE_KEYRING=1` and export everything yourself.
@@ -343,7 +340,7 @@ For secrets (`*_TOKEN`, `*_KEY`, `*_PASSWORD`, `*_SECRET`, and similar), OpenSRE
 1. Your process environment
 2. The owner-only file `~/.opensre/credentials.json`
 
-`opensre onboard` saves credentials there so they still work after you clear `.env`.
+`opensre onboard` saves LLM credentials there so they still work after you clear `.env`.
 
 **Not stored as secrets:** webhook-style URLs such as `SLACK_WEBHOOK_URL` and `ROCKETCHAT_WEBHOOK_URL`. Those stay in env / store only — treat them as secrets and don't log them.
 
@@ -720,7 +717,7 @@ Mirror conversation history and memory to a user-owned object store. Details: [R
 | `OPENOBSERVE_MAX_RESULTS` | `100` | Max OpenObserve results |
 | `VICTORIA_LOGS_URL` |  | VictoriaLogs instance URL |
 | `VICTORIA_LOGS_TENANT_ID` |  | VictoriaLogs tenant ID |
-| `HERMES_LOG_PATH` | `~/.hermes/logs/errors.log` | Default path and path sandbox for the `get_hermes_logs` tool |
+| `HERMES_LOG_PATH` | `~/.hermes/logs/errors.log` | Hermes log path saved by `opensre integrations setup hermes`; also defines the path sandbox for `get_hermes_logs` |
 | `OPENSRE_HERMES_INVESTIGATE` |  | Set to `1` to enable Hermes watch auto-investigation when the CLI flag is omitted |
 | `CLICKHOUSE_HOST` |  | ClickHouse host |
 | `CLICKHOUSE_PORT` | `8123` | ClickHouse port |

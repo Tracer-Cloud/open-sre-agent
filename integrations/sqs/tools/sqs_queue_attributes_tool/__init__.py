@@ -32,6 +32,11 @@ from integrations.sqs import (
 
 logger = logging.getLogger(__name__)
 
+_BACKLOG_ALERT_USE_CASE = (
+    "Investigating a queue-age or backlog alert — returns depth, in-flight "
+    "count, and DLQ configuration"
+)
+
 
 def _queue_name_from_url(url: str) -> str:
     return url.rstrip("/").rsplit("/", 1)[-1]
@@ -140,8 +145,7 @@ def _map_get_sqs_queue_attributes(
         "Diagnosing stuck consumers: in-flight count equals the consumer/pod count",
         "Identifying a poison-pill message cycling due to a short VisibilityTimeout",
         "Checking whether a queue has a dead-letter queue configured at all",
-        "Investigating a queue-age or backlog alert — returns depth, in-flight "
-        "count, and DLQ configuration",
+        _BACKLOG_ALERT_USE_CASE,
         "Confirming whether a queue is draining after a consumer deploy or scale-up",
     ],
     requires=[],

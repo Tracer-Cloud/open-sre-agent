@@ -21,6 +21,20 @@ def test_billing_env_var_names_are_the_infra_contract() -> None:
     assert billing.CREDITS_HTTP_TIMEOUT_SECONDS == 5.0
 
 
+def test_gateway_stop_slices_fit_inside_the_process_budget() -> None:
+    """Web, reload-watcher, and Slack heartbeat joins must stay smaller than
+    DEFAULT_STOP_TIMEOUT_SECONDS or SIGTERM overruns the chat drain."""
+    from config.constants import gateway, slack
+
+    assert gateway.DEFAULT_STOP_TIMEOUT_SECONDS == 8.0
+    assert gateway.WEB_STOP_TIMEOUT_SECONDS == 5.0
+    assert gateway.SCHEDULER_RELOAD_JOIN_TIMEOUT_SECONDS == 2.0
+    assert slack.SLACK_HEARTBEAT_STOP_TIMEOUT_SECONDS == 2.0
+    assert gateway.WEB_STOP_TIMEOUT_SECONDS < gateway.DEFAULT_STOP_TIMEOUT_SECONDS
+    assert gateway.SCHEDULER_RELOAD_JOIN_TIMEOUT_SECONDS < gateway.DEFAULT_STOP_TIMEOUT_SECONDS
+    assert slack.SLACK_HEARTBEAT_STOP_TIMEOUT_SECONDS < gateway.DEFAULT_STOP_TIMEOUT_SECONDS
+
+
 def test_tenancy_env_var_names_are_the_infra_contract() -> None:
     """Pin the control plane's env-var names to the strings its ECS task
     definition injects — a rename here fails gateway startup in a silo."""
@@ -57,6 +71,24 @@ def test_remote_sync_endpoint_url_env_is_re_exported() -> None:
     # Assert
     assert constants.REMOTE_SYNC_ENDPOINT_URL_ENV == "OPENSRE_REMOTE_SYNC_ENDPOINT_URL"
     assert "REMOTE_SYNC_ENDPOINT_URL_ENV" in constants.__all__
+
+
+def test_split_config_constants_are_re_exported() -> None:
+    """The constants facade remains the canonical import path after the split."""
+    from config import constants
+
+    expected = {
+        "CLERK_ISSUER_ENV": "CLERK_ISSUER",
+        "CLERK_JWKS_URL_ENV": "CLERK_JWKS_URL",
+        "DEPLOYMENT_ENV_ENV": "ENV",
+        "SLACK_CHANNEL": "tracer-rca-report-alerts",
+        "TRACER_BASE_URL_DEV": "https://staging.tracer.cloud",
+        "TRACER_BASE_URL_PROD": "https://app.tracer.cloud",
+    }
+
+    for name, value in expected.items():
+        assert getattr(constants, name) == value
+        assert name in constants.__all__
 
 
 @pytest.mark.parametrize("module", ["billing", "tenancy"])

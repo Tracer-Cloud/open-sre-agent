@@ -13,9 +13,10 @@ from __future__ import annotations
 import logging
 from dataclasses import dataclass, field
 
+from config.constants.gateway import DEFAULT_STOP_TIMEOUT_SECONDS, WEB_STOP_TIMEOUT_SECONDS
+from gateway.core.process.shutdown_budget import ShutdownBudget
 from gateway.transports.names import TransportName
 from gateway.transports.startup import (
-    DEFAULT_STOP_TIMEOUT_SECONDS,
     TransportHandle,
     start_transports,
     stop_transports,
@@ -23,10 +24,6 @@ from gateway.transports.startup import (
 from gateway.web.startup import start_web_server
 from gateway.web.web_server import WebAppServerHandle
 from infrastructure.turn_host.turn_callback import TurnCallback
-
-# The web app is a thread join, not a network drain, so it gets a smaller slice
-# of the shutdown budget and leaves the rest for in-flight chat turns.
-WEB_STOP_TIMEOUT_SECONDS = 5.0
 
 _WEB_COMPONENT = "web"
 
@@ -41,10 +38,13 @@ class StartedGateway:
 
     def stop(self, *, timeout: float = DEFAULT_STOP_TIMEOUT_SECONDS) -> bool:
         """Stop web and every chat transport; return whether all chat workers stopped."""
+        budget = ShutdownBudget(timeout)
         if self.web_server is not None:
-            self.web_server.stop(timeout=min(timeout, WEB_STOP_TIMEOUT_SECONDS))
+            started = budget.mark()
+            self.web_server.stop(timeout=budget.take(WEB_STOP_TIMEOUT_SECONDS))
+            budget.consume(started)
             self.web_server = None
-        stopped = stop_transports(handles=list(self.transports.values()), timeout=timeout)
+        stopped = stop_transports(handles=list(self.transports.values()), timeout=budget.remaining)
         self.transports = {}
         return stopped
 

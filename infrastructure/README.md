@@ -17,7 +17,17 @@ junk drawer. Prefer leaf imports over re-export shims.
 - `process/` — exit codes, CLI runtime flags, process-wide turn capacity
   (`process/turn_capacity/`), and installed vs latest release version
   (`process/release_version.py`).
-- `setup_state.py` — install/setup facts surfaced to agents and doctor.
+- `setup_state.py` — install/setup facts surfaced to agents through prompt context.
+- `alert_intake.py` — minimal HTTP intake (`POST /alerts`) into the process-wide
+  inbox, shared by gateway and interactive shell without either surface
+  importing the other.
+- `asgi_server.py` — generic ASGI transport: run any ASGI app in a background
+  thread (`serve_asgi_in_thread`).
+- `request_body_limit.py` — shared ASGI middleware that caps mutating request
+  bodies before the standalone alert listener, gateway web app, or Slack Events
+  API can buffer them.
+- `turn_host/` — shared turn host whose single `TurnRunner` serves the
+  interactive shell and every gateway transport.
 - `harness_providers/` — integration provider registries wired into the harness.
 
 ## Contracts

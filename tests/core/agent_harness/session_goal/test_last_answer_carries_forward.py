@@ -14,7 +14,7 @@ unverified answer cannot become settled by being repeated.
 from __future__ import annotations
 
 from core.agent_harness.session.session_core import SessionCore
-from core.agent_harness.session_goal.continuation import continuation_nudge
+from core.agent_harness.session_goal.continuation import continuation_prompt
 from core.agent_harness.session_goal.goal import SessionGoal
 from core.agent_harness.session_goal.run_until import run_until_session_goal
 from core.agent_harness.turns.turn_results import ToolCallingTurnResult, TurnResult
@@ -31,18 +31,18 @@ def test_the_previous_answer_reaches_the_next_turn() -> None:
     goal = _goal().with_last_answer(_ANSWER)
 
     # Act
-    nudge = continuation_nudge(goal)
+    prompt = continuation_prompt(goal)
 
     # Assert
-    assert _ANSWER in nudge
+    assert _ANSWER in prompt
 
 
 def test_the_next_turn_is_told_to_explain_a_different_number() -> None:
     # Arrange / Act
-    nudge = continuation_nudge(_goal().with_last_answer(_ANSWER))
+    prompt = continuation_prompt(_goal().with_last_answer(_ANSWER))
 
     # Assert: silently replacing it is the failure being prevented.
-    assert "say why" in nudge
+    assert "say why" in prompt
 
 
 def test_a_previous_answer_is_not_presented_as_established() -> None:
@@ -56,7 +56,7 @@ def test_a_previous_answer_is_not_presented_as_established() -> None:
 
     # Assert
     assert goal.findings == ()
-    assert "treat these as done" not in continuation_nudge(goal)
+    assert "treat these as done" not in continuation_prompt(goal)
 
 
 def test_an_empty_answer_is_not_recorded() -> None:
@@ -94,7 +94,6 @@ def test_a_tool_less_turn_still_hands_its_answer_to_the_next_turn() -> None:
                 handled=True,
             ),
             assistant_response_text=body,
-            llm_run=None,
         )
 
     # Act

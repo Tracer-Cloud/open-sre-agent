@@ -11,7 +11,8 @@ pipeline and loop control flow around that.
 
 | Concern                        | Location                                                                                       |
 | ------------------------------- | ------------------------------------------------------------------------------------------------ |
-| Stage ordering                  | `tools/investigation/lifecycle.py` (`run_connected_investigation`)                             |
+| Stage ordering (SoT)            | `tools/investigation/agent_pipeline.py` (`run_agent_investigation`)                            |
+| Deprecated lifecycle facade     | `tools/investigation/lifecycle.py` (`run_connected_investigation` → agent pipeline)            |
 | Public runner entrypoint        | `tools/investigation/capability.py`                                                            |
 | Integration discovery           | `tools/investigation/stages/resolve_integrations/node.py`                                      |
 | Alert classification/extraction | `tools/investigation/stages/intake/node.py`                                                    |

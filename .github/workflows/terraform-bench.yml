@@ -1,7 +1,8 @@
 name: terraform-bench (plan)
 
-# Runs terraform fmt + init + validate + plan against tests/benchmarks/cloudopsbench/infra/ on every PR
-# that touches the bench infra. Posts the plan output as a sticky PR comment so
+# Runs terraform fmt + init + validate + plan against
+# tests/benchmarks/cloudopsbench/infra/ on every PR that touches Terraform or
+# scanner configuration. Posts the plan output as a sticky PR comment so
 # reviewers can see what would change before approving.
 #
 # Never applies — apply is developer-local in v1 (see tests/benchmarks/cloudopsbench/infra/README.md).
@@ -11,7 +12,11 @@ name: terraform-bench (plan)
 on:
   pull_request:
     paths:
-      - "tests/benchmarks/cloudopsbench/infra/**"
+      - "tests/benchmarks/cloudopsbench/infra/**.tf"
+      - "tests/benchmarks/cloudopsbench/infra/**.tfvars"
+      - "tests/benchmarks/cloudopsbench/infra/.tflint.hcl"
+      - "tests/benchmarks/cloudopsbench/infra/.tfsec/config.yml"
+      - "tests/benchmarks/cloudopsbench/infra/.checkov.yaml"
       - ".github/workflows/terraform-bench.yml"
   workflow_dispatch:
 

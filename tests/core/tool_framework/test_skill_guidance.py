@@ -52,6 +52,16 @@ def test_load_tool_skill_guidance_skips_missing_file(tmp_path: Path) -> None:
     assert result.diagnostics == []
 
 
+def test_load_tool_skill_guidance_reports_unclosed_frontmatter(tmp_path: Path) -> None:
+    path = tmp_path / "SKILL.md"
+    path.write_text("---\nname: unclosed-skill\ndescription: leaked yaml\n", encoding="utf-8")
+
+    result = load_tool_skill_guidance(path)
+
+    assert result.skill is None
+    assert [diagnostic.code for diagnostic in result.diagnostics] == ["parse_failed"]
+
+
 def test_load_tool_skill_guidance_reports_invalid_yaml(tmp_path: Path) -> None:
     path = tmp_path / "SKILL.md"
     path.write_text("---\nname: [unterminated\n---\nBody\n", encoding="utf-8")
@@ -158,6 +168,32 @@ tools:
     assert 'description="A & B tool"' not in formatted
 
 
+def test_format_tool_skill_guidance_escapes_newlines_in_attributes(tmp_path: Path) -> None:
+    path = tmp_path / "SKILL.md"
+    _write_skill(
+        path,
+        """
+name: my-skill
+description: Handles A and B operations.
+tools:
+  - tool_a
+""".strip(),
+    )
+    result = load_tool_skill_guidance(path, known_tool_names=frozenset({"tool_a"}))
+    assert result.skill is not None
+
+    skill_with_newline = result.skill.__class__(
+        name=result.skill.name,
+        description="line one\nline two",
+        content=result.skill.content,
+        file_path=result.skill.file_path,
+        tool_names=result.skill.tool_names,
+    )
+    formatted = format_tool_skill_guidance(skill_with_newline)
+    assert "&#10;" in formatted
+    assert 'description="line one\nline two"' not in formatted
+
+
 def test_sentry_summary_skill_loads_and_references_correct_tools() -> None:
     """The sentry-summary SKILL.md must load cleanly and declare the four Sentry tools."""
     skill_path = (
@@ -193,3 +229,24 @@ def test_sentry_summary_skill_loads_and_references_correct_tools() -> None:
     assert "priority_candidates" in result.skill.content
     # Registry truncates combined guidance at 2400 chars; keep the skill under that.
     assert len(formatted) <= 2400
+
+
+def test_load_tool_skill_guidance_honors_string_disable_model_invocation(
+    tmp_path: Path,
+) -> None:
+    path = tmp_path / "SKILL.md"
+    _write_skill(
+        path,
+        """
+name: quiet-skill
+description: Should not be attached to the model.
+tools:
+  - some_tool
+disable-model-invocation: "true"
+""".strip(),
+    )
+
+    result = load_tool_skill_guidance(path, known_tool_names=frozenset({"some_tool"}))
+
+    assert result.skill is not None
+    assert result.skill.disable_model_invocation is True

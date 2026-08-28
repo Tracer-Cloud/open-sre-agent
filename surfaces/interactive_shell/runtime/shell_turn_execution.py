@@ -1,8 +1,6 @@
 """One interactive-shell turn: build (or reuse) the shell agent, then ``handle``.
 
-The shell's ports are supplied by ``shell_agent``; the agent's own stages run.
-A test that injects a whole stage (``execute_actions`` / ``gather_evidence`` /
-``answer_agent``) goes through the seams in ``turn_seams``.
+The shell's ports are supplied by ``shell_agent``; the agent's own ReAct stage runs.
 """
 
 from __future__ import annotations
@@ -27,7 +25,7 @@ from surfaces.interactive_shell.runtime.agent_harness_adapters import ShellOutpu
 from surfaces.interactive_shell.runtime.core.turn_accounting import ShellTurnAccounting
 from surfaces.interactive_shell.runtime.shell_agent import shell_agent_build_config
 from surfaces.interactive_shell.session import Session
-from surfaces.interactive_shell.utils.telemetry import PromptRecorder
+from surfaces.interactive_shell.telemetry import PromptRecorder
 
 
 def execute_shell_turn(
@@ -47,7 +45,7 @@ def execute_shell_turn(
 
     The same :class:`TurnRunner` the chat transports use, built with the
     shell's own :func:`shell_agent_build_config` so the REPL keeps its tools,
-    prompts and gather phase. Pass a long-lived ``handler`` (the REPL builds one
+    prompts. Pass a long-lived ``handler`` (the REPL builds one
     at startup) so the tool stack is not rebuilt every turn.
     """
     resolved_output: TurnOutput = output if output is not None else ShellOutputSink(console)
@@ -82,8 +80,11 @@ def execute_shell_turn(
         on_progress=_on_progress,
     )
     if result is None:
-        # The process gate refused the turn; the host already said so on the
-        # output. Report a turn that ran nothing rather than inventing an answer.
+        # No agent work ran. The shell binds no admission hook and its sink
+        # carries no ``turn_cancel``, so for this caller the capacity gate is
+        # the only reason the host returns ``None`` — and it already said so on
+        # the output. Report a turn that ran nothing rather than inventing an
+        # answer.
         return TurnResult(
             final_intent="cli_agent_at_capacity",
             action_result=ToolCallingTurnResult(

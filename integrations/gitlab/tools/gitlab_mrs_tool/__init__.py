@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from typing import Any
 
+from core.domain.types.evidence import record_evidence_entry
 from core.domain.types.tools import ToolSurface
 from core.tool_framework import tool
 from core.tool_framework.utils import code_host_unavailable_payload
@@ -12,9 +13,29 @@ from integrations.gitlab import (
 )
 from integrations.gitlab.tools.gitlab_commits_tool import (
     _gitlab_available,
+    _gitlab_count_label,
     _gl_creds,
     _resolve_config,
 )
+
+
+def _map_list_gitlab_mrs(
+    evidence: dict[str, Any], output: dict[str, Any], tool_input: dict[str, Any]
+) -> None:
+    """Cite the number of merge requests retrieved and the target branch."""
+    if not output.get("available"):
+        return
+    mrs = output.get("mrs") or []
+    if not mrs:
+        return
+    label = _gitlab_count_label(len(mrs), tool_input.get("per_page", 10))
+    target_branch = tool_input.get("target_branch", "main")
+    record_evidence_entry(
+        evidence,
+        source="list_gitlab_mrs",
+        label="GitLab Merge Requests",
+        summary=f"{label} merge request(s) targeting '{target_branch}'",
+    )
 
 
 def _list_gitlab_mrs_extract_params(sources: dict[str, dict]) -> dict[str, Any]:
@@ -56,6 +77,7 @@ def _list_gitlab_mrs_available(sources: dict[str, dict]) -> bool:
     },
     is_available=_list_gitlab_mrs_available,
     extract_params=_list_gitlab_mrs_extract_params,
+    evidence_mapper=_map_list_gitlab_mrs,
 )
 def list_gitlab_mrs(
     project_id: str,

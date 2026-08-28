@@ -354,6 +354,13 @@ _BUILTIN_SPECS: tuple[IntegrationSpec, ...] = (
         verify_order=34,
     ),
     IntegrationSpec(
+        service="hermes",
+        has_verifier=True,
+        direct_effective=True,
+        setup_order=56,
+        verify_order=101,
+    ),
+    IntegrationSpec(
         service="victoria_logs",
         aliases=("victorialogs",),
         has_verifier=True,
@@ -387,7 +394,12 @@ _BUILTIN_SPECS: tuple[IntegrationSpec, ...] = (
         setup_order=25,
         verify_order=9,
     ),
-    IntegrationSpec(service="google_docs", has_verifier=True, verify_order=19),
+    IntegrationSpec(
+        service="google_docs",
+        has_verifier=True,
+        setup_order=55,
+        verify_order=19,
+    ),
     IntegrationSpec(service="kafka", has_verifier=True, verify_order=37),
     IntegrationSpec(service="clickhouse", has_verifier=True, verify_order=23),
     IntegrationSpec(service="alicloud", direct_effective=True),

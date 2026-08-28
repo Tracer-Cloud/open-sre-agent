@@ -1,7 +1,7 @@
 """Helpers shared by GitHub MCP tools.
 
 Each function takes inputs produced by the rest of the runtime
-(integration store entries, MCP tool results, runtime-extracted kwargs)
+(integration store entries, runtime-extracted kwargs)
 and returns the shape the next layer expects. Callers live in
 ``integrations/github/tools/*.py`` and rely on these wrappers so the
 tool files stay thin.
@@ -13,16 +13,12 @@ Exports:
 - ``github_source_available``: predicate on the integration store entry.
 - ``github_creds``: maps classified integration fields to tool kwargs.
 - ``resolve_github_mcp_config``: merges env defaults with explicit overrides.
-- ``normalize_github_tool_result``: turns a raw MCP tool result into the
-  payload shape consumed by the tool framework.
 """
 
 from __future__ import annotations
 
-import json
 from typing import Any
 
-from core.tool_framework.utils import tool_unavailable
 from integrations.github.mcp import (
     DEFAULT_GITHUB_MCP_MODE,
     GitHubMCPConfig,
@@ -120,52 +116,3 @@ def resolve_github_mcp_config(
             "toolsets": env_config.toolsets if env_config else (),
         }
     )
-
-
-def _structured_content_or_text_fallback(result: dict[str, Any]) -> Any:
-    """Return ``structured_content`` if present, else ``text`` parsed as JSON.
-
-    Returns ``None`` when ``text`` is empty or not valid JSON.
-    """
-    structured = result.get("structured_content")
-    if structured is not None:
-        return structured
-    text = str(result.get("text") or "").strip()
-    if not text:
-        return None
-    try:
-        return json.loads(text)
-    except json.JSONDecodeError:
-        return None
-
-
-def normalize_github_tool_result(result: dict[str, Any]) -> dict[str, Any]:
-    """Normalize a raw GitHub MCP tool result into the tool-framework payload.
-
-    ``result`` is the dict returned by ``call_github_mcp_tool``: it carries
-    ``is_error`` (bool), ``text`` (str, root-cause message on error),
-    ``tool`` (str, the MCP tool name), ``arguments`` (dict passed to the tool),
-    ``structured_content`` (parsed JSON or None), and ``content`` (list of MCP
-    content items). When ``is_error`` is truthy, returns the standard
-    ``tool_unavailable("github", ...)`` envelope so the framework surfaces a
-    consistent unavailable-source response. Otherwise returns a dict with
-    ``source="github"``, ``available=True``, and the original ``tool``,
-    ``arguments``, ``text``, ``content`` keys preserved, and
-    ``structured_content`` normalized via :func:`_structured_content_or_text_fallback`.
-    """
-    if result.get("is_error"):
-        return tool_unavailable(
-            "github",
-            result.get("text") or "GitHub MCP tool call failed.",
-            tool=result.get("tool"),
-            arguments=result.get("arguments", {}),
-        )
-    return {
-        "source": "github",
-        "available": True,
-        "tool": result.get("tool"),
-        "arguments": result.get("arguments", {}),
-        "text": result.get("text", ""),
-        "structured_content": _structured_content_or_text_fallback(result),
-        "content": result.get("content", []),
-    }

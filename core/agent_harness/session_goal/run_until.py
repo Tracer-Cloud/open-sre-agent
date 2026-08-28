@@ -12,7 +12,7 @@ from dataclasses import dataclass, replace
 from typing import Any
 
 from core.agent_harness.session.terminal_access import clear_pending_autosubmit
-from core.agent_harness.session_goal.continuation import continuation_nudge
+from core.agent_harness.session_goal.continuation import continuation_prompt
 from core.agent_harness.session_goal.evaluate import (
     default_evaluate_session_goal,
     session_goal_reply_text,
@@ -209,7 +209,7 @@ def run_until_session_goal(
     """Run ``chat`` until the session goal is terminal or the budget is hit.
 
     Always runs the first ``chat(message)`` through the action-agent path.
-    Continues with nudges only when a goal is already active afterward
+    Continues with prompts only when a goal is already active afterward
     (explicit ``goal=`` attach, or ``session_goal:`` handoff from that turn).
     """
     evaluate_fn = evaluate or default_evaluate_session_goal
@@ -278,7 +278,7 @@ def run_until_session_goal(
             break
 
         _announce_working(session, active, on_progress)
-        last = chat(continuation_nudge(active))
+        last = chat(continuation_prompt(active))
         active = active.record_turn()
         attach_session_goal(session, active)
         active, last, stop = _finish_outer_turn(

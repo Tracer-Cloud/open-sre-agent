@@ -22,8 +22,8 @@ from surfaces.interactive_shell.runtime.subprocess_runner import (
     build_opensre_cli_argv,
     start_background_cli_task,
 )
+from surfaces.interactive_shell.telemetry.turn_outcome import format_wizard_cli_outcome
 from surfaces.interactive_shell.ui import DIM, ERROR, print_command_output
-from surfaces.interactive_shell.utils.telemetry.turn_outcome import format_wizard_cli_outcome
 from surfaces.shared.terminal.components.choice_menu import prepare_repl_output_line
 
 _UPDATE_SUBPROCESS_TIMEOUT_SECONDS = 300
@@ -194,22 +194,36 @@ def _cmd_onboard(session: Session, console: Console, args: list[str]) -> bool:  
     if session_terminal(session) is None:
         cli_cmd = " ".join(["uv run opensre onboard", *args]).strip()
         message = (
-            "Onboarding is an interactive wizard (LLM provider, integrations, messaging). "
+            "Onboarding is an interactive wizard for LLM provider setup. "
             "It cannot run inside a Telegram chat.\n\n"
             f"Run on the server:\n  {cli_cmd}\n\n"
-            "Or configure individual services with "
-            "`/integrations setup <service>`."
+            "Configure integrations separately with `/integrations setup <service>`."
         )
         console.print()
         console.print(message)
         publish_headless_slash_response(session, message=message)
         return True
     # The REPL loop treats ``/onboard`` as exclusive-stdin in
-    # ``runtime.utils.input_policy`` so the prompt_toolkit Application is torn down before
+    # ``runtime.input_policy`` so the prompt_toolkit Application is torn down before
     # this handler runs — the wizard subprocess therefore gets exclusive
     # stdin and can drive its own interactive prompts without conflicting
     # with the shell's UI.
     return run_cli_command(console, ["onboard", *args], capture_output=False, session=session)
+
+
+def _cmd_setup(session: Session, console: Console, args: list[str]) -> bool:  # noqa: ARG001
+    if session_terminal(session) is None:
+        message = (
+            "Setup is an interactive wizard (GitHub sign-in + LLM key). "
+            "It cannot run inside a Telegram chat.\n\n"
+            "Run on the server:\n  uv run opensre setup\n\n"
+            "Configure integrations separately with `/integrations setup <service>`."
+        )
+        console.print()
+        console.print(message)
+        publish_headless_slash_response(session, message=message)
+        return True
+    return run_cli_command(console, ["setup", *args], capture_output=False, session=session)
 
 
 def _cmd_auth(session: Session, console: Console, args: list[str]) -> bool:  # noqa: ARG001
@@ -424,6 +438,12 @@ COMMANDS: list[SlashCommand] = [
         "Shortcut for LLM provider login.",
         _cmd_login,
         usage=("/login", "/login chatgpt", "/login claude", "/login deepseek"),
+    ),
+    SlashCommand(
+        "/setup",
+        "First-run setup: GitHub sign-in, LLM key, then the interactive shell.",
+        _cmd_setup,
+        usage=("/setup",),
     ),
     SlashCommand(
         "/onboard",

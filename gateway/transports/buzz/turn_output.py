@@ -16,7 +16,7 @@ from gateway.core.single_message_output import (
 )
 from infrastructure.delivery.notifications.limits import MAX_MESSAGE_SIZE
 from infrastructure.text.truncation import truncate
-from integrations.buzz.client import BuzzClient
+from integrations.buzz import BuzzClient
 
 logger = logging.getLogger("gateway")
 

@@ -196,6 +196,8 @@ def collect(cloudapi_root: Path) -> list[dict[str, Any]]:
     """Return every GET binding in the protos under *cloudapi_root*."""
     entries: list[dict[str, Any]] = []
     seen: set[tuple[str, str]] = set()
+    dropped: dict[str, int] = {"mutating": 0, "no_host": 0}
+    unhosted: set[str] = set()
 
     for proto in sorted((cloudapi_root / "yandex").rglob("*.proto")):
         text = proto.read_text(encoding="utf-8", errors="replace")
@@ -210,11 +212,17 @@ def collect(cloudapi_root: Path) -> list[dict[str, Any]]:
             if not get_match:
                 continue
             if _is_mutating(rpc_name):
+                dropped["mutating"] += 1
                 continue
             path = get_match.group(1)
             key = _endpoint_key(path, package)
             if not key:
-                continue  # no reachable host: the service is not in the registry
+                # No reachable host: the service is not in the registry. Counted
+                # rather than passed over in silence - this is the path that once
+                # hid 34 endpoints behind a naming mismatch.
+                dropped["no_host"] += 1
+                unhosted.add(package)
+                continue
             if (key, path) in seen:
                 continue
             seen.add((key, path))
@@ -231,6 +239,15 @@ def collect(cloudapi_root: Path) -> list[dict[str, Any]]:
             entries.append(entry)
 
     entries.sort(key=lambda e: (e["service"], e["path"]))
+    # Say what was left out. A generator that silently drops bindings is how 34
+    # endpoints once went missing behind a naming mismatch and looked, from the
+    # outside, like Yandex not offering an API at all.
+    print(
+        f"kept {len(entries)} read endpoints; "
+        f"dropped {dropped['mutating']} mutating and {dropped['no_host']} with no registry host"
+    )
+    for package in sorted(unhosted):
+        print(f"  no host for package: {package}")
     return entries
 
 

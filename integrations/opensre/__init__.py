@@ -17,15 +17,15 @@ from integrations.opensre.inject import (
 )
 from integrations.opensre.seed_evidence import merge_opensre_seed_into_state
 
-__all__ = (
+__all__ = [
     "OPENSRE_HF_DATASET_ID",
     "OpenSRECsvGrafanaBackend",
     "extract_scoring_points",
     "infer_opensre_telemetry_relative",
     "inject_opensre_into_resolved_integrations",
-    "merge_opensre_seed_into_state",
     "materialize_opensre_telemetry_from_hub",
+    "merge_opensre_seed_into_state",
     "resolve_opensre_telemetry_dir",
     "stream_opensre_query_alerts",
     "strip_scoring_points_from_alert",
-)
+]

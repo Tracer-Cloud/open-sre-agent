@@ -13,11 +13,11 @@ from surfaces.interactive_shell.command_registry.slash_catalog import (
     slash_invoke_tool_description,
 )
 from surfaces.interactive_shell.session import Session
-from surfaces.interactive_shell.ui import repl_tty_interactive
-from surfaces.interactive_shell.ui.execution_confirm import execution_allowed
-from surfaces.interactive_shell.utils.telemetry.turn_outcome import (
+from surfaces.interactive_shell.telemetry.turn_outcome import (
     format_terminal_turn_outcome,
 )
+from surfaces.interactive_shell.ui import repl_tty_interactive
+from surfaces.interactive_shell.ui.execution_confirm import execution_allowed
 from tools.interactive_shell.shared.execution_policy import ExecutionPolicyResult
 from tools.interactive_shell.shared.host_contracts import ExecutionGate
 
@@ -25,6 +25,9 @@ from tools.interactive_shell.shared.host_contracts import ExecutionGate
 class SlashPorts(ExecutionGate, Protocol):
     def command_exists(self, name: str) -> bool:
         raise NotImplementedError
+
+    def command_is_mutating(self, name: str) -> bool:
+        """Whether running command ``name`` can change state (control commands cannot)."""
 
     def tool_description(self) -> str:
         raise NotImplementedError
@@ -59,6 +62,10 @@ class SlashPorts(ExecutionGate, Protocol):
 class ReplSlashPorts:
     def command_exists(self, name: str) -> bool:
         return name in SLASH_COMMANDS
+
+    def command_is_mutating(self, name: str) -> bool:
+        command = SLASH_COMMANDS.get(name)
+        return command.mutating if command is not None else True
 
     def tool_description(self) -> str:
         return slash_invoke_tool_description()

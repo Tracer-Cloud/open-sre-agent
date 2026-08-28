@@ -35,7 +35,7 @@ _CADENCE_LABELS: dict[str, str] = {
     "0 7 * * 1-5": "every weekday at 7am",
 }
 
-# Canonical Want-me-to body for a full-investigation offer (INTERACTION_RULES).
+# Canonical Want-me-to body for a full-investigation offer.
 _INVESTIGATION_WANT_ME_TO_BODY = "run a full investigation"
 # Dogfood: models say "kick off a full investigation…" — still arm.
 _FULL_INVESTIGATION_MARKER = "full investigation"

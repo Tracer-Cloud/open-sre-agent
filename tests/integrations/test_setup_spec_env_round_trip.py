@@ -38,9 +38,11 @@ from integrations.dagster.setup import DAGSTER_SETUP
 from integrations.datadog.setup import DATADOG_SETUP
 from integrations.github.setup import GITHUB_SETUP
 from integrations.gitlab.setup import GITLAB_SETUP
+from integrations.google_docs import GOOGLE_DOCS_SETUP
 from integrations.grafana.setup import GRAFANA_SETUP
 from integrations.groundcover.setup import GROUNDCOVER_SETUP
 from integrations.helm.setup import HELM_SETUP
+from integrations.hermes.setup import HERMES_SETUP
 from integrations.honeycomb.setup import HONEYCOMB_SETUP
 from integrations.incident_io.setup import INCIDENT_IO_SETUP
 from integrations.jenkins.setup import JENKINS_SETUP
@@ -101,6 +103,10 @@ _SUBMITTED: dict[str, dict[str, str]] = {
         "base_url": "https://gitlab.example.com/api/v4",
         "auth_token": "glpat-gitlab-token",
     },
+    "google_docs": {
+        "credentials_file": "/opt/opensre/google-docs-sa.json",
+        "folder_id": "1BxiMVs0XRA5nFMdKvBdBZjgmUUqptlbs74OgVE2upms",
+    },
     "sentry": {
         "base_url": "https://sentry.example.com",
         "organization_slug": "checkout-org",
@@ -146,6 +152,7 @@ _SUBMITTED: dict[str, dict[str, str]] = {
         "kubeconfig": "/home/ci/.kube/config",
         "default_namespace": "checkout",
     },
+    "hermes": {"log_path": "/var/log/hermes/errors.log"},
     "smtp": {
         "host": "smtp.eu.example.com",
         "port": "2525",
@@ -322,8 +329,10 @@ _SPECS = [
     DAGSTER_SETUP,
     DATADOG_SETUP,
     GITLAB_SETUP,
+    GOOGLE_DOCS_SETUP,
     GROUNDCOVER_SETUP,
     HELM_SETUP,
+    HERMES_SETUP,
     HONEYCOMB_SETUP,
     INCIDENT_IO_SETUP,
     JENKINS_SETUP,

@@ -59,7 +59,7 @@ def build_litellm_agent_client(settings: Any, provider: str) -> LiteLLMAgentClie
         )
 
     if is_azure_openai_provider(provider):
-        from config.config import AZURE_OPENAI_LLM_CONFIG
+        from config.llm_models import AZURE_OPENAI_LLM_CONFIG
 
         azure = resolve_azure_openai_request_kwargs(settings, model_type=ModelType.REASONING)
         return LiteLLMAgentClient(
@@ -71,7 +71,7 @@ def build_litellm_agent_client(settings: Any, provider: str) -> LiteLLMAgentClie
         )
 
     if is_openai_compat_provider(provider):
-        from config.config import PROVIDER_OLLAMA
+        from config.llm_settings import PROVIDER_OLLAMA
 
         resolved = resolve_openai_compat_provider(settings, provider, ModelType.REASONING)
         max_tokens = 1024 if provider == PROVIDER_OLLAMA else resolved.config.max_tokens
@@ -85,7 +85,7 @@ def build_litellm_agent_client(settings: Any, provider: str) -> LiteLLMAgentClie
         )
 
     if is_vertex_ai_provider(provider):
-        from config.config import VERTEX_AI_LLM_CONFIG
+        from config.llm_models import VERTEX_AI_LLM_CONFIG
 
         vertex = resolve_vertex_ai_request_kwargs(settings, model_type=ModelType.REASONING)
         return LiteLLMAgentClient(
@@ -133,7 +133,7 @@ def build_litellm_llm_client(
         )
 
     if is_azure_openai_provider(provider):
-        from config.config import AZURE_OPENAI_LLM_CONFIG
+        from config.llm_models import AZURE_OPENAI_LLM_CONFIG
 
         azure = resolve_azure_openai_request_kwargs(settings, model_type=model_type)
         raw_fallback = _fallback("azure_openai")
@@ -174,7 +174,7 @@ def build_litellm_llm_client(
         )
 
     if is_vertex_ai_provider(provider):
-        from config.config import VERTEX_AI_LLM_CONFIG
+        from config.llm_models import VERTEX_AI_LLM_CONFIG
 
         vertex = resolve_vertex_ai_request_kwargs(settings, model_type=model_type)
         raw_fallback = _fallback("vertex_ai")

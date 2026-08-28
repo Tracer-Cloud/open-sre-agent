@@ -6,7 +6,8 @@ terminal I/O lives in one place.
 
 Return values from :func:`read_key_unix` / :func:`read_key_windows`:
   ``"up"``, ``"down"``, ``"enter"``, ``"cancel"``, ``"tab"``,
-  ``"right"``, ``"left"``, ``"eof"``, ``"ignore"``.
+  ``"shift_tab"``, ``"right"``, ``"left"``, ``"1"``–``"9"``, ``"eof"``,
+  ``"ignore"``.
 """
 
 from __future__ import annotations
@@ -22,6 +23,22 @@ def flush_stdin_unix() -> None:
         import termios
 
         termios.tcflush(sys.stdin.fileno(), termios.TCIFLUSH)  # type: ignore[attr-defined]
+
+
+def flush_pending_input() -> None:
+    """Drop leftover keypresses (Enter from the previous prompt, CPR, etc.).
+
+    Ask User must not treat the newline that submitted the last prompt — or
+    the ``/choose`` autosubmit — as answering every question with option 1.
+    """
+    flush_stdin_unix()
+    if os.name != "nt":
+        return
+    with contextlib.suppress(Exception):
+        import msvcrt  # type: ignore[import,attr-defined]
+
+        while msvcrt.kbhit():  # type: ignore[attr-defined]
+            msvcrt.getwch()  # type: ignore[attr-defined]
 
 
 def restore_stdin_terminal() -> None:
@@ -50,12 +67,16 @@ def restore_stdin_terminal() -> None:
         termios.tcflush(fd, termios.TCIFLUSH)  # type: ignore[attr-defined]
 
 
-def read_key_unix(*, also_cancel: tuple[bytes, ...] = ()) -> str:
+def read_key_unix(
+    *,
+    also_cancel: tuple[bytes, ...] = (),
+    space_confirms: bool = True,
+) -> str:
     """Read one logical keypress in raw mode; return a normalised key name.
 
     Possible return values: ``"up"``, ``"down"``, ``"enter"``,
-    ``"cancel"``, ``"tab"``, ``"right"``, ``"left"``, ``"eof"``,
-    ``"ignore"``.
+    ``"cancel"``, ``"tab"``, ``"shift_tab"``, ``"right"``, ``"left"``,
+    ``"1"``–``"9"``, ``"eof"``, ``"ignore"``.
 
     ``also_cancel`` treats additional single-byte keys as ``"cancel"`` (e.g.
     ``(b"s", b"S")`` for an explicit skip shortcut).
@@ -74,10 +95,12 @@ def read_key_unix(*, also_cancel: tuple[bytes, ...] = ()) -> str:
         b = ch[0]
         if b in (3, 4) or ch in also_cancel:  # Ctrl-C / Ctrl-D / caller shortcuts
             return "cancel"
-        if b in (10, 13, 32):  # LF / CR / Space
+        if b in (10, 13) or (space_confirms and b == 32):  # LF / CR / optional Space
             return "enter"
         if b == 9:  # Tab
             return "tab"
+        if 0x31 <= b <= 0x39:  # 1-9
+            return chr(b)
         if ch in (b"j", b"J"):
             return "down"
         if ch in (b"k", b"K"):
@@ -97,6 +120,8 @@ def read_key_unix(*, also_cancel: tuple[bytes, ...] = ()) -> str:
                         return "right"
                     if arr == b"D":
                         return "left"
+                    if arr == b"Z":
+                        return "shift_tab"
                     # Not an arrow key — drain the rest of the CSI sequence so
                     # bytes like "0;1R" from a CPR (ESC[row;colR) don't leak into
                     # the next read or the prompt buffer as literal characters.
@@ -111,12 +136,16 @@ def read_key_unix(*, also_cancel: tuple[bytes, ...] = ()) -> str:
         termios.tcsetattr(fd, termios.TCSADRAIN, old)  # type: ignore[attr-defined]
 
 
-def read_key_windows(*, also_cancel: tuple[bytes, ...] = ()) -> str:
+def read_key_windows(
+    *,
+    also_cancel: tuple[bytes, ...] = (),
+    space_confirms: bool = True,
+) -> str:
     """Read one logical keypress on Windows; return a normalised key name.
 
     Possible return values: ``"up"``, ``"down"``, ``"enter"``,
-    ``"cancel"``, ``"tab"``, ``"right"``, ``"left"``, ``"eof"``,
-    ``"ignore"``.
+    ``"cancel"``, ``"tab"``, ``"shift_tab"``, ``"right"``, ``"left"``,
+    ``"1"``–``"9"``, ``"eof"``, ``"ignore"``.
 
     ``also_cancel`` treats additional single-byte keys as ``"cancel"``.
     """
@@ -125,10 +154,12 @@ def read_key_windows(*, also_cancel: tuple[bytes, ...] = ()) -> str:
     ch = msvcrt.getch()  # type: ignore[attr-defined]
     if ch in (b"\x03", b"\x1b") or ch in also_cancel:
         return "cancel"
-    if ch in (b"\r", b"\n", b" "):
+    if ch in (b"\r", b"\n") or (space_confirms and ch == b" "):
         return "enter"
     if ch == b"\t":
         return "tab"
+    if len(ch) == 1 and b"1" <= ch <= b"9":
+        return str(ch.decode("ascii"))
     if ch in (b"j", b"J"):
         return "down"
     if ch in (b"k", b"K"):
@@ -145,8 +176,16 @@ def read_key_windows(*, also_cancel: tuple[bytes, ...] = ()) -> str:
             return "right"
         if ch2 == b"K":
             return "left"
+        if ch2 == b"\x0f":
+            return "shift_tab"
         return "ignore"
     return "ignore"
 
 
-__all__ = ["flush_stdin_unix", "read_key_unix", "read_key_windows", "restore_stdin_terminal"]
+__all__ = [
+    "flush_pending_input",
+    "flush_stdin_unix",
+    "read_key_unix",
+    "read_key_windows",
+    "restore_stdin_terminal",
+]

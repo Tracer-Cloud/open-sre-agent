@@ -8,7 +8,7 @@ from core.agent_harness.session_goal.evaluate import (
     _host_owned_achieved_claim_lacks_tool_evidence,
     _host_owned_goal_has_tool_evidence_and_answer_reply,
     _host_owned_goal_has_unverified_cohort_reply,
-    _reply_is_nonempty_and_not_progress_paint,
+    _reply_is_nonempty_and_not_progress_text,
     _short_checklist_has_achieved_claim_and_tool_evidence,
     _short_checklist_has_no_prior_progress_and_tool_answer,
 )
@@ -31,12 +31,12 @@ def _goal(
     )
 
 
-def test_reply_is_nonempty_and_not_progress_paint() -> None:
-    assert _reply_is_nonempty_and_not_progress_paint("D7 retention is unavailable.") is True
-    assert _reply_is_nonempty_and_not_progress_paint("   ") is False
-    assert _reply_is_nonempty_and_not_progress_paint("") is False
-    paint = "◎ /goal active\n  reason: waiting for host signal"
-    assert _reply_is_nonempty_and_not_progress_paint(paint) is False
+def test_reply_is_nonempty_and_not_progress_text() -> None:
+    assert _reply_is_nonempty_and_not_progress_text("D7 retention is unavailable.") is True
+    assert _reply_is_nonempty_and_not_progress_text("   ") is False
+    assert _reply_is_nonempty_and_not_progress_text("") is False
+    progress_text = "◎ /goal active\n  reason: waiting for host signal"
+    assert _reply_is_nonempty_and_not_progress_text(progress_text) is False
 
 
 def test_host_owned_goal_has_unverified_cohort_reply_requires_all_parts() -> None:

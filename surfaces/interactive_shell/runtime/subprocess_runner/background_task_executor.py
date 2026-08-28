@@ -14,8 +14,8 @@ from rich.console import Console
 from rich.markup import escape
 
 from surfaces.interactive_shell.runtime import Session, TaskKind, TaskRecord
+from surfaces.interactive_shell.telemetry import PromptRecorder
 from surfaces.interactive_shell.ui import DIM, ERROR, HIGHLIGHT
-from surfaces.interactive_shell.utils.telemetry import PromptRecorder
 from surfaces.shared.error_handling.exception_reporting import report_exception
 
 from .task_streaming import (

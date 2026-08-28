@@ -101,7 +101,7 @@ _CLASSIFY_PATCH_TARGETS: list[tuple[str, str, str]] = [
     ("new_relic", "integrations.new_relic", "NewRelicIntegrationConfig"),
     ("github", "integrations.github.mcp", "build_github_mcp_config"),
     ("sentry", "integrations.sentry", "build_sentry_config"),
-    ("gitlab", "integrations.gitlab", "build_gitlab_config"),
+    ("gitlab", "integrations.gitlab.client", "build_gitlab_config"),
     ("mongodb", "integrations.mongodb", "build_mongodb_config"),
     ("postgresql", "integrations.postgresql", "build_postgresql_config"),
     ("mongodb_atlas", "integrations.mongodb_atlas", "build_mongodb_atlas_config"),

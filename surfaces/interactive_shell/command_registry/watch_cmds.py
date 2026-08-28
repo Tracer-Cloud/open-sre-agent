@@ -11,14 +11,14 @@ from rich.console import Console
 from rich.markup import escape
 
 from infrastructure.errors import OpenSREError
-from integrations.buzz.alarms import BuzzAlarmDispatcher
-from integrations.buzz.credentials import (
+from integrations.buzz import (
     load_credentials_from_env as load_buzz_credentials_from_env,
 )
-from integrations.rocketchat.alarms import RocketChatAlarmDispatcher
-from integrations.rocketchat.credentials import (
+from integrations.buzz.alarms import BuzzAlarmDispatcher
+from integrations.rocketchat import (
     load_credentials_from_env as load_rocketchat_credentials_from_env,
 )
+from integrations.rocketchat.alarms import RocketChatAlarmDispatcher
 from integrations.telegram.alarms import AlarmDispatcher
 from integrations.telegram.credentials import load_credentials_from_env
 from surfaces.interactive_shell.command_registry.types import (

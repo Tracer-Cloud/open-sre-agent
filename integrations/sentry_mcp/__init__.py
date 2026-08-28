@@ -29,6 +29,7 @@ import os
 from collections.abc import AsyncIterator, Coroutine, Mapping
 from contextlib import AsyncExitStack, asynccontextmanager
 from dataclasses import dataclass
+from http import HTTPStatus
 from typing import Any, cast
 
 import httpx
@@ -357,7 +358,10 @@ def describe_sentry_mcp_error(err: BaseException, config: SentryMCPConfig) -> st
     detail = _root_cause_message(err)
     hints: list[str] = []
 
-    if isinstance(err, httpx.HTTPStatusError) and err.response.status_code in (401, 403):
+    if isinstance(err, httpx.HTTPStatusError) and err.response.status_code in (
+        HTTPStatus.UNAUTHORIZED,
+        HTTPStatus.FORBIDDEN,
+    ):
         hints.append(
             "Authentication failed. Check SENTRY_MCP_AUTH_TOKEN is a valid user auth token "
             "with the required scopes (at least `org:read`)."
@@ -535,3 +539,21 @@ def classify(
     if cfg.is_configured:
         return cfg, "sentry_mcp"
     return None, None
+
+
+__all__ = [
+    "DEFAULT_SENTRY_MCP_URL",
+    "SentryMCPConfig",
+    "SentryMCPContentItem",
+    "SentryMCPToolCallResult",
+    "SentryMCPToolDescriptor",
+    "SentryMCPValidationResult",
+    "build_sentry_mcp_config",
+    "call_sentry_mcp_tool",
+    "classify",
+    "describe_sentry_mcp_error",
+    "list_sentry_mcp_tools",
+    "sentry_mcp_config_from_env",
+    "sentry_mcp_runtime_unavailable_reason",
+    "validate_sentry_mcp_config",
+]

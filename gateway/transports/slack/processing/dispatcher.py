@@ -17,7 +17,7 @@ from config.constants.gateway import (
 from config.principal import StorageScope
 from config.scope_context import bound_storage_scope
 from core.agent_harness import SessionCore
-from gateway.core.billing.credits_client import CreditsOutcome, consume_credits
+from gateway.core.billing.turn_metering import bound_turn_metering
 from gateway.core.middleware.active_turns import ActiveTurnRegistry, is_stop_command
 from gateway.core.middleware.approvals import ApprovalBroker, approval_tool_hooks
 from gateway.core.middleware.attention import GateDecision, ThreadAttentionGate
@@ -212,19 +212,6 @@ class SlackTurnDispatcher:
             if session is None:
                 return
 
-            # Metering: only an explicit webapp denial (402) blocks the turn,
-            # so a config error can never masquerade to users as "out of
-            # credits". UNCONFIGURED (dev setups without metering env) and
-            # UNAVAILABLE (webapp outage) proceed — fail-open is the intended
-            # policy so a billing outage never silences the Slack coworker.
-            if consume_credits(scope.principal.id, reason="slack_turn") is CreditsOutcome.DENIED:
-                self._logger.info(
-                    "[slack-gateway] turn denied: out of credits channel=%s",
-                    inbound.channel_id,
-                )
-                self._post(inbound, CREDITS_DENIED_MESSAGE)
-                return
-
             # Never log message bodies — audit hashes live in messaging_security.
             # ts vs thread_ts distinguishes a new mention (ts == thread_ts) from a
             # threaded reply — key to diagnosing session continuity.
@@ -303,11 +290,37 @@ class SlackTurnDispatcher:
                     timestamp=inbound.ts,
                 )
 
+            def _on_credit_denied() -> None:
+                self._logger.info(
+                    "[slack-gateway] turn denied: out of credits channel=%s",
+                    inbound.channel_id,
+                )
+                if not terminal.claim():
+                    return
+                try:
+                    output.finalize(CREDITS_DENIED_MESSAGE)
+                except Exception:
+                    self._logger.debug(
+                        "[slack-gateway] credits-denied finalize failed", exc_info=True
+                    )
+                mark_turn_failed(
+                    self._messaging,
+                    channel=inbound.channel_id,
+                    timestamp=inbound.ts,
+                )
+
             with terminal.timeout_after(self._settings.turn_timeout_seconds, _on_turn_timeout):
                 try:
-                    # Slack thread is the continuity source when the
-                    # gateway session file is empty (redeploy / ephemeral disk).
-                    if session_needs_thread_seed(inbound.text, is_reply=is_reply):
+                    # Slack thread is the continuity source only when the
+                    # gateway session is empty (redeploy / ephemeral disk).
+                    # If prior turns already live in-session, skip the fetch —
+                    # re-scanning the whole thread on every reply re-invokes
+                    # the agent against rebuilt history for no benefit.
+                    if session_needs_thread_seed(
+                        inbound.text,
+                        is_reply=is_reply,
+                        has_session_history=prior_msgs > 0,
+                    ):
                         seeded = seed_session_from_slack_thread(
                             session,
                             channel_id=inbound.channel_id,
@@ -335,6 +348,11 @@ class SlackTurnDispatcher:
                             surface=UsageSurface.SLACK,
                             session_id=session.session_id,
                             user_id=inbound.user_id or None,
+                        ),
+                        bound_turn_metering(
+                            organization_id=scope.principal.id,
+                            reason="slack_turn",
+                            on_denied=_on_credit_denied,
                         ),
                     ):
                         self._handler(agent_text, session, output, self._logger)
@@ -383,7 +401,7 @@ def _slack_files_context(files: tuple[SlackInboundFile, ...], logger: logging.Lo
     fail-safe — a missing token drops attachments rather than failing the turn).
     """
     from gateway.transports.slack.processing.attachments import build_files_context
-    from integrations.slack.web_client import resolve_bot_token
+    from integrations.slack import resolve_bot_token
 
     target, detail = resolve_bot_token()
     if target is None:

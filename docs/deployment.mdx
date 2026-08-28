@@ -103,35 +103,63 @@ Complete route reference: [HTTP API](/api).
 
 ## Horizontal scale-out
 
-Run more than one gateway task to serve more concurrent conversations.
+Run **one** gateway task and leave `OPENSRE_SESSION_FILE_LOCK` off. More than
+one gateway task sharing `OPENSRE_HOME` is not supported yet. Follow
+[#5474](https://github.com/Tracer-Cloud/opensre/issues/5474) and add a second
+task only after that lands.
 
-### Required: a shared, locked session store
-
-All tasks must use the same session store — a shared mount such as an S3 Files or
-EFS volume. Turn on the cross-process lock so two tasks never corrupt one
-session's file:
+To serve more concurrent conversations today, raise concurrency on that single
+task (next section). After #5474, put every task on the same session store — a
+shared mount such as S3 Files or EFS — and set:
 
 ```bash
 OPENSRE_SESSION_FILE_LOCK=1
 ```
 
-Without it, two tasks handling turns for the same conversation at the same moment
-can interleave writes and lose turns. A single-task deployment does not need it
-and should leave it off.
+Slack Events API tasks must also share `DATABASE_URL`. Without it, a Slack retry
+that lands on another replica runs the same turn twice. Socket Mode, Telegram,
+and Discord do not use that store. Do not set `SLACK_GATEWAY_ALLOW_LOCAL_DEDUP=1`
+on more than one replica.
+
+Do not turn the lock on to make a multi-task fleet safe until then. Even after
+the fix, `fcntl.flock` is weak on some shared mounts (NFS, and EFS depending on
+configuration) — stay on a single task there, or use a mount that honors POSIX
+locks.
 
 ### Concurrency per task
 
-Each task runs a bounded number of turns at once (default 1). Turns are I/O-bound
-— mostly waiting on the model — so a small task can run several; the limit is the
-task's memory, since each concurrent turn holds its context resident. Raise it
-without changing the task size:
+Each task has two caps, and the lower one wins. `OPENSRE_MAX_CONCURRENT_TURNS`
+limits every turn in the process (default 1 on SMALL). Slack, Telegram, and
+Discord each have their own pool (`SLACK_GATEWAY_MAX_CONCURRENT`,
+`TELEGRAM_GATEWAY_MAX_CONCURRENT`, `DISCORD_GATEWAY_MAX_CONCURRENT`), which also
+defaults to 1 on SMALL. Raising only the process cap leaves chat at one
+concurrent turn.
+
+Turns are I/O-bound — mostly waiting on the model — so a small task can run
+several; the ceiling is the task's memory, since each concurrent turn holds its
+context resident. Raise both without changing the task size, using the transport
+vars for the chats you run:
 
 ```bash
 OPENSRE_MAX_CONCURRENT_TURNS=2
+SLACK_GATEWAY_MAX_CONCURRENT=2
+TELEGRAM_GATEWAY_MAX_CONCURRENT=2
+DISCORD_GATEWAY_MAX_CONCURRENT=2
 ```
+
+Or set `OPENSRE_SIZE_PROFILE=MEDIUM` (2) or `LARGE` (4) to raise both defaults
+together.
 
 Read the `gateway_turn_memory` debug lines (`delta_mb`, `peak_mb`) from a real run
 to size this against the task's memory limit before raising it.
+
+Queued investigations (from `POST /investigate`) run in a separate background pool
+that defaults to one at a time. Raise it to process more concurrently, still
+bounded by the turn limit above:
+
+```bash
+OPENSRE_INVESTIGATION_WORKERS=2
+```
 
 ### Dedicated scheduler service
 
@@ -153,16 +181,17 @@ that file, so a separate filesystem would leave it running a stale task set.
 
 ### Optional: conversation affinity
 
-The lock keeps N tasks correct. Affinity — routing a conversation to the same
-task each time — is a performance option: it keeps that conversation's warm agent
-in one task's memory instead of cold-rebuilding when a turn lands elsewhere.
+Skip affinity until you run more than one gateway task (after #5474). Then it is
+a performance option: it keeps a conversation's warm agent in one task's memory
+instead of cold-rebuilding when a turn lands elsewhere.
 
 Affinity is a routing concern, not an app setting:
 
-- Behind an HTTP load balancer (Slack Events API), enable consistent hashing on
-  the conversation (Slack channel and thread) so a thread sticks to one task.
+- Behind an HTTP load balancer (Slack Events API), set the shared
+  `DATABASE_URL` above, then enable consistent hashing on the conversation
+  (Slack channel and thread) so a thread sticks to one task. Hashing does not
+  replace event dedup.
 - With the pull transports (Slack Socket Mode, Telegram, Discord), each task
   connects independently and the provider spreads events across tasks, so there
-  is no built-in affinity. The lock keeps this correct; affinity would need an
-  external dispatcher and is worth adding only when warm-agent reuse measurably
-  helps.
+  is no built-in affinity. Affinity would need an external dispatcher and is
+  worth adding only when warm-agent reuse measurably helps.

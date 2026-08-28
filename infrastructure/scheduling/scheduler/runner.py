@@ -25,6 +25,7 @@ from infrastructure.scheduling.scheduler.reload_signal import (
     RELOAD_POLL_SECONDS,
     watch_and_reconcile,
 )
+from infrastructure.scheduling.scheduler.runners import SchedulerRunners
 from infrastructure.scheduling.scheduler.store import (
     _default_store_path,
     get_task,
@@ -97,7 +98,7 @@ def _on_job_submitted(event: Any) -> None:
         _pending_fire_times[event.job_id] = fire_time
 
 
-def _scheduled_job(task_id: str) -> None:
+def _scheduled_job(task_id: str, runners: SchedulerRunners) -> None:
     """Job callback invoked by APScheduler on each cron tick."""
     with _pending_fire_times_lock:
         fire_time = _pending_fire_times.pop(task_id, None)
@@ -127,7 +128,7 @@ def _scheduled_job(task_id: str) -> None:
         )
         return
 
-    result = execute_task(task, fire_time)
+    result = execute_task(task, fire_time, runners)
 
     if result:
         task.last_run = datetime.now(UTC).isoformat()
@@ -138,6 +139,7 @@ def _scheduled_job(task_id: str) -> None:
 
 def _register_jobs(
     scheduler: Any,
+    runners: SchedulerRunners,
     *,
     task_filter: TaskFilter | None = None,
     add_listener: bool = True,
@@ -167,7 +169,7 @@ def _register_jobs(
         scheduler.add_job(
             _scheduled_job,
             trigger=trigger,
-            args=[task.id],
+            args=[task.id, runners],
             id=task.id,
             name=f"{task.kind.value}:{task.id}",
             replace_existing=True,
@@ -203,6 +205,7 @@ def _desired_task_ids(*, task_filter: TaskFilter | None = None) -> set[str]:
 
 def resync_scheduler_jobs(
     scheduler: Any,
+    runners: SchedulerRunners,
     *,
     task_filter: TaskFilter | None = None,
 ) -> int:
@@ -210,6 +213,7 @@ def resync_scheduler_jobs(
     existing_ids = {job.id for job in scheduler.get_jobs()}
     enabled_count = _register_jobs(
         scheduler,
+        runners,
         task_filter=task_filter,
         add_listener=False,
     )
@@ -231,6 +235,7 @@ def resync_scheduler_jobs(
 
 def refresh_background_scheduler(
     scheduler: Any | None,
+    runners: SchedulerRunners,
     *,
     task_filter: TaskFilter | None = None,
 ) -> tuple[Any | None, int]:
@@ -240,9 +245,9 @@ def refresh_background_scheduler(
     existing scheduler is shut down and ``None`` is returned.
     """
     if scheduler is None:
-        return start_background_scheduler(task_filter=task_filter)
+        return start_background_scheduler(runners, task_filter=task_filter)
 
-    enabled_count = resync_scheduler_jobs(scheduler, task_filter=task_filter)
+    enabled_count = resync_scheduler_jobs(scheduler, runners, task_filter=task_filter)
     if enabled_count > 0:
         return scheduler, enabled_count
 
@@ -259,6 +264,7 @@ def refresh_background_scheduler(
 
 
 def start_background_scheduler(
+    runners: SchedulerRunners,
     *,
     task_filter: TaskFilter | None = None,
 ) -> tuple[Any, int]:
@@ -271,7 +277,7 @@ def start_background_scheduler(
     from apscheduler.schedulers.background import BackgroundScheduler
 
     scheduler = BackgroundScheduler()
-    enabled_count = _register_jobs(scheduler, task_filter=task_filter)
+    enabled_count = _register_jobs(scheduler, runners, task_filter=task_filter)
     if enabled_count == 0:
         record_scheduler_service_operation("scheduler_idle", task_count=0)
         return None, 0
@@ -281,7 +287,9 @@ def start_background_scheduler(
     return scheduler, enabled_count
 
 
-def _watch_reload_signal(scheduler: Any, stop_event: threading.Event) -> None:
+def _watch_reload_signal(
+    scheduler: Any, runners: SchedulerRunners, stop_event: threading.Event
+) -> None:
     """Keep the blocking scheduler's jobs in sync with the task store until stopped.
 
     The blocking scheduler registers tasks once, so without this a task added by
@@ -291,13 +299,13 @@ def _watch_reload_signal(scheduler: Any, stop_event: threading.Event) -> None:
     """
     watch_and_reconcile(
         stop_event,
-        lambda: resync_scheduler_jobs(scheduler),
+        lambda: resync_scheduler_jobs(scheduler, runners),
         _default_store_path(),
         on_error=lambda exc: logger.warning("Scheduler resync failed; will retry: %s", exc),
     )
 
 
-def start_scheduler(*, idle_when_empty: bool = False) -> None:
+def start_scheduler(runners: SchedulerRunners, *, idle_when_empty: bool = False) -> None:
     """Load all enabled tasks and start the blocking scheduler.
 
     Blocks until SIGINT or SIGTERM. Invalid tasks (bad cron, bad timezone)
@@ -310,7 +318,7 @@ def start_scheduler(*, idle_when_empty: bool = False) -> None:
     from apscheduler.schedulers.blocking import BlockingScheduler
 
     scheduler = BlockingScheduler()
-    enabled_count = _register_jobs(scheduler)
+    enabled_count = _register_jobs(scheduler, runners)
     if enabled_count == 0 and not idle_when_empty:
         logger.warning("No enabled tasks found. Scheduler has nothing to run.")
         record_scheduler_service_operation("scheduler_idle", task_count=0)
@@ -333,7 +341,7 @@ def start_scheduler(*, idle_when_empty: bool = False) -> None:
     # the watcher must consume and resync it rather than discard it.
     reload_watcher = threading.Thread(
         target=_watch_reload_signal,
-        args=(scheduler, stop_event),
+        args=(scheduler, runners, stop_event),
         name="scheduler-reload-watch",
         daemon=True,
     )
@@ -358,7 +366,7 @@ def start_scheduler(*, idle_when_empty: bool = False) -> None:
         record_scheduler_service_operation("scheduler_stopped", task_count=enabled_count)
 
 
-def run_task_now(task_id: str) -> bool:
+def run_task_now(task_id: str, runners: SchedulerRunners) -> bool:
     """Execute a task immediately (ad-hoc one-shot for debugging).
 
     Uses the current time with seconds precision as fire_time so it does
@@ -369,7 +377,7 @@ def run_task_now(task_id: str) -> bool:
         return False
 
     fire_time = datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
-    return execute_task(task, fire_time)
+    return execute_task(task, fire_time, runners)
 
 
 __all__ = [

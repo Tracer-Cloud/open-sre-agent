@@ -19,7 +19,7 @@ from typing import Literal
 from rich.markup import escape
 
 from surfaces.interactive_shell.runtime.core.state import SpinnerState
-from surfaces.interactive_shell.runtime.utils.input_policy import turn_should_show_spinner
+from surfaces.interactive_shell.runtime.input_policy import turn_should_show_spinner
 from surfaces.interactive_shell.session import Session
 from surfaces.interactive_shell.ui import (
     DIM,

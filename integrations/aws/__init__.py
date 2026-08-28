@@ -6,6 +6,16 @@ import logging
 from typing import Any
 
 from integrations._validation_helpers import report_classify_failure
+from integrations.aws.role_mode_gate import (
+    CONFIGURE_FIRST_INSTRUCTION,
+    GATE_OPTIONS,
+    GATE_QUESTION,
+    NO_AMBIENT_CREDENTIALS_NOTICE,
+    ConfigureCredentialsFirst,
+    RoleGateChoice,
+    gate_role_mode,
+)
+from integrations.aws.setup import AWS_SETUP
 from integrations.config_models import AWSIntegrationConfig
 
 logger = logging.getLogger(__name__)
@@ -37,3 +47,17 @@ def classify(
     except Exception as exc:
         report_classify_failure(exc, logger=logger, integration="aws", record_id=record_id)
         return None, None
+
+
+__all__ = [
+    "AWS_SETUP",
+    "CONFIGURE_FIRST_INSTRUCTION",
+    "ConfigureCredentialsFirst",
+    "GATE_OPTIONS",
+    "GATE_QUESTION",
+    "NO_AMBIENT_CREDENTIALS_NOTICE",
+    "RoleGateChoice",
+    "_text",
+    "classify",
+    "gate_role_mode",
+]

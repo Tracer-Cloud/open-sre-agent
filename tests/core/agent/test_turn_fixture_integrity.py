@@ -132,8 +132,6 @@ def test_scenario_action_kinds_have_registered_tools() -> None:
             kind = str(action.get("kind", "")).strip()
             if not kind:
                 continue
-            if kind == "assistant_handoff":
-                continue
             tool_name = TOOL_KIND_TO_NAME.get(cast(ToolKind, kind))
             if tool_name is None:
                 missing.append(f"{case.scenario.id}: kind {kind!r} has no tool mapping")
@@ -259,9 +257,9 @@ def test_parse_selection_spec_variants() -> None:
     # A bare mode defaults to the 5% fast slice.
     assert parse_selection_spec("complex") == SelectionSpec(mode="complex", fraction=0.05)
     assert parse_selection_spec("346,347") == SelectionSpec(mode="id", ids=("346", "347"))
-    assert parse_selection_spec("id:346-metric-read-windows-users") == SelectionSpec(
+    assert parse_selection_spec("id:340-rca-verb-pasted-json-dispatch") == SelectionSpec(
         mode="id",
-        ids=("346-metric-read-windows-users",),
+        ids=("340-rca-verb-pasted-json-dispatch",),
     )
 
 
@@ -273,10 +271,10 @@ def test_parse_selection_spec_rejects_bad_input() -> None:
 
 def test_select_cases_by_numeric_prefix_ids() -> None:
     cases = load_all_scenarios()
-    selected = select_cases(cases, spec="346,347")
+    selected = select_cases(cases, spec="300,301")
     assert [case.scenario.id for case in selected] == [
-        "346-metric-read-windows-users",
-        "347-session-goal-five-step-checklist",
+        "300-sample-alert-run",
+        "301-sample-alert-paraphrase",
     ]
 
 
@@ -308,8 +306,7 @@ def test_select_cases_complex_picks_the_top_scored() -> None:
 
 def test_select_cases_percentage_rounds_up() -> None:
     cases = load_all_scenarios()
-    # 5% of 61 scenarios rounds up to 4.
-    assert len(select_cases(cases, spec="complex:5%")) == 4
+    assert len(select_cases(cases, spec="complex:5%")) == 1
 
 
 def test_select_representative_covers_every_behavior_class() -> None:

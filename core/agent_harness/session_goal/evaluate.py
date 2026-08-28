@@ -47,7 +47,7 @@ from core.agent_harness.session_goal.goal import (
     apply_session_goal_progress,
     attach_session_goal,
 )
-from core.agent_harness.session_goal.progress import is_session_goal_progress_paint
+from core.agent_harness.session_goal.progress import is_session_goal_progress_text
 from core.agent_harness.turns.cohort_identity import (
     goal_needs_cohort_identity,
     reply_reports_cohort_unverified,
@@ -57,7 +57,7 @@ from core.agent_harness.turns.cohort_identity import (
 _ACHIEVED_CLAIM = re.compile(r"session_goal:achieved")
 
 # Pre-fix host reasons embedded the tag grammar; neutralize before scanning so
-# old painted status text cannot look like a claim.
+# old progress status text cannot look like a claim.
 _LEGACY_WAITING_WITH_TAG = (
     "waiting for session_goal:achieved with tool evidence",
     "waiting for session_goal:achieved",
@@ -87,7 +87,7 @@ def reply_claims_session_goal_achieved(text: str) -> bool:
     """True when ``text`` contains a real ``session_goal:achieved`` progress tag.
 
     Host status reasons never embed tag grammar (:class:`SessionGoalReason`).
-    Legacy painted phrases that did are stripped before the token scan.
+    Legacy progress phrases that did are stripped before the token scan.
     """
     if not text:
         return False
@@ -112,11 +112,6 @@ def turn_has_session_goal_evidence(result: Any) -> bool:
     call must not let an ``achieved`` claim through. ``executed_count`` alone
     would say yes to a turn whose only action failed.
 
-    Counts action-phase successes **and** gather-phase successes. A metric_read
-    turn typically executes only ``assistant_handoff`` in the action phase
-    (which does not increment ``executed_success_count``) and the live query
-    in gather — that gather work is the real evidence.
-
     Dispatching ``investigation_start`` is not finishing evidence for a session
     goal — that work lands in later turns / the investigation report.
     """
@@ -129,11 +124,7 @@ def turn_has_session_goal_evidence(result: Any) -> bool:
             action_succeeded = int(getattr(action, "executed_success_count", 0) or 0)
         except (TypeError, ValueError):
             action_succeeded = 0
-    try:
-        gather_succeeded = int(getattr(result, "gather_success_count", 0) or 0)
-    except (TypeError, ValueError):
-        gather_succeeded = 0
-    return action_succeeded > 0 or gather_succeeded > 0
+    return action_succeeded > 0
 
 
 # metric_read-style attach usually emits query + report (2 items). Longer
@@ -156,9 +147,9 @@ def _same_turn_completable(goal: SessionGoal) -> bool:
     return len(goal.checklist) <= _SAME_TURN_CHECKLIST_MAX_ITEMS
 
 
-def _reply_is_nonempty_and_not_progress_paint(text: str) -> bool:
+def _reply_is_nonempty_and_not_progress_text(text: str) -> bool:
     """True when the assistant reply is real content, not ``/goal`` status chrome."""
-    return bool(text.strip()) and not is_session_goal_progress_paint(text)
+    return bool(text.strip()) and not is_session_goal_progress_text(text)
 
 
 def _short_checklist_has_achieved_claim_and_tool_evidence(
@@ -209,7 +200,7 @@ def _host_owned_goal_has_unverified_cohort_reply(goal: SessionGoal, text: str) -
     """
     return (
         goal.host_owned
-        and _reply_is_nonempty_and_not_progress_paint(text)
+        and _reply_is_nonempty_and_not_progress_text(text)
         and goal_needs_cohort_identity(goal.condition)
         and reply_reports_cohort_unverified(text)
     )
@@ -226,7 +217,7 @@ def _host_owned_goal_has_tool_evidence_and_answer_reply(
     Do not wait for ``session_goal:achieved`` — that tag is scrubbed from the
     visible reply and models often omit it.
     """
-    return goal.host_owned and has_evidence and _reply_is_nonempty_and_not_progress_paint(text)
+    return goal.host_owned and has_evidence and _reply_is_nonempty_and_not_progress_text(text)
 
 
 def evaluate_session_goal(

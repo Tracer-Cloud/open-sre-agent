@@ -49,8 +49,8 @@ def _cmd_exit(session: Session, console: Console, _args: list[str]) -> bool:
 
 
 def _cmd_health(_session: Session, console: Console, _args: list[str]) -> bool:
-    from config.config import get_environment
     from config.constants.paths import integrations_store_path
+    from config.environment import get_environment
     from integrations.verify import verify_integrations
     from surfaces.shared.terminal.health import render_health_report
 
@@ -104,8 +104,8 @@ def _cmd_version(_session: Session, console: Console, _args: list[str]) -> bool:
 
 
 COMMANDS: list[SlashCommand] = [
-    SlashCommand("/exit", "Exit the interactive shell.", _cmd_exit),
-    SlashCommand("/quit", "Alias for /exit.", _cmd_exit),
+    SlashCommand("/exit", "Exit the interactive shell.", _cmd_exit, mutating=False),
+    SlashCommand("/quit", "Alias for /exit.", _cmd_exit, mutating=False),
     SlashCommand("/health", "Show integration and agent health.", _cmd_health),
     SlashCommand("/doctor", "Run full environment diagnostic.", _cmd_doctor),
     SlashCommand("/version", "Print version, Python, and OS info.", _cmd_version),
