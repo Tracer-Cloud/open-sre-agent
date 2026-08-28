@@ -30,6 +30,32 @@ def test_classifies_by_impact(command: str, expected: CommandRisk) -> None:
     assert why  # a human-readable reason always accompanies the level
 
 
+@pytest.mark.parametrize(
+    ("command", "expected"),
+    [
+        # A single explicitly-named file is a bounded delete: medium, not high.
+        ("rm notes.md", CommandRisk.MEDIUM),
+        ("rm -rf /tmp/t1.txt", CommandRisk.MEDIUM),
+        ("rm data.json && echo done", CommandRisk.MEDIUM),
+        # Directories, globs, and root-ish paths are not bounded: high.
+        ("rm -rf build", CommandRisk.HIGH),  # no extension -> directory
+        ("rm -rf logs/", CommandRisk.HIGH),  # trailing slash -> directory
+        ("rm *.log", CommandRisk.HIGH),  # glob -> many files
+        ("rm -rf /", CommandRisk.HIGH),  # root
+        ("rm -rf /tmp", CommandRisk.HIGH),  # top-level dir
+        ("rm -rf ~", CommandRisk.HIGH),  # home
+        ("rm", CommandRisk.HIGH),  # no target named -> conservative
+        # Low-level wipes are always high regardless of target.
+        ("dd if=/dev/zero of=disk.img", CommandRisk.HIGH),
+        ("shred secret.txt", CommandRisk.HIGH),
+    ],
+)
+def test_delete_grades_by_target(command: str, expected: CommandRisk) -> None:
+    risk, why = classify_command_risk(command)
+    assert risk is expected
+    assert why
+
+
 def test_unrecognized_mutation_defaults_to_medium_not_low() -> None:
     risk, _why = classify_command_risk("frobnicate --all")
     assert risk is CommandRisk.MEDIUM

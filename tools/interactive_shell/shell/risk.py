@@ -28,10 +28,6 @@ class CommandRisk(StrEnum):
     HIGH = "high"
 
 
-# First-token verbs that destroy data or cannot be undone.
-_DESTRUCTIVE_VERBS = frozenset(
-    {"rm", "rmdir", "shred", "dd", "mkfs", "fdisk", "truncate", "unlink", "srm"}
-)
 # Substrings that mark a remote, irreversible, or destructive action regardless
 # of the leading verb (checked against the whole command, lowercased).
 _HIGH_RISK_PATTERNS: tuple[str, ...] = (
@@ -69,8 +65,66 @@ def _first_verb(segment: str) -> str:
     return ""
 
 
+def _args_after_verb(segment: str) -> list[str]:
+    """Tokens after the command verb, skipping any leading ``ENV=val`` prefixes."""
+    tokens = segment.strip().split()
+    seen_verb = False
+    args: list[str] = []
+    for token in tokens:
+        if not seen_verb:
+            if "=" in token and not token.startswith("-"):
+                continue  # env prefix precedes the verb
+            seen_verb = True  # this token is the verb itself
+            continue
+        args.append(token)
+    return args
+
+
 def _segments(command: str) -> list[str]:
     return [seg for seg in _OPERATOR_SPLIT.split(command) if seg.strip()]
+
+
+_RM_VERBS = frozenset({"rm", "rmdir", "unlink"})
+_HARD_DESTRUCTIVE_VERBS = frozenset({"shred", "srm", "dd", "mkfs", "fdisk", "truncate"})
+_RM_RECURSIVE_FLAGS = frozenset({"-r", "-R", "-rf", "-fr", "-rF", "-Rf", "-fR", "--recursive"})
+
+
+def _looks_like_directory(target: str) -> bool:
+    """A path with no filename extension (or a trailing slash) reads as a dir."""
+    return target.endswith("/") or "." not in target.rstrip("/").rsplit("/", 1)[-1]
+
+
+def _is_broad_path(target: str) -> bool:
+    """A root-ish or home-root target whose deletion is not bounded."""
+    normalized = target.rstrip("/")
+    if normalized in {"", "~", "."}:
+        return True
+    return normalized.startswith(("/", "~")) and normalized.count("/") <= 1
+
+
+def _delete_risk(command: str) -> tuple[CommandRisk, str] | None:
+    """Grade a delete command by its target, or ``None`` if it is not one.
+
+    Deleting a single explicitly-named file is bounded (medium); globs,
+    recursive directory removals, root-ish paths, and low-level wipes are not.
+    """
+    for segment in _segments(command):
+        verb = _first_verb(segment)
+        if verb in _HARD_DESTRUCTIVE_VERBS:
+            return CommandRisk.HIGH, "Destroys data at a low level; irreversible."
+        if verb not in _RM_VERBS:
+            continue
+        args = _args_after_verb(segment)
+        targets = [token for token in args if not token.startswith("-")]
+        recursive = any(token in _RM_RECURSIVE_FLAGS for token in args)
+        if any(char in target for target in targets for char in "*?["):
+            return CommandRisk.HIGH, "Deletes multiple files via a glob; irreversible."
+        if any(_is_broad_path(target) for target in targets):
+            return CommandRisk.HIGH, "Deletes a broad or system path; irreversible."
+        if not targets or (recursive and any(_looks_like_directory(t) for t in targets)):
+            return CommandRisk.HIGH, "Recursively deletes a directory; irreversible."
+        return CommandRisk.MEDIUM, "Deletes a single named file; recoverable only from a backup."
+    return None
 
 
 def classify_command_risk(command: str) -> tuple[CommandRisk, str]:
@@ -86,11 +140,13 @@ def classify_command_risk(command: str) -> tuple[CommandRisk, str]:
     if any(pattern in lowered for pattern in _HIGH_RISK_PATTERNS):
         return CommandRisk.HIGH, "Destructive or remote action that may be irreversible."
 
+    delete = _delete_risk(command)
+    if delete is not None:
+        return delete
+
     verbs = [_first_verb(seg) for seg in _segments(command)]
     verbs = [verb for verb in verbs if verb]
 
-    if any(verb in _DESTRUCTIVE_VERBS for verb in verbs):
-        return CommandRisk.HIGH, "Deletes or overwrites data; likely irreversible."
     if any(verb in _NETWORK_VERBS for verb in verbs):
         return CommandRisk.HIGH, "Contacts a remote system or network resource."
     if any(verb in _PACKAGE_VERBS for verb in verbs):

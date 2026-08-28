@@ -58,6 +58,20 @@ def test_overlay_renders_three_tagged_rows_for_the_auto_gate() -> None:
     assert "[c] No, cancel" in rendered
 
 
+def test_overlay_fits_inside_a_narrow_prompt(monkeypatch) -> None:
+    """A prompt narrower than a typical option label must not wrap the box."""
+    width = 20
+    monkeypatch.setattr(
+        "surfaces.interactive_shell.ui.hooks.confirmation_choice.prompt_line_width",
+        lambda: width,
+    )
+    rendered = _plain(confirmation_choice_overlay_ansi(0, _YES_NO))
+    for line in rendered.splitlines():
+        assert len(line) <= width
+    assert "❯ [a]" in rendered
+    assert "[b]" in rendered
+
+
 def test_letter_keys_deliver_the_matching_answer() -> None:
     state = _FakeState(_YES_NO)
     bindings = install_confirmation_key_bindings(state, lambda: None)
