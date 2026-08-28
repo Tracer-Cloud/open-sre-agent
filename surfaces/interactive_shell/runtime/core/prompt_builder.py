@@ -24,6 +24,7 @@ from surfaces.interactive_shell.ui.input_prompt.key_bindings import (
 )
 from surfaces.interactive_shell.ui.input_prompt.refresh import wire_prompt_refresh
 from surfaces.interactive_shell.ui.input_prompt.style import refresh_prompt_theme
+from surfaces.interactive_shell.ui.prompt_visibility import typing_box_hidden
 from surfaces.interactive_shell.ui.terminal_ui import render_prompt_region
 from surfaces.shared.terminal.components.cpr_stdin import drain_stale_cpr_bytes
 
@@ -111,9 +112,15 @@ class PromptBuilder:
             message=self.message_with_spinner,
             bottom_toolbar=self.spinner.toolbar_ansi,
             refresh_interval=PROMPT_REFRESH_INTERVAL_S,
-            placeholder=lambda: prompt_rendering.resolve_prompt_placeholder(self.session),
+            placeholder=self._prompt_placeholder,
             default=prefilled,
         )
+
+    def _prompt_placeholder(self) -> ANSI:
+        # Options menus / confirmation own the keyboard — suppress free-text ghost.
+        if typing_box_hidden(self.session, self.state):
+            return ANSI("")
+        return prompt_rendering.resolve_prompt_placeholder(self.session)
 
     def render_submitted_prompt(self, console: Console, text: str) -> None:
         prompt_rendering.render_submitted_prompt(console, self.session, text)

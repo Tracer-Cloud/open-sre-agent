@@ -80,6 +80,25 @@ class AgentTurnResources:
     turn_handler: TurnRunner | None = None
 
 
+def _confirm_via_prompt(runtime: AgentTurnResources, prompt: str) -> str:
+    """Park for a y/n answer with the input row switched to confirmation mode.
+
+    The terminal flag drives the prompt to hide the free-text box and its ghost
+    placeholder for the duration of the wait; it is cleared and redrawn on the
+    way out so the normal ``[N] ❯`` box returns immediately.
+    """
+    runtime.session.terminal.awaiting_confirmation = True
+    try:
+        return request_confirmation_via_prompt(
+            runtime.state,
+            prompt,
+            redraw=runtime.invalidate_prompt,
+        )
+    finally:
+        runtime.session.terminal.awaiting_confirmation = False
+        runtime.invalidate_prompt()
+
+
 def _streaming_console(
     runtime: AgentTurnResources, cancel_event: threading.Event
 ) -> StreamingConsole:
@@ -145,7 +164,7 @@ async def run_agent_turn(runtime: AgentTurnResources, text: str) -> None:
                 text=text,
                 output=console,
                 recorder=recorder,
-                confirm=lambda prompt: request_confirmation_via_prompt(runtime.state, prompt),
+                confirm=lambda prompt: _confirm_via_prompt(runtime, prompt),
                 emit=emit,
                 dispatch_cancel=dispatch_cancel,
             )

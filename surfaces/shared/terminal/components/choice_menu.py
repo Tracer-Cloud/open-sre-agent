@@ -146,9 +146,44 @@ def reset_tty_column() -> None:
     sys.stdout.flush()
 
 
+def leave_inline_menu() -> None:
+    """Restore cooked stdin and start the next Rich line at column zero.
+
+    Call after every inline menu exits (select or Esc). Without this, padded
+    menu rows leave the cursor mid-line and later prints (cancelled notice,
+    ``/exit`` resume hint) stagger diagonally.
+    """
+    from surfaces.shared.terminal.components.key_reader import restore_stdin_terminal
+
+    restore_stdin_terminal()
+    prepare_repl_output_line()
+
+
 def erase_menu_lines(height: int) -> None:
     """Erase a previously-rendered inline menu block."""
     _erase_menu_block(height)
+
+
+def _clear_prompt_toolkit_paint() -> None:
+    """Drop any live prompt-toolkit frame so option menus own the screen alone."""
+    from contextlib import suppress
+
+    try:
+        from prompt_toolkit.application.current import get_app_or_none
+    except ImportError:
+        return
+    app = get_app_or_none()
+    if app is None:
+        return
+    renderer = getattr(app, "renderer", None)
+    if renderer is not None:
+        # Erase only the app's reserved rows so the transcript stays and the
+        # menu draws inline (Droid-style); a full clear reads as a new window.
+        with suppress(Exception):
+            renderer.erase()
+    if getattr(app, "is_running", False):
+        with suppress(Exception):
+            app.invalidate()
 
 
 def _draw_menu(
@@ -178,10 +213,10 @@ def _draw_menu(
     for i, label in enumerate(labels):
         here = i == index
         numbered = f"{i + 1}. {label}"
-        sym = ">" if here else " "
+        sym = "❯" if here else " "
         padded = _pad(sym, numbered, w)
         if here:
-            write_menu_line(f"{ui_theme.MENU_SELECTION_ROW_ANSI}{padded}{ui_theme.ANSI_RESET}")
+            write_menu_line(f"{ui_theme.PROMPT_ACCENT_ANSI}{padded}{ui_theme.ANSI_RESET}")
         else:
             write_menu_line(f"{ui_theme.DIM_COUNTER_ANSI}{padded}{ui_theme.ANSI_RESET}")
     write_menu_line()
@@ -206,29 +241,59 @@ def _pick(
     crumb: str,
     labels: list[str],
     initial_index: int = 0,
-) -> int | None:
-    """Draw an inline menu, let user navigate, erase on exit. Returns index or None."""
+    custom_label: str | None = None,
+) -> int | str | None:
+    """Draw an inline menu; return index, custom typed string, or None on Esc.
+
+    When ``custom_label`` matches the focused row, printable keys type on that
+    row in place (Droid-style) and Enter returns the typed string.
+    """
+    from surfaces.shared.terminal.components.key_reader import read_menu_or_char
+
     if not labels:
         return None
     title, crumb, labels = _sanitize_menu(title, crumb, labels)
     idx = initial_index % len(labels)
     height = _menu_height(crumb, labels)
+    draft = ""
     first = True
     while True:
+        on_custom = custom_label is not None and labels[idx] == custom_label
+        display = list(labels)
+        if on_custom:
+            display[idx] = f"{draft}█"
         _draw_menu(
             title=title,
             crumb=crumb,
-            labels=labels,
+            labels=display,
             index=idx,
             erase_lines=0 if first else height,
         )
         first = False
-        action = _read_action()
+        height = _menu_height(crumb, display)
+        action = (
+            read_menu_or_char(allow_chars=True) if on_custom else _read_action()
+        )
+        if on_custom and action == "backspace":
+            draft = draft[:-1]
+            continue
+        if on_custom and len(action) == 1 and action.isprintable() and action not in "\t\n\r":
+            draft += action
+            continue
         if action == "enter":
+            if on_custom:
+                text = draft.strip()
+                if not text:
+                    continue
+                _erase_menu(crumb, display)
+                leave_inline_menu()
+                return text
             _erase_menu(crumb, labels)
+            leave_inline_menu()
             return idx
         if action in ("cancel", "eof"):
-            _erase_menu(crumb, labels)
+            _erase_menu(crumb, display if on_custom else labels)
+            leave_inline_menu()
             return None
         if action == "ignore":
             continue
@@ -238,25 +303,27 @@ def _pick(
             idx = (idx + 1) % len(labels)
 
 
-# ── public API ───────────────────────────────────────────────────────────────
-
-
 def repl_choose_one(
     *,
     title: str,
     choices: list[tuple[str, str]],
     breadcrumb: str = "",
     initial_value: str | None = None,
+    custom_label: str | None = None,
 ) -> str | None:
     """Show an inline erasing arrow-key menu; return selected value or None on Esc.
 
     ``breadcrumb`` is a slash-separated path shown dimly below the title, e.g.
     ``/model › set``.  Only call when :func:`repl_tty_interactive` is True.
+
+    When ``custom_label`` is set and that row is focused, the user types on that
+    row in place (same option array) instead of opening a separate prompt.
     """
     from surfaces.shared.terminal.components.cpr_stdin import drain_stale_cpr_bytes
 
     if not choices or not repl_tty_interactive():
         return None
+    _clear_prompt_toolkit_paint()
     drain_stale_cpr_bytes()
     crumb = breadcrumb
     labels = [label for _value, label in choices]
@@ -266,9 +333,17 @@ def repl_choose_one(
             if value == initial_value:
                 initial_index = index
                 break
-    picked = _pick(title=title, crumb=crumb, labels=labels, initial_index=initial_index)
+    picked = _pick(
+        title=title,
+        crumb=crumb,
+        labels=labels,
+        initial_index=initial_index,
+        custom_label=custom_label,
+    )
     if picked is None:
         return None
+    if isinstance(picked, str):
+        return picked
     value = choices[picked][0]
     return value if isinstance(value, str) else None
 
@@ -292,6 +367,7 @@ def print_valid_choice_list(
 __all__ = [
     "CRUMB_SEP",
     "erase_menu_lines",
+    "leave_inline_menu",
     "menu_columns",
     "print_valid_choice_list",
     "read_menu_action",

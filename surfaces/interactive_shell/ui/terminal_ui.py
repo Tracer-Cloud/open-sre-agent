@@ -21,6 +21,10 @@ from rich.console import Console
 
 from surfaces.interactive_shell.ui.auto_status import auto_status_ansi
 from surfaces.interactive_shell.ui.input_prompt import rendering as prompt_rendering
+from surfaces.interactive_shell.ui.prompt_visibility import (
+    hidden_typing_box_pad,
+    typing_box_hidden,
+)
 from surfaces.interactive_shell.ui.task_plan import task_plan_overlay_ansi
 from surfaces.shared.terminal.banner import render_ready_box
 from surfaces.shared.terminal.components.cpr_stdin import strip_cpr_sequences
@@ -53,12 +57,22 @@ def render_prompt_region(session: Session, state: ReplState, spinner: SpinnerSta
     otherwise the spinner, completion preview, or idle hint, followed by the
     autonomy status line showing the active ``/auto`` level.
 
+    When confirmation or exclusive-stdin structured input owns the keyboard,
+    the free-text typing box (rule + ``[N] ❯``) is omitted so it does not
+    compete with Ask User / option menus — free text is itself an option
+    (``Or type your own answer...``), not a parallel composer.
+
     The region always starts with one blank row so the hint/spinner line never
     sits flush against whatever output scrolled above it. The row is constant
     across all prompt states (no height delta between redraws) and is erased
     with the rest of the region on submit (``erase_when_done=True``).
     """
-    base = prompt_rendering._prompt_message(session).value
+    if typing_box_hidden(session, state):
+        # Same newline count as ``_prompt_message`` so confirmation does not
+        # shift the live region height under ``patch_stdout``.
+        base = hidden_typing_box_pad()
+    else:
+        base = prompt_rendering._prompt_message(session).value
     auto_line = strip_cpr_sequences(auto_status_ansi(session))
     # The confirmation prompt takes the prefix row so every state renders the
     # same rows (blank, prefix, auto status, input) — no height delta on redraw.

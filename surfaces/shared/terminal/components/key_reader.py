@@ -182,10 +182,196 @@ def read_key_windows(
     return "ignore"
 
 
+def read_typing_key() -> str:
+    """Read one key while editing free text inside a menu row.
+
+    Returns ``"enter"``, ``"cancel"``, ``"backspace"``, ``"eof"``, or a single
+    printable character (ASCII). Multi-byte UTF-8 is ignored for now so the
+    Ask User custom row stays a simple in-place field.
+    """
+    if os.name == "nt":
+        return _read_typing_key_windows()
+    return _read_typing_key_unix()
+
+
+def read_menu_or_char(*, allow_chars: bool = False) -> str:
+    """Menu navigation keys, optionally plus printable chars / backspace.
+
+    When ``allow_chars`` is True (custom option row focused), typing inserts
+    on that row in place; arrows/tab still move between options.
+    """
+    if os.name == "nt":
+        return _read_menu_or_char_windows(allow_chars=allow_chars)
+    return _read_menu_or_char_unix(allow_chars=allow_chars)
+
+
+def _read_menu_or_char_unix(*, allow_chars: bool) -> str:
+    import select as _sel
+    import termios
+    import tty
+
+    fd = sys.stdin.fileno()
+    old = termios.tcgetattr(fd)  # type: ignore[attr-defined]
+    try:
+        tty.setraw(fd)  # type: ignore[attr-defined]
+        ch = os.read(fd, 1)
+        if not ch:
+            return "eof"
+        b = ch[0]
+        if b in (3, 4):
+            return "cancel"
+        if b in (10, 13):
+            return "enter"
+        if allow_chars and b in (8, 127):
+            return "backspace"
+        if b == 9:
+            return "tab"
+        # Digits stay as select shortcuts unless typing on the custom row.
+        if not allow_chars and 0x31 <= b <= 0x39:
+            return chr(b)
+        if ch in (b"j", b"J") and not allow_chars:
+            return "down"
+        if ch in (b"k", b"K") and not allow_chars:
+            return "up"
+        if ch in (b"q", b"Q") and not allow_chars:
+            return "cancel"
+        if b == 27:
+            if _sel.select([fd], [], [], 0.1)[0]:
+                nxt = os.read(fd, 1)
+                if nxt == b"[" and _sel.select([fd], [], [], 0.1)[0]:
+                    arr = os.read(fd, 1)
+                    if arr == b"A":
+                        return "up"
+                    if arr == b"B":
+                        return "down"
+                    if arr == b"C":
+                        return "right"
+                    if arr == b"D":
+                        return "left"
+                    if arr == b"Z":
+                        return "shift_tab"
+                    while arr and not (0x40 <= arr[0] <= 0x7E):
+                        if not _sel.select([fd], [], [], 0)[0]:
+                            break
+                        arr = os.read(fd, 1)
+                    return "ignore"
+            return "cancel"
+        if allow_chars and 32 <= b <= 126:
+            return chr(b)
+        return "ignore"
+    finally:
+        termios.tcsetattr(fd, termios.TCSADRAIN, old)  # type: ignore[attr-defined]
+
+
+def _read_menu_or_char_windows(*, allow_chars: bool) -> str:
+    import msvcrt  # type: ignore[import,attr-defined]
+
+    ch = msvcrt.getch()  # type: ignore[attr-defined]
+    if ch in (b"\x03",):
+        return "cancel"
+    if ch in (b"\r", b"\n"):
+        return "enter"
+    if allow_chars and ch in (b"\x08", b"\x7f"):
+        return "backspace"
+    if ch == b"\t":
+        return "tab"
+    if ch == b"\x1b":
+        return "cancel"
+    if not allow_chars and len(ch) == 1 and b"1" <= ch <= b"9":
+        return str(ch.decode("ascii"))
+    if not allow_chars and ch in (b"j", b"J"):
+        return "down"
+    if not allow_chars and ch in (b"k", b"K"):
+        return "up"
+    if not allow_chars and ch in (b"q", b"Q"):
+        return "cancel"
+    if ch in (b"\xe0", b"\x00"):
+        ch2 = msvcrt.getch()  # type: ignore[attr-defined]
+        if ch2 == b"H":
+            return "up"
+        if ch2 == b"P":
+            return "down"
+        if ch2 == b"M":
+            return "right"
+        if ch2 == b"K":
+            return "left"
+        if ch2 == b"\x0f":
+            return "shift_tab"
+        return "ignore"
+    if allow_chars:
+        try:
+            text = ch.decode("ascii")
+        except UnicodeDecodeError:
+            return "ignore"
+        if text.isprintable() and text != "\t":
+            return text
+    return "ignore"
+
+
+def _read_typing_key_unix() -> str:
+    import select as _sel
+    import termios
+    import tty
+
+    fd = sys.stdin.fileno()
+    old = termios.tcgetattr(fd)  # type: ignore[attr-defined]
+    try:
+        tty.setraw(fd)  # type: ignore[attr-defined]
+        ch = os.read(fd, 1)
+        if not ch:
+            return "eof"
+        b = ch[0]
+        if b in (3, 4):  # Ctrl-C / Ctrl-D
+            return "cancel"
+        if b in (10, 13):
+            return "enter"
+        if b in (8, 127):  # BS / DEL
+            return "backspace"
+        if b == 27:
+            # Esc alone cancels; drain CSI so arrows don't leak as chars.
+            if _sel.select([fd], [], [], 0.05)[0]:
+                nxt = os.read(fd, 1)
+                if nxt == b"[":
+                    while _sel.select([fd], [], [], 0)[0]:
+                        arr = os.read(fd, 1)
+                        if arr and 0x40 <= arr[0] <= 0x7E:
+                            break
+            return "cancel"
+        if 32 <= b <= 126:
+            return chr(b)
+        return "ignore"
+    finally:
+        termios.tcsetattr(fd, termios.TCSADRAIN, old)  # type: ignore[attr-defined]
+
+
+def _read_typing_key_windows() -> str:
+    import msvcrt  # type: ignore[import,attr-defined]
+
+    ch = msvcrt.getch()  # type: ignore[attr-defined]
+    if ch in (b"\x03", b"\x1b"):
+        return "cancel"
+    if ch in (b"\r", b"\n"):
+        return "enter"
+    if ch in (b"\x08", b"\x7f"):
+        return "backspace"
+    if ch in (b"\xe0", b"\x00"):
+        msvcrt.getch()  # type: ignore[attr-defined]
+        return "ignore"
+    try:
+        text = ch.decode("ascii")
+    except UnicodeDecodeError:
+        return "ignore"
+    if text.isprintable() and text != "\t":
+        return text
+    return "ignore"
+
+
 __all__ = [
     "flush_pending_input",
     "flush_stdin_unix",
     "read_key_unix",
     "read_key_windows",
+    "read_menu_or_char",
+    "read_typing_key",
     "restore_stdin_terminal",
 ]

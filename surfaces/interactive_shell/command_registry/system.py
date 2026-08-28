@@ -40,6 +40,10 @@ def _flush_analytics_on_exit(console: Console) -> None:
 
 
 def _cmd_exit(session: Session, console: Console, _args: list[str]) -> bool:
+    # Defend against a prior inline menu that left the cursor mid-line.
+    from surfaces.shared.terminal.components.choice_menu import prepare_repl_output_line
+
+    prepare_repl_output_line()
     if session.session_id:
         console.print()
         print_session_resume_hint(console, session.session_id)

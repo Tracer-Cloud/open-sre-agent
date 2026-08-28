@@ -28,8 +28,39 @@ _QUESTIONS = (
 )
 
 
+def _patch_wizard(monkeypatch, actions: list[str]) -> None:
+    keys = iter(actions)
+    monkeypatch.setattr(
+        "surfaces.interactive_shell.ui.ask_user.repl_tty_interactive",
+        lambda: True,
+    )
+    monkeypatch.setattr(
+        "surfaces.interactive_shell.ui.ask_user.read_menu_or_char",
+        lambda allow_chars=False: next(keys),
+    )
+    monkeypatch.setattr(
+        "surfaces.interactive_shell.ui.ask_user._draw_ask_user",
+        lambda **_kwargs: None,
+    )
+    monkeypatch.setattr(
+        "surfaces.interactive_shell.ui.ask_user._leave_ask_user",
+        lambda _question: None,
+    )
+    monkeypatch.setattr(
+        "surfaces.shared.terminal.components.cpr_stdin.drain_stale_cpr_bytes",
+        lambda: None,
+    )
+    monkeypatch.setattr(
+        "surfaces.interactive_shell.ui.ask_user.flush_pending_input",
+        lambda: None,
+    )
+    monkeypatch.setattr(
+        "surfaces.interactive_shell.ui.ask_user.clear_live_prompt_paint",
+        lambda: None,
+    )
+
+
 def test_breadcrumb_hollow_until_a_question_is_replied() -> None:
-    # The current question is not filled just for being current — only replies fill it.
     crumb = format_ask_user_breadcrumb(
         _QUESTIONS,
         answered=(False, False, False),
@@ -38,7 +69,6 @@ def test_breadcrumb_hollow_until_a_question_is_replied() -> None:
 
 
 def test_breadcrumb_fills_only_replied_questions() -> None:
-    # Codebase is replied (●); Metrics unanswered stays ○.
     crumb = format_ask_user_breadcrumb(
         _QUESTIONS,
         answered=(True, False, False),
@@ -58,32 +88,7 @@ def test_answer_block_round_trips() -> None:
 
 
 def test_wizard_enter_on_each_question_submits(monkeypatch) -> None:
-    actions = iter(["enter", "enter", "enter"])
-    monkeypatch.setattr(
-        "surfaces.interactive_shell.ui.ask_user.repl_tty_interactive",
-        lambda: True,
-    )
-    monkeypatch.setattr(
-        "surfaces.interactive_shell.ui.ask_user._read_wizard_action",
-        lambda: next(actions),
-    )
-    monkeypatch.setattr(
-        "surfaces.interactive_shell.ui.ask_user._draw_ask_user",
-        lambda **_kwargs: None,
-    )
-    monkeypatch.setattr(
-        "surfaces.interactive_shell.ui.ask_user._erase_ask_user",
-        lambda _question: None,
-    )
-    monkeypatch.setattr(
-        "surfaces.shared.terminal.components.cpr_stdin.drain_stale_cpr_bytes",
-        lambda: None,
-    )
-    monkeypatch.setattr(
-        "surfaces.interactive_shell.ui.ask_user.flush_pending_input",
-        lambda: None,
-    )
-
+    _patch_wizard(monkeypatch, ["enter", "enter", "enter"])
     picked = repl_ask_user(_QUESTIONS)
     assert picked == (
         "Hypothetical/demo scenario, no real code",
@@ -93,31 +98,7 @@ def test_wizard_enter_on_each_question_submits(monkeypatch) -> None:
 
 
 def test_wizard_esc_cancels(monkeypatch) -> None:
-    monkeypatch.setattr(
-        "surfaces.interactive_shell.ui.ask_user.repl_tty_interactive",
-        lambda: True,
-    )
-    monkeypatch.setattr(
-        "surfaces.interactive_shell.ui.ask_user._read_wizard_action",
-        lambda: "cancel",
-    )
-    monkeypatch.setattr(
-        "surfaces.interactive_shell.ui.ask_user._draw_ask_user",
-        lambda **_kwargs: None,
-    )
-    monkeypatch.setattr(
-        "surfaces.interactive_shell.ui.ask_user._erase_ask_user",
-        lambda _question: None,
-    )
-    monkeypatch.setattr(
-        "surfaces.shared.terminal.components.cpr_stdin.drain_stale_cpr_bytes",
-        lambda: None,
-    )
-    monkeypatch.setattr(
-        "surfaces.interactive_shell.ui.ask_user.flush_pending_input",
-        lambda: None,
-    )
-
+    _patch_wizard(monkeypatch, ["cancel"])
     assert repl_ask_user(_QUESTIONS) is None
 
 
@@ -127,68 +108,35 @@ def test_wizard_flushes_leftover_keys_before_reading(monkeypatch) -> None:
     def _flush() -> None:
         flushed["count"] += 1
 
-    actions = iter(["enter", "enter", "enter"])
-    monkeypatch.setattr(
-        "surfaces.interactive_shell.ui.ask_user.repl_tty_interactive",
-        lambda: True,
-    )
-    monkeypatch.setattr(
-        "surfaces.interactive_shell.ui.ask_user._read_wizard_action",
-        lambda: next(actions),
-    )
-    monkeypatch.setattr(
-        "surfaces.interactive_shell.ui.ask_user._draw_ask_user",
-        lambda **_kwargs: None,
-    )
-    monkeypatch.setattr(
-        "surfaces.interactive_shell.ui.ask_user._erase_ask_user",
-        lambda _question: None,
-    )
-    monkeypatch.setattr(
-        "surfaces.shared.terminal.components.cpr_stdin.drain_stale_cpr_bytes",
-        lambda: None,
-    )
+    _patch_wizard(monkeypatch, ["enter", "enter", "enter"])
     monkeypatch.setattr("surfaces.interactive_shell.ui.ask_user.flush_pending_input", _flush)
 
     assert repl_ask_user(_QUESTIONS) is not None
-    # Once before the loop, once after the first draw — leftover Enter from
-    # the previous prompt must not auto-select option 1 on every question.
     assert flushed["count"] >= 2
 
 
 def test_wizard_submit_row_confirms_highlighted_option(monkeypatch) -> None:
-    """Arrow to Submit then Enter uses the option that was highlighted."""
-    # First question has 2 options + custom = 3 rows + Submit. Up from the
-    # first option wraps onto Submit without changing the highlighted option.
-    actions = iter(["up", "enter", "enter", "enter"])
-    monkeypatch.setattr(
-        "surfaces.interactive_shell.ui.ask_user.repl_tty_interactive",
-        lambda: True,
-    )
-    monkeypatch.setattr(
-        "surfaces.interactive_shell.ui.ask_user._read_wizard_action",
-        lambda: next(actions),
-    )
-    monkeypatch.setattr(
-        "surfaces.interactive_shell.ui.ask_user._draw_ask_user",
-        lambda **_kwargs: None,
-    )
-    monkeypatch.setattr(
-        "surfaces.interactive_shell.ui.ask_user._erase_ask_user",
-        lambda _question: None,
-    )
-    monkeypatch.setattr(
-        "surfaces.shared.terminal.components.cpr_stdin.drain_stale_cpr_bytes",
-        lambda: None,
-    )
-    monkeypatch.setattr(
-        "surfaces.interactive_shell.ui.ask_user.flush_pending_input",
-        lambda: None,
-    )
-
+    # First question: 2 options + custom = 3 rows + Submit. Up wraps to Submit.
+    _patch_wizard(monkeypatch, ["up", "enter", "enter", "enter"])
     picked = repl_ask_user(_QUESTIONS)
     assert picked == (
         "Hypothetical/demo scenario, no real code",
         "I'll paste the raw numbers/graph description",
         "Last 7 days",
     )
+
+
+def test_wizard_types_on_custom_row_in_place(monkeypatch) -> None:
+    """Droid-style: typed text is the last row of the OpenSRE option array."""
+    # Down to custom row, type "paste", Enter, then Enter on Q2/Q3 defaults.
+    _patch_wizard(
+        monkeypatch,
+        ["down", "down", "p", "a", "s", "t", "e", "enter", "enter", "enter"],
+    )
+    picked = repl_ask_user(_QUESTIONS)
+    assert picked == (
+        "paste",
+        "I'll paste the raw numbers/graph description",
+        "Last 7 days",
+    )
+    assert "Or type your own" not in "".join(picked)
