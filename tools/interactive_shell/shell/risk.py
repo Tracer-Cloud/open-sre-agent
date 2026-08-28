@@ -76,8 +76,12 @@ def _segments(command: str) -> list[str]:
 def classify_command_risk(command: str) -> tuple[CommandRisk, str]:
     """Return the risk level and a one-line human impact for ``command``.
 
-    ``command`` is the full shell string the user is being asked to approve.
+    ``command`` is the full shell string the user is being asked to approve; a
+    leading ``$ `` display prompt is stripped so it is not read as the verb.
     """
+    command = command.strip()
+    if command.startswith("$"):
+        command = command[1:].lstrip()
     lowered = command.lower()
     if any(pattern in lowered for pattern in _HIGH_RISK_PATTERNS):
         return CommandRisk.HIGH, "Destructive or remote action that may be irreversible."

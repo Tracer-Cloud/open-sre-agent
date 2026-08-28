@@ -55,9 +55,8 @@ def confirmation_choice_overlay_ansi(selected: int, options: tuple[tuple[str, st
         f"{'❯' if position == index else ' '} [{chr(ord('a') + position)}] {label}"
         for position, (_answer, label) in enumerate(options)
     ]
-    inner = min(
-        max(_BOX_MIN_INNER, *(len(row) for row in contents)), prompt_line_width() - _BOX_CHROME
-    )
+    # Span the full prompt width (like the composer box below), not the content.
+    inner = max(_BOX_MIN_INNER, prompt_line_width() - _BOX_CHROME)
     border = ui_theme.PROMPT_FRAME_ANSI
     reset = ui_theme.ANSI_RESET
     lines = [f"{border}┌{'─' * (inner + 2)}┐{reset}"]

@@ -39,3 +39,11 @@ def test_env_prefix_does_not_hide_the_verb() -> None:
     # A leading ENV=val assignment must not be mistaken for the command.
     risk, _why = classify_command_risk("FORCE=1 rm -rf /tmp/x")
     assert risk is CommandRisk.HIGH
+
+
+def test_leading_dollar_display_prefix_is_ignored() -> None:
+    # action_summary is rendered as "$ <command>"; the "$" must not be read as
+    # the verb (which mislabeled every command as a generic MEDIUM state change).
+    assert classify_command_risk("$ curl -s https://api.github.com/zen")[0] is CommandRisk.HIGH
+    assert classify_command_risk("$ rm -rf build")[0] is CommandRisk.HIGH
+    assert classify_command_risk("$ mkdir out")[0] is CommandRisk.LOW
