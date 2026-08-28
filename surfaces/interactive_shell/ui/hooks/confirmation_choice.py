@@ -1,10 +1,12 @@
-"""Arrow-navigable Yes/No hook for the execution-confirmation gate.
+"""Arrow-navigable choice hook for the execution-confirmation gate.
 
-Renders the pending confirmation as a stacked ``[a] Yes`` / ``[b] No`` choice
-driven with ↑/↓ and Enter (or the ``a``/``b``/``y``/``n`` letters) instead of a
-typed ``Y/n`` answer. The free-text box is hidden while a confirmation is
-active (see ``typing_box_hidden``), so the choice cannot be confused with a
-message. Selecting delivers the answer straight to the parked turn worker.
+Renders the pending confirmation as a stacked, tagged choice (``[a] …`` /
+``[b] …`` / …) driven with ↑/↓ and Enter — or the row's letter, the ``y``/``n``
+answer keys, or a digit — instead of a typed answer. The free-text box is
+hidden while a confirmation is active (see ``typing_box_hidden``), so the choice
+cannot be confused with a message. The options are supplied per confirmation by
+``ReplState.confirm_options`` (default Yes/No; the auto-level gate adds an
+"always allow" row). Selecting delivers the answer to the parked turn worker.
 """
 
 from __future__ import annotations
@@ -17,15 +19,16 @@ from prompt_toolkit.key_binding.key_processor import KeyPressEvent
 
 from infrastructure.terminal import theme as ui_theme
 
-# (answer delivered to the gate, visible label). The gate treats "", "y", "yes"
-# as allow and everything else as cancel, so "y"/"n" map cleanly to Yes/No.
-_CONFIRM_OPTIONS: tuple[tuple[str, str], ...] = (("y", "Yes"), ("n", "No"))
+# Rows are supplied per confirmation via ``ReplState.confirm_options``. The gate
+# reads "", "y", "yes" as allow; "always" as allow-and-raise-auto; else cancel.
+_MAX_TAGGED = 9
 
 
 class ConfirmChoiceState(Protocol):
     """The subset of ``ReplState`` this hook drives."""
 
     confirm_selected: int
+    confirm_options: tuple[tuple[str, str], ...]
 
     def is_awaiting_confirmation(self) -> bool:
         """True while a confirmation is pending and owns the keyboard."""
@@ -34,16 +37,13 @@ class ConfirmChoiceState(Protocol):
         """Hand ``answer`` to the parked turn worker and wake it."""
 
 
-def confirmation_option_count() -> int:
-    """Number of selectable rows, so callers can clamp ``confirm_selected``."""
-    return len(_CONFIRM_OPTIONS)
-
-
-def confirmation_choice_overlay_ansi(selected: int) -> str:
-    """Stacked ``❯ [a] Yes`` / ``  [b] No`` rows, accenting the selected one."""
-    index = selected % len(_CONFIRM_OPTIONS)
+def confirmation_choice_overlay_ansi(selected: int, options: tuple[tuple[str, str], ...]) -> str:
+    """Stacked ``❯ [a] …`` rows for ``options``, accenting the selected one."""
+    if not options:
+        return ""
+    index = selected % len(options)
     rows: list[str] = []
-    for position, (_answer, label) in enumerate(_CONFIRM_OPTIONS):
+    for position, (_answer, label) in enumerate(options):
         tag = chr(ord("a") + position)
         chosen = position == index
         marker = "❯" if chosen else " "
@@ -53,15 +53,28 @@ def confirmation_choice_overlay_ansi(selected: int) -> str:
 
 
 def install_confirmation_key_bindings(state: ConfirmChoiceState, redraw: object) -> KeyBindings:
-    """Bindings active only while awaiting confirmation: ↑/↓ move, Enter/letters pick.
+    """Bindings active only while awaiting confirmation: ↑/↓ move, Enter/letters/digits pick.
 
     ``redraw`` invalidates the prompt so a selection change repaints at once.
+    The handlers read ``state.confirm_options`` at press time, so a confirmation
+    with two or three rows is driven by the same fixed bindings.
     """
     kb = KeyBindings()
     awaiting = Condition(state.is_awaiting_confirmation)
-    count = len(_CONFIRM_OPTIONS)
+
+    def _deliver_index(index: int) -> None:
+        options = state.confirm_options
+        if 0 <= index < len(options):
+            state.deliver_confirmation(options[index][0])
+
+    def _deliver_answer(answer: str) -> None:
+        for option_answer, _label in state.confirm_options:
+            if option_answer == answer:
+                state.deliver_confirmation(answer)
+                return
 
     def _move(delta: int) -> None:
+        count = len(state.confirm_options) or 1
         state.confirm_selected = (state.confirm_selected + delta) % count
         if callable(redraw):
             redraw()
@@ -76,16 +89,22 @@ def install_confirmation_key_bindings(state: ConfirmChoiceState, redraw: object)
 
     @kb.add("c-m", filter=awaiting, eager=True)
     def _on_enter(_event: KeyPressEvent) -> None:
-        answer, _label = _CONFIRM_OPTIONS[state.confirm_selected % count]
-        state.deliver_confirmation(answer)
+        _deliver_index(state.confirm_selected)
 
-    # Letter shortcuts: the a/b row tags and the y/n answer keys both pick a row.
-    for position, (answer, _label) in enumerate(_CONFIRM_OPTIONS):
-        for key in {chr(ord("a") + position), answer}:
+    # Row tags [a]..[i] and digits 1..9 pick that row directly.
+    for position in range(_MAX_TAGGED):
+        for key in (chr(ord("a") + position), str(position + 1)):
 
             @kb.add(key, filter=awaiting, eager=True)
-            def _on_letter(_event: KeyPressEvent, _answer: str = answer) -> None:
-                state.deliver_confirmation(_answer)
+            def _on_row_key(_event: KeyPressEvent, _index: int = position) -> None:
+                _deliver_index(_index)
+
+    # y / n stay as answer shortcuts for the common allow / cancel rows.
+    for answer in ("y", "n"):
+
+        @kb.add(answer, filter=awaiting, eager=True)
+        def _on_answer_key(_event: KeyPressEvent, _answer: str = answer) -> None:
+            _deliver_answer(_answer)
 
     return kb
 
@@ -93,6 +112,5 @@ def install_confirmation_key_bindings(state: ConfirmChoiceState, redraw: object)
 __all__ = [
     "ConfirmChoiceState",
     "confirmation_choice_overlay_ansi",
-    "confirmation_option_count",
     "install_confirmation_key_bindings",
 ]

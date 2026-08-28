@@ -125,7 +125,9 @@ def _confirmation_block(state: ReplState) -> str:
     """
     header = clip_prompt_text(state.confirm_prompt_text.strip(), prompt_line_width())
     header_ansi = f"{ui_theme.SECONDARY_ANSI}{header}{ui_theme.ANSI_RESET}"
-    choice = strip_cpr_sequences(confirmation_choice_overlay_ansi(state.confirm_selected))
+    choice = strip_cpr_sequences(
+        confirmation_choice_overlay_ansi(state.confirm_selected, state.confirm_options)
+    )
     hint = f"{ui_theme.DIM_ANSI}{_CONFIRM_HINT}{ui_theme.ANSI_RESET}"
     return f"{header_ansi}\n\n{choice}\n\n{hint}"
 

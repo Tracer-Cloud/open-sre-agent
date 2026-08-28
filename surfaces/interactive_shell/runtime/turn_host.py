@@ -89,9 +89,15 @@ def _confirm_via_prompt(runtime: AgentTurnResources, prompt: str) -> str:
     without waiting for the next refresh tick. ``prepare_ui`` clears any
     typeahead that landed in the (hidden) composer before the gate opened.
     """
+    # The execution gate stashes the rows it wants (e.g. an "always allow" row)
+    # on the terminal just before calling this; consume them for the choice.
+    terminal = runtime.session.terminal
+    options = terminal.pending_confirm_options
+    terminal.pending_confirm_options = None
     return request_confirmation_via_prompt(
         runtime.state,
         prompt,
+        options=options,
         redraw=runtime.invalidate_prompt,
         prepare_ui=lambda: _reset_prompt_buffer(runtime.session),
     )

@@ -21,6 +21,14 @@ from surfaces.shared.terminal.prompt_layout import clip_prompt_text, prompt_line
 # How often prompt-toolkit refreshes prompt callbacks and confirmation polling.
 PROMPT_REFRESH_INTERVAL_S = 0.25
 
+# Default confirmation rows: (answer, label). The execution gate reads "", "y",
+# "yes" as allow and "always" as allow-and-raise-auto; anything else cancels.
+# The cancel row is always last so the default selection lands on it.
+DEFAULT_CONFIRM_OPTIONS: tuple[tuple[str, str], ...] = (
+    ("y", "Yes, allow"),
+    ("n", "No, cancel"),
+)
+
 
 class TurnPhase(enum.Enum):
     """Explicit lifecycle phase of the current interactive-shell turn.
@@ -56,6 +64,7 @@ class ReplState:
     confirm_response: list[str] = field(default_factory=list)
     confirm_prompt_text: str = ""
     confirm_selected: int = 0
+    confirm_options: tuple[tuple[str, str], ...] = DEFAULT_CONFIRM_OPTIONS
     plan_expanded: bool = False
     # Checklist identity for ``plan_expanded`` — step texts, ignoring status.
     plan_step_texts: tuple[str, ...] | None = None
@@ -99,15 +108,22 @@ class ReplState:
         """Return whether the transient Ctrl-C exit hint is still active."""
         return time.monotonic() <= self.ctrl_c_exit_hint_until
 
-    def begin_confirmation(self, event: threading.Event, prompt_text: str = "") -> None:
+    def begin_confirmation(
+        self,
+        event: threading.Event,
+        prompt_text: str = "",
+        options: tuple[tuple[str, str], ...] | None = None,
+    ) -> None:
         # Reset the response list BEFORE publishing ``confirm_event`` so a
         # concurrent ``deliver_confirmation`` cannot have its answer clobbered.
         # ``phase`` is set before the publish so a parked worker is observable
         # as awaiting confirmation the instant the event is visible.
         self.confirm_response = []
         self.confirm_prompt_text = prompt_text
-        # Default the arrow on No so a stray Enter cancels instead of approving.
-        self.confirm_selected = 1
+        self.confirm_options = options or DEFAULT_CONFIRM_OPTIONS
+        # Default the arrow on the last row (cancel) so a stray Enter aborts
+        # instead of approving.
+        self.confirm_selected = len(self.confirm_options) - 1
         self.phase = TurnPhase.AWAITING_CONFIRMATION
         self.confirm_event = event
 
@@ -115,6 +131,7 @@ class ReplState:
         self.confirm_event = None
         self.confirm_response = []
         self.confirm_prompt_text = ""
+        self.confirm_options = DEFAULT_CONFIRM_OPTIONS
         # Only a normal confirmation completion returns to dispatching/idle; a
         # cancel in progress must keep its CANCELLING phase.
         if self.phase is TurnPhase.AWAITING_CONFIRMATION:

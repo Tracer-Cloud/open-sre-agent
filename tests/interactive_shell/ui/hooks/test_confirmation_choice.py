@@ -1,7 +1,9 @@
-"""The confirmation hook renders a stacked Yes/No choice and delivers a pick.
+"""The confirmation hook renders the state's rows and delivers a pick.
 
-The arrow marker follows ``confirm_selected``; ``y``/``n`` are the answers the
-execution gate reads (allow vs cancel).
+Rows come from ``ReplState.confirm_options`` (Yes/No, or the three-row auto-level
+gate with an "always" row). ↑/↓, Enter, row tags, digits, and the ``y``/``n``
+answer keys all resolve to one of those rows; the default selection is the last
+(cancel) row so a stray Enter aborts.
 """
 
 from __future__ import annotations
@@ -12,11 +14,16 @@ import threading
 from surfaces.interactive_shell.runtime.core.state import ReplState
 from surfaces.interactive_shell.ui.hooks import (
     confirmation_choice_overlay_ansi,
-    confirmation_option_count,
     install_confirmation_key_bindings,
 )
 
 _ANSI = re.compile(r"\x1b\[[0-9;]*m")
+_YES_NO = (("y", "Yes, allow"), ("n", "No, cancel"))
+_THREE = (
+    ("y", "Yes, allow"),
+    ("always", "Yes, and always allow reversible commands"),
+    ("n", "No, cancel"),
+)
 
 
 def _plain(text: str) -> str:
@@ -24,74 +31,77 @@ def _plain(text: str) -> str:
 
 
 class _FakeState:
-    def __init__(self) -> None:
-        self.confirm_selected = 0
-        self.awaiting = True
+    def __init__(self, options: tuple[tuple[str, str], ...]) -> None:
+        self.confirm_options = options
+        self.confirm_selected = len(options) - 1
         self.delivered: list[str] = []
 
     def is_awaiting_confirmation(self) -> bool:
-        return self.awaiting
+        return True
 
     def deliver_confirmation(self, answer: str) -> None:
         self.delivered.append(answer)
 
 
 def test_overlay_marks_the_selected_row_with_the_arrow() -> None:
-    # Arrange / Act
-    yes = _plain(confirmation_choice_overlay_ansi(0))
-    no = _plain(confirmation_choice_overlay_ansi(1))
+    yes = _plain(confirmation_choice_overlay_ansi(0, _YES_NO))
+    no = _plain(confirmation_choice_overlay_ansi(1, _YES_NO))
 
-    # Assert: exactly one arrow, on the selected row.
-    assert "❯ [a] Yes" in yes and "❯ [b] No" not in yes
-    assert "❯ [b] No" in no and "❯ [a] Yes" not in no
+    assert "❯ [a] Yes, allow" in yes and "❯ [b] No, cancel" not in yes
+    assert "❯ [b] No, cancel" in no and "❯ [a] Yes, allow" not in no
 
 
-def test_option_count_is_two() -> None:
-    assert confirmation_option_count() == 2
+def test_overlay_renders_three_tagged_rows_for_the_auto_gate() -> None:
+    rendered = _plain(confirmation_choice_overlay_ansi(1, _THREE))
+    assert "[a] Yes, allow" in rendered
+    assert "❯ [b] Yes, and always allow reversible commands" in rendered
+    assert "[c] No, cancel" in rendered
 
 
 def test_letter_keys_deliver_the_matching_answer() -> None:
-    # Arrange
-    state = _FakeState()
-    redraws: list[bool] = []
-    bindings = install_confirmation_key_bindings(state, lambda: redraws.append(True))
+    state = _FakeState(_YES_NO)
+    bindings = install_confirmation_key_bindings(state, lambda: None)
     by_key = {str(b.keys[0]): b.handler for b in bindings.bindings}
 
-    # Act: pressing "n" cancels, "y" allows, regardless of the current arrow.
     by_key["n"](None)
     by_key["y"](None)
-
-    # Assert
     assert state.delivered == ["n", "y"]
 
 
-def test_arrow_keys_move_and_wrap_the_selection_then_enter_delivers_it() -> None:
-    # Arrange
-    state = _FakeState()
+def test_arrow_keys_move_and_wrap_then_enter_delivers_the_row() -> None:
+    state = _FakeState(_THREE)  # starts on the last row (No)
     redraws: list[bool] = []
     bindings = install_confirmation_key_bindings(state, lambda: redraws.append(True))
     by_key = {str(b.keys[0]): b.handler for b in bindings.bindings}
 
-    # Act / Assert: Down moves Yes(0) -> No(1) and wraps No -> Yes.
-    by_key["Keys.Down"](None)
-    assert state.confirm_selected == 1
-    by_key["Keys.Down"](None)
+    by_key["Keys.Down"](None)  # No(2) -> wrap Yes(0)
     assert state.confirm_selected == 0
-    # Up wraps Yes(0) -> No(1); Enter then delivers the No answer.
-    by_key["Keys.Up"](None)
+    by_key["Keys.Up"](None)  # Yes(0) -> wrap No(2)
+    assert state.confirm_selected == 2
+    by_key["Keys.Down"](None)  # No(2) -> Yes(0)
+    by_key["Keys.Down"](None)  # Yes(0) -> always(1)
     assert state.confirm_selected == 1
     by_key["Keys.ControlM"](None)
-    assert state.delivered == ["n"]
-    # Every movement repainted the prompt.
-    assert redraws == [True, True, True]
+    assert state.delivered == ["always"]
+    assert redraws == [True, True, True, True]
+
+
+def test_digit_and_tag_keys_pick_a_row_directly() -> None:
+    state = _FakeState(_THREE)
+    bindings = install_confirmation_key_bindings(state, lambda: None)
+    by_key = {str(b.keys[0]): b.handler for b in bindings.bindings}
+
+    by_key["2"](None)  # second row = always
+    by_key["c"](None)  # third row tag = No
+    assert state.delivered == ["always", "n"]
 
 
 def test_enter_on_default_selection_cancels() -> None:
-    # Production begin_confirmation defaults the arrow to No so a stray Enter
-    # cancels instead of approving.
+    # begin_confirmation defaults the arrow to the last row (cancel) so a stray
+    # Enter aborts instead of approving.
     state = ReplState()
     state.begin_confirmation(threading.Event(), "Proceed?")
-    assert state.confirm_selected == 1
+    assert state.confirm_selected == 1  # Yes/No default -> No is last
 
     bindings = install_confirmation_key_bindings(state, lambda: None)
     by_key = {str(b.keys[0]): b.handler for b in bindings.bindings}

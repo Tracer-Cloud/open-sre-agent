@@ -23,7 +23,7 @@ from rich.console import Console
 from rich.markup import escape
 from rich.text import Text
 
-from config.constants.repl_autonomy import DEFAULT_AUTO_LEVEL
+from config.constants.repl_autonomy import AUTO_LEVEL_TITLES, DEFAULT_AUTO_LEVEL, AutoLevel
 from core.agent_harness.spi.session_state import trust_mode_enabled
 from infrastructure.analytics.cli import capture_repl_execution_policy_decision
 from infrastructure.analytics.provider import Properties
@@ -37,6 +37,7 @@ from tools.interactive_shell.shared import (
     is_mutating_tool_type,
     resolve_confirmation,
 )
+from tools.interactive_shell.shell.risk import CommandRisk, classify_command_risk
 
 if TYPE_CHECKING:
     from surfaces.interactive_shell.runtime import Session
@@ -50,18 +51,46 @@ DEFAULT_CONFIRM_FN: Callable[[str], str] = _default_confirm_fn
 _APPROVE_PROMPT = "Approve this action?"
 
 
+_ALWAYS_ALLOW_LABEL = {
+    AutoLevel.MED: "Yes, and always allow reversible commands",
+    AutoLevel.HIGH: "Yes, and always allow all commands",
+}
+
+
+def _confirm_options_and_target(
+    risk: CommandRisk, plan_only: bool
+) -> tuple[tuple[tuple[str, str], ...], AutoLevel | None]:
+    """The confirmation rows and the auto level an "always allow" row would set.
+
+    Plan-only confirmations offer only Yes/No — raising the auto level would not
+    lift the plan-only latch. Auto-level confirmations add an "always allow" row
+    targeting the level that runs this command's risk (reversible → Med, else
+    High).
+    """
+    if plan_only:
+        return (("y", "Yes, allow"), ("n", "No, cancel")), None
+    target = AutoLevel.MED if risk in (CommandRisk.LOW, CommandRisk.MEDIUM) else AutoLevel.HIGH
+    return (
+        (("y", "Yes, allow"), ("always", _ALWAYS_ALLOW_LABEL[target]), ("n", "No, cancel")),
+        target,
+    )
+
+
 def _render_command_to_approve(
     console: Console,
     *,
     summary: str,
-    reason: str,
+    risk: CommandRisk,
+    why: str,
     action_already_listed: bool,
 ) -> None:
-    """Approval card: header, command child, why-this-needs-approval."""
+    """Approval card: header with the risk level, the command, and its impact."""
     header = Text()
     header.append("Command to approve", style=str(HIGHLIGHT))
     header.append(" · ", style=str(DIM))
-    header.append("needs confirmation", style=str(HIGHLIGHT))
+    header.append(
+        f"{risk.value} risk", style=str(WARNING if risk is CommandRisk.HIGH else SECONDARY)
+    )
     console.print()
     console.print(header)
     if summary and not action_already_listed:
@@ -69,10 +98,10 @@ def _render_command_to_approve(
         child.append("↳ ", style=str(DIM))
         child.append(summary, style=str(TEXT))
         console.print(child)
-    why = Text()
-    why.append("Why this needs approval: ", style=str(DIM))
-    why.append(reason, style=str(SECONDARY))
-    console.print(why)
+    why_line = Text()
+    why_line.append("Why this needs approval: ", style=str(DIM))
+    why_line.append(why, style=str(SECONDARY))
+    console.print(why_line)
     console.print()
 
 
@@ -162,16 +191,25 @@ def execution_allowed(
         return False
 
     # NEEDS_CONFIRMATION
-    reason = (result.reason or "this action").strip()
     summary = action_summary.strip()
+    risk, impact = classify_command_risk(summary)
+    # The classifier's impact replaces only the generic auto-level reason; a
+    # specific policy reason (e.g. a fleet-scan explanation, plan-only) wins.
+    policy_reason = (result.reason or "").strip()
+    why = impact if (not policy_reason or policy_reason.startswith("Auto (")) else policy_reason
     _render_command_to_approve(
         console,
         summary=summary,
-        reason=reason,
+        risk=risk,
+        why=why,
         action_already_listed=action_already_listed,
     )
+    options, always_target = _confirm_options_and_target(risk, plan_only_active)
+    terminal = getattr(session, "terminal", None)
+    if terminal is not None:
+        terminal.pending_confirm_options = options
     answer = confirm(_APPROVE_PROMPT).strip().lower()
-    if answer not in {"", "y", "yes"}:
+    if answer not in {"", "y", "yes", "always"}:
         _emit_decision(
             tool_type=result.tool_type,
             policy_verdict=result.verdict,
@@ -183,12 +221,20 @@ def execution_allowed(
         console.print(f"[{DIM}]cancelled.[/]")
         return False
 
+    if answer == "always" and always_target is not None and terminal is not None:
+        # "Yes, and always allow …" both approves now and raises the auto level
+        # so commands of this risk stop asking for the rest of the session.
+        terminal.auto_level = always_target
+        console.print(
+            f"[{DIM}]Auto raised to {AUTO_LEVEL_TITLES[always_target]}; "
+            f"commands like this now run without asking.[/]"
+        )
     _emit_decision(
         tool_type=result.tool_type,
         policy_verdict=result.verdict,
         outcome="allowed",
         trust_mode=trust_mode,
-        reason="user_confirmed",
+        reason="user_confirmed_always" if answer == "always" else "user_confirmed",
         user_prompted=True,
     )
     if plan_only_active and is_mutating_tool_type(result.tool_type):
