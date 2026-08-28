@@ -69,6 +69,9 @@ function Get-OpenSreMainArtifact {
         "Accept" = "application/vnd.github+json"
         "User-Agent" = "opensre-windows-startup-investigation"
     }
+    if ($env:GITHUB_TOKEN) {
+        $headers["Authorization"] = "Bearer $($env:GITHUB_TOKEN)"
+    }
     $release = Invoke-RestMethod `
         -Uri "https://api.github.com/repos/$RepositoryName/releases/tags/main-build" `
         -Headers $headers

@@ -33,6 +33,8 @@ jobs:
 
       - name: Measure startup
         shell: pwsh
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
         run: >-
           ./.github/scripts/measure-windows-startup.ps1
           -Mode "${{ matrix.mode }}"
