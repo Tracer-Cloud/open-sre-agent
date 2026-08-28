@@ -257,6 +257,9 @@ When referencing files in your response, make sure to include the relevant start
   * Do not provide range of lines
   * Examples: src/app.ts, src/app.ts:42, b/server/index.js#L10, C:\repo\project\main.rs:12:5
 
+**Tables**
+Write tables as valid GitHub-flavored Markdown pipe tables: include a header row, separator row, and one newline-delimited row per record. Add blank lines before and after the table. Never use spaces, tabs, inline prose, or code fences to simulate tables, and never insert line breaks inside cells
+
 **Structure**
 
 - Place related bullets together; don’t mix unrelated concepts in the same section.
