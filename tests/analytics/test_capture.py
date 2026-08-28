@@ -50,7 +50,7 @@ class _StubAnalytics:
 
 def test_capture_cli_invoked_uses_safe_capture(monkeypatch: pytest.MonkeyPatch) -> None:
     stub = _StubAnalytics()
-    monkeypatch.setattr(cli, "get_analytics", lambda: stub)
+    monkeypatch.setattr(capture, "get_analytics", lambda: stub)
 
     capture.capture_cli_invoked({"command_path": "opensre version"})
 
@@ -68,8 +68,8 @@ def test_capture_cli_invoked_reports_analytics_failures_to_sentry(
     def raise_error() -> _StubAnalytics:
         raise expected_error
 
-    monkeypatch.setattr(cli, "get_analytics", raise_error)
-    monkeypatch.setattr(cli, "capture_exception", captured_errors.append)
+    monkeypatch.setattr(capture, "get_analytics", raise_error)
+    monkeypatch.setattr(capture, "capture_exception", captured_errors.append)
 
     capture.capture_cli_invoked()
 
@@ -78,7 +78,7 @@ def test_capture_cli_invoked_reports_analytics_failures_to_sentry(
 
 def test_identify_github_username_sets_person_property(monkeypatch: pytest.MonkeyPatch) -> None:
     stub = _StubAnalytics()
-    monkeypatch.setattr(cli, "get_analytics", lambda: stub)
+    monkeypatch.setattr(github_identity, "get_analytics", lambda: stub)
 
     github_identity.identify_github_username("octocat")
 
@@ -88,7 +88,7 @@ def test_identify_github_username_sets_person_property(monkeypatch: pytest.Monke
 
 def test_identify_github_username_noop_on_empty(monkeypatch: pytest.MonkeyPatch) -> None:
     stub = _StubAnalytics()
-    monkeypatch.setattr(cli, "get_analytics", lambda: stub)
+    monkeypatch.setattr(github_identity, "get_analytics", lambda: stub)
 
     github_identity.identify_github_username("")
 
@@ -97,7 +97,7 @@ def test_identify_github_username_noop_on_empty(monkeypatch: pytest.MonkeyPatch)
 
 def test_identify_saved_github_username_reads_store(monkeypatch: pytest.MonkeyPatch) -> None:
     stub = _StubAnalytics()
-    monkeypatch.setattr(cli, "get_analytics", lambda: stub)
+    monkeypatch.setattr(github_identity, "get_analytics", lambda: stub)
     # Patch the package API surface (what production imports). Patching only
     # ``integrations.github.identity`` misses when another test has bound the
     # name on ``integrations.github`` and shadowed ``__getattr__``.
@@ -113,7 +113,7 @@ def test_identify_saved_github_username_noop_when_store_empty(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     stub = _StubAnalytics()
-    monkeypatch.setattr(cli, "get_analytics", lambda: stub)
+    monkeypatch.setattr(github_identity, "get_analytics", lambda: stub)
     monkeypatch.setattr("integrations.github.saved_github_username", lambda: "")
 
     github_identity.identify_saved_github_username()
@@ -130,8 +130,8 @@ def test_identify_github_username_reports_failures_to_sentry(
     def raise_error() -> _StubAnalytics:
         raise expected_error
 
-    monkeypatch.setattr(cli, "get_analytics", raise_error)
-    monkeypatch.setattr(cli, "capture_exception", captured_errors.append)
+    monkeypatch.setattr(github_identity, "get_analytics", raise_error)
+    monkeypatch.setattr(github_identity, "capture_exception", captured_errors.append)
 
     github_identity.identify_github_username("octocat")
 
@@ -173,7 +173,7 @@ def test_build_cli_invoked_properties_handles_root_invocation() -> None:
 
 def test_capture_update_helpers_emit_expected_events(monkeypatch: pytest.MonkeyPatch) -> None:
     stub = _StubAnalytics()
-    monkeypatch.setattr(cli, "get_analytics", lambda: stub)
+    monkeypatch.setattr(capture, "get_analytics", lambda: stub)
 
     capture.capture_update_started(check_only=True)
     capture.capture_update_completed(check_only=False, updated=True)
@@ -188,7 +188,7 @@ def test_capture_update_helpers_emit_expected_events(monkeypatch: pytest.MonkeyP
 
 def test_capture_terminal_metrics_emit_expected_contract(monkeypatch: pytest.MonkeyPatch) -> None:
     stub = _StubAnalytics()
-    monkeypatch.setattr(cli, "get_analytics", lambda: stub)
+    monkeypatch.setattr(capture, "get_analytics", lambda: stub)
 
     capture.capture_terminal_actions_planned(planned_count=3, has_unhandled_clause=True)
     capture.capture_terminal_actions_executed(
@@ -227,7 +227,7 @@ def test_eval_and_terminal_kpi_queries_cover_core_metrics() -> None:
 
 def test_track_investigation_emits_lifecycle_once(monkeypatch: pytest.MonkeyPatch) -> None:
     stub = _StubAnalytics()
-    monkeypatch.setattr(cli, "get_analytics", lambda: stub)
+    monkeypatch.setattr(capture, "get_analytics", lambda: stub)
 
     with investigation_tracker.track_investigation(
         entrypoint=EntrypointSource.CLI_COMMAND,
@@ -255,7 +255,7 @@ def test_track_investigation_emits_failed_on_exception(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     stub = _StubAnalytics()
-    monkeypatch.setattr(cli, "get_analytics", lambda: stub)
+    monkeypatch.setattr(capture, "get_analytics", lambda: stub)
 
     # Wrap the raise in a callable so the ``raise`` lives inside ``_trigger``
     # rather than directly in the test body. ``pytest.raises`` then sees a
@@ -284,7 +284,7 @@ def test_capture_investigation_failed_includes_state_loop_metrics(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     stub = _StubAnalytics()
-    monkeypatch.setattr(cli, "get_analytics", lambda: stub)
+    monkeypatch.setattr(capture, "get_analytics", lambda: stub)
 
     capture.capture_investigation_failed(
         failure_type="RuntimeError",
@@ -302,7 +302,7 @@ def test_track_investigation_failed_uses_tracker_loop_metrics(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     stub = _StubAnalytics()
-    monkeypatch.setattr(cli, "get_analytics", lambda: stub)
+    monkeypatch.setattr(capture, "get_analytics", lambda: stub)
 
     def _trigger() -> None:
         with investigation_tracker.track_investigation(
@@ -324,7 +324,7 @@ def test_track_investigation_failed_uses_tracker_loop_metrics(
 
 def test_capture_investigation_outcome_and_cancelled(monkeypatch: pytest.MonkeyPatch) -> None:
     stub = _StubAnalytics()
-    monkeypatch.setattr(cli, "get_analytics", lambda: stub)
+    monkeypatch.setattr(capture, "get_analytics", lambda: stub)
 
     capture.capture_investigation_outcome(
         investigation_id="inv-123",
@@ -358,7 +358,7 @@ def test_track_investigation_records_loop_metrics_on_completion(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     stub = _StubAnalytics()
-    monkeypatch.setattr(cli, "get_analytics", lambda: stub)
+    monkeypatch.setattr(capture, "get_analytics", lambda: stub)
 
     with investigation_tracker.track_investigation(
         entrypoint=EntrypointSource.CLI_COMMAND,
@@ -375,7 +375,7 @@ def test_track_investigation_records_loop_metrics_on_completion(
 
 def test_track_investigation_nested_context_dedupes(monkeypatch: pytest.MonkeyPatch) -> None:
     stub = _StubAnalytics()
-    monkeypatch.setattr(cli, "get_analytics", lambda: stub)
+    monkeypatch.setattr(capture, "get_analytics", lambda: stub)
 
     with (
         investigation_tracker.track_investigation(
@@ -396,7 +396,7 @@ def test_track_investigation_nested_context_dedupes(monkeypatch: pytest.MonkeyPa
 
 def test_capture_diagnosis_category_mismatch(monkeypatch: pytest.MonkeyPatch) -> None:
     stub = _StubAnalytics()
-    monkeypatch.setattr(cli, "get_analytics", lambda: stub)
+    monkeypatch.setattr(capture, "get_analytics", lambda: stub)
 
     capture.capture_diagnosis_category_mismatch(
         root_cause_category="dns_resolution_failure",
