@@ -107,11 +107,12 @@ purpose); omitting it fails with `The following required arguments are missing: 
 </Warning>
 
 The token needs the `search` capability. The `admin` role includes this by
-default. For a dedicated service account, ensure the role includes:
+default.
 
-- `search`
-- `read_splunkd_private_settings` (needed for the verify call against
-  `/services/server/info`)
+`opensre integrations verify splunk` also reads `/services/server/info`, so a
+least-privilege service account needs a role that can reach that endpoint as
+well as search. If `verify` reports `HTTP 403`, the role is missing access to
+that endpoint rather than to search.
 
 ### Quick local test with Docker
 
@@ -290,7 +291,7 @@ Detail: Connected to Splunk 9.x.x
 
 - Use a **read-only bearer token** — never use an admin token in production.
 - Store `SPLUNK_TOKEN` in `.env` or the credential store, not in source code or CI logs.
-- Prefer a dedicated `opensre` service account with only the `search` capability (plus `read_splunkd_private_settings` for verify).
+- Prefer a dedicated `opensre` service account scoped to `search`. `verify` additionally reads `/services/server/info`, so the role must be able to reach that endpoint too.
 - For enterprise self-signed certificates, set `SPLUNK_CA_BUNDLE` rather than disabling verification entirely.
 - Set `SPLUNK_VERIFY_SSL=false` only in local or dev environments when you cannot supply a CA bundle.
 - Rotate tokens on a schedule and revoke them when no longer needed.
