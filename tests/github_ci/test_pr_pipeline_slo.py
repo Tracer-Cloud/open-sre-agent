@@ -99,6 +99,7 @@ def test_quality_jobs_start_in_parallel_and_gate_aggregates_them() -> None:
     assert "needs" not in jobs["quality-static"]
     assert "needs" not in jobs["quality-typecheck"]
     assert "needs" not in jobs["test"]
+    assert "needs" not in jobs["session-store-locked"]
     assert "Restore mypy cache" in {step.get("name") for step in jobs["quality-typecheck"]["steps"]}
     assert "Verify typed tool contracts" in {
         step.get("name") for step in jobs["quality-typecheck"]["steps"]
@@ -124,6 +125,7 @@ def test_quality_jobs_start_in_parallel_and_gate_aggregates_them() -> None:
         "quality-typecheck",
         "test",
         "coverage-report",
+        "session-store-locked",
     }
 
 
