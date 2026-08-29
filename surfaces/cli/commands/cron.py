@@ -201,6 +201,7 @@ def cron_remove(task_id: str) -> None:
 @click.argument("task_id")
 def cron_run(task_id: str) -> None:
     """Run a scheduled task immediately (ad-hoc one-shot for debugging)."""
+    from bootstrap.adapters import scheduler_runners
     from bootstrap.process import SCHEDULED_COMMAND_PROFILE, configure_process
     from infrastructure.scheduling.scheduler.operation_log import record_scheduler_task_operation
     from infrastructure.scheduling.scheduler.runner import run_task_now
@@ -219,7 +220,7 @@ def cron_run(task_id: str) -> None:
         task,
         extra={"command": "cron_run"},
     )
-    success = run_task_now(task_id)
+    success = run_task_now(task_id, scheduler_runners())
     if success:
         _console.print("[green]Done.[/green]")
     else:
@@ -287,6 +288,7 @@ def cron_logs(task_id: str, limit: int) -> None:
 )
 def cron_start(service: bool) -> None:
     """Start the scheduler daemon (blocks until interrupted)."""
+    from bootstrap.adapters import scheduler_runners
     from bootstrap.process import SCHEDULER_WORKER_PROFILE, configure_process
     from infrastructure.scheduling.scheduler.runner import start_scheduler
 
@@ -295,7 +297,7 @@ def cron_start(service: bool) -> None:
 
     _console.print("[bold]Starting scheduler daemon...[/bold]")
     _console.print("Press Ctrl+C to stop.")
-    start_scheduler(idle_when_empty=service)
+    start_scheduler(scheduler_runners(), idle_when_empty=service)
 
 
 def _validate_chat_id_for_provider(provider: str, chat_id: str) -> None:

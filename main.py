@@ -19,6 +19,7 @@ Driving the agent from Python instead of the CLI::
 
     from bootstrap.process import EMBEDDED_PROFILE, configure_process
     from core.agent_harness import AgentSession
+    from tools.investigation.capability import run_investigation_payload
 
     configure_process(EMBEDDED_PROFILE)
 
@@ -28,14 +29,17 @@ Driving the agent from Python instead of the CLI::
         print(result.primary_response_text)
     follow = session.chat("what should we check next?")  # same agent, next turn
 
-    report = session.investigate({"alert_name": "HighLatency"})
+    report = session.investigate(
+        {"alert_name": "HighLatency"}, runner=run_investigation_payload
+    )
     print(report.report)
 
 ``configure_process`` comes first and is what registers the harness adapters
-tools resolve through (and the investigation payload runner);
-``AgentSession.start()`` only loads the environment, so on its own the agent
-starts but no tool is available. It cannot self-bootstrap — ``core`` sits below
-``bootstrap`` in the layer contract, so the caller wires it.
+tools resolve through; ``AgentSession.start()`` only loads the environment, so
+on its own the agent starts but no tool is available. It cannot self-bootstrap —
+``core`` sits below ``bootstrap`` in the layer contract, so the caller wires it.
+``investigate`` takes its payload runner as an argument (``core`` must not import
+``tools``); embedders pass ``run_investigation_payload`` as shown.
 ``EMBEDDED_PROFILE`` deliberately leaves Sentry and LLM preloading to the host
 process.
 

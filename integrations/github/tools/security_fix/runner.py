@@ -228,7 +228,7 @@ def _result_response_text(ctx: SecurityAlertContext, result: CodingResult) -> st
 def _unsupported_without_fallback_message(reason: str | None) -> str:
     base = _single_line(reason or "No built-in local fixer produced a change.")
     suffix = (
-        "Install and log in to a coding agent CLI (Pi, Claude Code, or Codex) so "
+        "Install and log in to a coding agent CLI (Pi, Claude Code, Codex, or Cursor) so "
         "OpenSRE can fix this finding automatically, or remediate it manually."
     )
     return f"{base} {suffix}".strip()

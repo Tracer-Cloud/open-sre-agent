@@ -1,4 +1,4 @@
-"""Provider metadata for browser-assisted LLM auth setup."""
+"""Provider metadata for browser-assisted LLM auth setup (API keys only)."""
 
 from __future__ import annotations
 
@@ -12,7 +12,7 @@ from surfaces.shared.llm_setup.catalog import (
     WizardCredentialKind,
 )
 
-AuthKind = Literal["api_key", "cli_subscription"]
+AuthKind = Literal["api_key"]
 
 
 @dataclass(frozen=True)
@@ -45,34 +45,6 @@ _API_KEY_SETUP_URLS: dict[str, str] = {
 }
 
 
-_SUBSCRIPTION_PROFILES: tuple[ProviderAuthProfile, ...] = (
-    ProviderAuthProfile(
-        name="chatgpt",
-        provider_value="codex",
-        label="ChatGPT subscription via Codex CLI",
-        kind="cli_subscription",
-        aliases=("openai-chatgpt", "openai-codex", "codex-cli"),
-        setup_url="https://github.com/openai/codex",
-        auth_hint="Run: codex login",
-    ),
-    ProviderAuthProfile(
-        name="claude",
-        provider_value="claude-code",
-        label="Anthropic subscription via Claude Code CLI",
-        kind="cli_subscription",
-        aliases=(
-            "claude-ai",
-            "claude-subscription",
-            "anthropic-subscription",
-            "anthropic-claude",
-            "claude-code-cli",
-        ),
-        setup_url="https://github.com/anthropics/claude-code",
-        auth_hint="Run: claude auth login",
-    ),
-)
-
-
 def _api_key_profiles() -> tuple[ProviderAuthProfile, ...]:
     profiles: list[ProviderAuthProfile] = []
     for provider in SUPPORTED_PROVIDERS:
@@ -95,7 +67,7 @@ def _api_key_profiles() -> tuple[ProviderAuthProfile, ...]:
 
 def iter_auth_profiles() -> tuple[ProviderAuthProfile, ...]:
     """Return all supported auth setup paths."""
-    return (*_SUBSCRIPTION_PROFILES, *_api_key_profiles())
+    return _api_key_profiles()
 
 
 def resolve_auth_profile(raw_name: str) -> ProviderAuthProfile:

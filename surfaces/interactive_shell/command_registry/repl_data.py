@@ -33,7 +33,7 @@ def verify_integration(service: str) -> dict[str, str] | None:
 def load_llm_settings() -> Any | None:
     """Best-effort LLM settings load; returns None if env is misconfigured."""
     try:
-        from config.config import LLMSettings
+        from config.llm_settings import LLMSettings
 
         return LLMSettings.from_env()
     except Exception:

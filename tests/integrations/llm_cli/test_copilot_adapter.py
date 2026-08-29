@@ -613,7 +613,7 @@ def test_cli_backed_client_invokes_copilot_and_forwards_token_env(
 
     mock_run.return_value = MagicMock(returncode=0, stdout="answer\n", stderr="")
 
-    with patch("infrastructure.safety.guardrails.engine.get_guardrail_engine") as gr:
+    with patch("infrastructure.safety.guardrails.evaluator.get_guardrail_evaluator") as gr:
         gr.return_value.is_active = False
         client = CLIBackedLLMClient(mock_adapter, model=None, max_tokens=256)
         resp = client.invoke("hello")

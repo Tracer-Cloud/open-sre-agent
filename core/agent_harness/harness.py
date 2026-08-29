@@ -5,7 +5,7 @@ Create the session, attach an agent, run turns::
     session = AgentSession.start(config)  # builds the default agent
     result = session.chat("…")            # turn 1
     follow = session.chat("…")            # turn 2 — same attached agent
-    report = session.investigate({…})     # needs no attached chat agent
+    report = session.investigate({…}, runner=run)  # needs no attached chat agent
 
 Embedded scripts that need local adapters use
 ``bootstrap.embedded.start_embedded_session``. Scheduled one-shots may use
@@ -33,7 +33,11 @@ from typing import TYPE_CHECKING, Any, Protocol, runtime_checkable
 from core.agent_harness.session import SessionManager
 
 if TYPE_CHECKING:
-    from core.agent_harness.investigation_api import AlertInput, InvestigationResult
+    from core.agent_harness.investigation_api import (
+        AlertInput,
+        InvestigationPayloadRunner,
+        InvestigationResult,
+    )
     from core.agent_harness.ports import (
         OutputSink,
         PromptContextProvider,
@@ -43,7 +47,6 @@ if TYPE_CHECKING:
     from core.agent_harness.session.session_core import SessionCore
     from core.agent_harness.session_goal.goal import SessionGoal
     from core.agent_harness.session_goal.run_until import SessionGoalRunResult
-    from core.agent_harness.turns.gather_phase import GatherPhase
     from core.agent_harness.turns.turn_results import TurnResult
     from core.tool.execution import ToolExecutionHooks
 
@@ -143,7 +146,6 @@ class AgentSession:
         prompts: PromptContextProvider | None = None,
         prepare_session: Callable[[SessionCore], None] | None = None,
         tools: ToolProvider | None = None,
-        gather: GatherPhase | None = None,
         console: Any | None = None,
         logger: logging.Logger | None = None,
         surface: str | None = None,
@@ -170,7 +172,7 @@ class AgentSession:
         ``prepare_session`` runs after session create (e.g. pin a project scope)
         and before the agent is built. ``console``, ``logger`` and ``surface``
         are the :class:`~core.agent_harness.turns.headless_build.DefaultHeadlessBuild`
-        fields; ``tools`` and ``gather`` the ports its ``agent()`` takes;
+        fields; ``tools`` the port its ``agent()`` takes;
         ``is_tty`` and ``tool_hooks`` (the turn's approval hooks) are bound on
         the first turn. A host that needs more (its own sink, prompts, error
         reporter, an action ``llm_factory``) builds through
@@ -188,7 +190,6 @@ class AgentSession:
             output=output if output is not None else BufferOutputSink(),
             prompts=prompts if prompts is not None else startup.prompts,
             tools=tools,
-            gather=gather,
             console=console,
             logger=logger,
             surface=surface,
@@ -205,7 +206,6 @@ class AgentSession:
         config: SessionConfig | None = None,
         output: OutputSink | None = None,
         prepare_session: Callable[[SessionCore], None] | None = None,
-        gather: GatherPhase | None = None,
         logger: logging.Logger | None = None,
         is_tty: bool | None = None,
     ) -> TurnResult:
@@ -220,7 +220,6 @@ class AgentSession:
             config or SCHEDULED_RUN_CONFIG,
             output=output,
             prepare_session=prepare_session,
-            gather=gather,
             logger=logger,
             is_tty=is_tty,
         ).chat(message)
@@ -230,7 +229,7 @@ class AgentSession:
 
         :attr:`SessionConfig.boot_process`, when supplied, runs first — an
         embedded host passes ``lambda: configure_process(EMBEDDED_PROFILE)`` so
-        gather and tools see the same local integrations as the interactive
+        tools see the same local integrations as the interactive
         shell. CLI, gateway and web already boot their own profile, so they
         leave it unset. ``configure_process`` is idempotent per profile, so a
         host that boots twice is harmless.
@@ -322,22 +321,25 @@ class AgentSession:
         self,
         alert: AlertInput,
         *,
+        runner: InvestigationPayloadRunner,
         opensre_evaluate: bool = False,
         investigation_metadata: tuple[str, str] | None = None,
     ) -> InvestigationResult:
-        """Run an investigation and return a typed result.
+        """Run an investigation through ``runner`` and return a typed result.
 
-        Uses the payload runner installed at process boot
-        (:func:`core.agent_harness.investigation_api.install_investigation_payload_runner`).
-        Does not require an attached chat agent.
+        ``agent_harness`` must not import ``tools``, so the caller (a surface or
+        the gateway) supplies the payload callable — normally
+        :func:`tools.investigation.capability.run_investigation_payload`. Does
+        not require an attached chat agent.
         """
-        from core.agent_harness.investigation_api import run_installed_investigation_payload
+        from core.agent_harness.investigation_api import InvestigationResult
 
-        return run_installed_investigation_payload(
+        payload = runner(
             raw_alert=alert,
             opensre_evaluate=opensre_evaluate,
             investigation_metadata=investigation_metadata,
         )
+        return InvestigationResult.from_payload(payload)
 
     def resolve_integrations(self, session: SessionCore) -> dict[str, Any]:
         """Return resolved integration configs for ``session``."""
@@ -352,7 +354,6 @@ class AgentSession:
         output: OutputSink,
         prompts: PromptContextProvider | None,
         tools: ToolProvider | None = None,
-        gather: GatherPhase | None = None,
         console: Any | None = None,
         logger: logging.Logger | None = None,
         surface: str | None = None,
@@ -370,7 +371,7 @@ class AgentSession:
 
         agent = DefaultHeadlessBuild(
             session=session, output=output, console=console, logger=logger, surface=surface
-        ).agent(tools=tools, prompts=prompts, gather=gather)
+        ).agent(tools=tools, prompts=prompts)
         agent.bind_turn(TurnBinding(is_tty=is_tty, tool_hooks=tool_hooks))
         self.attach_agent(agent)
 

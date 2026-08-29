@@ -425,7 +425,7 @@ def _init_sentry_once(
     """
     import sentry_sdk
 
-    from integrations.llm_cli.errors import (
+    from integrations.llm_cli import (
         CLIAuthenticationRequired,
         CLIInterruptedError,
         CLITimeoutError,
@@ -513,7 +513,7 @@ def init_sentry(entrypoint: str | None = None) -> None:
         _capture_sentry_init_skipped("telemetry_disabled")
         return
 
-    from config.config import get_environment
+    from config.environment import get_environment
     from config.version import get_opensre_version
 
     try:

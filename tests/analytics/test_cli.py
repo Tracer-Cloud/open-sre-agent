@@ -98,10 +98,10 @@ def test_identify_github_username_noop_on_empty(monkeypatch: pytest.MonkeyPatch)
 def test_identify_saved_github_username_reads_store(monkeypatch: pytest.MonkeyPatch) -> None:
     stub = _StubAnalytics()
     monkeypatch.setattr(cli, "get_analytics", lambda: stub)
-    monkeypatch.setattr(
-        "integrations.github.identity.saved_github_username",
-        lambda: "octocat",
-    )
+    # Patch the package API surface (what production imports). Patching only
+    # ``integrations.github.identity`` misses when another test has bound the
+    # name on ``integrations.github`` and shadowed ``__getattr__``.
+    monkeypatch.setattr("integrations.github.saved_github_username", lambda: "octocat")
 
     cli.identify_saved_github_username()
 
@@ -114,7 +114,7 @@ def test_identify_saved_github_username_noop_when_store_empty(
 ) -> None:
     stub = _StubAnalytics()
     monkeypatch.setattr(cli, "get_analytics", lambda: stub)
-    monkeypatch.setattr("integrations.github.identity.saved_github_username", lambda: "")
+    monkeypatch.setattr("integrations.github.saved_github_username", lambda: "")
 
     cli.identify_saved_github_username()
 
@@ -136,87 +136,6 @@ def test_identify_github_username_reports_failures_to_sentry(
     cli.identify_github_username("octocat")
 
     assert captured_errors == [expected_error]
-
-
-def test_capture_github_login_completed(monkeypatch: pytest.MonkeyPatch) -> None:
-    stub = _StubAnalytics()
-    monkeypatch.setattr(cli, "get_analytics", lambda: stub)
-
-    cli.capture_github_login_completed("octocat", variant="forced")
-
-    assert stub.events == [
-        (
-            Event.GITHUB_LOGIN_COMPLETED,
-            {
-                "github_username": "octocat",
-                "experiment_key": cli.GITHUB_GATE_EXPERIMENT,
-                "variant": "forced",
-                "gate_version": cli.GITHUB_GATE_VERSION,
-                "github_gate_variant": "forced",
-            },
-        ),
-    ]
-
-
-def test_assign_github_gate_variant_is_deterministic() -> None:
-    a = cli.assign_github_gate_variant("11111111-2222-3333-4444-555555555555")
-    b = cli.assign_github_gate_variant("11111111-2222-3333-4444-555555555555")
-    c = cli.assign_github_gate_variant("aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee")
-    assert a == b
-    assert a in {cli.GITHUB_GATE_VARIANT_CONTROL, cli.GITHUB_GATE_VARIANT_FORCED}
-    # Different ids should usually split; assert both variants exist across a sample.
-    variants = {
-        cli.assign_github_gate_variant(f"00000000-0000-0000-0000-{i:012d}") for i in range(40)
-    }
-    assert variants == {cli.GITHUB_GATE_VARIANT_CONTROL, cli.GITHUB_GATE_VARIANT_FORCED}
-    assert c in variants
-
-
-def test_resolve_github_gate_variant_env_override(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setenv("OPENSRE_GITHUB_GATE_VARIANT", "forced")
-    assert cli.resolve_github_gate_variant() == "forced"
-    monkeypatch.setenv("OPENSRE_GITHUB_GATE_VARIANT", "control")
-    assert cli.resolve_github_gate_variant() == "control"
-
-
-def test_capture_github_login_lifecycle_events(monkeypatch: pytest.MonkeyPatch) -> None:
-    stub = _StubAnalytics()
-    monkeypatch.setattr(cli, "get_analytics", lambda: stub)
-
-    cli.capture_github_login_prompted(variant="control")
-    cli.capture_github_login_skipped(variant="control", skip_source=cli.GITHUB_SKIP_SOURCE_MENU)
-    cli.capture_github_login_abandoned(variant="forced", reason="cancelled")
-    cli.capture_github_login_failed(variant="forced", reason_category=cli.GITHUB_FAIL_DEVICE_FLOW)
-    cli.stamp_github_gate_variant("forced")
-
-    exp_control = cli.github_gate_experiment_properties("control")
-    exp_forced = cli.github_gate_experiment_properties("forced")
-    assert stub.events == [
-        (Event.GITHUB_LOGIN_GATE_SHOWN, exp_control),
-        (Event.GITHUB_LOGIN_PROMPTED, exp_control),
-        (
-            Event.GITHUB_LOGIN_SKIPPED,
-            {**exp_control, "skip_source": cli.GITHUB_SKIP_SOURCE_MENU},
-        ),
-        (
-            Event.GITHUB_LOGIN_ABANDONED,
-            {**exp_forced, "reason": "cancelled"},
-        ),
-        (
-            Event.GITHUB_LOGIN_FAILED,
-            {**exp_forced, "reason_category": cli.GITHUB_FAIL_DEVICE_FLOW},
-        ),
-    ]
-    assert stub.persistent_properties == exp_forced
-
-
-def test_github_gate_experiment_properties_shape() -> None:
-    props = cli.github_gate_experiment_properties("control", skip_source="menu")
-    assert props["experiment_key"] == "github_gate_v1"
-    assert props["variant"] == "control"
-    assert props["gate_version"] == "1"
-    assert props["github_gate_variant"] == "control"
-    assert props["skip_source"] == "menu"
 
 
 def test_build_cli_invoked_properties_includes_full_command_path() -> None:
@@ -494,3 +413,24 @@ def test_capture_diagnosis_category_mismatch(monkeypatch: pytest.MonkeyPatch) ->
             },
         )
     ]
+
+
+def test_investigation_started_properties_use_current_model_env(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("LLM_PROVIDER", "anthropic")
+    monkeypatch.setenv("ANTHROPIC_REASONING_MODEL", "claude-opus-4-7")
+    monkeypatch.delenv("ANTHROPIC_MODEL", raising=False)
+    monkeypatch.delenv("OPENAI_MODEL", raising=False)
+    monkeypatch.delenv("OPENAI_REASONING_MODEL", raising=False)
+
+    properties = cli._investigation_started_properties(
+        input_path=None,
+        input_json=None,
+        interactive=False,
+        evaluate_requested=False,
+        shared_properties={},
+    )
+
+    assert properties["llm_provider"] == "anthropic"
+    assert properties["llm_model"] == "claude-opus-4-7"

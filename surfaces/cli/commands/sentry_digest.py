@@ -238,6 +238,7 @@ def sentry_uptime_watch_remove(task_id: str) -> None:
 @click.argument("task_id")
 def sentry_uptime_watch_run(task_id: str) -> None:
     """Run a scheduled Sentry uptime watch task immediately."""
+    from bootstrap.adapters import scheduler_runners
     from infrastructure.scheduling.scheduler.runner import run_task_now
     from infrastructure.scheduling.scheduler.store import get_task
     from infrastructure.scheduling.scheduler.types import TaskKind
@@ -252,7 +253,7 @@ def sentry_uptime_watch_run(task_id: str) -> None:
     require_digest_delivery_provider(task.provider.value)
 
     _console.print(f"Running Sentry uptime watch task {task_id}...")
-    success = run_task_now(task_id)
+    success = run_task_now(task_id, scheduler_runners())
     if success:
         _console.print("[green]Done.[/green]")
     else:
@@ -270,7 +271,7 @@ def sentry_uptime_watch_run(task_id: str) -> None:
 )
 def sentry_digest_run(project_slug: str) -> None:
     """Run the morning digest once and print the report to stdout."""
-    from infrastructure.scheduling.scheduler.agent_runner import invoke_agent_runner
+    from bootstrap.adapters import scheduler_runners
 
     configure_process(SCHEDULED_COMMAND_PROFILE)
     payload: dict[str, str] = {
@@ -282,7 +283,7 @@ def sentry_digest_run(project_slug: str) -> None:
         payload["project_slug"] = project_slug.strip()
 
     try:
-        message = invoke_agent_runner(payload)
+        message = scheduler_runners().agent(payload)
     except Exception as exc:
         _console.print(f"[red]Sentry morning digest failed: {exc}[/red]")
         raise SystemExit(1) from exc
@@ -426,6 +427,7 @@ def sentry_digest_schedule_remove(task_id: str) -> None:
 @click.argument("task_id")
 def sentry_digest_schedule_run(task_id: str) -> None:
     """Run a scheduled Sentry digest task immediately."""
+    from bootstrap.adapters import scheduler_runners
     from infrastructure.scheduling.scheduler.runner import run_task_now
     from infrastructure.scheduling.scheduler.store import get_task
     from infrastructure.scheduling.scheduler.types import TaskKind
@@ -440,7 +442,7 @@ def sentry_digest_schedule_run(task_id: str) -> None:
     require_digest_delivery_provider(task.provider.value)
 
     _console.print(f"Running Sentry digest task {task_id}...")
-    success = run_task_now(task_id)
+    success = run_task_now(task_id, scheduler_runners())
     if success:
         _console.print("[green]Done.[/green]")
     else:

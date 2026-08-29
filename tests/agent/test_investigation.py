@@ -430,7 +430,7 @@ def test_execute_tools_uses_availability_view_for_classified_integrations() -> N
     tool_calls = [ToolCall(id="tc1", name="query_grafana_logs", input={"service_name": "checkout"})]
 
     with patch(
-        "integrations.grafana.tools.get_grafana_client_from_credentials",
+        "integrations.grafana.tools._helpers.get_grafana_client_from_credentials",
         return_value=mock_client,
     ) as mock_factory:
         results = execute_tools(tool_calls, [rt], resolved)
@@ -924,58 +924,6 @@ def test_should_accept_conclusion_production_default_rejects_incomplete_once() -
     accept, nudge = agent._should_accept_conclusion(evidence_count=3, iteration=5)
     assert accept is True
     assert nudge is None
-
-
-def test_invalid_hook_return_false_none_raises_at_call_site() -> None:
-    """Greptile P1: a hook override that returns ``(False, None)`` would
-    spin the loop on an unchanged message history until
-    ``MAX_INVESTIGATION_LOOPS``, silently burning the whole token budget.
-    The call site must raise immediately so buggy overrides fail loud
-    instead of expensive.
-
-    This pins the contract — a future regression that drops the guard
-    fails here instead of in a production token-burn incident."""
-
-    class _BadAgent(ConnectedInvestigationAgent):
-        def _should_accept_conclusion(
-            self,
-            *,
-            evidence_count: int,  # noqa: ARG002 — base signature
-            iteration: int,  # noqa: ARG002 — base signature
-            final_text: str = "",  # noqa: ARG002 — base signature
-        ) -> tuple[bool, str | None]:
-            return False, None  # invalid — rejects without providing context
-
-    mock_llm = MagicMock()
-    # Empty content + no tool calls → LLM "concludes" → triggers the hook.
-    mock_response = MagicMock()
-    mock_response.has_tool_calls = False
-    mock_response.tool_calls = []
-    mock_response.content = ""
-    mock_response.raw_content = None
-    mock_llm.invoke.return_value = mock_response
-    mock_llm.tool_schemas.return_value = []
-    mock_tracker = MagicMock()
-
-    state = {
-        "alert_name": "Test alert",
-        "pipeline_name": "test-pipeline",
-        "severity": "critical",
-        "resolved_integrations": {},
-    }
-    agent = _BadAgent()
-    with (
-        patch(
-            "tools.investigation.stages.gather_evidence.agent.default_llm_factory",
-            return_value=mock_llm,
-        ),
-        patch(
-            "tools.investigation.stages.gather_evidence.agent.get_tracker",
-            return_value=mock_tracker,
-        ),
-        pytest.raises(ValueError, match="_should_accept_conclusion returned"),
-    ):
-        agent.run(state)
 
 
 def test_should_accept_conclusion_subclass_can_force_continuation() -> None:

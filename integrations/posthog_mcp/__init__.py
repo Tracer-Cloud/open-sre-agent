@@ -29,6 +29,7 @@ import os
 from collections.abc import AsyncIterator, Coroutine, Mapping
 from contextlib import AsyncExitStack, asynccontextmanager
 from dataclasses import dataclass
+from http import HTTPStatus
 from typing import Any, cast
 from urllib.parse import parse_qsl, urlencode, urlparse, urlunparse
 
@@ -391,7 +392,10 @@ def describe_posthog_mcp_error(err: BaseException, config: PostHogMCPConfig) -> 
     detail = _root_cause_message(err)
     hints: list[str] = []
 
-    if isinstance(err, httpx.HTTPStatusError) and err.response.status_code in (401, 403):
+    if isinstance(err, httpx.HTTPStatusError) and err.response.status_code in (
+        HTTPStatus.UNAUTHORIZED,
+        HTTPStatus.FORBIDDEN,
+    ):
         hints.append(
             "Authentication failed. Check POSTHOG_MCP_AUTH_TOKEN is a valid personal API key "
             "created with the `MCP Server` preset."
@@ -569,3 +573,22 @@ def classify(
     if cfg.is_configured:
         return cfg, "posthog_mcp"
     return None, None
+
+
+__all__ = [
+    "DEFAULT_POSTHOG_MCP_URL",
+    "POSTHOG_MCP_EU_URL",
+    "PostHogMCPConfig",
+    "PostHogMCPContentItem",
+    "PostHogMCPToolCallResult",
+    "PostHogMCPToolDescriptor",
+    "PostHogMCPValidationResult",
+    "build_posthog_mcp_config",
+    "call_posthog_mcp_tool",
+    "classify",
+    "describe_posthog_mcp_error",
+    "list_posthog_mcp_tools",
+    "posthog_mcp_config_from_env",
+    "posthog_mcp_runtime_unavailable_reason",
+    "validate_posthog_mcp_config",
+]

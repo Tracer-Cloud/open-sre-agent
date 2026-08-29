@@ -7,6 +7,7 @@ import json
 import logging
 import os
 import threading
+import time
 import uuid
 from collections.abc import Iterator
 from datetime import UTC, datetime
@@ -19,13 +20,14 @@ from config.constants.session_store import OPENSRE_SESSION_FILE_LOCK_ENV
 from config.version import get_opensre_version
 from core.agent_harness.session.persistence.contracts import CHAT_KINDS, SessionPersistenceSource
 from core.agent_harness.session.persistence.paths import session_path
+from infrastructure.observability.operations_log import record_operation
 
 logger = logging.getLogger(__name__)
 
 # Seconds to wait for the cross-process session lock before giving up. Generous:
 # same-session turns are already serialized in-process, so real contention here
 # is only two tasks racing one session — rare, and pathological beyond this.
-_SESSION_LOCK_TIMEOUT_SECONDS = 10
+_SESSION_LOCK_TIMEOUT_SECONDS: float = 10
 
 
 def _session_file_lock_enabled() -> bool:
@@ -46,6 +48,10 @@ _TAIL_SCAN_CHUNK_BYTES = 64 * 1024
 # (e.g. a full script body) never bloats the session log.
 _INTENT_ARGS_MAX_CHARS = 2_000
 _INTENT_USER_TEXT_MAX_CHARS = 200
+
+
+def _elapsed_ms(started: float) -> int:
+    return round((time.monotonic() - started) * 1000)
 
 
 def _now() -> str:
@@ -98,11 +104,17 @@ class JsonlSessionStore:
     def _locked(self, path: Path) -> Iterator[None]:
         """Serialize writes to one session file across processes (reentrant).
 
-        A no-op unless the file lock is enabled. Same-instance reentrancy lets
-        ``flush`` hold the lock across its whole read-modify-append while inner
-        appends re-enter cheaply; a per-path lock means different sessions never
-        contend. On timeout the caller's best-effort ``suppress`` skips the write
-        after a warning.
+        A no-op unless the file lock is enabled — the early return above keeps
+        the default (single-task) path free of the timing/recording below. Same-
+        instance reentrancy lets ``flush`` hold the lock across its whole
+        read-modify-append while inner appends re-enter cheaply; a per-path lock
+        means different sessions never contend. On timeout the caller's
+        best-effort ``suppress`` skips the write after a warning.
+
+        Every acquire (successful or not) records its wait time via the
+        operations log, and a timeout is recorded under its own event —
+        distinct from a generic failure, since it is a write that did not
+        happen rather than an error mid-write.
         """
         if not self._file_lock_enabled:
             yield
@@ -113,10 +125,19 @@ class JsonlSessionStore:
             if lock is None:
                 lock = FileLock(f"{key}.lock", timeout=_SESSION_LOCK_TIMEOUT_SECONDS)
                 self._write_locks[key] = lock
+        started = time.monotonic()
         try:
             with lock:
+                record_operation(
+                    "session_file_lock_wait",
+                    {"wait_ms": _elapsed_ms(started), "path": str(path)},
+                )
                 yield
         except Timeout:
+            record_operation(
+                "session_file_lock_timeout",
+                {"wait_ms": _elapsed_ms(started), "path": str(path)},
+            )
             logger.warning("session file lock timed out; skipping write: %s", path)
             raise
         finally:
@@ -447,6 +468,21 @@ class JsonlSessionStore:
                     content=goal_state,
                     display=False,
                 )
+        if hasattr(session, "task_plan"):
+            from core.agent_harness.task_plan.persist import (
+                TASK_PLAN_STATE_CUSTOM_TYPE,
+                should_persist_task_plan_state,
+                task_plan_state_snapshot,
+            )
+
+            plan_state = task_plan_state_snapshot(session)
+            if should_persist_task_plan_state(plan_state, prior_records=records):
+                self.append_custom_message(
+                    session.session_id,
+                    custom_type=TASK_PLAN_STATE_CUSTOM_TYPE,
+                    content=plan_state or {},
+                    display=False,
+                )
         if trailing_leaf:
             return
         if session.agent.messages and not any(rec.get("type") == "message" for rec in records):
@@ -569,11 +605,20 @@ class JsonlSessionStore:
         self._leaf_ids[key] = entry_id
 
     @staticmethod
-    def _loads_record(line: str) -> dict[str, Any] | None:
-        """Parse one JSONL line into a record dict, or ``None`` if unusable."""
+    def _loads_record(line: str, *, path: Path | None = None) -> dict[str, Any] | None:
+        """Parse one JSONL line into a record dict, or ``None`` if unusable.
+
+        A decode failure here is a torn tail or truncation on the read side —
+        recorded distinctly from a write-side lock timeout, since the two catch
+        different failure modes on either end of the same file.
+        """
         try:
             rec = json.loads(line)
         except json.JSONDecodeError:
+            record_operation(
+                "session_jsonl_decode_failed",
+                {"line_chars": len(line), "path": str(path) if path else ""},
+            )
             return None
         return rec if isinstance(rec, dict) else None
 
@@ -581,7 +626,7 @@ class JsonlSessionStore:
     def _read_records(path: Path) -> list[dict[str, Any]]:
         records: list[dict[str, Any]] = []
         for line in path.read_text(encoding="utf-8").splitlines():
-            rec = JsonlSessionStore._loads_record(line)
+            rec = JsonlSessionStore._loads_record(line, path=path)
             if rec is not None:
                 records.append(rec)
         return records
@@ -664,7 +709,7 @@ class JsonlSessionStore:
                     for line in reversed(region.decode("utf-8").splitlines()):
                         if not line.strip():
                             continue
-                        rec = self._loads_record(line)
+                        rec = self._loads_record(line, path=path)
                         if rec is None:
                             continue
                         resolved, tip = self._tip_id_from_record(rec)

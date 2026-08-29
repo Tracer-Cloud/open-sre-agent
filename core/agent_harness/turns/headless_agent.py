@@ -21,24 +21,18 @@ from collections.abc import Callable, Iterator
 from contextlib import contextmanager
 from dataclasses import replace
 
-from core.agent_harness.accounting.token_accounting import LlmRunInfo
 from core.agent_harness.accounting.turn_accounting import DefaultTurnAccounting
 from core.agent_harness.ports import (
-    AnswerRequest,
     ConfirmFn,
     ConsoleBindable,
     ErrorReporter,
-    EvidenceGatherer,
     ExecuteActions,
     LlmFactory,
     OutputBindable,
     OutputSink,
     PromptContextProvider,
-    ReasoningClientProvider,
-    RunRecordFactory,
     SessionBindable,
     SessionState,
-    StreamAnswerFn,
     ToolProvider,
     TurnAccounting,
     TurnBinding,
@@ -47,12 +41,7 @@ from core.agent_harness.session_goal.goal import SessionGoal
 from core.agent_harness.session_goal.run_until import SessionGoalRunResult, run_until_session_goal
 from core.agent_harness.turns.action_driver import ActionTurnRunner
 from core.agent_harness.turns.chat_api import ChatTurnBindings, dispatch_chat_turn
-from core.agent_harness.turns.evidence_driver import gather_tool_evidence
-from core.agent_harness.turns.gather_observation import GatheredEvidence
-from core.agent_harness.turns.gather_phase import GatherPhase
 from core.agent_harness.turns.headless_adapters import NoopTurnAccounting
-from core.agent_harness.turns.host_cancel import host_cancel_requested
-from core.agent_harness.turns.orchestrator import stream_answer
 from core.agent_harness.turns.turn_plan import TurnPlan
 from core.agent_harness.turns.turn_results import ToolCallingTurnResult, TurnResult
 from core.tool.execution import ToolExecutionHooks
@@ -93,10 +82,7 @@ class HeadlessAgent:
         session: SessionState,
         output: OutputSink,
         prompts: PromptContextProvider,
-        reasoning: ReasoningClientProvider,
-        run_factory: RunRecordFactory,
         error_reporter: ErrorReporter,
-        gather: GatherPhase,
         llm_factory: LlmFactory,
     ) -> None:
         self._tools = tools
@@ -104,18 +90,13 @@ class HeadlessAgent:
         self._session: SessionState = session
         self._output: OutputSink = output
         self._prompts: PromptContextProvider = prompts
-        self._reasoning = reasoning
-        self._run_factory = run_factory
         self._error_reporter = error_reporter
-        self._gather_phase = gather
         # Turn-scoped state; see bind_turn / bind_stages.
         self._accounting: TurnAccounting | None = None
         self._confirm_fn: ConfirmFn | None = None
         self._is_tty: bool | None = None
         self._tool_hooks: ToolExecutionHooks | None = None
         self._execute_actions_override: ExecuteActions | None = None
-        self._answer_override: StreamAnswerFn | None = None
-        self._gather_override: EvidenceGatherer | None = None
         # Reentrant so handle() may call dispatch() on the same thread; a second
         # thread fails the non-blocking acquire and gets AgentBusyError.
         self._turn_lock = threading.RLock()
@@ -201,8 +182,6 @@ class HeadlessAgent:
                 self._session,
                 ChatTurnBindings(
                     execute_actions=self._execute_actions_override or self._execute_actions,
-                    answer=self._answer_override or self._answer,
-                    gather=self._gather_override or self._gather,
                     accounting=self._take_accounting(message),
                     confirm_fn=self._confirm_fn,
                     is_tty=self._is_tty,
@@ -263,8 +242,6 @@ class HeadlessAgent:
         self,
         *,
         execute_actions: ExecuteActions | None = None,
-        answer: StreamAnswerFn | None = None,
-        gather_evidence: EvidenceGatherer | None = None,
     ) -> None:
         """Replace whole stages for the next dispatches; ``None`` restores the port-driven default.
 
@@ -272,8 +249,6 @@ class HeadlessAgent:
         long-lived agent that hosts many turns with different injected seams.
         """
         self._execute_actions_override = execute_actions
-        self._answer_override = answer
-        self._gather_override = gather_evidence
 
     @contextmanager
     def _one_turn_at_a_time(self) -> Iterator[None]:
@@ -315,48 +290,12 @@ class HeadlessAgent:
             confirm_fn=confirm_fn,
         )
 
-    def _answer(self, text: str, request: AnswerRequest) -> LlmRunInfo | None:
-        return stream_answer(
-            text,
-            self._session,
-            self._output,
-            prompts=self._prompts,
-            reasoning=self._reasoning,
-            run_factory=self._run_factory,
-            error_reporter=self._error_reporter,
-            request=request,
-        )
-
-    def _gather(
-        self, text: str, *, turn_plan: TurnPlan | None = None
-    ) -> str | GatheredEvidence | None:
-        if not self._gather_phase.enabled:
-            return None
-        if host_cancel_requested(self._output):
-            return None
-        resolved = turn_plan.resolved_integrations if turn_plan is not None else None
-        return gather_tool_evidence(
-            text,
-            self._session,
-            error_reporter=self._error_reporter,
-            resolved_integrations=resolved,
-            max_iterations=self._gather_phase.max_iterations,
-            on_progress=self._gather_phase.on_progress,
-            persist=self._gather_phase.persist,
-            is_cancelled=lambda: host_cancel_requested(self._output),
-            tool_hooks=self._tool_hooks,
-        )
-
     def _ports(self) -> tuple[object, ...]:
         """Every port this agent holds; rebinding asks each for the capability it needs."""
         return (
             self._tools,
             self._prompts,
-            self._reasoning,
-            self._run_factory,
             self._error_reporter,
-            self._gather_phase.on_progress,
-            self._gather_phase.persist,
         )
 
     def _new_action_runner(self) -> ActionTurnRunner:

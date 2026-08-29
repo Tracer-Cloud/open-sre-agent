@@ -8,6 +8,7 @@ from core.agent_harness.prompts.skills.loader import (
     list_action_skills,
     load_skill_body,
     load_skills_block,
+    load_skills_demo_block,
     load_skills_index,
     skills_dir,
 )
@@ -18,6 +19,7 @@ __all__ = [
     "list_action_skills",
     "load_skill_body",
     "load_skills_block",
+    "load_skills_demo_block",
     "load_skills_index",
     "skills_dir",
 ]

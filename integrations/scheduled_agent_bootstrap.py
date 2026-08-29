@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from infrastructure.scheduling.scheduler.agent_runner import AgentPayload, register_agent_runner
+from infrastructure.scheduling.scheduler.agent_runner import AgentPayload
 from integrations.github.pr_sweep_runner import run_github_pr_sweep
 from integrations.manual_loop_runner import run_manual_prompt_loop
 from integrations.posthog.report_runner import run_posthog_report
@@ -27,14 +27,4 @@ def run_scheduled_agent_digest(payload: AgentPayload) -> str:
     return run_sentry_morning_digest(payload)
 
 
-def install() -> None:
-    """Bind the multiplexed scheduled agent runner.
-
-    Registers this seam alone. A host that wants both seams — and its capacity
-    gate applied to them — builds ``SchedulerRunners`` through
-    :func:`bootstrap.adapters.scheduler_runners` instead.
-    """
-    register_agent_runner(run_scheduled_agent_digest)
-
-
-__all__ = ["install", "run_scheduled_agent_digest"]
+__all__ = ["run_scheduled_agent_digest"]

@@ -84,8 +84,8 @@ def version_command() -> None:
 )
 def health_command(watch: bool, rate: int) -> None:
     """Show a quick health summary of the local agent setup."""
-    from config.config import get_environment
     from config.constants.paths import integrations_store_path
+    from config.environment import get_environment
     from integrations.verify import verify_integrations
     from surfaces.shared.terminal.health import render_health_json, render_health_report
 

@@ -64,7 +64,7 @@ a realistic Datadog Kubernetes alert.
 
 ## Relationship to guardrails
 
-Masking is complementary to the one-way `GuardrailEngine`. Guardrails handle
+Masking is complementary to the one-way `GuardrailEvaluator`. Guardrails handle
 hard-block rules (credit cards, API keys) and replace matches with `[REDACTED]`
 irreversibly. Masking handles infrastructure identifiers reversibly so they can
 be restored for user-facing output.

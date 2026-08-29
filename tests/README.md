@@ -8,7 +8,7 @@
 | Verify all integration configs and clients | `make verify-integrations` | After adding or changing an integration. |
 | Run a live RCA end-to-end test | `make test-rca` | When you need to validate a full investigation against real services. |
 | Run a single RCA fixture | `make test-rca FILE=<name>` | When iterating on one specific alert scenario. |
-| Run the full suite including e2e | `make test-full` | Pre-release or CI; requires live infrastructure. |
+| Run the default pytest collection (`tests/e2e` excluded by pytest configuration) | `make test-full` | Broad local or CI regression run; use `make test-rca` for live RCA end-to-end testing. |
 | Run synthetic scenarios (no live infra) | `make test-synthetic` | When testing scenario logic without external service dependencies. |
 
 ## Layout

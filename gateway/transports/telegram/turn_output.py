@@ -11,6 +11,7 @@ from gateway.core.single_message_output import (
 from gateway.transports.telegram.poller.client import TelegramBotClient
 from infrastructure.delivery.notifications.limits import MAX_MESSAGE_SIZE
 from infrastructure.text.truncation import truncate
+from integrations.telegram.delivery import truncate_for_telegram_html
 from integrations.telegram.formatting import markdown_to_telegram_html
 
 logger = logging.getLogger("gateway")
@@ -45,7 +46,9 @@ class _TelegramChannel:
         final = truncate(answer, MAX_MESSAGE_SIZE, suffix="…")
         # Render the answer's Markdown as Telegram HTML, falling back to the plain
         # answer if the API rejects the markup so a message is never lost.
-        html_final = markdown_to_telegram_html(final)
+        html_final = truncate_for_telegram_html(
+            markdown_to_telegram_html(answer), MAX_MESSAGE_SIZE, suffix="…"
+        )
         if message_id and self._edit_final(message_id, html_final, final):
             logger.info("outbound %s text=%r", self.destination, log_preview(final))
             return ""

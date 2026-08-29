@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from integrations.github.mcp import (
+from integrations.github import (
     build_github_mcp_config,
     format_github_mcp_validation_cli_report,
     validate_github_mcp_config,

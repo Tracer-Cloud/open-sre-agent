@@ -22,7 +22,6 @@ def test_shell_agent_build_omits_capability_policy() -> None:
     assert config.apply_capability_policy is None
     assert config.build_tools is not None
     assert config.build_prompts is not None
-    assert config.build_gather is not None
 
 
 def test_gateway_policy_still_withholds_on_a_fresh_session() -> None:
@@ -51,7 +50,6 @@ def test_build_shell_agent_applies_capability_policy_when_set(
         return AgentBuildConfig(
             build_tools=base.build_tools,
             build_prompts=base.build_prompts,
-            build_gather=base.build_gather,
             error_reporter=base.error_reporter,
             apply_capability_policy=seen.append,
         )

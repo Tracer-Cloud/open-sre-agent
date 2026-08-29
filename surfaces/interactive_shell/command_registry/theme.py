@@ -21,7 +21,7 @@ from surfaces.shared.terminal.components.choice_menu import (
 
 
 def _refresh_prompt_style(session: Session) -> None:
-    """Defer prompt-toolkit style refresh until the next prompt_async turn."""
+    """Defer prompt-toolkit style refresh until the prompt input loop resumes."""
     session.terminal.pending_theme_refresh = True
 
 

@@ -219,7 +219,6 @@ def test_gateway_manager_registers_harness_adapters(monkeypatch: pytest.MonkeyPa
     reset_process_runtime_for_tests()
     # Registration happens in bootstrap.process via GATEWAY_PROFILE.
     monkeypatch.setattr("bootstrap.process.install_harness_adapters", _record("adapters"))
-    monkeypatch.setattr("bootstrap.process.install_scheduler_runners", _record("runners"))
     monkeypatch.setattr(
         "infrastructure.observability.errors.sentry.init_sentry",
         lambda **_kwargs: None,

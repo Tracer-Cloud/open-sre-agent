@@ -130,18 +130,23 @@ async def test_prompt_input_reader_keyboard_interrupt_with_dispatch_running_retu
 async def test_prompt_input_reader_keyboard_interrupt_without_dispatch_uses_ctrl_c_gate(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    monkeypatch.setattr(reader_module, "repl_prompt_note_ctrl_c", lambda _console, _sid: False)
+    monkeypatch.setattr(reader_module, "repl_prompt_ctrl_c_should_exit", lambda: False)
 
-    event = await _reader(FakePrompt(lambda: (_ for _ in ()).throw(KeyboardInterrupt))).read()
+    state = ReplState()
+    event = await _reader(
+        FakePrompt(lambda: (_ for _ in ()).throw(KeyboardInterrupt)),
+        state,
+    ).read()
 
     assert event == InputCancelled()
+    assert state.is_ctrl_c_exit_hint_visible()
 
 
 @pytest.mark.asyncio
 async def test_prompt_input_reader_keyboard_interrupt_without_dispatch_can_close(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    monkeypatch.setattr(reader_module, "repl_prompt_note_ctrl_c", lambda _console, _sid: True)
+    monkeypatch.setattr(reader_module, "repl_prompt_ctrl_c_should_exit", lambda: True)
 
     event = await _reader(FakePrompt(lambda: (_ for _ in ()).throw(KeyboardInterrupt))).read()
 

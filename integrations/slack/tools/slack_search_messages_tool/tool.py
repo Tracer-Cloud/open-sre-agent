@@ -9,7 +9,7 @@ from core.tool import BaseTool, SideEffectLevel
 from core.tool_framework import SUMMARIZE_OBSERVATION_TAG, tool
 from core.tool_framework.utils import tool_unavailable
 from integrations.slack.tools.slack_read_messages_tool.constants import SOURCE
-from integrations.slack.web_client import bot_token_configured, resolve_bot_token, search_messages
+from integrations.slack.web_client import resolve_user_token, search_messages, user_token_configured
 
 
 class SlackSearchMessagesTool(BaseTool):
@@ -18,10 +18,11 @@ class SlackSearchMessagesTool(BaseTool):
     name = "slack_search_messages"
     source = SOURCE
     description = (
-        "Search Slack *messages* workspace-wide (search.messages) using the bot token. "
+        "Search Slack *messages* workspace-wide (search.messages). "
         "Use Slack search syntax (e.g. 'in:#incidents timeout', 'from:@user error'). "
-        "Requires the search:read bot scope. Not for workspace roster — use "
-        "slack_list_team_members for who is on the team / member IDs."
+        "Needs a Slack user token (SLACK_ACCESS_TOKEN, xoxp-…) with search:read — "
+        "Slack refuses bot tokens for this endpoint. "
+        "Not for workspace roster — use slack_list_team_members for who is on the team / member IDs."
     )
     use_cases = [
         "Finding prior discussion of an incident keyword",
@@ -59,11 +60,13 @@ class SlackSearchMessagesTool(BaseTool):
         "error_type": "validation_error, configuration_error, or api_error",
     }
 
-    def is_available(self, sources: dict[str, Any]) -> bool:
-        return bot_token_configured(sources)
+    def is_available(self, _sources: dict[str, Any]) -> bool:
+        # A bot token does not make this tool usable, so the resolved-integration
+        # map is not consulted: only a user token counts.
+        return user_token_configured()
 
     def run(self, query: str, count: int = 20, **_kwargs: Any) -> dict[str, Any]:
-        target, resolution_error = resolve_bot_token()
+        target, resolution_error = resolve_user_token()
         if target is None:
             return tool_unavailable(
                 SOURCE,

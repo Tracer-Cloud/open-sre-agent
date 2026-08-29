@@ -8,8 +8,13 @@ import pytest
 from rich.console import Console
 
 import surfaces.interactive_shell.command_registry.choice_prompt as choice_prompt
-from core.agent_harness.session.pending_choice import PendingUserChoice
+from core.agent_harness.session.pending_choice import (
+    AskUserQuestion,
+    PendingUserChoice,
+    format_ask_user_answers,
+)
 from surfaces.interactive_shell.session import Session
+from surfaces.interactive_shell.ui.ask_user import CUSTOM_OPTION
 
 _CHOICE = PendingUserChoice(
     title="How should I handle the uncommitted changes?",
@@ -35,7 +40,7 @@ def test_selection_is_auto_submitted_as_next_user_message(
 ) -> None:
     session = Session()
     session.pending_user_choice = _CHOICE
-    console, _buf = _console()
+    console, buf = _console()
 
     def _pick_second(**kwargs: object) -> str:
         assert kwargs["title"] == _CHOICE.title
@@ -48,6 +53,10 @@ def test_selection_is_auto_submitted_as_next_user_message(
     assert session.pending_user_choice is None
     assert session.terminal.pending_prompt_default == "Commit the changes"
     assert session.terminal.pending_prompt_autosubmit is True
+    output = buf.getvalue()
+    assert "✓" in output
+    assert _CHOICE.title in output
+    assert "Commit the changes" in output
 
 
 def test_cancelled_menu_leaves_prompt_free(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -89,7 +98,7 @@ def test_non_tty_prints_options_as_text(monkeypatch: pytest.MonkeyPatch) -> None
 
 
 def test_choose_is_registered_with_exclusive_stdin(monkeypatch: pytest.MonkeyPatch) -> None:
-    import surfaces.interactive_shell.runtime.utils.input_policy as input_policy
+    import surfaces.interactive_shell.runtime.input_policy as input_policy
     from surfaces.interactive_shell.command_registry import SLASH_COMMANDS
 
     assert "/choose" in SLASH_COMMANDS
@@ -98,3 +107,113 @@ def test_choose_is_registered_with_exclusive_stdin(monkeypatch: pytest.MonkeyPat
     # interactive so the registration (not the test environment) is asserted.
     monkeypatch.setattr(input_policy, "repl_tty_interactive", lambda: True)
     assert input_policy.turn_needs_exclusive_stdin("/choose", Session()) is True
+
+
+_BATCH_QUESTIONS = (
+    AskUserQuestion(
+        label="Codebase",
+        title="Where does the /api/orders service live?",
+        options=("Hypothetical/demo scenario, no real code", "I'll point you at a repo"),
+    ),
+    AskUserQuestion(
+        label="Window",
+        title="What's the time window of the p99 regression?",
+        options=("Last 7 days", "Last 24 hours"),
+    ),
+)
+_BATCH_CHOICE = PendingUserChoice(
+    title="Ask User",
+    options=_BATCH_QUESTIONS[0].options,
+    questions=_BATCH_QUESTIONS,
+)
+
+
+def test_batch_answers_are_auto_submitted_as_qa_block(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    session = Session()
+    session.pending_user_choice = _BATCH_CHOICE
+    console, _buf = _console()
+    answers = (
+        "Hypothetical/demo scenario, no real code",
+        "Last 7 days",
+    )
+
+    monkeypatch.setattr(choice_prompt, "repl_tty_interactive", lambda: True)
+    monkeypatch.setattr(choice_prompt, "repl_ask_user", lambda _questions: answers)
+    monkeypatch.setattr(
+        choice_prompt,
+        "repl_choose_one",
+        lambda **_kw: (_ for _ in ()).throw(AssertionError("single menu must not run")),
+    )
+
+    assert _handler(session, console) is True
+    assert session.pending_user_choice is None
+    assert session.terminal.pending_prompt_autosubmit is True
+    assert session.terminal.awaiting_handoff_answer is True
+    assert session.terminal.pending_prompt_default == format_ask_user_answers(
+        _BATCH_QUESTIONS, answers
+    )
+
+
+def test_batch_custom_option_is_captured_inline_and_auto_submitted(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Free text is an option: concrete answers auto-submit; no ``[N] ❯`` fill-in."""
+    session = Session()
+    session.pending_user_choice = _BATCH_CHOICE
+    console, _buf = _console()
+    answers = (
+        "Hypothetical/demo scenario, no real code",
+        "my custom window",
+    )
+
+    monkeypatch.setattr(choice_prompt, "repl_tty_interactive", lambda: True)
+    monkeypatch.setattr(choice_prompt, "repl_ask_user", lambda _questions: answers)
+
+    assert _handler(session, console) is True
+    assert session.terminal.pending_prompt_autosubmit is True
+    assert session.terminal.awaiting_handoff_answer is True
+    assert session.terminal.pending_prompt_default == format_ask_user_answers(
+        _BATCH_QUESTIONS, answers
+    )
+
+
+def test_single_choice_types_custom_in_place(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    session = Session()
+    session.pending_user_choice = _CHOICE
+    console, _buf = _console()
+    seen: dict[str, object] = {}
+
+    def _pick(**kwargs: object) -> str:
+        seen["custom_label"] = kwargs.get("custom_label")
+        seen["choices"] = kwargs["choices"]
+        return "typed by hand"
+
+    monkeypatch.setattr(choice_prompt, "repl_tty_interactive", lambda: True)
+    monkeypatch.setattr(choice_prompt, "repl_choose_one", _pick)
+
+    assert _handler(session, console) is True
+    assert seen["custom_label"] == CUSTOM_OPTION
+    choices = seen["choices"]
+    assert isinstance(choices, list)
+    assert (CUSTOM_OPTION, CUSTOM_OPTION) in choices
+    assert session.terminal.pending_prompt_default == "typed by hand"
+    assert session.terminal.pending_prompt_autosubmit is True
+
+
+def test_non_tty_batch_prints_every_question(monkeypatch: pytest.MonkeyPatch) -> None:
+    session = Session()
+    session.pending_user_choice = _BATCH_CHOICE
+    console, buf = _console()
+
+    monkeypatch.setattr(choice_prompt, "repl_tty_interactive", lambda: False)
+
+    assert _handler(session, console) is True
+    output = buf.getvalue()
+    for question in _BATCH_QUESTIONS:
+        assert question.title in output
+        for option in question.options:
+            assert option in output

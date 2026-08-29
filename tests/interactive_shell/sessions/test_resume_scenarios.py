@@ -12,12 +12,12 @@ import pytest
 from pydantic import ValidationError
 from rich.console import Console
 
-from config.config import (
+from config.llm_auth.credentials import status as credential_status
+from config.llm_settings import (
     get_configured_llm_provider,
     get_llm_provider_api_key_env,
     resolve_llm_settings_verbose,
 )
-from config.llm_auth.credentials import status as credential_status
 from core.agent_harness.session import JsonlSessionStore
 from surfaces.interactive_shell.command_registry import dispatch_slash
 from surfaces.interactive_shell.session import Session
@@ -510,10 +510,6 @@ class TestResumeLiveRepl:
         _write_finalized_session(sessions_dir, target_id, chat_text="live redis investigation")
 
         with ReplDriver(home=home, startup_wait=10.0) as repl:
-            if repl.contains("Press Enter to continue"):
-                repl.send("", wait=3.0)
-                repl.reset_output()
-
             repl.send("/sessions", wait=1.0)
             assert repl.wait_until_contains("live9999", "live redis", timeout=60.0)
 

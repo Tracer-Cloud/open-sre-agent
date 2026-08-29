@@ -18,10 +18,9 @@ dependencies = [
     "anthropic>=0.77.1",
     "mcp>=1.28.1",
     "openai>=2.0.0",
-    # Held at 1.90.x: 1.93.0 ships a Rust extension with no cp314 wheel (breaks
-    # uv builds on Python 3.14) and changes the model price table (breaks the
-    # gpt-5.6 alias pricing). 1.90.0 is the last version verified green here.
-    # Lift once the wheel + pricing are resolved upstream.
+    # Held below 1.96: LiteLLM 1.97 updates GPT-5.6 prices while family
+    # suffixes still use OpenSRE's local launch-rate fallback, producing
+    # inconsistent cost estimates. Lift after canonical fallback is reconciled.
     "litellm>=1.90.0,<1.96.0",
     # Data validation
     "pydantic>=2.12.5,<3",
@@ -40,7 +39,6 @@ dependencies = [
     # OpenSSL >= 3.2 (SSL_get0_group_name). release.yml pins Homebrew openssl@3
     # and re-copies those dylibs into the PyInstaller onedir bundle.
     "cryptography>=50.0.0,<51",
-    "keyring>=23.0.1",
     # AWS
     "boto3>=1.42.88",
     # Slack (Socket Mode gateway + Web API)
@@ -168,7 +166,7 @@ include = [
 
 [tool.setuptools.package-data]
 "surfaces.shared" = ["sample_alerts/*.json"]
-"core.agent_harness.prompts" = ["skills/**/*.md"]
+"core.agent_harness.prompts" = ["opensre_system_prompt.md", "skills/**/*.md"]
 "integrations" = ["**/SKILL.md", "yandex_cloud/api_index.json"]
 "tools" = ["**/SKILL.md"]
 
@@ -234,7 +232,7 @@ ignore_names = [
   "parse_chunk", "from_tokens",                    # fleet_monitoring meter protocol
   "steer", "emit_update", "on_update",             # agent runtime protocol surface
   "tool_description",                              # slash adapter protocol
-  "reset_guardrail_engine", "reset_runtime_flags", "reset_cli_session_id",
+  "reset_guardrail_evaluator", "reset_runtime_flags", "reset_cli_session_id",
   "register_external_tool_package", "get_tool_descriptors", "load_tool",
   "signoz_is_available",
   "load_remote_url", "save_named_remote", "delete_named_remote", "save_remote_ops_config",
@@ -251,6 +249,10 @@ dev = [
     "pre-commit>=4.0.0",
     "pytest>=9.0.3",
     "pytest-cov>=7.1.0",
+    # pytest.ini sets ``timeout``; without the plugin that key is silently
+    # inert and pytest warns "Unknown config option". Keep it in every install
+    # path, not just the ``dev`` extra that ``make install`` uses.
+    "pytest-timeout>=2.3.0",
     "types-psutil>=7.2.2.20260408",
     "types-PyYAML>=6.0.12",
     "import-linter>=2.0",

@@ -16,14 +16,14 @@ from surfaces.interactive_shell.session import Session
 from surfaces.interactive_shell.ui.input_prompt import completion as prompt_completion
 from surfaces.interactive_shell.ui.input_prompt import rendering as prompt_rendering
 from surfaces.interactive_shell.ui.input_prompt.completion import completion_preview_hint_ansi
-from surfaces.interactive_shell.ui.input_prompt.layout import _prompt_line_width
+from surfaces.interactive_shell.ui.input_prompt.layout import prompt_line_width
 from surfaces.interactive_shell.ui.input_prompt.refresh import wire_prompt_refresh
 from surfaces.interactive_shell.ui.input_prompt.rendering import (
     DEFAULT_PLACEHOLDER_TEXT,
     _prompt_counter_text,
     _prompt_message,
-    _prompt_rule_ansi,
     _prompt_turn_number,
+    composer_footer_ansi,
     render_submitted_prompt,
     resolve_idle_hint_ansi,
     resolve_prompt_placeholder,
@@ -154,59 +154,35 @@ class TestPromptTurnCounter:
 
 
 class TestResolveIdleHint:
-    def test_shows_connected_integrations_in_hint_bar(self) -> None:
+    def test_idle_hint_is_a_spacer_because_help_lives_below_the_composer(self) -> None:
         session = Session()
         session.configured_integrations_known = True
         session.configured_integrations = ("datadog", "github", "grafana")
         rendered = _strip_ansi(resolve_idle_hint_ansi(session))
-        assert "/ for commands" in rendered
-        assert "tab tool details" in rendered
-        assert "Datadog" in rendered
-        assert "GitHub" in rendered
-        assert "Grafana" in rendered
-
-    def test_omits_integrations_when_none_configured(self) -> None:
-        session = Session()
-        session.configured_integrations_known = True
-        session.configured_integrations = ()
-        rendered = _strip_ansi(resolve_idle_hint_ansi(session))
-        assert "Datadog" not in rendered
-        assert "/ for commands" in rendered
-        assert "tab tool details" in rendered
-
-    def test_clips_hint_below_terminal_width(self, monkeypatch: pytest.MonkeyPatch) -> None:
-        """Leave the last column empty so shrink-resize cannot soft-wrap the hint."""
-        session = Session()
-        session.configured_integrations_known = True
-        session.configured_integrations = (
-            "datadog",
-            "github",
-            "grafana",
-            "posthog_mcp",
-            "sentry",
-            "slack",
-            "vercel",
-            "aws",
-        )
-        monkeypatch.setattr(prompt_rendering, "_prompt_line_width", lambda: 40)
-        rendered = _strip_ansi(resolve_idle_hint_ansi(session))
-        assert len(rendered) <= 40
-        assert rendered.endswith("…")
+        assert rendered == ""
 
 
-class TestPromptRuleWidth:
-    def test_rule_leaves_last_column_empty(self, monkeypatch: pytest.MonkeyPatch) -> None:
-        """A full-width rule soft-wraps on shrink and orphans stale prompt frames."""
-        monkeypatch.setattr(prompt_rendering, "_prompt_line_width", lambda: 79)
-        rule = _strip_ansi(_prompt_rule_ansi())
-        assert len(rule) == 79
-        assert set(rule) == {"─"}
+class TestComposerFooter:
+    def test_places_help_and_terminal_mode_at_opposite_edges(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        monkeypatch.setattr(prompt_rendering, "prompt_line_width", lambda: 79)
+        footer = _strip_ansi(composer_footer_ansi())
+        assert footer.startswith("? for help")
+        assert footer.endswith("TERMINAL ■")
+        assert len(footer) == 79
 
-    def test_prompt_message_rule_uses_safe_width(self, monkeypatch: pytest.MonkeyPatch) -> None:
-        monkeypatch.setattr(prompt_rendering, "_prompt_line_width", lambda: 79)
-        rendered = _strip_ansi(_prompt_message(Session()).value)
-        rule_line, _prompt_line = rendered.split("\n", 1)
-        assert len(rule_line) == 79
+    def test_narrow_footer_keeps_only_a_clipped_help_hint(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        monkeypatch.setattr(prompt_rendering, "prompt_line_width", lambda: 6)
+        footer = _strip_ansi(composer_footer_ansi())
+        assert footer == "? for…"
+
+
+class TestPromptMessage:
+    def test_uses_minimal_greater_than_prompt(self) -> None:
+        assert _strip_ansi(_prompt_message(Session()).value) == " > "
 
 
 class TestResolvePromptPlaceholder:
@@ -403,7 +379,7 @@ class TestCompletionPreviewHint:
         rendered = _strip_ansi(completion_preview_hint_ansi())
         assert rendered.endswith("…")
         # One column short of the terminal width (pending-wrap guard).
-        assert len(rendered) <= _prompt_line_width(40)
+        assert len(rendered) <= prompt_line_width(40)
         assert rendered.startswith("/plugin-cmd — ")
 
 
@@ -423,7 +399,7 @@ class TestResolvePromptPrefix:
             idle_hint=spinner.idle_hint_ansi(),
         )
         assert "preview line" not in prefix
-        assert "esc to cancel" in _strip_ansi(prefix)
+        assert "Press ESC to stop" in _strip_ansi(prefix)
 
     def test_prefers_completion_preview_over_idle_hint(
         self, monkeypatch: pytest.MonkeyPatch
@@ -445,6 +421,6 @@ class TestResolvePromptPrefix:
         spinner = loop_state.SpinnerState()
         prefix = resolve_prompt_prefix_ansi(
             inline_spinner=spinner.inline_spinner_ansi(),
-            idle_hint=spinner.idle_hint_ansi(),
+            idle_hint=resolve_idle_hint_ansi(Session()),
         )
-        assert "/ for commands" in _strip_ansi(prefix)
+        assert _strip_ansi(prefix) == ""

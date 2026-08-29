@@ -15,7 +15,7 @@ from core.domain.alerts.fields import (
 )
 from core.domain.alerts.normalization import normalize_alert_payload
 from core.state.models import AgentState, AgentStateModel, model_default_payload
-from integrations.opensre.hf_remote import (
+from integrations.opensre import (
     extract_scoring_points,
     strip_scoring_points_from_alert,
 )

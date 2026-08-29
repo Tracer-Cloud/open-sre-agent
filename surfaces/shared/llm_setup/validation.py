@@ -29,7 +29,7 @@ def _load_anthropic_client() -> tuple[Any, type[Exception]]:
 def _get_provider_base_url(provider_value: str) -> str | None:
     """Get the base_url for OpenAI-compatible non-OpenAI providers, or None for native OpenAI."""
     # Lazy imports keep config loading out of the validation module import graph.
-    from config import config as llm_config
+    from config import llm_models
 
     # custom-openai's base URL is user-supplied: read + normalize it from the env
     # rather than a static default, so the probe hits the configured gateway.
@@ -38,13 +38,13 @@ def _get_provider_base_url(provider_value: str) -> str | None:
 
         return normalize_custom_base_url(os.getenv(CUSTOM_OPENAI_BASE_URL_ENV, "")) or None
     base_urls = {
-        "openrouter": llm_config.OPENROUTER_BASE_URL,
-        "trustedrouter": llm_config.TRUSTEDROUTER_BASE_URL,
-        "deepseek": llm_config.DEEPSEEK_BASE_URL,
-        "gemini": llm_config.GEMINI_BASE_URL,
-        "nvidia": llm_config.NVIDIA_BASE_URL,
-        "groq": llm_config.GROQ_BASE_URL,
-        "minimax": llm_config.MINIMAX_BASE_URL,
+        "openrouter": llm_models.OPENROUTER_BASE_URL,
+        "trustedrouter": llm_models.TRUSTEDROUTER_BASE_URL,
+        "deepseek": llm_models.DEEPSEEK_BASE_URL,
+        "gemini": llm_models.GEMINI_BASE_URL,
+        "nvidia": llm_models.NVIDIA_BASE_URL,
+        "groq": llm_models.GROQ_BASE_URL,
+        "minimax": llm_models.MINIMAX_BASE_URL,
     }
     return base_urls.get(provider_value)
 

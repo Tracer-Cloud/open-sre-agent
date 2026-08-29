@@ -143,7 +143,10 @@ CASES: tuple[MigrationCase, ...] = (
     MigrationCase("integrations/betterstack.py", "query_logs", "betterstack", "query_logs"),
     # gitlab
     MigrationCase(
-        "integrations/gitlab.py", "validate_gitlab_config", "gitlab", "validate_gitlab_config"
+        "integrations/gitlab/client.py",
+        "validate_gitlab_config",
+        "gitlab",
+        "validate_gitlab_config",
     ),
     # bitbucket
     MigrationCase(

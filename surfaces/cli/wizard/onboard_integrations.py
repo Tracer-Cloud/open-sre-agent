@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from surfaces.cli.wizard._ui import Choice
+from surfaces.cli.wizard.components import Choice
 
 ONBOARD_INTEGRATION_GROUP_ORDER: tuple[str, ...] = (
     "Observability",
@@ -222,5 +222,5 @@ ONBOARD_INTEGRATION_CHOICES: tuple[Choice, ...] = (
 ONBOARD_SKIP_CHOICE = Choice(
     value="skip",
     label="Skip for now",
-    hint="Finish onboarding without configuring an integration",
+    hint="Finish setup without configuring an integration",
 )

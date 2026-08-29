@@ -8,10 +8,20 @@ from unittest.mock import MagicMock
 
 import pytest
 
+from config.constants.gateway import SCHEDULER_RELOAD_JOIN_TIMEOUT_SECONDS
 from gateway.core.lifecycle.controller import GatewayController
+from gateway.core.process.shutdown_budget import ShutdownBudget
 from gateway.startup import StartedGateway
 from gateway.transports.names import TransportName
 from gateway.transports.startup import TransportHandle
+
+
+class _Clock:
+    def __init__(self, now: float = 0.0) -> None:
+        self.now = now
+
+    def __call__(self) -> float:
+        return self.now
 
 
 def test_start_surfaces_delegates_to_the_startup_module(
@@ -106,8 +116,8 @@ def test_manager_reload_scheduler_refreshes_component_status(
     """Loop/cron mutations must resync the long-lived gateway scheduler."""
     publishes: list[dict[str, str]] = []
 
-    def _refresh(scheduler: object | None, *, task_filter=None):
-        _ = task_filter
+    def _refresh(scheduler: object | None, runners: object, *, task_filter=None):
+        _ = (task_filter, runners)
         assert scheduler is None
         return object(), 3
 
@@ -126,3 +136,33 @@ def test_manager_reload_scheduler_refreshes_component_status(
 
     assert manager.components["scheduler"] == "running 3 scheduled task(s)"
     assert publishes == [{"scheduler": "running 3 scheduled task(s)"}]
+
+
+def test_stop_subtracts_reload_join_from_the_surface_budget(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Reload-watcher join is a slice of SIGTERM, not extra time on top of it."""
+    clock = _Clock()
+
+    def _budget(seconds: float) -> ShutdownBudget:
+        return ShutdownBudget(seconds, clock=clock)
+
+    monkeypatch.setattr("gateway.core.lifecycle.controller.ShutdownBudget", _budget)
+    manager = GatewayController()
+    reload_thread = MagicMock()
+
+    def _join(timeout: float | None = None) -> None:
+        _ = timeout
+        clock.now += 2.0
+
+    reload_thread.join.side_effect = _join
+    manager._scheduler_reload_thread = reload_thread
+    surfaces = MagicMock()
+    surfaces.stop.return_value = True
+    manager.surfaces = surfaces
+
+    assert manager.stop(timeout=8.0) is True
+    reload_thread.join.assert_called_once_with(timeout=SCHEDULER_RELOAD_JOIN_TIMEOUT_SECONDS)
+    surfaces.stop.assert_called_once_with(timeout=6.0)
+    assert manager.surfaces is None
+    assert manager._scheduler_reload_thread is None

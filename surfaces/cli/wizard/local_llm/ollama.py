@@ -11,7 +11,7 @@ from typing import TYPE_CHECKING
 
 import httpx
 
-from config.config import DEFAULT_OLLAMA_HOST
+from config.llm_models import DEFAULT_OLLAMA_HOST
 from infrastructure.terminal.theme import DIM, WARNING
 from surfaces.shared.llm_setup.ollama import normalize_model_tag
 

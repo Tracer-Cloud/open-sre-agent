@@ -7,7 +7,8 @@ from __future__ import annotations
 from typing import Any
 
 from core.tool import BaseTool
-from integrations.helm.helpers import helm_base_unavailable, helm_client_for_run
+from integrations.helm.client_factory import helm_client_for_run
+from integrations.helm.unavailable import helm_base_unavailable
 
 
 class HelmListReleasesTool(BaseTool):

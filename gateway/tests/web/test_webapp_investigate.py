@@ -9,10 +9,7 @@ from typing import Any
 import pytest
 from fastapi.testclient import TestClient
 
-from core.agent_harness.investigation_api import (
-    install_investigation_payload_runner,
-    reset_investigation_payload_runner_for_tests,
-)
+from config.constants.http import MAX_REQUEST_BODY_BYTES
 from gateway.web import webapp
 
 _LOOPBACK = ("127.0.0.1", 40000)
@@ -25,16 +22,14 @@ def _no_token(monkeypatch: pytest.MonkeyPatch) -> Iterator[None]:
     yield
 
 
-@pytest.fixture(autouse=True)
-def _reset_investigation_runner() -> Iterator[None]:
-    reset_investigation_payload_runner_for_tests()
-    yield
-    reset_investigation_payload_runner_for_tests()
-
-
 @pytest.fixture
 def client() -> TestClient:
     return TestClient(webapp.app, client=_LOOPBACK)
+
+
+def _use_runner(monkeypatch: pytest.MonkeyPatch, runner: Any) -> None:
+    """Substitute the payload runner the endpoint injects into ``investigate``."""
+    monkeypatch.setattr(webapp, "run_investigation_payload", runner)
 
 
 def _fake_payload() -> dict[str, Any]:
@@ -51,7 +46,6 @@ def _fake_payload() -> dict[str, Any]:
 def test_investigate_runs_pipeline_and_returns_report(
     monkeypatch: pytest.MonkeyPatch, client: TestClient
 ) -> None:
-    del monkeypatch  # fixture reserved for env overrides elsewhere
     captured: dict[str, Any] = {}
 
     def _fake_run(
@@ -61,7 +55,7 @@ def test_investigate_runs_pipeline_and_returns_report(
         captured["investigation_metadata"] = investigation_metadata
         return _fake_payload()
 
-    install_investigation_payload_runner(_fake_run)
+    _use_runner(monkeypatch, _fake_run)
 
     resp = client.post(
         "/investigate",
@@ -85,7 +79,7 @@ def test_investigate_runs_pipeline_and_returns_report(
 
 
 def test_investigate_resolves_metadata_from_raw_alert_when_overrides_missing(
-    client: TestClient,
+    monkeypatch: pytest.MonkeyPatch, client: TestClient
 ) -> None:
     captured: dict[str, Any] = {}
 
@@ -93,7 +87,7 @@ def test_investigate_resolves_metadata_from_raw_alert_when_overrides_missing(
         captured["investigation_metadata"] = investigation_metadata
         return _fake_payload()
 
-    install_investigation_payload_runner(_fake_run)
+    _use_runner(monkeypatch, _fake_run)
 
     resp = client.post(
         "/investigate",
@@ -110,12 +104,12 @@ def test_investigate_missing_raw_alert_returns_422(client: TestClient) -> None:
 
 
 def test_investigate_pipeline_failure_returns_503_without_leaking_exception_text(
-    client: TestClient,
+    monkeypatch: pytest.MonkeyPatch, client: TestClient
 ) -> None:
     def _boom(**_: Any) -> dict[str, Any]:
         raise RuntimeError("llm unavailable at s3://internal-bucket/creds.json")
 
-    install_investigation_payload_runner(_boom)
+    _use_runner(monkeypatch, _boom)
 
     resp = client.post("/investigate", json={"raw_alert": {"alert_name": "x"}})
 
@@ -126,13 +120,15 @@ def test_investigate_pipeline_failure_returns_503_without_leaking_exception_text
     assert "s3://internal-bucket" not in body["error"]
 
 
-def test_investigate_malformed_pipeline_result_returns_503(client: TestClient) -> None:
+def test_investigate_malformed_pipeline_result_returns_503(
+    monkeypatch: pytest.MonkeyPatch, client: TestClient
+) -> None:
     """A result dict that fails InvestigateResponse validation is caught too."""
 
     def _malformed(**_: Any) -> dict[str, Any]:
         return {"report": None, "problem_md": "p", "root_cause": "c"}
 
-    install_investigation_payload_runner(_malformed)
+    _use_runner(monkeypatch, _malformed)
 
     resp = client.post("/investigate", json={"raw_alert": {"alert_name": "x"}})
 
@@ -140,8 +136,10 @@ def test_investigate_malformed_pipeline_result_returns_503(client: TestClient) -
     assert resp.json()["error"] == "investigation failed: ValidationError"
 
 
-def test_investigate_non_loopback_without_token_returns_403() -> None:
-    install_investigation_payload_runner(lambda **_: _fake_payload())
+def test_investigate_non_loopback_without_token_returns_403(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _use_runner(monkeypatch, lambda **_: _fake_payload())
     remote = TestClient(webapp.app, client=_REMOTE)
 
     resp = remote.post("/investigate", json={"raw_alert": {"alert_name": "x"}})
@@ -151,7 +149,7 @@ def test_investigate_non_loopback_without_token_returns_403() -> None:
 
 def test_investigate_token_auth(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("OPENSRE_ALERT_LISTENER_TOKEN", "sekret")
-    install_investigation_payload_runner(lambda **_: _fake_payload())
+    _use_runner(monkeypatch, lambda **_: _fake_payload())
     remote = TestClient(webapp.app, client=_REMOTE)
 
     assert (
@@ -168,14 +166,16 @@ def test_investigate_token_auth(monkeypatch: pytest.MonkeyPatch) -> None:
     )
 
 
-def test_investigate_at_capacity_returns_503(client: TestClient) -> None:
+def test_investigate_at_capacity_returns_503(
+    monkeypatch: pytest.MonkeyPatch, client: TestClient
+) -> None:
     from infrastructure.turn_host.concurrency import (
         TurnConcurrencyGate,
         reset_process_turn_gate_for_tests,
         set_process_turn_gate,
     )
 
-    install_investigation_payload_runner(lambda **_: _fake_payload())
+    _use_runner(monkeypatch, lambda **_: _fake_payload())
     gate = TurnConcurrencyGate(1)
     assert gate.try_acquire() is True  # occupy the only slot
     set_process_turn_gate(gate)
@@ -186,3 +186,19 @@ def test_investigate_at_capacity_returns_503(client: TestClient) -> None:
     finally:
         gate.release()
         reset_process_turn_gate_for_tests()
+
+
+def test_oversized_investigate_body_is_rejected(client: TestClient) -> None:
+    """Regression: /investigate took a Pydantic body, so nothing capped it.
+
+    The cap only ever guarded /alerts, and FastAPI buffers the whole payload
+    while solving the request model, so an oversized POST here was read into
+    memory in full and then run.
+    """
+    resp = client.post(
+        "/investigate",
+        json={"raw_alert": {"text": "x" * (MAX_REQUEST_BODY_BYTES + 1)}},
+    )
+
+    assert resp.status_code == HTTPStatus.REQUEST_ENTITY_TOO_LARGE
+    assert resp.json() == {"error": "payload too large"}

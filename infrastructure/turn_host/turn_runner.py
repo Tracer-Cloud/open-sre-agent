@@ -30,7 +30,7 @@ from rich.console import Console
 from core.agent_harness import SessionCore, SessionManager, TurnResult
 from core.agent_harness.ports import ConfirmFn, SlashPortsFactory, TurnAccounting
 from core.agent_harness.runtime import AgentBuildConfig, TurnBinding
-from core.agent_harness.spi.cancel import ensure_turn_cancel
+from core.agent_harness.spi.cancel import ensure_turn_cancel, host_cancel_requested
 from core.agent_harness.spi.session_goal import (
     SessionGoal,
     format_session_goal_progress,
@@ -76,6 +76,7 @@ class TurnRunner:
         slash_ports_factory: SlashPortsFactory | None = None,
         agent_build: AgentBuildConfig | None = None,
         gate: TurnConcurrencyGate | None = None,
+        admission_check: Callable[[], bool] | None = None,
         busy_message: str = AT_CAPACITY_MESSAGE,
         retain_only_current_session: bool = False,
     ) -> None:
@@ -88,6 +89,7 @@ class TurnRunner:
         )
         # Gateway already bootstrapped env at process start; turns must not reload.
         self._gate = gate
+        self._admission_check = admission_check
         self._busy_message = busy_message
 
     def drop_session(self, session_id: str) -> None:
@@ -117,19 +119,36 @@ class TurnRunner:
         accounting_factory: Callable[[str], TurnAccounting] | None = None,
         on_progress: Callable[[SessionGoal], None] | None = None,
     ) -> TurnResult | None:
-        """Run one turn and return its result, or ``None`` when at capacity.
+        """Run one admitted turn, or return ``None`` when a gate rejects it.
 
         Same turn as :meth:`__call__` — one capacity gate, one agent pool, one
         ``handle`` call. The keywords carry a caller's terminal context; every
         default is what a chat transport gets, so omitting them all is the
         transport path exactly — including ``on_progress``, which falls back
-        to the compact status line a chat placeholder can hold. ``None`` means the
-        gate refused the turn and the at-capacity sentence is already on the output.
+        to the compact status line a chat placeholder can hold.
+
+        ``None`` means no agent work ran, for one of three reasons: the capacity
+        gate refused the turn (the at-capacity sentence is already finalized on
+        the output), the host cancelled it before it started, or the optional
+        admission hook rejected it. Only the first finalizes anything here — a
+        cancelling host and a rejecting hook each own their user-facing response.
         """
         with turn_slot(self._gate) as running:
             if not running:
                 output.finalize(self._busy_message)
                 return None
+            if host_cancel_requested(output):
+                return None
+            # Admission runs inside the slot on purpose: a hook that meters the
+            # turn must not charge for work capacity would have refused. The
+            # cost is that a blocking hook holds a slot it has not used yet —
+            # on the SMALL profile that is the process's only slot, so a hook
+            # doing I/O should keep its timeout well under a turn's duration.
+            if self._admission_check is not None and not self._admission_check():
+                return None
+            # Admission may have consumed a credit. From here the turn lifecycle
+            # must run so transports cannot acknowledge a paid delivery without
+            # dispatching it.
             return self._run_turn(
                 text,
                 session,
@@ -219,10 +238,9 @@ class TurnRunner:
                 # Host soft-timeout (or stop) already owns the output terminal
                 # message — do not overwrite it with empty/fallback finalize.
                 cancelled = isinstance(cancel, threading.Event) and cancel.is_set()
-                # A streamed answer (answered=True) already resolved the placeholder status
-                # via the output. Otherwise always finalize so the placeholder never hangs —
-                # even when the turn produced no text.
-                if not turn_result.answered and not cancelled:
+                # A streamed agent conclusion already resolved the placeholder.
+                # Self-rendering tools still need the captured response finalized.
+                if not turn_result.action_result.response_streamed and not cancelled:
                     output.finalize(outbound_text or EMPTY_RESPONSE_MESSAGE)
                 # Resolve rebuilds SessionCore from disk next inbound message —
                 # persist session_goal (attach / progress / /goal pause) now.

@@ -300,7 +300,7 @@ def invoke_with_litellm_llm_retries(
     model: str,
     on_model_fallback: Callable[[], dict[str, Any] | None],
 ) -> Any:
-    from infrastructure.safety.guardrails.engine import GuardrailBlockedError
+    from infrastructure.safety.guardrails.evaluator import GuardrailBlockedError
 
     backoff_seconds = _RETRY_INITIAL_BACKOFF_SEC
     last_err: Exception | None = None
@@ -366,7 +366,7 @@ def stream_with_litellm_retries(
     model: str,
     on_model_fallback: Callable[[], dict[str, Any] | None],
 ) -> Iterator[str]:
-    from infrastructure.safety.guardrails.engine import GuardrailBlockedError
+    from infrastructure.safety.guardrails.evaluator import GuardrailBlockedError
 
     backoff_seconds = _RETRY_INITIAL_BACKOFF_SEC
     for attempt in range(_RETRY_MAX_ATTEMPTS):

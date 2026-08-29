@@ -6,6 +6,7 @@ import os
 from enum import StrEnum
 from typing import Final
 
+from config.constants.environment import DEPLOYMENT_ENV_ENV
 from infrastructure.analytics.analytics_runtime import is_ci_environment
 from infrastructure.analytics.provider import Properties
 
@@ -58,7 +59,12 @@ def is_test_run() -> bool:
 def resolve_environment_tag() -> str:
     """Resolve coarse environment classification for analytics slicing."""
     raw = (
-        (os.getenv("OPENSRE_ANALYTICS_ENV") or os.getenv("ENV") or os.getenv("ENVIRONMENT") or "")
+        (
+            os.getenv("OPENSRE_ANALYTICS_ENV")
+            or os.getenv(DEPLOYMENT_ENV_ENV)
+            or os.getenv("ENVIRONMENT")
+            or ""
+        )
         .strip()
         .lower()
     )

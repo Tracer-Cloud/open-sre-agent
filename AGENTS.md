@@ -1,5 +1,28 @@
 ## OpenSRE Development Reference
 
+## CI failures and tests (mandatory — every PR / push)
+
+Agents **must** close the loop on CI and tests. Do not treat "pushed a fix" or "opened a PR" as done.
+
+1. **After every push** to a branch with an open PR, run:
+   ```bash
+   gh pr checks --watch
+   # or: gh pr view --json statusCheckRollup,url
+   ```
+2. **On any failure** (`CI Gate`, `quality`, `test (*)`, import graph, etc.):
+   - Pull the failing job log (`gh run view <id> --log-failed`).
+   - Fix the root cause in product or test code (not by skipping / constant-condition toggles).
+   - Re-run the **focused** local commands from [CI.md](CI.md) for the touched modules, then push.
+   - Re-check `gh pr checks` until required jobs are green (or skipped for docs-only).
+3. **Tests that fail under CI load** (xdist, barriers, fan-out concurrency) are real bugs in the test harness — harden synchronization; do not ignore flakes.
+4. **Import / API-border failures** (`check_imports.py`, `test_integrations_api_border`) mean the wrong module edge was used — import the package API allowlisted in `.importlinter.strict` / the border allowlist, not an internal leaf, unless the ignore list explicitly names that edge.
+5. Keep monitoring until merge requirements in [CI.md §8](CI.md) (green checks + Greptile 5/5) are met.
+6. After merge, monitor the merge commit's `main` CI, full CodeQL, and release
+   workflows. A post-merge failure is unfinished delivery: fix or revert it
+   before reporting completion.
+
+The Cursor project hook [`.cursor/hooks/check-ci-failures.sh`](.cursor/hooks/check-ci-failures.sh) (wired in `.cursor/hooks.json`) re-injects this checklist on agent stop when the current branch's PR has failing checks — treat that follow-up as blocking work, not a suggestion.
+
 ## Build and Run commands
 
 - Build `make install` (sets up the project environment via `uv sync` and installs this repo in editable mode)
@@ -10,6 +33,10 @@
 
 - Use strict typing, follow DRY principle
 - One clear purpose per file (separation of concerns)
+- Keep every Python `__init__.py` as a lightweight package facade: declare the
+  public interface with imports and `__all__` only. Put implementation,
+  orchestration, and side effects in focused modules, then re-export only the
+  intended public API; never let `__init__.py` become a god file.
 - Keep docstrings concise and contract-focused. Use one sentence for straightforward
   APIs; add only non-obvious invariants, failure behavior, or layering constraints
   callers must understand. Keep bug history and implementation narration in tests,
@@ -23,9 +50,10 @@
   under `config/constants/` (e.g. `config/constants/billing.py`,
   `config/constants/llm.py`) — a leaf that any layer can import without a cycle —
   and re-export via `config/constants/__init__.py`. Do **not** define shared env
-  names in `config/config.py`: it imports `config.llm_auth.*`, so a name it and
-  one of those modules both need would force a cyclic import. Only a name used
-  solely inside `config/config.py` (nothing it imports needs it) may live there.
+  names in `config/llm_settings.py`: it imports `config.llm_auth.*`, so a name it
+  and one of those modules both need would force a cyclic import. Only a name
+  used solely inside `config/llm_settings.py` (nothing it imports needs it) may
+  live there.
 - Do not keep compatibility-only forwarding modules after refactors. Once imports and tests
   are migrated, remove the old module path in the same change and use one canonical import path.
 - Test fakes: never inline a lambda that builds an ad-hoc `type(...)` object (or
@@ -41,7 +69,8 @@
   ```
 
   Trivial lambdas (`lambda **_kw: None`, `lambda: sentinel`) stay inline.
-  Precedent: `gateway/tests/runtime/test_startup.py` (`_StubHarness`),
+  Precedent: `tests/infrastructure/safety/guardrails/test_llm_integration.py`
+  (`_anthropic_fake_response`),
   `tests/cli/test_integrations_setup_github.py` (`_prompt_answering`).
 - Protocol methods you **add or change** use a **docstring-only body** — no
   `...`, no `pass`, no `raise NotImplementedError`, and never a docstring *plus*
@@ -232,16 +261,20 @@ Steps:
 
 ### Changing the investigation pipeline
 
-Investigations are coordinated in `tools/investigation/lifecycle.py` and exposed via
+Investigations are coordinated in `tools/investigation/agent_pipeline.py`
+(`run_agent_investigation`) and exposed via
 `tools/investigation/capability.py`. Semantic stages live under
 `tools/investigation/stages/`; reporting lives under
 `tools/investigation/reporting/`. See
 [docs/investigation-pipeline-architecture.md](docs/investigation-pipeline-architecture.md)
 for the end-to-end stage/loop diagrams before making structural changes.
 
+`tools/investigation/lifecycle.py` is a **deprecated** compatibility facade
+over `agent_pipeline` — do not add new callers; keep the module until removal.
+
 Files to touch:
 
-- `tools/investigation/lifecycle.py` for high-level stage ordering.
+- `tools/investigation/agent_pipeline.py` for high-level stage ordering.
 - `core/state/` for shared agent state and investigation pipeline slice contracts
   that cross stage boundaries.
 - `core/domain/` for pure investigation rules (alert source mapping, tool planning,
@@ -281,7 +314,7 @@ Steps:
 - Investigation tool schemas: draft-07 JSON Schema (e.g. `"type": ["object", "null"]`) can pass loose checks but fail the LLM API on first invoke because **all** available investigation tools are sent together. Normalize in the provider adapter and extend registry contract tests; see [docs/investigation-tool-calling.md](docs/investigation-tool-calling.md).
 - Action-agent path: do not implement regex/keyword/fuzzy intent routing or deterministic action bypasses around the action agent — including in the harness orchestrator / `SessionGoal` loop / evidence-tier policy. Intent belongs in the action turn (structured handoff tags such as `evidence_kind:…`, `session_goal:…`, `database_query:…`); hosts react to those tags or explicit APIs only. See `surfaces/interactive_shell/AGENTS.md` ("Action Selection And Execution") for the sanctioned literal-`/slash` exception, and `core/agent_harness/AGENTS.md`.
 - Information exposure through an exception (CWE-209 / CodeQL `py/stack-trace-exposure`): never send an exception's detail — `str(exc)`, `repr(exc)`, `traceback.format_exc()`, `exc.args`, provider/model/field internals — to an **external surface**. External surfaces are HTTP responses (`JSONResponse`/`HTTPException.detail` in `gateway/web/`) and chat gateway messages delivered to Slack/Telegram users (`OutputSink.render_error` on the gateway sinks). Log full detail server-side (`logger` + `capture_exception`) and return a generic message or `type(exc).__name__` only. The local CLI/terminal sink is **not** external — it may show detail. Redact at the sink/response boundary, not per call site, so the shared turn engine keeps detail for local dev.
-- Cyclic imports (CodeQL `py/cyclic-import`): CodeQL counts **function-local** and `TYPE_CHECKING` imports as part of a cycle, so making an import lazy does **not** clear the alert. Break the cycle structurally — move the shared symbol (type, exception, helper) into a **leaf** module both sides import, and never add a back-edge from a lower-level module up to a higher-level one. Precedent: `surfaces/cli/wizard/validation_result.py` and `surfaces/shared/llm_setup/persist.py` exist only to hold shared symbols so `validation` ↔ `azure_openai` and `_ui` → `service` stay acyclic.
+- Cyclic imports (CodeQL `py/cyclic-import`): CodeQL counts **function-local** and `TYPE_CHECKING` imports as part of a cycle, so making an import lazy does **not** clear the alert. Break the cycle structurally — move the shared symbol (type, exception, helper) into a **leaf** module both sides import, and never add a back-edge from a lower-level module up to a higher-level one. Precedent: `surfaces/shared/llm_setup/validation_result.py` and `surfaces/shared/llm_setup/persist.py` exist only to hold shared symbols so `validation` ↔ `azure_openai` and `_ui` → `service` stay acyclic.
 - CodeQL does not model `NoReturn`: it treats `pytest.skip`, `pytest.fail`, `sys.exit`, `typer.Exit` and custom raise-helpers as if they return, so any code after them looks reachable. Two alerts come from this — `py/uninitialized-local-variable` when a name is bound in `try` and the `except` only calls such a function, and unreachable-code when a `with` body ends in a bare `raise`. Do **not** silence with a comment: bind the name on every path CodeQL can see. Prefer a sentinel over exception control flow for ordinary "not found" — `next(iterable, None)` plus an explicit `if x is None:` guard, not `try: next(...) except StopIteration:`. `mypy` narrows correctly after the guard because it *does* honour `NoReturn`. For the bare-`raise` case, extract a `_raise()` helper.
 - Protocol stub bodies (CodeQL `py/ineffectual-statement`): a bare `...` on a
   `Protocol` method is a valid PEP-544 idiom but trips CodeQL as a statement

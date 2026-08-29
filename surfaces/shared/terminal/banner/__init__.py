@@ -1,15 +1,11 @@
-"""Startup splash and REPL welcome banner."""
+"""OpenSRE launch banner."""
 
 from surfaces.shared.terminal.banner.banner import (
-    build_ready_panel,
-    render_ready_box,
-    render_splash,
+    build_launch_banner,
+    render_launch_banner,
 )
-from surfaces.shared.terminal.banner.banner_state import integration_display_name
 
 __all__ = [
-    "build_ready_panel",
-    "integration_display_name",
-    "render_ready_box",
-    "render_splash",
+    "build_launch_banner",
+    "render_launch_banner",
 ]

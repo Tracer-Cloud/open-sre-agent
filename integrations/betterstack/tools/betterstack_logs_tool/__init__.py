@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from typing import Any
 
+from core.domain.types.evidence import record_evidence_entry
 from core.domain.types.tools import ToolSurface
 from core.tool_framework import tool
 from integrations.betterstack import (
@@ -12,6 +13,34 @@ from integrations.betterstack import (
     betterstack_is_available,
     query_logs,
 )
+
+
+def _map_query_betterstack_logs(
+    evidence: dict[str, Any], output: dict[str, Any], _tool_input: dict[str, Any]
+) -> None:
+    """Cite the row count and source queried.
+
+    ``query_logs`` always clamps its effective ``limit`` to
+    ``config.max_rows``, so a returned count equal to that limit may be a
+    truncated page rather than every matching row -- use the "N+" convention.
+    """
+    if not output.get("available"):
+        return
+    row_count = output.get("row_count", 0)
+    if not row_count:
+        return
+    limit = output.get("limit", 0)
+    count_label = f"{row_count}+" if limit and row_count >= limit else str(row_count)
+    summary = f"{count_label} log row(s)"
+    source = output.get("betterstack_source")
+    if source:
+        summary += f" from '{source}'"
+    record_evidence_entry(
+        evidence,
+        source="query_betterstack_logs",
+        label="Better Stack Logs",
+        summary=summary,
+    )
 
 
 @tool(
@@ -34,6 +63,7 @@ from integrations.betterstack import (
     is_available=betterstack_is_available,
     injected_params=("password", "query_endpoint", "username"),
     extract_params=betterstack_extract_params,
+    evidence_mapper=_map_query_betterstack_logs,
 )
 def query_betterstack_logs(
     query_endpoint: str,

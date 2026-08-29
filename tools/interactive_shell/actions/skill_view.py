@@ -9,6 +9,7 @@ from core.agent_harness.tools import ActionToolScope, execute_with_action_contex
 from core.domain.types.tools import ToolSurface
 from core.tool import RegisteredTool, SideEffectLevel
 from core.tool_framework.utils import object_schema, string_property
+from tools.interactive_shell.action_names import ActionToolName
 
 
 def execute_skill_view_tool(args: dict[str, Any], ctx: ActionToolScope) -> dict[str, Any]:
@@ -46,7 +47,7 @@ def run_skill_view(*, name: str, context: Any) -> dict[str, Any]:
 
 
 skill_view_tool = RegisteredTool(
-    name="skill_view",
+    name=ActionToolName.SKILL_VIEW,
     description=(
         "Load the full body of one action-agent skill by name from the "
         "SKILLS INDEX. Call this in the same turn when the user request matches "

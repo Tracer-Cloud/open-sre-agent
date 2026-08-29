@@ -17,6 +17,7 @@ from infrastructure.scheduling.scheduler.loop_constants import (
     LOOP_TELEGRAM_CHAT_ID_PARAM,
 )
 from infrastructure.scheduling.scheduler.operation_log import record_scheduler_execution_operation
+from infrastructure.scheduling.scheduler.runners import SchedulerRunners
 from infrastructure.scheduling.scheduler.tasks import build_message
 from infrastructure.scheduling.scheduler.types import Provider, ScheduledTask, TaskKind, TaskStatus
 
@@ -26,6 +27,7 @@ logger = logging.getLogger(__name__)
 def execute_task(
     task: ScheduledTask,
     fire_time: str,
+    runners: SchedulerRunners,
 ) -> bool:
     """Execute a scheduled task with claim-based dedup.
 
@@ -65,7 +67,7 @@ def execute_task(
 
     # Build the message
     try:
-        message = build_message(task)
+        message = build_message(task, runners)
     except RuntimeError as exc:
         # Pipeline failures — record without leaking details to chat
         _record_failure(task, fire_time, str(exc), stage="message_build")

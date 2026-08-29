@@ -17,10 +17,13 @@ if MODE not in {"onedir", "onefile"}:
 manifest = runpy.run_path(str(ROOT / "infrastructure/deployment/packaging/release_manifest.py"))
 runtime_hidden_imports = manifest["runtime_hidden_imports"]
 skill_data_entries = manifest["skill_data_entries"]
+infrastructure_data_entries = manifest["infrastructure_data_entries"]
 
-datas = [
-    (str(ROOT / "infrastructure"), "infrastructure"),
-]
+datas = list(infrastructure_data_entries(ROOT))
+datas += collect_data_files(
+    "core.agent_harness.prompts",
+    includes=["opensre_system_prompt.md"],
+)
 datas += collect_data_files("surfaces.cli")
 datas += collect_data_files("surfaces.shared")
 datas += collect_data_files("config")

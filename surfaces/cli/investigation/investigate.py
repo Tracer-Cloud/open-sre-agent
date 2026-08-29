@@ -48,16 +48,15 @@ def run_investigation_cli(
     ``investigation_metadata`` is an optional ``(alert_name, severity)`` tuple.
     """
     check_llm_settings()
-    from bootstrap.adapters import install_investigation_api
     from core.agent_harness import AgentSession
+    from tools.investigation.capability import run_investigation_payload
 
-    # CLI_PROFILE boots env only; install the payload runner before investigate.
-    install_investigation_api()
     try:
         return (
             AgentSession()
             .investigate(
                 raw_alert,
+                runner=run_investigation_payload,
                 opensre_evaluate=opensre_evaluate,
                 investigation_metadata=investigation_metadata,
             )

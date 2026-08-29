@@ -1,13 +1,13 @@
 """LLM provider connection env-var names and base-URL value normalizers.
 
-Kept in this leaf module (not ``config.config``) because modules that
-``config.config`` imports — e.g. ``config.llm_auth.provider_catalog`` — also
-need them, so co-locating with ``config.config`` would be a cyclic import.
+Kept in this leaf module (not ``config.llm_settings``) because modules that
+``config.llm_settings`` imports — e.g. ``config.llm_auth.provider_catalog`` —
+also need them, so co-locating them would be a cyclic import.
 
 The base-URL normalizers live here (a Tier-4 leaf that imports only stdlib) so
 that ``config`` never has to reach up into ``core`` to normalize a value: both
-``config.config`` validators and the ``surfaces`` wizard import them from here,
-and ``core`` may import them downward too.
+``config.llm_settings`` validators and the ``surfaces`` wizard import them from
+here, and ``core`` may import them downward too.
 """
 
 from __future__ import annotations
@@ -17,6 +17,10 @@ from typing import Final
 # --- Connection env-var names ------------------------------------------------
 
 LLM_PROVIDER_ENV: Final[str] = "LLM_PROVIDER"
+
+#: Legacy key from the removed OAuth auth method. API keys are the only LLM
+#: auth path now; env sync strips this from existing ``.env`` files.
+LLM_AUTH_METHOD_ENV: Final[str] = "LLM_AUTH_METHOD"
 
 AZURE_OPENAI_BASE_URL_ENV: Final[str] = "AZURE_OPENAI_BASE_URL"
 AZURE_OPENAI_API_VERSION_ENV: Final[str] = "AZURE_OPENAI_API_VERSION"

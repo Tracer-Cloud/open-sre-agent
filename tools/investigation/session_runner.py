@@ -11,7 +11,7 @@ import threading
 from collections.abc import Callable, Iterator
 from typing import Any, NoReturn
 
-from config.config import resolve_llm_settings
+from config.llm_settings import resolve_llm_settings
 from core.domain.stream import StreamEvent
 from infrastructure.errors import OpenSREError
 from tools.investigation.alert_templates import build_alert_template

@@ -8,12 +8,12 @@ from collections.abc import Generator, Mapping
 from contextlib import contextmanager
 from contextvars import ContextVar
 from dataclasses import dataclass
-from hashlib import sha256
 from typing import TYPE_CHECKING, Final
 from uuid import uuid4
 
 from config.constants.investigation import MAX_INVESTIGATION_LOOPS
 from config.constants.llm import LLM_PROVIDER_ENV
+from config.llm_auth.provider_catalog import provider_spec
 from infrastructure.analytics.events import Event
 from infrastructure.analytics.investigation_loop import (
     begin_investigation_loop_metrics_scope,
@@ -108,6 +108,27 @@ def _string_value(value: object) -> str | None:
     return value if isinstance(value, str) and value else None
 
 
+def _configured_llm_model() -> str | None:
+    """Return the reasoning/legacy model env for the active LLM provider."""
+    provider = _string_value(os.getenv(LLM_PROVIDER_ENV))
+    candidates: list[str] = []
+    if provider is not None:
+        spec = provider_spec(provider)
+        if spec is not None:
+            candidates.extend(key for key in (spec.model_env, spec.legacy_model_env) if key)
+    if not candidates:
+        for fallback_provider in ("anthropic", "openai"):
+            spec = provider_spec(fallback_provider)
+            if spec is None:
+                continue
+            candidates.extend(key for key in (spec.model_env, spec.legacy_model_env) if key)
+    for key in candidates:
+        value = _string_value(os.getenv(key))
+        if value is not None:
+            return value
+    return None
+
+
 def _mapping_value(mapping: Mapping[str, object], key: str) -> str | None:
     return _string_value(mapping.get(key))
 
@@ -199,9 +220,7 @@ def _investigation_started_properties(
         "evaluate_requested": evaluate_requested,
     }
     llm_provider = _string_value(os.getenv(LLM_PROVIDER_ENV))
-    llm_model = _string_value(os.getenv("ANTHROPIC_MODEL")) or _string_value(
-        os.getenv("OPENAI_MODEL")
-    )
+    llm_model = _configured_llm_model()
     if llm_provider is not None:
         properties["llm_provider"] = llm_provider
     if llm_model is not None:
@@ -686,7 +705,7 @@ def identify_saved_github_username() -> None:
     ``$ai_generation`` include ``github_username`` without requiring a fresh
     device-flow login each session.
     """
-    from integrations.github.identity import saved_github_username
+    from integrations.github import saved_github_username
 
     identify_github_username(saved_github_username())
 
@@ -714,129 +733,6 @@ def identify_github_username(username: str) -> None:
         analytics.set_persistent_property("github_username", username)
     except Exception as exc:
         capture_exception(exc)
-
-
-GITHUB_GATE_EXPERIMENT: Final[str] = "github_gate_v1"
-GITHUB_GATE_VERSION: Final[str] = "1"
-GITHUB_GATE_VARIANT_CONTROL: Final[str] = "control"
-GITHUB_GATE_VARIANT_FORCED: Final[str] = "forced"
-_GITHUB_GATE_VARIANTS: Final[frozenset[str]] = frozenset(
-    {GITHUB_GATE_VARIANT_CONTROL, GITHUB_GATE_VARIANT_FORCED}
-)
-GITHUB_GATE_VARIANT_ENV: Final[str] = "OPENSRE_GITHUB_GATE_VARIANT"
-
-# Real user-skip sources (never used for CI/test/env bypasses).
-GITHUB_SKIP_SOURCE_MENU: Final[str] = "menu"
-GITHUB_SKIP_SOURCE_ESCAPE: Final[str] = "escape"
-GITHUB_SKIP_SOURCE_DECLINE_RETRY: Final[str] = "decline_retry"
-
-GITHUB_FAIL_DEVICE_FLOW: Final[str] = "device_flow_unavailable"
-GITHUB_FAIL_TRANSPORT: Final[str] = "transport_error"
-GITHUB_FAIL_VERIFY: Final[str] = "access_unverified"
-
-
-def assign_github_gate_variant(anonymous_id: str) -> str:
-    """Deterministically assign ``control`` (skip allowed) or ``forced`` (no skip).
-
-    Buckets on the install anonymous id so the variant is sticky without a
-    PostHog feature-flag round-trip. Override with ``OPENSRE_GITHUB_GATE_VARIANT``.
-    """
-    digest = sha256(f"{GITHUB_GATE_EXPERIMENT}:{anonymous_id}".encode()).hexdigest()
-    return (
-        GITHUB_GATE_VARIANT_FORCED if int(digest[:8], 16) % 2 == 0 else GITHUB_GATE_VARIANT_CONTROL
-    )
-
-
-def resolve_github_gate_variant() -> str:
-    """Resolve the GitHub login-gate experiment variant for this install."""
-    override = os.getenv(GITHUB_GATE_VARIANT_ENV, "").strip().lower()
-    if override in _GITHUB_GATE_VARIANTS:
-        return override
-    from infrastructure.analytics.provider import get_anonymous_id
-
-    return assign_github_gate_variant(get_anonymous_id())
-
-
-def github_gate_experiment_properties(variant: str, **extra: object) -> Properties:
-    """Shared experiment fields for GitHub gate exposure/outcome events."""
-    properties: Properties = {
-        "experiment_key": GITHUB_GATE_EXPERIMENT,
-        "variant": variant,
-        "gate_version": GITHUB_GATE_VERSION,
-        # Backward-compatible alias used by existing dashboards / persistent stamp.
-        "github_gate_variant": variant,
-    }
-    for key, value in extra.items():
-        if value is None:
-            continue
-        properties[key] = value  # type: ignore[assignment]
-    return properties
-
-
-def stamp_github_gate_variant(variant: str) -> None:
-    """Persist experiment fields on every subsequent analytics event.
-
-    Downstream events such as ``investigation_started`` inherit ``variant`` /
-    ``github_gate_variant`` via the anonymous ``distinct_id`` session, so
-    completed-vs-skipped and forced-vs-control cohorts can be joined without
-    using ``github_username``.
-    """
-    if variant not in _GITHUB_GATE_VARIANTS:
-        return
-    try:
-        analytics = get_analytics()
-        for key, value in github_gate_experiment_properties(variant).items():
-            analytics.set_persistent_property(key, value)  # type: ignore[arg-type]
-    except Exception as exc:
-        capture_exception(exc)
-
-
-def capture_github_login_prompted(*, variant: str) -> None:
-    """Exposure event when the GitHub login gate is rendered to an eligible install.
-
-    Emits both ``github_login_gate_shown`` (canonical) and ``github_login_prompted``
-    (backward compatible) with identical experiment properties so existing
-    PostHog boards keep working during the rename.
-
-    Do **not** combine both event names in the same funnel step or ``event IN
-    (...)`` filter — each gate presentation produces two events and that query
-    would double-count exposures. Prefer ``github_login_gate_shown`` for new
-    boards; keep ``github_login_prompted`` only for legacy charts that have not
-    migrated yet.
-    """
-    props = github_gate_experiment_properties(variant)
-    _capture(Event.GITHUB_LOGIN_GATE_SHOWN, props)
-    _capture(Event.GITHUB_LOGIN_PROMPTED, props)
-
-
-def capture_github_login_skipped(*, variant: str, skip_source: str) -> None:
-    """User chose to skip (menu / Escape / decline retry). Never for CI bypasses."""
-    _capture(
-        Event.GITHUB_LOGIN_SKIPPED,
-        github_gate_experiment_properties(variant, skip_source=skip_source),
-    )
-
-
-def capture_github_login_abandoned(*, variant: str, reason: str) -> None:
-    _capture(
-        Event.GITHUB_LOGIN_ABANDONED,
-        github_gate_experiment_properties(variant, reason=reason),
-    )
-
-
-def capture_github_login_failed(*, variant: str, reason_category: str) -> None:
-    """Non-terminal failure during a gate attempt (device flow / transport / verify)."""
-    _capture(
-        Event.GITHUB_LOGIN_FAILED,
-        github_gate_experiment_properties(variant, reason_category=reason_category),
-    )
-
-
-def capture_github_login_completed(username: str, *, variant: str | None = None) -> None:
-    properties: Properties = {"github_username": username}
-    if variant is not None:
-        properties.update(github_gate_experiment_properties(variant))
-    _capture(Event.GITHUB_LOGIN_COMPLETED, properties)
 
 
 def capture_loop_suggestion_prompted() -> None:

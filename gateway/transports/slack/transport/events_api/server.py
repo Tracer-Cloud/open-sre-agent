@@ -25,6 +25,7 @@ import uvicorn
 from fastapi import FastAPI, Request, Response
 from fastapi.responses import JSONResponse, PlainTextResponse
 
+from config.constants.gateway import DEFAULT_STOP_TIMEOUT_SECONDS
 from gateway.core.lifecycle.errors import GatewayTransportFailedError
 from gateway.core.middleware.approvals import ApprovalBroker
 from gateway.core.storage.events.repository import HandledSlackEventRepository
@@ -37,6 +38,7 @@ from gateway.transports.slack.transport.events_api.receiver import (
     admit_slack_http_request,
     admit_slack_interactivity_request,
 )
+from infrastructure.request_body_limit import RequestBodyLimitMiddleware
 
 #: Starts a turn for one inbound message without blocking the request.
 SubmitTurn = Callable[[SlackInboundMessage], None]
@@ -82,7 +84,7 @@ class SlackHttpServerHandle:
     def bound_address(self) -> str:
         return f"{self.bound_host}:{self.bound_port}"
 
-    def stop(self, *, timeout: float = 8.0) -> bool:
+    def stop(self, *, timeout: float = DEFAULT_STOP_TIMEOUT_SECONDS) -> bool:
         """Stop serving and report whether the listener thread ended in time.
 
         Signature matches ``gateway.startup.TransportWorker`` so the
@@ -109,6 +111,9 @@ def build_slack_http_app(
     without blocking — the route must answer Slack first.
     """
     app = FastAPI()
+    # Slack's signature covers the raw body, so both routes must read it before
+    # they can authenticate the caller. Bound the read itself.
+    app.add_middleware(RequestBodyLimitMiddleware)
 
     async def _admit(request: Request) -> Response:
         if not gate.accepting:

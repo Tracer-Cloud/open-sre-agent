@@ -5,7 +5,7 @@ from __future__ import annotations
 from collections.abc import Iterable
 from typing import Any
 
-from config.config import get_tracer_base_url
+from config.tracer_urls import get_tracer_base_url
 from core.domain.types.tools import ToolSurface
 from core.tool_framework import tool
 from integrations.tracer import (

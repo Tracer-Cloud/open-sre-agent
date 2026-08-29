@@ -15,7 +15,6 @@ owner module instead of broadening module responsibilities.
 - `../main.py` — process/bootstrap boundary only: startup sweep, TTY/non-TTY
   gate, banner display, the async boundary (`asyncio.run`). Do not move
   per-turn dispatch/runtime logic back into startup bootstrap.
-- `startup/first_launch_github.py` — first-launch GitHub sign-in gate only.
 - `startup/initial_input.py` — scripted non-interactive initial-input replay
   only.
 - `../controller.py` — `InteractiveShellController`: prompt lifecycle,
@@ -28,7 +27,7 @@ owner module instead of broadening module responsibilities.
   pending prompt defaults, autosubmit handling only.
 - `input/` — prompt input event conversion only: EOF, Ctrl-C, CPR cleanup,
   session resume hints.
-- `utils/input_policy.py` — prompt stdin/spinner gating decisions for turns
+- `input_policy.py` — prompt stdin/spinner gating decisions for turns
   only.
 - `background/workers.py` — alert watcher lifecycle, spinner ticker lifecycle,
   sampler startup, turn-start background-output drains only.
@@ -51,7 +50,7 @@ owner module instead of broadening module responsibilities.
   agent lifecycle events (spinner, prompt suppression, `console.print`, CPR
   drain) only — not in the turn-entry adapter or the core harness.
 - `shell_turn_execution.py` — `execute_shell_turn`: binds shell adapters
-  (`action_turn.py`, `integration_tool_gathering.py`, `answer_turn.py`) plus
+  (`action_turn.py`, `answer_turn.py`) plus
   accounting around `core.agent_harness.turns.orchestrator.run_turn`. Each
   adapter owns its own binding; tests import them from their owning module,
   not `shell_turn_execution`.

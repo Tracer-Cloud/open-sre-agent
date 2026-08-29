@@ -31,8 +31,22 @@ def _timeout_remediation() -> list[str]:
     ]
 
 
+_TIMEOUT_EXCEPTION_NAMES = frozenset(
+    {
+        "APITimeoutError",
+        "ConnectTimeout",
+        "PoolTimeout",
+        "ReadTimeout",
+        "TimeoutException",
+        "WriteTimeout",
+    }
+)
+
+
 def _looks_like_timeout(exc: BaseException) -> bool:
     if isinstance(exc, TimeoutError):
+        return True
+    if type(exc).__name__ in _TIMEOUT_EXCEPTION_NAMES:
         return True
     try:
         from anthropic import APITimeoutError as AnthropicTimeoutError
@@ -177,8 +191,7 @@ def remediate_missing_llm_credentials(message: str, *, provider: str | None = No
     subject = f"No API key is set for {target}" if provider else "No LLM API key is set"
     return (
         f"{subject}. Run `/auth login {target}` to add one, or `/onboard` to rerun "
-        f"setup (from a terminal: `opensre auth login {target}`). "
-        f"(Provider detail: {message.strip()})"
+        f"setup (from a terminal: `opensre auth login {target}`)."
     )
 
 
@@ -257,9 +270,8 @@ def classify_llm_invoke_failure(exc: BaseException) -> LLMInvokeFailure | None:
 
     if not isinstance(exc, RuntimeError):
         if _looks_like_timeout(exc):
-            detail = str(exc).strip() or "The LLM request timed out."
             return LLMInvokeFailure(
-                user_message=f"Investigation stopped: {detail}",
+                user_message="Investigation stopped: the LLM request timed out.",
                 tracker_message="Failed: LLM timed out",
                 remediation_steps=_timeout_remediation(),
                 root_cause_category="Investigation Error",
@@ -277,8 +289,7 @@ def classify_llm_invoke_failure(exc: BaseException) -> LLMInvokeFailure | None:
 
         if "anthropic" in err_msg and "was not found" in err_msg:
             return LLMInvokeFailure(
-                user_message=raw.strip()
-                or "Anthropic model was not found. Check your configured model name.",
+                user_message="Anthropic model was not found. Check your configured model name.",
                 tracker_message="Failed: Model not found",
                 remediation_steps=[
                     (
@@ -290,8 +301,7 @@ def classify_llm_invoke_failure(exc: BaseException) -> LLMInvokeFailure | None:
             )
         if "azure openai deployment" in err_msg or is_azure_openai_failure_message(raw):
             return LLMInvokeFailure(
-                user_message=raw.strip()
-                or "The configured Azure OpenAI deployment was not found (404).",
+                user_message="The configured Azure OpenAI deployment was not found (404).",
                 tracker_message="Failed: Azure deployment not found",
                 remediation_steps=azure_deployment_not_found_remediation_steps(),
             )
@@ -340,7 +350,7 @@ def classify_llm_invoke_failure(exc: BaseException) -> LLMInvokeFailure | None:
         or ("api key" in err_msg and "invalid" in err_msg)
     ):
         return LLMInvokeFailure(
-            user_message=f"Investigation stopped: LLM authentication failed. {raw}",
+            user_message="Investigation stopped: LLM authentication failed.",
             tracker_message="Failed: LLM authentication",
             remediation_steps=[
                 "Verify API keys or CLI login for your LLM_PROVIDER.",
@@ -349,9 +359,8 @@ def classify_llm_invoke_failure(exc: BaseException) -> LLMInvokeFailure | None:
         )
 
     if _looks_like_timeout(exc):
-        detail = raw.strip() or "The LLM request timed out."
         return LLMInvokeFailure(
-            user_message=f"Investigation stopped: {detail}",
+            user_message="Investigation stopped: the LLM request timed out.",
             tracker_message="Failed: LLM timed out",
             remediation_steps=_timeout_remediation(),
             root_cause_category="Investigation Error",

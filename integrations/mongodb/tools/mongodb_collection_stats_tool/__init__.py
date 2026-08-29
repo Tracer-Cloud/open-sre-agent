@@ -2,6 +2,7 @@
 
 from typing import Any
 
+from core.domain.types.evidence import record_evidence_entry
 from core.domain.types.tools import ToolSurface
 from core.tool_framework import tool
 from integrations.mongodb import (
@@ -12,6 +13,24 @@ from integrations.mongodb import (
 )
 
 
+def _map_get_mongodb_collection_stats(
+    evidence: dict[str, Any], output: dict[str, Any], _tool_input: dict[str, Any]
+) -> None:
+    """Cite document count and storage size for the collection."""
+    if not output.get("available"):
+        return
+    size_mb = round((output.get("size_bytes") or 0) / (1024 * 1024), 2)
+    record_evidence_entry(
+        evidence,
+        source="get_mongodb_collection_stats",
+        label="MongoDB Collection Stats",
+        summary=(
+            f"'{output.get('ns', '')}': {output.get('count', 0)} document(s), {size_mb}MB, "
+            f"{output.get('index_count', 0)} index(es)"
+        ),
+    )
+
+
 @tool(
     name="get_mongodb_collection_stats",
     description="Retrieve document counts, size metrics, and index information for a specific MongoDB collection.",
@@ -20,6 +39,7 @@ from integrations.mongodb import (
     is_available=mongodb_database_is_available,
     injected_params=("connection_string",),
     extract_params=mongodb_extract_params,
+    evidence_mapper=_map_get_mongodb_collection_stats,
 )
 def get_mongodb_collection_stats(
     connection_string: str,

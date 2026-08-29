@@ -5,18 +5,21 @@ The ``ask_user_choice`` action tool stores a
 session and queues this command via ``set_auto_command``, so it runs as a
 literal slash turn with exclusive stdin — the only place a raw-stdin arrow-key
 picker is safe (see ``_EXCLUSIVE_STDIN_MENU_COMMANDS`` in
-``runtime/utils/input_policy.py``). The selected option label is auto-submitted
+``runtime/input_policy.py``). The selected option label is auto-submitted
 as the next user message so the agent receives the decision verbatim.
 """
 
 from __future__ import annotations
 
 from rich.console import Console
-from rich.markup import escape
 
+from core.agent_harness.spi.handoff import format_ask_user_answers
 from infrastructure.terminal import theme as ui_theme
 from surfaces.interactive_shell.command_registry.types import SlashCommand
 from surfaces.interactive_shell.runtime import Session
+from surfaces.interactive_shell.ui.ask_user import CUSTOM_OPTION, repl_ask_user
+from surfaces.interactive_shell.ui.handoff_questions import render_choice_selection
+from surfaces.interactive_shell.ui.prompt_visibility import clear_live_prompt_paint
 from surfaces.shared.terminal.components.choice_menu import (
     print_valid_choice_list,
     repl_choose_one,
@@ -33,26 +36,45 @@ def _cmd_choose(session: Session, console: Console, args: list[str]) -> bool:
         return True
 
     if not repl_tty_interactive():
-        # Non-TTY fallback: show the options; the user replies in plain text.
-        print_valid_choice_list(
-            console,
-            title=escape(pending.title),
-            choices=list(pending.options),
-        )
+        for question in pending.items():
+            print_valid_choice_list(
+                console,
+                title=question.title,
+                choices=list(question.options),
+            )
         console.print(f"[{ui_theme.DIM}]Reply with the option you want.[/]")
         return True
 
-    picked = repl_choose_one(
-        title=pending.title,
-        choices=[(option, option) for option in pending.options],
-    )
-    if picked is None:
-        console.print(f"[{ui_theme.DIM}]Selection cancelled — type a reply instead.[/]")
+    items = pending.items()
+    clear_live_prompt_paint(session)
+    if pending.is_batch():
+        picked = repl_ask_user(items)
+        if picked is None:
+            console.print(f"[{ui_theme.DIM}]Selection cancelled — type a reply instead.[/]")
+            session.terminal.awaiting_handoff_answer = False
+            return True
+        session.terminal.set_auto_command(format_ask_user_answers(items, picked))
+        session.terminal.awaiting_handoff_answer = True
         return True
 
-    # Auto-submit the chosen label as the next user message; the prompt echo is
-    # the confirmation, so nothing is printed here.
-    session.terminal.set_auto_command(picked)
+    option_choices = [(option, option) for option in items[0].options]
+    option_choices.append((CUSTOM_OPTION, CUSTOM_OPTION))
+    # Custom row: type in place on the OpenSRE option array (Droid-style).
+    picked_one = repl_choose_one(
+        title=items[0].title,
+        choices=option_choices,
+        custom_label=CUSTOM_OPTION,
+        multi_select=items[0].multi_select,
+        header="Ask User",
+    )
+    if picked_one is None:
+        console.print(f"[{ui_theme.DIM}]Selection cancelled — type a reply instead.[/]")
+        session.terminal.awaiting_handoff_answer = False
+        return True
+
+    render_choice_selection(console, items[0].title, picked_one)
+    session.terminal.set_auto_command(picked_one)
+    session.terminal.awaiting_handoff_answer = True
     return True
 
 

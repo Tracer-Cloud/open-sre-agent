@@ -7,11 +7,7 @@ from pathlib import Path
 
 import pytest
 
-from config.repl_config import (
-    ReplConfig,
-    read_github_login_deferred,
-    write_github_login_deferred,
-)
+from config.repl_config import ReplConfig
 
 
 class TestReplConfigDefaults:
@@ -373,25 +369,6 @@ class TestThemeRegistry:
         # Assert: the name is resolved, but activation stays the caller's job.
         assert cfg.theme == "amber"
         assert get_active_theme_name() == "pink"
-
-
-class TestGithubLoginDeferral:
-    def test_read_defaults_false(self, tmp_path, monkeypatch: pytest.MonkeyPatch) -> None:
-        import config.constants as const_module
-
-        monkeypatch.setattr(const_module, "OPENSRE_HOME_DIR", tmp_path)
-        monkeypatch.setattr("config.constants.paths.OPENSRE_HOME_DIR", tmp_path)
-        assert read_github_login_deferred() is False
-
-    def test_write_and_read_round_trip(self, tmp_path, monkeypatch: pytest.MonkeyPatch) -> None:
-        import config.constants as const_module
-
-        monkeypatch.setattr(const_module, "OPENSRE_HOME_DIR", tmp_path)
-        monkeypatch.setattr("config.constants.paths.OPENSRE_HOME_DIR", tmp_path)
-        write_github_login_deferred(True)
-        assert read_github_login_deferred() is True
-        write_github_login_deferred(False)
-        assert read_github_login_deferred() is False
 
 
 class TestAlertListenerPortParsing:

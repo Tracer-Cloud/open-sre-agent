@@ -9,8 +9,8 @@ OpenSRE queries Splunk over the REST API during investigations. The agent calls
 `query_splunk_logs` with a planner-supplied SPL `query`.
 
 There is **no** `opensre integrations setup splunk` handler today. Configure
-Splunk via the onboarding wizard, environment variables, or the integration
-store, then verify with `opensre integrations verify splunk`.
+Splunk via environment variables or the integration store, then verify with
+`opensre integrations verify splunk`.
 
 ## Prerequisites
 
@@ -20,17 +20,7 @@ store, then verify with `opensre integrations verify splunk`.
 
 ## Setup
 
-### Option 1: Onboarding wizard
-
-```bash
-opensre onboard
-```
-
-Select **Splunk** under Observability and provide the REST API base URL and
-bearer token. The wizard validates and writes the integration store (token
-stays in the credential store; URL/index/SSL settings sync to `.env`).
-
-### Option 2: Environment variables
+### Option 1: Environment variables
 
 ```bash
 SPLUNK_URL=https://splunk.corp.com:8089    # REST API base URL (port 8089 default)
@@ -48,7 +38,7 @@ SPLUNK_CA_BUNDLE=/etc/ssl/certs/corp-ca.pem  # Path to custom CA bundle (optiona
 | `SPLUNK_VERIFY_SSL` | `true` | Set to `false` to disable SSL verification (dev/local only) |
 | `SPLUNK_CA_BUNDLE` | — | Path to a PEM CA bundle for enterprise self-signed certificates |
 
-### Option 3: Persistent store
+### Option 2: Persistent store
 
 ```json
 {
@@ -90,20 +80,31 @@ OpenSRE uses **bearer tokens** — not basic auth and not HEC tokens.
 
 1. Go to **Settings** → **Tokens**
 2. Click **New Token**
-3. Set a name (for example `opensre`) and an expiry date
-4. Copy the generated token
+3. In **User**, pick the existing Splunk user the token authenticates as
+4. Fill in **Audience** (required) and an expiry date
+5. Copy the generated token
 
-**Via the REST API** (replace `<PASSWORD>` with your admin password):
+**Via the REST API** (replace `<PASSWORD>` with your admin password and
+`<SPLUNK_USER>` with the service account the token should authenticate as):
 
 ```bash
 curl -sk -u admin:<PASSWORD> \
   https://splunk.corp.com:8089/services/authorization/tokens \
   -X POST \
-  --data-urlencode "name=opensre" \
+  --data-urlencode "name=<SPLUNK_USER>" \
+  --data-urlencode "audience=OpenSRE" \
   --data-urlencode "expires_on=+90d" \
   --data-urlencode "output_mode=json" \
   | python3 -c "import sys,json; d=json.load(sys.stdin); print(d['entry'][0]['content']['token'])"
 ```
+
+<Warning>
+`name` is the **existing Splunk user** the token authenticates as, not an arbitrary
+label — Splunk rejects an unrecognized name with `User "..." does not exist.` The token
+inherits that user's roles, so point it at a least-privilege service account rather than
+`admin`. `audience` is also required (a short free-text description of the token's
+purpose); omitting it fails with `The following required arguments are missing: audience.`
+</Warning>
 
 The token needs the `search` capability. The `admin` role includes this by
 default. For a dedicated service account, ensure the role includes:
@@ -111,6 +112,135 @@ default. For a dedicated service account, ensure the role includes:
 - `search`
 - `read_splunkd_private_settings` (needed for the verify call against
   `/services/server/info`)
+
+### Quick local test with Docker
+
+```bash
+docker run -d --name splunk-dev --platform linux/amd64 \
+  -p 127.0.0.1:8000:8000 \
+  -p 127.0.0.1:8089:8089 \
+  -e SPLUNK_START_ARGS=--accept-license \
+  -e SPLUNK_GENERAL_TERMS=--accept-sgt-current-at-splunk-com \
+  -e SPLUNK_PASSWORD=VerifyPass123! \
+  splunk/splunk:latest
+
+i=0
+until docker logs splunk-dev 2>&1 | grep -q "Ansible playbook complete"; do
+  i=$((i + 1))
+  if [ "$i" -ge 180 ]; then
+    echo "Splunk never became ready; check: docker logs splunk-dev" >&2
+    break
+  fi
+  sleep 5
+done
+```
+
+<Warning>
+`splunk/splunk` publishes **amd64 only**, which is why `--platform linux/amd64` is
+already on the command above. On Apple Silicon it runs under emulation and can take
+15 minutes or more to report ready; on native amd64 the flag is a harmless no-op.
+Without `SPLUNK_GENERAL_TERMS=--accept-sgt-current-at-splunk-com` alongside
+`SPLUNK_START_ARGS=--accept-license`, the container exits immediately with
+`License not accepted` — newer images require both, not just the license flag
+documented in older Splunk Docker guides.
+</Warning>
+
+Seed a test event and create a token:
+
+```bash
+curl -sk -u admin:VerifyPass123! \
+  "https://localhost:8089/services/receivers/simple?index=main&sourcetype=opensre_verify" \
+  --data-binary "$(date -u '+%Y-%m-%d %H:%M:%S') ERROR payment-service: connection refused to billing-api during checkout"
+
+SPLUNK_TOKEN=$(curl -sk -u admin:VerifyPass123! \
+  https://localhost:8089/services/authorization/tokens \
+  -X POST \
+  --data-urlencode "name=admin" \
+  --data-urlencode "audience=OpenSRE verification" \
+  --data-urlencode "expires_on=+90d" \
+  --data-urlencode "output_mode=json" \
+  | python3 -c "import sys,json; print(json.load(sys.stdin)['entry'][0]['content']['token'])")
+
+export SPLUNK_URL="https://localhost:8089"
+export SPLUNK_TOKEN
+export SPLUNK_VERIFY_SSL=false
+export SPLUNK_INDEX=main
+unset SPLUNK_INSTANCES SPLUNK_CA_BUNDLE
+```
+
+Then point OpenSRE at an empty store, so the container is the only Splunk either
+command can reach:
+
+```bash
+export OPENSRE_DEMO_STORE_DIR="$(mktemp -d /tmp/opensre-splunk-demo.XXXXXX)"
+export OPENSRE_INTEGRATIONS_STORE_PATH="$OPENSRE_DEMO_STORE_DIR/integrations.json"
+```
+
+<Warning>
+Do this **before** verifying, and keep it for the rest of the recipe. A saved Splunk
+record wins over `SPLUNK_URL` / `SPLUNK_TOKEN` for `opensre integrations verify`, so
+with your real store in play the check can pass against production while appearing to
+test localhost — the `SOURCE` column reads `local store` instead of `local env`.
+`opensre investigate` fails the other way: it only falls through to env vars when the
+store has **no records at all**, so a single record for any unrelated service blocks
+env resolution entirely. An empty store is the one state both commands agree on.
+`SPLUNK_INSTANCES` overrides `SPLUNK_URL` / `SPLUNK_TOKEN` outright, which is why the
+block above clears it.
+</Warning>
+
+Verify:
+
+```bash
+opensre integrations verify splunk
+```
+
+```
+SERVICE │ SOURCE    │ STATUS   │ DETAIL
+splunk  │ local env │ ✓ passed │ Connected to Splunk 10.4.2
+```
+
+Trigger a real investigation against the seeded event. `opensre investigate
+--print-template splunk` prints this payload shape if you want to start from it:
+
+```bash
+opensre investigate --input-json '{
+  "alert_source": "splunk",
+  "alert_name": "PaymentServiceErrors",
+  "severity": "critical",
+  "commonAnnotations": {
+    "summary": "payment-service errors detected",
+    "splunk_query": "index=main sourcetype=opensre_verify | head 50"
+  }
+}'
+```
+
+Real output from a run against this exact local instance (edited for length). Other
+integrations still resolved from your own environment ride along harmlessly:
+
+```
+Loading integrations: telegram, splunk
+↳ Splunk · query splunk logs
+
+Triage complete: payment-service checkout failed with connection refused
+to billing-api at 21:40:00 UTC; no billing-api logs are present in Splunk
+during a 4-hour window across all indexes.
+
+root_cause: payment-service is receiving TCP connection refused when
+calling billing-api during checkout, and billing-api has emitted zero log
+lines across all Splunk indexes for the last 4 hours. The most likely
+explanation is that billing-api pods are not running or not listening,
+though without cluster/deploy visibility the exact narrow cause cannot be
+confirmed.
+```
+
+Teardown:
+
+```bash
+docker rm -f splunk-dev
+rm -rf "$OPENSRE_DEMO_STORE_DIR"
+unset OPENSRE_DEMO_STORE_DIR OPENSRE_INTEGRATIONS_STORE_PATH \
+  SPLUNK_URL SPLUNK_TOKEN SPLUNK_VERIFY_SSL SPLUNK_INDEX
+```
 
 ## Investigation tools
 
@@ -154,7 +284,7 @@ Detail: Connected to Splunk 9.x.x
 | Empty search results | Data may not have been ingested yet, or the index name is wrong |
 | `Connection refused` on port 8089 | Splunk management port may be firewalled; confirm network access |
 | `opensre integrations verify` fails | Check `SPLUNK_URL` includes the protocol and port (`https://host:8089`) |
-| `opensre integrations setup splunk` | Not available — use `opensre onboard`, env vars, or the store, then `verify` |
+| `opensre integrations setup splunk` | Not available — use env vars or the store, then `verify` |
 
 ## Security
 

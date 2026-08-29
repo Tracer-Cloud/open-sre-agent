@@ -70,6 +70,12 @@ MCP_BY_COMMAND: dict[str, _SlashMcpFields] = {
         "User asks to log in, authenticate, connect an LLM provider, or check provider auth",
         anti_examples=("User asks to configure an observability integration (use /integrations)",),
     ),
+    "/auto": _mcp(
+        "Set Auto autonomy: off (ask before every tool), low (also ask before investigations), "
+        "med (ask before mutating agent tools), high (ask nothing, alpha default).",
+        "User asks to change Auto Off/Low/Med/High or how much the agent may run without approval",
+        anti_examples=("User asks to enable trust mode (use /trust)",),
+    ),
     "/background": _mcp(
         "Manage session-local background investigation mode and completed RCA summaries. "
         "Subcommands: on, off, status, list, show <task_id>, use <task_id>, notify list, notify set.",
@@ -103,7 +109,7 @@ MCP_BY_COMMAND: dict[str, _SlashMcpFields] = {
         "Show or edit local OpenSRE configuration (~/.opensre/config.yml). "
         "Subcommands: show, set <key> <value>.",
         "User asks to view or change OpenSRE config settings",
-        anti_examples=("User asks how to configure an integration (may need assistant_handoff)",),
+        anti_examples=("User asks how to configure an integration (answer directly)",),
     ),
     "/context": _mcp(
         "Display accumulated infrastructure context collected during the session.",
@@ -184,14 +190,14 @@ MCP_BY_COMMAND: dict[str, _SlashMcpFields] = {
         "and configured integrations with pass/fail per component.",
         "User asks if OpenSRE is healthy, working, or connected",
         anti_examples=(
-            "User asks what integrations OpenSRE supports in general (docs → assistant_handoff)",
+            "User asks what integrations OpenSRE supports in general (answer from docs)",
             "User asks to list connected integrations (use /integrations list)",
         ),
     ),
     "/help": _mcp(
         "Show the slash-command help index or detailed help for a command or category.",
         "User asks for available commands or help using /help",
-        anti_examples=("User asks a procedural docs question (assistant_handoff)",),
+        anti_examples=("User asks a procedural docs question (answer directly)",),
     ),
     "/hermes": _mcp(
         "Live-tail Hermes logs and send detected incidents to Telegram. Subcommand: watch.",
@@ -206,7 +212,7 @@ MCP_BY_COMMAND: dict[str, _SlashMcpFields] = {
         "User asks to verify an integration by name",
         "User asks to show details for a configured integration",
         anti_examples=(
-            "User asks which integrations OpenSRE supports without configuring (assistant_handoff)",
+            "User asks which integrations OpenSRE supports without configuring (answer directly)",
             "User asks to list connected integrations (prefer /integrations list)",
         ),
     ),
@@ -216,7 +222,7 @@ MCP_BY_COMMAND: dict[str, _SlashMcpFields] = {
         "User asks to run one of the built-in sample alerts/templates",
         anti_examples=(
             "User pastes alert text inline (use investigation_start instead)",
-            "User asks how investigations work (assistant_handoff)",
+            "User asks how investigations work (answer directly)",
         ),
     ),
     "/last": _mcp(
@@ -280,15 +286,15 @@ MCP_BY_COMMAND: dict[str, _SlashMcpFields] = {
         "User explicitly types /model or asks to run /model show",
         "User asks to change, set, restore, or switch the active provider or model",
         anti_examples=(
-            "User asks a natural-language model status question like 'which model is being used now?' (assistant_handoff)",
-            "User asks what model/provider the assistant is using (assistant_handoff)",
-            "User asks whether OpenAI is configured now without explicitly asking to run /model or verify credentials (assistant_handoff)",
-            "User says switch to local llama without a concrete provider (assistant_handoff)",
+            "User asks a natural-language model status question like 'which model is being used now?' (answer directly)",
+            "User asks what model/provider the agent is using (answer directly)",
+            "User asks whether OpenAI is configured now without explicitly asking to run /model or verify credentials (answer directly)",
+            "User says switch to local llama without a concrete provider (clarify the provider)",
         ),
     ),
     "/onboard": _mcp(
-        "Launch the interactive onboarding wizard (handoff if run inside the REPL).",
-        "User asks to run onboarding or initial setup wizard",
+        "Launch the interactive LLM onboarding wizard (handoff if run inside the REPL).",
+        "User asks to run onboarding or reconfigure the LLM provider",
     ),
     "/privacy": _mcp(
         "Show history persistence settings, redaction status, and the local threat model.",
@@ -304,7 +310,7 @@ MCP_BY_COMMAND: dict[str, _SlashMcpFields] = {
         "User explicitly asks to connect to a remote/hosted/EC2/Nitro OpenSRE instance",
         "User asks how many remote deployments are configured or wants to inspect a remote agent",
         "User asks about remote deployment status, health, or operations",
-        anti_examples=("Vague connect to X without remote/hosted context (assistant_handoff)",),
+        anti_examples=("Vague connect to X without remote/hosted context (clarify the target)",),
     ),
     "/new": _mcp(
         "Start a new session while preserving the current LLM conversation context and "
@@ -340,12 +346,17 @@ MCP_BY_COMMAND: dict[str, _SlashMcpFields] = {
         "User asks to see past sessions, session history, or what was run in previous sessions",
         anti_examples=("User asks for the current session status (use /status)",),
     ),
+    "/setup": _mcp(
+        "First-run setup: GitHub sign-in, LLM key, then open the interactive shell.",
+        "User asks to run first-run setup or factory-style install setup",
+        "User just installed OpenSRE and needs to sign in and add an LLM key",
+    ),
     "/status": _mcp(
         "Explicit /status command operation: show REPL session status, including "
         "provider, models, trust mode, and active flags.",
         "User explicitly types /status or asks to run /status",
         anti_examples=(
-            "User asks conversationally what the current session status is (assistant_handoff)",
+            "User asks conversationally what the current session status is (answer directly)",
             "User asks if integrations are healthy (use /health)",
         ),
     ),
@@ -381,7 +392,7 @@ MCP_BY_COMMAND: dict[str, _SlashMcpFields] = {
         "User explicitly types /tools or asks to run /tools",
         "User explicitly asks to list registered tools as a shell command",
         anti_examples=(
-            "User asks conversationally what tools or capabilities the assistant can use (assistant_handoff)",
+            "User asks conversationally what tools or capabilities the agent can use (answer directly)",
         ),
     ),
     "/tests": _mcp(
@@ -561,9 +572,9 @@ def slash_invoke_tool_description(specs: list[SlashCommandSpec] | None = None) -
         "operation/discovery cases that the system prompt explicitly maps to a "
         "slash command. Do not use this as a natural-language router for "
         "ordinary informational, how-to, capability, or status questions merely "
-        "because a slash command can display related information; hand those to "
-        "assistant_handoff unless a prompt rule names a read-only discovery "
-        "exception. Supply positional args in the args array. This tool covers "
+        "because a slash command can display related information; answer those "
+        "directly unless a prompt rule names a read-only discovery exception. "
+        "Supply positional args in the args array. This tool covers "
         "only the slash-command clause of a request. For compound requests, "
         "still emit a separate tool call for every other actionable clause in "
         "order; for example "

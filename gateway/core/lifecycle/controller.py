@@ -23,8 +23,13 @@ from typing import Any
 
 from rich.console import Console
 
+from config.constants.gateway import (
+    DEFAULT_STOP_TIMEOUT_SECONDS,
+    SCHEDULER_RELOAD_JOIN_TIMEOUT_SECONDS,
+)
 from core.agent_harness.ports import SlashPortsFactory
 from gateway import startup as gateway_startup
+from gateway.core.billing.turn_metering import admit_metered_turn
 from gateway.core.chat_agent_build import chat_agent_build_config
 from gateway.core.config.logging_config import configure_logging
 from gateway.core.lifecycle.credential_hydration import (
@@ -34,6 +39,7 @@ from gateway.core.lifecycle.credential_hydration import (
 from gateway.core.lifecycle.errors import GatewayConfigurationError
 from gateway.core.process.component_status import clear_component_status, write_component_status
 from gateway.core.process.readiness import set_ready
+from gateway.core.process.shutdown_budget import ShutdownBudget
 from gateway.core.process.supervision import GATEWAY_PID_FILE
 from infrastructure.turn_host.concurrency import (
     TurnConcurrencyGate,
@@ -42,10 +48,6 @@ from infrastructure.turn_host.concurrency import (
 )
 from infrastructure.turn_host.turn_callback import TurnCallback
 from infrastructure.turn_host.turn_runner import TurnRunner
-
-# The reload watcher only polls a flag, so it should never need the full
-# shutdown budget; cap it so chat workers keep the rest.
-SCHEDULER_RELOAD_JOIN_TIMEOUT_SECONDS = 2.0
 
 CredentialHydratorFactory = Callable[[], GatewayCredentialHydrator | None]
 
@@ -75,6 +77,7 @@ class GatewayController:
         self.logger: logging.Logger | None = None
         self.surfaces: gateway_startup.StartedGateway | None = None
         self.scheduler: Any = None
+        self._scheduler_runners: Any = None
         self._scheduler_reload_thread: threading.Thread | None = None
         self.components: dict[str, str] = {}
         self._slash_ports_factory = slash_ports_factory
@@ -107,6 +110,7 @@ class GatewayController:
             slash_ports_factory=self._slash_ports_factory,
             agent_build=chat_agent_build_config(),
             gate=self.turn_gate,
+            admission_check=admit_metered_turn,
         )
 
         self.start_surfaces(logger=logger, handler=handler)
@@ -153,12 +157,12 @@ class GatewayController:
 
         # Investigation + multiplexed scheduled-agent runners (Sentry digest, etc.).
         # A scheduled run costs a turn, so both take the same capacity gate chat
-        # turns take — stated here, once, rather than rewritten in afterwards.
-        scheduler_runners().gated(self.turn_gate).install()
+        # turns take — stated here, once, and passed into the scheduler.
+        self._scheduler_runners = scheduler_runners().gated(self.turn_gate)
         install_scheduled_delivery_adapters()
         # Drop any reload request queued before this process owned the scheduler.
         consume_scheduler_reload_request()
-        scheduler, task_count = start_background_scheduler()
+        scheduler, task_count = start_background_scheduler(self._scheduler_runners)
         if scheduler is None:
             self.components["scheduler"] = "idle (no scheduled tasks)"
         else:
@@ -166,21 +170,24 @@ class GatewayController:
             self.components["scheduler"] = f"running {task_count} scheduled task(s)"
         self._start_scheduler_reload_watcher(logger)
 
-    def stop(self, *, timeout: float = gateway_startup.DEFAULT_STOP_TIMEOUT_SECONDS) -> bool:
+    def stop(self, *, timeout: float = DEFAULT_STOP_TIMEOUT_SECONDS) -> bool:
         """Shut down all components and return whether the chat workers stopped."""
+        budget = ShutdownBudget(timeout)
         set_ready(False)
         self._stopped.set()
         stopped = True
         if self._scheduler_reload_thread is not None:
+            started = budget.mark()
             self._scheduler_reload_thread.join(
-                timeout=min(timeout, SCHEDULER_RELOAD_JOIN_TIMEOUT_SECONDS)
+                timeout=budget.take(SCHEDULER_RELOAD_JOIN_TIMEOUT_SECONDS)
             )
+            budget.consume(started)
             self._scheduler_reload_thread = None
         if self.scheduler is not None:
             self.scheduler.shutdown(wait=False)
             self.scheduler = None
         if self.surfaces is not None:
-            stopped = self.surfaces.stop(timeout=timeout) and stopped
+            stopped = self.surfaces.stop(timeout=budget.remaining) and stopped
             self.surfaces = None
         clear_component_status()
         return stopped
@@ -239,7 +246,9 @@ class GatewayController:
         """Resync the live scheduler (or start one) from the current task store."""
         from infrastructure.scheduling.scheduler.runner import refresh_background_scheduler
 
-        scheduler, task_count = refresh_background_scheduler(self.scheduler)
+        scheduler, task_count = refresh_background_scheduler(
+            self.scheduler, self._scheduler_runners
+        )
         self.scheduler = scheduler
         if scheduler is None:
             self.components["scheduler"] = "idle (no scheduled tasks)"

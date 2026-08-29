@@ -5,11 +5,14 @@ from __future__ import annotations
 import contextlib
 import json
 import os
+import shutil
 import subprocess
 import sys
 import tempfile
 import textwrap
+from collections.abc import Iterator
 from dataclasses import dataclass, field
+from functools import lru_cache
 from typing import Any
 
 from config.constants import OPENSRE_TMP_DIR, ensure_opensre_tmp_dir
@@ -22,11 +25,18 @@ _BASE_ENV_KEYS = (
     "LANG",
     "LC_ALL",
     "PATH",
-    "PYTHONPATH",
     "REQUESTS_CA_BUNDLE",
     "SSL_CERT_FILE",
+    "SYSTEMROOT",
+    "TEMP",
     "TMPDIR",
+    "TMP",
+    "USERPROFILE",
+    "WINDIR",
 )
+_PYTHON_EXECUTABLE_NAMES = ("python3", "python")
+_PYTHON_PROBE = "import sys; raise SystemExit(sys.version_info[0] != 3)"
+_PYTHON_PROBE_TIMEOUT = 3
 
 # Preamble injected before user code when network access is disabled.
 _NETWORK_BLOCK_PREAMBLE = textwrap.dedent("""\
@@ -109,6 +119,82 @@ class SandboxResult:
         return self.exit_code == 0 and not self.timed_out
 
 
+@lru_cache(maxsize=8)
+def _validated_frozen_python(frozen_executable: str, path: str) -> str | None:
+    """Resolve and validate an external Python for a frozen OpenSRE process."""
+    for name in _PYTHON_EXECUTABLE_NAMES:
+        for candidate in _explicit_path_candidates(name, path):
+            try:
+                is_frozen_executable = os.path.samefile(candidate, frozen_executable)
+            except OSError:
+                is_frozen_executable = os.path.normcase(
+                    os.path.realpath(candidate)
+                ) == os.path.normcase(os.path.realpath(frozen_executable))
+            if is_frozen_executable:
+                continue
+            try:
+                probe = subprocess.run(
+                    [candidate, "-I", "-c", _PYTHON_PROBE],
+                    stdin=subprocess.DEVNULL,
+                    stdout=subprocess.DEVNULL,
+                    stderr=subprocess.DEVNULL,
+                    timeout=_PYTHON_PROBE_TIMEOUT,
+                    env=_sandbox_env({"PATH": path}),
+                )
+            except (OSError, subprocess.TimeoutExpired):
+                continue
+            if probe.returncode == 0:
+                return candidate
+    return None
+
+
+def _explicit_path_candidates(name: str, path: str) -> Iterator[str]:
+    """Yield executables found only inside absolute, explicit PATH entries."""
+    seen_directories: set[str] = set()
+    for entry in path.split(os.pathsep):
+        if not entry or not os.path.isabs(entry):
+            continue
+        directory = os.path.abspath(entry)
+        normalized_directory = os.path.normcase(directory)
+        if normalized_directory in seen_directories:
+            continue
+        seen_directories.add(normalized_directory)
+
+        candidate = shutil.which(os.path.join(directory, name))
+        if candidate is None:
+            continue
+        candidate = os.path.abspath(candidate)
+        if os.path.normcase(os.path.dirname(candidate)) != normalized_directory:
+            continue
+        yield candidate
+
+
+def _python_executable() -> str:
+    """Return a real Python interpreter, never the frozen OpenSRE executable."""
+    if not sys.executable:
+        raise FileNotFoundError("Python 3 is not available")
+    if not getattr(sys, "frozen", False):
+        return sys.executable
+
+    candidate = _validated_frozen_python(
+        os.path.abspath(sys.executable),
+        os.environ.get("PATH", ""),
+    )
+    if candidate is not None:
+        return candidate
+
+    raise FileNotFoundError("Python 3 is not available on PATH")
+
+
+def python_interpreter_available() -> bool:
+    """Return whether sandbox execution can resolve a Python interpreter."""
+    try:
+        _python_executable()
+    except OSError:
+        return False
+    return True
+
+
 def run_python_sandbox(
     code: str,
     inputs: dict[str, Any] | None = None,
@@ -152,6 +238,7 @@ def run_python_sandbox(
 
     tmp_path: str | None = None
     try:
+        python_executable = _python_executable()
         ensure_opensre_tmp_dir()
         with tempfile.NamedTemporaryFile(
             mode="w",
@@ -163,7 +250,7 @@ def run_python_sandbox(
             tmp_path = tmp.name
 
         result = subprocess.run(
-            [sys.executable, tmp_path],
+            [python_executable, "-I", tmp_path],
             capture_output=True,
             text=True,
             encoding="utf-8",

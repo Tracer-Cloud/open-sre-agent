@@ -12,8 +12,7 @@ from tools.registry import get_registered_tool_map, get_registered_tools
 # auto-injected at run time. If one stays in the model-facing ``required`` list,
 # the LLM is asked for a value it cannot know, so it silently never calls the
 # tool — the conversational assistant then answers from prose instead of live
-# data. See ``tools/SentrySearchIssuesTool`` and the chat tool-gathering
-# loop in ``interactive_shell/runtime/integration_tool_gathering.py``.
+# data. See ``tools/SentrySearchIssuesTool``.
 CREDENTIAL_PARAM_NAMES = frozenset(
     {
         # auth secrets
