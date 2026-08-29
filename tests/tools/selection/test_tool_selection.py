@@ -7,12 +7,12 @@ from typing import Any
 import pytest
 from pydantic import ValidationError
 
-from config.config import (
+from config.llm_auth.credentials import status as credential_status
+from config.llm_settings import (
     get_configured_llm_provider,
     get_llm_provider_api_key_env,
     resolve_llm_settings,
 )
-from config.llm_auth.credentials import status as credential_status
 from core.llm.factory import LLMRole, get_llm
 from core.llm.types import SchemaDescribedTool
 from tools.registry import get_registered_tool_map
