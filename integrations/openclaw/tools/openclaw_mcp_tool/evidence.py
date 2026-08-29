@@ -10,7 +10,7 @@ from typing import Any
 
 from core.domain.types.evidence import record_evidence_entry
 
-_MAX_TITLE_CHARS = 80
+_MAX_FIELD_CHARS = 80
 
 
 def _available(output: dict[str, Any]) -> bool:
@@ -27,11 +27,12 @@ def _nonempty_structured(value: object) -> bool:
     return isinstance(value, list) and bool(value)
 
 
-def _short_title(value: object) -> str:
+def _bounded_field(value: object) -> str:
+    """Collapse whitespace and cap OpenClaw metadata used in catalog summaries."""
     text = " ".join(str(value).split())
-    if len(text) <= _MAX_TITLE_CHARS:
+    if len(text) <= _MAX_FIELD_CHARS:
         return text
-    return text[: _MAX_TITLE_CHARS - 1].rstrip() + "…"
+    return text[: _MAX_FIELD_CHARS - 1].rstrip() + "…"
 
 
 def _conversation_label(structured: object, tool_input: dict[str, Any]) -> str:
@@ -42,12 +43,18 @@ def _conversation_label(structured: object, tool_input: dict[str, Any]) -> str:
             or structured.get("session_key")
         )
         title = structured.get("title") or structured.get("derivedTitle")
-        parts = [str(ident).strip()] if ident else []
+        parts: list[str] = []
+        if ident:
+            bounded_ident = _bounded_field(ident)
+            if bounded_ident:
+                parts.append(bounded_ident)
         if title:
-            parts.append(_short_title(title))
+            bounded_title = _bounded_field(title)
+            if bounded_title:
+                parts.append(bounded_title)
         if parts:
             return " — ".join(parts)
-    conversation_id = str(tool_input.get("conversation_id") or "").strip()
+    conversation_id = _bounded_field(tool_input.get("conversation_id") or "")
     if conversation_id:
         return conversation_id
     return "conversation loaded"
@@ -113,7 +120,7 @@ def map_search_openclaw_conversations(
     summary = f"{count} {word}"
     search = str(output.get("search") or tool_input.get("search") or "").strip()
     if search:
-        summary += f" matching '{_short_title(search)}'"
+        summary += f" matching '{_bounded_field(search)}'"
     record_evidence_entry(
         evidence,
         source="search_openclaw_conversations",
@@ -148,7 +155,7 @@ def map_call_openclaw_tool(
     hint = _call_size_hint(output)
     if hint is None:
         return
-    tool_name = str(output.get("tool") or tool_input.get("tool_name") or "").strip()
+    tool_name = _bounded_field(output.get("tool") or tool_input.get("tool_name") or "")
     summary = f"{tool_name} returned {hint}" if tool_name else hint
     record_evidence_entry(
         evidence,

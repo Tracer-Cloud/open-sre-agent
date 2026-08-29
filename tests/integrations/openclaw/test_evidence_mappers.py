@@ -120,6 +120,26 @@ class TestMapGetOpenclawConversation:
         assert entries[0]["summary"] == "conv-1 — Checkout debugging"
         assert "ok" not in (entries[0]["summary"] or "")
 
+    def test_bounds_long_conversation_identifier(self) -> None:
+        evidence: dict = {}
+        long_id = "c" * 120
+
+        map_get_openclaw_conversation(
+            evidence,
+            {
+                "available": True,
+                "structured_content": {"id": long_id, "title": "Checkout debugging"},
+            },
+            {},
+        )
+
+        summary = evidence["catalog_entries"][0]["summary"] or ""
+        ident, _, title = summary.partition(" — ")
+        assert ident.endswith("…")
+        assert len(ident) == 80
+        assert long_id not in summary
+        assert title == "Checkout debugging"
+
     def test_records_nothing_when_payload_is_empty(self) -> None:
         evidence: dict = {}
 
@@ -161,6 +181,29 @@ class TestMapCallOpenclawTool:
         assert entries[0]["source"] == "call_openclaw_tool"
         assert entries[0]["summary"] == "messages_read returned 2 structured items"
         assert "transcript" not in (entries[0]["summary"] or "")
+
+    def test_bounds_long_tool_name(self) -> None:
+        evidence: dict = {}
+        long_name = "openclaw_" + ("x" * 120)
+
+        map_call_openclaw_tool(
+            evidence,
+            {
+                "available": True,
+                "tool": long_name,
+                "text": "ok",
+                "structured_content": [{"id": "msg-1"}],
+                "content": [],
+            },
+            {},
+        )
+
+        summary = evidence["catalog_entries"][0]["summary"] or ""
+        name, _, rest = summary.partition(" returned ")
+        assert name.endswith("…")
+        assert len(name) == 80
+        assert long_name not in summary
+        assert rest == "1 structured item"
 
     def test_records_nothing_when_payload_is_empty(self) -> None:
         evidence: dict = {}
