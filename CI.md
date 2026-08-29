@@ -95,25 +95,6 @@ Map changed paths to targets using the `PathRule` entries in
 - Changed files under `tests/` with no app rule run as-is
 
 Use a focused `-k` filter when you only need a subset of a package.
- 
-### Tool test suites (static vs selection split)
- 
-Tool testing is divided into two distinct suites:
- 
-- **static suite** (deterministic, PR gate): `tests/tools/test_registry.py` and `tests/tools/test_*.py`. Run locally with:
-
-  ```bash
-  uv run python -m pytest tests/tools/ -m "not live_llm"
-  ```
-
-  Runs unconditionally in CI and pre-push without LLM credentials or network access.
-- **selection suite** (LLM-backed, opt-in/nightly): Lives under `tests/tools/selection/`. Run locally or on nightly schedules with:
-
-  ```bash
-  uv run python -m pytest tests/tools/ -m live_llm
-  ```
-
-  Evaluates live tool selection using `gpt-4o` / `claude-3-7-sonnet` (~$0.02–$0.05 per full run). Flaky selection cases are quarantined with a named owner and issue ticket (`@pytest.mark.skip(reason="Quarantined: #<ticket> owner: @<user>")`), never loosened.
 
 ## 3) Full suite runs in CI
 
