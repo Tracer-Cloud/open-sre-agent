@@ -122,6 +122,23 @@ class ApprovalBroker:
             return (False, "")
         return (pending.approved, pending.decided_by)
 
+    def discard(self, approval_id: str) -> None:
+        """Forget a request that was never put in front of anyone.
+
+        Only :meth:`wait` removes an entry, so a prompter that gives up before
+        waiting — the post to the chat failed, so no button exists to click —
+        would otherwise leave the request pending for the life of the process.
+        :meth:`close` would then deny it at shutdown and write an
+        ``approval.resolve`` audit record for a decision nobody was ever asked
+        to make. No audit record here: an unposted request was never presented,
+        so there is nothing to attribute.
+
+        Mirrors ``PendingApprovals.discard`` on the Buzz transport. Safe to call
+        after :meth:`wait`, which has already removed the entry.
+        """
+        with self._lock:
+            self._pending.pop(approval_id, None)
+
     def close(self) -> int:
         """Deny every outstanding approval and refuse new ones; returns how many were pending.
 

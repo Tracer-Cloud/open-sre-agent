@@ -68,6 +68,7 @@ class ThreadApprovalPrompter:
                 tool_name,
                 self._channel_id,
             )
+            self._broker.discard(approval_id)
             return (False, "")
         timeout = min(float(expiry_seconds), MAX_APPROVAL_WAIT_SECONDS)
         approved, decided_by = self._broker.wait(approval_id, timeout=timeout)

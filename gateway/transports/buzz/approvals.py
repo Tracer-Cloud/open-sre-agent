@@ -75,6 +75,7 @@ class BuzzApprovalPrompter:
                 self._channel_id,
                 result["error"],
             )
+            self._broker.discard(approval_id)
             return (False, "")
 
         event_id = result["event_id"]
