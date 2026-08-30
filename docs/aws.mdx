@@ -171,6 +171,93 @@ Detail: Connected to AWS STS via static-creds in us-east-1; caller identity acco
 
 Inside the REPL: `/integrations verify aws` or `/verify aws`. Aliases such as `eks` also map to this check.
 
+## Local verification recipe
+
+A short end-to-end recipe to bring AWS up locally, confirm the verifier passes, exercise `execute_aws_operation` against real data, and tear everything down. This uses temporary credentials from an existing AWS account or SSO session — no long-lived infrastructure to provision.
+
+### Bring it up (credentials)
+
+If you authenticate with AWS SSO (`aws sso login`), the credentials are not exposed as environment variables by default. Export them into the variables OpenSRE's env resolver reads:
+
+```powershell
+# PowerShell (Windows)
+$creds = aws configure export-credentials --format process | ConvertFrom-Json
+$env:AWS_ACCESS_KEY_ID = $creds.AccessKeyId
+$env:AWS_SECRET_ACCESS_KEY = $creds.SecretAccessKey
+$env:AWS_SESSION_TOKEN = $creds.SessionToken
+$env:AWS_REGION = "us-east-1"
+```
+
+```bash
+# bash / zsh (macOS / Linux)
+eval "$(aws configure export-credentials --format env)"
+export AWS_REGION=us-east-1
+```
+
+Static access keys or a role ARN work too — see [Setup](#setup) above.
+
+### Verify
+
+```bash
+uv run opensre integrations verify aws
+```
+
+Expected:
+
+```
+SERVICE │ SOURCE    │ STATUS   │ DETAIL
+━━━━━━━━┿━━━━━━━━━━━┿━━━━━━━━━━┿━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+aws     │ local env │ ✓ passed │ Connected to AWS STS via static-creds
+        │           │          │ in us-east-1; caller identity confirmed.
+```
+
+### Exercise `execute_aws_operation`
+
+`execute_aws_operation` is read-only: the operation allowlist admits only `describe_*`, `get_*`, `list_*`, and `head_*` calls, and a blocklist rejects mutating operations (e.g. `terminate_instances` returns `"error": "Operation not allowed"`). Run a few real calls:
+
+```bash
+uv run python -c "from integrations.aws.aws_sdk_client import execute_aws_sdk_call; import json; print(json.dumps(execute_aws_sdk_call('sts', 'get_caller_identity'), indent=2, default=str))"
+```
+
+Real output from a run against a live account (redacted):
+
+```json
+{
+  "success": true,
+  "service": "sts",
+  "operation": "get_caller_identity",
+  "data": {
+    "UserId": "<REDACTED>",
+    "Account": "<REDACTED>",
+    "Arn": "arn:aws:sts::<REDACTED>:assumed-role/<REDACTED_ROLE>/<REDACTED_USER>"
+  },
+  "metadata": {"region": "us-east-1", "parameters_provided": false}
+}
+```
+
+Other calls confirmed against the same account (output trimmed and redacted):
+
+- `execute_aws_operation(service="ec2", operation="describe_instances")` — returned a running `t2.micro` in `us-east-1a` with full metadata.
+- `execute_aws_operation(service="s3", operation="list_buckets")` — returned the account's real buckets.
+- `execute_aws_operation(service="iam", operation="list_roles", parameters={"MaxItems": 5})` — returned real IAM roles; confirms parameters pass through to the API.
+- `execute_aws_operation(service="ecs", operation="list_clusters")` — returned `{"clusterArns": []}`, a valid empty result (`"found": true`), not a stub or error.
+
+### Teardown
+
+There is no infrastructure to remove — just clear the exported credentials from your shell:
+
+```powershell
+# PowerShell
+Remove-Item Env:AWS_ACCESS_KEY_ID, Env:AWS_SECRET_ACCESS_KEY, Env:AWS_SESSION_TOKEN, Env:AWS_REGION
+```
+
+```bash
+# bash / zsh
+unset AWS_ACCESS_KEY_ID AWS_SECRET_ACCESS_KEY AWS_SESSION_TOKEN AWS_REGION
+```
+
+If you configured AWS through `opensre integrations setup aws`, remove the stored entry with `opensre integrations remove aws`.
+
 ## Troubleshooting
 
 | Symptom | Fix |
