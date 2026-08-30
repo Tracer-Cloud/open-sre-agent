@@ -61,6 +61,15 @@ class ToolTrackingMixin:
         key = event_key or tool_name
         self._tool_start_times[key] = time.monotonic()
         self._tool_inputs[key] = tool_input
+        from surfaces.shared.terminal.output.console_state import get_investigation_plan_session
+
+        plan_session = get_investigation_plan_session()
+        if plan_session is not None:
+            from core.agent_harness.task_plan.work_log import record_task_plan_work
+
+            source, label = resolve_tool_activity_labels(tool_name)
+            work_line = f"{source} · {label}" if label else source
+            record_task_plan_work(plan_session, work_line)
         if self._silent:
             return
         _record_tool_summary(tool_name, self._tool_summary_counts, self._tool_summary_order)

@@ -134,3 +134,19 @@ def test_apply_update_plan_session_is_set_only_for_the_latch() -> None:
     apply_update_plan_session(session, plan, plan_only=False)
     assert session.task_plan is plan
     assert session.plan_only_until_authorized is True
+
+
+def test_apply_update_plan_session_refreshes_the_live_prompt() -> None:
+    """Pinned overlay must repaint as soon as the plan is stored, not later."""
+    from core.agent_harness.task_plan.update_plan_policy import apply_update_plan_session
+
+    session = Session()
+    refreshes = {"count": 0}
+    session.terminal.prompt_refresh_fn = lambda: refreshes.__setitem__(
+        "count", refreshes["count"] + 1
+    )
+    plan, _error = parse_task_plan({"plan": _PLAN})
+    assert plan is not None
+    apply_update_plan_session(session, plan, plan_only=True)
+    assert session.task_plan is plan
+    assert refreshes["count"] == 1

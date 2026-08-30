@@ -69,6 +69,14 @@ _SIMPLE_TOOL_LABELS: dict[str, tuple[str, str]] = {
     ActionToolName.SHELL_RUN: ("Execute", "command"),
 }
 
+#: Tools that must not appear in the post-execution plan work log (plan/UI plumbing).
+_SKIP_PLAN_WORK_TOOLS: frozenset[str] = frozenset(
+    {
+        ActionToolName.UPDATE_PLAN,
+        ActionToolName.ASK_USER_CHOICE,
+    }
+)
+
 #: Tools that render their own dedicated UI (the investigation lap/spinner
 #: progress). The generic live tool-call preview is suppressed for these so it
 #: does not duplicate that UI as a wall of text.
@@ -351,9 +359,20 @@ class ActionRenderObserver:
             pass  # owns its UI; a generic preview would duplicate it
         else:
             self._render_tool_invocation(name, data)
+        if name not in _SKIP_PLAN_WORK_TOOLS and not _is_internal_choice_command(name, data):
+            self._record_plan_work(name, data)
         if self.planned_count == 0 and name not in SELF_RECORDING_ACTION_TOOL_NAMES:
             self.session.record("cli_agent", self.message)
         self.planned_count += 1
+
+    def _record_plan_work(self, name: str, data: dict[str, Any]) -> None:
+        """Attribute this tool call to the current in_progress plan step."""
+        from core.agent_harness.task_plan.work_log import record_task_plan_work
+
+        args = data.get("input")
+        label, content = tool_call_display(name, args if isinstance(args, dict) else {})
+        line = f"{label} {content}".strip() if content else label
+        record_task_plan_work(self.session, line)
 
     def _set_spinner_phase(self, label: str) -> None:
         # Only relabel an already-running spinner; never activate one. Literal

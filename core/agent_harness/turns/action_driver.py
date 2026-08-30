@@ -1059,6 +1059,17 @@ def _end_silent_tool_turn(output: OutputSink) -> None:
     output.print()
 
 
+def _show_completed_plan_breakdown(output: OutputSink, session: SessionState) -> None:
+    """Print the one-shot per-step work breakdown when the plan is complete."""
+    from core.agent_harness.task_plan.work_log import take_completed_plan_breakdown
+
+    breakdown = take_completed_plan_breakdown(session)
+    if not breakdown:
+        return
+    output.print()
+    output.print(breakdown)
+
+
 def _count_turn(result: Any, session: SessionState, history_start: int) -> _TurnCounts:
     """Count what ran, from the history rows this turn added plus the results."""
     executed_entries = [
@@ -1199,6 +1210,7 @@ def _run_action_turn(
             final_text="\n".join(display_chunks) if use_final_text else "",
             display_chunks=display_chunks,
         )
+        _show_completed_plan_breakdown(args.output, session)
 
     log.debug(
         "action_turn done planned=%s executed=%s handled=%s cancelled=%s investigation=%s",

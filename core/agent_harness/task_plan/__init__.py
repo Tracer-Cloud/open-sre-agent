@@ -6,6 +6,8 @@ Leaves:
 * :mod:`persist` — flush / restore
 * :mod:`progress` — plain-text ``Plan · n/m`` checklist
 * :mod:`prompt` — planning instructions + CURRENT PLAN block
+* :mod:`investigation_progress` — host advances plan during investigation stages
+* :mod:`work_log` — host records per-step work for the post-execution breakdown
 """
 
 from __future__ import annotations

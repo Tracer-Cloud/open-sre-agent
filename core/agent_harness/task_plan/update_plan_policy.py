@@ -50,10 +50,21 @@ def apply_update_plan_session(
     The latch is set-only here: marking a step in_progress must NOT clear it, or
     the model could authorize its own execution. Only the user confirming a
     mutating step at the execution gate lifts the latch.
+
+    After writing ``session.task_plan``, refresh the interactive prompt when one
+    is wired so the pinned overlay repaints immediately (not only on the next
+    spinner tick). Headless sessions without a terminal facet are a no-op.
     """
+    from core.agent_harness.task_plan.work_log import sync_task_plan_work_for_plan
+
+    sync_task_plan_work_for_plan(session, plan)
     session.task_plan = plan
     if plan_only:
         session.plan_only_until_authorized = True
+    terminal = getattr(session, "terminal", None)
+    notify = getattr(terminal, "notify_prompt_changed", None) if terminal is not None else None
+    if callable(notify):
+        notify()
 
 
 __all__ = [

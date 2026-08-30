@@ -11,6 +11,7 @@ _active_display: Any | None = None
 _completed_footer_snapshot: tuple[str, float, str, str] | None = None
 _tracker_toggle_stop_fn: Callable[[], None] | None = None
 _investigation_spinner: Any | None = None
+_investigation_plan_session: Any | None = None
 
 
 def set_tracker_toggle_stop_fn(fn: Callable[[], None] | None) -> None:
@@ -33,6 +34,60 @@ def set_investigation_spinner(spinner: Any | None) -> None:
 
 def get_investigation_spinner() -> Any | None:
     return _investigation_spinner
+
+
+def set_investigation_plan_session(session: Any | None) -> None:
+    """Register the session whose ``task_plan`` tracks investigation stages.
+
+    ProgressTracker / diagnose call :func:`advance_investigation_plan` while this
+    pin is set. Cleared when the foreground run ends.
+    """
+    global _investigation_plan_session
+    _investigation_plan_session = session
+
+
+def get_investigation_plan_session() -> Any | None:
+    """Return the session pinned for investigation plan advance, or ``None``."""
+    return _investigation_plan_session
+
+
+def advance_investigation_plan(node_name: str) -> None:
+    """Advance the pinned session plan for a progress node. No-op if unset."""
+    session = _investigation_plan_session
+    if session is None:
+        return
+    plan = getattr(session, "task_plan", None)
+    if plan is None:
+        return
+    from core.agent_harness.task_plan.investigation_progress import (
+        advance_task_plan_for_investigation_node,
+    )
+    from core.agent_harness.task_plan.update_plan_policy import apply_update_plan_session
+    from core.agent_harness.task_plan.work_log import record_task_plan_work
+    from surfaces.shared.terminal.output.labels import _node_label
+
+    updated = advance_task_plan_for_investigation_node(plan, node_name)
+    if updated is not plan:
+        apply_update_plan_session(session, updated, plan_only=False)
+    # Attribute this stage to the step that is now in progress.
+    record_task_plan_work(session, _node_label(node_name))
+
+
+def complete_investigation_plan() -> None:
+    """Mark the pinned session plan fully completed. No-op if unset."""
+    session = _investigation_plan_session
+    if session is None:
+        return
+    plan = getattr(session, "task_plan", None)
+    if plan is None:
+        return
+    from core.agent_harness.task_plan.investigation_progress import complete_task_plan
+    from core.agent_harness.task_plan.update_plan_policy import apply_update_plan_session
+
+    updated = complete_task_plan(plan)
+    if updated is plan:
+        return
+    apply_update_plan_session(session, updated, plan_only=False)
 
 
 def _capture_footer_snapshot(display: Any) -> None:
