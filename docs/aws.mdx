@@ -213,20 +213,22 @@ aws     │ local env │ ✓ passed │ Connected to AWS STS via static-creds
 
 ### Exercise `execute_aws_operation`
 
-`execute_aws_operation` is read-only: the operation allowlist admits only `describe_*`, `get_*`, `list_*`, and `head_*` calls, and a blocklist rejects mutating operations (e.g. `terminate_instances` returns `"error": "Operation not allowed"`). Run a few real calls:
+`execute_aws_operation` is the registered AWS tool. It is read-only: only `describe_*`, `get_*`, `list_*`, and `head_*` operations are allowed, and mutating operations (e.g. `terminate_instances`) are rejected with an `"Operation not allowed"` error.
+
+Call it against your account (any region works — set `AWS_REGION`, or pass a region-scoped service; `us-east-1` is used here as the example):
 
 ```bash
-uv run python -c "from integrations.aws.aws_sdk_client import execute_aws_sdk_call; import json; print(json.dumps(execute_aws_sdk_call('sts', 'get_caller_identity'), indent=2, default=str))"
+uv run opensre ask "Use execute_aws_operation to run sts get_caller_identity and show the result."
 ```
 
-Real output from a run against a live account (redacted):
+A successful call returns a payload of this shape (redacted):
 
 ```json
 {
-  "success": true,
+  "found": true,
   "service": "sts",
   "operation": "get_caller_identity",
-  "data": {
+  "result": {
     "UserId": "<REDACTED>",
     "Account": "<REDACTED>",
     "Arn": "arn:aws:sts::<REDACTED>:assumed-role/<REDACTED_ROLE>/<REDACTED_USER>"
@@ -235,16 +237,20 @@ Real output from a run against a live account (redacted):
 }
 ```
 
-Other calls confirmed against the same account (output trimmed and redacted):
+Other read-only operations confirmed against a live account (output trimmed and redacted):
 
-- `execute_aws_operation(service="ec2", operation="describe_instances")` — returned a running `t2.micro` in `us-east-1a` with full metadata.
-- `execute_aws_operation(service="s3", operation="list_buckets")` — returned the account's real buckets.
-- `execute_aws_operation(service="iam", operation="list_roles", parameters={"MaxItems": 5})` — returned real IAM roles; confirms parameters pass through to the API.
-- `execute_aws_operation(service="ecs", operation="list_clusters")` — returned `{"clusterArns": []}`, a valid empty result (`"found": true`), not a stub or error.
+- `ec2` / `describe_instances` — returned a running `t2.micro` in `us-east-1a` with full metadata.
+- `s3` / `list_buckets` — returned the account's real buckets.
+- `iam` / `list_roles` with `parameters={"MaxItems": 5}` — returned real IAM roles; confirms parameters pass through to the API.
+- `ecs` / `list_clusters` — returned `{"clusterArns": []}`, a valid empty result (`"found": true`), not a stub or error.
+
+Because AWS spans many regions, target another region either by exporting a different `AWS_REGION` or by passing a region-scoped `service`/`parameters` combination; global services (e.g. `iam`) report `"region": "aws-global"` in the metadata.
 
 ### Teardown
 
-There is no infrastructure to remove — just clear the exported credentials from your shell:
+There is no cloud infrastructure to remove. What you clean up depends on how you configured AWS.
+
+**If you only exported credentials for this session** (the SSO / env-var path above), clear them from your shell:
 
 ```powershell
 # PowerShell
@@ -256,7 +262,21 @@ Remove-Item Env:AWS_ACCESS_KEY_ID, Env:AWS_SECRET_ACCESS_KEY, Env:AWS_SESSION_TO
 unset AWS_ACCESS_KEY_ID AWS_SECRET_ACCESS_KEY AWS_SESSION_TOKEN AWS_REGION
 ```
 
-If you configured AWS through `opensre integrations setup aws`, remove the stored entry with `opensre integrations remove aws`.
+**If you ran `opensre integrations setup aws`**, that writes to three tiers — the integration store, the project `.env`, and the system keyring for secrets. Clearing all of them takes two steps:
+
+1. Remove the store entry:
+
+   ```bash
+   opensre integrations remove aws
+   ```
+
+2. `opensre integrations remove` clears only the store entry. To also clear the `.env` and keyring values that setup wrote, re-run setup and submit empty values (setup writes blank values through every tier, which clears them):
+
+   ```bash
+   opensre integrations setup aws
+   ```
+
+   Alternatively, delete the `AWS_*` lines from your project `.env` by hand and remove the matching secret entries from your OS keyring.
 
 ## Troubleshooting
 
