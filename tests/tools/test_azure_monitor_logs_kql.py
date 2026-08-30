@@ -47,3 +47,19 @@ def test_finds_multiple_real_clauses() -> None:
 def test_single_quoted_string_is_also_masked() -> None:
     query = "AppTraces | where Level == '| take 5'"
     assert has_take_or_limit_clause(query) is False
+
+
+def test_escaped_quote_does_not_end_the_string_early() -> None:
+    """Regression: an escaped quote (``\\"``) inside a string must not be
+    treated as the string's closing quote -- doing so exposes the rest of
+    the literal (which may contain '| take N') as if it were real code."""
+    query = 'AppTraces | where Message contains "escaped \\" quote | take 5 in it"'
+    assert has_take_or_limit_clause(query) is False
+    assert find_take_or_limit_values(query) == []
+
+
+def test_escaped_backslash_before_closing_quote_still_closes_string() -> None:
+    """A literal backslash (``\\\\``) escapes itself, not the following
+    quote -- the string must still close normally afterward."""
+    query = 'AppTraces | where Message contains "trailing backslash \\\\" | take 5'
+    assert find_take_or_limit_values(query) == [5]

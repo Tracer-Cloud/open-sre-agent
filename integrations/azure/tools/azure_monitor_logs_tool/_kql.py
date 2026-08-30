@@ -1,8 +1,9 @@
 """Lightweight KQL text helpers for take/limit pipe-stage detection.
 
-Not a full KQL parser -- masks quoted string literals and ``//`` line
-comments so take/limit pipe-stage detection isn't fooled by text that
-merely *contains* those keywords inside a string or comment (e.g. a
+Not a full KQL parser -- masks quoted string literals (including
+backslash-escaped quotes) and ``//`` line comments so take/limit
+pipe-stage detection isn't fooled by text that merely *contains* those
+keywords inside a string or comment (e.g. a
 ``where Message contains "| take 5"`` filter).
 """
 
@@ -30,6 +31,17 @@ def mask_string_and_comment_text(query: str) -> str:
     while i < n:
         ch = query[i]
         if quote_char is not None:
+            if ch == "\\" and i + 1 < n:
+                # A backslash-escaped character (``\"``, ``\\``, ...) can't
+                # close the string or be interpreted as real syntax -- mask
+                # both the backslash and the character it escapes together,
+                # so an escaped quote never ends the string early and
+                # exposes the rest of the literal as executable text.
+                next_ch = query[i + 1]
+                result.append(ch if ch == "\n" else " ")
+                result.append(next_ch if next_ch == "\n" else " ")
+                i += 2
+                continue
             if ch == quote_char:
                 quote_char = None
                 result.append(ch)
