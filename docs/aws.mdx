@@ -262,7 +262,7 @@ Remove-Item Env:AWS_ACCESS_KEY_ID, Env:AWS_SECRET_ACCESS_KEY, Env:AWS_SESSION_TO
 unset AWS_ACCESS_KEY_ID AWS_SECRET_ACCESS_KEY AWS_SESSION_TOKEN AWS_REGION
 ```
 
-**If you ran `opensre integrations setup aws`**, that writes to three tiers — the integration store, the project `.env`, and the system keyring for secrets. `opensre integrations remove aws` clears only the store entry, so clear the other two tiers by hand:
+**If you ran `opensre integrations setup aws`**, that writes to three tiers — the integration store, the project `.env` (non-secret fields), and an owner-only local secret file at `~/.opensre/credentials.json` (secret fields such as `AWS_SECRET_ACCESS_KEY` / `AWS_SESSION_TOKEN`). `opensre integrations remove aws` clears only the store entry, so clear the other two tiers too or the credentials stay resolvable:
 
 1. Remove the store entry:
 
@@ -270,9 +270,15 @@ unset AWS_ACCESS_KEY_ID AWS_SECRET_ACCESS_KEY AWS_SESSION_TOKEN AWS_REGION
    opensre integrations remove aws
    ```
 
-2. Delete the `AWS_*` lines (`AWS_ROLE_ARN`, `AWS_EXTERNAL_ID`, `AWS_REGION`, `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, `AWS_SESSION_TOKEN`) from your project `.env`.
+2. Delete the non-secret `AWS_*` lines (`AWS_ROLE_ARN`, `AWS_EXTERNAL_ID`, `AWS_REGION`, `AWS_ACCESS_KEY_ID`) from your project `.env`.
 
-3. Remove the secret entries setup stored in your OS keyring (the `*_KEY` / `*_SECRET_ACCESS_KEY` / `*_SESSION_TOKEN` values). Use your platform's keyring manager, or your OS credential store, to delete the OpenSRE entries.
+3. Delete the secret entries from the local secret store. OpenSRE stores secrets in `~/.opensre/credentials.json`, not the OS keychain. Remove the AWS keys from it:
+
+   ```bash
+   uv run python -c "from config.secrets.store import delete_secret; [delete_secret(k) for k in ('AWS_SECRET_ACCESS_KEY', 'AWS_SESSION_TOKEN')]"
+   ```
+
+   `delete_secret` removes each key from every local tier. Deleting `~/.opensre/credentials.json` outright also works if it holds no other integration's secrets.
 
 ## Troubleshooting
 
