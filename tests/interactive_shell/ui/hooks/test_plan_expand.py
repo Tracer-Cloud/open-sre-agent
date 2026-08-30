@@ -1,4 +1,4 @@
-"""Ctrl+P toggles the plan overlay only while a plan is on screen."""
+"""Alt/Option+P and Ctrl+P toggle the plan overlay only while a plan is on screen."""
 
 from __future__ import annotations
 
@@ -13,25 +13,37 @@ class _FakeState:
         self.plan_expanded = not self.plan_expanded
 
 
+def _binding_keys(kb) -> set[tuple[str, ...]]:
+    return {tuple(str(key) for key in binding.keys) for binding in kb.bindings}
+
+
+def test_expand_bindings_include_alt_and_ctrl_p() -> None:
+    state = _FakeState()
+    kb = install_plan_expand_key_bindings(state, lambda: True, lambda: None)
+    keys = _binding_keys(kb)
+    assert ("Keys.Escape", "p") in keys
+    assert ("Keys.ControlP",) in keys
+
+
 def test_ctrl_p_toggles_expansion_and_redraws() -> None:
-    # Arrange
     state = _FakeState()
     redraws: list[bool] = []
     kb = install_plan_expand_key_bindings(state, lambda: True, lambda: redraws.append(True))
-    handler = kb.bindings[0].handler
+    handler = next(
+        binding.handler
+        for binding in kb.bindings
+        if tuple(str(k) for k in binding.keys) == ("Keys.ControlP",)
+    )
 
-    # Act: two presses flip and flip back.
     handler(None)
     handler(None)
 
-    # Assert
     assert state.plan_expanded is False
     assert redraws == [True, True]
 
 
 def test_binding_is_gated_on_a_plan_being_present() -> None:
-    # The filter is False with no plan, so Ctrl+P keeps its default behavior.
     state = _FakeState()
     kb = install_plan_expand_key_bindings(state, lambda: False, lambda: None)
 
-    assert kb.bindings[0].filter() is False
+    assert all(binding.filter() is False for binding in kb.bindings)

@@ -61,15 +61,26 @@ class ToolTrackingMixin:
         key = event_key or tool_name
         self._tool_start_times[key] = time.monotonic()
         self._tool_inputs[key] = tool_input
-        from surfaces.shared.terminal.output.console_state import get_investigation_plan_session
+        from surfaces.shared.terminal.output.console_state import (
+            get_investigation_active_phase,
+            get_investigation_plan_session,
+        )
 
         plan_session = get_investigation_plan_session()
         if plan_session is not None:
-            from core.agent_harness.task_plan.work_log import record_task_plan_work
+            from core.agent_harness.spi.task_plan import (
+                pipeline_phase_to_step_index,
+                record_task_plan_work,
+            )
 
             source, label = resolve_tool_activity_labels(tool_name)
             work_line = f"{source} · {label}" if label else source
-            record_task_plan_work(plan_session, work_line)
+            phase = get_investigation_active_phase()
+            step_index = None
+            plan = getattr(plan_session, "task_plan", None)
+            if phase is not None and plan is not None and plan.steps:
+                step_index = pipeline_phase_to_step_index(phase, len(plan.steps))
+            record_task_plan_work(plan_session, work_line, step_index=step_index)
         if self._silent:
             return
         _record_tool_summary(tool_name, self._tool_summary_counts, self._tool_summary_order)

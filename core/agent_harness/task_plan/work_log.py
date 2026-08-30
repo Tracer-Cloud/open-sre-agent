@@ -53,19 +53,22 @@ def in_progress_step_index(plan: TaskPlan) -> int | None:
     return None
 
 
-def record_task_plan_work(session: Any, line: str) -> None:
-    """Append a work line under the current ``in_progress`` plan step.
+def record_task_plan_work(session: Any, line: str, *, step_index: int | None = None) -> None:
+    """Append a work line under a plan step.
 
-    No-op when there is no plan, no in-progress step, or the line is empty.
+    Defaults to the current ``in_progress`` step. Pass ``step_index`` to attribute
+    work to a specific checklist row (investigation pipeline phase mapping).
+    No-op when there is no plan, no target step, or the line is empty.
     Caps lines per step so a chatty turn stays readable.
     """
     plan = getattr(session, "task_plan", None)
     if plan is None or not plan.steps:
         return
     sync_task_plan_work_for_plan(session, plan)
-    index = in_progress_step_index(plan)
+    index = step_index if step_index is not None else in_progress_step_index(plan)
     if index is None:
         return
+    index = max(0, min(int(index), len(plan.steps) - 1))
     cleaned = strip_terminal_controls(line).strip()
     if not cleaned:
         return

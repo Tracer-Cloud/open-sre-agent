@@ -367,7 +367,7 @@ class ActionRenderObserver:
 
     def _record_plan_work(self, name: str, data: dict[str, Any]) -> None:
         """Attribute this tool call to the current in_progress plan step."""
-        from core.agent_harness.task_plan.work_log import record_task_plan_work
+        from core.agent_harness.spi.task_plan import record_task_plan_work
 
         args = data.get("input")
         label, content = tool_call_display(name, args if isinstance(args, dict) else {})

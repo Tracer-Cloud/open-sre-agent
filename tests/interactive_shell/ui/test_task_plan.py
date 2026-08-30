@@ -148,7 +148,7 @@ def test_long_plan_collapses_to_a_window_around_the_current_step() -> None:
     assert lines[2] == "  ✓ Read the config"
     assert lines[3] == "  ● Patch the bug"
     assert lines[4] == "  ○ Run the tests"
-    assert lines[5] == "  … 1 more · Ctrl+P for full plan"
+    assert lines[5] == "  … 1 more · Alt/Option+P to view all"
     # The collapsed view hides the far ends.
     assert "Inspect the repo" not in overlay
     assert "Confirm green" not in overlay
@@ -162,6 +162,7 @@ def test_expanded_long_plan_shows_every_step() -> None:
     assert lines[1] == "  ✓ Inspect the repo"
     assert lines[5] == "  ○ Confirm green"
     assert "earlier" not in overlay
+    assert "Alt/Option+P" not in overlay
     assert "Ctrl+P" not in overlay
 
 
@@ -182,7 +183,7 @@ def _other_long_plan():
 
 
 def test_replacing_a_plan_resets_expanded_state() -> None:
-    # Ctrl+P on plan A must not stick when plan B is assigned without a
+    # Alt/Option+P on plan A must not stick when plan B is assigned without a
     # None/empty gap — the replacement should open in its collapsed window.
     session = Session()
     session.task_plan = _long_plan()
@@ -195,7 +196,7 @@ def test_replacing_a_plan_resets_expanded_state() -> None:
     session.task_plan = _other_long_plan()
     second = _strip_ansi(render_prompt_region(session, state, SpinnerState()).value)
     assert state.plan_expanded is False
-    assert "Ctrl+P for full plan" in second
+    assert "Alt/Option+P to view all" in second
     assert "Map the services" not in second
     assert "Verify p99" not in second
 

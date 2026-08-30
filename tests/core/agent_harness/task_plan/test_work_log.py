@@ -46,6 +46,17 @@ def test_record_task_plan_work_attributes_to_in_progress_step() -> None:
     assert session.task_plan_work[1] == []
 
 
+def test_record_task_plan_work_honors_explicit_step_index() -> None:
+    session = _session_with_plan("in_progress", "pending", "pending", "pending")
+    record_task_plan_work(session, "Loading integrations", step_index=0)
+    record_task_plan_work(session, "PostHog · exceptions", step_index=1)
+    record_task_plan_work(session, "Diagnosing", step_index=2)
+    assert session.task_plan_work[0] == ["Loading integrations"]
+    assert session.task_plan_work[1] == ["PostHog · exceptions"]
+    assert session.task_plan_work[2] == ["Diagnosing"]
+    assert session.task_plan_work[3] == []
+
+
 def test_record_skips_when_no_in_progress_step() -> None:
     session = _session_with_plan("pending", "pending", "pending", "pending")
     record_task_plan_work(session, "should not land")

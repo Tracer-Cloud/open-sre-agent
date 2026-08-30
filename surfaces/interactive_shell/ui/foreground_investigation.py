@@ -104,7 +104,7 @@ def run_foreground_investigation(
             )
             if outcome.status is ForegroundInvestigationStatus.COMPLETED:
                 complete_investigation_plan()
-                from core.agent_harness.task_plan.work_log import take_completed_plan_breakdown
+                from core.agent_harness.spi.task_plan import take_completed_plan_breakdown
 
                 breakdown = take_completed_plan_breakdown(session)
                 if breakdown:

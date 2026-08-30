@@ -7,8 +7,9 @@ from core.agent_harness.task_plan.investigation_progress import (
     advance_task_plan_to_phase,
     complete_task_plan,
     investigation_phase_index,
+    pipeline_phase_to_step_index,
 )
-from core.agent_harness.task_plan.plan import PlanStepStatus, parse_task_plan
+from core.agent_harness.task_plan.plan import PlanStep, PlanStepStatus, TaskPlan, parse_task_plan
 
 
 def _plan(*statuses: str):
@@ -36,6 +37,13 @@ def test_investigation_phase_index_maps_pipeline_nodes() -> None:
     assert investigation_phase_index("unknown_node") is None
 
 
+def test_pipeline_phase_spreads_across_five_step_plans() -> None:
+    assert pipeline_phase_to_step_index(0, 5) == 0
+    assert pipeline_phase_to_step_index(1, 5) == 1
+    assert pipeline_phase_to_step_index(2, 5) == 2
+    assert pipeline_phase_to_step_index(3, 5) == 4
+
+
 def test_advance_marks_prior_steps_completed() -> None:
     plan = _plan("in_progress", "pending", "pending", "pending")
     updated = advance_task_plan_to_phase(plan, 1)
@@ -45,7 +53,7 @@ def test_advance_marks_prior_steps_completed() -> None:
     assert updated.current_index == 2
 
 
-def test_advance_caps_at_last_step_for_short_plans() -> None:
+def test_advance_caps_publish_on_last_step_for_short_plans() -> None:
     plan, error = parse_task_plan(
         {
             "plan": [
@@ -63,9 +71,44 @@ def test_advance_caps_at_last_step_for_short_plans() -> None:
     assert updated.current_index == 3
 
 
+def test_advance_five_step_diagnose_lands_before_verify() -> None:
+    five = TaskPlan(
+        steps=(
+            PlanStep(step="Scope", status=PlanStepStatus.IN_PROGRESS),
+            PlanStep(step="Correlate", status=PlanStepStatus.PENDING),
+            PlanStep(step="Rank", status=PlanStepStatus.PENDING),
+            PlanStep(step="Propose", status=PlanStepStatus.PENDING),
+            PlanStep(step="Verify", status=PlanStepStatus.PENDING),
+        )
+    )
+    updated = advance_task_plan_to_phase(five, 2)
+    assert updated.current_index == 3
+    assert updated.steps[2].status is PlanStepStatus.IN_PROGRESS
+    assert updated.steps[4].status is PlanStepStatus.PENDING
+
+
 def test_advance_does_not_regress() -> None:
     plan = _plan("completed", "in_progress", "pending", "pending")
     assert advance_task_plan_to_phase(plan, 0) is plan
+
+
+def test_advance_does_not_reopen_completed_step_at_mapped_phase() -> None:
+    plan = _plan("in_progress", "completed", "pending", "pending")
+    updated = advance_task_plan_to_phase(plan, 1)
+    assert updated.steps[0].status is PlanStepStatus.COMPLETED
+    assert updated.steps[1].status is PlanStepStatus.COMPLETED
+    assert updated.steps[2].status is PlanStepStatus.PENDING
+    assert updated.current_index == 3
+
+
+def test_advance_does_not_reset_completed_step_after_mapped_phase() -> None:
+    plan = _plan("in_progress", "pending", "completed", "pending")
+    updated = advance_task_plan_to_phase(plan, 1)
+    assert updated.steps[0].status is PlanStepStatus.COMPLETED
+    assert updated.steps[1].status is PlanStepStatus.IN_PROGRESS
+    assert updated.steps[2].status is PlanStepStatus.COMPLETED
+    assert updated.steps[3].status is PlanStepStatus.PENDING
+    assert updated.current_index == 2
 
 
 def test_advance_is_idempotent_at_same_phase() -> None:
