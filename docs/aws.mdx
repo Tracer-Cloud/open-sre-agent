@@ -215,10 +215,10 @@ aws     │ local env │ ✓ passed │ Connected to AWS STS via static-creds
 
 `execute_aws_operation` is the registered AWS tool. It is read-only: only `describe_*`, `get_*`, `list_*`, and `head_*` operations are allowed, and mutating operations (e.g. `terminate_instances`) are rejected with an `"Operation not allowed"` error.
 
-Call it against your account (any region works — set `AWS_REGION`, or pass a region-scoped service; `us-east-1` is used here as the example):
+It is not auto-planned during an investigation (the agent needs an explicit service and operation), so call it by looking it up in the tool registry and running it directly. Any region works — set `AWS_REGION`, or pass a region-scoped service; `us-east-1` is used here as the example:
 
 ```bash
-uv run opensre ask "Use execute_aws_operation to run sts get_caller_identity and show the result."
+uv run python -c "from tools.registry import get_registered_tool; import json; tool = get_registered_tool('execute_aws_operation'); print(json.dumps(tool.run(service='sts', operation='get_caller_identity'), indent=2, default=str))"
 ```
 
 A successful call returns a payload of this shape (redacted):
@@ -262,7 +262,7 @@ Remove-Item Env:AWS_ACCESS_KEY_ID, Env:AWS_SECRET_ACCESS_KEY, Env:AWS_SESSION_TO
 unset AWS_ACCESS_KEY_ID AWS_SECRET_ACCESS_KEY AWS_SESSION_TOKEN AWS_REGION
 ```
 
-**If you ran `opensre integrations setup aws`**, that writes to three tiers — the integration store, the project `.env`, and the system keyring for secrets. Clearing all of them takes two steps:
+**If you ran `opensre integrations setup aws`**, that writes to three tiers — the integration store, the project `.env`, and the system keyring for secrets. `opensre integrations remove aws` clears only the store entry, so clear the other two tiers by hand:
 
 1. Remove the store entry:
 
@@ -270,13 +270,9 @@ unset AWS_ACCESS_KEY_ID AWS_SECRET_ACCESS_KEY AWS_SESSION_TOKEN AWS_REGION
    opensre integrations remove aws
    ```
 
-2. `opensre integrations remove` clears only the store entry. To also clear the `.env` and keyring values that setup wrote, re-run setup and submit empty values (setup writes blank values through every tier, which clears them):
+2. Delete the `AWS_*` lines (`AWS_ROLE_ARN`, `AWS_EXTERNAL_ID`, `AWS_REGION`, `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, `AWS_SESSION_TOKEN`) from your project `.env`.
 
-   ```bash
-   opensre integrations setup aws
-   ```
-
-   Alternatively, delete the `AWS_*` lines from your project `.env` by hand and remove the matching secret entries from your OS keyring.
+3. Remove the secret entries setup stored in your OS keyring (the `*_KEY` / `*_SECRET_ACCESS_KEY` / `*_SESSION_TOKEN` values). Use your platform's keyring manager, or your OS credential store, to delete the OpenSRE entries.
 
 ## Troubleshooting
 
