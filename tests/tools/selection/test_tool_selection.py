@@ -8,6 +8,8 @@ import pytest
 from pydantic import ValidationError
 
 from config.llm_auth.credentials import status as credential_status
+from config.llm_auth.provider_catalog import provider_spec
+from config.llm_credentials import resolve_env_credential
 from config.llm_settings import (
     get_configured_llm_provider,
     get_llm_provider_api_key_env,
@@ -16,6 +18,7 @@ from config.llm_settings import (
 from core.llm.factory import LLMRole, get_llm
 from core.llm.shared.llm_retry import LLMCreditExhaustedError
 from core.llm.types import SchemaDescribedTool
+from tests.core.agent._ci_gates import skip_or_fail
 from tools.registry import get_registered_tool_map
 
 pytestmark = [pytest.mark.live_llm, pytest.mark.integration]
@@ -108,15 +111,27 @@ def _require_live_llm_credentials() -> None:
         hint = f" configured provider={provider!r}"
         if env_var is not None:
             hint += f", required key={env_var}"
-        pytest.skip(f"Skipping live tool selection; missing LLM configuration:{hint}. {msg}")
+        skip_or_fail(f"Live tool selection requires LLM configuration:{hint}. {msg}")
 
     if settings is None:
-        pytest.skip("Skipping live tool selection; LLM settings could not be resolved.")
+        skip_or_fail("Live tool selection requires resolvable LLM settings.")
 
     auth = credential_status(settings.provider)
     if not auth.configured or auth.stale:
-        pytest.skip(
-            f"Skipping live tool selection; unconfigured or stale credentials for provider {settings.provider!r}."
+        skip_or_fail(
+            "Live tool selection requires configured, current credentials for "
+            f"provider {settings.provider!r}."
+        )
+
+    spec = provider_spec(settings.provider)
+    if (
+        spec is not None
+        and spec.credential_kind == "api_key"
+        and spec.api_key_env
+        and not resolve_env_credential(spec.api_key_env)
+    ):
+        skip_or_fail(
+            f"Live tool selection requires a resolvable API key for provider {settings.provider!r}."
         )
 
 
@@ -166,7 +181,7 @@ def test_live_tool_selection_matches_target_tool(scenario: SelectionScenario) ->
     try:
         response = llm.invoke(messages=messages, tools=tool_schemas)
     except LLMCreditExhaustedError as exc:
-        pytest.skip(f"Skipping live tool selection; provider credit/quota is exhausted. {exc}")
+        skip_or_fail(f"Live tool selection provider credit/quota is exhausted. {exc}")
     assert response is not None
 
     assert response.has_tool_calls, (

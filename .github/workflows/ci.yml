@@ -148,6 +148,7 @@ jobs:
               --ignore=tests/core/agent
               --ignore=tests/core/tool/test_contracts.py
               --ignore=tests/tools/test_registry_index.py
+              --ignore=tests/tools/selection
             split_args: >-
               --ci-splits=6 --ci-group=1
               --ci-durations-path=.github/ci/pytest-file-durations.json
@@ -165,6 +166,7 @@ jobs:
               --ignore=tests/core/agent
               --ignore=tests/core/tool/test_contracts.py
               --ignore=tests/tools/test_registry_index.py
+              --ignore=tests/tools/selection
             split_args: >-
               --ci-splits=6 --ci-group=2
               --ci-durations-path=.github/ci/pytest-file-durations.json
@@ -182,6 +184,7 @@ jobs:
               --ignore=tests/core/agent
               --ignore=tests/core/tool/test_contracts.py
               --ignore=tests/tools/test_registry_index.py
+              --ignore=tests/tools/selection
             split_args: >-
               --ci-splits=6 --ci-group=3
               --ci-durations-path=.github/ci/pytest-file-durations.json
@@ -199,6 +202,7 @@ jobs:
               --ignore=tests/core/agent
               --ignore=tests/core/tool/test_contracts.py
               --ignore=tests/tools/test_registry_index.py
+              --ignore=tests/tools/selection
             split_args: >-
               --ci-splits=6 --ci-group=4
               --ci-durations-path=.github/ci/pytest-file-durations.json
@@ -216,6 +220,7 @@ jobs:
               --ignore=tests/core/agent
               --ignore=tests/core/tool/test_contracts.py
               --ignore=tests/tools/test_registry_index.py
+              --ignore=tests/tools/selection
             split_args: >-
               --ci-splits=6 --ci-group=5
               --ci-durations-path=.github/ci/pytest-file-durations.json
@@ -233,6 +238,7 @@ jobs:
               --ignore=tests/core/agent
               --ignore=tests/core/tool/test_contracts.py
               --ignore=tests/tools/test_registry_index.py
+              --ignore=tests/tools/selection
             split_args: >-
               --ci-splits=6 --ci-group=6
               --ci-durations-path=.github/ci/pytest-file-durations.json
@@ -381,8 +387,12 @@ jobs:
               tests/hermes
           - os: ubuntu-latest
             shard: cli-live-agent
+            # Keep all required live agent/tool-choice contracts on the
+            # credentialed provider already used by this gate.
             llm_provider: openai
-            pytest_paths: tests/core/agent/test_turn_scenarios.py
+            pytest_paths: >-
+              tests/core/agent/test_turn_scenarios.py
+              tests/tools/selection
           # This subprocess-heavy file dominated a whole duration-balanced
           # shard. Run complementary selections independently so its tests can
           # use four runner cores without changing or dropping coverage.
@@ -620,7 +630,6 @@ jobs:
           ${PYTEST_COVERAGE_ARGS}
           --ignore=tests/e2e/kubernetes_local_alert_simulation
           --ignore=tests/synthetic
-          --ignore=tests/tools/selection
           ${{ matrix.extra_pytest_args }}
           ${{ matrix.split_args }}
           -m "${PYTEST_MARKER_EXPR}"

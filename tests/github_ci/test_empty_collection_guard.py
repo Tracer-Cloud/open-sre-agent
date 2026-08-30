@@ -36,8 +36,6 @@ _NOT_IN_PR_CI = (
     "tests/e2e/install",
     "tests/e2e/quickstart",
     "tests/e2e/kubernetes_local_alert_simulation",
-    # Opt-in live tool selection: real LLM tool-choice, not a required gate.
-    "tests/tools/selection",
 )
 
 
@@ -175,8 +173,14 @@ def test_every_test_directory_runs_in_a_shard() -> None:
     )
 
 
-def test_live_tool_selection_is_ignored_on_claimed_tools_shards() -> None:
-    """``tests/tools`` claims the live suite, so the shared ignore is load-bearing."""
+def test_live_tool_selection_runs_only_on_openai_live_shard() -> None:
+    """Keep selection tests out of broad shards and in the required live gate."""
     claimed = [shard for shard in _shards() if _covers(shard.claims, "tests/tools/selection")]
-    assert claimed
-    assert all("tests/tools/selection" in shard.ignores for shard in claimed)
+    running = [shard for shard in claimed if not _covers(shard.ignores, "tests/tools/selection")]
+
+    assert [shard.name for shard in running] == ["cli-live-agent"]
+    assert all(
+        "tests/tools/selection" in shard.ignores
+        for shard in claimed
+        if shard.name.startswith("tools-runtime-")
+    )
