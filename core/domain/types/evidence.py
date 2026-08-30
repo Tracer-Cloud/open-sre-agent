@@ -34,14 +34,18 @@ def record_evidence_entry(
     """Record a citeable report entry from inside an evidence mapper.
 
     The report's evidence catalog turns each entry into a display id (``E1`` …)
-    the agent can cite. ``source`` is the claim-facing key; the first entry for a
-    given ``source`` wins, and a bespoke catalog reader for the same key takes
-    precedence. Lets a tool's output become citeable without editing the shared
+    the agent can cite. ``source`` is the claim-facing key; a bespoke catalog
+    reader for the same key takes precedence over this one. A later call with
+    the same ``source`` (e.g. the same tool invoked again with a different
+    query in one investigation) replaces the earlier entry rather than adding a
+    second one, so the catalog always cites the most recent call for that
+    source. Lets a tool's output become citeable without editing the shared
     catalog builder.
     """
     entries = evidence.setdefault(CATALOG_ENTRIES_KEY, [])
     if not isinstance(entries, list):
         return
+    entries[:] = [e for e in entries if not (isinstance(e, dict) and e.get("source") == source)]
     entries.append(
         {"source": source, "label": label, "summary": summary, "url": url, "snippet": snippet}
     )
