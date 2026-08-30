@@ -1,6 +1,6 @@
 import os
 
-from config.config import has_credentials_for_active_llm_provider
+from config.llm_settings import has_credentials_for_active_llm_provider
 
 LLM_CREDENTIAL_SKIP_REASON = (
     "Hermes e2e tests require OPENSRE_RUN_HERMES_E2E=1 "

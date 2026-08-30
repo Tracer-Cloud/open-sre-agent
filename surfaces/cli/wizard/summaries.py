@@ -143,7 +143,7 @@ def render_saved_summary(
         credentials ~/.opensre/credentials.json  [SECONDARY key] [TEXT value]
         store       ~/.opensre/store.json        [SECONDARY key] [BRAND path]
     """
-    from integrations.store import STORE_PATH
+    from integrations.store import resolve_store_path
 
     console.print()
     console.print(Rule(style=DIM))
@@ -169,7 +169,7 @@ def render_saved_summary(
     _kv("config", saved_path, BRAND)
     _kv("env", env_path, BRAND)
     _kv("credentials", credential_line)
-    _kv("store", str(STORE_PATH), BRAND)
+    _kv("store", str(resolve_store_path()), BRAND)
     console.print()
 
 

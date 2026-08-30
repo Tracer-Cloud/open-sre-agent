@@ -6,8 +6,7 @@ import logging
 import os
 from typing import Any
 
-from config.config import SLACK_CHANNEL
-from config.constants.slack import SLACK_WEBHOOK_URL_ENV
+from config.constants.slack import SLACK_CHANNEL, SLACK_WEBHOOK_URL_ENV
 from infrastructure.delivery.notifications.delivery_errors import extract_http_error
 from infrastructure.delivery.notifications.delivery_transport import post_json
 from infrastructure.delivery.notifications.redaction import redact_slack_token

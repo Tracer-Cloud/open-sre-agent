@@ -384,6 +384,15 @@ def _apply_theme(theme: CliTheme) -> None:
             "markdown.h1": f"bold {theme.HIGHLIGHT}",
             "markdown.h2": f"bold {theme.BRAND}",
             "markdown.h3": f"bold {theme.BRAND}",
+            "markdown.h4": f"bold {theme.SECONDARY}",
+            "markdown.strong": f"bold {theme.TEXT}",
+            "markdown.em": f"italic {theme.SECONDARY}",
+            "markdown.item.bullet": f"bold {theme.BRAND}",
+            "markdown.item.number": f"bold {theme.BRAND}",
+            "markdown.block_quote": theme.SECONDARY,
+            "markdown.link": f"underline {theme.BRAND}",
+            "markdown.link_url": theme.DIM,
+            "markdown.hr": theme.DIM,
         }
     )
 

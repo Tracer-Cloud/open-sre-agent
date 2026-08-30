@@ -50,9 +50,10 @@ The Cursor project hook [`.cursor/hooks/check-ci-failures.sh`](.cursor/hooks/che
   under `config/constants/` (e.g. `config/constants/billing.py`,
   `config/constants/llm.py`) — a leaf that any layer can import without a cycle —
   and re-export via `config/constants/__init__.py`. Do **not** define shared env
-  names in `config/config.py`: it imports `config.llm_auth.*`, so a name it and
-  one of those modules both need would force a cyclic import. Only a name used
-  solely inside `config/config.py` (nothing it imports needs it) may live there.
+  names in `config/llm_settings.py`: it imports `config.llm_auth.*`, so a name it
+  and one of those modules both need would force a cyclic import. Only a name
+  used solely inside `config/llm_settings.py` (nothing it imports needs it) may
+  live there.
 - Do not keep compatibility-only forwarding modules after refactors. Once imports and tests
   are migrated, remove the old module path in the same change and use one canonical import path.
 - Test fakes: never inline a lambda that builds an ad-hoc `type(...)` object (or

@@ -9,7 +9,7 @@ from rich.console import Console
 from rich.text import Text
 
 from infrastructure.terminal.theme import BRAND, DIM, TEXT
-from surfaces.shared.terminal.banner import build_ready_panel
+from surfaces.shared.terminal.banner import build_launch_banner
 
 #: First-run actions only. Everything else is discoverable via ``opensre --help``;
 #: a landing page that lists every command reads as "here is everything" rather
@@ -144,7 +144,7 @@ def render_landing(group: click.Group) -> None:
     console = Console(highlight=False)
     options = _options_from_command(group)
     console.print()
-    console.print(build_ready_panel(console))
+    console.print(build_launch_banner(console))
     console.print(
         Text.assemble(
             ("  ", ""),

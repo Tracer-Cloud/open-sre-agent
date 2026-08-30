@@ -69,10 +69,10 @@ def test_frozen_bundle_ships_the_shared_system_prompt() -> None:
     assert (REPO_ROOT / "core/agent_harness/prompts/opensre_system_prompt.md").is_file()
 
 
-def test_release_artifacts_ship_the_planning_instructions() -> None:
-    """The task-plan prompt loader reads its adjacent Markdown at runtime."""
+def test_release_artifacts_do_not_ship_removed_planning_instructions() -> None:
+    """Planning instructions were retired; do not reintroduce the data file."""
     pyproject = tomllib.loads((REPO_ROOT / "pyproject.toml").read_text(encoding="utf-8"))
     package_data = pyproject["tool"]["setuptools"]["package-data"]
 
-    assert package_data["core.agent_harness.task_plan"] == ["planning_instructions.md"]
-    assert (REPO_ROOT / "core/agent_harness/task_plan/planning_instructions.md").is_file()
+    assert "core.agent_harness.task_plan" not in package_data
+    assert not (REPO_ROOT / "core/agent_harness/task_plan/planning_instructions.md").is_file()

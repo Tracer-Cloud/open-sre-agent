@@ -57,8 +57,8 @@ def _custom_anthropic_params(
     Shared by the agent and reasoning builders so the resolution and the redacted
     per-build diagnostic live in exactly one place (one DEBUG line per build).
     """
-    from config.config import CUSTOM_ANTHROPIC_LLM_CONFIG
     from config.constants.llm import CUSTOM_ANTHROPIC_API_KEY_ENV
+    from config.llm_models import CUSTOM_ANTHROPIC_LLM_CONFIG
     from core.llm.providers.custom_endpoints import (
         custom_base_url,
         log_endpoint_resolution,
@@ -73,7 +73,12 @@ def _custom_anthropic_params(
 
 def _native_sdk_agent_client(route: LLMRoute) -> AgentLLMClient:
     """Build the native vendor-SDK tool-calling client for the route's provider."""
-    from config.config import PROVIDER_ANTHROPIC, PROVIDER_BEDROCK, PROVIDER_OLLAMA, PROVIDER_OPENAI
+    from config.llm_settings import (
+        PROVIDER_ANTHROPIC,
+        PROVIDER_BEDROCK,
+        PROVIDER_OLLAMA,
+        PROVIDER_OPENAI,
+    )
     from core.llm.providers.custom_endpoints import is_custom_anthropic_provider
     from core.llm.providers.openai_compat_providers import (
         is_openai_compat_provider,
@@ -147,7 +152,7 @@ def build_reasoning_client(route: LLMRoute, model_type: ModelType) -> Any:
 
 def _cli_llm_client(registration: Any, model_type: ModelType) -> Any:
     """Build the subprocess CLI-backed reasoning client for a CLI provider registration."""
-    from config.config import DEFAULT_MAX_TOKENS
+    from config.llm_models import DEFAULT_MAX_TOKENS
     from infrastructure.harness_providers import build_cli_client
 
     model_name = os.getenv(registration.model_env_key, "").strip() or None
@@ -161,7 +166,7 @@ def _cli_llm_client(registration: Any, model_type: ModelType) -> Any:
 
 def _native_sdk_llm_client(route: LLMRoute, model_type: ModelType) -> Any:
     """Build the native vendor-SDK reasoning client for the route's provider and tier."""
-    from config.config import PROVIDER_ANTHROPIC, PROVIDER_BEDROCK, PROVIDER_OPENAI
+    from config.llm_settings import PROVIDER_ANTHROPIC, PROVIDER_BEDROCK, PROVIDER_OPENAI
     from core.llm.providers.custom_endpoints import is_custom_anthropic_provider
     from core.llm.providers.openai_compat_providers import (
         is_openai_compat_provider,

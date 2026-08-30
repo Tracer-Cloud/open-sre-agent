@@ -21,7 +21,7 @@ from infrastructure.terminal.theme import (
     WARNING,
 )
 from surfaces.interactive_shell.ui.poster import refresh_welcome_poster, repl_render_launch_poster
-from surfaces.shared.terminal.banner import render_ready_box
+from surfaces.shared.terminal.banner import render_launch_banner
 from surfaces.shared.terminal.components import (
     print_valid_choice_list,
     repl_choose_one,
@@ -115,7 +115,7 @@ __all__ = [
     "render_agents_table",
     "refresh_welcome_poster",
     "repl_render_launch_poster",
-    "render_ready_box",
+    "render_launch_banner",
     "render_integrations_table",
     "render_mcp_table",
     "render_models_table",

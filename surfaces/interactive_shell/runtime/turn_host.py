@@ -41,7 +41,11 @@ from surfaces.interactive_shell.runtime.core.confirmation import (
     DispatchCancelled,
     request_confirmation_via_prompt,
 )
-from surfaces.interactive_shell.runtime.core.state import ReplState, SpinnerState
+from surfaces.interactive_shell.runtime.core.state import (
+    DEFAULT_CONFIRM_OPTIONS,
+    ReplState,
+    SpinnerState,
+)
 from surfaces.interactive_shell.runtime.input import PromptInputReader
 from surfaces.interactive_shell.runtime.input.actions import (
     InputAction,
@@ -78,6 +82,85 @@ class AgentTurnResources:
     console: Console | None = None
     #: Session-scoped turn host; each turn binds its own streaming console.
     turn_handler: TurnRunner | None = None
+
+
+def _confirm_via_prompt(runtime: AgentTurnResources, prompt: str) -> str:
+    """Park for a y/n answer; hide the free-text box via ReplState confirmation phase.
+
+    ``begin_confirmation`` flips ``state.is_awaiting_confirmation()``, which
+    ``typing_box_hidden`` / ``render_prompt_region`` already honor. ``redraw``
+    invalidates the live prompt immediately so the box hides and restores
+    without waiting for the next refresh tick. ``prepare_ui`` clears any
+    typeahead that landed in the (hidden) composer before the gate opened.
+    """
+    # The execution gate stashes the rows it wants (e.g. an "always allow" row)
+    # on the terminal just before calling this; consume them for the choice.
+    terminal = runtime.session.terminal
+    options = terminal.pending_confirm_options
+    terminal.pending_confirm_options = None
+    app = terminal.prompt_app
+    prompt_running = app is not None and getattr(app, "is_running", False)
+    if terminal.exclusive_stdin_active or not prompt_running:
+        # Exclusive-stdin / subprocess turns own the TTY (and ``is_running`` can
+        # still be true). Parking on the prompt app hangs while the cooked
+        # terminal echoes the arrow keys, so read a plain line instead.
+        return _confirm_via_readline(prompt, options)
+    return request_confirmation_via_prompt(
+        runtime.state,
+        prompt,
+        options=options,
+        redraw=runtime.invalidate_prompt,
+        prepare_ui=lambda: _reset_prompt_buffer(runtime.session),
+    )
+
+
+def _confirm_via_readline(prompt: str, options: tuple[tuple[str, str], ...] | None) -> str:
+    """Cooked-stdin confirmation for when the arrow-nav prompt app is unavailable.
+
+    Prints the rows and reads one line; a row tag, digit, or answer key resolves
+    to that row's answer, which the execution gate interprets. An empty line
+    matches the arrow-nav default: the last row (cancel).
+    """
+    rows = options or DEFAULT_CONFIRM_OPTIONS
+    for index, (_answer, label) in enumerate(rows):
+        print(f"  [{chr(ord('a') + index)}] {label}")
+    tags = "/".join(chr(ord("a") + index) for index in range(len(rows)))
+    cancel = rows[-1][0]
+    try:
+        raw = input(f"{prompt} [{tags}] ").strip().lower()
+    except (EOFError, KeyboardInterrupt):
+        return cancel
+    if not raw:
+        return cancel
+    for index, (answer, _label) in enumerate(rows):
+        if raw in {chr(ord("a") + index), str(index + 1), answer}:
+            return answer
+    return raw
+
+
+def _reset_prompt_buffer(session: Session) -> None:
+    """Empty the live prompt buffer so hidden typeahead cannot submit later.
+
+    Confirmation parks on a worker thread; prompt-toolkit buffer mutations must
+    run on the UI loop (same rule as ``invalidate_prompt`` / refresh prefill).
+    """
+    terminal = getattr(session, "terminal", None)
+    if terminal is None:
+        return
+    app = getattr(terminal, "prompt_app", None)
+    if app is None:
+        return
+
+    def _reset() -> None:
+        buffer = getattr(app, "current_buffer", None)
+        if buffer is not None:
+            buffer.reset()
+
+    loop = getattr(terminal, "main_loop", None)
+    if loop is not None:
+        loop.call_soon_threadsafe(_reset)
+        return
+    _reset()
 
 
 def _streaming_console(
@@ -145,7 +228,7 @@ async def run_agent_turn(runtime: AgentTurnResources, text: str) -> None:
                 text=text,
                 output=console,
                 recorder=recorder,
-                confirm=lambda prompt: request_confirmation_via_prompt(runtime.state, prompt),
+                confirm=lambda prompt: _confirm_via_prompt(runtime, prompt),
                 emit=emit,
                 dispatch_cancel=dispatch_cancel,
             )

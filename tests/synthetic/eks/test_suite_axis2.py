@@ -26,7 +26,7 @@ from __future__ import annotations
 
 import pytest
 
-from config.config import has_credentials_for_active_llm_provider
+from config.llm_settings import has_credentials_for_active_llm_provider
 from tests.synthetic.eks.run_suite import run_scenario, score_reasoning
 from tests.synthetic.eks.scenario_loader import load_all_scenarios
 from tests.synthetic.mock_datadog_backend.selective_backend import SelectiveDatadogBackend

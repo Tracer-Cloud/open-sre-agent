@@ -176,6 +176,16 @@ def repl_reset_ctrl_c_gate() -> None:
     _last_ctrl_c[0] = None
 
 
+def repl_prompt_ctrl_c_should_exit() -> bool:
+    """Arm the REPL Ctrl-C gate or consume a second press as an exit."""
+    now = time.monotonic()
+    if _last_ctrl_c[0] is not None and now - _last_ctrl_c[0] <= _CTRL_C_EXIT_WINDOW:
+        _last_ctrl_c[0] = None
+        return True
+    _last_ctrl_c[0] = now
+    return False
+
+
 def cli_invocation_name() -> str:
     """Return the basename of the current CLI launcher (for example ``opensre`` or ``o``)."""
     argv0 = sys.argv[0].strip() if sys.argv else ""
@@ -194,15 +204,12 @@ def print_session_resume_hint(console: Console, session_id: str) -> None:
 
 
 def repl_prompt_note_ctrl_c(console: Console, session_id: str | None = None) -> bool:
-    now = time.monotonic()
-    if _last_ctrl_c[0] is not None and now - _last_ctrl_c[0] <= _CTRL_C_EXIT_WINDOW:
+    if repl_prompt_ctrl_c_should_exit():
         console.print()
         if session_id:
             print_session_resume_hint(console, session_id)
         console.print(f"[{DIM}]Goodbye![/]")
-        _last_ctrl_c[0] = None
         return True
-    _last_ctrl_c[0] = now
     console.print(f"[{DIM}](Press Ctrl+C again to exit)[/]")
     return False
 

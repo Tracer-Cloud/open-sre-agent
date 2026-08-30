@@ -8,13 +8,13 @@ from urllib.parse import urlparse
 
 from pydantic import AliasChoices, Field, field_validator, model_validator
 
-from config.config import get_tracer_base_url
 from config.constants.azure import (
     AZURE_LOG_ANALYTICS_DEFAULT_ENDPOINT,
     AZURE_MAX_RESULTS_DEFAULT,
     AZURE_MAX_RESULTS_HARD_LIMIT,
 )
 from config.strict_config import StrictConfigModel
+from config.tracer_urls import get_tracer_base_url
 from infrastructure.text.url_validation import validate_https_or_loopback_http_url
 from integrations._validators import (
     normalize_bearer,

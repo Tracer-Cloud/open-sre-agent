@@ -7,6 +7,8 @@ from collections.abc import Callable
 
 from prompt_toolkit import PromptSession
 from prompt_toolkit.application import Application
+from prompt_toolkit.buffer import Buffer
+from prompt_toolkit.filters import Condition
 from prompt_toolkit.formatted_text import ANSI
 from rich.console import Console
 
@@ -17,6 +19,10 @@ from surfaces.interactive_shell.runtime.core.state import (
 )
 from surfaces.interactive_shell.session import Session
 from surfaces.interactive_shell.ui import input_prompt
+from surfaces.interactive_shell.ui.hooks import (
+    install_confirmation_key_bindings,
+    install_plan_expand_key_bindings,
+)
 from surfaces.interactive_shell.ui.input_prompt import rendering as prompt_rendering
 from surfaces.interactive_shell.ui.input_prompt.key_bindings import (
     build_cancel_key_bindings,
@@ -24,6 +30,7 @@ from surfaces.interactive_shell.ui.input_prompt.key_bindings import (
 )
 from surfaces.interactive_shell.ui.input_prompt.refresh import wire_prompt_refresh
 from surfaces.interactive_shell.ui.input_prompt.style import refresh_prompt_theme
+from surfaces.interactive_shell.ui.prompt_visibility import typing_box_hidden
 from surfaces.interactive_shell.ui.terminal_ui import render_prompt_region
 from surfaces.shared.terminal.components.cpr_stdin import drain_stale_cpr_bytes
 
@@ -49,21 +56,51 @@ class PromptBuilder:
         self.pt_app: Application[str] | None = None
         self.loop: asyncio.AbstractEventLoop | None = None
         self._invalidate_prompt: Callable[[], None] | None = None
+        self._submitted: asyncio.Queue[str] = asyncio.Queue()
+        self._prompt_task: asyncio.Task[str] | None = None
+
+    def _composer_hidden(self) -> bool:
+        """True while structured input (confirmation, menus) owns the keyboard.
+
+        The prompt reads this to collapse the free-text composer box so it does
+        not sit under the pending choice.
+        """
+        return typing_box_hidden(self.session, self.state)
 
     def setup(self) -> None:
         if self.pt_session is None:
-            self.pt_session = input_prompt.build_prompt_session(self.session)
+            self.pt_session = input_prompt.build_prompt_session(
+                self.session,
+                hide_composer=self._composer_hidden,
+            )
             self.session.terminal.prompt_history_backend = self.pt_session.history
 
         cancel_kb = build_cancel_key_bindings(self.state)
         install_session_key_bindings(self.pt_session, cancel_kb)
 
         self.pt_app = self.pt_session.app
+        self.pt_session.default_buffer.accept_handler = self._accept_prompt_buffer
+        # While the Yes/No gate owns the keyboard the composer is hidden but its
+        # buffer still receives unbound keys unless it is read-only. Lock it so
+        # typeahead cannot accumulate under the overlay and submit after close.
+        self.pt_session.default_buffer.read_only = Condition(self.state.is_awaiting_confirmation)
         self.loop = asyncio.get_running_loop()
         self.session.terminal.prompt_app = self.pt_app
         self.session.terminal.main_loop = self.loop
         self.state.bind_loop(self.loop)
         self._invalidate_prompt = wire_prompt_refresh(self.session, self.pt_app, self.loop)
+        # Arrow-navigable Yes/No for the execution-confirmation gate: ↑/↓ move the
+        # selection, Enter (or a/b/y/n) delivers it. Installed after the redraw
+        # hook so a selection change repaints immediately.
+        confirm_kb = install_confirmation_key_bindings(self.state, self._invalidate_prompt)
+        install_session_key_bindings(self.pt_session, confirm_kb)
+        # Ctrl+P expands/collapses the pinned plan while one is on screen.
+        plan_kb = install_plan_expand_key_bindings(
+            self.state,
+            lambda: self.session.task_plan is not None and bool(self.session.task_plan.steps),
+            self._invalidate_prompt,
+        )
+        install_session_key_bindings(self.pt_session, plan_kb)
 
     @property
     def invalidate_prompt(self) -> Callable[[], None]:
@@ -80,7 +117,7 @@ class PromptBuilder:
 
         def _exit_prompt_app(attempts_left: int = 5) -> None:
             if self.pt_app is not None and self.pt_app.is_running:
-                self.pt_app.exit()
+                self.pt_app.exit(result="")
                 return
             if attempts_left > 0 and self.loop is not None:
                 self.loop.call_later(0.02, _exit_prompt_app, attempts_left - 1)
@@ -89,6 +126,52 @@ class PromptBuilder:
 
     def message_with_spinner(self) -> ANSI:
         return render_prompt_region(self.session, self.state, self.spinner)
+
+    def _accept_prompt_buffer(self, buffer: Buffer) -> bool:
+        """Queue accepted text while keeping the prompt application alive."""
+        # Enter during confirmation is handled by the Yes/No bindings; never
+        # treat residual buffer text as a submitted message while the gate is up.
+        if self.state.is_awaiting_confirmation():
+            return True
+        self._submitted.put_nowait(buffer.text)
+        return False
+
+    def _start_prompt_if_needed(self) -> asyncio.Task[str]:
+        if self.pt_session is None:
+            raise RuntimeError("PromptBuilder.setup() must run before reading prompts")
+        task = self._prompt_task
+        if task is None:
+            task = asyncio.create_task(
+                self.pt_session.prompt_async(
+                    message=self.message_with_spinner,
+                    bottom_toolbar=self.spinner.toolbar_ansi,
+                    refresh_interval=PROMPT_REFRESH_INTERVAL_S,
+                    placeholder=self._prompt_placeholder,
+                )
+            )
+            self._prompt_task = task
+        return task
+
+    async def suspend(self) -> None:
+        """Release stdin while an exclusive picker or wizard is running."""
+        task = self._prompt_task
+        if task is None:
+            return
+        if not task.done() and self.pt_app is not None and self.pt_app.is_running:
+            self.pt_app.exit(result="")
+        await asyncio.gather(task, return_exceptions=True)
+        if self._prompt_task is task:
+            self._prompt_task = None
+
+    async def close(self) -> None:
+        """Stop the persistent prompt application during shell shutdown."""
+        task = self._prompt_task
+        self._prompt_task = None
+        if task is None:
+            return
+        if not task.done():
+            task.cancel()
+        await asyncio.gather(task, return_exceptions=True)
 
     async def read_prompt_text(self) -> str:
         if self.pt_session is None:
@@ -107,13 +190,32 @@ class PromptBuilder:
             self.session.terminal.last_input_autosubmitted = True
             return prefilled
 
-        return await self.pt_session.prompt_async(
-            message=self.message_with_spinner,
-            bottom_toolbar=self.spinner.toolbar_ansi,
-            refresh_interval=PROMPT_REFRESH_INTERVAL_S,
-            placeholder=lambda: prompt_rendering.resolve_prompt_placeholder(self.session),
-            default=prefilled,
-        )
+        if prefilled:
+            self.pt_session.default_buffer.text = prefilled
+
+        prompt_task = self._start_prompt_if_needed()
+        submitted = asyncio.create_task(self._submitted.get())
+        try:
+            done, _pending = await asyncio.wait(
+                {prompt_task, submitted},
+                return_when=asyncio.FIRST_COMPLETED,
+            )
+            if prompt_task in done:
+                submitted.cancel()
+                await asyncio.gather(submitted, return_exceptions=True)
+                self._prompt_task = None
+                return await prompt_task
+            return submitted.result()
+        except BaseException:
+            submitted.cancel()
+            await asyncio.gather(submitted, return_exceptions=True)
+            raise
+
+    def _prompt_placeholder(self) -> ANSI:
+        # Options menus / confirmation own the keyboard — suppress free-text ghost.
+        if typing_box_hidden(self.session, self.state):
+            return ANSI("")
+        return prompt_rendering.resolve_prompt_placeholder(self.session)
 
     def render_submitted_prompt(self, console: Console, text: str) -> None:
         prompt_rendering.render_submitted_prompt(console, self.session, text)

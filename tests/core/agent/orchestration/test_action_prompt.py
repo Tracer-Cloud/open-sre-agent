@@ -233,11 +233,13 @@ def test_skills_loader_bundles_github_ci_fix_skill() -> None:
 
     assert "github-ci-fix" in load_skills_index()
     body = load_skill_body("github-ci-fix")
-    assert "GITHUB PR CI FIX SKILL" in body
+    assert "GITHUB CI FIX SKILL" in body
     assert "fix_github_pr_ci" in body
     assert "output exactly that text and stop" in body
     assert '"next steps"' in body
-    assert "pushes to the existing PR head branch" in body
+    assert "separate linked git" in body
+    assert "worktree, commits on a fresh" in body
+    assert 'branch="main"' in body
     cached_load_skills_block.cache_clear()
 
 

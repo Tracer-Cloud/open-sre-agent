@@ -51,7 +51,7 @@ def _provider_choice(profile: ProviderAuthProfile) -> questionary.Choice:
 
 def _configured_profile_name() -> str | None:
     """The auth-profile name matching the install's active LLM provider, if any."""
-    from config.config import get_configured_llm_provider
+    from config.llm_settings import get_configured_llm_provider
 
     configured = get_configured_llm_provider()
     for profile in iter_auth_profiles():

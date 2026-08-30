@@ -1,4 +1,4 @@
-"""Action tool for fixing failing GitHub PR CI and pushing the PR branch."""
+"""Action tool for fixing failing GitHub CI and pushing a repair branch."""
 
 from __future__ import annotations
 
@@ -38,9 +38,11 @@ _INPUT_SCHEMA: dict[str, Any] = {
         "branch": {
             "type": "string",
             "description": (
-                "Branch whose failing CI should be fixed by pushing directly to it "
+                "Optional branch whose failing GitHub Actions checks should be fixed "
                 "(e.g. 'main'). Use only when the user asks to fix a branch's CI "
-                "itself; mutually exclusive with the PR selectors."
+                "itself; mutually exclusive with the PR selectors. OpenSRE pushes a "
+                "fresh repair branch from a linked worktree — never the protected "
+                "branch directly."
             ),
         },
         "workspace": {
@@ -96,20 +98,20 @@ def _confirm_fn(context: Any) -> Any:
 @tool(
     name="fix_github_pr_ci",
     source="github",
-    display_name="Fix GitHub PR CI",
+    display_name="Fix GitHub CI",
     description=(
-        "Inspect failing GitHub Actions checks on a pull request, run an "
-        "auto-detected coding agent with the failing log context, commit the "
-        "result, push it to the pull request's existing head branch, and wait "
-        "for the new checks to finish. It does not open a new PR and refuses "
-        "fork PR branches. With branch= it instead fixes the failing workflow "
-        "runs on that branch (e.g. main) and pushes directly to it."
+        "Inspect failing GitHub Actions checks on a pull request or branch, run "
+        "an auto-detected coding agent with the failing log context, commit the "
+        "result, push the PR branch or a fresh repair branch from a linked "
+        "worktree, and wait for the new checks to finish. It refuses fork PR "
+        "branches and never pushes directly to protected branches such as main."
     ),
     use_cases=[
         "Fix failing CI on a GitHub pull request and push to the PR branch",
+        "Fix failing CI on the main branch and push a repair branch",
         "Fix the CI failure for a PR URL",
         "Repair a failing GitHub Actions check on the current branch PR",
-        "Fix failing CI on main and push the fix straight to main",
+        "Fix failing CI on main and push a repair branch",
     ],
     anti_examples=[
         "Creating or closing ordinary GitHub issues (use github_cli)",
@@ -120,9 +122,8 @@ def _confirm_fn(context: Any) -> Any:
     side_effect_level=SideEffectLevel.MUTATING,
     requires_approval=True,
     approval_reason=(
-        "Checks out the target branch, edits files, commits, pushes to that "
-        "branch (directly to the base branch in branch mode), and waits for "
-        "the resulting checks."
+        "Checks out the PR branch or creates a branch-fix worktree, edits files, "
+        "commits, pushes the repair branch, and waits for the resulting checks."
     ),
     parallel_safe=False,
     accepts_runtime_context=True,

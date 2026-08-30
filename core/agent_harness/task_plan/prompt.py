@@ -1,14 +1,10 @@
 """Prompt fragments for the live task plan.
 
-The STABLE planning instructions live in ``planning_instructions.md``. This
-module renders the per-turn CURRENT PLAN block from the snapshotted plan so
-transcript compaction cannot drop it.
+Renders the per-turn CURRENT PLAN block from the snapshotted plan so
+transcript compaction cannot drop it, plus Ask User answered guidance.
 """
 
 from __future__ import annotations
-
-from functools import lru_cache
-from pathlib import Path
 
 from core.agent_harness.session.pending_choice import parse_ask_user_answers
 from core.agent_harness.task_plan.plan import PlanStepStatus, TaskPlan
@@ -19,17 +15,17 @@ ASK_USER_ANSWERED_GUIDANCE = (
     "If this is the FIRST round and the answers open new discriminating "
     "questions, call ask_user_choice for ONE more scoped round. If two rounds "
     "are already answered (see the Q&A above), do NOT ask again — write the "
-    "analysis now with your best hypothesis. Two rounds is the hard maximum.\n"
-    "Write the analysis in structured sections, then update_plan:\n"
-    "- Facts: the answers as short bullets.\n"
-    "- What the signature tells us: for each fact state what it RULES OUT, not "
-    "just what it is; name the narrowing in one line.\n"
-    "- Hypothesis ranking: a table with columns # | Hypothesis | Why it fits | "
-    "Discriminator — the single observation that confirms or rules each one out "
-    "versus the others. Rank by how well current evidence fits.\n"
-    "Put that analysis in update_plan(..., explanation=...) — the UI renders it "
-    "under the checklist. Use headers and a table, never one dense paragraph. "
-    "Do not repeat it in the assistant closing reply. "
+    "plan now with your best reading of the answers. Two rounds is the hard "
+    "maximum.\n"
+    "Then update_plan. Put the rationale in explanation=... — the UI renders "
+    "it under the checklist. Do not repeat it in the assistant closing reply. "
+    "If this is a diagnosis, write structured sections, never one dense "
+    "paragraph: Facts; What the signature tells us (what each fact RULES OUT); "
+    "Hypothesis ranking with columns # | Hypothesis | Why it fits | "
+    "Discriminator. "
+    "If this is implementation or plan-only coding work, write a short grounded "
+    "rationale (why this sequence, what you will verify, Biggest risk) — do "
+    "not invent telemetry or a hypothesis table. "
     "Treat RECENT CONVERSATION as authoritative: preserve the original target "
     "repository and every requested output or metric. The Q&A answers refine "
     "that request; they never replace it. "
@@ -45,28 +41,19 @@ ASK_USER_ANSWERED_PLAN_ONLY_GUIDANCE = (
     "does not authorize execution. If this is the FIRST round and the answers "
     "open new discriminating questions, call ask_user_choice for ONE more "
     "scoped round. If two rounds are already answered, do NOT ask again. "
-    "Write the analysis in structured sections, then update_plan with every "
-    "step pending and STOP:\n"
-    "- Facts: the answers as short bullets.\n"
-    "- What the signature tells us: for each fact state what it RULES OUT.\n"
-    "- Hypothesis ranking: # | Hypothesis | Why it fits | Discriminator.\n"
-    "Put that analysis in update_plan(..., explanation=...). "
+    "Then update_plan with every step pending and STOP. Put the rationale in "
+    "explanation=... "
+    "If this is a diagnosis: Facts; What the signature tells us (what each "
+    "fact RULES OUT); Hypothesis ranking with Discriminator. "
+    "If this is implementation or plan-only coding work: why this sequence, "
+    "what you will verify, Biggest risk — do not invent telemetry or a "
+    "hypothesis table. "
     "Treat RECENT CONVERSATION as authoritative: preserve the original target "
     "repository and every requested output or metric. The Q&A answers refine "
     "that request; they never replace it. "
     "Do not pass plan_only=false; the host keeps the plan-only latch until the user "
     "confirms a mutating step at the execution gate."
 )
-
-
-_INSTRUCTIONS_FILENAME = "planning_instructions.md"
-
-
-@lru_cache(maxsize=1)
-def load_planning_instructions() -> str:
-    """Return the bundled planning-instruction markdown."""
-    path = Path(__file__).with_name(_INSTRUCTIONS_FILENAME)
-    return path.read_text(encoding="utf-8")
 
 
 def ask_user_answered_block(text: str, *, plan_only: bool = False) -> str:
@@ -126,5 +113,4 @@ __all__ = [
     "ASK_USER_ANSWERED_PLAN_ONLY_GUIDANCE",
     "ask_user_answered_block",
     "current_task_plan_block",
-    "load_planning_instructions",
 ]

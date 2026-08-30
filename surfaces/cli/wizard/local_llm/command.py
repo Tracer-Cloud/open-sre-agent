@@ -5,8 +5,8 @@ from __future__ import annotations
 import questionary
 from rich.console import Console
 
-from config.config import DEFAULT_OLLAMA_HOST
 from config.env_file import sync_env_values
+from config.llm_models import DEFAULT_OLLAMA_HOST
 from config.setup_store import get_store_path, save_local_config
 from infrastructure.terminal.theme import DIM, ERROR, HIGHLIGHT, WARNING
 from surfaces.cli.wizard.local_llm.hardware import detect_hardware, recommend_model

@@ -328,6 +328,19 @@ per-session lock). Different sessions stay concurrent under the capacity gate.
 There is no `dispatch_message_to_headless_agent` — that free-function dump was
 replaced by `HeadlessAgent.dispatch` / `AgentSession.chat`.
 
+### Two doors into a turn (Concurrency & Serialization)
+
+There are two ways into an agent turn:
+1. **The Host Loop (`TurnRunner` → `HeadlessAgent.handle`)**:
+   - Used by concurrent multi-actor hosts (**Gateway** transports and **Interactive Shell**).
+   - Takes the `SessionAgentPool` per-session lock (serializing turns for the same session to prevent `AgentBusyError` and state corruption).
+   - Takes the process turn capacity gate (`TurnConcurrencyGate` / `OPENSRE_MAX_CONCURRENT_TURNS`).
+   - Drives the full `SessionGoal` outer loop (`run_goal`).
+2. **Scripted / Headless API (`AgentSession.chat` / `chat_until_goal`)**:
+   - The un-gated single-turn API for programmatic scripts (`main.py`, notebooks), tests, and single-shot CLI (`opensre ask`).
+   - Deliberately kept as an unguarded entry point for single-tenant, scripted use.
+   - **Forbidden for concurrent hosts:** Gateway and Shell modules must never call `chat()` or `chat_until_goal()` directly (enforced by `gateway/tests/test_harness_behaviour_border.py` and `tests/interactive_shell/test_harness_api_border.py`).
+
 **Scaling** is separate from the host API: local concurrency
 (`TurnConcurrencyGate` / transport pools / `OPENSRE_SIZE_PROFILE`) and cloud
 Fargate scale-out (spin more tasks; same API per task) sit *around*

@@ -22,7 +22,6 @@ from core.agent_harness.task_plan.progress import (
     format_plan_header,
     format_task_plan_plain,
 )
-from core.agent_harness.task_plan.prompt import load_planning_instructions
 from core.agent_harness.task_plan.update_plan_policy import (
     apply_update_plan_host_policy,
     apply_update_plan_session,
@@ -38,7 +37,6 @@ __all__ = [
     "format_plan_header",
     "format_task_plan_plain",
     "is_plan_diagnosis_prose",
-    "load_planning_instructions",
     "parse_task_plan",
     "promote_first_pending_step",
     "task_plan_to_payload",

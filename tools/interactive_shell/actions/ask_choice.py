@@ -38,9 +38,10 @@ _CHOOSE_COMMAND = "/choose"
 _DEFAULT_HEADER = "Ask User"
 
 _FALLBACK_INSTRUCTION = (
-    "No interactive selection menu is available on this surface. Present the "
-    "options as a short numbered list instead and ask the user to reply with "
-    "the number or the option text."
+    "No interactive selection menu is available on this surface. If the choice "
+    "is required for work to continue, present a short numbered list and ask "
+    "the user to reply. If this was only an optional follow-up, do NOT park a "
+    "numbered question — finish with one sentence of instructions."
 )
 _QUEUED_INSTRUCTION = (
     "The selection menu opens after this turn ends. End the turn now without a "
@@ -79,6 +80,13 @@ _QUESTION_ITEM_SCHEMA = {
                 "The selected label is echoed back verbatim."
             ),
         ),
+        "multi_select": {
+            "type": "boolean",
+            "description": (
+                "When true, the shell shows checkboxes and the user may toggle "
+                "several options (Space/Enter). Default false = single choice."
+            ),
+        },
     },
 }
 
@@ -117,6 +125,22 @@ def _options_error(options: list[str]) -> str | None:
     return None
 
 
+def _parse_bool(value: object, *, default: bool = False) -> bool:
+    """Coerce tool args to bool without treating the string ``\"false\"`` as True."""
+    if value is None:
+        return default
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, str):
+        lowered = value.strip().lower()
+        if lowered in {"1", "true", "yes", "on"}:
+            return True
+        if lowered in {"0", "false", "no", "off", ""}:
+            return False
+        return default
+    return default
+
+
 def _parse_questions(raw: object) -> tuple[list[AskUserQuestion] | None, str | None]:
     """Return ``(questions, error)``. Absent/empty ``raw`` yields ``([], None)``."""
     if raw is None:
@@ -139,7 +163,15 @@ def _parse_questions(raw: object) -> tuple[list[AskUserQuestion] | None, str | N
         option_error = _options_error(options)
         if option_error is not None:
             return None, f"questions[{index}]: {option_error}"
-        parsed.append(AskUserQuestion(label=label, title=title, options=tuple(options)))
+        multi_select = _parse_bool(item.get("multi_select"), default=False)
+        parsed.append(
+            AskUserQuestion(
+                label=label,
+                title=title,
+                options=tuple(options),
+                multi_select=multi_select,
+            )
+        )
     if len(parsed) > _MAX_QUESTIONS:
         return None, f"at most {_MAX_QUESTIONS} questions are supported"
     return parsed, None
@@ -187,7 +219,12 @@ def execute_ask_user_choice_tool(args: dict[str, Any], ctx: ActionToolScope) -> 
         option_error = _options_error(options)
         if option_error is not None:
             return {"ok": False, "error": option_error}
-        pending = PendingUserChoice(title=title, options=tuple(options))
+        multi_select = _parse_bool(args.get("multi_select"), default=False)
+        pending = PendingUserChoice(
+            title=title,
+            options=tuple(options),
+            multi_select=multi_select,
+        )
         queued = _QUEUED_INSTRUCTION
         summary = f"selection menu queued: {title}"
 
@@ -214,9 +251,14 @@ def run_ask_user_choice(
     title: str = "",
     options: list[str] | None = None,
     questions: list[dict[str, Any]] | None = None,
+    multi_select: bool = False,
     context: Any,
 ) -> dict[str, Any]:
-    payload: dict[str, Any] = {"title": title, "options": options or []}
+    payload: dict[str, Any] = {
+        "title": title,
+        "options": options or [],
+        "multi_select": multi_select,
+    }
     if questions is not None:
         payload["questions"] = questions
     return execute_with_action_context(
@@ -234,9 +276,11 @@ ask_user_choice_tool = RegisteredTool(
         "job, pass ALL of them in questions (label, title, options) in ONE "
         "call, then end the turn — do not drip questions and do not call "
         "update_plan until the answers arrive. A single decision uses title "
-        "and options. The menu opens after the turn ends; answers arrive "
-        "verbatim as the next user message. If the result says the menu is "
-        "unavailable, fall back to a numbered list."
+        "and options. Precede the call with one short sentence telling the "
+        "user what you are about to ask and that they can type their own "
+        "answer if none fit. The menu opens after the turn ends; answers "
+        "arrive verbatim as the next user message. If the result says the "
+        "menu is unavailable, fall back to a numbered list."
     ),
     use_cases=[
         (
@@ -244,9 +288,15 @@ ask_user_choice_tool = RegisteredTool(
             "fixed set of actions (e.g. stash vs commit vs worktree)"
         ),
         (
-            "Investigation or triage is blocked on several facts the user "
-            "must supply (where a service lives, how to get metrics, the "
-            "time window) — one questions payload, then plan"
+            "A prior selection or free-text answer is still ambiguous and the "
+            "next step is itself a choice among a small fixed set — offer "
+            "another menu rather than an open-ended 'tell me more' question"
+        ),
+        (
+            "Triage is blocked on several facts the user must supply (where a "
+            "service lives, how to get metrics, the time window) and there is "
+            "no investigate/RCA verb with a concrete alert payload yet — one "
+            "questions payload, then plan"
         ),
         "A skill instructs presenting a structured choice / dropdown to the user",
     ],
@@ -254,8 +304,13 @@ ask_user_choice_tool = RegisteredTool(
         "Open-ended questions with no fixed option set (ask in plain text)",
         "Yes/no confirmations already covered by the execution confirmation flow",
         "Presenting information that requires no decision",
+        "Optional end-of-turn follow-up on a headless, scheduled, gateway, or /goal turn",
         "One ask_user_choice call per question when several facts block the same job",
         "Calling update_plan before the Ask User answers arrive",
+        (
+            "Explicit investigate/RCA/diagnose with pasted alert JSON or quoted "
+            "payload — call investigation_start instead of Ask User"
+        ),
     ],
     input_schema=object_schema(
         properties={
@@ -276,10 +331,18 @@ ask_user_choice_tool = RegisteredTool(
                 "type": "array",
                 "description": (
                     "Two to six blockers to ask in one Ask User wizard. Each "
-                    "item is {label, title, options}. Prefer this over several "
-                    "turns when missing facts block a plan."
+                    "item is {label, title, options, multi_select?}. Prefer "
+                    "this over several turns when missing facts block a plan."
                 ),
                 "items": _QUESTION_ITEM_SCHEMA,
+            },
+            "multi_select": {
+                "type": "boolean",
+                "description": (
+                    "For a single title/options decision: when true, the shell "
+                    "shows checkboxes and the user may toggle several options. "
+                    "Ignored when questions is set (use per-question multi_select)."
+                ),
             },
         },
         required=(),

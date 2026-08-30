@@ -40,6 +40,9 @@ def test_update_plan_tool_is_action_surface_read_only() -> None:
     assert "action" in update_plan_tool.surfaces
     assert update_plan_tool.side_effect_level == "read_only"
     assert update_plan_tool.parallel_safe is False
+    explanation = update_plan_tool.input_schema["properties"]["explanation"]["description"]
+    assert "investigation" in explanation.lower()
+    assert "do not invent causal hypotheses" in explanation.lower()
 
 
 def test_update_plan_stores_the_checklist_on_the_session() -> None:

@@ -5,11 +5,9 @@ from __future__ import annotations
 from core.agent_harness.prompts import (
     PromptBlockId,
     PromptTier,
-    build_action_system_prompt,
     build_action_system_prompt_envelope,
 )
 from core.agent_harness.task_plan.plan import parse_task_plan
-from core.agent_harness.task_plan.prompt import load_planning_instructions
 from core.agent_harness.turns.turn_snapshot import TurnSnapshot
 
 
@@ -26,25 +24,15 @@ def _ctx(*, plan=None) -> TurnSnapshot:
     )
 
 
-def test_planning_instructions_are_about_seventy_lines_with_examples() -> None:
-    text = load_planning_instructions()
-    lines = text.splitlines()
-    assert 60 <= len(lines) <= 120
-    assert "update_plan" in text
-    assert "ASK THEN PLAN" in text
-    assert "ask_user_choice" in text
-    assert "go-ahead to continue" in text
-    assert "do not invent a pause" in text.lower()
-    assert "VERIFIABILITY" in text
-    assert "Confirm checkout returns 2xx" in text
-    assert "work_task_*" in text
-    assert "/goal" in text
+def test_composed_prompt_omits_removed_planning_instructions_file() -> None:
+    from core.agent_harness.prompts import build_action_system_prompt
 
-
-def test_composed_prompt_includes_planning_instructions() -> None:
     prompt = build_action_system_prompt(_ctx())
-    assert "PLANNING — update_plan" in prompt
-    assert "The LAST step is always a verification step" in prompt
+    assert "PLANNING — update_plan" not in prompt
+    assert "ASK THEN PLAN" not in prompt
+    assert "action-agent-planning-instructions" not in [
+        block.id for block in build_action_system_prompt_envelope(_ctx()).blocks
+    ]
 
 
 def test_current_plan_is_ephemeral_so_compaction_cannot_drop_it() -> None:
@@ -111,6 +99,18 @@ def test_ask_user_answered_guidance_defaults_to_execute_not_pause() -> None:
     assert "do not invent a plan-only pause" in text
     assert "plan_only_after=true" in text
     assert "in_progress and execute it now" in text
+
+
+def test_ask_user_answered_guidance_scopes_diagnosis_shape_to_incidents() -> None:
+    from core.agent_harness.task_plan.prompt import (
+        ASK_USER_ANSWERED_GUIDANCE,
+        ASK_USER_ANSWERED_PLAN_ONLY_GUIDANCE,
+    )
+
+    for text in (ASK_USER_ANSWERED_GUIDANCE, ASK_USER_ANSWERED_PLAN_ONLY_GUIDANCE):
+        assert "If this is a diagnosis" in text
+        assert "If this is implementation or plan-only coding work" in text
+        assert "do not invent telemetry" in text.lower()
 
 
 def test_ask_user_answers_preserve_original_repo_and_all_requested_metrics() -> None:

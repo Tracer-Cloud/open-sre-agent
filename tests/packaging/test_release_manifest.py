@@ -73,8 +73,8 @@ def test_required_data_covers_runtime_files_that_are_not_skill_documents() -> No
         path.relative_to(_REPO_ROOT).as_posix() for path in required_skill_files(_REPO_ROOT)
     }
 
-    assert "core/agent_harness/task_plan/planning_instructions.md" in relative_paths
     assert "integrations/yandex_cloud/api_index.json" in relative_paths
+    assert "core/agent_harness/task_plan/planning_instructions.md" not in relative_paths
 
 
 def test_release_build_uses_checked_in_spec() -> None:

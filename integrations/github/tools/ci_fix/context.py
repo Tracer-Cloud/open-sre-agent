@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import re
 from dataclasses import dataclass, replace
-from typing import Any
+from typing import Any, Final
 from urllib.parse import quote
 
 from infrastructure.safety.masking import MaskingPolicy, MaskingRules
@@ -27,6 +27,8 @@ _ACTIONS_URL_RE = re.compile(
     r"/actions/runs/(?P<run_id>\d+)(?:/job/(?P<job_id>\d+))?",
     re.IGNORECASE,
 )
+CI_TARGET_BRANCH: Final = "branch"
+CI_TARGET_PR: Final = "pr"
 # CANCELLED is omitted: cancelled siblings of a real failure are noise, not a
 # second root cause for the coding agent to chase.
 _FAILED_CONCLUSIONS = frozenset({"ACTION_REQUIRED", "FAILURE", "STARTUP_FAILURE", "TIMED_OUT"})
@@ -46,6 +48,8 @@ _PR_FIELDS = ",".join(
         "statusCheckRollup",
     ]
 )
+_BRANCH_RUN_FIELDS = "databaseId,name,workflowName,conclusion,status,url"
+_BRANCH_RUNS_KEY = "runs"
 _MAX_LOG_CHARS = 7000
 _MAX_TASK_LOG_CHARS = 18000
 
@@ -74,7 +78,7 @@ class FailingCheck:
 
 @dataclass(frozen=True)
 class CiFixContext:
-    """Resolved CI failure (PR or direct branch target) and coding-agent task."""
+    """Resolved CI failure (PR or branch target) and coding-agent task."""
 
     owner: str
     repo: str
@@ -87,16 +91,19 @@ class CiFixContext:
     skipped_check_names: tuple[str, ...]
     failing_checks: tuple[FailingCheck, ...]
     task: str
+    target_kind: str = CI_TARGET_PR
+    target_branch: str = ""
 
     @property
     def is_branch_target(self) -> bool:
-        """True when the fix pushes directly to a requested branch, not a PR head."""
-        return self.number is None
+        """True when the fix targets a named branch via a repair worktree, not a PR head."""
+        return self.number is None or self.target_kind == CI_TARGET_BRANCH
 
     @property
     def target_label(self) -> str:
-        if self.number is None:
-            return f"{self.owner}/{self.repo}@{self.head_branch}"
+        if self.is_branch_target:
+            branch = self.target_branch or self.base_branch or self.head_branch
+            return f"{self.owner}/{self.repo}@{branch}"
         return f"{self.owner}/{self.repo}#{self.number}"
 
 
@@ -205,12 +212,10 @@ def gather_ci_fix_context(
         skipped_check_names=tuple(_check_name(item) for item in rollup if _is_skipped(item)),
         failing_checks=checks,
         task="",
+        target_kind=CI_TARGET_PR,
+        target_branch=head_branch,
     )
     return replace(ctx, task=_build_task(ctx))
-
-
-_BRANCH_RUN_FIELDS = "databaseId,name,workflowName,conclusion,status,url"
-_BRANCH_RUNS_KEY = "runs"
 
 
 def gather_branch_ci_fix_context(
@@ -222,7 +227,7 @@ def gather_branch_ci_fix_context(
     github_token: str | None = None,
 ) -> CiFixContext:
     """Resolve a branch's failing workflow runs and log snippets (no PR involved)."""
-    branch_name = branch.strip()
+    branch_name = _normalize_branch(branch)
     if not branch_name:
         raise GitHubCiFixError(
             ERR_INVALID_INPUT,
@@ -300,6 +305,8 @@ def gather_branch_ci_fix_context(
         skipped_check_names=tuple(_check_name(run) for run in runs if _is_skipped(run)),
         failing_checks=checks,
         task="",
+        target_kind=CI_TARGET_BRANCH,
+        target_branch=branch_name,
     )
     return replace(ctx, task=_build_task(ctx))
 
@@ -406,15 +413,16 @@ def _log_excerpt(raw: str) -> str:
 def _build_task(ctx: CiFixContext) -> str:
     masker = MaskingRules(MaskingPolicy.from_env())
     if ctx.is_branch_target:
-        header = (
-            f"Fix the failing GitHub Actions workflow runs on {ctx.owner}/{ctx.repo} "
-            f"branch {ctx.head_branch}."
-        )
+        branch = ctx.target_branch or ctx.base_branch or ctx.head_branch
         lines = [
-            header,
+            f"Fix the failing GitHub Actions workflow runs on {ctx.owner}/{ctx.repo} "
+            f"branch {branch}.",
             "",
-            f"Branch to edit and push: {ctx.head_branch}",
-            f"Head SHA: {ctx.head_sha}",
+            f"Branch: {branch}",
+            f"Failing commit SHA: {ctx.head_sha}",
+            f"Branch URL: {ctx.url}",
+            "The workspace is a fresh OpenSRE repair branch based on the target branch.",
+            "Repair every failing check listed below from all failing workflows on that commit.",
             "",
             "Failing checks and log excerpts:",
         ]
@@ -500,11 +508,21 @@ def _int_value(value: Any) -> int | None:
     return value if isinstance(value, int) else None
 
 
+def _normalize_branch(branch: str | None) -> str:
+    cleaned = str(branch or "").strip()
+    for prefix in ("refs/remotes/origin/", "refs/heads/", "origin/"):
+        if cleaned.startswith(prefix):
+            return cleaned.removeprefix(prefix).strip()
+    return cleaned
+
+
 def _indent(value: str, *, prefix: str) -> str:
     return "\n".join(f"{prefix}{line}" if line else "" for line in value.splitlines())
 
 
 __all__ = [
+    "CI_TARGET_BRANCH",
+    "CI_TARGET_PR",
     "CiFixContext",
     "FailingCheck",
     "PullRequestRef",

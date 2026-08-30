@@ -19,7 +19,8 @@ from fastapi.responses import JSONResponse
 from pydantic import BaseModel, ValidationError
 
 from bootstrap.process import WEB_PROFILE, configure_process
-from config.config import LLMSettings, get_environment
+from config.environment import get_environment
+from config.llm_settings import LLMSettings
 from config.version import get_opensre_version
 from core.agent_harness import AgentSession
 from gateway.core.process.readiness import is_gateway_ready

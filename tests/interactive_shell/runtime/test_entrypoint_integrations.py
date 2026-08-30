@@ -225,15 +225,6 @@ def test_run_repl_async_identifies_saved_github_username(monkeypatch: Any) -> No
         lambda **_kwargs: SimpleNamespace(session=Session(), inbox=None),
     )
 
-    class _PromptSession:
-        history = None
-
-    monkeypatch.setattr(
-        main_entrypoint,
-        "build_prompt_session",
-        lambda: _PromptSession(),
-    )
-
     import asyncio
 
     asyncio.run(main_entrypoint.run_repl_async(initial_input="hello"))
@@ -269,14 +260,6 @@ def test_run_repl_async_failed_resume_flushes_starter_session(
 
     monkeypatch.setattr(session.store, "flush", _track_flush)
 
-    class _PromptSession:
-        history = None
-
-    monkeypatch.setattr(
-        main_entrypoint,
-        "build_prompt_session",
-        lambda: _PromptSession(),
-    )
     monkeypatch.setattr(
         main_entrypoint,
         "create_repl_runtime",
@@ -382,10 +365,6 @@ def test_run_repl_async_routes_the_console_into_resume(monkeypatch: Any, tmp_pat
         _resume,
     )
 
-    class _PromptSession:
-        history = None
-
-    monkeypatch.setattr(main_entrypoint, "build_prompt_session", lambda: _PromptSession())
     monkeypatch.setattr(
         main_entrypoint,
         "create_repl_runtime",
@@ -517,9 +496,6 @@ def test_initial_input_replay_uses_the_supplied_console(monkeypatch: Any) -> Non
 
     monkeypatch.setattr(replay, "render_terminal_ui", _fake_terminal_ui)
 
-    class _PromptSession:
-        history = None
-
     # Rendering happens before the first turn; stub the turn so this pins the
     # console wiring rather than the whole execution stack.
     monkeypatch.setattr(replay, "render_submitted_prompt", lambda *_a, **_kw: None)
@@ -528,7 +504,6 @@ def test_initial_input_replay_uses_the_supplied_console(monkeypatch: Any) -> Non
         lambda *_a, **_kw: None,
     )
 
-    monkeypatch.setattr(main_entrypoint, "build_prompt_session", lambda: _PromptSession())
     monkeypatch.setattr(
         main_entrypoint,
         "create_repl_runtime",

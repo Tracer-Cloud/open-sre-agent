@@ -27,7 +27,7 @@ def _clear_cache() -> None:
 
 def test_resolve_llm_route_reports_provider_and_sdk_transport(monkeypatch: pytest.MonkeyPatch):
     monkeypatch.setattr(
-        "config.config.resolve_llm_settings", lambda: SimpleNamespace(provider="anthropic")
+        "config.llm_settings.resolve_llm_settings", lambda: SimpleNamespace(provider="anthropic")
     )
     monkeypatch.delenv("OPENSRE_LLM_TRANSPORT", raising=False)
 
@@ -40,7 +40,7 @@ def test_resolve_llm_route_reports_provider_and_sdk_transport(monkeypatch: pytes
 
 def test_resolve_llm_route_azure_forces_litellm(monkeypatch: pytest.MonkeyPatch):
     monkeypatch.setattr(
-        "config.config.resolve_llm_settings", lambda: SimpleNamespace(provider="azure-openai")
+        "config.llm_settings.resolve_llm_settings", lambda: SimpleNamespace(provider="azure-openai")
     )
     monkeypatch.delenv("OPENSRE_LLM_TRANSPORT", raising=False)
 

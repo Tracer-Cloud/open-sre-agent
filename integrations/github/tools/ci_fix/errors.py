@@ -1,4 +1,4 @@
-"""Error model for the GitHub PR CI fix tool."""
+"""Error model for the GitHub CI fix tool."""
 
 from __future__ import annotations
 

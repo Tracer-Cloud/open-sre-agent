@@ -51,6 +51,7 @@ from integrations.hermes.classifier import IncidentClassifier
 from integrations.hermes.config import default_hermes_log_path
 from integrations.hermes.incident import HermesIncident, LogLevel, LogRecord
 from integrations.hermes.poller import HermesLogCursor, HermesLogPoll, poll_hermes_logs
+from integrations.hermes.tools.hermes_session_evidence_tool._evidence import MAPPERS
 
 # Cap how many records the tool will serialise into a single
 # response. The poller has its own byte budget; this is the
@@ -217,6 +218,7 @@ def _resolve_cursor(
     name="get_hermes_logs",
     display_name="Hermes log poll",
     source="hermes",
+    evidence_mapper=MAPPERS["get_hermes_logs"],
     description=(
         "Read Hermes Agent's own ~/.hermes/logs/errors.log (or another "
         "Hermes log file) incrementally. Use op='scan' for a one-shot "

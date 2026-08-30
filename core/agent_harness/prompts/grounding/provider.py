@@ -24,7 +24,7 @@ _DOCS_RELEVANCE_FLOOR = 8
 def load_llm_settings() -> Any | None:
     """Best-effort LLM settings load for prompt environment grounding."""
     try:
-        from config.config import LLMSettings
+        from config.llm_settings import LLMSettings
 
         return LLMSettings.from_env()
     except Exception:

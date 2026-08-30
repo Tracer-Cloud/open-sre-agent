@@ -12,12 +12,12 @@ import pytest
 from pydantic import ValidationError
 from rich.console import Console
 
-from config.config import (
+from config.llm_auth.credentials import status as credential_status
+from config.llm_settings import (
     get_configured_llm_provider,
     get_llm_provider_api_key_env,
     resolve_llm_settings_verbose,
 )
-from config.llm_auth.credentials import status as credential_status
 from core.agent_harness.session import JsonlSessionStore
 from surfaces.interactive_shell.command_registry import dispatch_slash
 from surfaces.interactive_shell.session import Session
