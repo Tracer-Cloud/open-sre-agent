@@ -632,7 +632,7 @@ def _monitors_extract_params(sources: dict[str, dict]) -> dict[str, Any]:
         "Reviewing monitor configuration for pipeline monitoring",
     ],
     requires=[],
-    evidence_type = EvidenceType.METRICS,
+    evidence_type = EvidenceType.TOPOLOGY,
     side_effect_level = SideEffectLevel.READ_ONLY,
     input_schema={
         "type": "object",
