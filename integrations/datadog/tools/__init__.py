@@ -177,6 +177,8 @@ def _context_extract_params(sources: dict[str, dict]) -> dict[str, Any]:
         "Getting the complete picture for root cause analysis",
     ],
     requires=[],
+    evidence_type = EvidenceType.METRICS,
+    side_effect_level = SideEffectLevel.READ_ONLY,
     input_schema={
         "type": "object",
         "properties": {
@@ -319,6 +321,8 @@ def _events_extract_params(sources: dict[str, dict]) -> dict[str, Any]:
         "Checking for infrastructure changes around the time of an incident",
     ],
     requires=[],
+    evidence_type = EvidenceType.EVENTS,
+    side_effect_level = SideEffectLevel.READ_ONLY,
     input_schema={
         "type": "object",
         "properties": {
@@ -431,6 +435,8 @@ _DATADOG_LOGS_ANTI = (
     ],
     anti_examples=list(_DATADOG_LOGS_ANTI),
     requires=[],
+    evidence_type = EvidenceType.LOGS,
+    side_effect_level = SideEffectLevel.READ_ONLY,
     input_schema={
         "type": "object",
         "properties": {
@@ -626,6 +632,8 @@ def _monitors_extract_params(sources: dict[str, dict]) -> dict[str, Any]:
         "Reviewing monitor configuration for pipeline monitoring",
     ],
     requires=[],
+    evidence_type = EvidenceType.METRICS,
+    side_effect_level = SideEffectLevel.READ_ONLY,
     input_schema={
         "type": "object",
         "properties": {
@@ -707,6 +715,8 @@ def _node_pods_extract_params(sources: dict[str, dict]) -> dict[str, Any]:
         "Feeding pod names into log retrieval tools for further investigation",
     ],
     requires=[],
+    evidence_type = EvidenceType.METRICS,
+side_effect_level = SideEffectLevel.READ_ONLY,
     input_schema={
         "type": "object",
         "properties": {
