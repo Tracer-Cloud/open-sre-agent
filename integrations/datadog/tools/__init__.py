@@ -9,6 +9,7 @@ import concurrent.futures
 import re
 from typing import Any
 
+from core.domain.types.evidence import record_evidence_entry
 from core.tool import EvidenceType, SideEffectLevel
 from core.tool_framework import tool
 from core.tool_framework.utils import tool_unavailable
@@ -166,10 +167,30 @@ def _context_extract_params(sources: dict[str, dict]) -> dict[str, Any]:
     }
 
 
+def _map_query_datadog_all(
+    evidence: dict[str, Any], output: dict[str, Any], _input: dict[str, Any]
+) -> None:
+    counts = {
+        "log line(s)": len(output.get("logs", [])),
+        "monitor(s)": len(output.get("monitors", [])),
+        "event(s)": len(output.get("events", [])),
+        "failed pod(s)": len(output.get("failed_pods", [])),
+    }
+    parts = [f"{count} {label}" for label, count in counts.items() if count]
+    if parts:
+        record_evidence_entry(
+            evidence,
+            source="query_datadog_all",
+            label="Datadog Context",
+            summary=", ".join(parts),
+        )
+
+
 @tool(
     name="query_datadog_all",
     display_name="Datadog",
     source="datadog",
+    evidence_mapper=_map_query_datadog_all,
     description="Fetch Datadog logs, monitors, and events in parallel for fast investigation.",
     use_cases=[
         "Full Datadog context in a single fast operation",
@@ -308,10 +329,24 @@ def _events_extract_params(sources: dict[str, dict]) -> dict[str, Any]:
     }
 
 
+def _map_query_datadog_events(
+    evidence: dict[str, Any], output: dict[str, Any], _input: dict[str, Any]
+) -> None:
+    events = output.get("events", [])
+    if events:
+        record_evidence_entry(
+            evidence,
+            source="query_datadog_events",
+            label="Datadog Events",
+            summary=f"{len(events)} event(s)",
+        )
+
+
 @tool(
     name="query_datadog_events",
     display_name="Datadog events",
     source="datadog",
+    evidence_mapper=_map_query_datadog_events,
     description="Query Datadog events for deployments, alerts, and system changes.",
     use_cases=[
         "Finding recent deployment events that may correlate with failures",
@@ -414,10 +449,24 @@ _DATADOG_LOGS_ANTI = (
 )
 
 
+def _map_query_datadog_logs(
+    evidence: dict[str, Any], output: dict[str, Any], _input: dict[str, Any]
+) -> None:
+    logs = output.get("logs", [])
+    if logs:
+        record_evidence_entry(
+            evidence,
+            source="query_datadog_logs",
+            label="Datadog Logs",
+            summary=f"{len(logs)} log line(s)",
+        )
+
+
 @tool(
     name="query_datadog_logs",
     display_name="Datadog logs",
     source="datadog",
+    evidence_mapper=_map_query_datadog_logs,
     tags=("logs", "observability"),
     description=(
         "Search Datadog Logs with a concrete query string (required), e.g. "
@@ -547,9 +596,25 @@ def _metrics_extract_params(sources: dict[str, dict]) -> dict[str, Any]:
     }
 
 
+def _map_query_datadog_metrics(
+    evidence: dict[str, Any], output: dict[str, Any], _input: dict[str, Any]
+) -> None:
+    # The tool is currently a stub that returns no series; this becomes live
+    # evidence only once the Datadog Metrics API v2 implementation lands.
+    series = output.get("metrics", [])
+    if series:
+        record_evidence_entry(
+            evidence,
+            source="query_datadog_metrics",
+            label="Datadog Metrics",
+            summary=f"{len(series)} series",
+        )
+
+
 @tool(
     name="query_datadog_metrics",
     source="datadog",
+    evidence_mapper=_map_query_datadog_metrics,
     description="Query Datadog metrics for infrastructure and application performance data.",
     use_cases=[
         "Investigating CPU or memory spikes correlated with an alert",
@@ -614,10 +679,24 @@ def _monitors_extract_params(sources: dict[str, dict]) -> dict[str, Any]:
     }
 
 
+def _map_query_datadog_monitors(
+    evidence: dict[str, Any], output: dict[str, Any], _input: dict[str, Any]
+) -> None:
+    monitors = output.get("monitors", [])
+    if monitors:
+        record_evidence_entry(
+            evidence,
+            source="query_datadog_monitors",
+            label="Datadog Monitors",
+            summary=f"{len(monitors)} monitor(s)",
+        )
+
+
 @tool(
     name="query_datadog_monitors",
     display_name="Datadog monitors",
     source="datadog",
+    evidence_mapper=_map_query_datadog_monitors,
     description="List Datadog monitors to understand alerting configuration and current states.",
     use_cases=[
         "Understanding which monitors triggered an alert",
@@ -697,9 +776,23 @@ def _node_pods_extract_params(sources: dict[str, dict]) -> dict[str, Any]:
     }
 
 
+def _map_get_pods_on_node(
+    evidence: dict[str, Any], output: dict[str, Any], _input: dict[str, Any]
+) -> None:
+    pods = output.get("pods", [])
+    if pods:
+        record_evidence_entry(
+            evidence,
+            source="get_pods_on_node",
+            label="Datadog Pods on Node",
+            summary=f"{len(pods)} pod(s)",
+        )
+
+
 @tool(
     name="get_pods_on_node",
     source="datadog",
+    evidence_mapper=_map_get_pods_on_node,
     description="Resolve a node IP address to all pods running on that node via Datadog.",
     use_cases=[
         "Mapping a node IP from an infrastructure alert to specific pods",

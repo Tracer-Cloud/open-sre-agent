@@ -66,7 +66,6 @@ get_mongodb_atlas_cluster_metrics
 get_mongodb_atlas_clusters
 get_mongodb_atlas_performance_advisor
 get_openclaw_conversation
-get_pods_on_node
 get_postgresql_current_queries
 get_postgresql_lock_status
 get_postgresql_replication_status
@@ -130,11 +129,6 @@ memory_recall
 memory_remember
 pi_coding_task
 query_azure_monitor_logs
-query_datadog_all
-query_datadog_events
-query_datadog_logs
-query_datadog_metrics
-query_datadog_monitors
 query_grafana_annotations
 query_groundcover_logs
 query_groundcover_traces
