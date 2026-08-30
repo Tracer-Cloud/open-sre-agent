@@ -227,7 +227,9 @@ def test_run_foreground_investigation_completes_pinned_task_plan(
         assert get_investigation_plan_session() is session
         advance_investigation_plan("investigation_agent")
         assert session.task_plan is not None
-        assert session.task_plan.current_index == 2
+        # On a 4-step plan, gather (phase 1) still maps to the first checklist
+        # row — see pipeline_phase_to_step_index — so Plan · 1/4 stays put.
+        assert session.task_plan.current_index == 1
         return {"root_cause": "sample"}
 
     outcome = run_foreground_investigation(

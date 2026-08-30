@@ -167,6 +167,7 @@ SPI_ROLE_NAMES: dict[str, frozenset[str]] = {
             "apply_update_plan_host_policy",
             "apply_update_plan_session",
             "complete_task_plan",
+            "ensure_active_step",
             "format_plan_header",
             "format_task_plan_plain",
             "investigation_phase_index",
