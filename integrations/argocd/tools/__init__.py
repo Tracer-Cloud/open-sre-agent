@@ -6,44 +6,20 @@ from __future__ import annotations
 
 from typing import Any
 
-from core.domain.types.evidence import record_evidence_entry
 from core.tool import BaseTool
 from core.tool_framework.utils import tool_unavailable
 from integrations.argocd.client import make_argocd_client
-
-
-def _map_argocd_application_diff(
-    evidence: dict[str, Any], output: dict[str, Any], _input: dict[str, Any]
-) -> None:
-    """Cite detected GitOps drift as report evidence.
-
-    Records nothing when no drift was found -- "0 diffs, no drift" is a clean
-    result, not a finding worth spending the agent's context budget on.
-    ``drift_detected`` is the authoritative signal, not ``diff_count``: the
-    client's ``modified`` flag (Argo CD v3.3's {items, modified} response
-    shape) can report drift with an empty itemized diff list -- a modified-
-    but-unitemized result must still be cited, not silently dropped.
-    """
-    if not output.get("available") or not output.get("drift_detected"):
-        return
-    diff_count = output.get("diff_count") or 0
-    if diff_count:
-        summary = f"{diff_count} object diff(s) — live state has drifted from GitOps"
-    else:
-        summary = "live state has drifted from GitOps (no itemized diffs returned)"
-    record_evidence_entry(
-        evidence,
-        source="argocd_application_diff",
-        label="Argo CD Application Diff",
-        summary=summary,
-    )
+from integrations.argocd.tools._evidence import (
+    map_argocd_application_diff,
+    map_argocd_application_status,
+)
 
 
 class ArgoCDApplicationDiffTool(BaseTool):
     """Fetch Argo CD server-side diff data for an application."""
 
     name = "argocd_application_diff"
-    evidence_mapper = _map_argocd_application_diff
+    evidence_mapper = map_argocd_application_diff
     source = "argocd"
     description = (
         "Fetch Argo CD server-side diff output and report whether live cluster state "
@@ -169,41 +145,11 @@ argocd_application_diff = ArgoCDApplicationDiffTool()
 """Argo CD application status investigation tool."""
 
 
-from core.tool import BaseTool
-
-
-def _map_argocd_application_status(
-    evidence: dict[str, Any], output: dict[str, Any], _input: dict[str, Any]
-) -> None:
-    """Cite the application's sync/health status, or the application list count."""
-    if not output.get("available"):
-        return
-    application = output.get("application")
-    if isinstance(application, dict) and application.get("name"):
-        sync_status = application.get("sync_status") or "unknown"
-        health_status = application.get("health_status") or "unknown"
-        record_evidence_entry(
-            evidence,
-            source="argocd_application_status",
-            label="Argo CD Application Status",
-            summary=f"{application['name']}: sync={sync_status}, health={health_status}",
-        )
-        return
-    applications = output.get("applications")
-    if isinstance(applications, list) and applications:
-        record_evidence_entry(
-            evidence,
-            source="argocd_application_status",
-            label="Argo CD Applications",
-            summary=f"{len(applications)} application(s) listed",
-        )
-
-
 class ArgoCDApplicationStatusTool(BaseTool):
     """Fetch Argo CD application sync and health status."""
 
     name = "argocd_application_status"
-    evidence_mapper = _map_argocd_application_status
+    evidence_mapper = map_argocd_application_status
     source = "argocd"
     description = (
         "Fetch Argo CD application sync status, health status, current revision, "

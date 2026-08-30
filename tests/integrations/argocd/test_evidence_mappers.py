@@ -4,9 +4,11 @@ from __future__ import annotations
 
 from typing import Any
 
-from integrations.argocd.tools import (
-    _map_argocd_application_diff,
-    _map_argocd_application_status,
+from integrations.argocd.tools._evidence import (
+    map_argocd_application_diff as _map_argocd_application_diff,
+)
+from integrations.argocd.tools._evidence import (
+    map_argocd_application_status as _map_argocd_application_status,
 )
 
 
