@@ -23,6 +23,12 @@ from tools.registry import get_registered_tool_map
 
 pytestmark = [pytest.mark.live_llm, pytest.mark.integration]
 
+_TOOL_SELECTION_SYSTEM_PROMPT = (
+    "You are selecting the first diagnostic tool for a live contract test. "
+    "You must call exactly one of the provided tools. Do not answer in prose "
+    "and do not merely name the tool."
+)
+
 
 @dataclass(frozen=True, slots=True)
 class SelectionScenario:
@@ -179,7 +185,11 @@ def test_live_tool_selection_matches_target_tool(scenario: SelectionScenario) ->
 
     response = None
     try:
-        response = llm.invoke(messages=messages, tools=tool_schemas)
+        response = llm.invoke(
+            messages=messages,
+            system=_TOOL_SELECTION_SYSTEM_PROMPT,
+            tools=tool_schemas,
+        )
     except LLMCreditExhaustedError as exc:
         skip_or_fail(f"Live tool selection provider credit/quota is exhausted. {exc}")
     assert response is not None
