@@ -128,6 +128,14 @@ def test_ensure_take_clause_branches(query: str, limit: int, expected: str) -> N
     assert _ensure_take_clause(query, limit) == expected
 
 
+def test_ensure_take_clause_appends_real_bound_despite_quoted_take_text() -> None:
+    """Regression: a naive substring check for "take"/"limit" would match
+    inside a quoted filter value and wrongly skip appending the real safety
+    cap, letting the query run unbounded against the customer's workspace."""
+    query = 'AppTraces | where Message contains "| take 5 now"'
+    assert _ensure_take_clause(query, 5) == query + " | take 5"
+
+
 def test_run_happy_path(monkeypatch: pytest.MonkeyPatch) -> None:
     mocked_response = MagicMock()
     mocked_response.raise_for_status.return_value = None
@@ -311,6 +319,26 @@ class TestMapQueryAzureMonitorLogs:
                 "total_returned": 3,
                 "effective_limit": 50,
                 "query": 'AppTraces | where Message contains "take 5 minutes"',
+            },
+            {},
+        )
+
+        assert evidence["catalog_entries"][0]["summary"].startswith("3 row(s)")
+
+    def test_ignores_pipe_and_take_text_embedded_in_a_quoted_string(self) -> None:
+        """Regression: a literal '|' immediately before 'take N' inside a
+        quoted string literal (e.g. a filter value) is not a real KQL
+        pipe-stage boundary -- the pipe-anchored regex alone still matches
+        it, so the query text must be masked before the regex runs."""
+        evidence: dict[str, Any] = {}
+
+        _map_query_azure_monitor_logs(
+            evidence,
+            {
+                "available": True,
+                "total_returned": 3,
+                "effective_limit": 50,
+                "query": 'AppTraces | where Message contains "| take 5 now"',
             },
             {},
         )

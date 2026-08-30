@@ -18,6 +18,7 @@ from core.tool_framework.utils import tool_unavailable
 from integrations.azure.tools.azure_monitor_logs_tool._evidence import (
     map_query_azure_monitor_logs,
 )
+from integrations.azure.tools.azure_monitor_logs_tool._kql import has_take_or_limit_clause
 
 
 def _bounded_limit(limit: int, max_results: int) -> int:
@@ -52,12 +53,7 @@ def _ensure_take_clause(query: str, limit: int) -> str:
     normalized = query.strip()
     if not normalized:
         return f"AppTraces | order by TimeGenerated desc | take {limit}"
-    lowered = normalized.lower()
-    padded = f" {lowered} "
-    # KQL defines `limit` as a synonym for `take` -- a caller who already
-    # bounded rows with either must not get a second, conflicting stage
-    # appended.
-    if " take " in padded or " limit " in padded:
+    if has_take_or_limit_clause(normalized):
         return normalized
     return f"{normalized} | take {limit}"
 

@@ -2,25 +2,15 @@
 
 from __future__ import annotations
 
-import re
 from typing import Any
 
 from core.domain.types.evidence import record_evidence_entry
 from infrastructure.text.truncation import truncate
+from integrations.azure.tools.azure_monitor_logs_tool._kql import find_take_or_limit_values
 
 #: Bound the KQL query text echoed into a report summary -- it can be a long
 #: or multi-line query built by the caller, not just the short bounded form.
 _QUERY_SUMMARY_TRUNCATE_LEN = 80
-
-#: _ensure_take_clause leaves a caller-supplied query untouched when it
-#: already contains a ``take``/``limit`` pipe stage -- KQL defines ``limit``
-#: as a synonym for ``take`` -- so ``effective_limit`` is computed but never
-#: actually applied to that query. A caller's own smaller ``take``/``limit
-#: N`` is therefore the real ceiling, not ``effective_limit``. Require a
-#: preceding ``|`` (the actual KQL pipe-stage syntax) so a ``take N`` that
-#: only appears inside a quoted string or a ``//`` comment -- not a real
-#: operator -- isn't mistaken for one.
-_TAKE_CLAUSE_RE = re.compile(r"\|\s*(?:take|limit)\s+(\d+)\b", re.IGNORECASE)
 
 
 def map_query_azure_monitor_logs(
@@ -39,7 +29,7 @@ def map_query_azure_monitor_logs(
         return
     effective_limit = output.get("effective_limit", total)
     raw_query = str(output.get("query", ""))
-    row_cap_matches = [int(m) for m in _TAKE_CLAUSE_RE.findall(raw_query)]
+    row_cap_matches = find_take_or_limit_values(raw_query)
     if row_cap_matches:
         effective_limit = min(effective_limit, *row_cap_matches)
     count_label = f"{total}+" if total >= effective_limit else str(total)
