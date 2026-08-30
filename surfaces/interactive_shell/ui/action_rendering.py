@@ -319,7 +319,7 @@ class ActionRenderObserver:
 
     def __call__(self, kind: str, data: dict[str, Any]) -> None:
         if kind == "llm_start":
-            self._set_spinner_phase(SpinnerState.EXECUTING_PHASE)
+            self._set_spinner_phase(SpinnerState.THINKING_PHASE)
             self._advance_spinner_verb(data)
             return
         if kind == "message_update":
@@ -341,6 +341,7 @@ class ActionRenderObserver:
             # update_plan is not painted into the transcript: the plan renders in
             # the pinned bottom overlay (``task_plan_overlay_ansi``) from session
             # state the tool committed.
+            self._clear_active_action()
             self._set_spinner_phase(SpinnerState.EXECUTING_PHASE)
             return
         if kind != "tool_start":
@@ -361,6 +362,7 @@ class ActionRenderObserver:
             self._render_tool_invocation(name, data)
         if name not in _SKIP_PLAN_WORK_TOOLS and not _is_internal_choice_command(name, data):
             self._record_plan_work(name, data)
+            self._set_active_action(name, data)
         if self.planned_count == 0 and name not in SELF_RECORDING_ACTION_TOOL_NAMES:
             self.session.record("cli_agent", self.message)
         self.planned_count += 1
@@ -381,6 +383,24 @@ class ActionRenderObserver:
         spinner = get_investigation_spinner()
         if spinner is not None and getattr(spinner, "streaming", False):
             spinner.set_phase(label)
+
+    def _set_active_action(self, name: str, data: dict[str, Any]) -> None:
+        """Show the running tool as a shimmering action line in the live region.
+
+        The line clears on ``tool_end``; scrollback keeps the settled solid copy.
+        Only relabels an already-running spinner (see ``_set_spinner_phase``).
+        """
+        spinner = get_investigation_spinner()
+        if spinner is None or not getattr(spinner, "streaming", False):
+            return
+        args = data.get("input")
+        label, content = tool_call_display(name, args if isinstance(args, dict) else {})
+        spinner.set_active_action(f"{label} · {content}" if content else label)
+
+    def _clear_active_action(self) -> None:
+        spinner = get_investigation_spinner()
+        if spinner is not None:
+            spinner.clear_active_action()
 
     def _advance_spinner_verb(self, data: dict[str, Any]) -> None:
         """Rotate the prompt spinner's thinking verb every two agent steps.

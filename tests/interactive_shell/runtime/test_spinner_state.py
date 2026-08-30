@@ -69,24 +69,34 @@ def test_spinner_invoking_tools_phase_matches_factory_copy() -> None:
     assert "(Press ESC to stop)" in rendered
 
 
-def test_invoking_tools_uses_brand_accent_not_highlight() -> None:
-    """Tool phase is brand-colored so it contrasts with Thinking (highlight)."""
+def test_load_state_phases_use_distinct_accents() -> None:
+    """Thinking=highlight, Executing=brand, Invoking tools=bold brand — a glance
+    tells LLM latency (thinking) from tool work (invoking)."""
     from infrastructure.terminal.theme import set_active_theme
 
     set_active_theme("blue")
     spinner = SpinnerState()
     spinner.start()
-    thinking = spinner.inline_spinner_ansi()
+
+    spinner.set_phase(SpinnerState.THINKING_PHASE)
+    thinking = spinner.inline_spinner_ansi().split("(Press ESC")[0]
+    assert SpinnerState.THINKING_PHASE in thinking
     assert "168;212;255" in thinking  # highlight
-    assert "111;165;216" not in thinking.split("(Press ESC")[0]
+    assert "111;165;216" not in thinking  # not brand
+
+    spinner.set_phase(SpinnerState.EXECUTING_PHASE)
+    executing = spinner.inline_spinner_ansi().split("(Press ESC")[0]
+    assert SpinnerState.EXECUTING_PHASE in executing
+    assert "111;165;216" in executing  # brand
+    assert "168;212;255" not in executing  # not highlight
+    assert "\x1b[1m" not in executing  # brand is not bold in the executing phase
 
     spinner.set_phase(SpinnerState.INVOKING_TOOLS_PHASE)
-    invoking = spinner.inline_spinner_ansi()
+    invoking = spinner.inline_spinner_ansi().split("(Press ESC")[0]
     assert SpinnerState.INVOKING_TOOLS_PHASE in invoking
     assert "111;165;216" in invoking  # brand
-    # Lead+label must not stay on highlight once tools are invoking.
-    lead = invoking.split("(Press ESC")[0]
-    assert "168;212;255" not in lead
+    assert "\x1b[1m" in invoking  # bold brand — the hottest state
+    assert "168;212;255" not in invoking  # not highlight
 
 
 def test_spinner_empty_when_not_streaming() -> None:
@@ -107,3 +117,24 @@ def test_inline_spinner_clips_a_long_phase_to_one_prompt_row() -> None:
     rendered = re.sub(r"\x1b\[[0-9;]*m", "", spinner.inline_spinner_ansi())
 
     assert len(rendered) <= prompt_line_width()
+
+
+def test_active_action_shimmer_renders_indented_glow_and_clears() -> None:
+    """The running action shows an indented white-glow line; cleared → blank."""
+    spinner = SpinnerState()
+    spinner.start()
+    assert spinner.active_action_ansi() == ""  # none by default
+
+    spinner.set_active_action("Execute · cd /tmp")
+    rendered = spinner.active_action_ansi()
+    assert "Execute · cd /tmp" in rendered
+    assert SpinnerState._ACTION_GLYPH in rendered
+    # White glow: a 24-bit grey foreground (R == G == B) within the shimmer band.
+    match = re.search(r"\x1b\[38;2;(\d+);(\d+);(\d+)m", rendered)
+    assert match is not None
+    red, green, blue = (int(match.group(i)) for i in (1, 2, 3))
+    assert red == green == blue
+    assert SpinnerState._SHIMMER_MIN_LEVEL <= red <= SpinnerState._SHIMMER_MAX_LEVEL
+
+    spinner.clear_active_action()
+    assert spinner.active_action_ansi() == ""

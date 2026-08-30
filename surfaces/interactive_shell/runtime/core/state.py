@@ -193,7 +193,12 @@ class SpinnerState:
     # render pass (layout measurement + paint), so a per-call counter can land
     # on the same frame every visible render and freeze the animation.
     _FRAME_INTERVAL_SECONDS = 0.1
-    EXECUTING_PHASE = "Thinking…"
+    # Load-state labels for the live spinner, escalating with the turn stage:
+    # waiting on the model (THINKING) → dispatching / between tools (EXECUTING)
+    # → a tool is running (INVOKING_TOOLS). Each renders in a distinct accent so
+    # a glance tells LLM latency from tool work.
+    THINKING_PHASE = "Thinking…"
+    EXECUTING_PHASE = "Executing…"
     INVOKING_TOOLS_PHASE = "Invoking tools…"
     _STOP_HINT = "(Press ESC to stop)"
     # Netrunner verb pools, escalating with time spent in the net: the longer
@@ -241,6 +246,14 @@ class SpinnerState:
     # Verbs picked twice as often as the rest of their pool (default weight 1).
     _VERB_WEIGHTS = {"jacking in": 2, "crawling the datastream": 2}
 
+    # White-glow shimmer for the running action line: a triangle wave over this
+    # period drives brightness between the two levels below (pure function of the
+    # clock, like the spinner glyph, so it never freezes on a busy render pass).
+    _SHIMMER_PERIOD_SECONDS = 1.1
+    _SHIMMER_MIN_LEVEL = 150
+    _SHIMMER_MAX_LEVEL = 255
+    _ACTION_GLYPH = "⟩"
+
     def __init__(self) -> None:
         self.streaming: bool = False
         self.started_at: float = 0.0
@@ -248,6 +261,36 @@ class SpinnerState:
         self._verb_tier: int = 0
         self._verb: str = self._VERB_TIERS[0][1][0]
         self.phase: str = ""
+        # The action currently running, shown shimmering in the live region and
+        # committed as a solid line to scrollback when it ends. Empty when none.
+        self.active_action: str = ""
+        self._action_started_at: float = 0.0
+
+    def set_active_action(self, text: str) -> None:
+        """Show ``text`` as the running action line (white-glow shimmer)."""
+        self.active_action = text.strip()
+        self._action_started_at = time.monotonic()
+
+    def clear_active_action(self) -> None:
+        self.active_action = ""
+
+    def active_action_ansi(self) -> str:
+        """The indented, shimmering action line, or ``""`` when none is running.
+
+        The glow is a triangle wave on a white foreground, so the line reads as
+        live work in progress; scrollback holds the settled solid copy.
+        """
+        if not self.active_action:
+            return ""
+        elapsed = time.monotonic() - self._action_started_at
+        phase = (elapsed % self._SHIMMER_PERIOD_SECONDS) / self._SHIMMER_PERIOD_SECONDS
+        triangle = 1.0 - abs(2.0 * phase - 1.0)  # 0 → 1 → 0 over the period
+        span = self._SHIMMER_MAX_LEVEL - self._SHIMMER_MIN_LEVEL
+        level = self._SHIMMER_MIN_LEVEL + int(triangle * span)
+        glow = f"\x1b[38;2;{level};{level};{level}m"
+        lead = f"  {self._ACTION_GLYPH} "
+        text = clip_prompt_text(self.active_action, prompt_line_width() - len(lead))
+        return f"{glow}{lead}{text}{ui_theme.ANSI_RESET}"
 
     def start(self) -> None:
         self.streaming = True
@@ -336,14 +379,17 @@ class SpinnerState:
         )
 
     def _phase_accent_ansi(self) -> str:
-        """Accent for the spinner lead+label; tool phase uses brand, not highlight.
+        """Accent for the spinner lead+label, distinct per load-state phase.
 
-        ``Thinking…`` / stage labels stay on the prompt accent (bold highlight).
-        ``Invoking tools…`` uses bold brand so the line under the plan reads as a
-        distinct activity color — same stack as Droid, different hue from thinking.
+        ``Thinking…`` (and pipeline stage labels) stay on the prompt accent (bold
+        highlight); ``Executing…`` uses brand; ``Invoking tools…`` uses bold
+        brand — the same hue as executing but heavier, so tool work reads as the
+        hottest state while staying different from thinking.
         """
         if self.phase == self.INVOKING_TOOLS_PHASE:
             return ui_theme.BOLD_BRAND_ANSI
+        if self.phase == self.EXECUTING_PHASE:
+            return ui_theme.BRAND_ANSI
         return ui_theme.PROMPT_ACCENT_ANSI
 
     def inline_spinner_ansi(self) -> str:

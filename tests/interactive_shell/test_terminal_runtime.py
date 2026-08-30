@@ -713,14 +713,15 @@ class TestSpinnerState:
         assert spinner.streaming is False
         assert spinner.inline_spinner_ansi() == ""
 
-    def test_inline_spinner_uses_active_theme_highlight(self) -> None:
+    def test_inline_spinner_thinking_uses_active_theme_highlight(self) -> None:
         from infrastructure.terminal.theme import set_active_theme
 
         set_active_theme("blue")
         spinner = loop_state.SpinnerState()
         spinner.start()
+        spinner.set_phase(loop_state.SpinnerState.THINKING_PHASE)
         raw = spinner.inline_spinner_ansi()
-        assert "168;212;255" in raw
+        assert "168;212;255" in raw  # highlight — the Thinking accent
         assert "185;237;175" not in raw
 
     def test_inline_spinner_invoking_tools_uses_brand(self) -> None:

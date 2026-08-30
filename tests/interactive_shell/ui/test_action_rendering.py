@@ -573,3 +573,33 @@ def test_update_plan_is_not_dumped_into_the_transcript() -> None:
     assert "Plan ready" not in output
     assert "Measure wait vs work" not in output
     assert "p99 up" not in output
+
+
+def test_observer_drives_load_state_phases_by_turn_stage() -> None:
+    """The spinner label tracks the stage: llm_start → Thinking, tool_start →
+    Invoking tools, tool_end → Executing. Never a stale label, never blank."""
+    from surfaces.interactive_shell.runtime.core.state import SpinnerState
+    from surfaces.shared.terminal.output.console_state import set_investigation_spinner
+
+    spinner = SpinnerState()
+    spinner.start()  # initial dispatch shows Executing
+    assert spinner.phase == SpinnerState.EXECUTING_PHASE
+    set_investigation_spinner(spinner)
+    try:
+        console = Console(file=io.StringIO(), force_terminal=False)
+        observer = ActionRenderObserver(session=Session(), console=console, message="do it")
+
+        observer("llm_start", {})
+        assert spinner.phase == SpinnerState.THINKING_PHASE
+
+        observer("tool_start", {"name": "shell_run", "input": {"command": "true"}})
+        assert spinner.phase == SpinnerState.INVOKING_TOOLS_PHASE
+        # The running action shows as a shimmering live line.
+        assert "Execute" in spinner.active_action
+        assert "true" in spinner.active_action
+
+        observer("tool_end", {"name": "shell_run"})
+        assert spinner.phase == SpinnerState.EXECUTING_PHASE
+        assert spinner.active_action == ""  # cleared; scrollback keeps the solid copy
+    finally:
+        set_investigation_spinner(None)
