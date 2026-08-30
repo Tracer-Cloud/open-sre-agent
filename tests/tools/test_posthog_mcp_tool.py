@@ -581,6 +581,22 @@ def test_map_call_posthog_tool_disambiguates_repeat_calls() -> None:
     assert sources == ["call_posthog_tool:execute-sql", "call_posthog_tool:execute-sql#2"]
 
 
+def test_map_call_posthog_tool_bounds_oversized_tool_name() -> None:
+    """Regression: tool_name is caller-controlled and unbounded -- an
+    oversized name must not inflate the summary, label, or source key."""
+    evidence: dict[str, object] = {}
+    huge_name = "x" * 500
+    map_call_posthog_tool(
+        evidence,
+        {"available": True, "tool": huge_name, "results": [[1]]},
+        {"tool_name": huge_name},
+    )
+    entry = evidence["catalog_entries"][0]
+    assert len(entry["source"]) < 100
+    assert len(entry["label"]) < 100
+    assert len(entry["summary"]) < 200
+
+
 def test_map_call_posthog_tool_skips_when_no_result_content() -> None:
     evidence: dict[str, object] = {}
     map_call_posthog_tool(

@@ -11,6 +11,14 @@ from infrastructure.text.truncation import truncate
 #: both are caller/upstream-supplied and unbounded.
 _SUMMARY_TRUNCATE_LEN = 120
 
+#: Bound the dispatched MCP tool name -- caller-controlled and unbounded --
+#: before it flows into the summary, label, and evidence source key.
+_TOOL_NAME_TRUNCATE_LEN = 60
+
+
+def _safe_tool_name(tool_name: str) -> str:
+    return truncate(tool_name.replace("\n", " "), _TOOL_NAME_TRUNCATE_LEN)
+
 
 def _next_unique_source(evidence: dict[str, Any], base: str) -> str:
     """Disambiguate repeat calls to a generic dispatcher tool.
@@ -73,7 +81,8 @@ def map_call_posthog_tool(
     """
     if not output.get("available"):
         return
-    tool_name = str(output.get("tool") or tool_input.get("tool_name") or "").strip()
+    raw_tool_name = str(output.get("tool") or tool_input.get("tool_name") or "").strip()
+    tool_name = _safe_tool_name(raw_tool_name) if raw_tool_name else ""
     results = output.get("results")
     text = output.get("text")
     structured = output.get("structured_content")
