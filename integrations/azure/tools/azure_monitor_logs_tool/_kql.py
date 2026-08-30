@@ -1,10 +1,15 @@
 """Lightweight KQL text helpers for take/limit pipe-stage detection.
 
-Not a full KQL parser -- masks quoted string literals (including
-backslash-escaped quotes) and ``//`` line comments so take/limit
-pipe-stage detection isn't fooled by text that merely *contains* those
-keywords inside a string or comment (e.g. a
-``where Message contains "| take 5"`` filter).
+Not a full KQL parser -- masks quoted string literals and ``//`` line
+comments so take/limit pipe-stage detection isn't fooled by text that
+merely *contains* those keywords inside a string or comment (e.g. a
+``where Message contains "| take 5"`` filter). Handles both of KQL's
+string forms: regular strings (``"..."``/``'...'``, backslash-escaped
+quotes) and verbatim strings (``@"..."``/``@'...'``, where backslash is
+a literal character and a doubled quote is the only escape) -- treating
+a verbatim string as a regular one would let a backslash before its
+real closing quote extend the mask past the string's true end, hiding
+a real take/limit stage that follows it.
 """
 
 from __future__ import annotations
@@ -26,30 +31,48 @@ def mask_string_and_comment_text(query: str) -> str:
     """
     result: list[str] = []
     quote_char: str | None = None
+    verbatim = False
     i = 0
     n = len(query)
     while i < n:
         ch = query[i]
         if quote_char is not None:
-            if ch == "\\" and i + 1 < n:
-                # A backslash-escaped character (``\"``, ``\\``, ...) can't
-                # close the string or be interpreted as real syntax -- mask
-                # both the backslash and the character it escapes together,
-                # so an escaped quote never ends the string early and
-                # exposes the rest of the literal as executable text.
+            if not verbatim and ch == "\\" and i + 1 < n:
+                # A backslash-escaped character (``\"``, ``\\``, ...) in a
+                # *regular* string can't close the string or be interpreted
+                # as real syntax -- mask both the backslash and the escaped
+                # character together, so an escaped quote never ends the
+                # string early. Verbatim strings don't use this escape --
+                # a backslash there is just a literal character.
                 next_ch = query[i + 1]
                 result.append(ch if ch == "\n" else " ")
                 result.append(next_ch if next_ch == "\n" else " ")
                 i += 2
                 continue
             if ch == quote_char:
+                # A verbatim string escapes a literal quote by doubling it
+                # (``""``/``''``), not with a backslash -- a doubled quote
+                # here isn't the closing quote.
+                if verbatim and i + 1 < n and query[i + 1] == quote_char:
+                    result.append(ch)
+                    result.append(query[i + 1])
+                    i += 2
+                    continue
                 quote_char = None
+                verbatim = False
                 result.append(ch)
             elif ch == "\n":
                 result.append(ch)
             else:
                 result.append(" ")
             i += 1
+            continue
+        if ch == "@" and i + 1 < n and query[i + 1] in ("'", '"'):
+            verbatim = True
+            quote_char = query[i + 1]
+            result.append(ch)
+            result.append(query[i + 1])
+            i += 2
             continue
         if ch in ("'", '"'):
             quote_char = ch

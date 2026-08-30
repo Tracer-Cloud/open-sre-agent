@@ -63,3 +63,22 @@ def test_escaped_backslash_before_closing_quote_still_closes_string() -> None:
     quote -- the string must still close normally afterward."""
     query = 'AppTraces | where Message contains "trailing backslash \\\\" | take 5'
     assert find_take_or_limit_values(query) == [5]
+
+
+def test_verbatim_string_does_not_treat_backslash_as_an_escape() -> None:
+    """Regression: KQL verbatim strings (``@"..."``) don't use backslash
+    escaping -- a backslash there is a literal character, so the very next
+    quote really does close the string. Treating it like a regular string's
+    escape would extend the mask past the string's true end and hide a
+    real take/limit stage that follows it, understating saturation."""
+    query = 'AppTraces | where Message == @"literal \\" | take 5'
+    assert find_take_or_limit_values(query) == [5]
+
+
+def test_verbatim_string_uses_doubled_quote_to_escape() -> None:
+    """A doubled quote (``""``) inside a verbatim string is its escape for
+    a literal quote -- it must not end the string early, so fake take/limit
+    text between the doubled quotes stays masked while a real clause after
+    the string's true end is still detected."""
+    query = 'AppTraces | where Message == @"a "" take 5 "" b" | take 3'
+    assert find_take_or_limit_values(query) == [3]
