@@ -42,7 +42,11 @@ from core.agent_harness.session.pending_choice import parse_ask_user_answers
 from core.agent_harness.session.terminal_access import execute_cli_onboard_on_missing_key
 from core.agent_harness.session_goal.goal import strip_session_goal_progress_tags
 from core.agent_harness.turns.conversation_recording import record_conversation_turn
-from core.agent_harness.turns.goal_review import build_goal_reviewer, tap_executed_tool_names
+from core.agent_harness.turns.goal_review import (
+    build_goal_reviewer,
+    tap_executed_tool_names,
+    task_plan_blocks_conclusion,
+)
 from core.agent_harness.turns.turn_plan import TurnPlan
 from core.agent_harness.turns.turn_results import ToolCallingTurnResult
 from core.agent_harness.turns.turn_snapshot import TurnSnapshot
@@ -764,6 +768,10 @@ def _build_action_agent(
             llm,
             _goal_review_user_request(message, turn_snapshot),
             executed_tool_names,
+            plan_incomplete=lambda: task_plan_blocks_conclusion(
+                task_plan=getattr(session, "task_plan", None),
+                plan_only=bool(getattr(session, "plan_only_until_authorized", False)),
+            ),
         )
 
     # WAL first, observer second: the tool intent must be on disk before
@@ -953,14 +961,18 @@ def _compose_response(
     # response_text still includes history for persistence / non-TTY surfaces.
     display_generic = _cap_for_display(generic_text)
     is_json = _looks_like_json(generic_text)
-    bulky = display_generic.count("\n") >= 4 or display_generic.endswith(_OUTPUT_TRUNCATED_MARKER)
+    truncated = display_generic.endswith(_OUTPUT_TRUNCATED_MARKER)
+    bulky = display_generic.count("\n") >= 4 or truncated
     if display_generic and (is_json or bulky):
-        # Bulky or JSON tool output reads as code: put it in its own fenced block
-        # below a blank line so it never blends with the report prose above it.
-        # JSON gets a ``json`` fence for syntax highlighting. Short summaries stay
-        # inline.
-        lang = "json" if is_json else "text"
-        display_generic = f"\n```{lang}\n{display_generic}\n```"
+        # Truncated JSON is invalid — fencing it as ``json`` makes Rich/Pygments
+        # paint error tokens (red blocks) on the cut. Use a text fence instead
+        # and keep the truncation marker outside the block.
+        if truncated:
+            body = display_generic[: -len(_OUTPUT_TRUNCATED_MARKER)].rstrip("\n")
+            display_generic = f"\n```text\n{body}\n```\n{_OUTPUT_TRUNCATED_MARKER}"
+        else:
+            lang = "json" if is_json else "text"
+            display_generic = f"\n```{lang}\n{display_generic}\n```"
     display_chunks = [chunk for chunk in (display_final, display_generic, hint) if chunk]
     response_chunks = [
         chunk

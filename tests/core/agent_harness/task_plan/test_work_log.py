@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from types import SimpleNamespace
 
+from core.agent_harness.task_plan.investigation_progress import advance_task_plan_to_phase
 from core.agent_harness.task_plan.plan import parse_task_plan
 from core.agent_harness.task_plan.update_plan_policy import apply_update_plan_session
 from core.agent_harness.task_plan.work_log import (
@@ -61,6 +62,15 @@ def test_record_skips_when_no_in_progress_step() -> None:
     session = _session_with_plan("pending", "pending", "pending", "pending")
     record_task_plan_work(session, "should not land")
     assert all(bucket == [] for bucket in session.task_plan_work)
+
+
+def test_record_keeps_attribution_when_mapped_phase_step_is_completed() -> None:
+    session = _session_with_plan("in_progress", "completed", "pending", "pending")
+    updated = advance_task_plan_to_phase(session.task_plan, 2)
+    apply_update_plan_session(session, updated, plan_only=False)
+    record_task_plan_work(session, "PostHog · query exceptions")
+    assert session.task_plan_work[0] == ["PostHog · query exceptions"]
+    assert session.task_plan_work[2] == []
 
 
 def test_format_breakdown_lists_work_under_steps() -> None:

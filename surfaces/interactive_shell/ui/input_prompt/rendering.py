@@ -23,9 +23,7 @@ from surfaces.interactive_shell.ui.input_prompt.layout import (
 )
 
 DEFAULT_PLACEHOLDER_TEXT = 'Try "Investigate this alert"'
-_DEFAULT_PLACEHOLDER_ANSI = ANSI(
-    f"{ui_theme.ANSI_DIM}{DEFAULT_PLACEHOLDER_TEXT}{ui_theme.ANSI_RESET}"
-)
+_PLAN_CONTINUE_PLACEHOLDER = "continue the plan, or type a message"
 
 
 def _prompt_turn_number(session: Session) -> int:
@@ -160,7 +158,11 @@ def composer_footer_ansi() -> str:
 
 
 def resolve_prompt_placeholder(session: Session) -> ANSI:
-    """Contextual ghost text when the input buffer is empty."""
+    """Contextual ghost text when the input buffer is empty.
+
+    Built per redraw (not at import) so theme ANSI cannot freeze stale, and so
+    an unfinished live plan can replace the default Investigate hint.
+    """
     parts: list[str] = []
     if session.terminal.trust_mode:
         parts.append("trust on")
@@ -170,13 +172,21 @@ def resolve_prompt_placeholder(session: Session) -> ANSI:
     if session.resumed_from_name:
         parts.append(f"resumed: {_short_meta(session.resumed_from_name, max_len=32)}")
     if parts:
-        return ANSI(f"{ui_theme.ANSI_DIM}{' · '.join(parts)}{ui_theme.ANSI_RESET}")
+        return ANSI(f"{ui_theme.DIM_ANSI}{' · '.join(parts)}{ui_theme.ANSI_RESET}")
     if (
         session.task_plan is not None
         and session.task_plan.all_pending
         and session.plan_only_until_authorized
     ):
         return ANSI(
-            f"{ui_theme.ANSI_DIM}say go to start the plan, or type a message{ui_theme.ANSI_RESET}"
+            f"{ui_theme.DIM_ANSI}say go to start the plan, or type a message{ui_theme.ANSI_RESET}"
         )
-    return _DEFAULT_PLACEHOLDER_ANSI
+    plan = session.task_plan
+    if (
+        plan is not None
+        and plan.steps
+        and not plan.all_completed
+        and not session.plan_only_until_authorized
+    ):
+        return ANSI(f"{ui_theme.DIM_ANSI}{_PLAN_CONTINUE_PLACEHOLDER}{ui_theme.ANSI_RESET}")
+    return ANSI(f"{ui_theme.DIM_ANSI}{DEFAULT_PLACEHOLDER_TEXT}{ui_theme.ANSI_RESET}")

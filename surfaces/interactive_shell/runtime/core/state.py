@@ -335,6 +335,17 @@ class SpinnerState:
             f"{ui_theme.DIM_ANSI} · {hint}{ui_theme.ANSI_RESET}"
         )
 
+    def _phase_accent_ansi(self) -> str:
+        """Accent for the spinner lead+label; tool phase uses brand, not highlight.
+
+        ``Thinking…`` / stage labels stay on the prompt accent (bold highlight).
+        ``Invoking tools…`` uses bold brand so the line under the plan reads as a
+        distinct activity color — same stack as Droid, different hue from thinking.
+        """
+        if self.phase == self.INVOKING_TOOLS_PHASE:
+            return ui_theme.BOLD_BRAND_ANSI
+        return ui_theme.PROMPT_ACCENT_ANSI
+
     def inline_spinner_ansi(self) -> str:
         if not self.streaming:
             return ""
@@ -354,14 +365,15 @@ class SpinnerState:
         # prefix and leaves stale spinner/status lines.
         lead = f"{glyph} "
         tail = f" {self._STOP_HINT}  {elapsed_badge}"
+        accent = self._phase_accent_ansi()
         width = prompt_line_width()
         reserved = len(lead) + len(tail)
         if reserved >= width:
             visible = clip_prompt_text(f"{lead}{label}{tail}", width)
-            return f"{ui_theme.PROMPT_ACCENT_ANSI}{visible}{ui_theme.ANSI_RESET}"
+            return f"{accent}{visible}{ui_theme.ANSI_RESET}"
         clipped_label = clip_prompt_text(label, width - reserved)
         return (
-            f"{ui_theme.PROMPT_ACCENT_ANSI}{lead}{clipped_label}{ui_theme.ANSI_RESET}"
+            f"{accent}{lead}{clipped_label}{ui_theme.ANSI_RESET}"
             f"{ui_theme.ANSI_DIM}{tail}{ui_theme.ANSI_RESET}"
         )
 

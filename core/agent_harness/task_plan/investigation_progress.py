@@ -10,8 +10,8 @@ from __future__ import annotations
 
 from core.agent_harness.task_plan.plan import PlanStep, PlanStepStatus, TaskPlan
 
-# Coarse pipeline phases (0 = intake/plan, 1 = gather, 2 = diagnose, 3 = publish).
-# Spread across the live checklist via :func:`pipeline_phase_to_step_index`.
+# Pipeline phases before publish (0..3). Publish is a sentinel that always maps
+# to the last checklist step (verify).
 _PHASE_BY_NODE: dict[str, int] = {
     "resolve_integrations": 0,
     "extract_alert": 0,
@@ -19,12 +19,13 @@ _PHASE_BY_NODE: dict[str, int] = {
     "investigation_agent": 1,
     "diagnose_root_cause": 2,
     "diagnose": 2,
-    "correlate_upstream": 2,
-    "merge_hypotheses": 2,
     "opensre_llm_eval": 2,
-    "publish_findings": 3,
+    "correlate_upstream": 3,
+    "merge_hypotheses": 3,
+    "publish_findings": 4,
 }
-_PIPELINE_PHASE_MAX = 3
+_WORK_PHASE_MAX = 3  # last work phase before publish
+_PUBLISH_PHASE = 4
 
 
 def investigation_phase_index(node_name: str) -> int | None:
@@ -35,36 +36,54 @@ def investigation_phase_index(node_name: str) -> int | None:
 
 
 def pipeline_phase_to_step_index(phase: int, total_steps: int) -> int:
-    """Map pipeline phase ``0..3`` onto a checklist of ``total_steps`` steps.
+    """Map pipeline phase onto a checklist of ``total_steps`` steps.
 
-    Phases 0–2 spread across the non-verify steps; phase 3 lands on the last
-    (verify) step. A 5-step plan therefore gets intake→0, gather→1, diagnose→2,
-    publish→4 — leaving step 3 for remediation narrative without stealing verify.
+    Work phases ``0..3`` spread evenly across steps ``0..total-2``; publish
+    (phase 4) lands on the last (verify) step. A 5-step plan therefore gets
+    intake→0, gather→1, diagnose→2, correlate→3, publish→4.
     """
     if total_steps <= 1:
         return 0
-    clamped = max(0, min(int(phase), _PIPELINE_PHASE_MAX))
-    if clamped >= _PIPELINE_PHASE_MAX:
+    clamped = max(0, min(int(phase), _PUBLISH_PHASE))
+    if clamped >= _PUBLISH_PHASE:
         return total_steps - 1
     work_steps = total_steps - 1
-    return min(work_steps - 1, (clamped * work_steps) // _PIPELINE_PHASE_MAX)
+    if work_steps <= 1:
+        return 0
+    return (clamped * (work_steps - 1)) // _WORK_PHASE_MAX
 
 
 def advance_task_plan_to_phase(plan: TaskPlan, phase: int) -> TaskPlan:
     """Mark steps before the mapped phase completed and that step in_progress.
 
-    Never moves the focus backwards: if the plan is already ahead of the mapped
-    step, or already fully completed, returns ``plan`` unchanged.
+    Never moves the focus backwards: if an ``in_progress`` step is already ahead
+    of the mapped step, or the plan is fully completed, returns ``plan``
+    unchanged.
 
-    Never reopens completed work: a step that is already completed stays
-    completed even when it sits at or after the mapped phase, so the overlay
-    and work-log attribution do not jump onto finished steps.
+    Never reopens completed work. If the mapped step is already completed, keep
+    the current ``in_progress`` step when one exists so the overlay and default
+    work-log attribution stay on live work. When there is no active step,
+    promote the next pending row so action activity is not dropped.
     """
     if not plan.steps or plan.all_completed:
         return plan
     target = pipeline_phase_to_step_index(phase, len(plan.steps))
-    focused = plan.current_index - 1
-    if focused > target:
+    in_progress_at = next(
+        (
+            index
+            for index, item in enumerate(plan.steps)
+            if item.status is PlanStepStatus.IN_PROGRESS
+        ),
+        None,
+    )
+    if plan.steps[target].status is PlanStepStatus.COMPLETED:
+        if in_progress_at is not None:
+            return plan
+        while (
+            target < len(plan.steps) - 1 and plan.steps[target].status is PlanStepStatus.COMPLETED
+        ):
+            target += 1
+    elif in_progress_at is not None and in_progress_at > target:
         return plan
 
     steps: list[PlanStep] = []

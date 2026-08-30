@@ -62,6 +62,14 @@ def _text(content: str) -> AgentLLMResponse:
     return AgentLLMResponse(content=content, tool_calls=[], raw_content=None)
 
 
+def _tool(name: str = "query_logs") -> AgentLLMResponse:
+    return AgentLLMResponse(
+        content="",
+        tool_calls=[ToolCall(id="1", name=name, input={})],
+        raw_content=None,
+    )
+
+
 def test_default_goal_requires_text_and_evidence() -> None:
     goal = Goal(description="count stars", success_criteria="numeric velocity")
     assert not goal_met(
@@ -165,7 +173,7 @@ def test_missing_max_iterations_is_not_a_ceiling() -> None:
 
 
 def test_agent_goal_does_not_block_a_no_tool_reply() -> None:
-    """A no-tool reply ends the turn; the ReAct Goal is not a stop gate."""
+    """A bare Goal without verify is not a stop gate; no-tool replies end the turn."""
     goal = Goal(description="count stars", success_criteria="numeric velocity")
     llm = _FakeLLM(iter([_text("not yet")]))
     tools = cast("list[RegisteredTool]", [_FakeTool()])
@@ -179,6 +187,38 @@ def test_agent_goal_does_not_block_a_no_tool_reply() -> None:
     )
     result = agent.run([{"role": "user", "content": "stars?"}])
     assert result.final_text == "not yet"
+
+
+def test_agent_reviewed_goal_nudges_when_plan_incomplete() -> None:
+    """Reviewed goals (with verify) reject premature stop and inject a nudge."""
+
+    calls = {"n": 0}
+
+    def _verify(observation: GoalObservation) -> bool:
+        _ = observation
+        calls["n"] += 1
+        # Reject the first conclusion; accept after the nudge lap.
+        return calls["n"] > 1
+
+    goal = Goal(
+        description="finish the plan",
+        success_criteria="all steps done",
+        verify=_verify,
+        nudge=lambda _obs: "Keep going on the plan.",
+    )
+    llm = _FakeLLM(iter([_text("paused"), _tool("t1"), _text("done")]))
+    tools = cast("list[RegisteredTool]", [_FakeTool()])
+    agent: Agent[RegisteredTool] = Agent(
+        llm=llm,
+        system="sys",
+        tools=tools,
+        resolved_integrations={},
+        max_iterations=6,
+        goal=goal,
+    )
+    result = agent.run([{"role": "user", "content": "run the plan"}])
+    assert result.final_text == "done"
+    assert calls["n"] >= 2
 
 
 def test_agent_without_goal_accepts_first_conclusion() -> None:

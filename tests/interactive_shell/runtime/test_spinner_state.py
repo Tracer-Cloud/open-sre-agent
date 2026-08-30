@@ -69,6 +69,26 @@ def test_spinner_invoking_tools_phase_matches_factory_copy() -> None:
     assert "(Press ESC to stop)" in rendered
 
 
+def test_invoking_tools_uses_brand_accent_not_highlight() -> None:
+    """Tool phase is brand-colored so it contrasts with Thinking (highlight)."""
+    from infrastructure.terminal.theme import set_active_theme
+
+    set_active_theme("blue")
+    spinner = SpinnerState()
+    spinner.start()
+    thinking = spinner.inline_spinner_ansi()
+    assert "168;212;255" in thinking  # highlight
+    assert "111;165;216" not in thinking.split("(Press ESC")[0]
+
+    spinner.set_phase(SpinnerState.INVOKING_TOOLS_PHASE)
+    invoking = spinner.inline_spinner_ansi()
+    assert SpinnerState.INVOKING_TOOLS_PHASE in invoking
+    assert "111;165;216" in invoking  # brand
+    # Lead+label must not stay on highlight once tools are invoking.
+    lead = invoking.split("(Press ESC")[0]
+    assert "168;212;255" not in lead
+
+
 def test_spinner_empty_when_not_streaming() -> None:
     spinner = SpinnerState()
     assert spinner.inline_spinner_ansi() == ""

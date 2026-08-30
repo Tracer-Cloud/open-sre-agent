@@ -179,11 +179,20 @@ def leave_inline_menu() -> None:
     and exceptions all recook stdin. Without this, padded menu rows leave the
     cursor mid-line and an inherited non-canonical or no-echo TTY breaks later
     shell input.
+
+    Also drain pending CSI (arrow keys / CPR) so they cannot leak as
+    ``^[[A`` into the transcript once the menu releases the keyboard.
     """
-    from surfaces.shared.terminal.components.key_reader import restore_stdin_terminal
+    from surfaces.shared.terminal.components.cpr_stdin import drain_stale_cpr_bytes
+    from surfaces.shared.terminal.components.key_reader import (
+        flush_pending_input,
+        restore_stdin_terminal,
+    )
 
     show_terminal_cursor()
     restore_stdin_terminal()
+    flush_pending_input()
+    drain_stale_cpr_bytes()
     prepare_repl_output_line()
 
 

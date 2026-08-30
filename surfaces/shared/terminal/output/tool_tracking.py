@@ -64,7 +64,16 @@ class ToolTrackingMixin:
         from surfaces.shared.terminal.output.console_state import (
             get_investigation_active_phase,
             get_investigation_plan_session,
+            get_investigation_spinner,
         )
+
+        # Match Droid: while tools run, the line under the plan reads
+        # "Invoking tools…" (not a stale stage label).
+        spinner = get_investigation_spinner()
+        if spinner is not None:
+            set_phase = getattr(spinner, "set_phase", None)
+            if callable(set_phase):
+                set_phase("Invoking tools…")
 
         plan_session = get_investigation_plan_session()
         if plan_session is not None:

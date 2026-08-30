@@ -723,6 +723,17 @@ class TestSpinnerState:
         assert "168;212;255" in raw
         assert "185;237;175" not in raw
 
+    def test_inline_spinner_invoking_tools_uses_brand(self) -> None:
+        from infrastructure.terminal.theme import set_active_theme
+
+        set_active_theme("blue")
+        spinner = loop_state.SpinnerState()
+        spinner.start()
+        spinner.set_phase(loop_state.SpinnerState.INVOKING_TOOLS_PHASE)
+        raw = spinner.inline_spinner_ansi()
+        assert "111;165;216" in raw  # blue BRAND
+        assert "168;212;255" not in raw.split("(Press ESC")[0]
+
     @staticmethod
     def _all_verbs(spinner: loop_state.SpinnerState) -> tuple[str, ...]:
         """Union of every tier's verb pool."""

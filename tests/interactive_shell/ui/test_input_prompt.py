@@ -190,6 +190,25 @@ class TestResolvePromptPlaceholder:
         session = Session()
         assert DEFAULT_PLACEHOLDER_TEXT in _placeholder_text(session)
 
+    def test_placeholder_prompts_to_continue_an_unfinished_plan(self) -> None:
+        from core.agent_harness.task_plan.plan import parse_task_plan
+
+        session = Session()
+        plan, error = parse_task_plan(
+            {
+                "plan": [
+                    {"step": "Discover source", "status": "completed"},
+                    {"step": "Query latency", "status": "in_progress"},
+                    {"step": "Verify", "status": "pending"},
+                ]
+            }
+        )
+        assert error is None and plan is not None
+        session.task_plan = plan
+        text = _strip_ansi(_placeholder_text(session))
+        assert "continue the plan" in text
+        assert DEFAULT_PLACEHOLDER_TEXT not in text
+
     def test_shows_trust_mode(self) -> None:
         session = Session()
         session.terminal.trust_mode = True

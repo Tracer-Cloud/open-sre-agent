@@ -439,12 +439,34 @@ def test_bulky_tool_output_is_capped_and_fenced_for_display() -> None:
     response_text, display_chunks, _use_final = _compose_response(result, _Session(), _counts(1))
     joined = "\n".join(display_chunks)
 
-    # Display: capped + fenced. Model/history: full, unfenced.
+    # Display: capped + text-fenced (truncated content is not valid code to highlight).
     assert "```text" in joined
     assert "… (output truncated)" in joined
     assert joined.count("run ") <= 12
     assert "```text" not in response_text
     assert response_text.count("run ") == 30
+
+
+def test_truncated_json_uses_text_fence_not_json_highlight() -> None:
+    """Broken mid-JSON must not use a ``json`` fence (Rich paints red error tokens)."""
+    github = ToolCall(id="1", name="posthog_mcp", input={"tool_name": "list"})
+    # Valid JSON over the line/char caps so _cap_for_display truncates it.
+    bulky_obj = {"tools": [{"name": f"tool_{i}", "description": "x" * 40} for i in range(40)]}
+    bulky = json.dumps(bulky_obj, indent=2)
+    result = _Result(
+        tool_results=[(github, _ToolResult(_payload(bulky)))],
+        final_text="Listed tools.",
+    )
+
+    _response_text, display_chunks, _use_final = _compose_response(result, _Session(), _counts(1))
+    joined = "\n".join(display_chunks)
+
+    assert "```json" not in joined
+    assert "```text" in joined
+    assert "… (output truncated)" in joined
+    # Marker sits outside the fence so it is not syntax-highlighted as an error.
+    fence_end = joined.index("```", joined.index("```text") + 1)
+    assert "… (output truncated)" in joined[fence_end:]
 
 
 def test_plan_snapshots_are_stripped_from_the_reply() -> None:

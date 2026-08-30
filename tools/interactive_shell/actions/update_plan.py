@@ -60,6 +60,10 @@ def execute_update_plan_tool(args: dict[str, Any], ctx: ActionToolScope) -> dict
         payload["instruction"] += (
             " Execution is authorized: the first step is in_progress — run it now."
         )
+    elif not plan.all_completed:
+        payload["instruction"] += (
+            " Continue the in_progress step now — do not end the turn while pending steps remain."
+        )
     return payload
 
 

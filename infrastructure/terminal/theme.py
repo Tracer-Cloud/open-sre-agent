@@ -8,7 +8,9 @@ this module.
 Token reference
 ---------------
   HIGHLIGHT  brand name, ❯ prompt, ✓ success, /commands, key findings, live indicator
+             (Thinking… / stage spinner lead)
   BRAND      model name, file paths, version numbers, secondary labels
+             (Invoking tools… spinner lead — distinct from Thinking)
   TEXT       all primary body text, step names, values, section headers
   SECONDARY  tips, descriptions, muted info, secondary body text
   DIM        timestamps, dividers, labels, ruled-out items, dim context

@@ -411,13 +411,16 @@ which owns the actual think → call-tools → observe algorithm.
 - `core/agent/react_loop.py` — `ReactLoop` (the loop as a method-object, phases
   `_think` / `_handle_conclusion` / `_observe`) and `run_react_loop` (its thin
   functional entry). A reply with no tool calls ends the turn unless a queued
-  `follow_up` is already waiting.
+  `follow_up` is waiting, or the host's `_should_accept_conclusion` rejects it
+  (reviewed goals from `build_goal_reviewer`, including an unfinished task
+  plan). Bare Goals without `verify` do not gate stop.
 - `core/agent/agent.py` — the `Agent` facade: `__init__` (holds config), `run()`
   (builds the per-run `AgentRunInput` via `_build_run_input` and hands it to
-  `run_react_loop`).
+  `run_react_loop`), and the `_should_accept_conclusion` / `_filter_tools`
+  override hooks.
 
 Do not reintroduce hook-method overrides on `Agent` itself (e.g. a subclass
 overriding a private `_before_provider_request`-style method) — customize via
 `provider_hooks=ProviderHooks(...)` at construction instead. Subclassing
-remains the pattern for `_filter_tools`, which is a genuine per-agent override,
-not a seam `ProviderHooks` covers.
+remains the pattern for `_filter_tools` and `_should_accept_conclusion`, which
+are genuine per-agent overrides, not seams `ProviderHooks` covers.

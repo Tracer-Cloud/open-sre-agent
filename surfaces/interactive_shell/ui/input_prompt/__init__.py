@@ -17,6 +17,7 @@ from prompt_toolkit.layout.containers import (
 from prompt_toolkit.layout.controls import FormattedTextControl
 from prompt_toolkit.widgets import Frame
 
+from infrastructure.terminal import theme as ui_theme
 from surfaces.interactive_shell.prompt_history import load_prompt_history
 from surfaces.interactive_shell.runtime import Session
 from surfaces.interactive_shell.ui.input_prompt.completion import ShellCompleter
@@ -24,7 +25,7 @@ from surfaces.interactive_shell.ui.input_prompt.key_bindings import _build_promp
 from surfaces.interactive_shell.ui.input_prompt.layout import prompt_line_width
 from surfaces.interactive_shell.ui.input_prompt.lexer import ReplInputLexer
 from surfaces.interactive_shell.ui.input_prompt.rendering import (
-    _DEFAULT_PLACEHOLDER_ANSI,
+    DEFAULT_PLACEHOLDER_TEXT,
     composer_footer_ansi,
     resolve_prompt_placeholder,
 )
@@ -103,10 +104,13 @@ def build_prompt_session(
     *,
     hide_composer: Callable[[], bool] | None = None,
 ) -> PromptSession[str]:
+    def _default_placeholder() -> ANSI:
+        return ANSI(f"{ui_theme.DIM_ANSI}{DEFAULT_PLACEHOLDER_TEXT}{ui_theme.ANSI_RESET}")
+
     placeholder = (
         (lambda: resolve_prompt_placeholder(session))
         if session is not None
-        else _DEFAULT_PLACEHOLDER_ANSI
+        else _default_placeholder
     )
     return _install_prompt_frame(
         PromptSession(

@@ -7,6 +7,7 @@ checklist and parses an ``update_plan`` payload through :func:`parse_task_plan`.
 from __future__ import annotations
 
 from core.agent_harness.task_plan.display import (
+    ensure_active_step,
     is_plan_diagnosis_prose,
     promote_first_pending_step,
 )
@@ -46,6 +47,7 @@ __all__ = [
     "apply_update_plan_host_policy",
     "apply_update_plan_session",
     "complete_task_plan",
+    "ensure_active_step",
     "format_plan_header",
     "format_task_plan_plain",
     "investigation_phase_index",

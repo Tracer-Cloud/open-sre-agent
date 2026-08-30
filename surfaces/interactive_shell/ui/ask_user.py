@@ -245,6 +245,11 @@ def repl_ask_user(
         return _run_ask_user(items)
     finally:
         leave_inline_menu()
+        # Arrow CSI (↑↓) and CPR bytes can arrive after Enter while the menu
+        # tears down; without a drain they leak as ``^[[A`` / red cells into
+        # the next prompt or transcript under patch_stdout.
+        flush_pending_input()
+        drain_stale_cpr_bytes()
 
 
 def _run_ask_user(

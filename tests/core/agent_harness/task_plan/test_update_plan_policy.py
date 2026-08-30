@@ -124,6 +124,43 @@ def test_normal_turn_honors_requested_plan_only() -> None:
     assert normalized.all_pending is True
 
 
+def test_normal_turn_promotes_gap_after_completed_step() -> None:
+    session = Session()
+    plan, _error = parse_task_plan(
+        {
+            "plan": [
+                {"step": "Confirm telemetry source", "status": "completed"},
+                {"step": "Query latency", "status": "pending"},
+                {"step": "Verify baseline", "status": "pending"},
+            ]
+        }
+    )
+    assert plan is not None
+    normalized, plan_only = apply_update_plan_host_policy(
+        plan,
+        plan_only_requested=False,
+        turn_user_message="run the plan",
+        session=session,
+    )
+    assert plan_only is False
+    assert normalized.steps[1].status is PlanStepStatus.IN_PROGRESS
+    assert normalized.current_index == 2
+
+
+def test_normal_turn_promotes_all_pending_when_execution_authorized() -> None:
+    session = Session()
+    plan, _error = parse_task_plan({"plan": _PLAN})
+    assert plan is not None
+    normalized, plan_only = apply_update_plan_host_policy(
+        plan,
+        plan_only_requested=False,
+        turn_user_message="make a plan and run it",
+        session=session,
+    )
+    assert plan_only is False
+    assert normalized.steps[0].status is PlanStepStatus.IN_PROGRESS
+
+
 def test_apply_update_plan_session_is_set_only_for_the_latch() -> None:
     from core.agent_harness.task_plan.update_plan_policy import apply_update_plan_session
 

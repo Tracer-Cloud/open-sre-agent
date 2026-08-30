@@ -14,7 +14,7 @@ from core.agent_harness.task_plan.plan import PlanStepStatus, TaskPlan
 from core.agent_harness.task_plan.progress import PLAN_STATUS_GLYPH, format_plan_header
 from infrastructure.safety.terminal_output import strip_terminal_controls
 
-_MAX_WORK_LINES_PER_STEP = 8
+_MAX_WORK_LINES_PER_STEP = 12
 _MAX_WORK_LINE_CHARS = 120
 
 
@@ -87,7 +87,11 @@ def format_task_plan_breakdown(
     plan: TaskPlan,
     work_by_step: list[list[str]] | None = None,
 ) -> str:
-    """Plain-text post-execution checklist with work lines under each step."""
+    """Plain-text post-execution checklist with work lines under each step.
+
+    Empty steps still appear (so the user sees the full plan). Steps that
+    gathered work list each line under a ``↳`` marker.
+    """
     work = work_by_step or []
     header = format_plan_header(plan)
     if plan.all_completed:

@@ -144,7 +144,8 @@ def test_update_plan_marks_a_fully_completed_plan_as_terminal() -> None:
 
 def test_update_plan_normal_create_carries_only_the_base_instruction() -> None:
     # A plain create (no plan_only, no Ask User answers on the turn) must not
-    # emit the plan-only or execution-authorized suffixes.
+    # emit the plan-only or execution-authorized suffixes; incomplete plans get
+    # a continue nudge so the model does not idle with pending steps.
     session = Session()
     result = execute_update_plan_tool({"plan": _PLAN}, _ctx(session=session))
 
@@ -152,6 +153,27 @@ def test_update_plan_normal_create_carries_only_the_base_instruction() -> None:
     assert "Plan stored." in result["instruction"]
     assert "Plan-only" not in result["instruction"]
     assert "Execution is authorized" not in result["instruction"]
+    assert "Continue the in_progress step now" in result["instruction"]
+
+
+def test_update_plan_promotes_next_pending_when_model_leaves_a_gap() -> None:
+    """Completed + pending with no in_progress must not idle as Plan · 2/3 ○ ○."""
+    session = Session()
+    gapped: list[dict[str, Any]] = [
+        {"step": "Confirm checkout latency telemetry source", "status": "completed"},
+        {"step": "Query recent checkout latency", "status": "pending"},
+        {"step": "Verify findings against baseline", "status": "pending"},
+    ]
+    result = execute_update_plan_tool({"plan": gapped}, _ctx(session=session))
+
+    assert result["ok"] is True
+    assert session.task_plan is not None
+    assert session.task_plan.steps[0].status is PlanStepStatus.COMPLETED
+    assert session.task_plan.steps[1].status is PlanStepStatus.IN_PROGRESS
+    assert session.task_plan.steps[2].status is PlanStepStatus.PENDING
+    assert session.task_plan.current_index == 2
+    assert "● Query recent checkout latency" in result["summary"]
+    assert "Continue the in_progress step now" in result["instruction"]
 
 
 def test_update_plan_result_payload_is_a_reparseable_durable_record() -> None:
