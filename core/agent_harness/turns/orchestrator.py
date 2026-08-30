@@ -121,7 +121,7 @@ def run_turn(
         return _cancelled_turn_result(accounting, action_result)
 
     response_text = action_result.response_text.strip()
-    if action_result.hit_iteration_cap:
+    if action_result.hit_iteration_cap and not action_result.response_streamed:
         response_text = "\n\n".join(filter(None, (response_text, _ITERATION_CAP_MESSAGE)))
     if response_text:
         record_conversation_turn(session, text, response_text)

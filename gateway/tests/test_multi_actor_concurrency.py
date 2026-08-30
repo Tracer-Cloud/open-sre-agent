@@ -39,6 +39,7 @@ from gateway.core.storage.session.file_bindings import FileBindingStore
 from infrastructure.turn_host.concurrency import AT_CAPACITY_MESSAGE, TurnConcurrencyGate
 from tests.shared.default_headless_build_stub import default_headless_build_stub
 from tests.shared.fake_agent import fake_agent
+from tests.shared.session_file import assert_session_file_integrity
 
 ACME = Principal.org("org_acme")
 ALICE = "U_ALICE"
@@ -83,17 +84,6 @@ def _join(threads: list[threading.Thread], timeout: float = 30.0) -> None:
 
 def _read_bindings(path: Path) -> dict:
     return json.loads(path.read_text(encoding="utf-8"))
-
-
-def _parseable_jsonl(path: Path) -> list[dict]:
-    rows: list[dict] = []
-    for line in path.read_text(encoding="utf-8").splitlines():
-        if not line.strip():
-            continue
-        rec = json.loads(line)
-        assert isinstance(rec, dict), f"non-object JSONL line in {path}: {line!r}"
-        rows.append(rec)
-    return rows
 
 
 # ── Shared bindings.json ────────────────────────────────────────────────────
@@ -297,7 +287,7 @@ def test_concurrent_alice_bob_session_appends_do_not_mix() -> None:
                 path = session_path(session_id)
                 paths_seen[actor] = str(path)
                 assert actor in str(path)
-                rows = _parseable_jsonl(path)
+                rows = assert_session_file_integrity(path)
                 texts = [r.get("content") for r in rows if r.get("type") == "message"]
                 assert all(isinstance(t, str) and t.startswith(marker) for t in texts)
                 assert len(texts) == 20
@@ -368,7 +358,7 @@ def test_same_session_concurrent_appends_remain_line_parseable() -> None:
     _join(threads)
 
     assert not errors, errors
-    rows = _parseable_jsonl(path)
+    rows = assert_session_file_integrity(path)
     messages = [r for r in rows if r.get("type") == "message"]
     assert len(messages) == 80
     contents = {r.get("content") for r in messages}
@@ -533,19 +523,23 @@ def test_fanout_three_transports_one_capacity_sentence_and_bindings_survive(
             )
         )
 
-    # Barrier-controlled stub LLM: the 4 admitted turns block in dispatch so
-    # the peak is deterministic; the 8 rejected never reach it.
-    peak_barrier = threading.Barrier(limit + 1)
+    # Hold admitted turns in dispatch until every worker has attempted the
+    # gate. An Event (not Barrier) signals peak; releasing before late workers
+    # call try_acquire frees slots and lets extra turns through (CI flake).
     release = threading.Event()
+    peak_reached = threading.Event()
+    attempts = {"count": 0}
+    attempts_cv = threading.Condition()
     inflight = {"count": 0}
     inflight_lock = threading.Lock()
 
     def _stub_dispatch(message: str) -> TurnResult:
         with inflight_lock:
             inflight["count"] += 1
+            if inflight["count"] >= limit:
+                peak_reached.set()
         try:
-            peak_barrier.wait(timeout=30)
-            release.wait(timeout=30)
+            assert release.wait(timeout=60), "timed out waiting for release"
         finally:
             with inflight_lock:
                 inflight["count"] -= 1
@@ -580,9 +574,30 @@ def test_fanout_three_transports_one_capacity_sentence_and_bindings_survive(
         "infrastructure.turn_host.turn_runner.capture_gateway_turn_failed", lambda **_: None
     )
 
+    base_gate = TurnConcurrencyGate(limit)
+
+    class _CountingGate:
+        """Count try_acquire calls so main can wait until every actor has raced."""
+
+        def __init__(self) -> None:
+            self.limit = base_gate.limit
+
+        def try_acquire(self) -> bool:
+            ok = base_gate.try_acquire()
+            with attempts_cv:
+                attempts["count"] += 1
+                attempts_cv.notify_all()
+            return ok
+
+        def acquire(self, *, timeout: float | None = None) -> bool:
+            return base_gate.acquire(timeout=timeout)
+
+        def release(self) -> None:
+            base_gate.release()
+
     runner = TurnRunner(
         console=Console(force_terminal=False),
-        gate=TurnConcurrencyGate(limit),
+        gate=_CountingGate(),  # type: ignore[arg-type]
     )
 
     errors: list[Exception] = []
@@ -629,13 +644,19 @@ def test_fanout_three_transports_one_capacity_sentence_and_bindings_survive(
     for t in threads:
         t.start()
 
-    # The barrier opens once the 4 admitted turns are in dispatch plus the main
-    # thread — that moment is the peak.
-    peak_barrier.wait(timeout=30)
+    assert peak_reached.wait(timeout=60), f"timed out waiting for {limit} concurrent admitted turns"
+    with attempts_cv:
+        deadline = time.monotonic() + 60.0
+        while attempts["count"] < n_actors:
+            remaining = deadline - time.monotonic()
+            assert remaining > 0, (
+                f"timed out waiting for all {n_actors} gate attempts (saw {attempts['count']})"
+            )
+            attempts_cv.wait(timeout=remaining)
     with inflight_lock:
         peak = inflight["count"]
     release.set()
-    _join(threads)
+    _join(threads, timeout=60.0)
 
     assert not errors, [repr(e) for e in errors]
     assert peak == limit, f"expected {limit} turns in flight at the peak, got {peak}"

@@ -37,7 +37,7 @@ description: "Agentic alert investigation for production systems."
     One command on macOS or Linux, then a quick setup wizard.
   </Card>
   <Card title="Run onboarding" icon="wand-magic-sparkles" href="/quickstart">
-    Tell it which LLM and tools you're using — `opensre onboard` walks you through it.
+    Pick the LLM provider OpenSRE should use — `opensre onboard` walks you through it.
   </Card>
   <Card title="Connect your tools" icon="plug" href="/integrations-overview">
     Datadog, Grafana, PagerDuty, Slack, Kubernetes, and more.
@@ -89,7 +89,7 @@ OpenSRE is an open-source agent that investigates production incidents for you. 
     ```
   </Step>
   <Step title="Set things up">
-    This launches a short wizard. Pick an LLM provider (OpenAI, Anthropic, a local model — whatever you use), paste in a key, and connect any tools you already have, like Datadog, Grafana, or Slack. It tests your key on the spot, so you find out about a typo now, not mid-investigation.
+    This launches a short wizard. Pick an LLM provider, paste in a key or confirm a CLI login, and OpenSRE tests it on the spot. Add tools later with `opensre integrations setup <service>` when you want it to query Datadog, Grafana, Slack, or another system.
 
     ```bash
     opensre onboard

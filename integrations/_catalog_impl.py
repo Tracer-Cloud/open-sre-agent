@@ -10,7 +10,6 @@ import threading
 from collections.abc import Callable
 from typing import Any
 
-from config.config import get_tracer_base_url
 from config.constants.alertmanager import (
     ALERTMANAGER_BEARER_TOKEN_ENV,
     ALERTMANAGER_PASSWORD_ENV,
@@ -109,6 +108,7 @@ from config.constants.helm import (
     HELM_PATH_ENV,
     OSRE_HELM_INTEGRATION_ENV,
 )
+from config.constants.hermes import HERMES_LOG_PATH_ENV
 from config.constants.honeycomb import (
     HONEYCOMB_API_KEY_ENV,
     HONEYCOMB_BASE_URL_ENV,
@@ -258,6 +258,7 @@ from config.constants.yandex_cloud import (
     YC_USE_METADATA_ENV,
 )
 from config.llm_credentials import resolve_env_credential
+from config.tracer_urls import get_tracer_base_url
 from infrastructure.observability.errors.boundary import report_exception
 from infrastructure.text.coercion import safe_int
 from integrations.airflow.config import airflow_config_from_env
@@ -314,6 +315,7 @@ from integrations.grafana import classify as _classify_grafana
 from integrations.groundcover import classify as _classify_groundcover
 from integrations.groundcover.config import GroundcoverIntegrationConfig
 from integrations.helm import classify as _classify_helm
+from integrations.hermes.config import classify as _classify_hermes
 from integrations.honeycomb import classify as _classify_honeycomb
 from integrations.honeycomb.config import HoneycombIntegrationConfig
 from integrations.incident_io import classify as _classify_incident_io
@@ -547,6 +549,7 @@ _CLASSIFIERS: dict[str, _ClassifyFn] = {
     "kubernetes": _classify_kubernetes,
     "argocd": _classify_argocd,
     "helm": _classify_helm,
+    "hermes": _classify_hermes,
     "victoria_logs": _classify_victoria_logs,
     "bitbucket": _classify_bitbucket,
     "snowflake": _classify_snowflake,
@@ -1215,6 +1218,10 @@ def load_env_integrations() -> list[dict[str, Any]]:
                     helm_env_config.model_dump(exclude={"integration_id"}),
                 )
             )
+
+    hermes_log_path = os.getenv(HERMES_LOG_PATH_ENV, "").strip()
+    if hermes_log_path:
+        integrations.append(_active_env_record("hermes", {"log_path": hermes_log_path}))
 
     vercel_api_token = resolve_env_credential(VERCEL_API_TOKEN_ENV)
     if vercel_api_token:

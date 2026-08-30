@@ -46,6 +46,7 @@ class Agent[RuntimeToolT: RuntimeTool](EventEmitterMixin, ToolFilterMixin, Steer
         tools: Sequence[RuntimeToolT] | None = None,
         resolved_integrations: dict[str, Any] | None = None,
         max_iterations: int | None = None,
+        max_stagnant_iterations: int | None = None,
         on_event: TupleEventCallback | None = None,
         on_runtime_event: RuntimeEventCallback | None = None,
         tool_hooks: ToolExecutionHooks | None = None,
@@ -60,6 +61,9 @@ class Agent[RuntimeToolT: RuntimeTool](EventEmitterMixin, ToolFilterMixin, Steer
         self._tools: list[RuntimeToolT] | None = list(tools) if tools is not None else None
         self._resolved = resolved_integrations
         self._max_iterations = max_iterations
+        if max_stagnant_iterations is not None and max_stagnant_iterations < 1:
+            raise ValueError("Agent: max_stagnant_iterations must be positive when set.")
+        self._max_stagnant_iterations = max_stagnant_iterations
         # Set per run from the run input; falls back to the constructed value.
         self._effective_max_iterations = max_iterations
         self._on_tuple_event = on_event
@@ -130,6 +134,7 @@ class Agent[RuntimeToolT: RuntimeTool](EventEmitterMixin, ToolFilterMixin, Steer
                 resolved=self._resolved,
                 tool_resources=self._tool_resources,
                 max_iterations=self._max_iterations,
+                max_stagnant_iterations=self._max_stagnant_iterations,
             )
         raise ValueError("Agent.run requires initial_messages or runtime_request.")
 

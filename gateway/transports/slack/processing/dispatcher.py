@@ -311,9 +311,16 @@ class SlackTurnDispatcher:
 
             with terminal.timeout_after(self._settings.turn_timeout_seconds, _on_turn_timeout):
                 try:
-                    # Slack thread is the continuity source when the
-                    # gateway session file is empty (redeploy / ephemeral disk).
-                    if session_needs_thread_seed(inbound.text, is_reply=is_reply):
+                    # Slack thread is the continuity source only when the
+                    # gateway session is empty (redeploy / ephemeral disk).
+                    # If prior turns already live in-session, skip the fetch —
+                    # re-scanning the whole thread on every reply re-invokes
+                    # the agent against rebuilt history for no benefit.
+                    if session_needs_thread_seed(
+                        inbound.text,
+                        is_reply=is_reply,
+                        has_session_history=prior_msgs > 0,
+                    ):
                         seeded = seed_session_from_slack_thread(
                             session,
                             channel_id=inbound.channel_id,

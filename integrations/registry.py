@@ -354,6 +354,13 @@ _BUILTIN_SPECS: tuple[IntegrationSpec, ...] = (
         verify_order=34,
     ),
     IntegrationSpec(
+        service="hermes",
+        has_verifier=True,
+        direct_effective=True,
+        setup_order=56,
+        verify_order=101,
+    ),
+    IntegrationSpec(
         service="victoria_logs",
         aliases=("victorialogs",),
         has_verifier=True,

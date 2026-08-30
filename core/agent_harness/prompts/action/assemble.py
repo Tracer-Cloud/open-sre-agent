@@ -7,6 +7,7 @@ import re
 from typing import TYPE_CHECKING
 
 from core.agent_harness.prompts.action.text import _SYSTEM_PROMPT_BASE
+from core.agent_harness.prompts.action.turn_interaction import turn_interaction_facts_block
 from core.agent_harness.prompts.kernel.envelope import (
     PromptBlock,
     PromptBlockId,
@@ -20,6 +21,10 @@ from core.agent_harness.prompts.memory.conversation import (
 )
 from core.agent_harness.prompts.runtime_facts import render_static_runtime_facts
 from core.agent_harness.prompts.skills.loader import load_skills_demo_block, load_skills_index
+from core.agent_harness.task_plan.prompt import (
+    ask_user_answered_block,
+    current_task_plan_block,
+)
 from infrastructure.harness_providers import action_prompt_vendor_fragments
 
 if TYPE_CHECKING:
@@ -88,7 +93,7 @@ def build_action_system_prompt_envelope(turn_snapshot: TurnSnapshot) -> PromptEn
             # Trailing separators stay in the block; avoid ``base + "\n\n"`` which
             # copies the entire stable prompt body on every turn.
             content="".join((_SYSTEM_PROMPT_BASE, "\n\n")),
-            provenance="core.agent_harness.prompts.action.opensre_system_prompt.md",
+            provenance="core.agent_harness.prompts.opensre_system_prompt.md",
         ),
     ]
     vendor_fragments = action_prompt_vendor_fragments()
@@ -154,6 +159,28 @@ def build_action_system_prompt_envelope(turn_snapshot: TurnSnapshot) -> PromptEn
             provenance="core.domain.memory",
         )
     )
+    blocks.extend(
+        _optional_block(
+            id=PromptBlockId.ASK_USER_ANSWERED,
+            kind=PromptBlockKind.RULE,
+            tier=PromptTier.EPHEMERAL,
+            content=ask_user_answered_block(
+                turn_snapshot.text,
+                plan_only=turn_snapshot.plan_only_until_authorized,
+            ),
+            provenance="core.agent_harness.task_plan.prompt",
+            suffix="\n\n",
+        )
+    )
+    blocks.append(
+        PromptBlock(
+            id=PromptBlockId.TURN_INTERACTION,
+            kind=PromptBlockKind.CONTEXT,
+            tier=PromptTier.EPHEMERAL,
+            content=turn_interaction_facts_block(turn_snapshot),
+            provenance="core.agent_harness.prompts.action.turn_interaction",
+        )
+    )
     blocks.append(
         PromptBlock(
             id=PromptBlockId.RECENT_CONVERSATION,
@@ -186,6 +213,20 @@ def build_action_system_prompt_envelope(turn_snapshot: TurnSnapshot) -> PromptEn
                 provenance="core.agent_harness.session.persistence.wal_recovery",
             )
         )
+    plan_block = current_task_plan_block(
+        turn_snapshot.task_plan,
+        plan_only=turn_snapshot.plan_only_until_authorized,
+    )
+    blocks.extend(
+        _optional_block(
+            id=PromptBlockId.CURRENT_TASK_PLAN,
+            kind=PromptBlockKind.CONTEXT,
+            tier=PromptTier.EPHEMERAL,
+            content=plan_block,
+            provenance="core.agent_harness.task_plan.prompt",
+            suffix="\n",
+        )
+    )
     return PromptEnvelope.from_blocks(
         blocks,
         separator="",

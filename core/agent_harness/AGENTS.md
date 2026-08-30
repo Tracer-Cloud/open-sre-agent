@@ -126,9 +126,11 @@ subpackage. Default port implementations live with the concern they serve, not i
        Want-me-to, stream flush). Stream rewrite locals
        (`text_changed_after_streaming`) stay inside finalize and must **never**
        gate route selection.
-    Resolves integrations **once** at the top of the turn onto the frozen
-    `turn_snapshot`, so `turn_snapshot.resolved_integrations` is the single
-    source of truth for what the turn knows. Downstream components (e.g.
+    Resolves base integrations **once** at the top of the turn, enriches that
+    per-turn copy with repository scopes from the frozen message/history, and
+    stores it on `turn_snapshot`, so `turn_snapshot.resolved_integrations` is
+    the single source of truth for what the turn knows without mutating the
+    session's base integration cache. Downstream components (e.g.
     `action_driver._resolved_integrations_for_turn`) read it from there rather
     than re-resolving. Do NOT reintroduce per-component integration resolution.
   - `turn_route.py` / `answer_finalize.py` / `handoff_policy.py` — the seams
@@ -325,6 +327,19 @@ per-session lock). Different sessions stay concurrent under the capacity gate.
 
 There is no `dispatch_message_to_headless_agent` — that free-function dump was
 replaced by `HeadlessAgent.dispatch` / `AgentSession.chat`.
+
+### Two doors into a turn (Concurrency & Serialization)
+
+There are two ways into an agent turn:
+1. **The Host Loop (`TurnRunner` → `HeadlessAgent.handle`)**:
+   - Used by concurrent multi-actor hosts (**Gateway** transports and **Interactive Shell**).
+   - Takes the `SessionAgentPool` per-session lock (serializing turns for the same session to prevent `AgentBusyError` and state corruption).
+   - Takes the process turn capacity gate (`TurnConcurrencyGate` / `OPENSRE_MAX_CONCURRENT_TURNS`).
+   - Drives the full `SessionGoal` outer loop (`run_goal`).
+2. **Scripted / Headless API (`AgentSession.chat` / `chat_until_goal`)**:
+   - The un-gated single-turn API for programmatic scripts (`main.py`, notebooks), tests, and single-shot CLI (`opensre ask`).
+   - Deliberately kept as an unguarded entry point for single-tenant, scripted use.
+   - **Forbidden for concurrent hosts:** Gateway and Shell modules must never call `chat()` or `chat_until_goal()` directly (enforced by `gateway/tests/test_harness_behaviour_border.py` and `tests/interactive_shell/test_harness_api_border.py`).
 
 **Scaling** is separate from the host API: local concurrency
 (`TurnConcurrencyGate` / transport pools / `OPENSRE_SIZE_PROFILE`) and cloud

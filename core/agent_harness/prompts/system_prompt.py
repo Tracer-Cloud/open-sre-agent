@@ -1,8 +1,7 @@
 """Shared OpenSRE system prompt loaded from ``opensre_system_prompt.md``.
 
-Action and assistant both use this file as their stable system base. The
-markdown lives next to the action assembler; this leaf is the one import
-path so the peer agent packages stay acyclic.
+The Markdown lives beside this loader so every agent path imports one shared
+base without reaching through the action package.
 """
 
 from __future__ import annotations
@@ -11,7 +10,7 @@ from functools import lru_cache
 from pathlib import Path
 
 _PROMPT_FILENAME = "opensre_system_prompt.md"
-_PROMPT_PATH = Path(__file__).parent / "action" / _PROMPT_FILENAME
+_PROMPT_PATH = Path(__file__).with_name(_PROMPT_FILENAME)
 
 
 @lru_cache(maxsize=1)

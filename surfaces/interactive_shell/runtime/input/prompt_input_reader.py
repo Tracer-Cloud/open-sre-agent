@@ -5,8 +5,9 @@ from __future__ import annotations
 from rich.console import Console
 
 from infrastructure.terminal.prompt_support import (
+    CTRL_C_DOUBLE_PRESS_WINDOW_S,
     print_session_resume_hint,
-    repl_prompt_note_ctrl_c,
+    repl_prompt_ctrl_c_should_exit,
     repl_reset_ctrl_c_gate,
 )
 from surfaces.interactive_shell.runtime.core.prompt_builder import PromptBuilder
@@ -52,11 +53,14 @@ class PromptInputReader:
             except KeyboardInterrupt:
                 if self.state.is_dispatch_running():
                     return InputCancelled()
-                if repl_prompt_note_ctrl_c(self.console, self.session.session_id):
+                if repl_prompt_ctrl_c_should_exit():
+                    self.state.clear_ctrl_c_exit_hint()
                     return InputClosed()
+                self.state.arm_ctrl_c_exit_hint(CTRL_C_DOUBLE_PRESS_WINDOW_S)
                 return InputCancelled()
 
             repl_reset_ctrl_c_gate()
+            self.state.clear_ctrl_c_exit_hint()
             raw_text = text
             text = strip_cpr_sequences(text)
             if not text.strip() and contains_cpr_sequence(raw_text):

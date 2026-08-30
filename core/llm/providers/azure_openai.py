@@ -48,7 +48,7 @@ def is_azure_litellm_model(model: str) -> bool:
 
 def resolve_azure_openai_api_version(value: str = "") -> str:
     """Return the configured Azure API version, falling back to the OpenSRE default."""
-    from config.config import DEFAULT_AZURE_OPENAI_API_VERSION
+    from config.llm_models import DEFAULT_AZURE_OPENAI_API_VERSION
 
     version = (value or os.getenv(AZURE_OPENAI_API_VERSION_ENV, "")).strip()
     return version or DEFAULT_AZURE_OPENAI_API_VERSION

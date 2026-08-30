@@ -4,13 +4,10 @@ from __future__ import annotations
 
 import logging
 import os
-import sys
 from typing import Literal
 
 import questionary
-from rich.text import Text
 
-import surfaces.cli.wizard._integration_configurators as _integration_configurators_module
 from config.env_file import sync_env_values
 from config.setup_store import get_store_path, save_local_config
 from core.llm.providers.azure_openai import is_azure_openai_provider
@@ -19,7 +16,6 @@ from infrastructure.terminal.theme import (
     GLYPH_ERROR,
     GLYPH_WARNING,
     SECONDARY,
-    TEXT,
     WARNING,
 )
 from integrations.llm_cli import diagnose_binary_path
@@ -34,7 +30,6 @@ from surfaces.cli.wizard.components import (
     console,
     local_defaults,
     prompt_value,
-    select_target_for_advanced,
     step_header,
 )
 from surfaces.cli.wizard.configurators.github import (
@@ -63,7 +58,7 @@ from surfaces.cli.wizard.llm_credential import (
     _prompt_validated_llm_credential,
     _provider_choice_label,
 )
-from surfaces.cli.wizard.probes import ProbeResult, probe_local_target, probe_remote_target
+from surfaces.cli.wizard.probes import ProbeResult, probe_local_target
 from surfaces.cli.wizard.summaries import (
     render_header,
     render_next_steps,
@@ -71,18 +66,21 @@ from surfaces.cli.wizard.summaries import (
 )
 from surfaces.shared.llm_setup.catalog import (
     PROVIDER_BY_VALUE,
-    SUPPORTED_PROVIDERS,
     ProviderOption,
     WizardCredentialKind,
 )
 from surfaces.shared.llm_setup.env_sync import sync_provider_env
+from surfaces.shared.llm_setup.provider_choices import (
+    DEFAULT_SETUP_PROVIDER_VALUE,
+    OTHER_PROVIDER_SELECTION,
+    focused_provider_default,
+    focused_setup_provider_options,
+    ordered_setup_provider_options,
+    other_setup_provider_options,
+)
 
-WIZARD_TOTAL_STEPS = 4
+WIZARD_TOTAL_STEPS = 2
 logger = logging.getLogger(__name__)
-
-#: Vendor-CLI providers a user can only reach by setting ``LLM_PROVIDER``
-#: directly; onboarding no longer offers a subscription/OAuth login for them.
-_HIDDEN_ONBOARDING_PROVIDERS = frozenset({"codex", "claude-code"})
 
 __all__ = [
     "DEFAULT_GITHUB_MCP_MODE",
@@ -90,6 +88,8 @@ __all__ = [
     "IntegrationHealthResult",
     "build_demo_action_response",
     "questionary",
+    "run_llm_setup",
+    "run_wizard",
 ]
 
 
@@ -112,11 +112,77 @@ def _seed_onboarding_loops() -> int:
 
 
 def _onboarding_provider_options() -> tuple[ProviderOption, ...]:
-    return tuple(
-        provider
-        for provider in SUPPORTED_PROVIDERS
-        if provider.value not in _HIDDEN_ONBOARDING_PROVIDERS
+    return ordered_setup_provider_options()
+
+
+def _provider_choice(provider: ProviderOption) -> Choice:
+    return Choice(
+        value=provider.value,
+        label=_provider_choice_label(provider),
+        hint=provider.group,
     )
+
+
+def _initial_provider_choices() -> list[Choice]:
+    choices = [_provider_choice(provider) for provider in focused_setup_provider_options()]
+    choices.append(
+        Choice(
+            value=OTHER_PROVIDER_SELECTION,
+            label="Other LLM provider",
+            hint="Show all supported providers",
+        )
+    )
+    return choices
+
+
+def _choose_onboarding_provider(default_provider_value: str) -> ProviderOption:
+    """Prompt for the LLM provider, with the full catalog behind ``Other``."""
+    valid_direct_values = {provider.value for provider in _onboarding_provider_options()}
+    while True:
+        provider_selection = choose(
+            "Choose your LLM provider",
+            _initial_provider_choices(),
+            default=focused_provider_default(default_provider_value),
+        )
+        if provider_selection in valid_direct_values:
+            return PROVIDER_BY_VALUE[
+                resolve_onboarding_provider(
+                    provider_selection,
+                    default=default_provider_value,
+                )
+            ]
+        if provider_selection != OTHER_PROVIDER_SELECTION:
+            # Tests and old scripted demos may still feed retired setup-mode
+            # answers into the first prompt; ask again instead of crashing.
+            continue
+        try:
+            other_choices = onboarding_provider_choices(
+                [_provider_choice(provider) for provider in other_setup_provider_options()]
+            )
+            other_default = onboarding_provider_default(default_provider_value)
+            if other_default not in {choice.value for choice in other_choices}:
+                other_provider_values = {
+                    provider.value for provider in other_setup_provider_options()
+                }
+                other_default = next(
+                    (
+                        choice.value
+                        for choice in other_choices
+                        if choice.value in other_provider_values
+                    ),
+                    other_choices[0].value,
+                )
+            selected = choose(
+                "Choose another LLM provider",
+                other_choices,
+                default=other_default,
+                back_on_cancel=True,
+            )
+            return PROVIDER_BY_VALUE[
+                resolve_onboarding_provider(selected, default=default_provider_value)
+            ]
+        except WizardBack:
+            continue
 
 
 def _run_cli_llm_onboarding(provider: ProviderOption) -> Literal["ok", "abort", "repick"]:
@@ -202,39 +268,28 @@ def _run_cli_llm_onboarding(provider: ProviderOption) -> Literal["ok", "abort", 
     return "abort"
 
 
-def run_wizard(_argv: list[str] | None = None) -> int:
-    """Run the interactive wizard."""
-    render_header()
+def run_llm_setup(
+    *,
+    show_header: bool = True,
+    start_step: int = 1,
+    total_steps: int = WIZARD_TOTAL_STEPS,
+) -> int:
+    """Prompt for LLM provider + credential and persist local config.
+
+    ``start_step`` / ``total_steps`` let a surrounding flow (e.g. factory setup)
+    place this block after earlier steps without rewriting step headers.
+    """
+    if show_header:
+        render_header()
     defaults = local_defaults()
     saved_provider_value = defaults["provider"] if isinstance(defaults["provider"], str) else None
     saved_model_value = defaults["model"] if isinstance(defaults["model"], str) else ""
-    default_wizard_mode = (
-        defaults["wizard_mode"] if isinstance(defaults["wizard_mode"], str) else "quickstart"
-    )
     provider_options = _onboarding_provider_options()
     provider_option_values = {p.value for p in provider_options}
     default_provider_value = (
         saved_provider_value
         if saved_provider_value in provider_option_values
-        else provider_options[0].value
-    )
-
-    step_header(1, WIZARD_TOTAL_STEPS, "Setup Mode")
-    wizard_mode = choose(
-        "How do you want to get started?",
-        [
-            Choice(
-                value="quickstart", label="Quickstart", hint="Local setup with the usual defaults"
-            ),
-            Choice(
-                value="advanced",
-                label="Advanced",
-                hint="Show probes and choose the target explicitly",
-            ),
-        ],
-        default=default_wizard_mode
-        if default_wizard_mode in {"quickstart", "advanced"}
-        else "quickstart",
+        else DEFAULT_SETUP_PROVIDER_VALUE
     )
 
     store_path = get_store_path()
@@ -242,20 +297,8 @@ def run_wizard(_argv: list[str] | None = None) -> int:
     remote_probe = ProbeResult(
         target="remote",
         reachable=False,
-        detail="Remote probing is shown during Advanced setup.",
+        detail="Remote setup is configured after first-run LLM setup.",
     )
-
-    if wizard_mode == "advanced":
-        remote_probe = probe_remote_target()
-        target = select_target_for_advanced(local_probe, remote_probe)
-        if target is None:
-            return 1
-    else:
-        target = "local"
-
-    if target != "local":
-        print("Only local configuration is supported today.", file=sys.stderr)
-        return 1
 
     force_repick = False
     provider: ProviderOption
@@ -265,10 +308,12 @@ def run_wizard(_argv: list[str] | None = None) -> int:
     # Records a ``continue_unsaved`` secret export so it can be re-applied
     # before the in-process shell handoff.
     session_env_sink: dict[str, str] = {}
+    llm_step = start_step
+    summary_step = start_step + 1
     while True:
         credential_state = OK
         session_env_sink = {}
-        step_header(2, WIZARD_TOTAL_STEPS, "LLM Provider")
+        step_header(llm_step, total_steps, "LLM Provider")
         saved_provider = (
             PROVIDER_BY_VALUE.get(saved_provider_value) if saved_provider_value else None
         )
@@ -284,26 +329,7 @@ def run_wizard(_argv: list[str] | None = None) -> int:
 
         if change_provider:
             try:
-                provider_selection = choose(
-                    "Choose your LLM provider",
-                    onboarding_provider_choices(
-                        [
-                            Choice(
-                                value=p.value,
-                                label=_provider_choice_label(p),
-                                hint=p.group,
-                            )
-                            for p in provider_options
-                        ]
-                    ),
-                    default=onboarding_provider_default(default_provider_value),
-                )
-                provider = PROVIDER_BY_VALUE[
-                    resolve_onboarding_provider(
-                        provider_selection,
-                        default=default_provider_value,
-                    )
-                ]
+                provider = _choose_onboarding_provider(default_provider_value)
             except WizardBack:
                 force_repick = True
                 continue
@@ -450,7 +476,7 @@ def run_wizard(_argv: list[str] | None = None) -> int:
         "remote": remote_probe.as_dict(),
     }
     saved_path = save_local_config(
-        wizard_mode=wizard_mode,
+        wizard_mode="quickstart",
         provider=provider.value,
         model=model,
         api_key_env=provider.api_key_env,
@@ -469,32 +495,22 @@ def run_wizard(_argv: list[str] | None = None) -> int:
         # its .env write failed and the user picked "continue without saving".
         os.environ.update(session_env_sink)
 
-    step_header(3, WIZARD_TOTAL_STEPS, "Integrations")
-    try:
-        configured_integrations, integration_env_path = (
-            _integration_configurators_module._configure_selected_integrations()
-        )
-    except KeyboardInterrupt:
-        cancelled = Text()
-        cancelled.append(f"\n  {GLYPH_WARNING}  ", style=f"bold {WARNING}")
-        cancelled.append("Integration setup cancelled. AI config was kept.", style=TEXT)
-        console.print(cancelled)
-        configured_integrations = []
-        integration_env_path = None
-
-    summary_env_path = integration_env_path or str(env_path)
     _seed_onboarding_loops()
 
-    step_header(4, WIZARD_TOTAL_STEPS, "Summary")
+    step_header(summary_step, total_steps, "Summary")
     render_saved_summary(
         provider_label=provider.label,
         model=model,
         saved_path=str(saved_path),
-        env_path=summary_env_path,
-        configured_integrations=configured_integrations,
+        env_path=str(env_path),
         credential_line=_credential_line_for_saved_summary(
             provider, credential_state=credential_state
         ),
     )
     render_next_steps()
     return 0
+
+
+def run_wizard(_argv: list[str] | None = None) -> int:
+    """Run the interactive LLM-only onboarding wizard."""
+    return run_llm_setup()

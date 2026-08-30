@@ -293,8 +293,8 @@ MCP_BY_COMMAND: dict[str, _SlashMcpFields] = {
         ),
     ),
     "/onboard": _mcp(
-        "Launch the interactive onboarding wizard (handoff if run inside the REPL).",
-        "User asks to run onboarding or initial setup wizard",
+        "Launch the interactive LLM onboarding wizard (handoff if run inside the REPL).",
+        "User asks to run onboarding or reconfigure the LLM provider",
     ),
     "/privacy": _mcp(
         "Show history persistence settings, redaction status, and the local threat model.",
@@ -345,6 +345,11 @@ MCP_BY_COMMAND: dict[str, _SlashMcpFields] = {
         "total turns, and investigation count for each session.",
         "User asks to see past sessions, session history, or what was run in previous sessions",
         anti_examples=("User asks for the current session status (use /status)",),
+    ),
+    "/setup": _mcp(
+        "First-run setup: GitHub sign-in, LLM key, then open the interactive shell.",
+        "User asks to run first-run setup or factory-style install setup",
+        "User just installed OpenSRE and needs to sign in and add an LLM key",
     ),
     "/status": _mcp(
         "Explicit /status command operation: show REPL session status, including "

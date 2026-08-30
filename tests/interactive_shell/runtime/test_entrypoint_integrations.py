@@ -225,15 +225,6 @@ def test_run_repl_async_identifies_saved_github_username(monkeypatch: Any) -> No
         lambda **_kwargs: SimpleNamespace(session=Session(), inbox=None),
     )
 
-    class _PromptSession:
-        history = None
-
-    monkeypatch.setattr(
-        main_entrypoint,
-        "build_prompt_session",
-        lambda: _PromptSession(),
-    )
-
     import asyncio
 
     asyncio.run(main_entrypoint.run_repl_async(initial_input="hello"))
@@ -269,14 +260,6 @@ def test_run_repl_async_failed_resume_flushes_starter_session(
 
     monkeypatch.setattr(session.store, "flush", _track_flush)
 
-    class _PromptSession:
-        history = None
-
-    monkeypatch.setattr(
-        main_entrypoint,
-        "build_prompt_session",
-        lambda: _PromptSession(),
-    )
     monkeypatch.setattr(
         main_entrypoint,
         "create_repl_runtime",
@@ -304,7 +287,6 @@ def test_run_repl_writes_startup_output_to_the_supplied_console(monkeypatch: Any
     from config.repl_config import ReplConfig
 
     captured = Console(file=StringIO(), force_terminal=False, width=80)
-    monkeypatch.setattr(main_entrypoint, "run_startup_sweep", lambda: None)
     monkeypatch.setattr(main_entrypoint.sys.stdin, "isatty", lambda: True)
 
     def _fake_terminal_ui(console: Any, **_kwargs: Any) -> None:
@@ -335,7 +317,6 @@ def test_run_repl_defaults_to_the_module_console(monkeypatch: Any) -> None:
     """Omitting the console keeps today's behaviour, not a silent no-op."""
     # Arrange
     seen: list[object] = []
-    monkeypatch.setattr(main_entrypoint, "run_startup_sweep", lambda: None)
     monkeypatch.setattr(main_entrypoint.sys.stdin, "isatty", lambda: True)
 
     def _record_console(console: Any, **_kwargs: Any) -> None:
@@ -384,10 +365,6 @@ def test_run_repl_async_routes_the_console_into_resume(monkeypatch: Any, tmp_pat
         _resume,
     )
 
-    class _PromptSession:
-        history = None
-
-    monkeypatch.setattr(main_entrypoint, "build_prompt_session", lambda: _PromptSession())
     monkeypatch.setattr(
         main_entrypoint,
         "create_repl_runtime",
@@ -419,7 +396,6 @@ def test_run_repl_hands_its_console_to_the_async_half(monkeypatch: Any) -> None:
 
     from config.repl_config import ReplConfig
 
-    monkeypatch.setattr(main_entrypoint, "run_startup_sweep", lambda: None)
     monkeypatch.setattr(main_entrypoint.sys.stdin, "isatty", lambda: True)
     monkeypatch.setattr(main_entrypoint, "render_terminal_ui", lambda _console, **_kw: None)
 
@@ -477,7 +453,6 @@ def test_console_injection_works_through_the_package_facade(monkeypatch: Any) ->
     from config.repl_config import ReplConfig
     from surfaces.interactive_shell import run_repl as facade
 
-    monkeypatch.setattr(main_entrypoint, "run_startup_sweep", lambda: None)
     monkeypatch.setattr(main_entrypoint.sys.stdin, "isatty", lambda: True)
 
     def _fake_terminal_ui(console: Any, **_kwargs: Any) -> None:
@@ -521,9 +496,6 @@ def test_initial_input_replay_uses_the_supplied_console(monkeypatch: Any) -> Non
 
     monkeypatch.setattr(replay, "render_terminal_ui", _fake_terminal_ui)
 
-    class _PromptSession:
-        history = None
-
     # Rendering happens before the first turn; stub the turn so this pins the
     # console wiring rather than the whole execution stack.
     monkeypatch.setattr(replay, "render_submitted_prompt", lambda *_a, **_kw: None)
@@ -532,7 +504,6 @@ def test_initial_input_replay_uses_the_supplied_console(monkeypatch: Any) -> Non
         lambda *_a, **_kw: None,
     )
 
-    monkeypatch.setattr(main_entrypoint, "build_prompt_session", lambda: _PromptSession())
     monkeypatch.setattr(
         main_entrypoint,
         "create_repl_runtime",

@@ -42,6 +42,7 @@ from integrations.google_docs import GOOGLE_DOCS_SETUP
 from integrations.grafana.setup import GRAFANA_SETUP
 from integrations.groundcover.setup import GROUNDCOVER_SETUP
 from integrations.helm.setup import HELM_SETUP
+from integrations.hermes.setup import HERMES_SETUP
 from integrations.honeycomb.setup import HONEYCOMB_SETUP
 from integrations.incident_io.setup import INCIDENT_IO_SETUP
 from integrations.jenkins.setup import JENKINS_SETUP
@@ -151,6 +152,7 @@ _SUBMITTED: dict[str, dict[str, str]] = {
         "kubeconfig": "/home/ci/.kube/config",
         "default_namespace": "checkout",
     },
+    "hermes": {"log_path": "/var/log/hermes/errors.log"},
     "smtp": {
         "host": "smtp.eu.example.com",
         "port": "2525",
@@ -330,6 +332,7 @@ _SPECS = [
     GOOGLE_DOCS_SETUP,
     GROUNDCOVER_SETUP,
     HELM_SETUP,
+    HERMES_SETUP,
     HONEYCOMB_SETUP,
     INCIDENT_IO_SETUP,
     JENKINS_SETUP,

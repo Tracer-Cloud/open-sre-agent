@@ -124,14 +124,6 @@ def test_system_prompt_routes_github_cli_to_action_tools() -> None:
     assert "day-by-day stars" in prompt
 
 
-def test_skills_loader_routes_star_history_away_from_github_cli() -> None:
-    cached_load_skills_block.cache_clear()
-    body = load_skill_body("github-cli").lower()
-    assert "star history" in body
-    assert "get_github_star_history" in body
-    assert "undercount" in body or "false zeros" in body
-
-
 def test_system_prompt_slack_fragment_documents_invented_command_example() -> None:
     # The Slack-specific invented-delivery-command example now lives in
     # integrations.slack.action_prompt, appended via the harness-ports
@@ -209,27 +201,6 @@ def test_skills_loader_bundles_architecture_audit_skill() -> None:
     assert "### Findings by severity" in body
 
 
-def test_skills_loader_bundles_github_cli_skill() -> None:
-    cached_load_skills_block.cache_clear()
-    skill = skills_dir() / "github_cli" / "SKILL.md"
-    assert skill.is_file()
-
-    index = load_skills_index()
-    assert "github-cli" in index
-    assert "github_cli(args=" not in index
-
-    body = load_skill_body("github-cli")
-    assert "GITHUB CLI SKILL" in body
-    assert "github_cli(args=" in body
-    assert "create an issue from that" in body
-
-    prompt = build_action_system_prompt(_ctx(messages=[("user", "audit architecture")]))
-    assert "architecture-audit" in prompt
-    assert "ARCHITECTURE AUDIT SKILL" not in prompt
-    assert "### Findings by severity" not in prompt
-    cached_load_skills_block.cache_clear()
-
-
 def test_skills_loader_bundles_github_security_fix_skill() -> None:
     cached_load_skills_block.cache_clear()
     skill = skills_dir() / "github_security_fix" / "SKILL.md"
@@ -262,11 +233,13 @@ def test_skills_loader_bundles_github_ci_fix_skill() -> None:
 
     assert "github-ci-fix" in load_skills_index()
     body = load_skill_body("github-ci-fix")
-    assert "GITHUB PR CI FIX SKILL" in body
+    assert "GITHUB CI FIX SKILL" in body
     assert "fix_github_pr_ci" in body
     assert "output exactly that text and stop" in body
     assert '"next steps"' in body
-    assert "pushes to the existing PR head branch" in body
+    assert "separate linked git" in body
+    assert "worktree, commits on a fresh" in body
+    assert 'branch="main"' in body
     cached_load_skills_block.cache_clear()
 
 
@@ -312,7 +285,6 @@ def test_skills_index_is_thin_relative_to_full_bodies() -> None:
     assert names >= {
         "morning-report",
         "architecture-audit",
-        "github-cli",
         "github-security-fix",
         "github-ci-fix",
     }

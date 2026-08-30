@@ -52,7 +52,7 @@ def observe_investigation_llm_usage() -> Iterator[InvestigationLlmUsage]:
 def resolve_configured_llm_identity() -> tuple[str, str]:
     """Best-effort ``(provider, model)`` from the configured LLM settings."""
     try:
-        from config.config import resolve_llm_settings
+        from config.llm_settings import resolve_llm_settings
 
         settings = resolve_llm_settings()
         provider = settings.provider

@@ -21,7 +21,7 @@ from surfaces.interactive_shell.ui import (
 
 def _status_provider_display() -> str:
     """Render the active LLM provider, flagging a fallback away from configured."""
-    from config.config import get_configured_llm_provider, resolve_llm_settings_verbose
+    from config.llm_settings import get_configured_llm_provider, resolve_llm_settings_verbose
 
     try:
         resolution = resolve_llm_settings_verbose()

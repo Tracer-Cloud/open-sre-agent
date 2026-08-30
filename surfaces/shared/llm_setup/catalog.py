@@ -6,7 +6,18 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from enum import StrEnum
 
-from config.config import (
+from config.constants.llm import (
+    AZURE_OPENAI_API_KEY_ENV,
+    AZURE_OPENAI_API_VERSION_ENV,
+    AZURE_OPENAI_BASE_URL_ENV,
+    CUSTOM_ANTHROPIC_API_KEY_ENV,
+    CUSTOM_ANTHROPIC_BASE_URL_ENV,
+    CUSTOM_OPENAI_API_KEY_ENV,
+    CUSTOM_OPENAI_BASE_URL_ENV,
+    TRUSTEDROUTER_API_KEY_ENV,
+)
+from config.llm_auth.provider_catalog import CredentialKind, require_provider_spec
+from config.llm_models import (
     ANTHROPIC_REASONING_MODEL,
     AZURE_OPENAI_REASONING_MODEL,
     BEDROCK_REASONING_MODEL,
@@ -22,17 +33,6 @@ from config.config import (
     TRUSTEDROUTER_REASONING_MODEL,
     VERTEX_AI_REASONING_MODEL,
 )
-from config.constants.llm import (
-    AZURE_OPENAI_API_KEY_ENV,
-    AZURE_OPENAI_API_VERSION_ENV,
-    AZURE_OPENAI_BASE_URL_ENV,
-    CUSTOM_ANTHROPIC_API_KEY_ENV,
-    CUSTOM_ANTHROPIC_BASE_URL_ENV,
-    CUSTOM_OPENAI_API_KEY_ENV,
-    CUSTOM_OPENAI_BASE_URL_ENV,
-    TRUSTEDROUTER_API_KEY_ENV,
-)
-from config.llm_auth.provider_catalog import CredentialKind, require_provider_spec
 from config.local_env import PROJECT_ROOT as PROJECT_ROOT
 from config.local_env import get_project_env_path
 from integrations.llm_cli import LLMCLIAdapter

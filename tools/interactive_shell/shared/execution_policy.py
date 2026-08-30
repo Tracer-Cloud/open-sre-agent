@@ -163,6 +163,10 @@ def apply_auto_level(
     """
     if result.verdict != "allow":
         return result
+    # Read-only shell commands (ls, find, grep, …) run without approval at every
+    # level: they only inspect state, so gating them is friction without safety.
+    if result.shell_classification == "read_only":
+        return result
     ask_types = AUTO_LEVEL_ASK_TOOL_TYPES[auto_level]
     if ask_types is not None and result.tool_type not in ask_types:
         return result
@@ -170,6 +174,37 @@ def apply_auto_level(
         result,
         verdict="ask",
         reason=f"Auto ({AUTO_LEVEL_TITLES[auto_level]}) requires approval for this action",
+    )
+
+
+def is_mutating_tool_type(tool_type: str) -> bool:
+    """True for tool types that can change state (the Med approval set)."""
+    return tool_type in (AUTO_LEVEL_ASK_TOOL_TYPES[AutoLevel.MED] or frozenset())
+
+
+def apply_plan_only_gate(
+    result: ExecutionPolicyResult,
+    *,
+    plan_only_active: bool,
+) -> ExecutionPolicyResult:
+    """Promote a mutating default-allow verdict to ``ask`` while a plan-only request stands.
+
+    The user asked for a plan without running it, so execution stays gated —
+    regardless of the ``/auto`` level — until the user confirms a mutating step
+    at the gate. Read-only tool types run normally.
+    """
+    if not plan_only_active or result.verdict != "allow":
+        return result
+    # Read-only shell commands only inspect state; a plan-only request does not
+    # gate them any more than /auto does.
+    if result.shell_classification == "read_only":
+        return result
+    if not is_mutating_tool_type(result.tool_type):
+        return result
+    return replace(
+        result,
+        verdict="ask",
+        reason="Plan-only request stands — confirm before running this step",
     )
 
 
@@ -206,6 +241,8 @@ __all__ = [
     "ToolExecutionPlan",
     "allow_tool",
     "apply_auto_level",
+    "apply_plan_only_gate",
+    "is_mutating_tool_type",
     "plan_foreground_tool",
     "resolve_confirmation",
 ]

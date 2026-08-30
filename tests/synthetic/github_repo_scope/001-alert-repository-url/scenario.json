@@ -1,0 +1,19 @@
+{
+  "scenario_id": "001-alert-repository-url",
+  "description": "A GitHub repository URL in the investigation request enriches the turn before action-tool planning.",
+  "user_message": "Investigate the latest change in https://github.com/Tracer-Cloud/opensre that could explain the incident.",
+  "base_resolved_integrations": {
+    "github": {
+      "connection_verified": true,
+      "mode": "stdio",
+      "command": "synthetic-github-mcp",
+      "args": []
+    }
+  },
+  "expected": {
+    "owner": "Tracer-Cloud",
+    "repo": "opensre",
+    "tool_name": "list_github_commits",
+    "commit_sha": "synthetic-repo-scope-5782"
+  }
+}

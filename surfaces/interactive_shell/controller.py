@@ -9,7 +9,6 @@ from collections.abc import Iterator
 from contextlib import contextmanager
 
 from prompt_toolkit import PromptSession
-from prompt_toolkit.patch_stdout import patch_stdout
 from rich.console import Console
 
 from config.repl_config import ReplConfig
@@ -47,6 +46,7 @@ from surfaces.interactive_shell.runtime.turn_host import (
 )
 from surfaces.interactive_shell.session import Session
 from surfaces.interactive_shell.ui import DIM
+from surfaces.interactive_shell.ui.input_prompt.stdout import patch_prompt_stdout
 
 log = logging.getLogger(__name__)
 
@@ -229,7 +229,9 @@ class InteractiveShellController:
             self.runtime_context.inbox = inbox
             self._start_runtime_services()
             try:
-                with patch_stdout(raw=True):
+                if self.prompt.pt_app is None:
+                    raise RuntimeError("prompt application was not initialized")
+                with patch_prompt_stdout(self.prompt.pt_app, raw=True):
                     # Main input loop: reads prompts and enqueues submitted turns
                     # onto state.queue. The agent turns themselves run in
                     # run_agent_turn_queue, started above in _start_runtime_services.
@@ -281,13 +283,21 @@ class InteractiveShellController:
                 self.state.deliver_confirmation(text)
                 return True
             case SubmitTurn(text=text, wait_until_idle=wait, warning=warning):
-                # Read before render_submitted_prompt — that clears the flag.
+                # Read before render_submitted_prompt — that clears the autosubmit
+                # and handoff-answer flags.
+                autosubmitted = bool(self.session.terminal.last_input_autosubmitted)
+                ask_user_answers = bool(self.session.terminal.awaiting_handoff_answer)
+                if not autosubmitted and not ask_user_answers:
+                    # A genuine typed turn starts a new workload: reset the ask-user
+                    # round counter so the two-round cap is per-request, not per-session.
+                    self.session.ask_user_rounds = 0
+                    self.session.terminal.pending_choice_response = None
                 wait_for_turn = _should_wait_until_turn_finishes(
                     exclusive_stdin=wait,
-                    goal_condition_autosubmitted=bool(
-                        self.session.terminal.last_input_autosubmitted
-                    ),
+                    goal_condition_autosubmitted=autosubmitted and not ask_user_answers,
                 )
+                if wait_for_turn:
+                    await self.prompt.suspend()
                 if warning:
                     self.echo_console.print(warning)
                 self.prompt.render_submitted_prompt(self.echo_console, text)
@@ -300,6 +310,7 @@ class InteractiveShellController:
     async def _shutdown_runtime(self) -> None:
         self.state.request_exit()
         self.state.cancel_current_dispatch()
+        await self.prompt.close()
 
         for _label, task in self.tasks:
             task.cancel()

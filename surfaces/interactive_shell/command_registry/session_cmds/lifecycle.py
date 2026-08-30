@@ -10,10 +10,10 @@ from surfaces.interactive_shell.ui import DIM, HIGHLIGHT
 
 
 def _cmd_clear(session: Session, console: Console, _args: list[str]) -> bool:
-    from surfaces.interactive_shell.ui import render_ready_box
+    from surfaces.interactive_shell.ui import render_launch_banner
 
     console.clear()
-    render_ready_box(console, session=session)
+    render_launch_banner(console, session=session)
     return True
 
 

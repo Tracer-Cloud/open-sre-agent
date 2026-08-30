@@ -73,6 +73,24 @@ def test_remote_sync_endpoint_url_env_is_re_exported() -> None:
     assert "REMOTE_SYNC_ENDPOINT_URL_ENV" in constants.__all__
 
 
+def test_split_config_constants_are_re_exported() -> None:
+    """The constants facade remains the canonical import path after the split."""
+    from config import constants
+
+    expected = {
+        "CLERK_ISSUER_ENV": "CLERK_ISSUER",
+        "CLERK_JWKS_URL_ENV": "CLERK_JWKS_URL",
+        "DEPLOYMENT_ENV_ENV": "ENV",
+        "SLACK_CHANNEL": "tracer-rca-report-alerts",
+        "TRACER_BASE_URL_DEV": "https://staging.tracer.cloud",
+        "TRACER_BASE_URL_PROD": "https://app.tracer.cloud",
+    }
+
+    for name, value in expected.items():
+        assert getattr(constants, name) == value
+        assert name in constants.__all__
+
+
 @pytest.mark.parametrize("module", ["billing", "tenancy"])
 def test_constants_module_stays_a_leaf(module: str) -> None:
     """``config`` sits at the bottom layer, so the constants must not

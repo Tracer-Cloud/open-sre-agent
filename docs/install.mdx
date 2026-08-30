@@ -11,7 +11,7 @@ After install, you have:
 
 - The `opensre` CLI on your PATH
 - An interactive shell when you run `opensre` with no arguments
-- An onboard wizard to pick your LLM and connect tools like Datadog or Slack
+- A short setup that signs you into GitHub and configures your LLM
 
 No sudo required on macOS/Linux in the usual case — the installer puts the binary somewhere writable (often `~/.local/bin`) and tells you if you need a PATH tweak.
 
@@ -29,9 +29,9 @@ curl -fsSL https://install.opensre.com | bash
 irm https://install.opensre.com | iex
 ```
 
-In a normal interactive terminal, the installer often starts `opensre onboard` for you when it finishes. In CI or scripts it skips that and prints what to do next.
+In a normal interactive terminal, the installer often starts `opensre setup` for you when it finishes. In CI or scripts it skips that and prints what to do next.
 
-Don't want auto-onboard?
+Don't want auto-setup?
 
 ```bash
 curl -fsSL https://install.opensre.com | OPENSRE_AUTO_LAUNCH=0 bash
@@ -48,19 +48,31 @@ More options (PATH notes, skipping GitHub CLI install, on-prem layout): [Install
 
 ## Set things up
 
-If onboard didn't start automatically, run it yourself:
+If setup didn't start automatically, run it yourself:
+
+```bash
+opensre setup
+```
+
+The wizard asks for:
+
+1. **GitHub sign-in** — browser device authorization (required)
+2. **An LLM provider** — Claude Code, OpenAI, OpenRouter, or another supported provider
+3. **A model and credential** — an API key, CLI login, or local endpoint depending on the provider
+
+When that finishes, OpenSRE opens the interactive shell. Add tools later, when you need them:
+
+```bash
+opensre integrations setup <service>
+```
+
+To change only the LLM later (without GitHub again):
 
 ```bash
 opensre onboard
 ```
 
-The wizard asks for:
-
-1. **An LLM** — OpenAI, Anthropic, a local model, or another provider you already use
-2. **Your tools** — whatever you want investigations to query (Datadog, Grafana, Slack, and so on)
-3. **Optional extras** — masking and messaging, if you want them
-
-Then check that the tools you connected actually work:
+Then check that the tools you connected work:
 
 ```bash
 opensre integrations verify
