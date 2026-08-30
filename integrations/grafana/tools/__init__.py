@@ -193,14 +193,16 @@ def _map_grafana_annotations(
     evidence: dict[str, Any], output: dict[str, Any], _input: dict[str, Any]
 ) -> None:
     annotations = output.get("annotations", [])
-    evidence["grafana_annotations"] = annotations
     if annotations:
+        evidence["grafana_annotations"] = annotations
         record_evidence_entry(
             evidence,
             source="grafana_annotations",
             label="Grafana Annotations",
             summary=f"{len(annotations)} annotations",
         )
+
+
 
 
 @tool(
@@ -306,18 +308,6 @@ def query_grafana_annotations(
     }
 
 
-def _map_grafana_annotations(
-    evidence: dict[str, Any], output: dict[str, Any], _input: dict[str, Any]
-) -> None:
-    annotations = output.get("annotations", [])
-    evidence["grafana_annotations"] = annotations
-    if annotations:
-        record_evidence_entry(
-            evidence,
-            source="grafana_annotations",
-            label="Grafana Annotations",
-            summary=f"{len(annotations)} annotations",
-        )
 
 
 
