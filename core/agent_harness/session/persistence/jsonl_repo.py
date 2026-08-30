@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import contextlib
 import json
+from collections.abc import Sequence
 from pathlib import Path
 from typing import Any
 
@@ -106,7 +107,7 @@ class JsonlSessionRepo:
     def _collect_investigation_records(
         path: Path,
         *,
-        lines: list[str] | None = None,
+        lines: Sequence[str | bytes] | None = None,
     ) -> list[dict[str, Any]]:
         with contextlib.suppress(Exception):
             loaded = _load_v2_lines(lines) if lines is not None else _load_v2_file(path)
@@ -153,7 +154,7 @@ class JsonlSessionRepo:
         results: list[dict[str, Any]] = []
         for path in sorted(root.glob("*.jsonl"), key=_mtime, reverse=True):
             with contextlib.suppress(Exception):
-                lines = path.read_text(encoding="utf-8").splitlines()
+                lines = path.read_bytes().splitlines()
                 results.extend(self._collect_investigation_records(path, lines=lines))
             if len(results) >= n * 3:
                 break
@@ -170,7 +171,7 @@ class JsonlSessionRepo:
         count = 0
         for path in root.glob("*.jsonl"):
             with contextlib.suppress(Exception):
-                lines = path.read_text(encoding="utf-8").splitlines()
+                lines = path.read_bytes().splitlines()
                 for rec in JsonlSessionRepo._collect_investigation_records(path, lines=lines):
                     inv_id = str(rec.get("investigation_id") or "").lower()
                     if not inv_id.startswith(normalized):
@@ -235,15 +236,20 @@ def _split_session_ref(ref: str) -> tuple[str, str | None]:
 
 
 def _load_v2_file(path: Path) -> tuple[dict[str, Any], list[dict[str, Any]]] | None:
-    return _load_v2_lines(path.read_text(encoding="utf-8").splitlines())
+    return _load_v2_lines(path.read_bytes().splitlines())
 
 
-def _load_v2_lines(lines: list[str]) -> tuple[dict[str, Any], list[dict[str, Any]]] | None:
+def _load_v2_lines(
+    lines: Sequence[str | bytes],
+) -> tuple[dict[str, Any], list[dict[str, Any]]] | None:
     if not lines:
         return None
     try:
-        header = json.loads(lines[0])
-    except json.JSONDecodeError:
+        first_line = lines[0]
+        header = json.loads(
+            first_line.decode("utf-8") if isinstance(first_line, bytes) else first_line
+        )
+    except (json.JSONDecodeError, UnicodeDecodeError):
         return None
     if (
         not isinstance(header, dict)
@@ -253,8 +259,9 @@ def _load_v2_lines(lines: list[str]) -> tuple[dict[str, Any], list[dict[str, Any
         return None
     entries: list[dict[str, Any]] = []
     for line in lines[1:]:
-        with contextlib.suppress(json.JSONDecodeError):
-            rec = json.loads(line)
+        with contextlib.suppress(json.JSONDecodeError, UnicodeDecodeError):
+            decoded = line.decode("utf-8") if isinstance(line, bytes) else line
+            rec = json.loads(decoded)
             if isinstance(rec, dict) and "id" in rec and "type" in rec:
                 entries.append(rec)
     return header, entries

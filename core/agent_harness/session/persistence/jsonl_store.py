@@ -565,7 +565,16 @@ class JsonlSessionStore:
                     **({"sidecar": True} if sidecar else {}),
                     **{key: value for key, value in payload.items() if value is not None},
                 }
+                needs_separator = path.stat().st_size > 0
+                if needs_separator:
+                    # A killed writer can leave one torn record without its newline.
+                    # Keep that dead line isolated so it cannot absorb this good record.
+                    with path.open("rb") as existing:
+                        existing.seek(-1, os.SEEK_END)
+                        needs_separator = existing.read(1) != b"\n"
                 with path.open("a", encoding="utf-8") as fh:
+                    if needs_separator:
+                        fh.write("\n")
                     fh.write(json.dumps(record, ensure_ascii=False, default=str) + "\n")
                     if durable:
                         fh.flush()
@@ -605,7 +614,7 @@ class JsonlSessionStore:
         self._leaf_ids[key] = entry_id
 
     @staticmethod
-    def _loads_record(line: str, *, path: Path | None = None) -> dict[str, Any] | None:
+    def _loads_record(line: str | bytes, *, path: Path | None = None) -> dict[str, Any] | None:
         """Parse one JSONL line into a record dict, or ``None`` if unusable.
 
         A decode failure here is a torn tail or truncation on the read side —
@@ -613,8 +622,9 @@ class JsonlSessionStore:
         different failure modes on either end of the same file.
         """
         try:
-            rec = json.loads(line)
-        except json.JSONDecodeError:
+            decoded = line.decode("utf-8") if isinstance(line, bytes) else line
+            rec = json.loads(decoded)
+        except (json.JSONDecodeError, UnicodeDecodeError):
             record_operation(
                 "session_jsonl_decode_failed",
                 {"line_chars": len(line), "path": str(path) if path else ""},
@@ -625,7 +635,9 @@ class JsonlSessionStore:
     @staticmethod
     def _read_records(path: Path) -> list[dict[str, Any]]:
         records: list[dict[str, Any]] = []
-        for line in path.read_text(encoding="utf-8").splitlines():
+        # Parse bytes one line at a time so one torn UTF-8 code point cannot make
+        # later complete records unreadable or be replaced inside a corrupt record.
+        for line in path.read_bytes().splitlines():
             rec = JsonlSessionStore._loads_record(line, path=path)
             if rec is not None:
                 records.append(rec)
@@ -706,7 +718,7 @@ class JsonlSessionStore:
                 region_end = scanned_low if scanned_low is not None else len(buffer)
                 if region_start < region_end:
                     region = buffer[region_start:region_end]
-                    for line in reversed(region.decode("utf-8").splitlines()):
+                    for line in reversed(region.splitlines()):
                         if not line.strip():
                             continue
                         rec = self._loads_record(line, path=path)
