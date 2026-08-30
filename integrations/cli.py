@@ -35,10 +35,10 @@ if TYPE_CHECKING:
 
 from integrations.registry import SUPPORTED_SETUP_SERVICES, resolve_management_service
 from integrations.store import (
-    STORE_PATH,
     get_integration,
     list_integrations,
     remove_integration,
+    resolve_store_path,
 )
 from integrations.verify import (
     SUPPORTED_VERIFY_SERVICES,
@@ -754,6 +754,12 @@ def _setup_helm() -> None:
     _run_spec_setup(HELM_SETUP)
 
 
+def _setup_hermes() -> None:
+    from integrations.hermes.setup import HERMES_SETUP
+
+    _run_spec_setup(HERMES_SETUP)
+
+
 def _setup_tempo() -> None:
     from integrations.tempo.setup import TEMPO_SETUP
 
@@ -770,6 +776,12 @@ def _setup_kubernetes() -> None:
     from integrations.kubernetes.setup import KUBERNETES_SETUP
 
     _run_spec_setup(KUBERNETES_SETUP)
+
+
+def _setup_google_docs() -> None:
+    from integrations.google_docs import GOOGLE_DOCS_SETUP
+
+    _run_spec_setup(GOOGLE_DOCS_SETUP)
 
 
 def _setup_yandex_cloud() -> None:
@@ -791,6 +803,7 @@ _HANDLERS: dict[str, Any] = {
     "grafana": _setup_grafana,
     "honeycomb": _setup_honeycomb,
     "helm": _setup_helm,
+    "hermes": _setup_hermes,
     "incident_io": _setup_incident_io,
     "mariadb": _setup_mariadb,
     "mongodb_atlas": _setup_mongodb_atlas,
@@ -826,6 +839,7 @@ _HANDLERS: dict[str, Any] = {
     "kubernetes": _setup_kubernetes,
     "servicenow": _setup_servicenow,
     "new_relic": _setup_new_relic,
+    "google_docs": _setup_google_docs,
     "yandex_cloud": _setup_yandex_cloud,
 }
 
@@ -895,7 +909,7 @@ def cmd_setup(service: str | None) -> str:
         _die(f"Usage: setup <service>. Supported: {', '.join(available)}")
     print(f"\n  Setting up {_B}{service}{_R}\n")
     _HANDLERS[service]()
-    print(f"\n  {GLYPH_SUCCESS} Saved → {STORE_PATH}\n")
+    print(f"\n  {GLYPH_SUCCESS} Saved → {resolve_store_path()}\n")
     return service
 
 

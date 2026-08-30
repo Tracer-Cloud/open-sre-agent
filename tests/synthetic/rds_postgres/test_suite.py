@@ -6,7 +6,7 @@ from pathlib import Path
 
 import pytest
 
-from config.config import has_credentials_for_active_llm_provider
+from config.llm_settings import has_credentials_for_active_llm_provider
 from tests.synthetic.rds_postgres.run_suite import run_scenario
 from tests.synthetic.rds_postgres.scenario_loader import (
     SUITE_DIR,

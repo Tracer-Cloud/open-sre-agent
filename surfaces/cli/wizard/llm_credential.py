@@ -89,8 +89,12 @@ _REPICK_CHOICE = Choice(
 
 
 def _provider_choice_label(provider: ProviderOption) -> str:
+    if provider.value == "claude-code":
+        return "Claude Code"
     if provider.value == "openai":
         return "OpenAI"
+    if provider.value == "openrouter":
+        return "OpenRouter"
     if provider.value == "anthropic":
         return "Anthropic"
     return provider.label

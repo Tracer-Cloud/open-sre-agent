@@ -1,14 +1,6 @@
 name: Release
 
 on:
-  pull_request:
-    branches: [main]
-    paths-ignore:
-      - "docs/**"
-      - "tests/**"
-      - "*.md"
-      - "*.mdx"
-      - ".claude/**"
   push:
     branches: [main]
     paths-ignore:
@@ -42,7 +34,7 @@ permissions:
   actions: read
 
 concurrency:
-  group: release-${{ github.event_name == 'pull_request' && github.event.pull_request.number || (github.event_name == 'push' && 'main') || (github.event_name == 'workflow_dispatch' && inputs.channel == 'main' && 'main') || 'stable' }}
+  group: release-${{ github.event_name == 'push' && 'main' || (github.event_name == 'workflow_dispatch' && inputs.channel == 'main' && 'main') || 'stable' }}
   cancel-in-progress: true
 
 jobs:
@@ -70,18 +62,6 @@ jobs:
           set -euo pipefail
 
           channel="release"
-
-          if [ "$EVENT_NAME" = "pull_request" ]; then
-            short_sha="${GITHUB_SHA:0:7}"
-            year="$(date -u +%Y)"
-            month="$(date -u +%-m)"
-            day="$(date -u +%-d)"
-
-            echo "channel=pr" >> "$GITHUB_OUTPUT"
-            echo "tag_name=pr-build" >> "$GITHUB_OUTPUT"
-            echo "version_name=0.1.${year}.${month}.${day}+pr.${short_sha}" >> "$GITHUB_OUTPUT"
-            exit 0
-          fi
 
           if [ "$EVENT_NAME" = "push" ]; then
             channel="main"
@@ -489,10 +469,8 @@ jobs:
           set -euo pipefail
           if [ "$RELEASE_CHANNEL" = "release" ]; then
             ASSET_BASENAME="opensre_${TAG_NAME#v}_${{ matrix.target }}"
-          elif [ "$RELEASE_CHANNEL" = "main" ]; then
-            ASSET_BASENAME="opensre_main_${{ matrix.target }}"
           else
-            ASSET_BASENAME="opensre_pr_${{ matrix.target }}"
+            ASSET_BASENAME="opensre_main_${{ matrix.target }}"
           fi
           tar -C dist -czf "${ASSET_BASENAME}.tar.gz" "${{ matrix.binary_name }}"
           shasum -a 256 "${ASSET_BASENAME}.tar.gz" > "${ASSET_BASENAME}.tar.gz.sha256"
@@ -503,10 +481,8 @@ jobs:
         run: |
           if ($env:RELEASE_CHANNEL -eq "release") {
             $assetBaseName = "opensre_$($env:TAG_NAME.TrimStart('v'))_${{ matrix.target }}"
-          } elseif ($env:RELEASE_CHANNEL -eq "main") {
-            $assetBaseName = "opensre_main_${{ matrix.target }}"
           } else {
-            $assetBaseName = "opensre_pr_${{ matrix.target }}"
+            $assetBaseName = "opensre_main_${{ matrix.target }}"
           }
           Compress-Archive -Path "dist\${{ matrix.binary_name }}" -DestinationPath "${assetBaseName}.zip"
           $hash = (Get-FileHash -Algorithm SHA256 "${assetBaseName}.zip").Hash.ToLowerInvariant()
@@ -515,7 +491,7 @@ jobs:
       - name: Upload binary archive
         uses: actions/upload-artifact@v4
         with:
-          name: ${{ env.RELEASE_CHANNEL == 'pr' && 'pr-' || env.RELEASE_CHANNEL == 'main' && 'main-' || '' }}release-${{ matrix.target }}
+          name: ${{ env.RELEASE_CHANNEL == 'main' && 'main-' || '' }}release-${{ matrix.target }}
           path: |
             opensre_*_${{ matrix.target }}.${{ matrix.archive_ext }}
             opensre_*_${{ matrix.target }}.${{ matrix.archive_ext }}.sha256

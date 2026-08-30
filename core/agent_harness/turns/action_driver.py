@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import json
 import logging
+import re
 import shlex
 from collections.abc import Sequence
 from dataclasses import dataclass
@@ -37,6 +38,7 @@ from core.agent_harness.prompts import (
     build_action_user_message,
 )
 from core.agent_harness.session.integration_resolution import resolve_and_cache_integrations
+from core.agent_harness.session.pending_choice import parse_ask_user_answers
 from core.agent_harness.session.terminal_access import execute_cli_onboard_on_missing_key
 from core.agent_harness.session_goal.goal import strip_session_goal_progress_tags
 from core.agent_harness.turns.conversation_recording import record_conversation_turn
@@ -204,14 +206,11 @@ def with_duplicate_action_call_guard(
     )
 
 
-# Some hosted tool-calling models emit one tool call per assistant turn even when
-# parallel tool calls are enabled. Keep the tool-calling loop bounded, but leave
-# enough headroom for a *data-dependent* compound request that must run
-# sequentially: each step waits for the previous tool's result before the next
-# call can be emitted (e.g. "look up the weather and then send it to Slack" =
-# Architecture audit needs headroom for clone + ≤3 agent-scan probes +
-# 4 heuristic shells + cleanup + save observations (then a no-tool report).
-_MAX_TOOL_CALLING_ITERATIONS = 13
+# This is an emergency ceiling, not the normal workflow budget. Productive
+# action turns may need many sequential calls; repeated observations are stopped
+# independently by the stagnation guard below.
+_MAX_TOOL_CALLING_ITERATIONS = 64
+_MAX_STAGNANT_TOOL_ITERATIONS = 3
 _EXECUTED_HISTORY_TYPES = {
     "slash",
     "shell",
@@ -223,11 +222,13 @@ _EXECUTED_HISTORY_TYPES = {
 INVESTIGATION_DISPATCH_TOOL_NAMES: frozenset[str] = frozenset(
     {"investigation_start", "alert_sample"}
 )
-# Tools whose user-facing event is rendered live by the surface's tool-event
-# observer (``tool_start``/``tool_end``), so the end-of-turn generic formatter
-# must stay silent for them: repeating their summary would double-print, and
-# their payload (e.g. the full skill body) is for the model only.
-_OBSERVER_RENDERED_TOOL_NAMES: frozenset[str] = frozenset({"skill_view"})
+# Tools whose user-facing event is owned by the host UI, so the end-of-turn
+# generic formatter must stay silent: repeating their summary would double-print,
+# and their payload (e.g. the full skill body) is for the model only. update_plan
+# renders as the pinned plan overlay, so its summary must not also print as text.
+_HOST_RENDERED_TOOL_NAMES: frozenset[str] = frozenset(
+    {"ask_user_choice", "skill_view", "update_plan"}
+)
 
 
 @dataclass(frozen=True)
@@ -336,9 +337,69 @@ def _generic_tool_results(result: Any) -> list[tuple[ToolCall, Any]]:
     ]
 
 
+_DISPLAY_OUTPUT_MAX_LINES = 12
+_DISPLAY_OUTPUT_MAX_CHARS = 800
+_OUTPUT_TRUNCATED_MARKER = "… (output truncated)"
+
+
+_PLAN_SNAPSHOT_RE = re.compile(r"Plan\s*[·.]\s*\d+\s*/\s*\d+(?:\s*[✓●○][^✓●○\n]*)*")
+
+
+def _strip_plan_snapshots(text: str) -> str:
+    """Remove ``Plan · n/m`` checklist snapshots the model restates in its reply.
+
+    The plan lives in the pinned overlay, so echoing it — let alone every
+    historical step-completion state — is a redundant wall. Prose (``-``/``•``
+    bullets, sentences) is untouched."""
+    if "Plan" not in text:
+        return text
+    cleaned = _PLAN_SNAPSHOT_RE.sub("", text)
+    return re.sub(r"\n{3,}", "\n\n", cleaned).strip()
+
+
+def _looks_like_json(text: str) -> bool:
+    stripped = text.strip()
+    if not stripped or stripped[0] not in "[{":
+        return False
+    try:
+        json.loads(stripped)
+    except (TypeError, ValueError, json.JSONDecodeError):
+        return False
+    return True
+
+
+def _cap_for_display(text: str) -> str:
+    """Cap verbose tool output for the console so a large result cannot flood the
+    transcript. The model and persisted history keep the full text; only the
+    user-facing preview is truncated."""
+    if not text:
+        return text
+    lines = text.splitlines()
+    capped = "\n".join(lines[:_DISPLAY_OUTPUT_MAX_LINES])
+    truncated = len(lines) > _DISPLAY_OUTPUT_MAX_LINES
+    if len(capped) > _DISPLAY_OUTPUT_MAX_CHARS:
+        capped = capped[:_DISPLAY_OUTPUT_MAX_CHARS].rstrip()
+        truncated = True
+    return f"{capped}\n{_OUTPUT_TRUNCATED_MARKER}" if truncated else capped
+
+
+def _visible_stdout(stdout: str) -> str:
+    """Plain-text stdout is shown as-is; a JSON payload (e.g. a ``gh api``
+    response) is pretty-printed so it reads as formatted data, not a one-line
+    blob. Capping and fenced-block styling happen later, at display time."""
+    stripped = stdout.strip()
+    if not stripped:
+        return ""
+    try:
+        parsed = json.loads(stripped)
+    except (TypeError, ValueError, json.JSONDecodeError):
+        return stripped
+    return json.dumps(parsed, indent=2, ensure_ascii=False)
+
+
 def _format_generic_tool_payload(tool_call: ToolCall, tool_result: Any) -> str:
     """Build a user-visible summary for one non-self-recording tool result."""
-    if tool_call.name in _OBSERVER_RENDERED_TOOL_NAMES:
+    if tool_call.name in _HOST_RENDERED_TOOL_NAMES and not getattr(tool_result, "is_error", False):
         return ""
     preferred_response = _preferred_tool_response_text(tool_result)
     if preferred_response:
@@ -350,7 +411,7 @@ def _format_generic_tool_payload(tool_call: ToolCall, tool_result: Any) -> str:
             return summary.strip()
         stdout = details.get("stdout")
         if details.get("ok") and isinstance(stdout, str) and stdout.strip():
-            return stdout.strip()
+            return _visible_stdout(stdout)
         error = details.get("error")
         if error:
             return str(error).strip()
@@ -372,15 +433,15 @@ def _format_generic_tool_payload(tool_call: ToolCall, tool_result: Any) -> str:
         if isinstance(summary, str) and summary.strip():
             return summary.strip()
         if parsed.get("ok") and isinstance(parsed.get("stdout"), str) and parsed["stdout"].strip():
-            return str(parsed["stdout"]).strip()
+            return _visible_stdout(str(parsed["stdout"]))
         if parsed.get("error"):
             return str(parsed["error"]).strip()
-    args = public_tool_input(tool_call.input)
-    if args:
-        return (
-            f"{tool_call.name} input: {json.dumps(args, ensure_ascii=False, default=str)}"
-            f"\n{tool_call.name} result: {content}"
-        )
+    if parsed is not None:
+        # An opaque JSON payload (a dict with no user-facing field, or a list):
+        # pretty-print it so raw data reads as formatted JSON rather than a
+        # one-line blob. Capping and fenced-block styling happen at display time.
+        return json.dumps(parsed, indent=2, ensure_ascii=False)
+    # Non-JSON content is the tool's real text output; show it under the name.
     return f"{tool_call.name} result: {content}"
 
 
@@ -423,27 +484,27 @@ def _self_recording_tools_only(result: Any) -> bool:
 
 # Self-recording tools whose result payload carries the real command output
 # back to the model (shell: stdout/stderr/exit_code; slash: the captured
-# console output read back from the history row). A closing summary after a
-# chain of these is grounded in observed output, unlike the bare success flags
-# most self-recording tools return.
-_GROUNDED_CHAIN_TOOL_NAMES: frozenset[str] = frozenset({"shell_run", "slash_invoke"})
+# console output read back from the history row). A closing summary after these
+# is grounded in observed output, unlike the bare success flags most
+# self-recording tools return.
+_GROUNDED_OUTPUT_TOOL_NAMES: frozenset[str] = frozenset({"shell_run", "slash_invoke"})
 
 
-def _multi_step_grounded_chain(result: Any) -> bool:
-    """True when the turn chained two or more output-carrying tool steps.
+def _grounded_output_tools_only(result: Any) -> bool:
+    """True when every tool this turn carried its real output back to the model.
 
     ``_self_recording_tools_only`` suppresses model closings because most
     self-recording tools hand the model a bare success flag, so closing prose
     would be invented. ``shell_run`` and ``slash_invoke`` are the exceptions —
-    their tool results carry the real output back to the model — so after a
-    multi-step chain the completion summary is grounded in output the model
-    actually observed, and dropping it left workflow turns ending on raw step
-    output with no wrap-up. Single commands keep the suppression: their one
-    output block is already on screen, and a paraphrase only adds
-    contradiction risk.
+    their tool results carry the real stdout/exit (or captured console output)
+    back to the model — so their closing summary is grounded in output the model
+    actually observed. That holds whether the turn ran one command or a chain:
+    keeping the closing lets the agent report what a command did (result, exit,
+    any skipped step) instead of ending on raw output, matching how a teammate
+    would confirm the outcome.
     """
     names = [tool_call.name for tool_call, _tool_result in getattr(result, "tool_results", [])]
-    return len(names) >= 2 and all(name in _GROUNDED_CHAIN_TOOL_NAMES for name in names)
+    return bool(names) and all(name in _GROUNDED_OUTPUT_TOOL_NAMES for name in names)
 
 
 def _asks_the_user(final_text: str) -> bool:
@@ -699,7 +760,11 @@ def _build_action_agent(
         # The reviewer reads executed tool names from the shared list the
         # event tap below fills, so it can stand down on handoff/dispatch
         # turns whose outcome is not reviewable at conclusion time.
-        goal = build_goal_reviewer(llm, message, executed_tool_names)
+        goal = build_goal_reviewer(
+            llm,
+            _goal_review_user_request(message, turn_snapshot),
+            executed_tool_names,
+        )
 
     # WAL first, observer second: the tool intent must be on disk before
     # any surface side effect reacts to the same event.
@@ -717,6 +782,7 @@ def _build_action_agent(
         tools=tuple(agent_tools),
         resolved_integrations=resolved_integrations,
         max_iterations=_MAX_TOOL_CALLING_ITERATIONS,
+        max_stagnant_iterations=_MAX_STAGNANT_TOOL_ITERATIONS,
         tool_resources=tool_resources,
         tool_hooks=tool_hooks,
         on_runtime_event=on_runtime_event,
@@ -728,6 +794,19 @@ def _build_action_agent(
         llm=llm,
         max_iterations=_MAX_TOOL_CALLING_ITERATIONS,
     )
+
+
+def _goal_review_user_request(message: str, turn_snapshot: TurnSnapshot | None) -> str:
+    """Recover the original user request when this turn contains Ask User answers."""
+    if turn_snapshot is None or not parse_ask_user_answers(message):
+        return message
+    for role, content in reversed(turn_snapshot.conversation_messages):
+        if role.casefold() != "user" or not content.strip():
+            continue
+        if parse_ask_user_answers(content):
+            continue
+        return content
+    return message
 
 
 @dataclass(frozen=True)
@@ -834,30 +913,55 @@ def _compose_response(
     Consumes the session's pending outcome hint.
     """
     final_text = str(getattr(result, "final_text", "") or "").strip()
+    waiting_for_choice = getattr(session, "pending_user_choice", None) is not None
     generic_text = _response_text_from_generic_results(result)
     hint = _pop_turn_outcome_hint(session)
     prefer_tool_response_text = _has_preferred_tool_response_text(result)
+    terminal = getattr(session, "terminal", None)
+    pending_choice_response = getattr(terminal, "pending_choice_response", None)
+    selected_choice = (
+        pending_choice_response.strip() if isinstance(pending_choice_response, str) else ""
+    )
+    if selected_choice and terminal is not None:
+        terminal.pending_choice_response = None
     # Self-recording tools (slash/shell/…) already rendered the real output.
     # Drop model closings so they cannot contradict what the user just saw
     # (classic failure: inventing "health check passed" after a failed /health).
-    # Exceptions: a multi-step shell/slash chain, whose closing summary is
-    # grounded in the output the model observed between steps; a closing
-    # question, which seeks direction instead of restating output; and any
-    # quiet ``shell_run``, which withheld live stdout so the closing *is*
-    # the turn's display.
-    suppress_final = prefer_tool_response_text or (
-        _self_recording_tools_only(result)
-        and not _multi_step_grounded_chain(result)
-        and not _asks_the_user(final_text)
-        and not _has_quiet_shell_run(result)
+    # Exceptions: a shell/slash command, whose closing summary is grounded in the
+    # output the model observed (so the agent can confirm the outcome, one command
+    # or a chain); a closing question, which seeks direction instead of restating
+    # output; and any quiet ``shell_run``, which withheld live stdout so the
+    # closing *is* the turn's display.
+    suppress_final = (
+        (waiting_for_choice and _is_redundant_choice_invitation(result, final_text))
+        or _is_choice_acknowledgement(final_text, selected_choice)
+        or prefer_tool_response_text
+        or (
+            _self_recording_tools_only(result)
+            and not _grounded_output_tools_only(result)
+            and not _asks_the_user(final_text)
+            and not _has_quiet_shell_run(result)
+        )
     )
     final_text_chunk = "" if suppress_final else final_text
-    display_final = final_text_chunk
+    # The model sometimes restates the plan (or every historical snapshot) in its
+    # reply; the pinned overlay already shows it, so strip snapshots from display.
+    display_final = _strip_plan_snapshots(final_text_chunk)
     # History entries are already rendered by self-recording tools (shell/slash/…).
     # Console display uses final_text + generic results + hints only so users see
     # github_cli / other registry tools without double-printing shell output.
     # response_text still includes history for persistence / non-TTY surfaces.
-    display_chunks = [chunk for chunk in (display_final, generic_text, hint) if chunk]
+    display_generic = _cap_for_display(generic_text)
+    is_json = _looks_like_json(generic_text)
+    bulky = display_generic.count("\n") >= 4 or display_generic.endswith(_OUTPUT_TRUNCATED_MARKER)
+    if display_generic and (is_json or bulky):
+        # Bulky or JSON tool output reads as code: put it in its own fenced block
+        # below a blank line so it never blends with the report prose above it.
+        # JSON gets a ``json`` fence for syntax highlighting. Short summaries stay
+        # inline.
+        lang = "json" if is_json else "text"
+        display_generic = f"\n```{lang}\n{display_generic}\n```"
+    display_chunks = [chunk for chunk in (display_final, display_generic, hint) if chunk]
     response_chunks = [
         chunk
         for chunk in (
@@ -869,8 +973,52 @@ def _compose_response(
         if chunk
     ]
     use_final_text = bool(final_text_chunk)
-    response_text = final_text if use_final_text else "\n".join(response_chunks)
+    response_text = "\n".join(response_chunks)
     return response_text, display_chunks, use_final_text
+
+
+def _is_redundant_choice_invitation(result: Any, final_text: str) -> bool:
+    """True when a single-choice closing repeats the title or tool summary."""
+    final_tokens = _choice_invitation_tokens(final_text)
+    if not final_tokens:
+        return True
+    for tool_call, tool_result in getattr(result, "tool_results", []):
+        if tool_call.name != "ask_user_choice":
+            continue
+        args = public_tool_input(tool_call.input)
+        if args.get("questions"):
+            return False
+        picker_copy = {_choice_invitation_tokens(str(args.get("title", "")))}
+        details = getattr(tool_result, "details", None)
+        if isinstance(details, dict):
+            picker_copy.add(_choice_invitation_tokens(str(details.get("summary", ""))))
+        picker_copy.discard(())
+        return final_tokens in picker_copy
+    return False
+
+
+def _choice_invitation_tokens(text: str) -> tuple[str, ...]:
+    """Normalize picker copy while allowing an optional polite prefix."""
+    tokens = tuple(re.findall(r"[a-z0-9]+", text.casefold()))
+    if tokens[:1] == ("please",):
+        return tokens[1:]
+    return tokens
+
+
+def _is_choice_acknowledgement(text: str, selected_choice: str) -> bool:
+    """True only for a bare restatement of the selected picker label."""
+    if not text or not selected_choice:
+        return False
+    choice = " ".join(selected_choice.casefold().split())
+    response = " ".join(text.casefold().strip().rstrip(".!?").split())
+    return response in {
+        choice,
+        f"{choice} selected",
+        f"{choice} was selected",
+        f"selected {choice}",
+        f"selected: {choice}",
+        f"you selected {choice}",
+    }
 
 
 def _show_response(
@@ -1006,7 +1154,7 @@ def _run_action_turn(
             client=llm_client,
             error_text=error_text,
         )
-        from config.config import get_configured_llm_provider
+        from config.llm_settings import get_configured_llm_provider
         from core.agent_harness.accounting.token_accounting import resolve_provider_name
 
         provider = resolve_provider_name(llm_client) if llm_client is not None else None
@@ -1046,8 +1194,9 @@ def _run_action_turn(
         _show_response(
             args.output,
             handled=counts.handled,
-            # use_final_text means the composed text *is* the closing message.
-            final_text=response_text if use_final_text else "",
+            # Stream only terminal-visible chunks. ``response_text`` may also
+            # contain self-recording history for persistence/headless surfaces.
+            final_text="\n".join(display_chunks) if use_final_text else "",
             display_chunks=display_chunks,
         )
 
@@ -1066,7 +1215,7 @@ def _run_action_turn(
         False,
         False if cancelled else counts.handled,
         response_text="" if cancelled else response_text,
-        response_streamed=bool(use_final_text and not result.hit_iteration_cap and not cancelled),
+        response_streamed=bool(use_final_text and not cancelled),
         investigation_dispatched=(False if cancelled else counts.investigation_dispatched),
         hit_iteration_cap=bool(result.hit_iteration_cap and not cancelled),
         cancelled=cancelled,

@@ -81,6 +81,7 @@ def test_gateway_turn_runner_does_not_finalize_answered_turn(
             False,
             False,
             response_streamed=True,
+            hit_iteration_cap=True,
         ),
         assistant_response_text="streamed answer",
     )
@@ -159,6 +160,39 @@ def test_run_turn_surfaces_iteration_cap_as_incomplete() -> None:
     assert "iteration limit reached" in result.primary_response_text
 
 
+def test_run_turn_does_not_duplicate_a_streamed_safety_handoff() -> None:
+    handoff = "Partial results are preserved; the repeated query is still blocked."
+
+    def execute_actions(_text: str, **_kwargs: object) -> ToolCallingTurnResult:
+        return ToolCallingTurnResult(
+            1,
+            1,
+            0,
+            False,
+            True,
+            response_text=handoff,
+            response_streamed=True,
+            hit_iteration_cap=True,
+        )
+
+    class _Accounting:
+        def record_action_result(self, _result: ToolCallingTurnResult) -> None:
+            return None
+
+        def finalize(self, result: TurnResult) -> TurnResult:
+            return result
+
+    result = run_turn(
+        "finish the task",
+        Session(store=InMemorySessionStore()),
+        execute_actions=execute_actions,
+        accounting=_Accounting(),
+    )
+
+    assert result.final_intent == "agent_incomplete"
+    assert result.primary_response_text == handoff
+
+
 def test_run_turn_builds_turn_plan_for_action_path(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -185,14 +219,21 @@ def test_run_turn_builds_turn_plan_for_action_path(
 
     session = Session(store=InMemorySessionStore())
     run_turn(
-        "hi",
+        "check facebook/react",
         session,
         execute_actions=execute_actions,
         accounting=_Accounting(),
     )
 
     assert captured, "execute_actions was never called"
-    assert captured[0].resolved_integrations == resolved
+    assert captured[0].resolved_integrations == {
+        "github": {
+            "configured": True,
+            "owner": "facebook",
+            "repo": "react",
+        }
+    }
+    assert resolved == {"github": {"configured": True}}
 
 
 def test_action_tools_uses_passed_resolved_integrations(
@@ -206,7 +247,7 @@ def test_action_tools_uses_passed_resolved_integrations(
         return []
 
     monkeypatch.setattr(
-        "core.agent_harness.tools.tool_provider.get_action_tools_from_integrations_context",
+        "core.agent_harness.tools.tool_provider.get_action_tools_from_integrations_view",
         _fake_build,
     )
     provider = DefaultToolProvider(
@@ -231,7 +272,7 @@ def test_action_tools_falls_back_to_session_resolve_when_none(
         return []
 
     monkeypatch.setattr(
-        "core.agent_harness.tools.tool_provider.get_action_tools_from_integrations_context",
+        "core.agent_harness.tools.tool_provider.get_action_tools_from_integrations_view",
         _fake_build,
     )
     monkeypatch.setattr(

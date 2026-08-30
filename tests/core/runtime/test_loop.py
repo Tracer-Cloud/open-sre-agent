@@ -40,6 +40,7 @@ class FakeLLM:
         self.invocations = 0
         self.schema_tool_names: list[list[str]] = []
         self.seen_messages: list[list[dict[str, Any]]] = []
+        self.seen_tools: list[list[dict[str, Any]] | None] = []
         self.model_id: str | None = None
 
     def tool_schemas(self, tools: list[Any]) -> list[dict[str, Any]]:
@@ -55,6 +56,7 @@ class FakeLLM:
     ) -> AgentLLMResponse:
         self.invocations += 1
         self.seen_messages.append(messages)
+        self.seen_tools.append(tools)
         return next(self._responses)
 
     def build_assistant_message(
@@ -104,10 +106,14 @@ def _text_response(content: str) -> AgentLLMResponse:
     return AgentLLMResponse(content=content, tool_calls=[], raw_content=None)
 
 
-def _tool_call_response(call_id: str, name: str) -> AgentLLMResponse:
+def _tool_call_response(
+    call_id: str,
+    name: str,
+    tool_input: dict[str, Any] | None = None,
+) -> AgentLLMResponse:
     return AgentLLMResponse(
         content="",
-        tool_calls=[ToolCall(id=call_id, name=name, input={})],
+        tool_calls=[ToolCall(id=call_id, name=name, input=dict(tool_input or {}))],
         raw_content=None,
     )
 
@@ -116,6 +122,7 @@ def _agent(
     llm: FakeLLM,
     tools: list[Any],
     max_iterations: int = 5,
+    max_stagnant_iterations: int | None = None,
     on_event: Any = None,
     on_runtime_event: Any = None,
 ) -> Agent:
@@ -125,6 +132,7 @@ def _agent(
         tools=tools,
         resolved_integrations={},
         max_iterations=max_iterations,
+        max_stagnant_iterations=max_stagnant_iterations,
         on_event=on_event,
         on_runtime_event=on_runtime_event,
     )
@@ -585,15 +593,17 @@ def test_tool_filtering_runs_after_subclass_initialization() -> None:
     assert [(tc.name, tool_output) for tc, tool_output in result.executed] == [("keep", output)]
 
 
-def test_always_tool_call_hits_iteration_cap() -> None:
-    def always_tool_calls() -> Iterator[AgentLLMResponse]:
-        counter = 0
-        while True:
-            counter += 1
-            yield _tool_call_response(f"c{counter}", "query_logs")
-
+def test_iteration_cap_gets_one_tool_disabled_final_handoff() -> None:
     max_iterations = 3
-    llm = FakeLLM(always_tool_calls())
+    llm = FakeLLM(
+        iter(
+            [
+                _tool_call_response(f"c{step}", "query_logs", {"step": step})
+                for step in range(max_iterations)
+            ]
+            + [_text_response("I completed two checks; the remaining work is blocked.")]
+        )
+    )
 
     result = _agent(llm, _tools(FakeTool("query_logs")), max_iterations=max_iterations).run(
         [{"role": "user", "content": "hello"}]
@@ -602,8 +612,74 @@ def test_always_tool_call_hits_iteration_cap() -> None:
     assert result.hit_iteration_cap is True
     assert result.llm_iterations_used == max_iterations
     assert len(result.executed) == max_iterations
-    assert result.final_text == ""
-    assert llm.invocations == max_iterations
+    assert result.final_text == "I completed two checks; the remaining work is blocked."
+    assert llm.invocations == max_iterations + 1
+    assert llm.seen_tools[-1] == []
+
+
+def test_productive_tool_run_can_continue_past_thirteen_iterations() -> None:
+    tool_iterations = 14
+    llm = FakeLLM(
+        iter(
+            [
+                _tool_call_response(f"c{step}", "query_logs", {"step": step})
+                for step in range(tool_iterations)
+            ]
+            + [_text_response("all steps completed")]
+        )
+    )
+
+    result = _agent(
+        llm,
+        _tools(FakeTool("query_logs")),
+        max_iterations=20,
+        max_stagnant_iterations=3,
+    ).run([{"role": "user", "content": "run every step"}])
+
+    assert result.hit_iteration_cap is False
+    assert result.llm_iterations_used == tool_iterations + 1
+    assert len(result.executed) == tool_iterations
+    assert result.final_text == "all steps completed"
+
+
+def test_repeated_observations_stop_early_with_one_tool_disabled_handoff() -> None:
+    llm = FakeLLM(
+        iter(
+            [_tool_call_response(f"c{step}", "query_logs") for step in range(4)]
+            + [_text_response("The same query failed repeatedly; use a narrower time range.")]
+        )
+    )
+
+    result = _agent(
+        llm,
+        _tools(FakeTool("query_logs", {"error": "unavailable"})),
+        max_iterations=20,
+        max_stagnant_iterations=3,
+    ).run([{"role": "user", "content": "keep trying"}])
+
+    assert result.hit_iteration_cap is True
+    assert result.llm_iterations_used == 4
+    assert len(result.executed) == 4
+    assert result.final_text == "The same query failed repeatedly; use a narrower time range."
+    assert llm.invocations == 5
+    assert llm.seen_tools[-1] == []
+
+
+def test_failed_safety_handoff_uses_deterministic_final_text() -> None:
+    def responses() -> Iterator[AgentLLMResponse]:
+        yield _tool_call_response("c1", "query_logs")
+        raise RuntimeError("final sampling unavailable")
+
+    llm = FakeLLM(responses())
+
+    result = _agent(llm, _tools(FakeTool("query_logs")), max_iterations=1).run(
+        [{"role": "user", "content": "finish this"}]
+    )
+
+    assert result.hit_iteration_cap is True
+    assert "emergency tool-iteration ceiling" in result.final_text
+    assert llm.invocations == 2
+    assert llm.seen_tools[-1] == []
 
 
 def test_react_loop_records_partial_iterations_when_llm_raises() -> None:

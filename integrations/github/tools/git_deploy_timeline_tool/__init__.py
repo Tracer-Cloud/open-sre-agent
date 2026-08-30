@@ -160,11 +160,13 @@ def _map_get_git_deploy_timeline(
 ) -> None:
     timeline = output.get("commits")
     if isinstance(timeline, list) and timeline:
+        count = len(timeline)
+        word = "deploy" if count == 1 else "deploys"
         record_evidence_entry(
             evidence,
             source="get_git_deploy_timeline",
             label="Git Deploy Timeline",
-            summary=f"{len(timeline)} deploys",
+            summary=f"{count} {word}",
         )
 
 

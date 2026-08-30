@@ -25,6 +25,36 @@ class TestPythonExecutionToolMetadata:
         assert "investigation" in registered.surfaces
         assert "chat" in registered.surfaces
 
+    def test_not_advertised_without_a_python_interpreter(self, monkeypatch) -> None:
+        def _unavailable() -> str:
+            raise FileNotFoundError("Python 3 is not available on PATH")
+
+        monkeypatch.setattr(
+            "infrastructure.safety.sandbox.runner._python_executable",
+            _unavailable,
+        )
+
+        clear_tool_registry_cache()
+        registered = get_registered_tool_map("chat")["execute_python_code"]
+
+        assert execute_python_code.is_available({}) is False
+        assert registered.is_available({}) is False
+
+    def test_guidance_does_not_require_bundled_dependencies(self) -> None:
+        clear_tool_registry_cache()
+        registered = get_registered_tool_map("chat")["execute_python_code"]
+        guidance = " ".join(
+            [
+                registered.description,
+                *registered.use_cases,
+                *registered.anti_examples,
+                registered.skill_guidance,
+            ]
+        )
+
+        assert "psutil" not in guidance
+        assert "opensre_runtime" in guidance
+
     def test_github_token_hidden_from_public_schema(self) -> None:
         clear_tool_registry_cache()
         registered = get_registered_tool_map("chat")["execute_python_code"]

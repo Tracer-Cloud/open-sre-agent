@@ -1,0 +1,168 @@
+"""Tests for the agent update_plan tool."""
+
+from __future__ import annotations
+
+import io
+from typing import Any
+
+from rich.console import Console
+
+from core.agent_harness.task_plan.plan import (
+    PlanStepStatus,
+    parse_task_plan,
+    task_plan_from_payload,
+)
+from core.agent_harness.tools.tool_context import ActionToolScope
+from surfaces.interactive_shell.session import Session
+from tools.interactive_shell.actions.update_plan import (
+    execute_update_plan_tool,
+    update_plan_tool,
+)
+
+
+def _ctx(session: Session | None = None) -> ActionToolScope:
+    console = Console(file=io.StringIO(), force_terminal=False, highlight=False)
+    return ActionToolScope(
+        session=session if session is not None else Session(),
+        console=console,
+    )
+
+
+_PLAN: list[dict[str, Any]] = [
+    {"step": "Capture 502 samples from checkout", "status": "completed"},
+    {"step": "Trace 502s to the last deploy", "status": "in_progress"},
+    {"step": "Confirm checkout returns 2xx", "status": "pending"},
+]
+
+
+def test_update_plan_tool_is_action_surface_read_only() -> None:
+    assert update_plan_tool.name == "update_plan"
+    assert "action" in update_plan_tool.surfaces
+    assert update_plan_tool.side_effect_level == "read_only"
+    assert update_plan_tool.parallel_safe is False
+    explanation = update_plan_tool.input_schema["properties"]["explanation"]["description"]
+    assert "investigation" in explanation.lower()
+    assert "do not invent causal hypotheses" in explanation.lower()
+
+
+def test_update_plan_stores_the_checklist_on_the_session() -> None:
+    session = Session()
+    result = execute_update_plan_tool({"plan": _PLAN}, _ctx(session=session))
+
+    assert result["ok"] is True
+    assert result["current"] == 2
+    assert result["total"] == 3
+    assert session.task_plan is not None
+    assert session.task_plan.current_index == 2
+    assert "Plan · 2/3" in result["summary"]
+    assert "(verify)" in result["summary"]
+
+
+def test_update_plan_rejects_two_in_progress_steps() -> None:
+    session = Session()
+    result = execute_update_plan_tool(
+        {
+            "plan": [
+                {"step": "First", "status": "in_progress"},
+                {"step": "Second", "status": "in_progress"},
+            ],
+            "plan_only": True,
+        },
+        _ctx(session=session),
+    )
+    assert result["ok"] is False
+    assert "at most one" in result["error"]
+    assert session.task_plan is None
+    assert session.plan_only_until_authorized is False
+
+
+def test_update_plan_stores_explanation_and_revises_in_place() -> None:
+    # Arrange: an initial two-step plan with a first diagnosis.
+    session = Session()
+    initial: list[dict[str, Any]] = [
+        {"step": "Reproduce the 502 on checkout", "status": "in_progress"},
+        {"step": "Confirm checkout returns 2xx", "status": "pending"},
+    ]
+    first = execute_update_plan_tool(
+        {"plan": initial, "explanation": "first diagnosis"},
+        _ctx(session=session),
+    )
+    assert first["ok"] is True
+    assert session.task_plan is not None
+    assert session.task_plan.total == 2
+    assert session.task_plan.explanation == "first diagnosis"
+
+    # Act: a second call revises to three advanced steps and a new diagnosis.
+    revised = [
+        {"step": "Capture 502 samples from checkout", "status": "completed"},
+        {"step": "Trace 502s to the last deploy", "status": "completed"},
+        {"step": "Confirm checkout returns 2xx", "status": "in_progress"},
+    ]
+    second = execute_update_plan_tool(
+        {"plan": revised, "explanation": "moved to verify"},
+        _ctx(session=session),
+    )
+
+    # Assert: the session holds only the revision — replaced, not merged.
+    assert second["ok"] is True
+    assert session.task_plan is not None
+    assert session.task_plan.total == 3
+    assert session.task_plan.current_index == 3
+    assert session.task_plan.steps[0].status is PlanStepStatus.COMPLETED
+    assert session.task_plan.explanation == "moved to verify"
+
+
+def test_update_plan_tool_name_is_the_action_enum() -> None:
+    from tools.interactive_shell.action_names import ActionToolName
+
+    assert update_plan_tool.name == ActionToolName.UPDATE_PLAN
+
+
+# --- create → mark-complete flow --------------------------------------------
+
+
+def test_update_plan_marks_a_fully_completed_plan_as_terminal() -> None:
+    # Arrange / Act: every step completed (the verification step last).
+    session = Session()
+    done: list[dict[str, Any]] = [
+        {"step": "Capture 502 samples from checkout", "status": "completed"},
+        {"step": "Trace 502s to the last deploy", "status": "completed"},
+        {"step": "Confirm checkout returns 2xx", "status": "completed"},
+    ]
+    result = execute_update_plan_tool({"plan": done}, _ctx(session=session))
+
+    # Assert: the focused index sits on the final step and no step reopens.
+    assert result["ok"] is True
+    assert session.task_plan is not None
+    assert session.task_plan.all_completed is True
+    assert session.task_plan.current_index == session.task_plan.total == 3
+    assert "Plan · 3/3" in result["summary"]
+    # A terminal plan is neither plan-only nor a freshly authorized execution.
+    assert "Plan-only" not in result["instruction"]
+    assert "Execution is authorized" not in result["instruction"]
+
+
+def test_update_plan_normal_create_carries_only_the_base_instruction() -> None:
+    # A plain create (no plan_only, no Ask User answers on the turn) must not
+    # emit the plan-only or execution-authorized suffixes.
+    session = Session()
+    result = execute_update_plan_tool({"plan": _PLAN}, _ctx(session=session))
+
+    assert result["ok"] is True
+    assert "Plan stored." in result["instruction"]
+    assert "Plan-only" not in result["instruction"]
+    assert "Execution is authorized" not in result["instruction"]
+
+
+def test_update_plan_result_payload_is_a_reparseable_durable_record() -> None:
+    # The tool result doubles as the durable CURRENT PLAN record: it must parse
+    # back into an equivalent plan when older messages drop from context.
+    session = Session()
+    result = execute_update_plan_tool({"plan": _PLAN}, _ctx(session=session))
+
+    restored = task_plan_from_payload(result)
+    reparsed, error = parse_task_plan(result)
+    assert error is None
+    assert restored is not None and reparsed is not None
+    assert [step.step for step in restored.steps] == [item["step"] for item in _PLAN]
+    assert restored.current_index == reparsed.current_index == 2

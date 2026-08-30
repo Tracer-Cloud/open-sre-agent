@@ -62,7 +62,7 @@ def _configure_buzz() -> tuple[str, str]:
             "private key here (kept out of plain .env — stored in ~/.opensre/credentials.json). "
             "Channels are UUIDs — run `buzz channels list` to find one.\n"
             "Requires the `buzz` CLI on PATH (`cargo install --path crates/buzz-cli` from "
-            "https://github.com/block/buzz). Press Ctrl+C to skip and continue onboarding; "
+            "https://github.com/block/buzz). Press Ctrl+C to skip Buzz setup; "
             "`opensre integrations setup buzz` picks it up later.[/]\n"
         ),
     )
@@ -78,7 +78,6 @@ def _configure_telegram() -> tuple[str, str]:
             "in. For a public channel the @name is enough; otherwise find the numeric chat id "
             "via getUpdates. See docs/messaging/telegram for details.\n"
             "Both answers are required — Telegram cannot deliver without a chat. Press Ctrl+C to "
-            "skip Telegram and continue onboarding; `opensre integrations setup telegram` picks "
-            "it up later.[/]\n"
+            "skip Telegram setup; `opensre integrations setup telegram` picks it up later.[/]\n"
         ),
     )

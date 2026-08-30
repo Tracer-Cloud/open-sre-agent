@@ -180,13 +180,37 @@ What changed:
 - The **only** remaining non-execution outcome is genuinely empty input (a bare
   `!` or whitespace), which is rejected as input validation, not as a guardrail.
 
-The `ask`/confirmation machinery (`trust_mode` plus the confirmation UX) is
-retained as an unused hook, split across two layers: the pure decision lives in
-`tools/interactive_shell/shared/execution_policy.py` (`resolve_confirmation`), and the terminal
-interaction (`execution_allowed` — console output, the `Proceed? [Y/n]` prompt,
-analytics) lives in `surfaces/interactive_shell/ui/execution_confirm.py`. If command
-guardrails are reintroduced after alpha, gate them here at the execution stage —
-never with an action-selection denial in the planner.
+The `ask`/confirmation machinery is retained and used by **`/auto`** (Off/Low/Med)
+plus `trust_mode`. It is split across two layers: the pure decision lives in
+`tools/interactive_shell/shared/execution_policy.py` (`resolve_confirmation`,
+`apply_auto_level`), and the terminal interaction (`execution_allowed` — console
+output, the approval prompt, analytics) lives in
+`surfaces/interactive_shell/ui/execution_confirm.py`.
+
+### `/auto` autonomy (tool-type confirmations)
+
+Addendum — Aug 2026.
+
+**Decision:** the REPL exposes `/auto off|low|med|high` as session-scoped
+tool-approval autonomy. Default is **high** (alpha: no confirmation). Lower
+levels promote a default-`allow` policy result to `ask` based on `tool_type`
+(`config/constants/repl_autonomy.py`), not a shell-command allowlist.
+
+| Level | Asks before |
+| --- | --- |
+| `high` | Nothing |
+| `med` | Mutating agent tools (`shell`, `code_agent`, `slash`, `cli_command`, `opensre_cli`, `switch_llm_provider`, `synthetic_test`, `sentry_issue_fix`, …) |
+| `low` | Med set, plus `investigation` / `sample_alert` |
+| `off` | Every tool type |
+
+**Interaction with `/trust`:** `trust_mode` still short-circuits `ask` to allow
+(skip the prompt). Non-TTY `ask` remains fail-closed.
+
+**Still true:** there is no shell argv allowlist/deny floor under alpha. `/auto`
+only gates whether the existing confirmation UX runs before a tool launch.
+
+If a shell-command allowlist is reintroduced after alpha, gate it here at the
+execution stage — never with an action-selection denial in the planner.
 
 ### Deterministic literal-`/slash` dispatch (no LLM)
 

@@ -163,8 +163,33 @@ def test_build_prompt_session_uses_persistent_history(
     assert tmp_path.exists()
     assert isinstance(prompt.completer, ShellCompleter)
     assert prompt.multiline is True
-    assert prompt.reserve_space_for_menu == 8
+    assert prompt.reserve_space_for_menu == 0
     assert prompt.app.key_bindings is not None
+
+
+def test_build_prompt_session_installs_single_row_bordered_composer() -> None:
+    from prompt_toolkit.layout.containers import (
+        FloatContainer,
+        HSplit,
+        Window,
+    )
+
+    with create_app_session(input=DummyInput(), output=DummyOutput()):
+        prompt = input_prompt.build_prompt_session()
+
+    root = prompt.layout.container
+    assert isinstance(root, HSplit)
+    framed_input = root.children[0]
+    assert isinstance(framed_input, FloatContainer)
+    chrome = framed_input.content
+    assert isinstance(chrome, HSplit)
+    assert len(chrome.children) == 3
+    composer = chrome.children[1]
+    footer = chrome.children[2]
+    assert isinstance(composer, HSplit)
+    assert composer.height == 3  # top border + one edit row + bottom border
+    assert isinstance(footer, Window)
+    assert chrome.preferred_width(80).preferred == 79
 
 
 def test_build_prompt_session_falls_back_to_memory_history(
@@ -204,7 +229,7 @@ def test_prompt_message_uses_accent_glyph() -> None:
     rendered = _prompt_message(Session()).value
 
     assert ui_theme.PROMPT_ACCENT_ANSI in rendered
-    assert "❯" in rendered
+    assert ">" in rendered
     assert ANSI_RESET in rendered
 
 
@@ -395,6 +420,14 @@ def test_completion_menu_current_item_uses_highlight_style() -> None:
     assert attrs_menu.bgcolor == BG.lstrip("#")
     assert attrs_menu.reverse is False
     assert attrs_menu.bold is True
+
+
+def test_composer_uses_terminal_background_without_a_highlight_fill() -> None:
+    set_active_theme("green")
+    style = _build_prompt_style()
+
+    for style_name in ("class:frame", "class:composer", "class:composer-footer"):
+        assert not style.get_attrs_for_style_str(style_name).bgcolor
 
 
 def test_lazy_rich_style_split_tracks_active_theme() -> None:
@@ -700,9 +733,7 @@ class TestSpinnerState:
         spinner.start()
         spinner.bytes_in = 1234 * _CHARS_PER_TOKEN  # = 1234 tokens
         rendered = _strip_ansi(spinner.inline_spinner_ansi())
-        # The verb is randomly picked from the tier pools per turn —
-        # any of them followed by ``…`` is acceptable.
-        assert any(f"{verb}…" in rendered for verb in self._all_verbs(spinner))
+        assert loop_state.SpinnerState.EXECUTING_PHASE in rendered
         # 1234 tokens → "1.2k" via format_token_count_short.
         assert "1.2k tokens" in rendered
         # Spinner glyph from the brail palette.
@@ -734,17 +765,16 @@ class TestSpinnerState:
 
     def test_streaming_inline_spinner_verb_stays_constant_across_calls(self) -> None:
         """A turn's verb is fixed at ``start()`` so the indicator
-        doesn't flicker between words mid-stream."""
+        doesn't flicker between words mid-stream. The visible label is the
+        executing phase; the verb is kept for investigation-stage fallback.
+        """
         spinner = loop_state.SpinnerState()
         spinner.start()
-        verbs_seen: set[str] = set()
+        first = spinner._verb
         for _ in range(20):
             rendered = _strip_ansi(spinner.inline_spinner_ansi())
-            for verb in self._all_verbs(spinner):
-                if f"{verb}…" in rendered:
-                    verbs_seen.add(verb)
-                    break
-        assert len(verbs_seen) == 1, f"verb changed mid-turn — saw {verbs_seen}"
+            assert spinner._verb == first
+            assert loop_state.SpinnerState.EXECUTING_PHASE in rendered
 
     def test_advance_verb_changes_verb_between_agent_steps(self) -> None:
         """``advance_verb`` re-rolls the verb and never repeats the current one."""
@@ -871,6 +901,7 @@ class TestSpinnerState:
         """
         spinner = loop_state.SpinnerState()
         rendered = _strip_ansi(spinner.idle_hint_ansi())
+        assert rendered.startswith("Ready")
         assert "/ for commands" in rendered
         assert "tab tool details" in rendered
         assert "history" in rendered
@@ -900,15 +931,15 @@ class TestSpinnerState:
         assert "esc to clear" in rendered
         assert "/ for commands" in rendered
 
-    def test_inline_spinner_contains_esc_to_cancel_when_streaming(self) -> None:
+    def test_inline_spinner_contains_stop_hint_when_streaming(self) -> None:
         """During streaming the inline spinner (shown in the prompt's first
-        reserved line) carries the ``esc to cancel`` hint so the user can
+        reserved line) carries ``(Press ESC to stop)`` so the user can
         interrupt the dispatch.
         """
         spinner = loop_state.SpinnerState()
         spinner.start()
         rendered = _strip_ansi(spinner.inline_spinner_ansi())
-        assert "esc to cancel" in rendered
+        assert "(Press ESC to stop)" in rendered
         # Idle hint text should NOT appear in the spinner row.
         assert "/ for commands" not in rendered
 
@@ -1247,13 +1278,14 @@ class TestBuildCancelKeyBindings:
     machinery; this test instantiates the bindings and verifies they
     were registered for the right keys."""
 
-    def test_returns_bindings_for_escape_and_ctrl_l(self) -> None:
+    def test_returns_bindings_for_ctrl_c_escape_and_ctrl_l(self) -> None:
         state = loop_state.ReplState()
         kb = build_cancel_key_bindings(state)
         # Flatten each binding's keys tuple. ``Keys`` enum members have
         # ``.value`` strings like ``"escape"``/``"c-l"`` matching the
         # decorator argument; plain string keys are themselves.
         registered = {getattr(k, "value", k) for b in kb.bindings for k in b.keys}
+        assert "c-c" in registered, f"Ctrl+C binding missing — registered: {registered}"
         assert "escape" in registered, f"escape binding missing — registered: {registered}"
         assert "c-l" in registered, f"Ctrl+L binding missing — registered: {registered}"
 
@@ -1557,6 +1589,43 @@ class TestRequestConfirmationViaPrompt:
         assert result == [""]
         assert state.confirm_event is None
         assert state.confirm_response == []
+
+
+def test_reset_prompt_buffer_schedules_on_the_ui_loop() -> None:
+    """Confirmation parks on a worker thread; buffer.reset must not run there."""
+    from surfaces.interactive_shell.runtime.turn_host import _reset_prompt_buffer
+
+    scheduled: list[object] = []
+
+    class _Loop:
+        def call_soon_threadsafe(self, fn: object, *args: object) -> None:
+            scheduled.append((fn, args))
+
+    class _Buffer:
+        def __init__(self) -> None:
+            self.resets = 0
+
+        def reset(self) -> None:
+            self.resets += 1
+
+    class _App:
+        def __init__(self) -> None:
+            self.current_buffer = _Buffer()
+
+    session = Session()
+    app = _App()
+    session.terminal.prompt_app = app
+    session.terminal.main_loop = _Loop()
+
+    _reset_prompt_buffer(session)
+
+    assert app.current_buffer.resets == 0
+    assert len(scheduled) == 1
+    fn, args = scheduled[0]
+    assert args == ()
+    assert callable(fn)
+    fn()
+    assert app.current_buffer.resets == 1
 
 
 class TestExecutionAllowedRespectsDispatchCancelled:

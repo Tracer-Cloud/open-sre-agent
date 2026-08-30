@@ -211,8 +211,8 @@ def test_lockfile_unlink_failure_is_logged_with_exc_info(
 ) -> None:
     """If the OS refuses to remove a lockfile (e.g. permission denied
     on a read-only filesystem), the sweep logs at WARNING **with**
-    ``exc_info`` so the operator can diagnose the cause, then
-    continues rather than crashing the REPL boot.
+    ``exc_info`` so the operator can diagnose the cause, then continues
+    processing the remaining lockfiles.
     """
     lock_dir = tmp_path / "agents"
     lock_dir.mkdir()
@@ -286,30 +286,8 @@ def test_sweep_result_total_property(isolated_registry: AgentRegistry, tmp_path:
 
 
 def test_empty_sweep_result_is_falsy_in_total() -> None:
-    """A no-op sweep produces ``SweepResult()`` with total == 0 — the
-    boot-time logger uses this to decide whether to emit a message."""
+    """A no-op sweep produces ``SweepResult()`` with total == 0."""
     empty = sweep_module.SweepResult()
     assert empty.total == 0
     assert empty.removed_records == ()
     assert empty.removed_locks == ()
-
-
-# ---------------------------------------------------------------------------
-# REPL-boot wrapper
-# ---------------------------------------------------------------------------
-
-
-def test_run_startup_sweep_swallows_exceptions(monkeypatch: pytest.MonkeyPatch) -> None:
-    """``run_startup_sweep`` is the REPL's boot hook; an unexpected
-    exception inside must NOT propagate, otherwise a sweep bug could
-    block the REPL from starting at all."""
-
-    def _explode(*_args: object, **_kwargs: object) -> None:
-        raise RuntimeError("simulated registry-load failure")
-
-    monkeypatch.setattr(sweep_module, "AgentRegistry", _explode)
-
-    result = sweep_module.run_startup_sweep()
-
-    assert isinstance(result, sweep_module.SweepResult)
-    assert result.total == 0

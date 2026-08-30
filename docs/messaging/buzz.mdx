@@ -44,15 +44,13 @@ BUZZ_PRIVATE_KEY=<your-key> BUZZ_RELAY_URL=<your-relay> buzz channels list
 
 Copy the UUID of the channel investigation reports should land in.
 
-### Option 1: Onboarding wizard (recommended)
+### Option 1: CLI setup (recommended)
 
 ```bash
-opensre onboard
-# or
 opensre integrations setup buzz
 ```
 
-Interactive shell: `/onboard`. Choose **Buzz**. The wizard prompts for:
+Interactive shell: `/integrations setup buzz`. The setup prompts for:
 
 - **Relay URL** (`BUZZ_RELAY_URL`, defaults to `http://localhost:3000`)
 - **Private key** (`BUZZ_PRIVATE_KEY` in `.env` and `~/.opensre/credentials.json`)

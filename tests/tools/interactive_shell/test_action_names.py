@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from tools.interactive_shell.action_names import TOOL_KIND_TO_NAME, ToolKind
+from tools.interactive_shell.action_names import TOOL_KIND_TO_NAME, ActionToolName, ToolKind
 
 
 def test_tool_kind_members_are_stable() -> None:
@@ -52,3 +52,27 @@ def test_tool_kind_to_name_lookup_by_plain_string_key() -> None:
     since StrEnum members hash and compare equal to their value."""
     assert TOOL_KIND_TO_NAME["slash"] == "slash_invoke"
     assert TOOL_KIND_TO_NAME.get("session_goal") == "session_goal_set"
+
+
+def test_action_tool_name_members_are_stable() -> None:
+    assert [name.value for name in ActionToolName] == [
+        "alert_sample",
+        "ask_user_choice",
+        "cli_exec",
+        "code_implement",
+        "fix_sentry_issue_start",
+        "investigation_start",
+        "llm_set_provider",
+        "propose_scheduled_delivery",
+        "session_goal_set",
+        "shell_run",
+        "skill_view",
+        "slash_invoke",
+        "synthetic_run",
+        "task_cancel",
+        "update_plan",
+    ]
+
+
+def test_tool_kind_to_name_maps_onto_action_tool_name() -> None:
+    assert set(TOOL_KIND_TO_NAME.values()) <= set(ActionToolName)

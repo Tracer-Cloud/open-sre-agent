@@ -22,7 +22,6 @@ _REQUIRED_ACTION_SKILL_NAMES = frozenset(
         "architecture-audit",
         "github-ci-fix",
         "github-ci-fix-onboarding",
-        "github-cli",
         "github-security-fix",
         "morning-report",
     }

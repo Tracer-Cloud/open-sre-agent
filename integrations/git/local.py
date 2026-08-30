@@ -310,6 +310,7 @@ def push_branch(
     remote: str = "origin",
     base_default: str = "",
     token: str | None = None,
+    allow_protected: bool = False,
 ) -> None:
     """Push *branch* to *remote* with upstream tracking. Never force, never base branch.
 
@@ -317,8 +318,14 @@ def push_branch(
     that token (via an ephemeral, host-scoped HTTP header) instead of the machine's
     cached git credentials. For SSH/other remotes the token is not injected (the
     transport authenticates itself).
+
+    ``allow_protected`` skips the protected-branch guard. Reserve it for
+    approval-gated flows where the user explicitly requested a direct push to
+    that branch (e.g. a branch-targeted CI fix on ``main``); never pass it for
+    ordinary feature-branch shipping.
     """
-    assert_not_protected(branch, protected_extra=base_default)
+    if not allow_protected:
+        assert_not_protected(branch, protected_extra=base_default)
     env = None
     if token:
         base = _remote_https_base(workspace, remote)

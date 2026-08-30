@@ -10,8 +10,12 @@ helpers let the turn host log that cost from a real run instead of guessing it.
 from __future__ import annotations
 
 import logging
-import resource
 import sys
+
+try:
+    import resource as _resource
+except ImportError:  # Windows / non-POSIX
+    _resource = None  # type: ignore[assignment]
 
 _BYTES_PER_MB = 1_048_576
 
@@ -20,21 +24,25 @@ def resident_memory_bytes() -> int | None:
     """This process's current resident memory in bytes, or ``None`` if unknown.
 
     Reads ``/proc/self/statm`` for an accurate live reading on Linux (the Fargate
-    runtime); returns ``None`` where that file is absent so callers skip the
-    measurement rather than report a wrong number.
+    runtime); returns ``None`` where the required platform APIs are absent so
+    callers skip the measurement rather than report a wrong number.
     """
+    if _resource is None:
+        return None
     try:
         with open("/proc/self/statm", encoding="ascii") as statm:
             resident_pages = int(statm.read().split()[1])
     except (OSError, ValueError, IndexError):
         return None
-    return resident_pages * resource.getpagesize()
+    return resident_pages * _resource.getpagesize()
 
 
 def peak_resident_memory_bytes() -> int | None:
     """This process's peak resident memory in bytes, or ``None`` if unknown."""
+    if _resource is None:
+        return None
     try:
-        peak = resource.getrusage(resource.RUSAGE_SELF).ru_maxrss
+        peak = _resource.getrusage(_resource.RUSAGE_SELF).ru_maxrss
     except (OSError, ValueError):
         return None
     # Linux reports kibibytes; macOS and the BSDs report bytes.

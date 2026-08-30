@@ -31,6 +31,9 @@ class FakeSlashPorts:
     def command_exists(self, _name: str) -> bool:
         return True
 
+    def command_is_mutating(self, _name: str) -> bool:
+        return True
+
     def tty_interactive(self) -> bool:
         return self.tty
 
@@ -437,3 +440,20 @@ def test_cron_remove_missing_task_id_regression(monkeypatch: pytest.MonkeyPatch)
     assert "Usage: opensre cron remove [OPTIONS] TASK_ID" in result["error"]
     latest = [row for row in session.history if row.get("type") == "slash"][-1]
     assert latest["ok"] is False
+
+
+def test_non_mutating_slash_command_skips_the_execution_gate() -> None:
+    # A control command (mutating=False) must dispatch without the execution
+    # gate, so a standing plan-only request cannot block /exit.
+    class _NonMutatingPorts(FakeSlashPorts):
+        def command_is_mutating(self, _name: str) -> bool:
+            return False
+
+        def execution_allowed(self, **_kwargs: Any) -> bool:
+            raise AssertionError("the gate must not run for a non-mutating command")
+
+    ctx, _buf, _session, ports = _ctx(ports=_NonMutatingPorts())
+
+    slash_tool.execute_slash_tool({"command": "/exit"}, ctx)
+
+    assert ports.dispatched == ["/exit"]

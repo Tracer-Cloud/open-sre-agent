@@ -9,6 +9,7 @@ from typing import Any
 import pytest
 from fastapi.testclient import TestClient
 
+from config.constants.http import MAX_REQUEST_BODY_BYTES
 from gateway.web import webapp
 
 _LOOPBACK = ("127.0.0.1", 40000)
@@ -185,3 +186,19 @@ def test_investigate_at_capacity_returns_503(
     finally:
         gate.release()
         reset_process_turn_gate_for_tests()
+
+
+def test_oversized_investigate_body_is_rejected(client: TestClient) -> None:
+    """Regression: /investigate took a Pydantic body, so nothing capped it.
+
+    The cap only ever guarded /alerts, and FastAPI buffers the whole payload
+    while solving the request model, so an oversized POST here was read into
+    memory in full and then run.
+    """
+    resp = client.post(
+        "/investigate",
+        json={"raw_alert": {"text": "x" * (MAX_REQUEST_BODY_BYTES + 1)}},
+    )
+
+    assert resp.status_code == HTTPStatus.REQUEST_ENTITY_TOO_LARGE
+    assert resp.json() == {"error": "payload too large"}

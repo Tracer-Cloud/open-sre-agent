@@ -18,10 +18,7 @@ from infrastructure.observability.errors.boundary import report_and_reraise
 from infrastructure.observability.errors.sentry import init_sentry
 from infrastructure.observability.trace.spans import stage_span
 from tools.investigation.state_factory import make_initial_state
-from tools.investigation.streaming import (
-    InvestigationPipelineStreamError,
-    resolved_integrations_stream_payload,
-)
+from tools.investigation.streaming import InvestigationPipelineStreamError
 
 if TYPE_CHECKING:
     # Type-only — avoids paying the agent module's heavy import cost at
@@ -103,7 +100,7 @@ def run_investigation(
             agent-level extensions can pass a subclass instead.
     """
     init_sentry(entrypoint="pipeline")
-    from tools.investigation.lifecycle import run_connected_investigation as _run
+    from tools.investigation.agent_pipeline import run_agent_investigation as _run
 
     initial = make_initial_state(
         raw_alert=raw_alert,
@@ -306,162 +303,32 @@ async def astream_investigation(
     def _run_pipeline() -> None:
         state = initial
         try:
-            from core.state.updates import apply_state_updates
-            from tools.investigation.reporting.node import generate_report
-            from tools.investigation.stages.diagnose import diagnose
-            from tools.investigation.stages.gather_evidence import get_investigation_agent_class
-            from tools.investigation.stages.intake import extract_alert
-            from tools.investigation.stages.plan_evidence import plan_actions
-            from tools.investigation.stages.resolve_integrations import resolve_integrations
-
-            # --- resolve_integrations ---
-            _put(_make_node_event("on_chain_start", "resolve_integrations", {}))
-            resolved_updates = _traced_node("resolve_integrations", resolve_integrations, state)
-            apply_state_updates(state, resolved_updates)
-            resolved = resolved_updates.get("resolved_integrations") or {}
-            _put(
-                _make_node_event(
-                    "on_chain_end",
-                    "resolve_integrations",
-                    {
-                        "output": {
-                            "resolved_integrations": resolved_integrations_stream_payload(resolved)
-                        }
-                    },
-                )
+            from tools.investigation.agent_pipeline import (
+                DeliverStyle,
+                PipelineHooks,
+                run_agent_investigation,
             )
 
-            # --- extract_alert ---
-            _put(_make_node_event("on_chain_start", "extract_alert", {}))
-            apply_state_updates(state, _traced_node("extract_alert", extract_alert, state))
-            _put(
-                _make_node_event(
-                    "on_chain_end",
-                    "extract_alert",
-                    {"output": {k: state.get(k) for k in ("alert_name", "severity")}},
+            def _on_stage_start(stream_name: str) -> None:
+                _put(_make_node_event("on_chain_start", stream_name, {}))
+
+            def _on_stage_end(stream_name: str, output: Mapping[str, Any]) -> None:
+                _put(
+                    _make_node_event(
+                        "on_chain_end",
+                        stream_name,
+                        {"output": dict(output)},
+                    )
                 )
-            )
 
-            if state.get("is_noise"):
-                with contextlib.suppress(RuntimeError):  # loop closed (consumer cancelled)
-                    loop.call_soon_threadsafe(event_queue.put_nowait, None)
-                return
-
-            # --- plan_actions ---
-            _put(_make_node_event("on_chain_start", "plan_actions", {}))
-            apply_state_updates(
+            run_agent_investigation(
                 state,
-                _traced_node("plan_actions", plan_actions, state),
-            )
-            _put(
-                _make_node_event(
-                    "on_chain_end",
-                    "plan_actions",
-                    {
-                        "output": {
-                            "planned_actions": state.get("planned_actions", []),
-                            "plan_rationale": state.get("plan_rationale", ""),
-                            "plan_audit": state.get("plan_audit", {}),
-                        }
-                    },
-                )
-            )
-
-            # --- investigation agent (with real tool events) ---
-            agent_class = get_investigation_agent_class()
-            apply_state_updates(
-                state,
-                _traced_node(
-                    "investigation_agent",
-                    agent_class().run,
-                    state,
-                    on_event=_on_agent_event,
+                hooks=PipelineHooks(
+                    on_stage_start=_on_stage_start,
+                    on_stage_end=_on_stage_end,
+                    on_agent_event=_on_agent_event,
                 ),
-            )
-
-            # --- diagnose ---
-            _put(_make_node_event("on_chain_start", "diagnose", {}))
-            apply_state_updates(state, _traced_node("diagnose", diagnose, state))
-            _put(
-                _make_node_event(
-                    "on_chain_end",
-                    "diagnose",
-                    {
-                        "output": {
-                            "root_cause": state.get("root_cause", ""),
-                            "root_cause_category": state.get("root_cause_category", ""),
-                            "validity_score": state.get("validity_score"),
-                            "validated_claims": state.get("validated_claims", []),
-                            "remediation_steps": state.get("remediation_steps", []),
-                        }
-                    },
-                )
-            )
-
-            # --- upstream correlation ---
-            from tools.investigation.reporting.upstream_correlation import (
-                enrich_upstream_correlation,
-            )
-
-            _put(
-                _make_node_event(
-                    "on_chain_start",
-                    "correlate_upstream",
-                    {},
-                )
-            )
-
-            apply_state_updates(
-                state,
-                _traced_node(
-                    "correlate_upstream",
-                    enrich_upstream_correlation,
-                    state,
-                ),
-            )
-
-            _put(
-                _make_node_event(
-                    "on_chain_end",
-                    "correlate_upstream",
-                    {
-                        "output": {
-                            "correlation": state.get("correlation", {}),
-                        }
-                    },
-                )
-            )
-
-            # --- deliver / publish (skip terminal/editor render; StreamRenderer owns output) ---
-            _put(_make_node_event("on_chain_start", "publish_findings", {}))
-            apply_state_updates(
-                state,
-                _traced_node(
-                    "publish_findings",
-                    generate_report,
-                    state,
-                    render_terminal=False,
-                    open_editor=False,
-                ),
-            )
-
-            _put(
-                _make_node_event(
-                    "on_chain_end",
-                    "publish_findings",
-                    {
-                        "output": {
-                            "root_cause": state.get("root_cause", ""),
-                            "root_cause_category": state.get("root_cause_category", ""),
-                            "validity_score": state.get("validity_score"),
-                            "report": state.get("report", ""),
-                            "slack_message": state.get("slack_message", ""),
-                            "problem_md": state.get("problem_md", ""),
-                            "validated_claims": state.get("validated_claims", []),
-                            "remediation_steps": state.get("remediation_steps", []),
-                        }
-                    },
-                )
+                deliver_style=DeliverStyle.STREAM,
             )
 
         except Exception as exc:

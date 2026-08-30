@@ -6,7 +6,8 @@ description: "Run one OpenSRE agent turn non-interactively from a terminal, scri
 
 `opensre ask` is OpenSRE’s headless, one-shot CLI command. It runs one agent
 turn, prints the response, and exits instead of opening the interactive shell.
-It uses the provider, integrations, and tools configured by `opensre onboard`.
+It uses the LLM provider from `opensre onboard` and any tools configured with
+`opensre integrations setup`.
 
 ```bash
 opensre ask "why did checkout latency increase today?"

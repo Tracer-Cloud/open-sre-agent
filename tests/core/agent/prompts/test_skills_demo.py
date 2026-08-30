@@ -50,6 +50,33 @@ def test_agent_prompt_includes_skill_demos() -> None:
     assert "Set up a weekday morning briefing with weather and news" in prompt
 
 
+def test_agent_prompt_combines_demo_catalog_with_selectable_choice_contract() -> None:
+    clear_skills_caches()
+    prompt = build_action_system_prompt(
+        TurnSnapshot(
+            text="Give me a demo",
+            conversation_messages=(),
+            configured_integrations=(),
+            configured_integrations_known=True,
+            last_state=None,
+            last_synthetic_observation_path=None,
+            reasoning_effort=None,
+            prompt_surface="interactive_shell",
+            interactive_choice_available=True,
+        )
+    )
+    collapsed = " ".join(prompt.split())
+
+    assert "ask_user_choice menu: available" in prompt
+    assert "For a demo or getting-started request" in collapsed
+    assert "available skill demos as selectable options" in collapsed
+    assert "ONLY the skill demos below" in collapsed
+    assert "that overview supplies the menu options only" in collapsed
+    for skill in list_action_skills():
+        if skill.demo:
+            assert skill.demo in prompt
+
+
 def test_skills_index_routes_capability_questions_to_direct_answer() -> None:
     clear_skills_caches()
     index = load_skills_index()

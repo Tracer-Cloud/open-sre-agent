@@ -17,9 +17,7 @@ from surfaces.interactive_shell.controller import InteractiveShellController
 from surfaces.interactive_shell.runtime.context import create_repl_runtime
 from surfaces.interactive_shell.runtime.startup.initial_input import run_initial_input
 from surfaces.interactive_shell.runtime.startup.loop_suggestions import offer_loop_suggestions
-from surfaces.interactive_shell.ui.input_prompt import build_prompt_session
 from surfaces.interactive_shell.ui.terminal_ui import render_terminal_ui
-from tools.system.fleet_monitoring.sweep import run_startup_sweep
 
 # Fallback when a caller does not supply one. Forces a terminal because the
 # shell owns the screen; an embedding caller passes its own instead.
@@ -52,8 +50,9 @@ async def run_repl_async(
     # probe thread while a status spinner animates lands whole above it instead
     # of racing the spinner's redraw on the tty and staircasing what follows.
     install_shell_log_handler(lambda: out)
-    pt_session = build_prompt_session()
-    runtime_context = create_repl_runtime(pt_session=pt_session)
+    # Let PromptBuilder build the prompt session so it can wire the
+    # composer-hide (needs the session + REPL state, which do not exist yet).
+    runtime_context = create_repl_runtime()
     session = runtime_context.session
     session.terminal.cli_command_group = cli_command_group
 
@@ -110,8 +109,6 @@ def run_repl(
         return 0
     if not sys.stdin.isatty() and initial_input is None:
         return 0
-
-    run_startup_sweep()
 
     try:
         if not initial_input:

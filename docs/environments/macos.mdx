@@ -3,7 +3,7 @@ title: "macOS"
 description: "Install OpenSRE on a Mac and run your first investigation."
 ---
 
-Install OpenSRE on macOS, set up your LLM and tools, then try a sample investigation.
+Install OpenSRE on macOS, set up your LLM, then try a sample investigation.
 
 ## 1. Install
 
@@ -32,7 +32,13 @@ curl -fsSL https://install.opensre.com | OPENSRE_AUTO_LAUNCH=0 bash
 opensre onboard
 ```
 
-You'll pick an LLM provider, paste a key, and can connect tools like Datadog, Grafana, or Slack. Then check they work:
+You'll pick an LLM provider and paste a key or confirm a CLI login. Add tools later, when you need them:
+
+```bash
+opensre integrations setup <service>
+```
+
+Then check connected tools:
 
 ```bash
 opensre integrations verify

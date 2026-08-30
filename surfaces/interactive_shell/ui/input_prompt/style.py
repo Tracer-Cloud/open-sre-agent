@@ -27,6 +27,10 @@ def _build_prompt_style() -> Style:
             "completion-menu.border": theme.DIM,
             "scrollbar.background": f"bg:{theme.BG}",
             "scrollbar.button": f"bg:{theme.DIM}",
+            "frame": "",
+            "frame.border": theme.DIM,
+            "composer": theme.TEXT,
+            "composer-footer": theme.DIM,
             # prompt_toolkit defaults the ``bottom-toolbar`` style to
             # ``reverse:noinherit``, which paints the toolbar as a dark
             # highlighted band across the terminal. Clear the reverse

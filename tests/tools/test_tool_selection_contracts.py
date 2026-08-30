@@ -174,3 +174,21 @@ def test_metrics_contracts_hide_credentials_from_model_visible_schema() -> None:
 
     assert {"grafana_endpoint", "grafana_api_key", "grafana_backend"}.isdisjoint(grafana_props)
     assert {"api_key", "app_key", "site"}.isdisjoint(datadog_props)
+
+
+def test_selection_scenarios_reference_valid_registered_tools() -> None:
+    from tests.tools.selection.test_tool_selection import SELECTION_SCENARIOS
+
+    tool_map = get_registered_tool_map(ToolSurface.INVESTIGATION)
+    for scenario in SELECTION_SCENARIOS:
+        for candidate in scenario.candidate_tool_names:
+            assert candidate in tool_map, (
+                f"Selection scenario {scenario.scenario_id!r} candidate tool {candidate!r} is not registered"
+            )
+        for expected in scenario.expected_tool_names:
+            assert expected in tool_map, (
+                f"Selection scenario {scenario.scenario_id!r} expected tool {expected!r} is not registered"
+            )
+        assert scenario.expected_tool_names.issubset(set(scenario.candidate_tool_names)), (
+            f"Selection scenario {scenario.scenario_id!r} expected tools must be in candidates"
+        )

@@ -104,7 +104,7 @@ def test_auth_login_chatgpt_is_rejected(monkeypatch, tmp_path: Path) -> None:
 
 def test_provider_chooser_defaults_to_the_configured_provider(monkeypatch) -> None:
     """Bare `/auth login` must preselect the install's provider, not the first row."""
-    import config.config as config_module
+    import config.llm_settings as config_module
     from surfaces.cli.commands.auth import _configured_profile_name
 
     monkeypatch.setattr(config_module, "get_configured_llm_provider", lambda: "openai")
