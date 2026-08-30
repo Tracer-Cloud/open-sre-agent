@@ -16,7 +16,11 @@ from surfaces.shared.terminal.components.token_format import (
     _CHARS_PER_TOKEN,
     format_token_count_short,
 )
-from surfaces.shared.terminal.prompt_layout import clip_prompt_text, prompt_line_width
+from surfaces.shared.terminal.prompt_layout import (
+    clip_prompt_text,
+    prompt_line_width,
+    prompt_text_width,
+)
 
 # How often prompt-toolkit refreshes prompt callbacks and confirmation polling.
 PROMPT_REFRESH_INTERVAL_S = 0.25
@@ -28,6 +32,15 @@ DEFAULT_CONFIRM_OPTIONS: tuple[tuple[str, str], ...] = (
     ("y", "Yes, allow"),
     ("n", "No, cancel"),
 )
+
+
+@dataclass
+class _InFlightAction:
+    """One still-running tool shown (or queued) on the live action row."""
+
+    action_id: str
+    text: str
+    started_at: float
 
 
 class TurnPhase(enum.Enum):
@@ -246,12 +259,10 @@ class SpinnerState:
     # Verbs picked twice as often as the rest of their pool (default weight 1).
     _VERB_WEIGHTS = {"jacking in": 2, "crawling the datastream": 2}
 
-    # White-glow shimmer for the running action line: a triangle wave over this
-    # period drives brightness between the two levels below (pure function of the
-    # clock, like the spinner glyph, so it never freezes on a busy render pass).
+    # Theme-token shimmer for the running action line: a triangle wave over this
+    # period fades DIM → TEXT → DIM (pure function of the clock, like the
+    # spinner glyph, so it never freezes on a busy render pass).
     _SHIMMER_PERIOD_SECONDS = 1.1
-    _SHIMMER_MIN_LEVEL = 150
-    _SHIMMER_MAX_LEVEL = 255
     _ACTION_GLYPH = "⟩"
 
     def __init__(self) -> None:
@@ -261,35 +272,67 @@ class SpinnerState:
         self._verb_tier: int = 0
         self._verb: str = self._VERB_TIERS[0][1][0]
         self.phase: str = ""
-        # The action currently running, shown shimmering in the live region and
-        # committed as a solid line to scrollback when it ends. Empty when none.
-        self.active_action: str = ""
-        self._action_started_at: float = 0.0
+        # In-flight tools in start order. The live row shows the first still
+        # running; the ReAct loop emits every start before any end, so a single
+        # slot would display the last tool and clear on the first completion.
+        self._in_flight_actions: list[_InFlightAction] = []
 
-    def set_active_action(self, text: str) -> None:
-        """Show ``text`` as the running action line (white-glow shimmer)."""
-        self.active_action = text.strip()
-        self._action_started_at = time.monotonic()
+    @property
+    def active_action(self) -> str:
+        """Text of the first still-running action, or empty."""
+        return self._in_flight_actions[0].text if self._in_flight_actions else ""
 
-    def clear_active_action(self) -> None:
-        self.active_action = ""
+    def set_active_action(self, text: str, *, action_id: str = "") -> None:
+        """Show ``text`` as a running action (theme-token shimmer).
+
+        Distinct ``action_id`` values stack so a batched start does not
+        overwrite an earlier tool. The same id updates that slot in place.
+        """
+        cleaned = text.strip()
+        started_at = time.monotonic()
+        if action_id:
+            for existing in self._in_flight_actions:
+                if existing.action_id == action_id:
+                    existing.text = cleaned
+                    existing.started_at = started_at
+                    return
+        self._in_flight_actions.append(
+            _InFlightAction(action_id=action_id, text=cleaned, started_at=started_at)
+        )
+
+    def clear_active_action(self, action_id: str | None = None) -> None:
+        """Drop one in-flight action, or all of them.
+
+        ``None`` clears every slot. A non-empty ``action_id`` removes that
+        tool only. An empty string pops the oldest slot (events that omitted
+        an id).
+        """
+        if action_id is None:
+            self._in_flight_actions.clear()
+            return
+        if action_id:
+            self._in_flight_actions = [
+                action for action in self._in_flight_actions if action.action_id != action_id
+            ]
+            return
+        if self._in_flight_actions:
+            del self._in_flight_actions[0]
 
     def active_action_ansi(self) -> str:
         """The indented, shimmering action line, or ``""`` when none is running.
 
-        The glow is a triangle wave on a white foreground, so the line reads as
-        live work in progress; scrollback holds the settled solid copy.
+        The glow fades DIM to TEXT on a triangle wave so the line reads as
+        live work; scrollback holds the settled solid copy.
         """
-        if not self.active_action:
+        current = self._in_flight_actions[0] if self._in_flight_actions else None
+        if current is None:
             return ""
-        elapsed = time.monotonic() - self._action_started_at
+        elapsed = time.monotonic() - current.started_at
         phase = (elapsed % self._SHIMMER_PERIOD_SECONDS) / self._SHIMMER_PERIOD_SECONDS
         triangle = 1.0 - abs(2.0 * phase - 1.0)  # 0 → 1 → 0 over the period
-        span = self._SHIMMER_MAX_LEVEL - self._SHIMMER_MIN_LEVEL
-        level = self._SHIMMER_MIN_LEVEL + int(triangle * span)
-        glow = f"\x1b[38;2;{level};{level};{level}m"
+        glow = ui_theme.fade_fg_ansi(triangle)
         lead = f"  {self._ACTION_GLYPH} "
-        text = clip_prompt_text(self.active_action, prompt_line_width() - len(lead))
+        text = clip_prompt_text(current.text, prompt_line_width() - prompt_text_width(lead))
         return f"{glow}{lead}{text}{ui_theme.ANSI_RESET}"
 
     def start(self) -> None:
@@ -299,6 +342,7 @@ class SpinnerState:
         self._verb_tier = 0
         self._verb = self._pick_verb()
         self.phase = self.EXECUTING_PHASE
+        self._in_flight_actions.clear()
 
     def advance_verb(self) -> None:
         """Pick a fresh thinking verb (the rotation cadence is the caller's).
@@ -353,6 +397,7 @@ class SpinnerState:
     def stop(self) -> None:
         self.streaming = False
         self.phase = ""
+        self._in_flight_actions.clear()
 
     def toolbar_ansi(self) -> str:
         # Always return an empty string so prompt_toolkit's ConditionalContainer
@@ -413,7 +458,7 @@ class SpinnerState:
         tail = f" {self._STOP_HINT}  {elapsed_badge}"
         accent = self._phase_accent_ansi()
         width = prompt_line_width()
-        reserved = len(lead) + len(tail)
+        reserved = prompt_text_width(lead) + prompt_text_width(tail)
         if reserved >= width:
             visible = clip_prompt_text(f"{lead}{label}{tail}", width)
             return f"{accent}{visible}{ui_theme.ANSI_RESET}"

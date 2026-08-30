@@ -109,32 +109,60 @@ def test_spinner_empty_when_not_streaming() -> None:
 
 def test_inline_spinner_clips_a_long_phase_to_one_prompt_row() -> None:
     """A long phase label must not soft-wrap past the one reserved prompt row."""
-    from surfaces.shared.terminal.prompt_layout import prompt_line_width
+    from surfaces.shared.terminal.prompt_layout import prompt_line_width, prompt_text_width
 
     spinner = SpinnerState()
     spinner.start()
     spinner.set_phase("X" * 400)
     rendered = re.sub(r"\x1b\[[0-9;]*m", "", spinner.inline_spinner_ansi())
 
-    assert len(rendered) <= prompt_line_width()
+    assert prompt_text_width(rendered) <= prompt_line_width()
 
 
 def test_active_action_shimmer_renders_indented_glow_and_clears() -> None:
-    """The running action shows an indented white-glow line; cleared → blank."""
+    """The running action shows an indented theme-token glow; cleared → blank."""
+    from infrastructure.terminal.theme import fade_fg_ansi, set_active_theme
+
+    set_active_theme("solarized")
     spinner = SpinnerState()
     spinner.start()
     assert spinner.active_action_ansi() == ""  # none by default
 
     spinner.set_active_action("Execute · cd /tmp")
+    started = time.monotonic() - SpinnerState._SHIMMER_PERIOD_SECONDS / 2
+    spinner._in_flight_actions[0].started_at = started
     rendered = spinner.active_action_ansi()
+    elapsed = time.monotonic() - started
+    phase = (elapsed % SpinnerState._SHIMMER_PERIOD_SECONDS) / SpinnerState._SHIMMER_PERIOD_SECONDS
+    triangle = 1.0 - abs(2.0 * phase - 1.0)
     assert "Execute · cd /tmp" in rendered
     assert SpinnerState._ACTION_GLYPH in rendered
-    # White glow: a 24-bit grey foreground (R == G == B) within the shimmer band.
-    match = re.search(r"\x1b\[38;2;(\d+);(\d+);(\d+)m", rendered)
-    assert match is not None
-    red, green, blue = (int(match.group(i)) for i in (1, 2, 3))
-    assert red == green == blue
-    assert SpinnerState._SHIMMER_MIN_LEVEL <= red <= SpinnerState._SHIMMER_MAX_LEVEL
+    assert fade_fg_ansi(triangle) in rendered
 
     spinner.clear_active_action()
     assert spinner.active_action_ansi() == ""
+
+
+def test_active_action_stack_keeps_earlier_tools_until_they_end() -> None:
+    """A later start must not overwrite an earlier still-running tool."""
+    spinner = SpinnerState()
+    spinner.start()
+    spinner.set_active_action("GitHub CLI · gh pr list", action_id="a")
+    spinner.set_active_action("Execute · true", action_id="b")
+    assert spinner.active_action.startswith("GitHub CLI")
+
+    spinner.clear_active_action("a")
+    assert spinner.active_action.startswith("Execute")
+    spinner.clear_active_action("b")
+    assert spinner.active_action == ""
+
+
+def test_active_action_row_clips_wide_glyphs_to_one_prompt_column_budget() -> None:
+    """CJK / emoji must be measured in terminal columns, not code points."""
+    from surfaces.shared.terminal.prompt_layout import prompt_line_width, prompt_text_width
+
+    spinner = SpinnerState()
+    spinner.start()
+    spinner.set_active_action("查询 · " + "中" * 200)
+    rendered = re.sub(r"\x1b\[[0-9;]*m", "", spinner.active_action_ansi())
+    assert prompt_text_width(rendered) <= prompt_line_width()

@@ -84,8 +84,19 @@ _SELF_RENDERING_TOOLS: frozenset[str] = frozenset(
     {
         ActionToolName.ASK_USER_CHOICE,
         ActionToolName.INVESTIGATION_START,
+        # shell_run / cli_exec stream their own ``$ <command>`` + output during
+        # execution, and the running action shows as the live shimmer line — so a
+        # static ``Execute``/``opensre`` header here would print the command a
+        # third time. Suppress it; the shimmer and the ``$`` line are enough.
+        ActionToolName.SHELL_RUN,
+        ActionToolName.CLI_EXEC,
     }
 )
+
+
+def _tool_event_id(data: dict[str, Any]) -> str:
+    """Stable id for one tool call, or empty when the event omitted it."""
+    return str(data.get("id") or data.get("tool_call_id") or "").strip()
 
 
 def _is_internal_choice_command(name: str, data: dict[str, Any]) -> bool:
@@ -341,8 +352,9 @@ class ActionRenderObserver:
             # update_plan is not painted into the transcript: the plan renders in
             # the pinned bottom overlay (``task_plan_overlay_ansi``) from session
             # state the tool committed.
-            self._clear_active_action()
-            self._set_spinner_phase(SpinnerState.EXECUTING_PHASE)
+            self._clear_active_action(data)
+            if not self._has_active_action():
+                self._set_spinner_phase(SpinnerState.EXECUTING_PHASE)
             return
         if kind != "tool_start":
             return
@@ -387,20 +399,30 @@ class ActionRenderObserver:
     def _set_active_action(self, name: str, data: dict[str, Any]) -> None:
         """Show the running tool as a shimmering action line in the live region.
 
-        The line clears on ``tool_end``; scrollback keeps the settled solid copy.
-        Only relabels an already-running spinner (see ``_set_spinner_phase``).
+        Stacked by tool-call id: the ReAct loop emits every ``tool_start``
+        before executing the batch, so a single slot would show the last
+        tool and clear on the first ``tool_end``. Scrollback keeps the
+        settled solid copy. Only relabels an already-running spinner
+        (see ``_set_spinner_phase``).
         """
         spinner = get_investigation_spinner()
         if spinner is None or not getattr(spinner, "streaming", False):
             return
         args = data.get("input")
         label, content = tool_call_display(name, args if isinstance(args, dict) else {})
-        spinner.set_active_action(f"{label} · {content}" if content else label)
+        spinner.set_active_action(
+            f"{label} · {content}" if content else label,
+            action_id=_tool_event_id(data),
+        )
 
-    def _clear_active_action(self) -> None:
+    def _clear_active_action(self, data: dict[str, Any]) -> None:
         spinner = get_investigation_spinner()
         if spinner is not None:
-            spinner.clear_active_action()
+            spinner.clear_active_action(_tool_event_id(data))
+
+    def _has_active_action(self) -> bool:
+        spinner = get_investigation_spinner()
+        return bool(spinner is not None and spinner.active_action)
 
     def _advance_spinner_verb(self, data: dict[str, Any]) -> None:
         """Rotate the prompt spinner's thinking verb every two agent steps.

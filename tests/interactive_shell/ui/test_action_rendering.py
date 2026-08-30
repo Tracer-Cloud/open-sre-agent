@@ -603,3 +603,84 @@ def test_observer_drives_load_state_phases_by_turn_stage() -> None:
         assert spinner.active_action == ""  # cleared; scrollback keeps the solid copy
     finally:
         set_investigation_spinner(None)
+
+
+def test_batched_tool_starts_keep_the_first_action_until_it_ends() -> None:
+    """The loop emits every tool_start before any tool_end.
+
+    The live row must keep the first still-running tool (not the last start)
+    and must stay on Invoking tools until the last in-flight call ends.
+    """
+    from surfaces.interactive_shell.runtime.core.state import SpinnerState
+    from surfaces.shared.terminal.output.console_state import set_investigation_spinner
+
+    spinner = SpinnerState()
+    spinner.start()
+    set_investigation_spinner(spinner)
+    try:
+        observer, _buffer = _observer_with_buffer("do both")
+        observer(
+            "tool_start",
+            {
+                "id": "a",
+                "name": "github_cli",
+                "input": {"repo": "acme/app", "args": ["pr", "list"]},
+            },
+        )
+        observer("tool_start", {"id": "b", "name": "shell_run", "input": {"command": "true"}})
+        assert "GitHub CLI" in spinner.active_action
+        assert "true" not in spinner.active_action
+        assert spinner.phase == SpinnerState.INVOKING_TOOLS_PHASE
+
+        observer("tool_end", {"id": "a", "name": "github_cli"})
+        assert "Execute" in spinner.active_action
+        assert "true" in spinner.active_action
+        assert spinner.phase == SpinnerState.INVOKING_TOOLS_PHASE
+
+        observer("tool_end", {"id": "b", "name": "shell_run"})
+        assert spinner.active_action == ""
+        assert spinner.phase == SpinnerState.EXECUTING_PHASE
+    finally:
+        set_investigation_spinner(None)
+
+
+def test_untracked_tool_end_does_not_clear_a_running_action() -> None:
+    """update_plan never owns the live row; its end must not wipe another tool."""
+    from surfaces.interactive_shell.runtime.core.state import SpinnerState
+    from surfaces.shared.terminal.output.console_state import set_investigation_spinner
+
+    spinner = SpinnerState()
+    spinner.start()
+    set_investigation_spinner(spinner)
+    try:
+        observer, _buffer = _observer_with_buffer("plan while running")
+        observer("tool_start", {"id": "a", "name": "shell_run", "input": {"command": "true"}})
+        observer(
+            "tool_end",
+            {"id": "p1", "name": "update_plan", "output": {"ok": True, "total": 1}},
+        )
+        assert "true" in spinner.active_action
+        assert spinner.phase == SpinnerState.INVOKING_TOOLS_PHASE
+    finally:
+        set_investigation_spinner(None)
+
+
+def test_command_tools_suppress_the_static_action_header() -> None:
+    """shell_run / cli_exec stream their own ``$ <cmd>`` + output; the observer
+    must not also print an Execute/opensre header (the running action shows as
+    the live shimmer, and scrollback keeps the ``$`` line)."""
+    for name, key, cmd in (
+        ("shell_run", "command", "echo hi"),
+        ("cli_exec", "payload", "integrations list"),
+    ):
+        buf = io.StringIO()
+        observer = ActionRenderObserver(
+            session=Session(),
+            console=Console(file=buf, force_terminal=False, highlight=False),
+            message="do it",
+        )
+        observer("tool_start", {"name": name, "input": {key: cmd}})
+        out = buf.getvalue()
+        assert "Execute" not in out
+        assert "opensre" not in out
+        assert cmd not in out  # header suppressed; the $cmd line comes from the presenter
