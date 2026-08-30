@@ -5,7 +5,8 @@ We want to have a very specific tests that validates wether the agent is working
 The test goes like this:
 - We start the gateway and get the agent
 - We send a message to the agent: "send a message to slack with the temperature in antartica, compute the temperature first and then send the message"
-- We expect the agent to produce two or three turns (1: create temperature, 2: send message via slack that includes the temperature)
+- We expect the agent to produce three action turns (compute, Slack send, finalize)
+  plus one ReAct goal-review invoke on the same LLM client
 """
 
 from __future__ import annotations
@@ -50,6 +51,8 @@ class _ComputeThenSlackLLM:
     * Turn 2 (once the compute step has run) emits ``slack_send_message`` with the
       temperature embedded in the message body.
     * Turn 3 concludes with a plain reply and no tool call.
+    * Turn 4 is the ReAct goal-reviewer invoke on this same client (structured
+      ``GOAL_REACHED`` / ``NOT_REACHED``); it is not another action turn.
 
     """
 
@@ -67,8 +70,12 @@ class _ComputeThenSlackLLM:
         system: str | None = None,
         tools: list[dict[str, Any]] | None = None,
     ) -> AgentLLMResponse:
-        _ = (system, tools)
+        _ = tools
         self.turns += 1
+        # Goal review reuses this client with a "User goal:" prompt; answer it
+        # as reached so the action loop does not treat the review as a new plan.
+        if self._is_goal_review(messages, system):
+            return AgentLLMResponse(content='{"verdict": "GOAL_REACHED"}')
         shell_output = self._shell_output(messages)
         if not shell_output:
             return AgentLLMResponse(
@@ -97,6 +104,16 @@ class _ComputeThenSlackLLM:
                 ],
             )
         return AgentLLMResponse(content="Done — sent the Antarctica temperature to Slack.")
+
+    @staticmethod
+    def _is_goal_review(messages: list[dict[str, Any]], system: str | None) -> bool:
+        if system and "completed the user's goal" in system:
+            return True
+        for message in messages:
+            content = message.get("content")
+            if isinstance(content, str) and content.startswith("User goal:"):
+                return True
+        return False
 
     @staticmethod
     def _shell_output(messages: list[dict[str, Any]]) -> str:
@@ -202,9 +219,9 @@ def test_agent_computes_temperature_then_sends_it_to_slack(
         is_tty=True,
     )
 
-    # The agent ran the compound request as a sequence of turns: compute, send,
-    # finalize. "Two or three turns" — the final no-tool reply is the third.
-    assert llm.turns == 3
+    # Compute → Slack → finalize, then the ReAct goal-reviewer invoke on the
+    # same client (fourth call). The behavioral contract is the two tools.
+    assert llm.turns == 4
     # Turn 1 actually executed a shell command to compute the temperature.
     shell_entries = [entry for entry in session.history if entry.get("type") == "shell"]
     assert shell_entries, "expected the compute turn to run a shell command"
