@@ -5,7 +5,9 @@ from __future__ import annotations
 from datetime import UTC, datetime, timedelta
 from typing import Any
 
-from core.domain.types.evidence import record_evidence_entry
+from integrations.github.tools.community_followup_tool.mapper import (
+    _map_summarize_community_followups,
+)
 from core.domain.types.tools import ToolSurface
 from core.tool import SideEffectLevel
 from core.tool_framework import tool
@@ -34,26 +36,6 @@ def _community_extract_params(sources: dict[str, dict]) -> dict[str, Any]:
         return {}
     return {"owner": gh.get("owner"), "repo": gh.get("repo"), **github_creds(gh)}
 
-
-def _map_summarize_community_followups(
-    evidence: dict[str, Any], output: dict[str, Any], _input: dict[str, Any]
-) -> None:
-    counts = output.get("counts") or {}
-    unanswered = counts.get("unanswered_questions", 0)
-    agenda = counts.get("agenda_items", 0)
-    if not unanswered and not agenda:
-        return
-    parts = []
-    if unanswered:
-        parts.append(f"{unanswered} unanswered question{'s' if unanswered != 1 else ''}")
-    if agenda:
-        parts.append(f"{agenda} agenda item{'s' if agenda != 1 else ''}")
-    record_evidence_entry(
-        evidence,
-        source="summarize_community_followups",
-        label="GitHub Community Follow-ups",
-        summary=", ".join(parts),
-    )
 
 
 @tool(
