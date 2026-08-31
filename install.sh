@@ -1083,7 +1083,7 @@ finish_install() {
   print_install_confirmation
   ensure_on_path
   ensure_github_cli
-  log "${COLOR_YELLOW:-}Run 'uv run ${BIN_NAME}' to get started!${COLOR_RESET:-}"
+  log "${COLOR_YELLOW:-}Run '${BIN_NAME}' to get started!${COLOR_RESET:-}"
 }
 
 main() {
