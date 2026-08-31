@@ -86,10 +86,12 @@ def render_choice_selection(console: Console, title: str, answer: str) -> None:
 
 
 def render_ask_user_qa(console: Console, pairs: list[tuple[str, str]]) -> None:
-    """Print Ask User Q→A: orange header, numbered questions, brand answers.
+    """Print Ask User Q→A: accent header, bold numbered questions, brand answers.
 
-    Each pair is a two-line block with a blank row after the header and
-    between items so the list is scannable.
+    Each pair is a two-line block — a bold question, then its answer in the brand
+    colour indented beneath it — with a blank row after the header and between
+    items so the filled-in recap is scannable and the answer reads apart from the
+    question.
     """
     console.print()
     console.print(Text("Ask User", style=f"bold {ui_theme.HIGHLIGHT}"))
@@ -99,7 +101,7 @@ def render_ask_user_qa(console: Console, pairs: list[tuple[str, str]]) -> None:
             console.print()
         qline = Text()
         qline.append(f"  {index + 1}.  ", style=str(ui_theme.DIM))
-        qline.append(_display_safe(question), style=str(ui_theme.TEXT))
+        qline.append(_display_safe(question), style=f"bold {ui_theme.TEXT}")
         console.print(qline)
         aline = Text()
         aline.append("      ", style=str(ui_theme.DIM))

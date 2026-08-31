@@ -72,6 +72,30 @@ def test_ask_user_answers_render_as_numbered_qa() -> None:
     assert session.terminal.submitted_turn_count == 1
 
 
+def test_ask_user_qa_highlights_answer_differently_from_question() -> None:
+    # 10.6 core contract: the answer must render in a distinct colour from the
+    # question, under a highlighted "Ask User" header, so a filled-in recap reads
+    # apart at a glance. Pin the colours, not just the text.
+    from infrastructure.terminal import theme as ui_theme
+
+    buffer = io.StringIO()
+    console = Console(file=buffer, force_terminal=True, color_system="truecolor", highlight=False)
+    render_ask_user_qa(console, [("Which product should I demo?", "OpenSRE itself")])
+    raw = buffer.getvalue()
+
+    def _sgr(hex_color: str) -> str:
+        r, g, b = (int(hex_color[i : i + 2], 16) for i in (1, 3, 5))
+        return f"38;2;{r};{g};{b}"
+
+    question_sgr = _sgr(str(ui_theme.TEXT))
+    answer_sgr = _sgr(str(ui_theme.BRAND))
+    header_sgr = _sgr(str(ui_theme.HIGHLIGHT))
+    assert question_sgr != answer_sgr  # the two colours genuinely differ
+    assert header_sgr in raw  # "Ask User" header in the accent colour
+    assert f"1;{question_sgr}" in raw  # question is bold TEXT (droid-style emphasis)
+    assert answer_sgr in raw  # answer highlighted in BRAND, distinct from the question
+
+
 def test_ask_user_qa_leaves_blank_rows_between_pairs() -> None:
     buffer = io.StringIO()
     console = Console(file=buffer, force_terminal=False, highlight=False, width=80)
