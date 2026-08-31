@@ -6,6 +6,7 @@ All rendering is delegated to the REPL TTY helpers in :mod:`rendering`.
 
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
@@ -206,10 +207,31 @@ def render_tools_table(console: Console, entries: list[ToolCatalogEntry]) -> Non
     )
 
 
+_COMMAND_OUTPUT_ANSI_RE = re.compile(r"\x1b\[[0-9;]*m")
+_COMMAND_OUTPUT_INDENT = "    "  # aligns wrapped lines under the ``  ↳ `` marker
+
+
+def _command_output_fits_indented(text: str, width: int) -> bool:
+    """Whether ``text`` still fits after a 4-column indent (visible width)."""
+    longest = max(
+        (len(_COMMAND_OUTPUT_ANSI_RE.sub("", line)) for line in text.split("\n")),
+        default=0,
+    )
+    return longest + len(_COMMAND_OUTPUT_INDENT) <= max(width, 1)
+
+
 def print_command_output(console: Console, output: str, *, style: str | None = None) -> None:
     if not output:
         return
     text = output.rstrip()
+    # Indent the result under its `$ command` header with a ``↳`` marker so it
+    # reads as the command's child (parent → child hierarchy) — but only when it
+    # fits, so wide output (tables) stays flush and does not wrap.
+    if _command_output_fits_indented(text, console.width):
+        lines = text.split("\n")
+        text = "\n".join(
+            [f"  ↳ {lines[0]}", *(f"{_COMMAND_OUTPUT_INDENT}{line}" for line in lines[1:])]
+        )
     # Parse any ANSI the captured child emitted so its Rich styling (bold, colour)
     # survives being re-printed here instead of showing as raw escape codes.
     rendered = Text.from_ansi(text) if style is None else Text.from_ansi(text, style=style)

@@ -117,6 +117,18 @@ class TestPromptTurnCounter:
         render_submitted_prompt(console, session, "and again")
         assert _prompt_turn_number(session) == 3
 
+    def test_user_prompt_row_has_a_left_accent_bar(self) -> None:
+        """A user prompt is marked by a left colour accent bar before ``[N] ❯``."""
+        from surfaces.interactive_shell.ui.input_prompt.rendering import _PROMPT_ACCENT_BAR
+
+        session = Session()
+        console = _render_console()
+        render_submitted_prompt(console, session, "why does it show that?")
+        out = console.file.getvalue()  # type: ignore[union-attr]
+        assert _PROMPT_ACCENT_BAR in out
+        assert out.index(_PROMPT_ACCENT_BAR) < out.index("[1]")  # bar leads the row
+        assert "why does it show that?" in out
+
     def test_autosubmitted_goal_condition_gets_work_turn_marker(self) -> None:
         """``/goal set`` autosubmit must not look like part of the slash turn."""
         session = Session()
