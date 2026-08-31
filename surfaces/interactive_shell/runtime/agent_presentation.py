@@ -12,12 +12,15 @@ draining from the turn's action-routing and prompt-construction logic.
 from __future__ import annotations
 
 import asyncio
+import time
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
 from typing import Literal
 
 from rich.markup import escape
 
+from config.constants.repl_sound import SOUND_MIN_TURN_SECONDS
+from infrastructure.terminal.notify import NotifyEvent, play_notification
 from surfaces.interactive_shell.runtime.core.state import SpinnerState
 from surfaces.interactive_shell.runtime.input_policy import turn_should_show_spinner
 from surfaces.interactive_shell.session import Session
@@ -126,8 +129,11 @@ class ConsoleAgentEventSink:
         self.spinner = spinner
         self.console = console
         self.state = AgentPresentationState()
+        self._turn_started_at: float | None = None
 
     async def __call__(self, event: AgentEvent) -> None:
+        if event.type == "turn_start":
+            self._turn_started_at = time.monotonic()
         previous = self.state
         self.state = _reduce_agent_presentation(
             previous,
@@ -141,6 +147,15 @@ class ConsoleAgentEventSink:
             console=self.console,
             spinner=self.spinner,
         )
+        if event.type in {"turn_end", "turn_interrupted", "turn_error"}:
+            self._chime_if_long_turn()
+
+    def _chime_if_long_turn(self) -> None:
+        """Chime once a walk-away-length turn finishes; stay silent for quick ones."""
+        started = self._turn_started_at
+        self._turn_started_at = None
+        if started is not None and time.monotonic() - started >= SOUND_MIN_TURN_SECONDS:
+            play_notification(NotifyEvent.TURN_COMPLETE)
 
 
 __all__ = [

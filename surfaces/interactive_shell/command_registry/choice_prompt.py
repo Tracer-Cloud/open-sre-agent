@@ -15,6 +15,7 @@ from rich.console import Console
 
 from core.agent_harness.spi.handoff import format_ask_user_answers
 from infrastructure.terminal import theme as ui_theme
+from infrastructure.terminal.notify import NotifyEvent, play_notification
 from surfaces.interactive_shell.command_registry.types import SlashCommand
 from surfaces.interactive_shell.runtime import Session
 from surfaces.interactive_shell.ui.ask_user import CUSTOM_OPTION, repl_ask_user
@@ -47,6 +48,7 @@ def _cmd_choose(session: Session, console: Console, args: list[str]) -> bool:
 
     items = pending.items()
     clear_live_prompt_paint(session)
+    play_notification(NotifyEvent.INPUT_NEEDED)  # the agent is now waiting on the user
     if pending.is_batch():
         picked = repl_ask_user(items)
         if picked is None:

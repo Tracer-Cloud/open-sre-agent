@@ -13,6 +13,7 @@ from rich.console import Console
 from surfaces.interactive_shell.ui.streaming import (
     finish_deferred_closer,
     format_token_count_short,
+    publish_full_response,
     render_markdown_block,
     render_note_block,
     render_response_header,
@@ -49,6 +50,34 @@ def test_render_note_block_is_dim_and_indented_but_keeps_bold() -> None:
     first_line = _strip_ansi(raw).splitlines()[0]
     assert first_line.startswith("   ")  # three-space left indent, no glyph
     assert "load the workflow" in first_line
+
+
+def test_table_reply_renders_as_a_table_not_flattened_pipes() -> None:
+    # A reply that leads with a Markdown table must render as an aligned table. The
+    # inline ``∴ `` marker fused onto the header row breaks CommonMark block parsing
+    # and flattens the table to one line of raw pipes, so the marker goes on its own
+    # line before a leading block.
+    buf = io.StringIO()
+    console = Console(file=buf, force_terminal=False, width=60, highlight=False)
+
+    publish_full_response(
+        console, "| Rank | Folder | Size |\n|---:|---|---:|\n| 1 | Library | 113G |"
+    )
+
+    out = buf.getvalue()
+    assert "| Rank | Folder |" not in out  # not the raw flattened markdown row
+    assert "Rank" in out and "Folder" in out and "Size" in out
+    assert "─" in out  # rendered as a table with a header rule
+
+
+def test_prose_reply_keeps_the_inline_marker() -> None:
+    # Prose still carries the marker inline on the first line.
+    buf = io.StringIO()
+    console = Console(file=buf, force_terminal=False, width=60, highlight=False)
+
+    publish_full_response(console, "Root disk is 44% full.")
+
+    assert "∴ Root disk is 44% full." in buf.getvalue()
 
 
 def _tty_console() -> tuple[Console, io.StringIO]:
