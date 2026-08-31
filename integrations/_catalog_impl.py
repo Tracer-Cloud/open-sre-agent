@@ -10,7 +10,6 @@ import threading
 from collections.abc import Callable
 from typing import Any
 
-from config.config import get_tracer_base_url
 from config.constants.alertmanager import (
     ALERTMANAGER_BEARER_TOKEN_ENV,
     ALERTMANAGER_PASSWORD_ENV,
@@ -259,6 +258,7 @@ from config.constants.yandex_cloud import (
     YC_USE_METADATA_ENV,
 )
 from config.llm_credentials import resolve_env_credential
+from config.tracer_urls import get_tracer_base_url
 from infrastructure.observability.errors.boundary import report_exception
 from infrastructure.text.coercion import safe_int
 from integrations.airflow.config import airflow_config_from_env

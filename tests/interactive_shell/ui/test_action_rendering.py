@@ -556,7 +556,9 @@ def test_update_plan_tool_start_does_not_commit_session_state() -> None:
     assert "Plan" not in buffer.getvalue()
 
 
-def test_update_plan_tool_end_renders_after_successful_commit() -> None:
+def test_update_plan_is_not_dumped_into_the_transcript() -> None:
+    # The plan renders only in the pinned bottom overlay; a successful
+    # update_plan must not print the checklist or the diagnosis into scrollback.
     from core.agent_harness.task_plan.plan import parse_task_plan
     from core.agent_harness.task_plan.update_plan_policy import apply_update_plan_session
 
@@ -565,89 +567,119 @@ def test_update_plan_tool_end_renders_after_successful_commit() -> None:
     assert error is None and plan is not None
     apply_update_plan_session(observer.session, plan, plan_only=True)
 
-    observer(
-        "tool_end",
-        {"id": "p1", "name": "update_plan", "output": {"ok": True, "total": 2}},
-    )
+    observer("tool_end", {"id": "p1", "name": "update_plan", "output": {"ok": True, "total": 2}})
+
     output = buffer.getvalue()
-    assert "Plan ready" in output or "Plan ·" in output
-    assert "Measure wait vs work" in output
-    assert "p99 up" in output
+    assert "Plan ready" not in output
+    assert "Measure wait vs work" not in output
+    assert "p99 up" not in output
 
 
-def test_update_plan_dedupe_refreshes_when_only_explanation_changes() -> None:
-    from core.agent_harness.task_plan.plan import parse_task_plan
-    from core.agent_harness.task_plan.update_plan_policy import apply_update_plan_session
+def test_observer_drives_load_state_phases_by_turn_stage() -> None:
+    """The spinner label tracks the stage: llm_start → Thinking, tool_start →
+    Invoking tools, tool_end → Executing. Never a stale label, never blank."""
+    from surfaces.interactive_shell.runtime.core.state import SpinnerState
+    from surfaces.shared.terminal.output.console_state import set_investigation_spinner
 
-    observer, buffer = _observer_with_buffer("plan the fix")
-    first, error = parse_task_plan({"plan": _UPDATE_PLAN, "explanation": "first diagnosis"})
-    assert error is None and first is not None
-    apply_update_plan_session(observer.session, first, plan_only=True)
-    observer("tool_end", {"id": "p1", "name": "update_plan", "output": {"ok": True}})
-    assert "first diagnosis" in buffer.getvalue()
+    spinner = SpinnerState()
+    spinner.start()  # initial dispatch shows Executing
+    assert spinner.phase == SpinnerState.EXECUTING_PHASE
+    set_investigation_spinner(spinner)
+    try:
+        console = Console(file=io.StringIO(), force_terminal=False)
+        observer = ActionRenderObserver(session=Session(), console=console, message="do it")
 
-    second, error = parse_task_plan({"plan": _UPDATE_PLAN, "explanation": "revised diagnosis"})
-    assert error is None and second is not None
-    apply_update_plan_session(observer.session, second, plan_only=True)
-    observer("tool_end", {"id": "p2", "name": "update_plan", "output": {"ok": True}})
-    assert "revised diagnosis" in buffer.getvalue()
+        observer("llm_start", {})
+        assert spinner.phase == SpinnerState.THINKING_PHASE
 
+        observer("tool_start", {"name": "shell_run", "input": {"command": "true"}})
+        assert spinner.phase == SpinnerState.INVOKING_TOOLS_PHASE
+        # The running action shows as a shimmering live line; for shell_run the
+        # shimmer names the action only — the ``$ <cmd>`` line shows the command.
+        assert spinner.active_action == "Execute"
 
-_IN_PROGRESS_PLAN = [
-    {"step": "Measure wait vs work", "status": "in_progress"},
-    {"step": "Verify p99 recovery", "status": "pending"},
-]
-
-
-def test_in_progress_explanation_only_update_renders_markdown() -> None:
-    from core.agent_harness.task_plan.plan import parse_task_plan
-    from core.agent_harness.task_plan.update_plan_policy import apply_update_plan_session
-
-    observer, buffer = _observer_with_buffer("keep going")
-    first, error = parse_task_plan({"plan": _IN_PROGRESS_PLAN, "explanation": "first diagnosis"})
-    assert error is None and first is not None
-    apply_update_plan_session(observer.session, first, plan_only=False)
-    observer("tool_end", {"id": "p1", "name": "update_plan", "output": {"ok": True}})
-    assert "first diagnosis" in buffer.getvalue()
-
-    second, error = parse_task_plan({"plan": _IN_PROGRESS_PLAN, "explanation": "revised diagnosis"})
-    assert error is None and second is not None
-    apply_update_plan_session(observer.session, second, plan_only=False)
-    observer("tool_end", {"id": "p2", "name": "update_plan", "output": {"ok": True}})
-    assert "revised diagnosis" in buffer.getvalue()
+        observer("tool_end", {"name": "shell_run"})
+        assert spinner.phase == SpinnerState.EXECUTING_PHASE
+        assert spinner.active_action == ""  # cleared; scrollback keeps the solid copy
+    finally:
+        set_investigation_spinner(None)
 
 
-def test_multiline_explanation_keeps_its_line_breaks_when_rendered() -> None:
-    # Arrange: a multi-line markdown explanation (a Facts heading + a bullet).
-    from core.agent_harness.task_plan.plan import parse_task_plan
-    from core.agent_harness.task_plan.update_plan_policy import apply_update_plan_session
+def test_batched_tool_starts_keep_the_first_action_until_it_ends() -> None:
+    """The loop emits every tool_start before any tool_end.
 
-    observer, buffer = _observer_with_buffer("keep going")
-    plan, error = parse_task_plan(
-        {"plan": _IN_PROGRESS_PLAN, "explanation": "### Facts\n- gradual onset"}
-    )
-    assert error is None and plan is not None
+    The live row must keep the first still-running tool (not the last start)
+    and must stay on Invoking tools until the last in-flight call ends.
+    """
+    from surfaces.interactive_shell.runtime.core.state import SpinnerState
+    from surfaces.shared.terminal.output.console_state import set_investigation_spinner
 
-    # Act: render the plan update through the observer.
-    apply_update_plan_session(observer.session, plan, plan_only=False)
-    observer("tool_end", {"id": "p1", "name": "update_plan", "output": {"ok": True}})
+    spinner = SpinnerState()
+    spinner.start()
+    set_investigation_spinner(spinner)
+    try:
+        observer, _buffer = _observer_with_buffer("do both")
+        observer(
+            "tool_start",
+            {
+                "id": "a",
+                "name": "github_cli",
+                "input": {"repo": "acme/app", "args": ["pr", "list"]},
+            },
+        )
+        observer("tool_start", {"id": "b", "name": "shell_run", "input": {"command": "true"}})
+        assert "GitHub CLI" in spinner.active_action
+        assert "true" not in spinner.active_action
+        assert spinner.phase == SpinnerState.INVOKING_TOOLS_PHASE
 
-    # Assert: both lines survive and are not flattened onto one line.
-    output = buffer.getvalue()
-    assert "Facts" in output
-    assert "gradual onset" in output
-    assert "Facts- gradual onset" not in output
+        observer("tool_end", {"id": "a", "name": "github_cli"})
+        assert spinner.active_action == "Execute"  # shell_run shimmer names the action only
+        assert spinner.phase == SpinnerState.INVOKING_TOOLS_PHASE
+
+        observer("tool_end", {"id": "b", "name": "shell_run"})
+        assert spinner.active_action == ""
+        assert spinner.phase == SpinnerState.EXECUTING_PHASE
+    finally:
+        set_investigation_spinner(None)
 
 
-def test_unchanged_plan_signature_does_not_reprint() -> None:
-    from core.agent_harness.task_plan.plan import parse_task_plan
-    from core.agent_harness.task_plan.update_plan_policy import apply_update_plan_session
+def test_untracked_tool_end_does_not_clear_a_running_action() -> None:
+    """update_plan never owns the live row; its end must not wipe another tool."""
+    from surfaces.interactive_shell.runtime.core.state import SpinnerState
+    from surfaces.shared.terminal.output.console_state import set_investigation_spinner
 
-    observer, buffer = _observer_with_buffer("plan the fix")
-    plan, error = parse_task_plan({"plan": _UPDATE_PLAN, "explanation": "same diagnosis"})
-    assert error is None and plan is not None
-    apply_update_plan_session(observer.session, plan, plan_only=True)
-    observer("tool_end", {"id": "p1", "name": "update_plan", "output": {"ok": True}})
-    first = buffer.getvalue()
-    observer("tool_end", {"id": "p2", "name": "update_plan", "output": {"ok": True}})
-    assert buffer.getvalue() == first
+    spinner = SpinnerState()
+    spinner.start()
+    set_investigation_spinner(spinner)
+    try:
+        observer, _buffer = _observer_with_buffer("plan while running")
+        observer("tool_start", {"id": "a", "name": "shell_run", "input": {"command": "true"}})
+        observer(
+            "tool_end",
+            {"id": "p1", "name": "update_plan", "output": {"ok": True, "total": 1}},
+        )
+        assert spinner.active_action == "Execute"  # shell_run still running, not wiped
+        assert spinner.phase == SpinnerState.INVOKING_TOOLS_PHASE
+    finally:
+        set_investigation_spinner(None)
+
+
+def test_command_tools_suppress_the_static_action_header() -> None:
+    """shell_run / cli_exec stream their own ``$ <cmd>`` + output; the observer
+    must not also print an Execute/opensre header (the running action shows as
+    the live shimmer, and scrollback keeps the ``$`` line)."""
+    for name, key, cmd in (
+        ("shell_run", "command", "echo hi"),
+        ("cli_exec", "payload", "integrations list"),
+    ):
+        buf = io.StringIO()
+        observer = ActionRenderObserver(
+            session=Session(),
+            console=Console(file=buf, force_terminal=False, highlight=False),
+            message="do it",
+        )
+        observer("tool_start", {"name": name, "input": {key: cmd}})
+        out = buf.getvalue()
+        assert "Execute" not in out
+        assert "opensre" not in out
+        assert cmd not in out  # header suppressed; the $cmd line comes from the presenter

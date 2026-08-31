@@ -176,7 +176,7 @@ Respond with ONE JSON object only (no markdown), exactly this shape:
 
 
 def run_opensre_llm_judge(*, state: dict[str, Any], rubric: str) -> dict[str, Any]:
-    from config.config import resolve_llm_settings
+    from config.llm_settings import resolve_llm_settings
     from core.llm.factory import LLMRole, get_llm
 
     resolve_llm_settings()

@@ -3,7 +3,7 @@ from __future__ import annotations
 import pytest
 
 from core.agent.run_io import AgentRunResult
-from infrastructure.analytics import cli
+from infrastructure.analytics import capture
 from infrastructure.analytics.events import Event
 from infrastructure.analytics.react_turn import emit_react_turn_completed, resolve_react_stop_reason
 
@@ -39,9 +39,9 @@ def test_capture_react_turn_completed_emits_required_properties(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     stub = _StubAnalytics()
-    monkeypatch.setattr(cli, "get_analytics", lambda: stub)
+    monkeypatch.setattr(capture, "get_analytics", lambda: stub)
 
-    cli.capture_react_turn_completed(
+    capture.capture_react_turn_completed(
         phase="action",
         llm_iterations_used=3,
         llm_iteration_cap=6,

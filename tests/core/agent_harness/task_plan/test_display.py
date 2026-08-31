@@ -2,7 +2,11 @@
 
 from __future__ import annotations
 
-from core.agent_harness.task_plan.display import is_plan_diagnosis_prose, promote_first_pending_step
+from core.agent_harness.task_plan.display import (
+    ensure_active_step,
+    is_plan_diagnosis_prose,
+    promote_first_pending_step,
+)
 from core.agent_harness.task_plan.plan import PlanStepStatus, parse_task_plan
 
 
@@ -69,3 +73,21 @@ def test_promote_first_pending_step_preserves_explanation() -> None:
     assert promoted.explanation == plan.explanation
     assert "gradual" in promoted.explanation
     assert promoted.steps[0].status is PlanStepStatus.IN_PROGRESS
+
+
+def test_ensure_active_step_promotes_after_completed_gap() -> None:
+    plan, error = parse_task_plan(
+        {
+            "plan": [
+                {"step": "Confirm source", "status": "completed"},
+                {"step": "Query latency", "status": "pending"},
+                {"step": "Verify", "status": "pending"},
+            ]
+        }
+    )
+    assert error is None and plan is not None
+    # promote_first_pending_step stays all-pending-only; ensure covers the gap.
+    assert promote_first_pending_step(plan) is plan
+    fixed = ensure_active_step(plan)
+    assert fixed.steps[1].status is PlanStepStatus.IN_PROGRESS
+    assert fixed.current_index == 2

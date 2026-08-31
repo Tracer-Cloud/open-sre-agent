@@ -237,7 +237,13 @@ def test_observer_does_not_commit_before_tool_success_so_flush_stays_empty() -> 
     assert not should_persist_task_plan_state(None, prior_records=[])
 
 
-def test_successful_tool_then_observer_paints_without_double_commit() -> None:
+def test_successful_tool_then_observer_does_not_double_commit_or_dump_transcript() -> None:
+    """Tool commits once; observer must not re-commit or dump the plan into scrollback.
+
+    The checklist lives in the pinned bottom overlay from session state — a
+    successful ``update_plan`` must not print ``Plan ready`` / diagnosis prose
+    into the transcript (see ``test_update_plan_is_not_dumped_into_the_transcript``).
+    """
     session = Session()
     result = execute_update_plan_tool(
         {"plan": _pending_plan(), "plan_only": True, "explanation": "### Facts\n- p99 up"},
@@ -250,8 +256,8 @@ def test_successful_tool_then_observer_paints_without_double_commit() -> None:
     console = Console(file=buffer, force_terminal=False, highlight=False, width=100)
     observer = ActionRenderObserver(session=session, console=console, message="plan the fix")
     observer("tool_end", {"id": "p1", "name": ActionToolName.UPDATE_PLAN, "output": {"ok": True}})
-    assert "Plan ready" in buffer.getvalue()
-    assert "p99 up" in buffer.getvalue()
+    assert "Plan ready" not in buffer.getvalue()
+    assert "p99 up" not in buffer.getvalue()
     assert task_plan_state_snapshot(session) == first_snapshot
 
 

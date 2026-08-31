@@ -1670,22 +1670,34 @@ def test_run_opensre_cli_command_skips_confirmation_for_investigate(
     assert "may change local config" not in buf.getvalue()
 
 
-def test_run_opensre_cli_command_allows_integrations_list_without_blocking(
+def test_run_opensre_cli_command_runs_integrations_list_in_foreground(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """Only the ``setup`` subcommand under ``integrations`` is the wizard.
-    Other ``integrations`` subcommands like ``integrations list`` must
-    not get caught by the interactive-wizard block — guard against an
-    over-broad refusal.
+    """``integrations list`` is read-only: it runs foreground so the action turn
+    observes the result, and is not caught by the interactive-wizard block (only
+    ``integrations setup`` is the wizard). Backgrounding it left the plan parked
+    on a task id while the turn ended.
     """
     start_calls: list[list[str]] = []
 
     def _fake_start_background_cli_task(*, argv_list: list[str], **_kw: object) -> None:
         start_calls.append(argv_list)
 
+    def _fake_run(command: list[str], **_kwargs: object) -> subprocess.CompletedProcess[str]:
+        return subprocess.CompletedProcess(
+            args=command,
+            returncode=0,
+            stdout="SERVICE  STATUS  ID\ngithub   active  github-c943a332\n",
+            stderr="",
+        )
+
     monkeypatch.setattr(
         "surfaces.interactive_shell.runtime.subprocess_runner.start_background_cli_task",
         _fake_start_background_cli_task,
+    )
+    monkeypatch.setattr(
+        "surfaces.interactive_shell.runtime.subprocess_runner.subprocess.run",
+        _fake_run,
     )
 
     session = Session()
@@ -1704,12 +1716,12 @@ def test_run_opensre_cli_command_allows_integrations_list_without_blocking(
     )
 
     out = buf.getvalue()
-    assert "needs a full terminal" not in out
-    # The dispatcher should have reached the background-task path
-    # (proving the wizard block didn't fire).
-    assert start_calls, "background task starter was not invoked"
-    assert "integrations" in start_calls[0]
-    assert "list" in start_calls[0]
+    assert "needs a full terminal" not in out  # wizard block did not fire
+    assert "$ opensre integrations list" in out
+    assert "github-c943a332" in out
+    # Read-only integrations runs foreground, not as a background task, so the
+    # turn observes pass/fail instead of ending on a task id.
+    assert start_calls == []
 
 
 def test_start_background_cli_task_echoes_command_markup_literally(
@@ -1749,3 +1761,17 @@ def test_start_background_cli_task_echoes_command_markup_literally(
 
     assert task is not None
     assert f"$ {display_command}" in buf.getvalue().replace("\n", "")
+
+
+def test_highlight_command_leaves_argument_keywords_plain() -> None:
+    """``done`` after ``echo`` is an argument, not the bash loop keyword — a shell
+    lexer mis-colours it. Command words are highlighted; ``done`` stays plain."""
+    from surfaces.interactive_shell.runtime.subprocess_runner.repl_presenter import (
+        _highlight_command,
+    )
+
+    text = _highlight_command("sleep 8 && echo done")
+    styled = {text.plain[s.start : s.end].strip() for s in text.spans}
+    assert "sleep" in styled  # first command highlighted
+    assert "echo" in styled  # command after the operator highlighted
+    assert "done" not in styled  # argument left in the base style, not recoloured

@@ -1,19 +1,21 @@
-"""Global application configuration.
+"""Env-backed LLM provider selection, model tiers, and settings validation.
 
-Clerk JWT configuration for both development and production environments.
-These are public endpoints and issuer URLs, not secrets.
+Resolution is deliberately non-falling-back: the configured provider is the one
+that is used, so a missing credential surfaces as a validation error instead of
+silently switching backends. Provider *metadata* (auth kind, env var names)
+lives in ``config.llm_auth.provider_catalog``; model defaults live in
+``config.llm_models``. This module owns only the runtime resolution on top of
+them.
 """
 
 import os
 from collections.abc import Sequence
 from dataclasses import dataclass
 from difflib import get_close_matches
-from enum import StrEnum
 from typing import Literal
 
 from pydantic import Field, ValidationError, field_validator, model_validator
 
-from config.constants.clerk import CLERK_ISSUER_ENV, CLERK_JWKS_URL_ENV
 from config.constants.llm import (
     AZURE_OPENAI_API_VERSION_ENV,
     AZURE_OPENAI_BASE_URL_ENV,
@@ -31,28 +33,21 @@ from config.llm_auth.provider_catalog import (
 )
 from config.llm_models import (
     ANTHROPIC_CLASSIFICATION_MODEL,
-    ANTHROPIC_LLM_CONFIG,
     ANTHROPIC_REASONING_MODEL,
     ANTHROPIC_TOOLCALL_MODEL,
     AZURE_OPENAI_CLASSIFICATION_MODEL,
-    AZURE_OPENAI_LLM_CONFIG,
     AZURE_OPENAI_REASONING_MODEL,
     AZURE_OPENAI_TOOLCALL_MODEL,
     BEDROCK_CLASSIFICATION_MODEL,
-    BEDROCK_LLM_CONFIG,
     BEDROCK_REASONING_MODEL,
     BEDROCK_TOOLCALL_MODEL,
     CUSTOM_ANTHROPIC_CLASSIFICATION_MODEL,
-    CUSTOM_ANTHROPIC_LLM_CONFIG,
     CUSTOM_ANTHROPIC_REASONING_MODEL,
     CUSTOM_ANTHROPIC_TOOLCALL_MODEL,
     CUSTOM_OPENAI_CLASSIFICATION_MODEL,
-    CUSTOM_OPENAI_LLM_CONFIG,
     CUSTOM_OPENAI_REASONING_MODEL,
     CUSTOM_OPENAI_TOOLCALL_MODEL,
-    DEEPSEEK_BASE_URL,
     DEEPSEEK_CLASSIFICATION_MODEL,
-    DEEPSEEK_LLM_CONFIG,
     DEEPSEEK_REASONING_MODEL,
     DEEPSEEK_TOOLCALL_MODEL,
     DEFAULT_AZURE_OPENAI_API_VERSION,
@@ -60,218 +55,54 @@ from config.llm_models import (
     DEFAULT_OLLAMA_HOST,
     DEFAULT_OLLAMA_MODEL,
     DEFAULT_VERTEX_AI_LOCATION,
-    GEMINI_BASE_URL,
     GEMINI_CLASSIFICATION_MODEL,
-    GEMINI_LLM_CONFIG,
     GEMINI_REASONING_MODEL,
     GEMINI_TOOLCALL_MODEL,
-    GROQ_BASE_URL,
     GROQ_CLASSIFICATION_MODEL,
-    GROQ_LLM_CONFIG,
     GROQ_REASONING_MODEL,
     GROQ_TOOLCALL_MODEL,
-    MINIMAX_BASE_URL,
     MINIMAX_CLASSIFICATION_MODEL,
-    MINIMAX_LLM_CONFIG,
     MINIMAX_REASONING_MODEL,
     MINIMAX_TOOLCALL_MODEL,
-    NVIDIA_BASE_URL,
     NVIDIA_CLASSIFICATION_MODEL,
-    NVIDIA_LLM_CONFIG,
     NVIDIA_REASONING_MODEL,
     NVIDIA_TOOLCALL_MODEL,
-    OLLAMA_LLM_CONFIG,
     OPENAI_CLASSIFICATION_MODEL,
-    OPENAI_LLM_CONFIG,
     OPENAI_REASONING_MODEL,
     OPENAI_TOOLCALL_MODEL,
-    OPENROUTER_BASE_URL,
     OPENROUTER_CLASSIFICATION_MODEL,
-    OPENROUTER_LLM_CONFIG,
     OPENROUTER_REASONING_MODEL,
     OPENROUTER_TOOLCALL_MODEL,
     PROVIDER_MODEL_DEFAULTS,
-    TRUSTEDROUTER_BASE_URL,
     TRUSTEDROUTER_CLASSIFICATION_MODEL,
-    TRUSTEDROUTER_LLM_CONFIG,
     TRUSTEDROUTER_REASONING_MODEL,
     TRUSTEDROUTER_TOOLCALL_MODEL,
     VERTEX_AI_CLASSIFICATION_MODEL,
-    VERTEX_AI_LLM_CONFIG,
     VERTEX_AI_REASONING_MODEL,
     VERTEX_AI_TOOLCALL_MODEL,
-    LLMModelConfig,
 )
 from config.local_env import bootstrap_opensre_env
 from config.strict_config import StrictConfigModel
 
 __all__ = (
-    "ANTHROPIC_CLASSIFICATION_MODEL",
-    "ANTHROPIC_LLM_CONFIG",
-    "ANTHROPIC_REASONING_MODEL",
-    "ANTHROPIC_TOOLCALL_MODEL",
-    "AZURE_OPENAI_CLASSIFICATION_MODEL",
-    "AZURE_OPENAI_LLM_CONFIG",
-    "AZURE_OPENAI_REASONING_MODEL",
-    "AZURE_OPENAI_TOOLCALL_MODEL",
-    "BEDROCK_CLASSIFICATION_MODEL",
-    "BEDROCK_LLM_CONFIG",
-    "BEDROCK_REASONING_MODEL",
-    "BEDROCK_TOOLCALL_MODEL",
-    "CUSTOM_ANTHROPIC_CLASSIFICATION_MODEL",
-    "CUSTOM_ANTHROPIC_LLM_CONFIG",
-    "CUSTOM_ANTHROPIC_REASONING_MODEL",
-    "CUSTOM_ANTHROPIC_TOOLCALL_MODEL",
-    "CUSTOM_OPENAI_CLASSIFICATION_MODEL",
-    "CUSTOM_OPENAI_LLM_CONFIG",
-    "CUSTOM_OPENAI_REASONING_MODEL",
-    "CUSTOM_OPENAI_TOOLCALL_MODEL",
-    "CLERK_CONFIG_DEV",
-    "CLERK_CONFIG_PROD",
-    "CLERK_ISSUER_ENV",
-    "CLERK_JWKS_URL_ENV",
-    "ClerkConfig",
-    "DEEPSEEK_BASE_URL",
-    "DEEPSEEK_CLASSIFICATION_MODEL",
-    "DEEPSEEK_LLM_CONFIG",
-    "DEEPSEEK_REASONING_MODEL",
-    "DEEPSEEK_TOOLCALL_MODEL",
-    "DEFAULT_AZURE_OPENAI_API_VERSION",
-    "DEFAULT_MAX_TOKENS",
-    "DEFAULT_OLLAMA_HOST",
-    "DEFAULT_OLLAMA_MODEL",
-    "DEFAULT_VERTEX_AI_LOCATION",
-    "Environment",
-    "GEMINI_BASE_URL",
-    "GEMINI_CLASSIFICATION_MODEL",
-    "GEMINI_LLM_CONFIG",
-    "GEMINI_REASONING_MODEL",
-    "GEMINI_TOOLCALL_MODEL",
-    "GROQ_BASE_URL",
-    "GROQ_CLASSIFICATION_MODEL",
-    "GROQ_LLM_CONFIG",
-    "GROQ_REASONING_MODEL",
-    "GROQ_TOOLCALL_MODEL",
-    "JWT_ALGORITHM",
-    "JWKS_CACHE_TTL_SECONDS",
-    "LLMModelConfig",
     "LLMProvider",
     "LLMResolution",
     "LLMSettings",
     "LLM_PROVIDER_API_KEY_ENVS",
-    "MINIMAX_BASE_URL",
-    "MINIMAX_CLASSIFICATION_MODEL",
-    "MINIMAX_LLM_CONFIG",
-    "MINIMAX_REASONING_MODEL",
-    "MINIMAX_TOOLCALL_MODEL",
-    "NVIDIA_BASE_URL",
-    "NVIDIA_CLASSIFICATION_MODEL",
-    "NVIDIA_LLM_CONFIG",
-    "NVIDIA_REASONING_MODEL",
-    "NVIDIA_TOOLCALL_MODEL",
-    "OLLAMA_LLM_CONFIG",
-    "OPENAI_CLASSIFICATION_MODEL",
-    "OPENAI_LLM_CONFIG",
-    "OPENAI_REASONING_MODEL",
-    "OPENAI_TOOLCALL_MODEL",
-    "OPENROUTER_BASE_URL",
-    "OPENROUTER_CLASSIFICATION_MODEL",
-    "OPENROUTER_LLM_CONFIG",
-    "OPENROUTER_REASONING_MODEL",
-    "OPENROUTER_TOOLCALL_MODEL",
     "PROVIDER_ANTHROPIC",
     "PROVIDER_BEDROCK",
-    "PROVIDER_MODEL_DEFAULTS",
     "PROVIDER_OLLAMA",
     "PROVIDER_OPENAI",
     "PROVIDER_VERTEX_AI",
-    "SLACK_CHANNEL",
-    "TRACER_BASE_URL_DEV",
-    "TRACER_BASE_URL_PROD",
-    "TRUSTEDROUTER_BASE_URL",
-    "TRUSTEDROUTER_CLASSIFICATION_MODEL",
-    "TRUSTEDROUTER_LLM_CONFIG",
-    "TRUSTEDROUTER_REASONING_MODEL",
-    "TRUSTEDROUTER_TOOLCALL_MODEL",
-    "VERTEX_AI_CLASSIFICATION_MODEL",
-    "VERTEX_AI_LLM_CONFIG",
-    "VERTEX_AI_REASONING_MODEL",
-    "VERTEX_AI_TOOLCALL_MODEL",
     "describe_llm_resolution",
-    "get_clerk_config_override",
     "get_configured_llm_provider",
-    "get_environment",
     "get_llm_provider_api_key_env",
-    "get_tracer_base_url",
     "has_credentials_for_active_llm_provider",
     "llm_provider_error_context",
     "resolve_llm_settings",
     "resolve_llm_settings_verbose",
 )
 
-
-class Environment(StrEnum):
-    """Application environment."""
-
-    DEVELOPMENT = "development"
-    PRODUCTION = "production"
-
-
-class ClerkConfig(StrictConfigModel):
-    """Clerk JWT configuration for a specific environment."""
-
-    jwks_url: str
-    issuer: str
-
-
-CLERK_CONFIG_DEV = ClerkConfig(
-    jwks_url="https://superb-jackal-75.clerk.accounts.dev/.well-known/jwks.json",
-    issuer="https://superb-jackal-75.clerk.accounts.dev",
-)
-
-CLERK_CONFIG_PROD = ClerkConfig(
-    jwks_url="https://clerk.tracer.cloud/.well-known/jwks.json",
-    issuer="https://clerk.tracer.cloud",
-)
-
-# Env vars injected by the org-silo infra (ECS task definition) to point JWT
-# verification at the silo's own Clerk instance instead of the defaults above.
-# Names live in ``config.constants.clerk`` (re-exported below for callers).
-
-
-def get_clerk_config_override() -> ClerkConfig | None:
-    """Return the Clerk instance configured via CLERK_ISSUER / CLERK_JWKS_URL.
-
-    The org-silo infra injects these per deployment; when ``CLERK_ISSUER`` is
-    unset, callers fall back to the hardcoded ``CLERK_CONFIG_DEV`` /
-    ``CLERK_CONFIG_PROD`` defaults. ``CLERK_JWKS_URL`` defaults to the
-    issuer's standard ``/.well-known/jwks.json`` path when omitted. Read at
-    call time (not import time) so env loaded by ``bootstrap_opensre_env``
-    and test monkeypatching are honored.
-    """
-    issuer = os.getenv(CLERK_ISSUER_ENV, "").strip().rstrip("/")
-    if not issuer:
-        return None
-    jwks_url = os.getenv(CLERK_JWKS_URL_ENV, "").strip() or f"{issuer}/.well-known/jwks.json"
-    return ClerkConfig(jwks_url=jwks_url, issuer=issuer)
-
-
-def get_environment() -> Environment:
-    """Get current environment from ENV variable.
-
-    Returns:
-        Environment enum value based on ENV variable.
-        Defaults to DEVELOPMENT if not set or unrecognized.
-    """
-    env_value = os.getenv("ENV", "development").lower()
-    if env_value in ("production", "prod"):
-        return Environment.PRODUCTION
-    return Environment.DEVELOPMENT
-
-
-# JWT Configuration
-JWT_ALGORITHM = "RS256"
-JWKS_CACHE_TTL_SECONDS = 3600
 
 LLMProvider = Literal[
     "anthropic",
@@ -649,16 +480,3 @@ def has_credentials_for_active_llm_provider() -> bool:
     settings = resolve_llm_settings()
     auth_status = credential_status(settings.provider)
     return auth_status.configured and not auth_status.stale
-
-
-# Tracer API Configuration
-TRACER_BASE_URL_DEV = "https://staging.tracer.cloud"
-TRACER_BASE_URL_PROD = "https://app.tracer.cloud"
-SLACK_CHANNEL = "tracer-rca-report-alerts"
-
-
-def get_tracer_base_url() -> str:
-    """Get Tracer base URL for current environment."""
-    return (
-        TRACER_BASE_URL_PROD if get_environment() == Environment.PRODUCTION else TRACER_BASE_URL_DEV
-    )

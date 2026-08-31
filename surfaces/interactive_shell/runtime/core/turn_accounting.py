@@ -14,7 +14,7 @@ from dataclasses import dataclass
 # package; this module owns only the shell's accounting side effects over them.
 from core.agent_harness import ToolCallingTurnResult, TurnResult
 from core.agent_harness.spi.accounting import ToolCallingAccountingStatus
-from infrastructure.analytics.cli import capture_terminal_turn_summarized
+from infrastructure.analytics.capture import capture_terminal_turn_summarized
 from surfaces.interactive_shell.session import Session
 from surfaces.interactive_shell.telemetry import PromptRecorder
 
@@ -60,7 +60,7 @@ class ShellTurnAccounting:
         )
 
     def _record_action_analytics(self, action_result: ToolCallingTurnResult) -> None:
-        from infrastructure.analytics.cli import (
+        from infrastructure.analytics.capture import (
             capture_repl_execution_policy_decision,
             capture_terminal_actions_executed,
             capture_terminal_actions_planned,

@@ -19,22 +19,25 @@ import shlex
 from typing import Any
 
 from rich.console import Console
+from rich.padding import Padding
+from rich.syntax import Syntax
 from rich.text import Text
 
 from core.agent_harness.spi.accounting import SELF_RECORDING_ACTION_TOOL_NAMES
-from core.agent_harness.spi.task_plan import TaskPlan, is_plan_diagnosis_prose
+from core.agent_harness.spi.task_plan import is_plan_diagnosis_prose
 from infrastructure.observability.trace.redaction import redact_sensitive
 from infrastructure.safety.terminal_output import strip_terminal_controls
-from infrastructure.terminal.theme import BOLD_SKILL, BRAND, DIM, HIGHLIGHT
+from infrastructure.terminal.theme import BOLD_SKILL, BRAND, DIM, HIGHLIGHT, MARKDOWN_CODE_THEME
 from surfaces.interactive_shell.runtime import Session
 from surfaces.interactive_shell.runtime.core.state import SpinnerState
 from surfaces.interactive_shell.ui.streaming import render_markdown_block
-from surfaces.interactive_shell.ui.task_plan import (
-    render_plan_updated,
-    render_task_plan,
-)
 from surfaces.shared.terminal.output.console_state import get_investigation_spinner
 from tools.interactive_shell.action_names import ActionToolName
+from tools.interactive_shell.shell.display import format_shell_command_for_display
+
+# Tool labels whose payload is a runnable command: render it as a highlighted
+# shell code block rather than plain inline text.
+_COMMAND_TOOL_LABELS: frozenset[str] = frozenset({"Execute", "GitHub CLI", "opensre"})
 
 # Tools whose preview is just ``(label, single-arg)``. The display content is the
 # stripped string value of that single argument. Anything that needs to combine
@@ -66,6 +69,14 @@ _SIMPLE_TOOL_LABELS: dict[str, tuple[str, str]] = {
     ActionToolName.SHELL_RUN: ("Execute", "command"),
 }
 
+#: Tools that must not appear in the post-execution plan work log (plan/UI plumbing).
+_SKIP_PLAN_WORK_TOOLS: frozenset[str] = frozenset(
+    {
+        ActionToolName.UPDATE_PLAN,
+        ActionToolName.ASK_USER_CHOICE,
+    }
+)
+
 #: Tools that render their own dedicated UI (the investigation lap/spinner
 #: progress). The generic live tool-call preview is suppressed for these so it
 #: does not duplicate that UI as a wall of text.
@@ -73,8 +84,29 @@ _SELF_RENDERING_TOOLS: frozenset[str] = frozenset(
     {
         ActionToolName.ASK_USER_CHOICE,
         ActionToolName.INVESTIGATION_START,
+        # shell_run / cli_exec stream their own ``$ <command>`` + output during
+        # execution, and the running action shows as the live shimmer line — so a
+        # static ``Execute``/``opensre`` header here would print the command a
+        # third time. Suppress it; the shimmer and the ``$`` line are enough.
+        ActionToolName.SHELL_RUN,
+        ActionToolName.CLI_EXEC,
     }
 )
+
+#: Tools that stream their own ``$ <command>`` line during execution. The live
+#: shimmer names the action only (``⟩ Execute``) rather than repeating the
+#: command, so the command is not shown twice while it runs.
+_COMMAND_STREAMING_TOOLS: frozenset[str] = frozenset(
+    {
+        ActionToolName.SHELL_RUN,
+        ActionToolName.CLI_EXEC,
+    }
+)
+
+
+def _tool_event_id(data: dict[str, Any]) -> str:
+    """Stable id for one tool call, or empty when the event omitted it."""
+    return str(data.get("id") or data.get("tool_call_id") or "").strip()
 
 
 def _is_internal_choice_command(name: str, data: dict[str, Any]) -> bool:
@@ -279,7 +311,15 @@ def tool_call_display(tool_name: str, args: dict[str, Any]) -> tuple[str, str]:
             label, content = key_label, str(args.get(arg_key, "")).strip()
         else:
             label, content = _generic_tool_display(tool_name, args)
-    return strip_terminal_controls(label), strip_terminal_controls(content)
+    label = strip_terminal_controls(label)
+    if label in _COMMAND_TOOL_LABELS:
+        # A runnable command renders as a shell block: keep newlines and collapse
+        # heredoc bodies to ``… (N lines)`` so a multi-line command reads as code
+        # instead of a flattened wall.
+        return label, format_shell_command_for_display(
+            strip_terminal_controls(content, keep_whitespace=True)
+        )
+    return label, strip_terminal_controls(content)
 
 
 class ActionRenderObserver:
@@ -297,12 +337,10 @@ class ActionRenderObserver:
         self.message = message
         self.planned_count = 0
         self._pending_skill_calls: dict[str, str] = {}
-        # (explanation, ((step, status), ...)) — explanation changes must refresh.
-        self._last_plan_signature: tuple[str, tuple[tuple[str, str], ...]] | None = None
 
     def __call__(self, kind: str, data: dict[str, Any]) -> None:
         if kind == "llm_start":
-            self._set_spinner_phase(SpinnerState.EXECUTING_PHASE)
+            self._set_spinner_phase(SpinnerState.THINKING_PHASE)
             self._advance_spinner_verb(data)
             return
         if kind == "message_update":
@@ -321,11 +359,12 @@ class ActionRenderObserver:
             name = str(data.get("name", "")).strip()
             if name == ActionToolName.SKILL_VIEW:
                 self._render_skill_end(data)
-            elif name == ActionToolName.UPDATE_PLAN:
-                # Commit lives in the tool; paint only after a successful result
-                # so a rejected call cannot leave session/overlay on a failed plan.
-                self._render_plan_update(data)
-            self._set_spinner_phase(SpinnerState.EXECUTING_PHASE)
+            # update_plan is not painted into the transcript: the plan renders in
+            # the pinned bottom overlay (``task_plan_overlay_ansi``) from session
+            # state the tool committed.
+            self._clear_active_action(data)
+            if not self._has_active_action():
+                self._set_spinner_phase(SpinnerState.EXECUTING_PHASE)
             return
         if kind != "tool_start":
             return
@@ -336,16 +375,28 @@ class ActionRenderObserver:
         if name == ActionToolName.SKILL_VIEW:
             self._render_skill_start(data)
         elif name == ActionToolName.UPDATE_PLAN:
-            pass  # render on tool_end after the tool commits session state
+            pass  # no transcript preview; the plan shows in the pinned bottom overlay
         elif _is_internal_choice_command(name, data):
             pass  # private picker plumbing; the menu owns the visible interaction
         elif name in _SELF_RENDERING_TOOLS:
             pass  # owns its UI; a generic preview would duplicate it
         else:
             self._render_tool_invocation(name, data)
+        if name not in _SKIP_PLAN_WORK_TOOLS and not _is_internal_choice_command(name, data):
+            self._record_plan_work(name, data)
+            self._set_active_action(name, data)
         if self.planned_count == 0 and name not in SELF_RECORDING_ACTION_TOOL_NAMES:
             self.session.record("cli_agent", self.message)
         self.planned_count += 1
+
+    def _record_plan_work(self, name: str, data: dict[str, Any]) -> None:
+        """Attribute this tool call to the current in_progress plan step."""
+        from core.agent_harness.spi.task_plan import record_task_plan_work
+
+        args = data.get("input")
+        label, content = tool_call_display(name, args if isinstance(args, dict) else {})
+        line = f"{label} {content}".strip() if content else label
+        record_task_plan_work(self.session, line)
 
     def _set_spinner_phase(self, label: str) -> None:
         # Only relabel an already-running spinner; never activate one. Literal
@@ -354,6 +405,35 @@ class ActionRenderObserver:
         spinner = get_investigation_spinner()
         if spinner is not None and getattr(spinner, "streaming", False):
             spinner.set_phase(label)
+
+    def _set_active_action(self, name: str, data: dict[str, Any]) -> None:
+        """Show the running tool as a shimmering action line in the live region.
+
+        Stacked by tool-call id: the ReAct loop emits every ``tool_start``
+        before executing the batch, so a single slot would show the last
+        tool and clear on the first ``tool_end``. Scrollback keeps the
+        settled solid copy. Only relabels an already-running spinner
+        (see ``_set_spinner_phase``).
+        """
+        spinner = get_investigation_spinner()
+        if spinner is None or not getattr(spinner, "streaming", False):
+            return
+        args = data.get("input")
+        label, content = tool_call_display(name, args if isinstance(args, dict) else {})
+        if name in _COMMAND_STREAMING_TOOLS:
+            text = label  # the ``$ <command>`` line already shows the command
+        else:
+            text = f"{label} · {content}" if content else label
+        spinner.set_active_action(text, action_id=_tool_event_id(data))
+
+    def _clear_active_action(self, data: dict[str, Any]) -> None:
+        spinner = get_investigation_spinner()
+        if spinner is not None:
+            spinner.clear_active_action(_tool_event_id(data))
+
+    def _has_active_action(self) -> bool:
+        spinner = get_investigation_spinner()
+        return bool(spinner is not None and spinner.active_action)
 
     def _advance_spinner_verb(self, data: dict[str, Any]) -> None:
         """Rotate the prompt spinner's thinking verb every two agent steps.
@@ -388,6 +468,8 @@ class ActionRenderObserver:
             return
         self.console.print()
         # ``render_markdown_block`` sanitizes model text at ``_build_markdown_block``.
+        # No ``∴`` header here: the turn's single marker sits on the final
+        # response, so a mid-turn narration must not add a second one.
         render_markdown_block(self.console, content)
 
     def _render_skill_start(self, data: dict[str, Any]) -> None:
@@ -408,42 +490,29 @@ class ActionRenderObserver:
         """Show the running tool: orange verb, then payload."""
         args = data.get("input")
         label, content = tool_call_display(name, args if isinstance(args, dict) else {})
+        self.console.print()
+        if content and label in _COMMAND_TOOL_LABELS:
+            # A runnable command reads as code: label line, then a syntax-
+            # highlighted shell block indented under it.
+            self.console.print(Text(label, style=str(HIGHLIGHT)))
+            self.console.print(
+                Padding(
+                    Syntax(
+                        content,
+                        "bash",
+                        theme=MARKDOWN_CODE_THEME,
+                        background_color="default",
+                        word_wrap=True,
+                    ),
+                    (0, 0, 0, 2),
+                )
+            )
+            return
         line = Text()
         line.append(label, style=str(HIGHLIGHT))
         if content:
             line.append(f" {content}", style=str(BRAND))
-        self.console.print()
         self.console.print(line)
-
-    def _render_plan_update(self, data: dict[str, Any]) -> None:
-        """Paint the checklist after a successful ``update_plan`` tool result.
-
-        Session state is written by the tool itself — this observer must not
-        commit on ``tool_start``, or a later validation/hook failure would leave
-        the overlay and flush transcript advertising a plan that never landed.
-        """
-        output = data.get("output")
-        if not isinstance(output, dict) or not output.get("ok"):
-            return
-        plan = getattr(self.session, "task_plan", None)
-        if not isinstance(plan, TaskPlan) or not plan.steps:
-            return
-        signature = (
-            plan.explanation,
-            tuple((item.step, str(item.status)) for item in plan.steps),
-        )
-        if signature == self._last_plan_signature:
-            return
-        self._last_plan_signature = signature
-        if plan.all_pending:
-            render_task_plan(self.console, plan)
-            return
-        render_plan_updated(self.console, plan)
-        # Keep the explanation's newlines: it is multi-line markdown (Facts,
-        # hypothesis table) that render_markdown_block lays out line by line.
-        explanation = strip_terminal_controls(plan.explanation, keep_whitespace=True)
-        if explanation:
-            render_markdown_block(self.console, explanation)
 
     def _render_skill_end(self, data: dict[str, Any]) -> None:
         """Print the ``↳`` child line under the skill's ``tool_start`` parent."""

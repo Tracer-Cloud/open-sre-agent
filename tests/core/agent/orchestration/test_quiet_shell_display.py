@@ -1,7 +1,9 @@
-"""Quiet ``shell_run`` keeps the model closing — it withheld live stdout.
+"""A ``shell_run`` turn keeps the model's grounded closing.
 
-Loud single ``shell_run`` still suppresses closings (output is already on
-screen). Quiet probes never enter display_chunks; the composed closing does.
+Quiet ``shell_run`` withheld live stdout, so its closing *is* the display. A
+loud ``shell_run`` also keeps its closing (grounded in the stdout/exit the model
+observed), but its already-painted stdout is not reprinted under it. Raw command
+output never enters display_chunks; the composed closing does.
 """
 
 from __future__ import annotations
@@ -88,8 +90,9 @@ def test_single_quiet_shell_run_keeps_the_model_closing() -> None:
     assert "Amsterdam: +18C" not in shown
 
 
-def test_quiet_string_false_still_suppresses_loud_closing() -> None:
-    # Arrange: models sometimes emit quiet as a string; "false" must not keep closings.
+def test_quiet_string_false_is_coerced_to_loud() -> None:
+    # Arrange: models sometimes emit quiet as a string; "false" must read as loud
+    # (already-on-screen stdout), not as a quiet probe.
     call = ToolCall(
         id="1",
         name="shell_run",
@@ -105,8 +108,10 @@ def test_quiet_string_false_still_suppresses_loud_closing() -> None:
         result, _Session(), _counts(1)
     )
 
-    # Assert: treated as loud — closing suppressed, no stdout reprint.
-    assert "\n".join(display_chunks) == ""
+    # Assert: the grounded closing shows; the loud stdout is not reprinted under it.
+    shown = "\n".join(display_chunks)
+    assert "done" in shown
+    assert "hi" not in shown
 
 
 def test_quiet_probes_stay_hidden_when_a_composed_closing_is_shown() -> None:
@@ -138,7 +143,7 @@ def test_quiet_probes_stay_hidden_when_a_composed_closing_is_shown() -> None:
     assert "Markets open higher" not in shown
 
 
-def test_loud_shell_run_does_not_reprint_stdout_in_display_chunks() -> None:
+def test_loud_shell_run_keeps_closing_without_reprinting_stdout() -> None:
     # Arrange: a non-quiet step, whose stdout the runner already painted.
     call = _shell_call("1", "echo hi", quiet=False)
     result = _Result(
@@ -151,8 +156,10 @@ def test_loud_shell_run_does_not_reprint_stdout_in_display_chunks() -> None:
         result, _Session(), _counts(1)
     )
 
-    # Assert: nothing to show, so the turn cannot print stdout twice.
-    assert "\n".join(display_chunks) == ""
+    # Assert: the grounded closing is shown; stdout is not reprinted under it.
+    shown = "\n".join(display_chunks)
+    assert "done" in shown
+    assert "hi" not in shown
 
 
 def test_silent_tool_turn_prints_a_blank_line() -> None:
@@ -417,3 +424,69 @@ def test_selected_choice_keeps_meaningful_follow_up_response() -> None:
     shown = "\n".join(display_chunks)
     assert "Blue-green avoids routing" in shown
     assert session.terminal.pending_choice_response is None
+
+
+def test_bulky_tool_output_is_capped_and_fenced_for_display() -> None:
+    # A large tool result must not flood the transcript or blend into the report:
+    # it is capped and shown in its own fenced code block for the console.
+    github = ToolCall(id="1", name="github_cli", input={"command": "run list"})
+    bulky = "\n".join(f"run {i} failure 2026-08-01T09:11:00Z" for i in range(30))
+    result = _Result(
+        tool_results=[(github, _ToolResult(_payload(bulky)))],
+        final_text="Here is the run history.",
+    )
+
+    response_text, display_chunks, _use_final = _compose_response(result, _Session(), _counts(1))
+    joined = "\n".join(display_chunks)
+
+    # Display: capped + text-fenced (truncated content is not valid code to highlight).
+    assert "```text" in joined
+    assert "… (output truncated)" in joined
+    assert joined.count("run ") <= 12
+    assert "```text" not in response_text
+    assert response_text.count("run ") == 30
+
+
+def test_truncated_json_uses_text_fence_not_json_highlight() -> None:
+    """Broken mid-JSON must not use a ``json`` fence (Rich paints red error tokens)."""
+    github = ToolCall(id="1", name="posthog_mcp", input={"tool_name": "list"})
+    # Valid JSON over the line/char caps so _cap_for_display truncates it.
+    bulky_obj = {"tools": [{"name": f"tool_{i}", "description": "x" * 40} for i in range(40)]}
+    bulky = json.dumps(bulky_obj, indent=2)
+    result = _Result(
+        tool_results=[(github, _ToolResult(_payload(bulky)))],
+        final_text="Listed tools.",
+    )
+
+    _response_text, display_chunks, _use_final = _compose_response(result, _Session(), _counts(1))
+    joined = "\n".join(display_chunks)
+
+    assert "```json" not in joined
+    assert "```text" in joined
+    assert "… (output truncated)" in joined
+    # Marker sits outside the fence so it is not syntax-highlighted as an error.
+    fence_end = joined.index("```", joined.index("```text") + 1)
+    assert "… (output truncated)" in joined[fence_end:]
+
+
+def test_plan_snapshots_are_stripped_from_the_reply() -> None:
+    # The model sometimes restates the plan (or every historical snapshot) in its
+    # closing text; the overlay already shows it, so display strips the snapshots
+    # while keeping the prose verification.
+    reply = (
+        "All 12 local actions completed successfully.\n\n"
+        "- Repository: /Users/x/opensre\n"
+        "- Branch: perf/checks\n\n"
+        "Plan · 1/7\n  ✓ Inspect path\n  ● Show branch\n  ○ Read commit\n"
+        "Plan · 7/7\n  ✓ Inspect path\n  ✓ Confirm all actions succeeded (verify)"
+    )
+    result = _Result(tool_results=[], final_text=reply)
+
+    _rt, display_chunks, use_final = _compose_response(result, _Session(), _counts(0))
+    shown = "\n".join(display_chunks)
+
+    assert use_final is True
+    assert "All 12 local actions completed successfully." in shown
+    assert "Repository: /Users/x/opensre" in shown
+    assert "Plan ·" not in shown
+    assert "✓ Inspect path" not in shown

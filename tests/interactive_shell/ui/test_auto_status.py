@@ -63,8 +63,9 @@ def test_render_prompt_region_shows_the_auto_status_line() -> None:
     assert "Auto (Med)" in plain
 
 
-def test_prompt_region_height_is_constant_across_confirmation() -> None:
-    """Entering/leaving confirmation must not change the region's row count."""
+def test_confirmation_region_height_is_constant_while_confirming() -> None:
+    """The Yes/No block is a taller modal than the idle prompt, but its own
+    height must not change as the arrow selection moves between the options."""
     from surfaces.interactive_shell.runtime.core.state import (
         ReplState,
         SpinnerState,
@@ -75,11 +76,11 @@ def test_prompt_region_height_is_constant_across_confirmation() -> None:
     session = Session()
     spinner = SpinnerState()
 
-    normal_rows = render_prompt_region(session, ReplState(), spinner).value.count("\n")
+    def _confirm_rows(selected: int) -> int:
+        state = ReplState()
+        state.phase = TurnPhase.AWAITING_CONFIRMATION
+        state.confirm_prompt_text = "Approve this action?"
+        state.confirm_selected = selected
+        return render_prompt_region(session, state, spinner).value.count("\n")
 
-    confirming = ReplState()
-    confirming.phase = TurnPhase.AWAITING_CONFIRMATION
-    confirming.confirm_prompt_text = "Proceed? [Y/n]"
-    confirm_rows = render_prompt_region(session, confirming, spinner).value.count("\n")
-
-    assert normal_rows == confirm_rows
+    assert _confirm_rows(0) == _confirm_rows(1)

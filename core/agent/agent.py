@@ -149,11 +149,13 @@ class Agent[RuntimeToolT: RuntimeTool](EventEmitterMixin, ToolFilterMixin, Steer
 
         Return ``(True, None)`` to accept the conclusion and end the loop.
         Return ``(False, nudge_text)`` to inject a user message and continue.
-        When a :class:`~core.agent.goals.Goal` is set, defer to
-        :func:`core.agent.goals.should_accept_with_goal` (budget ceiling
-        still forces accept on the last iteration).
+
+        A bare :class:`~core.agent.goals.Goal` without ``verify`` is descriptive
+        only — it does not gate stop (capability answers / skill demos must end
+        on the first no-tool reply). Reviewed goals from
+        ``build_goal_reviewer`` carry ``verify`` and do gate.
         """
-        if self._goal is None:
+        if self._goal is None or self._goal.verify is None:
             return True, None
         from core.agent.goals import should_accept_with_goal
 

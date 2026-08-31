@@ -42,7 +42,7 @@ def run_text_investigation(
     action_already_listed: bool = False,
 ) -> None:
     def _run(task: TaskRecord) -> dict[str, object]:
-        from infrastructure.analytics.cli import track_investigation
+        from infrastructure.analytics.investigation_tracker import track_investigation
         from infrastructure.analytics.source import EntrypointSource, TriggerMode
 
         with (

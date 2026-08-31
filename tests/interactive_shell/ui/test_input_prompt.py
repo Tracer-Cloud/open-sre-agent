@@ -22,8 +22,8 @@ from surfaces.interactive_shell.ui.input_prompt.rendering import (
     DEFAULT_PLACEHOLDER_TEXT,
     _prompt_counter_text,
     _prompt_message,
-    _prompt_rule_ansi,
     _prompt_turn_number,
+    composer_footer_ansi,
     render_submitted_prompt,
     resolve_idle_hint_ansi,
     resolve_prompt_placeholder,
@@ -117,6 +117,18 @@ class TestPromptTurnCounter:
         render_submitted_prompt(console, session, "and again")
         assert _prompt_turn_number(session) == 3
 
+    def test_user_prompt_row_has_a_left_accent_bar(self) -> None:
+        """A user prompt is marked by a left colour accent bar before ``[N] ❯``."""
+        from surfaces.interactive_shell.ui.input_prompt.rendering import _PROMPT_ACCENT_BAR
+
+        session = Session()
+        console = _render_console()
+        render_submitted_prompt(console, session, "why does it show that?")
+        out = console.file.getvalue()  # type: ignore[union-attr]
+        assert _PROMPT_ACCENT_BAR in out
+        assert out.index(_PROMPT_ACCENT_BAR) < out.index("[1]")  # bar leads the row
+        assert "why does it show that?" in out
+
     def test_autosubmitted_goal_condition_gets_work_turn_marker(self) -> None:
         """``/goal set`` autosubmit must not look like part of the slash turn."""
         session = Session()
@@ -154,65 +166,60 @@ class TestPromptTurnCounter:
 
 
 class TestResolveIdleHint:
-    def test_shows_connected_integrations_in_hint_bar(self) -> None:
+    def test_idle_hint_is_a_spacer_because_help_lives_below_the_composer(self) -> None:
         session = Session()
         session.configured_integrations_known = True
         session.configured_integrations = ("datadog", "github", "grafana")
         rendered = _strip_ansi(resolve_idle_hint_ansi(session))
-        assert rendered.startswith("Ready")
-        assert "/ for commands" in rendered
-        assert "tab tool details" in rendered
-        assert "Datadog" in rendered
-        assert "GitHub" in rendered
-
-    def test_omits_integrations_when_none_configured(self) -> None:
-        session = Session()
-        session.configured_integrations_known = True
-        session.configured_integrations = ()
-        rendered = _strip_ansi(resolve_idle_hint_ansi(session))
-        assert "Datadog" not in rendered
-        assert "/ for commands" in rendered
-        assert "tab tool details" in rendered
-
-    def test_clips_hint_below_terminal_width(self, monkeypatch: pytest.MonkeyPatch) -> None:
-        """Leave the last column empty so shrink-resize cannot soft-wrap the hint."""
-        session = Session()
-        session.configured_integrations_known = True
-        session.configured_integrations = (
-            "datadog",
-            "github",
-            "grafana",
-            "posthog_mcp",
-            "sentry",
-            "slack",
-            "vercel",
-            "aws",
-        )
-        monkeypatch.setattr(prompt_rendering, "prompt_line_width", lambda: 40)
-        rendered = _strip_ansi(resolve_idle_hint_ansi(session))
-        assert len(rendered) <= 40
-        assert rendered.endswith("…")
+        assert rendered == ""
 
 
-class TestPromptRuleWidth:
-    def test_rule_leaves_last_column_empty(self, monkeypatch: pytest.MonkeyPatch) -> None:
-        """A full-width rule soft-wraps on shrink and orphans stale prompt frames."""
+class TestComposerFooter:
+    def test_places_help_and_terminal_mode_at_opposite_edges(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
         monkeypatch.setattr(prompt_rendering, "prompt_line_width", lambda: 79)
-        rule = _strip_ansi(_prompt_rule_ansi())
-        assert len(rule) == 79
-        assert set(rule) == {"─"}
+        footer = _strip_ansi(composer_footer_ansi())
+        assert footer.startswith("? for help")
+        assert footer.endswith("TERMINAL ■")
+        assert len(footer) == 79
 
-    def test_prompt_message_rule_uses_safe_width(self, monkeypatch: pytest.MonkeyPatch) -> None:
-        monkeypatch.setattr(prompt_rendering, "prompt_line_width", lambda: 79)
-        rendered = _strip_ansi(_prompt_message(Session()).value)
-        rule_line, _prompt_line = rendered.split("\n", 1)
-        assert len(rule_line) == 79
+    def test_narrow_footer_keeps_only_a_clipped_help_hint(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        monkeypatch.setattr(prompt_rendering, "prompt_line_width", lambda: 6)
+        footer = _strip_ansi(composer_footer_ansi())
+        assert footer == "? for…"
+
+
+class TestPromptMessage:
+    def test_uses_minimal_greater_than_prompt(self) -> None:
+        assert _strip_ansi(_prompt_message(Session()).value) == " > "
 
 
 class TestResolvePromptPlaceholder:
     def test_default_when_no_session_context(self) -> None:
         session = Session()
         assert DEFAULT_PLACEHOLDER_TEXT in _placeholder_text(session)
+
+    def test_placeholder_prompts_to_continue_an_unfinished_plan(self) -> None:
+        from core.agent_harness.task_plan.plan import parse_task_plan
+
+        session = Session()
+        plan, error = parse_task_plan(
+            {
+                "plan": [
+                    {"step": "Discover source", "status": "completed"},
+                    {"step": "Query latency", "status": "in_progress"},
+                    {"step": "Verify", "status": "pending"},
+                ]
+            }
+        )
+        assert error is None and plan is not None
+        session.task_plan = plan
+        text = _strip_ansi(_placeholder_text(session))
+        assert "continue the plan" in text
+        assert DEFAULT_PLACEHOLDER_TEXT not in text
 
     def test_shows_trust_mode(self) -> None:
         session = Session()
@@ -445,6 +452,6 @@ class TestResolvePromptPrefix:
         spinner = loop_state.SpinnerState()
         prefix = resolve_prompt_prefix_ansi(
             inline_spinner=spinner.inline_spinner_ansi(),
-            idle_hint=spinner.idle_hint_ansi(),
+            idle_hint=resolve_idle_hint_ansi(Session()),
         )
-        assert "/ for commands" in _strip_ansi(prefix)
+        assert _strip_ansi(prefix) == ""

@@ -359,6 +359,21 @@ def _github_actions_run_params(sources: dict[str, dict]) -> dict[str, Any]:
     return params
 
 
+def _map_list_github_actions_workflow_runs(
+    evidence: dict[str, Any], output: dict[str, Any], _input: dict[str, Any]
+) -> None:
+    runs = output.get("workflow_runs", [])
+    if runs:
+        count = len(runs)
+        word = "run" if count == 1 else "runs"
+        record_evidence_entry(
+            evidence,
+            source="list_github_actions_workflow_runs",
+            label="GitHub Workflow Runs",
+            summary=f"{count} {word}",
+        )
+
+
 @tool(
     name="list_github_actions_workflow_runs",
     source="github",
@@ -401,6 +416,7 @@ def _github_actions_run_params(sources: dict[str, dict]) -> dict[str, Any]:
     is_available=_github_actions_is_available,
     extract_params=_github_actions_repo_params,
     injected_params=GITHUB_INJECTED_PARAMS,
+    evidence_mapper=_map_list_github_actions_workflow_runs,
 )
 def list_github_actions_workflow_runs(
     owner: str,
@@ -478,6 +494,21 @@ def list_github_actions_workflow_runs(
     return payload
 
 
+def _map_list_github_actions_active_runs(
+    evidence: dict[str, Any], output: dict[str, Any], _input: dict[str, Any]
+) -> None:
+    runs = output.get("workflow_runs", [])
+    if runs:
+        count = len(runs)
+        word = "run" if count == 1 else "runs"
+        record_evidence_entry(
+            evidence,
+            source="list_github_actions_active_runs",
+            label="GitHub Active Runs",
+            summary=f"{count} {word}",
+        )
+
+
 @tool(
     name="list_github_actions_active_runs",
     source="github",
@@ -503,6 +534,7 @@ def list_github_actions_workflow_runs(
     is_available=_github_actions_is_available,
     extract_params=_github_actions_repo_params,
     injected_params=GITHUB_INJECTED_PARAMS,
+    evidence_mapper=_map_list_github_actions_active_runs,
 )
 def list_github_actions_active_runs(
     owner: str,
@@ -591,6 +623,21 @@ def list_github_actions_active_runs(
     }
 
 
+def _map_list_github_actions_run_jobs(
+    evidence: dict[str, Any], output: dict[str, Any], _input: dict[str, Any]
+) -> None:
+    jobs = output.get("jobs", [])
+    if jobs:
+        count = len(jobs)
+        word = "job" if count == 1 else "jobs"
+        record_evidence_entry(
+            evidence,
+            source="list_github_actions_run_jobs",
+            label="GitHub Run Jobs",
+            summary=f"{count} {word}",
+        )
+
+
 @tool(
     name="list_github_actions_run_jobs",
     source="github",
@@ -616,6 +663,7 @@ def list_github_actions_active_runs(
     is_available=_github_actions_is_available,
     extract_params=_github_actions_run_params,
     injected_params=GITHUB_INJECTED_PARAMS,
+    evidence_mapper=_map_list_github_actions_run_jobs,
 )
 def list_github_actions_run_jobs(
     owner: str,
@@ -714,11 +762,13 @@ def _map_get_github_actions_step_log(
     evidence: dict[str, Any], output: dict[str, Any], _input: dict[str, Any]
 ) -> None:
     if output.get("log_text"):
+        lines_count = output.get("returned_lines", 0)
+        word = "line" if lines_count == 1 else "lines"
         record_evidence_entry(
             evidence,
             source="get_github_actions_step_log",
             label="GitHub Actions Step Log",
-            summary=f"{output.get('returned_lines', 0)} lines",
+            summary=f"{lines_count} {word}",
         )
 
 

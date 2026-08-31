@@ -8,7 +8,7 @@ OpenSRE works with many model providers. You choose which one with
 `~/.opensre/credentials.json` (or the process environment).
 
 Default model IDs are defined in
-[`config/config.py`](https://github.com/Tracer-Cloud/opensre/blob/main/config/config.py).
+[`config/llm_models.py`](https://github.com/Tracer-Cloud/opensre/blob/main/config/llm_models.py).
 Routing is in
 [`core/llm/factory.py`](https://github.com/Tracer-Cloud/opensre/blob/main/core/llm/factory.py).
 
@@ -479,7 +479,7 @@ those resources).
   (`…:application-inference-profile/…`) do not encode the vendor in the ID.
   Those always use **Converse**, which works for any model behind the profile.
 
-Defaults in `config/config.py` are US cross-region inference profile IDs for
+Defaults in `config/llm_models.py` are US cross-region inference profile IDs for
 Anthropic Claude. Override with IDs or ARNs that are enabled for inference in
 your account and region.
 
@@ -852,9 +852,11 @@ updating env vars. A new process picks up the new `LLM_PROVIDER` automatically.
 
 ## Where this lives in the code
 
-- Provider names and defaults:
-  [`config/config.py`](https://github.com/Tracer-Cloud/opensre/blob/main/config/config.py)
+- Provider names and settings:
+  [`config/llm_settings.py`](https://github.com/Tracer-Cloud/opensre/blob/main/config/llm_settings.py)
   (`LLMProvider`, `LLMSettings`)
+- Model defaults:
+  [`config/llm_models.py`](https://github.com/Tracer-Cloud/opensre/blob/main/config/llm_models.py)
 - Runtime routing:
   [`core/llm/factory.py`](https://github.com/Tracer-Cloud/opensre/blob/main/core/llm/factory.py)
   (`resolve_llm_route`, `get_llm`) and client construction in

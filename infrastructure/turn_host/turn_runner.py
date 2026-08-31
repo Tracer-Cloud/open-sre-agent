@@ -36,7 +36,7 @@ from core.agent_harness.spi.session_goal import (
     format_session_goal_progress,
     format_session_goal_status_line,
 )
-from infrastructure.analytics.cli import (
+from infrastructure.analytics.capture import (
     capture_gateway_turn_completed,
     capture_gateway_turn_failed,
     capture_gateway_turn_started,

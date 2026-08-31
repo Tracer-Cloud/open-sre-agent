@@ -42,11 +42,6 @@ from core.agent_harness.spi.session_goal import strip_session_goal_progress_tags
 from surfaces.interactive_shell.ui.streaming.renderer import (
     _build_markdown_block,
     render_markdown_block,
-    render_response_header,
-)
-from surfaces.shared.terminal.components.token_format import (
-    _CHARS_PER_TOKEN,
-    format_token_count_short,
 )
 
 # Throttle for the optional ``update_streaming_progress`` hook on the
@@ -58,6 +53,9 @@ _PROGRESS_INTERVAL_SECONDS = 0.1
 # external caller (e.g. agent_actions.py for the planned-actions
 # bullet header) stay in lock-step.
 _PARAGRAPH_BREAK = "\n\n"
+# Inline agent marker: a single ``∴`` leads the response's first line (no
+# separate ``∴ OpenSRE`` header row) so the turn carries one compact marker.
+_RESPONSE_MARKER = "∴ "
 _CODE_FENCE = "```"
 # Match a triple-backtick only when it opens a line. An inline mention
 # inside flowing text (e.g. "The ``` marker opens a code block") would
@@ -80,10 +78,6 @@ _SELF_SPACING_BLOCK_TOKEN_TYPES = frozenset(
         "table_open",
     }
 )
-
-
-def _format_tokens(token_count: int) -> str:
-    return f"{format_token_count_short(token_count)} tokens"
 
 
 def _paragraph_has_want_me_to(text: str) -> bool:
@@ -142,6 +136,7 @@ def stream_to_console_state(
     defer_want_me_to_closer: bool = False,
 ) -> StreamRenderResult:
     """Like :func:`stream_to_console` but returns render/defer metadata."""
+    del label  # the inline ∴ marker replaced the ``∴ OpenSRE`` header
     if not console.is_terminal:
         text = "".join(chunks)
         if suppress_if_starts_with is not None and text.lstrip().startswith(
@@ -155,8 +150,7 @@ def stream_to_console_state(
             # gather path can print the canonical rewrite once.
             return StreamRenderResult(text=text, deferred_closer=True)
         console.print()
-        render_response_header(console, label)
-        render_markdown_block(console, text)
+        render_markdown_block(console, f"{_RESPONSE_MARKER}{text.lstrip()}")
         console.print()
         return StreamRenderResult(text=text)
 
@@ -189,7 +183,6 @@ def stream_to_console_state(
             break
 
     console.print()
-    render_response_header(console, label)
 
     # Paragraph-level streaming: chunks accumulate in ``para_buffer``
     # until a paragraph boundary (``\n\n`` outside a code block) closes
@@ -234,6 +227,9 @@ def stream_to_console_state(
         visible = strip_session_goal_progress_tags(text)
         if not visible.strip():
             return
+        if rendered_paragraphs == 0:
+            # The first paragraph carries the inline ``∴`` marker.
+            visible = f"{_RESPONSE_MARKER}{visible.lstrip()}"
         markdown = _build_markdown_block(visible)
         starts_with_self_spacing_block = bool(
             markdown.parsed and markdown.parsed[0].type in _SELF_SPACING_BLOCK_TOKEN_TYPES
@@ -419,19 +415,16 @@ def stream_to_console_state(
             footer_elapsed_s=elapsed,
             footer_total_bytes=total_bytes,
         )
-    if buffer:
-        tokens = _format_tokens(total_bytes // _CHARS_PER_TOKEN)
-        console.print(f"[{ui_theme.DIM}]· {elapsed:.1f}s · ↓ {tokens}[/]")
     console.print()
     return StreamRenderResult(text=text, deferred_closer=False)
 
 
 def publish_full_response(console: Console, text: str, *, label: str = "assistant") -> None:
     """Render a complete assistant answer (non-TTY deferred gather path)."""
+    del label  # the inline ∴ marker replaced the ``∴ OpenSRE`` header
     body = (text or "").strip()
     if not body:
         return
     console.print()
-    render_response_header(console, label)
-    render_markdown_block(console, body)
+    render_markdown_block(console, f"{_RESPONSE_MARKER}{body}")
     console.print()

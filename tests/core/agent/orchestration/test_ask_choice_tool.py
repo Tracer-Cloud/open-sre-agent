@@ -212,3 +212,49 @@ def test_malformed_question_is_rejected() -> None:
         _ctx(),
     )
     assert result["ok"] is False
+
+
+def test_multi_select_string_false_is_not_truthy() -> None:
+    session = Session()
+    result = execute_ask_user_choice_tool(
+        {"title": _TITLE, "options": _OPTIONS, "multi_select": "false"},
+        _ctx(session=session),
+    )
+    assert result["ok"] is True
+    assert session.pending_user_choice is not None
+    assert session.pending_user_choice.multi_select is False
+
+
+def test_multi_select_true_on_single_decision() -> None:
+    session = Session()
+    result = execute_ask_user_choice_tool(
+        {"title": _TITLE, "options": _OPTIONS, "multi_select": True},
+        _ctx(session=session),
+    )
+    assert result["ok"] is True
+    assert session.pending_user_choice is not None
+    assert session.pending_user_choice.multi_select is True
+
+
+def test_per_question_multi_select_string_false() -> None:
+    session = Session()
+    questions = [
+        {
+            "label": "Extras",
+            "title": "Which extras?",
+            "options": ["Unit tests", "Dockerfile"],
+            "multi_select": "false",
+        },
+        {
+            "label": "Lang",
+            "title": "Language?",
+            "options": ["Python", "Go"],
+        },
+    ]
+    result = execute_ask_user_choice_tool(
+        {"title": "Ask User", "questions": questions},
+        _ctx(session=session),
+    )
+    assert result["ok"] is True
+    assert session.pending_user_choice is not None
+    assert session.pending_user_choice.questions[0].multi_select is False

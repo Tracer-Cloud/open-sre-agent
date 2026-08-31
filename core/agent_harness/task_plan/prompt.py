@@ -104,6 +104,12 @@ def current_task_plan_block(
             "Keep working that step, or ask_user_choice if facts are missing. "
             "Do not start another investigation."
         )
+    elif not plan.all_completed and not plan_only:
+        lines.append(
+            "Work remains on this plan and no step is in_progress. "
+            "Call update_plan to set the next pending step in_progress and "
+            "execute it now — do not end the turn idle."
+        )
     lines.append("")
     return "\n".join(lines)
 

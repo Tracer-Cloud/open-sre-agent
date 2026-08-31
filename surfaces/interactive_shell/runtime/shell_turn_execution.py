@@ -26,6 +26,7 @@ from surfaces.interactive_shell.runtime.core.turn_accounting import ShellTurnAcc
 from surfaces.interactive_shell.runtime.shell_agent import shell_agent_build_config
 from surfaces.interactive_shell.session import Session
 from surfaces.interactive_shell.telemetry import PromptRecorder
+from surfaces.shared.terminal.components.rendering import print_repl_text
 
 
 def execute_shell_turn(
@@ -63,7 +64,8 @@ def execute_shell_turn(
         rendered = format_session_goal_progress(goal, session=session)
         if rendered:
             # Checklist uses ``[x]`` / ``[ ]`` — Rich markup must stay off.
-            console.print(rendered, markup=False)
+            # CRLF under patch_stdout(raw=True) so rows do not staircase.
+            print_repl_text(console, rendered, markup=False)
 
     def _accounting(message: str) -> ShellTurnAccounting:
         return ShellTurnAccounting(session=session, text=message, recorder=recorder)

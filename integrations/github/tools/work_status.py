@@ -381,6 +381,21 @@ def _normalize_security_alert(alert_type: str, item: dict[str, Any]) -> Security
     )
 
 
+def _map_list_github_security_alerts(
+    evidence: dict[str, Any], output: dict[str, Any], _input: dict[str, Any]
+) -> None:
+    alerts = output.get("alerts", [])
+    if alerts:
+        count = len(alerts)
+        word = "alert" if count == 1 else "alerts"
+        record_evidence_entry(
+            evidence,
+            source="list_github_security_alerts",
+            label="GitHub Security Alerts",
+            summary=f"{count} {word}",
+        )
+
+
 _ALERT_ENDPOINTS = {
     "dependabot": "dependabot/alerts",
     "secret_scanning": "secret-scanning/alerts",
@@ -419,6 +434,7 @@ _ISSUE_MUTATION_OPERATIONS = {"create", "update", "close"}
     is_available=_github_available,
     extract_params=_github_extract_params,
     injected_params=GITHUB_INJECTED_PARAMS,
+    evidence_mapper=_map_list_github_security_alerts,
 )
 def list_github_security_alerts(
     owner: str,

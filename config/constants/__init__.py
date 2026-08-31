@@ -73,6 +73,7 @@ from config.constants.datadog import (
     DATADOG_APP_KEY_ENV,
     DATADOG_SITE_ENV,
 )
+from config.constants.environment import DEPLOYMENT_ENV_ENV
 from config.constants.filestorage import (
     BLOB_READ_WRITE_TOKEN_ENV,
     DEFAULT_MAX_PARALLEL_UPLOADS,
@@ -372,6 +373,7 @@ from config.constants.slack import (
     SLACK_ACCESS_TOKEN_ENV,
     SLACK_APP_TOKEN_ENV,
     SLACK_BOT_TOKEN_ENV,
+    SLACK_CHANNEL,
     SLACK_DEFAULT_CHAT_ID_ENV,
     SLACK_FILE_HOST_SUFFIXES,
     SLACK_HEARTBEAT_STOP_TIMEOUT_SECONDS,
@@ -413,7 +415,12 @@ from config.constants.tenancy import (
     INTEGRATIONS_SECRET_ARN_ENV,
     INTEGRATIONS_STORE_PATH_ENV,
 )
-from config.constants.tracer import TRACER_BASE_URL_ENV, TRACER_JWT_TOKEN_ENV
+from config.constants.tracer import (
+    TRACER_BASE_URL_DEV,
+    TRACER_BASE_URL_ENV,
+    TRACER_BASE_URL_PROD,
+    TRACER_JWT_TOKEN_ENV,
+)
 from config.constants.turn_concurrency import (
     OPENSRE_MAX_CONCURRENT_TURNS_ENV,
     OPENSRE_SIZE_PROFILE_ENV,
@@ -549,6 +556,7 @@ __all__ = [
     "DATADOG_API_KEY_ENV",
     "DATADOG_APP_KEY_ENV",
     "DATADOG_SITE_ENV",
+    "DEPLOYMENT_ENV_ENV",
     "DEFAULT_POSTHOG_TIMEOUT_SECONDS",
     "DEFAULT_POSTHOG_URL",
     "DEFAULT_SENTRY_BASE_URL",
@@ -735,6 +743,7 @@ __all__ = [
     "SLACK_ACCESS_TOKEN_ENV",
     "SLACK_APP_TOKEN_ENV",
     "SLACK_BOT_TOKEN_ENV",
+    "SLACK_CHANNEL",
     "SLACK_DEFAULT_CHAT_ID_ENV",
     "SLACK_USER_TOKEN_PREFIXES",
     "SLACK_WEBHOOK_URL_ENV",
@@ -760,7 +769,9 @@ __all__ = [
     "TEMPO_USERNAME_ENV",
     "THEME_NAMES",
     "Theme",
+    "TRACER_BASE_URL_DEV",
     "TRACER_BASE_URL_ENV",
+    "TRACER_BASE_URL_PROD",
     "TRACER_JWT_TOKEN_ENV",
     "TWILIO_ACCOUNT_SID_ENV",
     "TWILIO_AUTH_TOKEN_ENV",

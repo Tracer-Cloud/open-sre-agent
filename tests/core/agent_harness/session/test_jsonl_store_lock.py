@@ -18,6 +18,7 @@ from core.agent_harness.session.persistence import jsonl_store
 from core.agent_harness.session.persistence.jsonl_store import JsonlSessionStore
 from core.agent_harness.session.persistence.paths import session_path
 from infrastructure.observability.operations_log import read_operations
+from tests.shared.session_file import assert_session_file_integrity
 
 
 @pytest.fixture
@@ -85,8 +86,6 @@ def test_flush_completes_with_the_lock_enabled(
 ) -> None:
     # The lock is reentrant: flush holds it across its inner appends (leaf, goal,
     # messages) without deadlocking on its own OS lock.
-    import json
-
     monkeypatch.setenv(OPENSRE_SESSION_FILE_LOCK_ENV, "1")
     monkeypatch.setattr(jsonl_store, "_SESSION_LOCK_TIMEOUT_SECONDS", 1.0)
     session = _session("sess-flush-locked")
@@ -96,8 +95,8 @@ def test_flush_completes_with_the_lock_enabled(
 
     store.flush(session)
 
-    lines = session_path(session.session_id).read_text(encoding="utf-8").splitlines()
-    assert any(json.loads(line).get("type") == "leaf" for line in lines)
+    # Integrity of the whole file, plus the leaf the flush must have written.
+    assert_session_file_integrity(session_path(session.session_id), expected_markers={"leaf"})
 
 
 def test_lock_disabled_records_no_lock_metrics(

@@ -44,6 +44,19 @@ class LoopHost[RuntimeToolT: RuntimeTool](Protocol):
     def _pop_follow_up_message(self) -> str | None:
         """The next queued follow-up prompt, or None when there is none."""
 
+    def _should_accept_conclusion(
+        self,
+        *,
+        evidence_count: int,
+        iteration: int,
+        final_text: str = "",
+    ) -> tuple[bool, str | None]:
+        """Whether a no-tool reply may end the turn.
+
+        Return ``(True, None)`` to accept, or ``(False, nudge)`` to inject a
+        user message and continue. Hosts without a reviewed goal always accept.
+        """
+
     def _transform_messages(self, messages: list[RuntimeMessage]) -> list[RuntimeMessage]:
         """Adjust runtime messages before they are converted for the provider."""
 

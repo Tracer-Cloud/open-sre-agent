@@ -14,11 +14,11 @@ def register_harness_adapters() -> None:
         merge_local_integrations,
     )
     from integrations.cli import setup_services
-    from integrations.store import STORE_PATH, load_integrations
+    from integrations.store import load_integrations, resolve_store_path
 
     IntegrationResolutionAdapters(
         load_integrations=load_integrations,
-        integration_store_path=lambda: str(STORE_PATH),
+        integration_store_path=lambda: str(resolve_store_path()),
         load_env_integrations=load_env_integrations,
         classify_integrations=classify_integrations,
         merge_local_integrations=merge_local_integrations,

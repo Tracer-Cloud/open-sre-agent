@@ -39,6 +39,7 @@ from gateway.core.storage.session.file_bindings import FileBindingStore
 from infrastructure.turn_host.concurrency import AT_CAPACITY_MESSAGE, TurnConcurrencyGate
 from tests.shared.default_headless_build_stub import default_headless_build_stub
 from tests.shared.fake_agent import fake_agent
+from tests.shared.session_file import assert_session_file_integrity
 
 ACME = Principal.org("org_acme")
 ALICE = "U_ALICE"
@@ -83,17 +84,6 @@ def _join(threads: list[threading.Thread], timeout: float = 30.0) -> None:
 
 def _read_bindings(path: Path) -> dict:
     return json.loads(path.read_text(encoding="utf-8"))
-
-
-def _parseable_jsonl(path: Path) -> list[dict]:
-    rows: list[dict] = []
-    for line in path.read_text(encoding="utf-8").splitlines():
-        if not line.strip():
-            continue
-        rec = json.loads(line)
-        assert isinstance(rec, dict), f"non-object JSONL line in {path}: {line!r}"
-        rows.append(rec)
-    return rows
 
 
 # ── Shared bindings.json ────────────────────────────────────────────────────
@@ -297,7 +287,7 @@ def test_concurrent_alice_bob_session_appends_do_not_mix() -> None:
                 path = session_path(session_id)
                 paths_seen[actor] = str(path)
                 assert actor in str(path)
-                rows = _parseable_jsonl(path)
+                rows = assert_session_file_integrity(path)
                 texts = [r.get("content") for r in rows if r.get("type") == "message"]
                 assert all(isinstance(t, str) and t.startswith(marker) for t in texts)
                 assert len(texts) == 20
@@ -368,7 +358,7 @@ def test_same_session_concurrent_appends_remain_line_parseable() -> None:
     _join(threads)
 
     assert not errors, errors
-    rows = _parseable_jsonl(path)
+    rows = assert_session_file_integrity(path)
     messages = [r for r in rows if r.get("type") == "message"]
     assert len(messages) == 80
     contents = {r.get("content") for r in messages}

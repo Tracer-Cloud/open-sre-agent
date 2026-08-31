@@ -20,6 +20,7 @@ from tools.interactive_shell.shell.parsing import (
     ParsedShellCommand,
     parse_shell_command,
 )
+from tools.interactive_shell.shell.read_only import is_read_only_shell_command
 
 
 def evaluate_shell_from_parsed(parsed: ParsedShellCommand) -> ExecutionPolicyResult:
@@ -39,11 +40,12 @@ def evaluate_shell_from_parsed(parsed: ParsedShellCommand) -> ExecutionPolicyRes
             shell_classification="unrestricted",
         )
 
+    classification = "read_only" if is_read_only_shell_command(parsed.command) else "unrestricted"
     return ExecutionPolicyResult(
         verdict="allow",
         tool_type="shell",
         reason=None,
-        shell_classification="unrestricted",
+        shell_classification=classification,
     )
 
 

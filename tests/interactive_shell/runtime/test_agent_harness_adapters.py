@@ -121,6 +121,6 @@ def test_response_header_opens_with_a_blank_line() -> None:
     # Act
     ShellOutputSink(console).render_response_header("assistant")  # type: ignore[arg-type]
 
-    # Assert: blank line first, then the ● marker.
+    # Assert: blank line first, then the ∴ marker.
     assert console.lines[0] == ""
-    assert "●" in console.lines[1]
+    assert "∴" in console.lines[1]

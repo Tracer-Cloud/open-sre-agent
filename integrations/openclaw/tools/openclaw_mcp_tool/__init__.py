@@ -6,6 +6,7 @@ Package layout (separation of concerns):
 - ``results.py``  — pure shaping of MCP results/failures into agent payloads.
 - ``params.py``   — availability + ``extract_params`` reads over the agent-state
   ``openclaw`` source.
+- ``evidence.py`` — report catalog mappers for the read tools.
 - ``__init__.py`` — this file: config resolution, MCP dispatch, and the
   ``@tool`` entrypoints. They stay here because the tool registry discovers a
   package's tools on its own module (``TOOL_MODULES`` would be needed to look
@@ -30,6 +31,12 @@ from integrations.openclaw import (
 )
 from integrations.openclaw import (
     list_openclaw_tools as list_openclaw_mcp_tools,
+)
+from integrations.openclaw.tools.openclaw_mcp_tool.evidence import (
+    map_call_openclaw_tool,
+    map_get_openclaw_conversation,
+    map_list_openclaw_tools,
+    map_search_openclaw_conversations,
 )
 from integrations.openclaw.tools.openclaw_mcp_tool.models import (
     OpenClawBridgeResponse,
@@ -156,6 +163,7 @@ def _normalize_named_bridge_call(
     },
     is_available=is_available,
     extract_params=extract_params,
+    evidence_mapper=map_list_openclaw_tools,
 )
 def list_openclaw_bridge_tools(
     name_filter: str | None = None,
@@ -244,6 +252,7 @@ def list_openclaw_bridge_tools(
     },
     is_available=is_available,
     extract_params=conversation_search_params,
+    evidence_mapper=map_search_openclaw_conversations,
 )
 def search_openclaw_conversations(
     search: str = "",
@@ -327,6 +336,7 @@ def search_openclaw_conversations(
     },
     is_available=is_available,
     extract_params=conversation_detail_params,
+    evidence_mapper=map_get_openclaw_conversation,
 )
 def get_openclaw_conversation(
     conversation_id: str | None = None,
@@ -455,6 +465,7 @@ def send_openclaw_message(
     },
     is_available=is_available,
     extract_params=extract_params,
+    evidence_mapper=map_call_openclaw_tool,
 )
 def call_openclaw_bridge_tool(
     tool_name: str | None = None,

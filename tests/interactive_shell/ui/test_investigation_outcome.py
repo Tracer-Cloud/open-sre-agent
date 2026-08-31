@@ -61,7 +61,7 @@ def test_run_foreground_investigation_early_cancel_omits_stale_investigation_id(
         lambda *_args, **_kwargs: task,
     )
 
-    def _raise_interrupt(_task: TaskRecord) -> dict[str, object]:
+    def _raise_interrupt(_task: TaskRecord, *_args: object) -> dict[str, object]:
         raise KeyboardInterrupt
 
     outcome = run_foreground_investigation(
@@ -92,7 +92,7 @@ def test_run_foreground_investigation_credit_exhausted_shows_auth_login_hint(
         lambda *_args, **_kwargs: task,
     )
 
-    def _raise_credit_exhausted(_task: TaskRecord) -> dict[str, object]:
+    def _raise_credit_exhausted(_task: TaskRecord, *_args: object) -> dict[str, object]:
         raise LLMCreditExhaustedError(
             "Anthropic credit exhausted (provider billing/quota). Original error: 400"
         )
@@ -127,7 +127,9 @@ def test_run_foreground_investigation_opensre_error_does_not_duplicate_auth_hint
         lambda *_args, **_kwargs: task,
     )
 
-    def _raise_credit_exhausted_opensre_error(_task: TaskRecord) -> dict[str, object]:
+    def _raise_credit_exhausted_opensre_error(
+        _task: TaskRecord, *_args: object
+    ) -> dict[str, object]:
         raise OpenSREError(
             "Anthropic credit exhausted (provider billing/quota). Original error: 400",
             suggestion=(
@@ -174,13 +176,84 @@ def test_run_foreground_investigation_skips_feedback_when_pt_app_running(
         session=session,
         console=console,
         task_command="/investigate grafana",
-        run=lambda _task: {"root_cause": "sample"},
+        run=lambda _task, *_args: {"root_cause": "sample"},
         exception_context="test",
         target="grafana",
     )
 
     assert outcome.status == "completed"
     feedback.assert_not_called()
+
+
+def test_run_foreground_investigation_completes_pinned_task_plan(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Successful investigation must finish the Plan · n/m overlay, not leave 1/N."""
+    from core.agent_harness.task_plan.plan import PlanStepStatus, parse_task_plan
+    from core.agent_harness.task_plan.update_plan_policy import apply_update_plan_session
+    from surfaces.shared.terminal.output.console_state import (
+        advance_investigation_plan,
+        get_investigation_plan_session,
+    )
+
+    session = Session()
+    session.terminal.prompt_app = MagicMock(is_running=True)
+    plan, error = parse_task_plan(
+        {
+            "plan": [
+                {"step": "Gather evidence", "status": "in_progress"},
+                {"step": "Rank hypotheses", "status": "pending"},
+                {"step": "Propose fix", "status": "pending"},
+                {"step": "Verify", "status": "pending"},
+            ]
+        }
+    )
+    assert error is None and plan is not None
+    apply_update_plan_session(session, plan, plan_only=False)
+    console = Console(force_terminal=False, color_system=None, highlight=False)
+    task = MagicMock(spec=TaskRecord)
+    task.cancel_requested = False
+    monkeypatch.setattr(
+        session.task_registry,
+        "create",
+        lambda *_args, **_kwargs: task,
+    )
+    monkeypatch.setattr(
+        "surfaces.shared.terminal.feedback.prompt_investigation_feedback",
+        MagicMock(),
+    )
+
+    def _run(_task: TaskRecord) -> dict[str, object]:
+        assert get_investigation_plan_session() is session
+        advance_investigation_plan("investigation_agent")
+        assert session.task_plan is not None
+        # On a 4-step plan, gather (phase 1) still maps to the first checklist
+        # row — see pipeline_phase_to_step_index — so Plan · 1/4 stays put.
+        assert session.task_plan.current_index == 1
+        return {"root_cause": "sample"}
+
+    outcome = run_foreground_investigation(
+        session=session,
+        console=console,
+        task_command="/investigate grafana",
+        run=_run,
+        exception_context="test",
+        target="grafana",
+    )
+
+    assert outcome.status == "completed"
+    assert session.task_plan is not None
+    assert session.task_plan.all_completed
+    assert all(step.status is PlanStepStatus.COMPLETED for step in session.task_plan.steps)
+    assert session.task_plan_breakdown_emitted is True
+    assert get_investigation_plan_session() is None
+
+
+def test_investigation_plan_session_pin_defaults_to_none() -> None:
+    """Process-global pin must be readable before the first set (no NameError)."""
+    from surfaces.shared.terminal.output.console_state import get_investigation_plan_session
+
+    assert get_investigation_plan_session() is None
 
 
 def test_run_foreground_investigation_prompts_feedback_when_pt_app_idle(
@@ -214,7 +287,7 @@ def test_run_foreground_investigation_prompts_feedback_when_pt_app_idle(
         session=session,
         console=console,
         task_command="/investigate",
-        run=lambda _task: {"root_cause": "sample"},
+        run=lambda _task, *_args: {"root_cause": "sample"},
         exception_context="test",
         target="",
     )
@@ -252,7 +325,7 @@ def test_run_foreground_investigation_skips_feedback_on_headless_session(
         session=session,
         console=console,
         task_command="/investigate grafana",
-        run=lambda _task: {"root_cause": "sample"},
+        run=lambda _task, *_args: {"root_cause": "sample"},
         exception_context="test",
         target="grafana",
     )

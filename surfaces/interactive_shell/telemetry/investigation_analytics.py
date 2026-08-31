@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from infrastructure.analytics.cli import (
+from infrastructure.analytics.capture import (
     capture_investigation_cancelled,
     capture_investigation_outcome,
 )

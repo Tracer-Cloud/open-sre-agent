@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from typing import Any
 
+from core.domain.types.evidence import record_evidence_entry
 from core.domain.types.tools import ToolSurface
 from core.tool_framework import tool
 from core.tool_framework.utils import tool_unavailable
@@ -48,6 +49,21 @@ def _list_github_commits_available(sources: dict[str, dict]) -> bool:
     return bool(github_source_available(sources) and gh.get("owner") and gh.get("repo"))
 
 
+def _map_list_github_commits(
+    evidence: dict[str, Any], output: dict[str, Any], _input: dict[str, Any]
+) -> None:
+    commits = output.get("commits", [])
+    if commits:
+        count = len(commits)
+        word = "commit" if count == 1 else "commits"
+        record_evidence_entry(
+            evidence,
+            source="list_github_commits",
+            label="GitHub Commits",
+            summary=f"{count} {word}",
+        )
+
+
 @tool(
     name="list_github_commits",
     source="github",
@@ -76,6 +92,7 @@ def _list_github_commits_available(sources: dict[str, dict]) -> bool:
     is_available=_list_github_commits_available,
     extract_params=_list_github_commits_extract_params,
     injected_params=GITHUB_INJECTED_PARAMS,
+    evidence_mapper=_map_list_github_commits,
 )
 def list_github_commits(
     owner: str,

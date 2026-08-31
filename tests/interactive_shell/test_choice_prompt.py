@@ -156,29 +156,52 @@ def test_batch_answers_are_auto_submitted_as_qa_block(
     )
 
 
-def test_batch_custom_option_preserves_the_picked_answers(
+def test_batch_custom_option_is_captured_inline_and_auto_submitted(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """A custom slot must not discard the fixed answers already picked."""
+    """Free text is an option: concrete answers auto-submit; no ``[N] ❯`` fill-in."""
     session = Session()
     session.pending_user_choice = _BATCH_CHOICE
-    console, buf = _console()
-
-    monkeypatch.setattr(choice_prompt, "repl_tty_interactive", lambda: True)
-    monkeypatch.setattr(
-        choice_prompt,
-        "repl_ask_user",
-        lambda _questions: ("Hypothetical/demo scenario, no real code", CUSTOM_OPTION),
+    console, _buf = _console()
+    answers = (
+        "Hypothetical/demo scenario, no real code",
+        "my custom window",
     )
 
+    monkeypatch.setattr(choice_prompt, "repl_tty_interactive", lambda: True)
+    monkeypatch.setattr(choice_prompt, "repl_ask_user", lambda _questions: answers)
+
     assert _handler(session, console) is True
-    # Not auto-submitted: the user completes the custom slot then presses Enter.
-    assert session.terminal.pending_prompt_autosubmit is False
+    assert session.terminal.pending_prompt_autosubmit is True
     assert session.terminal.awaiting_handoff_answer is True
-    # The already-chosen answer is prefilled, not dropped.
-    prefill = session.terminal.pending_prompt_default or ""
-    assert "Hypothetical/demo scenario, no real code" in prefill
-    assert "fill in your own answer" in buf.getvalue().lower()
+    assert session.terminal.pending_prompt_default == format_ask_user_answers(
+        _BATCH_QUESTIONS, answers
+    )
+
+
+def test_single_choice_types_custom_in_place(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    session = Session()
+    session.pending_user_choice = _CHOICE
+    console, _buf = _console()
+    seen: dict[str, object] = {}
+
+    def _pick(**kwargs: object) -> str:
+        seen["custom_label"] = kwargs.get("custom_label")
+        seen["choices"] = kwargs["choices"]
+        return "typed by hand"
+
+    monkeypatch.setattr(choice_prompt, "repl_tty_interactive", lambda: True)
+    monkeypatch.setattr(choice_prompt, "repl_choose_one", _pick)
+
+    assert _handler(session, console) is True
+    assert seen["custom_label"] == CUSTOM_OPTION
+    choices = seen["choices"]
+    assert isinstance(choices, list)
+    assert (CUSTOM_OPTION, CUSTOM_OPTION) in choices
+    assert session.terminal.pending_prompt_default == "typed by hand"
+    assert session.terminal.pending_prompt_autosubmit is True
 
 
 def test_non_tty_batch_prints_every_question(monkeypatch: pytest.MonkeyPatch) -> None:

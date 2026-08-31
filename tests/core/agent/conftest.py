@@ -10,14 +10,14 @@ from pathlib import Path
 import pytest
 from pydantic import ValidationError
 
-from config.config import (
+from config.grafana_cloud import load_env
+from config.llm_auth.credentials import status as credential_status
+from config.llm_auth.provider_catalog import provider_spec
+from config.llm_settings import (
     get_configured_llm_provider,
     get_llm_provider_api_key_env,
     resolve_llm_settings,
 )
-from config.grafana_cloud import load_env
-from config.llm_auth.credentials import status as credential_status
-from config.llm_auth.provider_catalog import provider_spec
 from tests.core.agent._ci_gates import (
     running_in_github_actions,
 )

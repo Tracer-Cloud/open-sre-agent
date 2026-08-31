@@ -27,6 +27,7 @@ vs metric ``call_*_tool`` can be distinguished).
 from __future__ import annotations
 
 import logging
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from typing import Any
 
@@ -155,6 +156,38 @@ def _gather_ran_metric_query(calls: list[ExecutedToolCall]) -> bool:
     return any(is_live_metric_query_call(name, args) for name, args in calls)
 
 
+_PLAN_INCOMPLETE_NUDGE = (
+    "The live task plan still has unfinished steps. Keep working the "
+    "in_progress step (call tools), or call ask_user_choice if a fact is "
+    "missing — do not pause and idle. Mark steps completed with update_plan "
+    "as you finish them; end the turn only when every plan step is completed."
+)
+
+
+def task_plan_blocks_conclusion(
+    *,
+    task_plan: Any | None,
+    plan_only: bool,
+) -> bool:
+    """True when a live execution plan still requires work this turn.
+
+    Plan-only (user asked not to run yet) never blocks. A fully completed plan
+    never blocks. Otherwise the agent must keep going — stopping with ``●`` on
+    a mid-plan step leaves the shell idle while the overlay still shows work.
+    """
+    if plan_only or task_plan is None:
+        return False
+    steps = getattr(task_plan, "steps", None)
+    if not steps:
+        return False
+    all_completed = getattr(task_plan, "all_completed", None)
+    if callable(all_completed):
+        return not bool(all_completed())
+    if isinstance(all_completed, bool):
+        return not all_completed
+    return any(getattr(item, "status", None) != "completed" for item in steps)
+
+
 @dataclass
 class _LLMGoalReviewer:
     """``Goal.verify`` predicate: one bounded, fail-open LLM review per turn."""
@@ -172,6 +205,9 @@ class _LLMGoalReviewer:
     # waiting for the LLM (which previously treated a draft query as reached).
     executed_tool_calls: list[ExecutedToolCall] = field(default_factory=list)
     reject_discovery_only: bool = False
+    # Live plan gate: when True at conclusion, reject without spending the LLM
+    # review budget (the overlay still shows unfinished work).
+    plan_incomplete: Callable[[], bool] | None = None
     reviews_remaining: int = field(default=_MAX_GOAL_REVIEWS)
 
     def __call__(self, observation: GoalObservation) -> bool:
@@ -187,6 +223,8 @@ class _LLMGoalReviewer:
             names = [name for name, _ in self.executed_tool_calls]
         if any(name in self.skip_tool_names for name in names):
             return True
+        if self.plan_incomplete is not None and self.plan_incomplete():
+            return False
         if self.reject_discovery_only and _gather_ran_only_discovery(self.executed_tool_calls):
             return False
         if self.reviews_remaining <= 0:
@@ -226,20 +264,40 @@ def build_goal_reviewer(
     llm: AgentLLMClient,
     user_goal: str,
     executed_tool_names: list[str],
+    *,
+    plan_incomplete: Callable[[], bool] | None = None,
 ) -> Goal:
     """Build a reviewed :class:`Goal` for one action turn over ``user_goal``.
 
     ``executed_tool_names`` is the shared list a :func:`tap_executed_tool_names`
     wrapper fills as the turn runs; the reviewer reads it at conclusion time.
+
+    ``plan_incomplete`` — when provided — rejects conclusions while the live
+    task plan still has unfinished steps, so the shell does not go idle with
+    ``Plan · n/m`` and a mid-list ``●``.
     """
+    reviewer = _LLMGoalReviewer(
+        llm=llm,
+        user_goal=user_goal,
+        executed_tool_names=executed_tool_names,
+        plan_incomplete=plan_incomplete,
+    )
+
+    def _nudge(_observation: GoalObservation) -> str:
+        if plan_incomplete is not None and plan_incomplete():
+            return _PLAN_INCOMPLETE_NUDGE
+        return (
+            f"Goal not yet met: {user_goal}. "
+            f"Success criteria: {_GOAL_SUCCESS_CRITERIA}. "
+            "Continue gathering evidence or taking actions until the criteria "
+            "are satisfied, then conclude with a clear answer."
+        )
+
     return Goal(
         description=user_goal,
         success_criteria=_GOAL_SUCCESS_CRITERIA,
-        verify=_LLMGoalReviewer(
-            llm=llm,
-            user_goal=user_goal,
-            executed_tool_names=executed_tool_names,
-        ),
+        verify=reviewer,
+        nudge=_nudge,
     )
 
 
@@ -282,4 +340,5 @@ __all__ = [
     "build_goal_reviewer",
     "tap_executed_tool_calls",
     "tap_executed_tool_names",
+    "task_plan_blocks_conclusion",
 ]

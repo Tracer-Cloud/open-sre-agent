@@ -328,6 +328,19 @@ per-session lock). Different sessions stay concurrent under the capacity gate.
 There is no `dispatch_message_to_headless_agent` — that free-function dump was
 replaced by `HeadlessAgent.dispatch` / `AgentSession.chat`.
 
+### Two doors into a turn (Concurrency & Serialization)
+
+There are two ways into an agent turn:
+1. **The Host Loop (`TurnRunner` → `HeadlessAgent.handle`)**:
+   - Used by concurrent multi-actor hosts (**Gateway** transports and **Interactive Shell**).
+   - Takes the `SessionAgentPool` per-session lock (serializing turns for the same session to prevent `AgentBusyError` and state corruption).
+   - Takes the process turn capacity gate (`TurnConcurrencyGate` / `OPENSRE_MAX_CONCURRENT_TURNS`).
+   - Drives the full `SessionGoal` outer loop (`run_goal`).
+2. **Scripted / Headless API (`AgentSession.chat` / `chat_until_goal`)**:
+   - The un-gated single-turn API for programmatic scripts (`main.py`, notebooks), tests, and single-shot CLI (`opensre ask`).
+   - Deliberately kept as an unguarded entry point for single-tenant, scripted use.
+   - **Forbidden for concurrent hosts:** Gateway and Shell modules must never call `chat()` or `chat_until_goal()` directly (enforced by `gateway/tests/test_harness_behaviour_border.py` and `tests/interactive_shell/test_harness_api_border.py`).
+
 **Scaling** is separate from the host API: local concurrency
 (`TurnConcurrencyGate` / transport pools / `OPENSRE_SIZE_PROFILE`) and cloud
 Fargate scale-out (spin more tasks; same API per task) sit *around*
@@ -398,13 +411,16 @@ which owns the actual think → call-tools → observe algorithm.
 - `core/agent/react_loop.py` — `ReactLoop` (the loop as a method-object, phases
   `_think` / `_handle_conclusion` / `_observe`) and `run_react_loop` (its thin
   functional entry). A reply with no tool calls ends the turn unless a queued
-  `follow_up` is already waiting.
+  `follow_up` is waiting, or the host's `_should_accept_conclusion` rejects it
+  (reviewed goals from `build_goal_reviewer`, including an unfinished task
+  plan). Bare Goals without `verify` do not gate stop.
 - `core/agent/agent.py` — the `Agent` facade: `__init__` (holds config), `run()`
   (builds the per-run `AgentRunInput` via `_build_run_input` and hands it to
-  `run_react_loop`).
+  `run_react_loop`), and the `_should_accept_conclusion` / `_filter_tools`
+  override hooks.
 
 Do not reintroduce hook-method overrides on `Agent` itself (e.g. a subclass
 overriding a private `_before_provider_request`-style method) — customize via
 `provider_hooks=ProviderHooks(...)` at construction instead. Subclassing
-remains the pattern for `_filter_tools`, which is a genuine per-agent override,
-not a seam `ProviderHooks` covers.
+remains the pattern for `_filter_tools` and `_should_accept_conclusion`, which
+are genuine per-agent overrides, not seams `ProviderHooks` covers.

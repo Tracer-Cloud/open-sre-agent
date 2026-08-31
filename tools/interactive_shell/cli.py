@@ -44,6 +44,18 @@ READ_ONLY_OPENSRE_SUBCOMMANDS: frozenset[str] = frozenset(
     }
 )
 
+# ``opensre integrations <sub>`` — probes and listings must not background, or
+# the action turn ends on "started — task …" while verify still runs and the
+# plan hangs on Invoking tools with "1 task running".
+_READ_ONLY_INTEGRATIONS_SUBCOMMANDS: frozenset[str] = frozenset(
+    {
+        "list",
+        "show",
+        "verify",
+        "status",
+    }
+)
+
 INVESTIGATION_OPENSRE_SUBCOMMANDS: frozenset[str] = frozenset({"investigate"})
 
 
@@ -139,9 +151,23 @@ def interactive_wizard_handoff_response_text(command_str: str) -> str:
     )
 
 
+def _integrations_subcommand(tokens: list[str]) -> str | None:
+    """Return the integrations subcommand, or ``None`` when not an integrations call."""
+    if not tokens or tokens[0].lower() != "integrations":
+        return None
+    return tokens[1].lower() if len(tokens) > 1 else "list"
+
+
+def _is_read_only_integrations(tokens: list[str]) -> bool:
+    sub = _integrations_subcommand(tokens)
+    return sub is not None and sub in _READ_ONLY_INTEGRATIONS_SUBCOMMANDS
+
+
 def classify_opensre_command(tokens: list[str]) -> str:
     first_token = tokens[0].lower()
     if first_token in READ_ONLY_OPENSRE_SUBCOMMANDS:
+        return OpensreCommandClass.READ_ONLY.value
+    if _is_read_only_integrations(tokens):
         return OpensreCommandClass.READ_ONLY.value
     if first_token in INVESTIGATION_OPENSRE_SUBCOMMANDS:
         return OpensreCommandClass.INVESTIGATION.value
@@ -169,6 +195,10 @@ def build_opensre_execution_plan(tokens: list[str]) -> OpensreExecutionPlan:
 
     execution_mode = OpensreExecutionMode.BACKGROUND
     if first_token in READ_ONLY_OPENSRE_SUBCOMMANDS:
+        execution_mode = OpensreExecutionMode.FOREGROUND
+    elif _is_read_only_integrations(tokens):
+        # Wait for verify/list/show so the tool observation includes pass/fail
+        # and the plan can leave Invoking tools instead of parking on a task id.
         execution_mode = OpensreExecutionMode.FOREGROUND
     elif first_token == "fleet":
         subcommand = tokens[1].lower() if len(tokens) > 1 else "list"
@@ -210,7 +240,7 @@ def to_tool_execution_plan(plan: OpensreExecutionPlan) -> ToolExecutionPlan:
             verdict="ask",
             tool_type="cli_command",
             reason=plan.confirmation_reason,
-            hint="Use a read-only subcommand (health, version, list, status, show)",
+            hint="Use a read-only subcommand (health, version, integrations verify/list/show)",
             shell_classification=plan.classification.value,
         )
     return ToolExecutionPlan(

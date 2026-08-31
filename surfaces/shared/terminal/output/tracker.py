@@ -102,6 +102,10 @@ class ProgressTracker(ToolTrackingMixin):
         self.events.append(
             ProgressEvent(node_name=node_name, elapsed_ms=0, status="started", message=message)
         )
+        from surfaces.shared.terminal.output.console_state import advance_investigation_plan
+
+        # Host-side plan advance: investigation blocks update_plan mid-run.
+        advance_investigation_plan(node_name)
         if self._silent:
             return
         if not self._rich:

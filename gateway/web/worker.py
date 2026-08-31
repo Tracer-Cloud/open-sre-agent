@@ -108,7 +108,7 @@ class InvestigationWorker:
     def _investigate(self, record: Any) -> None:
         """Run one claimed investigation and record its outcome; capacity is the caller's."""
         try:
-            from infrastructure.analytics.cli import track_investigation
+            from infrastructure.analytics.investigation_tracker import track_investigation
             from infrastructure.analytics.source import EntrypointSource, TriggerMode
             from infrastructure.analytics.usage_context import (
                 bound_usage_context,

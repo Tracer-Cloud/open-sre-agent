@@ -5,17 +5,15 @@ from pathlib import Path
 import pytest
 from pydantic import ValidationError
 
-from config.config import (
-    Environment,
+from config.llm_auth.credentials import CredentialStatus
+from config.llm_settings import (
     LLMSettings,
     describe_llm_resolution,
-    get_environment,
     has_credentials_for_active_llm_provider,
     llm_provider_error_context,
     resolve_llm_settings,
     resolve_llm_settings_verbose,
 )
-from config.llm_auth.credentials import CredentialStatus
 
 
 def test_llm_settings_reject_provider_typos_with_suggestion() -> None:
@@ -200,7 +198,7 @@ def test_llm_settings_from_env_max_tokens_default(monkeypatch) -> None:
     monkeypatch.setenv("LLM_PROVIDER", "ollama")
     monkeypatch.delenv("LLM_MAX_TOKENS", raising=False)
 
-    from config.config import DEFAULT_MAX_TOKENS
+    from config.llm_models import DEFAULT_MAX_TOKENS
 
     settings = LLMSettings.from_env()
 
@@ -292,7 +290,7 @@ def test_has_credentials_for_active_llm_provider_ollama_never_requires_key(monke
 def test_has_credentials_for_active_llm_provider_cli_uses_status(monkeypatch) -> None:
     monkeypatch.setenv("LLM_PROVIDER", "copilot")
     monkeypatch.setattr(
-        "config.config.credential_status",
+        "config.llm_settings.credential_status",
         lambda provider: CredentialStatus(
             provider=provider,
             configured=True,
@@ -356,7 +354,7 @@ def test_resolve_llm_settings_verbose_reports_no_fallback_when_other_key_present
 def test_resolve_llm_settings_verbose_does_not_warn_without_fallback(monkeypatch, caplog) -> None:
     monkeypatch.setenv("LLM_PROVIDER", "openai")
 
-    with caplog.at_level("WARNING", logger="config.config"):
+    with caplog.at_level("WARNING", logger="config.llm_settings"):
         resolve_llm_settings_verbose()
 
     assert not [r for r in caplog.records if "falling back" in r.getMessage()]
@@ -420,29 +418,3 @@ def test_llm_provider_error_context_never_raises(monkeypatch) -> None:
     monkeypatch.setenv("LLM_PROVIDER", "not-a-real-provider")
 
     assert llm_provider_error_context() == ""
-
-
-def test_environment_is_str_enum_with_stable_values() -> None:
-    assert set(Environment) == {Environment.DEVELOPMENT, Environment.PRODUCTION}
-    assert Environment.DEVELOPMENT.value == "development"
-    assert Environment.PRODUCTION.value == "production"
-    # StrEnum round-trips from its string value and compares equal to it,
-    # which is what the `.value` call sites and `== Environment.X` checks rely on.
-    assert Environment("production") is Environment.PRODUCTION
-    assert Environment.PRODUCTION == "production"
-
-
-@pytest.mark.parametrize(
-    ("env_value", "expected"),
-    [
-        ("production", Environment.PRODUCTION),
-        ("prod", Environment.PRODUCTION),
-        ("development", Environment.DEVELOPMENT),
-        ("", Environment.DEVELOPMENT),
-        ("anything-else", Environment.DEVELOPMENT),
-    ],
-)
-def test_get_environment_maps_env_var(monkeypatch, env_value: str, expected: Environment) -> None:
-    monkeypatch.setenv("ENV", env_value)
-
-    assert get_environment() == expected

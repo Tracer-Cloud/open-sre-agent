@@ -179,6 +179,29 @@ def print_repl_json(console: Console, json_str: str) -> None:
             _REPL_OUTPUT_PREPARED.reset(token)
 
 
+def print_repl_text(console: Console, text: str, *, markup: bool = False) -> None:
+    """Print multi-line plain text with CRLF under ``patch_stdout(raw=True)``.
+
+    Session-goal progress and similar checklists use bare newlines. Rich's
+    row-by-row ``console.print`` emits ``\\n`` only; in raw mode that does not
+    return the cursor to column zero, so the next lines staircase across the
+    screen. Buffer + ``\\r\\n`` (same path as tables/JSON) keeps each row left-
+    aligned.
+    """
+    if not text:
+        return
+    if console.file is sys.stdout and sys.stdout.isatty() and not _console_is_capturing(console):
+        width = _prepare_tty_for_rich(console)
+        _write_repl_tty_buffered(
+            console=console,
+            width=width,
+            leading_blank=False,
+            render_to_buffer=lambda buf_console: buf_console.print(text, markup=markup),
+        )
+        return
+    _console_print_prepared(console, text, markup=markup)
+
+
 def repl_print(console: Console, *objects: Any, **kwargs: Any) -> None:
     """Print via Rich after resetting the TTY column (inline-menu safe)."""
     from surfaces.shared.terminal.components.choice_menu import prepare_repl_output_line
@@ -238,6 +261,7 @@ __all__ = [
     "_repl_table_width",
     "print_repl_json",
     "print_repl_table",
+    "print_repl_text",
     "repl_clear_screen",
     "repl_print",
     "repl_print_continue",

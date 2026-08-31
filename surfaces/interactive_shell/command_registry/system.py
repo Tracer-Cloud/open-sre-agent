@@ -40,6 +40,10 @@ def _flush_analytics_on_exit(console: Console) -> None:
 
 
 def _cmd_exit(session: Session, console: Console, _args: list[str]) -> bool:
+    # Defend against a prior inline menu that left the cursor mid-line.
+    from surfaces.shared.terminal.components.choice_menu import prepare_repl_output_line
+
+    prepare_repl_output_line()
     if session.session_id:
         console.print()
         print_session_resume_hint(console, session.session_id)
@@ -49,8 +53,8 @@ def _cmd_exit(session: Session, console: Console, _args: list[str]) -> bool:
 
 
 def _cmd_health(_session: Session, console: Console, _args: list[str]) -> bool:
-    from config.config import get_environment
     from config.constants.paths import integrations_store_path
+    from config.environment import get_environment
     from integrations.verify import verify_integrations
     from surfaces.shared.terminal.health import render_health_report
 
@@ -104,8 +108,8 @@ def _cmd_version(_session: Session, console: Console, _args: list[str]) -> bool:
 
 
 COMMANDS: list[SlashCommand] = [
-    SlashCommand("/exit", "Exit the interactive shell.", _cmd_exit),
-    SlashCommand("/quit", "Alias for /exit.", _cmd_exit),
+    SlashCommand("/exit", "Exit the interactive shell.", _cmd_exit, mutating=False),
+    SlashCommand("/quit", "Alias for /exit.", _cmd_exit, mutating=False),
     SlashCommand("/health", "Show integration and agent health.", _cmd_health),
     SlashCommand("/doctor", "Run full environment diagnostic.", _cmd_doctor),
     SlashCommand("/version", "Print version, Python, and OS info.", _cmd_version),

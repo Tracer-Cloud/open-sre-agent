@@ -77,29 +77,49 @@ def run_foreground_investigation(
     task.mark_running()
     started = time.monotonic()
     session_id = str(getattr(session, "session_id", "") or "") or None
-    with traced_session(
-        session_id,
-        component="investigation",
-        attributes={"target": normalized_target, "command": task_command},
-    ) as attrs:
-        outcome = _run_foreground_investigation_body(
-            session=session,
-            console=console,
-            task_command=task_command,
-            run=run,
-            exception_context=exception_context,
-            normalized_target=normalized_target,
-            task=task,
-            started=started,
-        )
-        mark_span_outcome(
-            attrs,
-            outcome.status,
-            error=bool(outcome.failure_category),
-            investigation_id=outcome.investigation_id or None,
-            failure_category=outcome.failure_category or None,
-        )
-        return outcome
+    # The action agent cannot call update_plan mid-investigation, so the host
+    # advances the pinned overlay: ProgressTracker / diagnose read the registered
+    # session, and a completed run marks every step done.
+    from surfaces.shared.terminal.output.console_state import (
+        complete_investigation_plan,
+        set_investigation_plan_session,
+    )
+
+    set_investigation_plan_session(session)
+    try:
+        with traced_session(
+            session_id,
+            component="investigation",
+            attributes={"target": normalized_target, "command": task_command},
+        ) as attrs:
+            outcome = _run_foreground_investigation_body(
+                session=session,
+                console=console,
+                task_command=task_command,
+                run=run,
+                exception_context=exception_context,
+                normalized_target=normalized_target,
+                task=task,
+                started=started,
+            )
+            if outcome.status is ForegroundInvestigationStatus.COMPLETED:
+                complete_investigation_plan()
+                from core.agent_harness.spi.task_plan import take_completed_plan_breakdown
+
+                breakdown = take_completed_plan_breakdown(session)
+                if breakdown:
+                    console.print()
+                    console.print(breakdown, markup=False)
+            mark_span_outcome(
+                attrs,
+                outcome.status,
+                error=bool(outcome.failure_category),
+                investigation_id=outcome.investigation_id or None,
+                failure_category=outcome.failure_category or None,
+            )
+            return outcome
+    finally:
+        set_investigation_plan_session(None)
 
 
 def _run_foreground_investigation_body(
