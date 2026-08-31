@@ -56,11 +56,9 @@ class TestNonTtyFallback:
 
         output = buf.getvalue()
         assert result == "Hello, world"
-        # Bullet header + label + text reach piped output so captured
-        # logs are useful. ``∴`` is the row marker; ``assistant`` is the
-        # dim label alongside it.
+        # The inline ``∴`` marker + text reach piped output so captured logs
+        # are useful (the standalone label header was removed).
         assert "∴" in output
-        assert "assistant" in output
         assert "Hello, world" in output
         # No spinner / Live cursor-movement artifacts in non-TTY captures.
         assert "thinking" not in output
@@ -570,9 +568,9 @@ class TestTtyParagraphRender:
         )
 
         assert result == ""
-        # Bullet still printed (header fires before chunk processing),
-        # but no spinner residue at finalize.
-        assert "∴" in _strip_ansi(buf.getvalue())
+        # The marker is inline on the first paragraph, so an empty stream prints
+        # no marker at all — and no spinner residue at finalize.
+        assert "∴" not in _strip_ansi(buf.getvalue())
 
 
 class TestMidStreamError:
@@ -643,7 +641,8 @@ class TestMidStreamError:
 class TestTimingFooter:
     """A small dim ``· Ns`` footer appears after a rendered live response."""
 
-    def test_footer_printed_after_streamed_response(self) -> None:
+    def test_no_timing_footer_after_streamed_response(self) -> None:
+        """The per-turn ``· Ns · ↓ tokens`` footer was removed for compactness."""
         console, buf = _tty_console()
         stream_to_console(
             console,
@@ -652,7 +651,7 @@ class TestTimingFooter:
         )
 
         output = _strip_ansi(buf.getvalue())
-        assert re.search(r"·\s+\d+\.\d+s", output) is not None
+        assert re.search(r"·\s+\d+\.\d+s", output) is None
 
     def test_footer_skipped_when_stream_is_empty(self) -> None:
         """Empty stream must not print a timing footer under nothing."""
