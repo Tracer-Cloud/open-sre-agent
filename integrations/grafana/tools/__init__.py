@@ -149,7 +149,6 @@ def query_grafana_alert_rules(
         "folder_filter": folder,
     }
 
-
 # ======== from tools/grafana_annotations_tool/ ========
 
 """Grafana deployment-annotations query tool for change correlation."""
