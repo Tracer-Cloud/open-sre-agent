@@ -5,9 +5,6 @@ from __future__ import annotations
 from datetime import UTC, datetime, timedelta
 from typing import Any
 
-from integrations.github.tools.community_followup_tool.mapper import (
-    _map_summarize_community_followups,
-)
 from core.domain.types.tools import ToolSurface
 from core.tool import SideEffectLevel
 from core.tool_framework import tool
@@ -17,6 +14,9 @@ from integrations.github.helpers import (
     GITHUB_INJECTED_PARAMS,
     github_creds,
     github_source_available,
+)
+from integrations.github.tools.community_followup_tool.mapper import (
+    _map_summarize_community_followups,
 )
 from integrations.github.tools.workflow import summarize_community_followups_from_comments
 
@@ -35,7 +35,6 @@ def _community_extract_params(sources: dict[str, dict]) -> dict[str, Any]:
     if not gh:
         return {}
     return {"owner": gh.get("owner"), "repo": gh.get("repo"), **github_creds(gh)}
-
 
 
 @tool(

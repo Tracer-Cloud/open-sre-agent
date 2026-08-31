@@ -109,7 +109,6 @@ list_eks_clusters
 list_eks_deployments
 list_eks_namespaces
 list_eks_pods
-list_github_security_alerts
 list_jenkins_builds
 list_jenkins_jobs
 list_jenkins_running_builds
@@ -136,7 +135,6 @@ redeploy_railway_service
 replay_slack_thread_locally
 rocketchat_send_message
 scan_redis_keys
-search_openclaw_conversations
 send_openclaw_message
 slack_add_reaction
 slack_join_channel
