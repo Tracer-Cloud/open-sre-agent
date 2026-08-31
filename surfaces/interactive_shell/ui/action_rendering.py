@@ -93,6 +93,16 @@ _SELF_RENDERING_TOOLS: frozenset[str] = frozenset(
     }
 )
 
+#: Tools that stream their own ``$ <command>`` line during execution. The live
+#: shimmer names the action only (``⟩ Execute``) rather than repeating the
+#: command, so the command is not shown twice while it runs.
+_COMMAND_STREAMING_TOOLS: frozenset[str] = frozenset(
+    {
+        ActionToolName.SHELL_RUN,
+        ActionToolName.CLI_EXEC,
+    }
+)
+
 
 def _tool_event_id(data: dict[str, Any]) -> str:
     """Stable id for one tool call, or empty when the event omitted it."""
@@ -410,10 +420,11 @@ class ActionRenderObserver:
             return
         args = data.get("input")
         label, content = tool_call_display(name, args if isinstance(args, dict) else {})
-        spinner.set_active_action(
-            f"{label} · {content}" if content else label,
-            action_id=_tool_event_id(data),
-        )
+        if name in _COMMAND_STREAMING_TOOLS:
+            text = label  # the ``$ <command>`` line already shows the command
+        else:
+            text = f"{label} · {content}" if content else label
+        spinner.set_active_action(text, action_id=_tool_event_id(data))
 
     def _clear_active_action(self, data: dict[str, Any]) -> None:
         spinner = get_investigation_spinner()

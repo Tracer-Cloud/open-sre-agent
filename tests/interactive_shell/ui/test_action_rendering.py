@@ -594,9 +594,9 @@ def test_observer_drives_load_state_phases_by_turn_stage() -> None:
 
         observer("tool_start", {"name": "shell_run", "input": {"command": "true"}})
         assert spinner.phase == SpinnerState.INVOKING_TOOLS_PHASE
-        # The running action shows as a shimmering live line.
-        assert "Execute" in spinner.active_action
-        assert "true" in spinner.active_action
+        # The running action shows as a shimmering live line; for shell_run the
+        # shimmer names the action only — the ``$ <cmd>`` line shows the command.
+        assert spinner.active_action == "Execute"
 
         observer("tool_end", {"name": "shell_run"})
         assert spinner.phase == SpinnerState.EXECUTING_PHASE
@@ -633,8 +633,7 @@ def test_batched_tool_starts_keep_the_first_action_until_it_ends() -> None:
         assert spinner.phase == SpinnerState.INVOKING_TOOLS_PHASE
 
         observer("tool_end", {"id": "a", "name": "github_cli"})
-        assert "Execute" in spinner.active_action
-        assert "true" in spinner.active_action
+        assert spinner.active_action == "Execute"  # shell_run shimmer names the action only
         assert spinner.phase == SpinnerState.INVOKING_TOOLS_PHASE
 
         observer("tool_end", {"id": "b", "name": "shell_run"})
@@ -659,7 +658,7 @@ def test_untracked_tool_end_does_not_clear_a_running_action() -> None:
             "tool_end",
             {"id": "p1", "name": "update_plan", "output": {"ok": True, "total": 1}},
         )
-        assert "true" in spinner.active_action
+        assert spinner.active_action == "Execute"  # shell_run still running, not wiped
         assert spinner.phase == SpinnerState.INVOKING_TOOLS_PHASE
     finally:
         set_investigation_spinner(None)

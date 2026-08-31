@@ -119,9 +119,10 @@ def test_inline_spinner_clips_a_long_phase_to_one_prompt_row() -> None:
     assert prompt_text_width(rendered) <= prompt_line_width()
 
 
-def test_active_action_shimmer_renders_indented_glow_and_clears() -> None:
-    """The running action shows an indented theme-token glow; cleared → blank."""
-    from infrastructure.terminal.theme import fade_fg_ansi, set_active_theme
+def test_active_action_renders_indented_line_and_clears() -> None:
+    """The running action shows an indented action line with a theme fill;
+    cleared → blank. (The shimmer→solid transition is pinned separately.)"""
+    from infrastructure.terminal.theme import set_active_theme
 
     set_active_theme("solarized")
     spinner = SpinnerState()
@@ -129,15 +130,10 @@ def test_active_action_shimmer_renders_indented_glow_and_clears() -> None:
     assert spinner.active_action_ansi() == ""  # none by default
 
     spinner.set_active_action("Execute · cd /tmp")
-    started = time.monotonic() - SpinnerState._SHIMMER_PERIOD_SECONDS / 2
-    spinner._in_flight_actions[0].started_at = started
     rendered = spinner.active_action_ansi()
-    elapsed = time.monotonic() - started
-    phase = (elapsed % SpinnerState._SHIMMER_PERIOD_SECONDS) / SpinnerState._SHIMMER_PERIOD_SECONDS
-    triangle = 1.0 - abs(2.0 * phase - 1.0)
     assert "Execute · cd /tmp" in rendered
     assert SpinnerState._ACTION_GLYPH in rendered
-    assert fade_fg_ansi(triangle) in rendered
+    assert "\x1b[38;2;" in rendered  # a 24-bit theme fill
 
     spinner.clear_active_action()
     assert spinner.active_action_ansi() == ""
@@ -185,3 +181,25 @@ def test_untracked_tool_end_pops_only_an_untracked_slot() -> None:
 
     spinner.clear_active_action("b")
     assert spinner.active_action == ""
+
+
+def test_action_line_shimmers_in_then_holds_solid() -> None:
+    """The action glows in over the lead window (shimmer prior), then holds a
+    solid fill while it runs (solid in progress)."""
+    from infrastructure.terminal.theme import fade_fg_ansi, set_active_theme
+
+    set_active_theme("solarized")
+    spinner = SpinnerState()
+    spinner.start()
+    spinner.set_active_action("Execute · sleep 4")
+    action = spinner._in_flight_actions[0]
+
+    # Early in the lead window: still shimmering in (partial glow), not solid.
+    action.started_at = time.monotonic() - SpinnerState._SHIMMER_LEAD_SECONDS * 0.25
+    early = spinner.active_action_ansi()
+    assert fade_fg_ansi(1.0) not in early
+
+    # After the lead window: solid fill held for the rest of the run.
+    action.started_at = time.monotonic() - (SpinnerState._SHIMMER_LEAD_SECONDS + 0.3)
+    solid = spinner.active_action_ansi()
+    assert fade_fg_ansi(1.0) in solid

@@ -259,10 +259,12 @@ class SpinnerState:
     # Verbs picked twice as often as the rest of their pool (default weight 1).
     _VERB_WEIGHTS = {"jacking in": 2, "crawling the datastream": 2}
 
-    # Theme-token shimmer for the running action line: a triangle wave over this
-    # period fades DIM → TEXT → DIM (pure function of the clock, like the
-    # spinner glyph, so it never freezes on a busy render pass).
+    # The running action line shimmers in — a white glow rising DIM → TEXT over
+    # the lead window as the action is picked up — then holds a SOLID fill while
+    # it runs ("shimmer prior, solid in progress"). Level is a pure function of
+    # the clock, like the spinner glyph, so it never freezes on a busy render.
     _SHIMMER_PERIOD_SECONDS = 1.1
+    _SHIMMER_LEAD_SECONDS = _SHIMMER_PERIOD_SECONDS / 2  # rising half of the glow
     _ACTION_GLYPH = "⟩"
 
     def __init__(self) -> None:
@@ -321,21 +323,26 @@ class SpinnerState:
                 return
 
     def active_action_ansi(self) -> str:
-        """The indented, shimmering action line, or ``""`` when none is running.
+        """The indented action line, or ``""`` when none is running.
 
-        The glow fades DIM to TEXT on a triangle wave so the line reads as
-        live work; scrollback holds the settled solid copy.
+        Shimmers in (DIM → TEXT) over the lead window as the action is picked up,
+        then holds a solid fill (TEXT) while it runs; scrollback keeps the
+        settled copy.
         """
         current = self._in_flight_actions[0] if self._in_flight_actions else None
         if current is None:
             return ""
         elapsed = time.monotonic() - current.started_at
-        phase = (elapsed % self._SHIMMER_PERIOD_SECONDS) / self._SHIMMER_PERIOD_SECONDS
-        triangle = 1.0 - abs(2.0 * phase - 1.0)  # 0 → 1 → 0 over the period
-        glow = ui_theme.fade_fg_ansi(triangle)
+        if elapsed < self._SHIMMER_LEAD_SECONDS:
+            # Shimmer in: the rising half of the glow (0 → 1) as it is picked up.
+            phase = (elapsed % self._SHIMMER_PERIOD_SECONDS) / self._SHIMMER_PERIOD_SECONDS
+            level = 1.0 - abs(2.0 * phase - 1.0)
+        else:
+            level = 1.0  # solid fill once in progress
+        fill = ui_theme.fade_fg_ansi(level)
         lead = f"  {self._ACTION_GLYPH} "
         text = clip_prompt_text(current.text, prompt_line_width() - prompt_text_width(lead))
-        return f"{glow}{lead}{text}{ui_theme.ANSI_RESET}"
+        return f"{fill}{lead}{text}{ui_theme.ANSI_RESET}"
 
     def start(self) -> None:
         self.streaming = True
