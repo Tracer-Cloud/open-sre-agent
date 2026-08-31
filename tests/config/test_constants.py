@@ -63,6 +63,16 @@ def test_the_organization_id_is_re_exported() -> None:
         assert name in constants.__all__
 
 
+def test_repl_sound_constants_are_re_exported() -> None:
+    """Callers may import the shell-sound names from the package root."""
+    from config import constants
+
+    assert constants.SOUND_NOTIFICATIONS_ENV == "OPENSRE_SOUND"
+    assert constants.SOUND_MIN_TURN_SECONDS == 8.0
+    assert "SOUND_NOTIFICATIONS_ENV" in constants.__all__
+    assert "SOUND_MIN_TURN_SECONDS" in constants.__all__
+
+
 def test_remote_sync_endpoint_url_env_is_re_exported() -> None:
     """Verify REMOTE_SYNC_ENDPOINT_URL_ENV is re-exported from config.constants."""
     # Arrange / Act

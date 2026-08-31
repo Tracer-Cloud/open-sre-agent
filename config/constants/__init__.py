@@ -330,6 +330,7 @@ from config.constants.repl_autonomy import (
     format_auto_status_plain,
     parse_auto_level,
 )
+from config.constants.repl_sound import SOUND_MIN_TURN_SECONDS, SOUND_NOTIFICATIONS_ENV
 from config.constants.repl_theme import DEFAULT_THEME_NAME, THEME_NAMES, Theme
 from config.constants.reporting import SLACK_LINK_RE
 from config.constants.runtime_metadata import (
@@ -536,6 +537,8 @@ __all__ = [
     "DEFAULT_AUTO_LEVEL",
     "format_auto_status_plain",
     "parse_auto_level",
+    "SOUND_MIN_TURN_SECONDS",
+    "SOUND_NOTIFICATIONS_ENV",
     "REMOTE_SYNC_BUCKET_ENV",
     "REMOTE_SYNC_ENDPOINT_URL_ENV",
     "REMOTE_SYNC_ENV",

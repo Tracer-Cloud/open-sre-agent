@@ -19,7 +19,7 @@ from typing import Literal
 
 from rich.markup import escape
 
-from config.constants.repl_sound import SOUND_MIN_TURN_SECONDS
+from config.constants import SOUND_MIN_TURN_SECONDS
 from infrastructure.terminal.notify import NotifyEvent, play_notification
 from surfaces.interactive_shell.runtime.core.state import SpinnerState
 from surfaces.interactive_shell.runtime.input_policy import turn_should_show_spinner

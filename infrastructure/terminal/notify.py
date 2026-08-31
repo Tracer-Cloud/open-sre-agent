@@ -17,12 +17,13 @@ import shutil
 import subprocess
 import sys
 
-from config.constants.repl_sound import SOUND_NOTIFICATIONS_ENV
+from config.constants import SOUND_NOTIFICATIONS_ENV
 
 _TRUTHY = {"1", "true", "yes", "on"}
 
-# TERM_PROGRAM value -> the macOS app whose window hosts this terminal, so the
-# frontmost app can be matched against the one we run inside.
+# TERM_PROGRAM value -> the macOS app that hosts this process. A *different*
+# frontmost app means this window is not focused. The same app does not prove
+# this window is frontmost (another window of iTerm/Code/… may be).
 _TERM_PROGRAM_APP = {
     "Apple_Terminal": "Terminal",
     "iTerm.app": "iTerm2",
@@ -35,8 +36,6 @@ _TERM_PROGRAM_APP = {
     "alacritty": "Alacritty",
     "Tabby": "Tabby",
 }
-# When TERM_PROGRAM is unset, treat any of these frontmost apps as "our terminal".
-_KNOWN_TERMINAL_APPS = frozenset(_TERM_PROGRAM_APP.values()) | {"Electron"}
 _LSAPPINFO_NAME_RE = re.compile(r'"LSDisplayName"="([^"]+)"')
 
 # Distinct macOS system sounds so completion and a request for input are audibly
@@ -82,8 +81,10 @@ def _macos_frontmost_app() -> str | None:
 def terminal_is_focused() -> bool | None:
     """Whether this terminal's window is frontmost. ``None`` when undeterminable.
 
-    Only resolvable on macOS (via the frontmost app). Off macOS — or if the
-    lookup fails — returns ``None`` so the caller can degrade rather than guess.
+    On macOS a *different* frontmost app means this window is not focused.
+    Matching the host app — or an unknown ``TERM_PROGRAM`` — cannot identify the
+    window, so that is undeterminable rather than treated as focused. Off macOS
+    — or if the lookup fails — returns ``None`` so the caller can degrade.
     """
     if platform.system() != "Darwin":
         return None
@@ -91,16 +92,16 @@ def terminal_is_focused() -> bool | None:
     if front is None:
         return None
     ours = _TERM_PROGRAM_APP.get(os.environ.get("TERM_PROGRAM", ""))
-    if ours is not None:
-        return front == ours
-    return front in _KNOWN_TERMINAL_APPS
+    if ours is None or front == ours:
+        return None
+    return False
 
 
 def play_notification(event: NotifyEvent) -> None:
     """Play a short chime for ``event`` — opt-in, best-effort, non-blocking.
 
-    Stays silent while this terminal is the focused window (you are already
-    looking); chimes when it is unfocused, or when focus cannot be determined.
+    Stays silent only when this window is known focused; chimes when it is
+    unfocused, or when focus cannot be determined.
     """
     if not sound_enabled():
         return
