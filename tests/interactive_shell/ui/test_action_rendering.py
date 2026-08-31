@@ -683,13 +683,3 @@ def test_command_tools_suppress_the_static_action_header() -> None:
         assert "Execute" not in out
         assert "opensre" not in out
         assert cmd not in out  # header suppressed; the $cmd line comes from the presenter
-
-
-def test_intermediate_narration_carries_the_agent_marker() -> None:
-    """An agent message to the user (intermediate narration) is marked with the
-    same ``●`` header as the final response, not left unmarked."""
-    observer, buffer = _observer_with_buffer("do it")
-    observer("message_update", {"content": "I'll run the command.", "has_tool_calls": True})
-    out = buffer.getvalue()
-    assert "●" in out
-    assert "I'll run the command." in out

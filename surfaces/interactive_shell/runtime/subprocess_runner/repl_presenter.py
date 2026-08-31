@@ -40,20 +40,63 @@ _MARKUP_STYLE_ALIASES: dict[str, str] = {
 # Command-focused highlighting: colour the command word (first token and each
 # token after a pipeline operator), flags, and operators; leave bare arguments
 # in the base bold. A shell lexer mis-colours argument words that happen to be
-# bash keywords (e.g. ``echo done`` → ``done`` as the loop keyword).
+# bash keywords (e.g. ``echo done`` → ``done`` as the loop keyword). Quoted
+# spans are blanked before matching so ``echo "a && b"`` does not treat the
+# inner ``&&`` as an operator.
 _SHELL_OPERATOR_RE = r"&&|\|\||[|;<>&]"
 _SHELL_FLAG_RE = r"(?<!\S)--?[A-Za-z][\w-]*"
 _SHELL_FIRST_COMMAND_RE = r"^\s*[\w./+-]+"
 _SHELL_PIPED_COMMAND_RE = r"(?<=[|&;]) *[\w./+-]+"
 
 
+def _blank_quoted_regions(command: str) -> str:
+    """Replace quoted interiors with spaces so highlighter regexes skip them.
+
+    Length is preserved so match offsets apply to the original command.
+    Unbalanced quotes blank through the end. Backslash escapes the next
+    character outside quotes and inside double quotes; single quotes treat
+    it as literal.
+    """
+    chars = list(command)
+    quote: str | None = None
+    index = 0
+    length = len(command)
+    while index < length:
+        char = chars[index]
+        if quote is None:
+            if char == "\\" and index + 1 < length:
+                index += 2
+                continue
+            if char in ("'", '"'):
+                quote = char
+            index += 1
+            continue
+        if char == "\\" and quote == '"' and index + 1 < length:
+            chars[index] = " "
+            chars[index + 1] = " "
+            index += 2
+            continue
+        if char == quote:
+            quote = None
+            index += 1
+            continue
+        chars[index] = " "
+        index += 1
+    return "".join(chars)
+
+
 def _highlight_command(command: str) -> Text:
     """Return ``command`` as a Text with command/flag/operator colouring."""
     text = Text(command, style="bold")
-    text.highlight_regex(_SHELL_OPERATOR_RE, style=str(DIM))
-    text.highlight_regex(_SHELL_FLAG_RE, style=str(WARNING))
-    text.highlight_regex(_SHELL_FIRST_COMMAND_RE, style=f"bold {HIGHLIGHT}")
-    text.highlight_regex(_SHELL_PIPED_COMMAND_RE, style=f"bold {HIGHLIGHT}")
+    searchable = _blank_quoted_regions(command)
+    for pattern, style in (
+        (_SHELL_OPERATOR_RE, str(DIM)),
+        (_SHELL_FLAG_RE, str(WARNING)),
+        (_SHELL_FIRST_COMMAND_RE, f"bold {HIGHLIGHT}"),
+        (_SHELL_PIPED_COMMAND_RE, f"bold {HIGHLIGHT}"),
+    ):
+        for match in re.finditer(pattern, searchable):
+            text.stylize(style, *match.span())
     return text
 
 

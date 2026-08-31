@@ -57,9 +57,9 @@ class TestNonTtyFallback:
         output = buf.getvalue()
         assert result == "Hello, world"
         # Bullet header + label + text reach piped output so captured
-        # logs are useful. ``●`` is the row marker; ``assistant`` is the
+        # logs are useful. ``∴`` is the row marker; ``assistant`` is the
         # dim label alongside it.
-        assert "●" in output
+        assert "∴" in output
         assert "assistant" in output
         assert "Hello, world" in output
         # No spinner / Live cursor-movement artifacts in non-TTY captures.
@@ -91,7 +91,7 @@ class TestNonTtyFallback:
         assert result == '{"actions":[]}'
         output = buf.getvalue()
         # No bullet header for suppressed responses.
-        assert "●" not in output
+        assert "∴" not in output
         assert '{"actions"' not in output
 
 
@@ -133,7 +133,7 @@ class TestTtyParagraphRender:
         output = _strip_ansi(buf.getvalue())
         assert result == "Run **opensre investigate** to start."
         # Bullet row marker pinned above the rendered paragraph.
-        assert "●" in output
+        assert "∴" in output
         # End-of-stream force-flush rendered Markdown — ``**`` stripped.
         assert "**opensre" not in output
         assert "opensre investigate" in output
@@ -572,7 +572,7 @@ class TestTtyParagraphRender:
         assert result == ""
         # Bullet still printed (header fires before chunk processing),
         # but no spinner residue at finalize.
-        assert "●" in _strip_ansi(buf.getvalue())
+        assert "∴" in _strip_ansi(buf.getvalue())
 
 
 class TestMidStreamError:
@@ -690,7 +690,7 @@ class TestRenderResponseHeader:
         console, buf = _tty_console()
         render_response_header(console, "assistant")
         output = _strip_ansi(buf.getvalue())
-        assert "●" in output
+        assert "∴" in output
         assert "assistant" in output
 
     def test_label_is_passthrough(self) -> None:
@@ -1002,7 +1002,7 @@ class TestSuppressionPeek:
         assert result == '{"actions":[]}'
         # No bullet header, no markdown, no live-region artifacts.
         output = _strip_ansi(buf.getvalue())
-        assert "●" not in output
+        assert "∴" not in output
         assert '{"actions"' not in output
 
     def test_renders_normally_when_first_char_does_not_match(self) -> None:
@@ -1016,7 +1016,7 @@ class TestSuppressionPeek:
 
         assert result == "Hello, world"
         output = _strip_ansi(buf.getvalue())
-        assert "●" in output
+        assert "∴" in output
         assert "Hello, world" in output
 
     def test_skips_leading_whitespace_before_deciding(self) -> None:
@@ -1031,7 +1031,7 @@ class TestSuppressionPeek:
 
         assert result == '  \n{"action":"slash"}'
         output = _strip_ansi(buf.getvalue())
-        assert "●" not in output
+        assert "∴" not in output
 
 
 class TestRenderMarkdownBlock:
