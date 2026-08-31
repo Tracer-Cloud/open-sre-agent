@@ -16,6 +16,13 @@ from core.tool_framework import tool
 from core.tool_framework.utils import tool_unavailable
 from integrations.jenkins import jenkins_config_from_env
 from integrations.jenkins.client import JenkinsClient, make_jenkins_client
+from integrations.jenkins.tools._evidence import (
+    map_get_jenkins_build_log,
+    map_get_jenkins_pipeline_stages,
+    map_list_jenkins_builds,
+    map_list_jenkins_jobs,
+    map_list_jenkins_running_builds,
+)
 
 
 def _jenkins_available(sources: dict) -> bool:
@@ -115,6 +122,7 @@ def _list_jenkins_builds_extract_params(sources: dict[str, dict]) -> dict[str, A
     },
     is_available=_jenkins_available,
     extract_params=_list_jenkins_builds_extract_params,
+    evidence_mapper=map_list_jenkins_builds,
 )
 def list_jenkins_builds(
     job_name: str,
@@ -185,6 +193,7 @@ def _get_jenkins_build_log_extract_params(sources: dict[str, dict]) -> dict[str,
     },
     is_available=_jenkins_available,
     extract_params=_get_jenkins_build_log_extract_params,
+    evidence_mapper=map_get_jenkins_build_log,
 )
 def get_jenkins_build_log(
     job_name: str,
@@ -253,6 +262,7 @@ def _get_jenkins_pipeline_stages_extract_params(sources: dict[str, dict]) -> dic
     },
     is_available=_jenkins_available,
     extract_params=_get_jenkins_pipeline_stages_extract_params,
+    evidence_mapper=map_get_jenkins_pipeline_stages,
 )
 def get_jenkins_pipeline_stages(
     job_name: str,
@@ -311,6 +321,7 @@ def _list_jenkins_jobs_extract_params(sources: dict[str, dict]) -> dict[str, Any
     outputs={"jobs": "Jobs with name, url, status, and last-build info"},
     is_available=_jenkins_available,
     extract_params=_list_jenkins_jobs_extract_params,
+    evidence_mapper=map_list_jenkins_jobs,
 )
 def list_jenkins_jobs(
     jenkins_url: str | None = None,
@@ -365,6 +376,7 @@ def _list_jenkins_running_builds_extract_params(sources: dict[str, dict]) -> dic
     outputs={"running_builds": "Builds currently in progress with job, number, and url"},
     is_available=_jenkins_available,
     extract_params=_list_jenkins_running_builds_extract_params,
+    evidence_mapper=map_list_jenkins_running_builds,
 )
 def list_jenkins_running_builds(
     jenkins_url: str | None = None,

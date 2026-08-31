@@ -51,8 +51,6 @@ get_hermes_session_log
 get_hermes_session_topology
 get_hermes_workflow_run
 get_host_metrics
-get_jenkins_build_log
-get_jenkins_pipeline_stages
 get_lambda_configuration
 get_lambda_errors
 get_lambda_invocation_logs
@@ -109,9 +107,6 @@ list_eks_clusters
 list_eks_deployments
 list_eks_namespaces
 list_eks_pods
-list_jenkins_builds
-list_jenkins_jobs
-list_jenkins_running_builds
 list_posthog_tools
 list_s3_objects
 list_sentry_tools
