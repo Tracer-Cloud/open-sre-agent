@@ -26,6 +26,28 @@ def _presenter() -> tuple[ReplSubprocessPresenter, StringIO]:
     return ReplSubprocessPresenter(session, console), buffer
 
 
+def test_plain_command_output_is_recessed_but_keeps_command_colours() -> None:
+    # Raw stdout reads as supporting detail beneath the bright reply: plain output
+    # is recessed to SECONDARY, while colour the command emitted itself survives.
+    import io
+    import re
+
+    from infrastructure.terminal import theme as ui_theme
+
+    buffer = io.StringIO()
+    console = Console(file=buffer, force_terminal=True, color_system="truecolor", width=80)
+    presenter = ReplSubprocessPresenter(Session(), console)
+
+    presenter.print_command_output("plain line of output")
+    presenter.print_command_output("\x1b[32mgreen success\x1b[0m")
+
+    raw = buffer.getvalue()
+    secondary = str(ui_theme.SECONDARY)
+    r, g, b = (int(secondary[i : i + 2], 16) for i in (1, 3, 5))
+    assert f"38;2;{r};{g};{b}" in raw  # plain output recessed to SECONDARY
+    assert re.search(r"\x1b\[[0-9;]*32m", raw)  # command's own green survives the base
+
+
 def test_escape_markup_message_preserves_intentional_tags() -> None:
     escaped = _escape_markup_message("[error]failed[/]")
     buffer = StringIO()

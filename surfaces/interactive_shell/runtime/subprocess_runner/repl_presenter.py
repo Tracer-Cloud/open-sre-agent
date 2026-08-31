@@ -15,7 +15,14 @@ from rich.text import Text
 
 from infrastructure.scheduling.task_types import TaskKind
 from surfaces.interactive_shell.session import Session
-from surfaces.interactive_shell.ui import DIM, ERROR, HIGHLIGHT, WARNING, print_command_output
+from surfaces.interactive_shell.ui import (
+    DIM,
+    ERROR,
+    HIGHLIGHT,
+    SECONDARY,
+    WARNING,
+    print_command_output,
+)
 from surfaces.interactive_shell.ui.execution_confirm import execution_allowed
 from surfaces.shared.error_handling.exception_reporting import report_exception
 from tools.interactive_shell.shared import ExecutionPolicyResult
@@ -205,7 +212,11 @@ class ReplSubprocessPresenter:
         if style in _MARKUP_STYLE_ALIASES:
             resolved = _MARKUP_STYLE_ALIASES[style]
         elif style is None:
-            resolved = None
+            # Recess plain command output beneath the bright reply summary: apply
+            # SECONDARY as the base so uncoloured stdout reads as supporting detail,
+            # while any colour the command emitted itself (red errors, etc.) still
+            # wins over the base.
+            resolved = str(SECONDARY)
         else:
             resolved = style
         print_command_output(self._console, text, style=resolved)
