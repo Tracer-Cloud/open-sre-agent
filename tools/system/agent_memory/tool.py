@@ -20,6 +20,7 @@ from core.domain.memory import (
 from core.domain.types.tools import ToolSurface
 from core.tool import SideEffectLevel
 from core.tool_framework import tool
+from tools.system.agent_memory._evidence import map_memory_recall
 from tools.system.agent_memory.results import (
     deleted_result,
     index_result,
@@ -162,6 +163,7 @@ def memory_forget(name: str) -> dict[str, Any]:
         "required": [],
         "additionalProperties": False,
     },
+    evidence_mapper=map_memory_recall,
 )
 def memory_recall(
     name: str | None = None, query: str | None = None, limit: int = 5

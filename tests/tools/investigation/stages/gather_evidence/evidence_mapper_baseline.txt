@@ -21,7 +21,6 @@ check_s3_marker
 create_google_docs_incident_report
 describe_eks_addon
 describe_eks_cluster
-execute_python_code
 execute_yc_operation
 fetch_failed_run
 find_yc_api
@@ -75,7 +74,6 @@ get_redis_replication
 get_redis_server_info
 get_redis_slowlog
 get_s3_object
-get_sre_guidance
 get_tracer_run
 get_tracer_tasks
 get_yc_instance_diagnostics
@@ -119,7 +117,6 @@ list_x_tools
 list_yc_instances
 list_yc_log_groups
 list_yc_metrics
-memory_recall
 memory_remember
 pi_coding_task
 query_azure_monitor_logs
@@ -143,7 +140,5 @@ telegram_send_message
 twilio_notify
 work_task_add
 work_task_complete
-work_task_list
-work_task_prioritize
 work_task_schedule_checkin
 work_task_update
