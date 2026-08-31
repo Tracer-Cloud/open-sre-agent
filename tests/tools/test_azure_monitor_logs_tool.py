@@ -122,6 +122,12 @@ def test_bounded_limit_enforces_minimum_of_one() -> None:
         ),
         ("AppTraces | take 100", 5, "AppTraces | take 100"),
         ("AppTraces | limit 100", 5, "AppTraces | limit 100"),
+        (
+            "AppTraces | top 5 by TimeGenerated desc",
+            50,
+            "AppTraces | top 5 by TimeGenerated desc",
+        ),
+        ("AppTraces | sample 20", 50, "AppTraces | sample 20"),
     ],
 )
 def test_ensure_take_clause_branches(query: str, limit: int, expected: str) -> None:
@@ -179,6 +185,43 @@ def test_run_happy_path(monkeypatch: pytest.MonkeyPatch) -> None:
     assert "workspace-123" in captured["url"]
     assert captured["headers"]["Authorization"] == "Bearer token-abc"
     assert "query" in captured["json"]
+
+
+def test_run_folds_a_smaller_caller_row_cap_into_effective_limit(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Regression (review finding): a caller-supplied `top N by ...` clause
+    caps rows the same way `take` does, but `_ensure_take_clause` leaves it
+    untouched (it already has a row-cap stage) and only appends its own
+    trailing `take {effective_limit}`. Without folding the caller's smaller
+    cap into `effective_limit`, a saturated `top 5` result would be
+    indistinguishable from an exact one to the evidence mapper, which
+    trusts `effective_limit` alone."""
+    mocked_response = MagicMock()
+    mocked_response.raise_for_status.return_value = None
+    mocked_response.json.return_value = {
+        "tables": [
+            {
+                "columns": [{"name": "TimeGenerated"}],
+                "rows": [["2026-04-27T10:00:00Z"]] * 5,
+            }
+        ]
+    }
+    monkeypatch.setattr(
+        "integrations.azure.tools.azure_monitor_logs_tool.httpx.post",
+        lambda *_args, **_kwargs: mocked_response,
+    )
+
+    result = query_azure_monitor_logs(
+        workspace_id="workspace-123",
+        access_token="token-abc",
+        query="AppTraces | top 5 by TimeGenerated desc",
+        limit=50,
+    )
+
+    assert result["total_returned"] == 5
+    assert result["effective_limit"] == 5
+    assert result["query"] == "AppTraces | top 5 by TimeGenerated desc"
 
 
 def test_run_http_error_path(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -250,11 +293,12 @@ class TestMapQueryAzureMonitorLogs:
 
         assert evidence["catalog_entries"][0]["summary"].startswith("50+ row(s)")
 
-    def test_qualifies_count_when_caller_query_has_a_smaller_take_clause(self) -> None:
-        """Regression: _ensure_take_clause leaves a caller-supplied query
-        untouched when it already has a `take` stage, so effective_limit is
-        never actually applied server-side -- the caller's own smaller
-        `take N` is the real ceiling and must be detected."""
+    def test_qualifies_count_when_effective_limit_already_folds_in_caller_cap(self) -> None:
+        """The mapper trusts ``effective_limit`` alone -- reconciling it
+        against any caller-supplied row-cap clause (take/limit/sample/top)
+        is the tool's job (see ``__init__.py``'s ``find_row_cap_values``
+        call), not the mapper's. This pins that contract: a smaller
+        effective_limit the tool already computed must still qualify."""
         evidence: dict[str, Any] = {}
 
         _map_query_azure_monitor_logs(
@@ -262,7 +306,7 @@ class TestMapQueryAzureMonitorLogs:
             {
                 "available": True,
                 "total_returned": 5,
-                "effective_limit": 50,
+                "effective_limit": 5,
                 "query": "AppTraces | where Level == 'Error' | take 5",
             },
             {},
@@ -270,26 +314,7 @@ class TestMapQueryAzureMonitorLogs:
 
         assert evidence["catalog_entries"][0]["summary"].startswith("5+ row(s)")
 
-    def test_qualifies_count_when_caller_query_has_a_smaller_limit_clause(self) -> None:
-        """Regression: KQL defines `limit` as a synonym for `take`, so a
-        caller-supplied `| limit N` clause is just as real a ceiling as
-        `| take N` and must be detected the same way."""
-        evidence: dict[str, Any] = {}
-
-        _map_query_azure_monitor_logs(
-            evidence,
-            {
-                "available": True,
-                "total_returned": 5,
-                "effective_limit": 50,
-                "query": "AppTraces | where Level == 'Error' | limit 5",
-            },
-            {},
-        )
-
-        assert evidence["catalog_entries"][0]["summary"].startswith("5+ row(s)")
-
-    def test_does_not_qualify_when_caller_take_clause_was_not_saturated(self) -> None:
+    def test_does_not_qualify_when_below_effective_limit(self) -> None:
         evidence: dict[str, Any] = {}
 
         _map_query_azure_monitor_logs(
@@ -297,48 +322,8 @@ class TestMapQueryAzureMonitorLogs:
             {
                 "available": True,
                 "total_returned": 3,
-                "effective_limit": 50,
+                "effective_limit": 5,
                 "query": "AppTraces | take 5",
-            },
-            {},
-        )
-
-        assert evidence["catalog_entries"][0]["summary"].startswith("3 row(s)")
-
-    def test_ignores_take_text_that_is_not_a_real_pipe_stage(self) -> None:
-        """Regression: 'take N' inside a quoted string literal or a comment
-        is not an actual KQL take operator (which requires a preceding `|`)
-        -- matching it as one would falsely mark a complete result as
-        truncated."""
-        evidence: dict[str, Any] = {}
-
-        _map_query_azure_monitor_logs(
-            evidence,
-            {
-                "available": True,
-                "total_returned": 3,
-                "effective_limit": 50,
-                "query": 'AppTraces | where Message contains "take 5 minutes"',
-            },
-            {},
-        )
-
-        assert evidence["catalog_entries"][0]["summary"].startswith("3 row(s)")
-
-    def test_ignores_pipe_and_take_text_embedded_in_a_quoted_string(self) -> None:
-        """Regression: a literal '|' immediately before 'take N' inside a
-        quoted string literal (e.g. a filter value) is not a real KQL
-        pipe-stage boundary -- the pipe-anchored regex alone still matches
-        it, so the query text must be masked before the regex runs."""
-        evidence: dict[str, Any] = {}
-
-        _map_query_azure_monitor_logs(
-            evidence,
-            {
-                "available": True,
-                "total_returned": 3,
-                "effective_limit": 50,
-                "query": 'AppTraces | where Message contains "| take 5 now"',
             },
             {},
         )

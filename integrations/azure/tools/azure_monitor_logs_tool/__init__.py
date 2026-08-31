@@ -18,7 +18,10 @@ from core.tool_framework.utils import tool_unavailable
 from integrations.azure.tools.azure_monitor_logs_tool._evidence import (
     map_query_azure_monitor_logs,
 )
-from integrations.azure.tools.azure_monitor_logs_tool._kql import has_take_or_limit_clause
+from integrations.azure.tools.azure_monitor_logs_tool._kql import (
+    find_row_cap_values,
+    has_row_cap_clause,
+)
 
 
 def _bounded_limit(limit: int, max_results: int) -> int:
@@ -53,7 +56,7 @@ def _ensure_take_clause(query: str, limit: int) -> str:
     normalized = query.strip()
     if not normalized:
         return f"AppTraces | order by TimeGenerated desc | take {limit}"
-    if has_take_or_limit_clause(normalized):
+    if has_row_cap_clause(normalized):
         return normalized
     return f"{normalized} | take {limit}"
 
@@ -104,6 +107,15 @@ def query_azure_monitor_logs(
 
     effective_limit = _bounded_limit(limit, max_results)
     bounded_query = _ensure_take_clause(query, effective_limit)
+    # A caller-supplied row-cap clause (take/limit/sample/top) smaller than
+    # effective_limit is the real ceiling Azure actually applies --
+    # _ensure_take_clause leaves such a query untouched, so effective_limit
+    # alone would overstate how many rows could possibly come back. Fold it
+    # in here so every consumer of effective_limit (the local slice below,
+    # and the evidence mapper) sees the one true ceiling.
+    caller_row_caps = find_row_cap_values(bounded_query)
+    if caller_row_caps:
+        effective_limit = min(effective_limit, *caller_row_caps)
     base_url = endpoint.strip().rstrip("/") or AZURE_LOG_ANALYTICS_DEFAULT_ENDPOINT
     url = f"{base_url}/v1/workspaces/{workspace}/query"
     payload = {

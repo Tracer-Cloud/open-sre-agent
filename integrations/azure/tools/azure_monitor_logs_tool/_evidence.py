@@ -6,7 +6,6 @@ from typing import Any
 
 from core.domain.types.evidence import record_evidence_entry
 from infrastructure.text.truncation import truncate
-from integrations.azure.tools.azure_monitor_logs_tool._kql import find_take_or_limit_values
 
 #: Bound the KQL query text echoed into a report summary -- it can be a long
 #: or multi-line query built by the caller, not just the short bounded form.
@@ -18,9 +17,10 @@ def map_query_azure_monitor_logs(
 ) -> None:
     """Cite the row count and a bounded snippet of the KQL query executed.
 
-    ``rows`` is truncated to ``effective_limit`` after the query runs, so a
-    returned count at that ceiling may understate how many rows actually
-    matched -- use the "N+" convention.
+    ``effective_limit`` is the tool's own true ceiling -- it already folds in
+    any caller-supplied row-cap clause (take/limit/sample/top) smaller than
+    the tool's computed limit, so a returned count at that ceiling may
+    understate how many rows actually matched -- use the "N+" convention.
     """
     if not output.get("available"):
         return
@@ -29,9 +29,6 @@ def map_query_azure_monitor_logs(
         return
     effective_limit = output.get("effective_limit", total)
     raw_query = str(output.get("query", ""))
-    row_cap_matches = find_take_or_limit_values(raw_query)
-    if row_cap_matches:
-        effective_limit = min(effective_limit, *row_cap_matches)
     count_label = f"{total}+" if total >= effective_limit else str(total)
     query = truncate(
         raw_query.replace("\r\n", " ").replace("\r", " ").replace("\n", " "),

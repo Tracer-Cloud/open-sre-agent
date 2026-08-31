@@ -1,7 +1,7 @@
-"""Lightweight KQL text helpers for take/limit pipe-stage detection.
+"""Lightweight KQL text helpers for row-capping pipe-stage detection.
 
 Not a full KQL parser -- masks quoted string literals and ``//`` line
-comments so take/limit pipe-stage detection isn't fooled by text that
+comments so row-cap pipe-stage detection isn't fooled by text that
 merely *contains* those keywords inside a string or comment (e.g. a
 ``where Message contains "| take 5"`` filter). Handles both of KQL's
 string forms: regular strings (``"..."``/``'...'``, backslash-escaped
@@ -9,17 +9,22 @@ quotes) and verbatim strings (``@"..."``/``@'...'``, where backslash is
 a literal character and a doubled quote is the only escape) -- treating
 a verbatim string as a regular one would let a backslash before its
 real closing quote extend the mask past the string's true end, hiding
-a real take/limit stage that follows it.
+a real row-cap stage that follows it.
 """
 
 from __future__ import annotations
 
 import re
 
-#: KQL defines ``limit`` as an alias for ``take``. Require a preceding ``|``
-#: (the actual pipe-stage syntax) against the masked query so a match can
-#: only come from a real operator, never from string/comment text.
-_TAKE_OR_LIMIT_CLAUSE_RE = re.compile(r"\|\s*(?:take|limit)\s+(\d+)\b", re.IGNORECASE)
+#: KQL row-capping pipe stages: ``limit`` is a synonym for ``take``;
+#: ``sample N`` returns up to N rows; ``top N by ...`` returns the top N by
+#: a sort expression. All four bound the row count the same way for the
+#: purpose of saturation detection. Require a preceding ``|`` (the actual
+#: pipe-stage syntax) against the masked query so a match can only come
+#: from a real operator, never from string/comment text.
+_ROW_CAP_CLAUSE_RE = re.compile(
+    r"\|\s*(?:take|limit|sample)\s+(\d+)\b|\|\s*top\s+(\d+)\s+by\b", re.IGNORECASE
+)
 
 
 def mask_string_and_comment_text(query: str) -> str:
@@ -89,11 +94,12 @@ def mask_string_and_comment_text(query: str) -> str:
     return "".join(result)
 
 
-def has_take_or_limit_clause(query: str) -> bool:
-    """True if ``query`` contains a real (non-string/comment) take/limit pipe stage."""
-    return bool(_TAKE_OR_LIMIT_CLAUSE_RE.search(mask_string_and_comment_text(query)))
+def has_row_cap_clause(query: str) -> bool:
+    """True if ``query`` contains a real (non-string/comment) row-cap pipe stage."""
+    return bool(_ROW_CAP_CLAUSE_RE.search(mask_string_and_comment_text(query)))
 
 
-def find_take_or_limit_values(query: str) -> list[int]:
-    """Return the integer caps from every real take/limit pipe stage in ``query``."""
-    return [int(m) for m in _TAKE_OR_LIMIT_CLAUSE_RE.findall(mask_string_and_comment_text(query))]
+def find_row_cap_values(query: str) -> list[int]:
+    """Return the integer caps from every real row-cap pipe stage in ``query``."""
+    masked = mask_string_and_comment_text(query)
+    return [int(g1 or g2) for g1, g2 in _ROW_CAP_CLAUSE_RE.findall(masked)]
