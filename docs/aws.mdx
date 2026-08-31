@@ -208,12 +208,13 @@ Expected:
 SERVICE │ SOURCE    │ STATUS   │ DETAIL
 ━━━━━━━━┿━━━━━━━━━━━┿━━━━━━━━━━┿━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 aws     │ local env │ ✓ passed │ Connected to AWS STS via static-creds
-        │           │          │ in us-east-1; caller identity confirmed.
+        │           │          │ in us-east-1; caller identity
+        │           │          │ account=<REDACTED> arn=<REDACTED>.
 ```
 
 ### Exercise `execute_aws_operation`
 
-`execute_aws_operation` is the registered AWS tool. It is read-only: only `describe_*`, `get_*`, `list_*`, and `head_*` operations are allowed, and mutating operations (e.g. `terminate_instances`) are rejected with an `"Operation not allowed"` error.
+`execute_aws_operation` is the registered AWS tool. It is read-only: the allowlist admits `describe_*`, `get_*`, `list_*`, `head_*`, `select_*`, `batch_get_*`, `lookup_*` (e.g. `cloudtrail.lookup_events`), and the exact operations `query` and `scan` (e.g. `dynamodb.query`). Mutating operations (e.g. `terminate_instances`) are rejected with an `"Operation not allowed"` error.
 
 It is not auto-planned during an investigation (the agent needs an explicit service and operation), so call it by looking it up in the tool registry and running it directly. Any region works — set `AWS_REGION`, or pass a region-scoped service; `us-east-1` is used here as the example:
 
