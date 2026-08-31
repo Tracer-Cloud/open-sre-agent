@@ -11,6 +11,7 @@ from core.agent_harness.prompts import (
     connected_integrations_block,
     prior_action_facts_block,
     recent_conversation_block,
+    repository_context_block,
 )
 from core.agent_harness.prompts.memory.conversation import NO_HISTORY_PLACEHOLDER
 from core.agent_harness.prompts.skills.loader import (
@@ -32,6 +33,8 @@ def _ctx(
     messages: list[tuple[str, str]] | None = None,
     integrations: tuple[str, ...] = (),
     integrations_known: bool = False,
+    active_repositories: dict[str, str] | None = None,
+    known_repositories: dict[str, tuple[str, ...]] | None = None,
 ) -> TurnSnapshot:
     return TurnSnapshot(
         text="",
@@ -41,6 +44,8 @@ def _ctx(
         last_state=None,
         last_synthetic_observation_path=None,
         reasoning_effort=None,
+        active_vcs_repositories=active_repositories or {},
+        known_vcs_repositories=known_repositories or {},
     )
 
 
@@ -167,6 +172,22 @@ def test_connected_integrations_block_renders_state() -> None:
     assert "github, posthog_mcp, sentry" in listed
     # Connected listing still must not imply auto-investigate on diagnostic asks.
     assert "does not gate diagnostic" in listed.lower()
+
+
+def test_repository_context_renders_one_active_and_multiple_remembered_repos() -> None:
+    block = repository_context_block(
+        _ctx(
+            active_repositories={"github": "vercel/next.js"},
+            known_repositories={
+                "github": ("Tracer-Cloud/opensre", "vercel/next.js"),
+            },
+        )
+    )
+
+    assert "active=vercel/next.js" in block
+    assert "remembered=Tracer-Cloud/opensre, vercel/next.js" in block
+    assert "without deleting the others" in block
+    assert repository_context_block(_ctx()) == ""
 
 
 def test_skills_loader_bundles_architecture_audit_skill() -> None:

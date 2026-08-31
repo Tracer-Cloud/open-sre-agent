@@ -43,6 +43,8 @@ class InMemorySessionState:
     last_command_observation: str | None = None
     resolved_integrations_cache: dict[str, Any] | None = None
     vcs_repo_scopes: dict[str, tuple[str, ...]] = field(default_factory=dict)
+    active_vcs_repositories: dict[str, str] = field(default_factory=dict)
+    known_vcs_repo_scopes: dict[str, dict[str, tuple[str, ...]]] = field(default_factory=dict)
     records: list[tuple[str, str, bool]] = field(default_factory=list)
     available_capabilities: dict[str, Any] = field(default_factory=dict)
 

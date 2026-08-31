@@ -26,6 +26,8 @@ from core.agent_harness.session.integration_resolution import (
 from core.agent_harness.turns.turn_snapshot import TurnSnapshot
 from infrastructure.harness_providers import enrich_resolved_with_repo_scopes
 
+_MAX_KNOWN_REPOSITORIES_PER_VENDOR = 20
+
 
 @dataclass(frozen=True)
 class TurnPlan:
@@ -62,13 +64,37 @@ def build_turn_plan(snapshot: TurnSnapshot, session: SessionState) -> TurnPlan:
     if not has_resolved_integrations(snapshot.resolved_integrations):
         snapshot = replace(snapshot, resolved_integrations=resolve_and_cache_integrations(session))
 
-    def _set_cached_scope(vendor: str, scope: tuple[str, ...] | None) -> None:
-        scopes = dict(session.vcs_repo_scopes)
+    repository_keys: dict[tuple[str, tuple[str, ...]], str] = {}
+
+    def _set_active_scope(vendor: str, scope: tuple[str, ...] | None) -> None:
+        active_scopes = dict(session.vcs_repo_scopes)
         if scope is None:
-            scopes.pop(vendor, None)
+            active_scopes.pop(vendor, None)
         else:
-            scopes[vendor] = scope
-        session.vcs_repo_scopes = scopes
+            active_scopes[vendor] = scope
+        session.vcs_repo_scopes = active_scopes
+
+        active_repositories = dict(session.active_vcs_repositories)
+        repository = repository_keys.get((vendor, scope)) if scope is not None else None
+        if repository is None:
+            active_repositories.pop(vendor, None)
+        else:
+            active_repositories[vendor] = repository
+        session.active_vcs_repositories = active_repositories
+
+    def _remember_scope(vendor: str, repository: str, scope: tuple[str, ...]) -> None:
+        repository_keys[(vendor, scope)] = repository
+        known_by_vendor = {
+            name: dict(scopes) for name, scopes in session.known_vcs_repo_scopes.items()
+        }
+        known = known_by_vendor.setdefault(vendor, {})
+        # Re-inserting moves a reused repository to the recent end without
+        # creating a duplicate. Bound the collection for long-running gateways.
+        known.pop(repository, None)
+        known[repository] = scope
+        while len(known) > _MAX_KNOWN_REPOSITORIES_PER_VENDOR:
+            known.pop(next(iter(known)))
+        session.known_vcs_repo_scopes = known_by_vendor
 
     enriched = enrich_resolved_with_repo_scopes(
         resolved=snapshot.resolved_integrations,
@@ -77,9 +103,17 @@ def build_turn_plan(snapshot: TurnSnapshot, session: SessionState) -> TurnPlan:
         env=None,
         cwd=snapshot.working_directory,
         cached_scopes=session.vcs_repo_scopes,
-        set_cached_scope=_set_cached_scope,
+        set_cached_scope=_set_active_scope,
+        remember_scope=_remember_scope,
     )
-    snapshot = replace(snapshot, resolved_integrations=enriched)
+    snapshot = replace(
+        snapshot,
+        resolved_integrations=enriched,
+        active_vcs_repositories=dict(session.active_vcs_repositories),
+        known_vcs_repositories={
+            vendor: tuple(scopes) for vendor, scopes in session.known_vcs_repo_scopes.items()
+        },
+    )
     return TurnPlan(snapshot=snapshot)
 
 

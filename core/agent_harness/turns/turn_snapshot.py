@@ -216,6 +216,12 @@ class TurnSnapshot:
     interactive_choice_available: bool = False
     """True when ``ask_user_choice`` can open a keyboard menu on this surface."""
 
+    active_vcs_repositories: dict[str, str] = field(default_factory=dict)
+    """Active repository identity per VCS vendor for this turn."""
+
+    known_vcs_repositories: dict[str, tuple[str, ...]] = field(default_factory=dict)
+    """Repository identities retained in this session, grouped by VCS vendor."""
+
     @classmethod
     def from_session(
         cls,
@@ -271,6 +277,12 @@ class TurnSnapshot:
             prompt_surface=surface,
             session_goal_attached=getattr(session, "session_goal", None) is not None,
             interactive_choice_available=_interactive_choice_available(session, surface),
+            active_vcs_repositories=dict(getattr(session, "active_vcs_repositories", {}) or {}),
+            known_vcs_repositories={
+                str(vendor): tuple(scopes)
+                for vendor, scopes in (getattr(session, "known_vcs_repo_scopes", {}) or {}).items()
+                if isinstance(scopes, dict)
+            },
         )
 
     def render_system_prompt(self) -> str:

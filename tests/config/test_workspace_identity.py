@@ -49,8 +49,10 @@ def test_workspace_line_in_prompt_when_set(monkeypatch) -> None:
     monkeypatch.setenv(OPENSRE_WORKSPACE_REPO_ENV, "acme/widgets")
     facts = build_runtime_metadata()
     block = render_static_runtime_facts(facts)
-    assert "this OpenSRE workspace repo is acme/widgets" in block
+    assert "this OpenSRE workspace default repo is acme/widgets" in block
     assert "treat “our” / “this repo” as acme/widgets" in block
+    assert "session repository context can select another active repo" in block
+    assert "does not limit how many repositories long-term memory" in block
 
 
 def test_workspace_absence_line_when_unknown(monkeypatch) -> None:

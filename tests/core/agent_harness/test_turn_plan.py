@@ -150,6 +150,56 @@ def test_repo_scope_is_sticky_and_current_message_can_override_it() -> None:
     assert session.vcs_repo_scopes["github"] == ("vercel", "next.js")
 
 
+def test_repo_scope_switch_keeps_all_repository_contexts_in_session_memory() -> None:
+    session = Session()
+    session.resolved_integrations_cache = {"github": {"connection_verified": True}}
+
+    first = build_turn_plan(
+        TurnSnapshot.from_session(
+            "Inspect facebook/react",
+            session,
+            surface="interactive_shell",
+        ),
+        session,
+    )
+    second = build_turn_plan(
+        TurnSnapshot.from_session(
+            "Now inspect vercel/next.js",
+            session,
+            surface="interactive_shell",
+        ),
+        session,
+    )
+
+    assert first.snapshot.active_vcs_repositories == {"github": "facebook/react"}
+    assert second.snapshot.active_vcs_repositories == {"github": "vercel/next.js"}
+    assert second.snapshot.known_vcs_repositories == {
+        "github": ("facebook/react", "vercel/next.js")
+    }
+    assert session.known_vcs_repo_scopes["github"] == {
+        "facebook/react": ("facebook", "react"),
+        "vercel/next.js": ("vercel", "next.js"),
+    }
+    assert session.vcs_repo_scopes["github"] == ("vercel", "next.js")
+
+
+def test_one_turn_remembers_all_named_repositories_and_activates_last() -> None:
+    session = Session()
+    session.resolved_integrations_cache = {"github": {"connection_verified": True}}
+
+    plan = build_turn_plan(
+        TurnSnapshot.from_session(
+            "Compare facebook/react with vercel/next.js",
+            session,
+            surface="interactive_shell",
+        ),
+        session,
+    )
+
+    assert plan.snapshot.active_vcs_repositories == {"github": "vercel/next.js"}
+    assert plan.snapshot.known_vcs_repositories == {"github": ("facebook/react", "vercel/next.js")}
+
+
 def test_repo_scope_uses_workspace_only_without_explicit_or_sticky_scope(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

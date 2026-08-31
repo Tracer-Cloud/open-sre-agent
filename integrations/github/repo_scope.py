@@ -38,19 +38,30 @@ def split_repo_full_name(value: str) -> tuple[str, str]:
     return owner.strip(), repo.strip().removesuffix(".git")
 
 
-def parse_github_repository_reference(text: str) -> tuple[str, str] | None:
-    """Return the last owner/repo pair found in *text*, or ``None``."""
+def find_github_repository_references(text: str) -> tuple[tuple[str, str], ...]:
+    """Return every distinct owner/repo in textual recency order."""
     if not text.strip():
-        return None
+        return ()
 
-    matches: list[tuple[str, str]] = []
+    matches: list[tuple[int, tuple[str, str]]] = []
     for pattern in (_GITHUB_HOST_RE, _REPO_QUALIFIER_RE, _BARE_REPO_RE):
         for match in pattern.finditer(text):
             owner = match.group("owner").strip()
             repo = match.group("repo").strip().removesuffix(".git")
             if owner and repo:
-                matches.append((owner, repo))
-    return matches[-1] if matches else None
+                matches.append((match.start(), (owner, repo)))
+    references: list[tuple[str, str]] = []
+    for _position, scope in sorted(matches):
+        if scope in references:
+            references.remove(scope)
+        references.append(scope)
+    return tuple(references)
+
+
+def parse_github_repository_reference(text: str) -> tuple[str, str] | None:
+    """Return the last owner/repo pair found in *text*, or ``None``."""
+    references = find_github_repository_references(text)
+    return references[-1] if references else None
 
 
 def _parse_git_remote_url(url: str) -> tuple[str, str] | None:
@@ -198,6 +209,20 @@ class _GithubVcsRepoScopeProvider:
             }
         return apply_github_repo_scope(resolved, owner, repo)
 
+    def repository_key(self, scope: tuple[str, ...]) -> str:
+        """Return ``owner/repo`` without internal workspace-scope markers."""
+        return f"{scope[0]}/{scope[1]}"
+
+    def referenced_scopes(
+        self,
+        *,
+        text: str,
+        env: Mapping[str, str] | None,
+    ) -> tuple[tuple[str, ...], ...]:
+        """Return all GitHub repositories explicitly named in ``text``."""
+        _ = env
+        return find_github_repository_references(text)
+
 
 GITHUB_VCS_REPO_SCOPE_PROVIDER = _GithubVcsRepoScopeProvider()
 
@@ -206,6 +231,7 @@ __all__ = [
     "GITHUB_VCS_REPO_SCOPE_PROVIDER",
     "apply_github_repo_scope",
     "detect_git_remote_repo_scope",
+    "find_github_repository_references",
     "infer_github_repo_scope",
     "parse_github_repository_reference",
     "split_repo_full_name",

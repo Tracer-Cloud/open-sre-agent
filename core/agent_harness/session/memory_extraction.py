@@ -49,7 +49,7 @@ _SAMPLE_OR_SYNTHETIC_RE = re.compile(
     r"\b(?:sample|template):[a-z0-9_-]+\b"
 )
 _EXPLICIT_MEMORY_RE = re.compile(r"(?i)\b(?:remember|save|store|keep|note|memorize)\b")
-_USER_GROUNDED_TYPES = frozenset({"infrastructure", "investigation_learning"})
+_USER_GROUNDED_TYPES = frozenset({"infrastructure", "repository", "investigation_learning"})
 _GROUNDING_STOPWORDS = frozenset(
     {
         "about",
@@ -102,6 +102,8 @@ will help later turns.
 Extract ONLY durable knowledge worth keeping across future sessions:
 - who the user is (name, role, how they like to work)
 - infrastructure facts and conventions (cluster names, naming schemes, known-flaky services)
+- repository facts (owner/name, purpose, default branch, conventions); keep a separate
+  stable memory for each repository instead of replacing the previously active repo
 - stable preferences the user stated
 - lessons learned from real incidents or investigations the user confirmed
 
@@ -116,7 +118,7 @@ scenarios, or generated RCA examples as the user's infrastructure or incident
 history unless the user explicitly says they are real and asks to remember them.
 
 Return a JSON array (no prose). Each item:
-{{"name": "kebab-case-slug", "type": "user|infrastructure|preference|investigation_learning",
+{{"name": "kebab-case-slug", "type": "user|infrastructure|repository|preference|investigation_learning",
   "description": "one line, max 200 chars", "content": "full markdown body"}}
 
 Return [] when nothing qualifies. At most {max_memories} items.

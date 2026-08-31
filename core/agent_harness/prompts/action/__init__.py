@@ -9,6 +9,7 @@ from core.agent_harness.prompts.action.assemble import (
     connected_integrations_block,
     prior_action_facts_block,
     recent_conversation_block,
+    repository_context_block,
     sanitize_action_text,
 )
 from core.agent_harness.prompts.action.text import (
@@ -25,5 +26,6 @@ __all__ = [
     "connected_integrations_block",
     "prior_action_facts_block",
     "recent_conversation_block",
+    "repository_context_block",
     "sanitize_action_text",
 ]

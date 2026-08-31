@@ -20,11 +20,22 @@ OpenSRE keeps durable knowledge across sessions so you never repeat yourself:
 
 - **Who you are** — your name, role, and how you like to work
 - **Your infrastructure** — cluster names, naming conventions, known-flaky services
+- **Your repositories** — owner/name, purpose, default branch, and repo-specific conventions
 - **Your preferences** — report formats, notification choices, defaults
 - **Investigation learnings** — root causes and lessons worth keeping
 
 The memory index is shown to the agent at the start of every conversation, so
 facts saved last week ground answers today.
+
+### Multiple repositories
+
+OpenSRE keeps one active repository per GitHub or GitLab context while retaining
+facts for many repositories. Naming a different repository makes it active for
+unqualified follow-up requests in that session; it does not delete or overwrite
+the repositories used earlier. Durable details are stored as separate
+`repository` memories, one per repository, and remain available in later
+sessions. A new session defaults the active target to the current workspace
+checkout, while the other repository memories stay available for recall.
 
 ## Saving memories
 
@@ -32,6 +43,14 @@ Talk normally — no special phrasing:
 
 ```
 our prod cluster is eks-prod-eu-1
+```
+
+```
+Tracer-Cloud/opensre is our SRE assistant repo; its default branch is main
+```
+
+```
+acme/payments owns the checkout API and deploys from release
 ```
 
 ```

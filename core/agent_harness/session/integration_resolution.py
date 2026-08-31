@@ -114,8 +114,15 @@ class IntegrationState:
     waiting for the first user message to trigger a visible "Loading integrations"
     pass. Cleared by :meth:`refresh` when integrations change."""
     vcs_repo_scopes: dict[str, tuple[str, ...]] = field(default_factory=dict)
-    """Sticky per-vendor repo scopes (owner/repo, project/ref/file, …) keyed by
-    vendor name, inferred from chat, env, or git remote for VCS tools."""
+    """Active per-vendor repo scopes used for unqualified VCS tool calls."""
+    active_vcs_repositories: dict[str, str] = field(default_factory=dict)
+    """Stable repository identity for each active per-vendor scope."""
+    known_vcs_repo_scopes: dict[str, dict[str, tuple[str, ...]]] = field(default_factory=dict)
+    """All repository scopes encountered this session, keyed by vendor and repo.
+
+    Switching the active scope updates :attr:`vcs_repo_scopes` without
+    discarding scopes for repositories used earlier in the session.
+    """
 
     _warm_lock: threading.Lock = field(default_factory=threading.Lock, repr=False, compare=False)
     _warm_generation: int = field(default=0, repr=False, compare=False)
@@ -205,5 +212,7 @@ class IntegrationState:
             if drop_cache:
                 self.resolved_cache = None
                 self.vcs_repo_scopes = {}
+                self.active_vcs_repositories = {}
+                self.known_vcs_repo_scopes = {}
         if pending is not None and not pending.done():
             pending.cancel()

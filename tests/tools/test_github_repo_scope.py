@@ -12,6 +12,7 @@ from integrations.github.repo_scope import (
     GITHUB_VCS_REPO_SCOPE_PROVIDER,
     apply_github_repo_scope,
     detect_git_remote_repo_scope,
+    find_github_repository_references,
     infer_github_repo_scope,
     parse_github_repository_reference,
     split_repo_full_name,
@@ -39,6 +40,15 @@ def test_parse_github_repository_reference(text: str, expected: tuple[str, str])
 def test_parse_github_repository_reference_last_match_wins() -> None:
     text = "https://github.com/first/a and https://github.com/second/b"
     assert parse_github_repository_reference(text) == ("second", "b")
+
+
+def test_find_github_repository_references_keeps_every_distinct_repo() -> None:
+    text = "Compare first/a with second/b, then revisit first/a"
+
+    assert find_github_repository_references(text) == (
+        ("second", "b"),
+        ("first", "a"),
+    )
 
 
 def test_parse_github_repository_reference_rejects_paths() -> None:

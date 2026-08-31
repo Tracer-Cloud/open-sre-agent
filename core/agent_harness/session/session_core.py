@@ -354,6 +354,27 @@ class SessionCore:
     def vcs_repo_scopes(self, value: dict[str, tuple[str, ...]]) -> None:
         self.integrations.vcs_repo_scopes = value
 
+    @property
+    def active_vcs_repositories(self) -> dict[str, str]:
+        """Stable identities for the active per-vendor repository scopes."""
+        return self.integrations.active_vcs_repositories
+
+    @active_vcs_repositories.setter
+    def active_vcs_repositories(self, value: dict[str, str]) -> None:
+        self.integrations.active_vcs_repositories = value
+
+    @property
+    def known_vcs_repo_scopes(self) -> dict[str, dict[str, tuple[str, ...]]]:
+        """All repositories remembered during this session, grouped by vendor."""
+        return self.integrations.known_vcs_repo_scopes
+
+    @known_vcs_repo_scopes.setter
+    def known_vcs_repo_scopes(
+        self,
+        value: dict[str, dict[str, tuple[str, ...]]],
+    ) -> None:
+        self.integrations.known_vcs_repo_scopes = value
+
     def refresh_runtime_metadata(self) -> None:
         """Rebuild :attr:`runtime_metadata`, including merged capability warnings."""
         from config.runtime_metadata import build_runtime_metadata

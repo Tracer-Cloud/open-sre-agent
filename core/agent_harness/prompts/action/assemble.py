@@ -147,6 +147,15 @@ def build_action_system_prompt_envelope(turn_snapshot: TurnSnapshot) -> PromptEn
             provenance="core.agent_harness.turns.turn_snapshot",
         )
     )
+    blocks.extend(
+        _optional_block(
+            id=PromptBlockId.REPOSITORY_CONTEXT,
+            kind=PromptBlockKind.CONTEXT,
+            tier=PromptTier.CONTEXT,
+            content=repository_context_block(turn_snapshot),
+            provenance="core.agent_harness.turns.turn_snapshot",
+        )
+    )
     # Volatile before ephemeral so render_cached + render_ephemeral reassemble
     # into render() and the cache breakpoint can sit after memory.
     memory_block = long_term_memory_block()
@@ -255,6 +264,31 @@ def connected_integrations_block(turn_snapshot: TurnSnapshot) -> str:
     return f"CONNECTED INTEGRATIONS (this install, right now): {listing}\n{gate_note}\n"
 
 
+def repository_context_block(turn_snapshot: TurnSnapshot) -> str:
+    """Render one active repo plus every repo retained in session memory."""
+    active = turn_snapshot.active_vcs_repositories
+    known = turn_snapshot.known_vcs_repositories
+    vendors = sorted(set(active) | set(known))
+    if not vendors:
+        return ""
+
+    lines: list[str] = []
+    for vendor in vendors:
+        active_repo = active.get(vendor, "none")
+        remembered = known.get(vendor, ())
+        remembered_text = ", ".join(remembered) if remembered else "none"
+        lines.append(f"- {vendor}: active={active_repo}; remembered={remembered_text}")
+    repository_lines = "\n".join(lines)
+    return (
+        "REPOSITORY CONTEXT (this session; one active target per vendor, many "
+        "remembered repositories):\n"
+        f"{repository_lines}\n"
+        "Use the active target for an unqualified repository request. A user-named "
+        "repository becomes active without deleting the others. Do not describe the "
+        "active repository as the only repository OpenSRE remembers.\n\n"
+    )
+
+
 def recent_conversation_block(turn_snapshot: TurnSnapshot) -> str:
     # Newest-first: this block rides after the literal user message, and
     # context_budget shrinks with text[:keep]. Chronological (oldest-first)
@@ -317,7 +351,9 @@ def long_term_memory_block() -> str:
         "every turn). Use listed facts when planning; when the USER MESSAGE "
         "contains a new useful durable fact, call memory_remember in this turn "
         "even if they never said remember/save — do not wait for special phrasing. "
-        "Prefer updating an existing name over near-duplicates:\n"
+        "Prefer updating an existing name over near-duplicates. Repository memories "
+        "are a collection: keep one stable memory per repository and never overwrite "
+        "one repository's facts merely because another repository became active:\n"
         f"{rendered}\n\n"
     )
 
@@ -359,5 +395,6 @@ __all__ = [
     "long_term_memory_block",
     "prior_action_facts_block",
     "recent_conversation_block",
+    "repository_context_block",
     "sanitize_action_text",
 ]

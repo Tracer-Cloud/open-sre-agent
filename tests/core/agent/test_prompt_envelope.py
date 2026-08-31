@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from dataclasses import replace
+
 import pytest
 
 from core.agent_harness.prompts import (
@@ -95,6 +97,19 @@ def test_action_system_prompt_envelope_matches_legacy_rendering(
         == PromptBlockKind.CONVERSATION
     )
     assert envelope.render() == build_action_system_prompt(ctx)
+
+
+def test_repository_context_is_a_named_context_block() -> None:
+    ctx = replace(
+        _ctx(),
+        active_vcs_repositories={"github": "acme/payments"},
+        known_vcs_repositories={"github": ("Tracer-Cloud/opensre", "acme/payments")},
+    )
+
+    block = build_action_system_prompt_envelope(ctx).require_block(PromptBlockId.REPOSITORY_CONTEXT)
+    assert block.kind == PromptBlockKind.CONTEXT
+    assert block.tier == PromptTier.CONTEXT
+    assert "active=acme/payments" in block.content
 
 
 def _turn(messages: list[tuple[str, str]]) -> TurnSnapshot:

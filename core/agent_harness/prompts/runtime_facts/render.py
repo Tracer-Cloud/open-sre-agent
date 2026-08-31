@@ -175,8 +175,11 @@ def _workspace_line(runtime: Mapping[str, Any]) -> str | None:
     repo = _clean_str(runtime, "workspace_repo")
     if repo:
         return (
-            f"this OpenSRE workspace repo is {repo} — treat “our” / “this repo” "
-            f"as {repo} unless the user names a different repository"
+            f"this OpenSRE workspace default repo is {repo} — at session start, "
+            f"treat “our” / “this repo” as {repo} unless the user names a different "
+            "repository; session repository context can select another active repo, "
+            "and this default does not limit how many repositories long-term memory "
+            "can retain"
         )
     return (
         "no workspace git/GitHub repo was detected for this process — ask which "

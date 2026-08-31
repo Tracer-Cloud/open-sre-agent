@@ -59,27 +59,40 @@ def _scope_from_url(value: str, allowed_hosts: frozenset[str]) -> GitlabRepoScop
     return GitlabRepoScope(project_id=project) if "/" in project else None
 
 
-def parse_gitlab_repository_reference(
+def find_gitlab_repository_references(
     text: str, *, allowed_hosts: frozenset[str] = frozenset()
-) -> GitlabRepoScope | None:
-    """Return the last GitLab project/file scope found in *text*.
+) -> tuple[GitlabRepoScope, ...]:
+    """Return all distinct GitLab project/file scopes in textual recency order.
 
     A host is accepted when it contains ``gitlab`` or matches *allowed_hosts*
     (typically the configured self-hosted GitLab base URL host).
     """
     if not text.strip():
-        return None
+        return ()
 
-    # ponytail: reverse-scan and early-return instead of accumulating every match.
-    for match in reversed(list(_PROJECT_QUALIFIER_RE.finditer(text))):
+    matches: list[tuple[int, GitlabRepoScope]] = []
+    for match in _PROJECT_QUALIFIER_RE.finditer(text):
         project = _clean_project_path(match.group("project"))
         if project:
-            return GitlabRepoScope(project_id=project)
-    for match in reversed(list(_URL_RE.finditer(text))):
+            matches.append((match.start(), GitlabRepoScope(project_id=project)))
+    for match in _URL_RE.finditer(text):
         scope = _scope_from_url(match.group(0), allowed_hosts)
         if scope:
-            return scope
-    return None
+            matches.append((match.start(), scope))
+    references: list[GitlabRepoScope] = []
+    for _position, scope in sorted(matches):
+        if scope in references:
+            references.remove(scope)
+        references.append(scope)
+    return tuple(references)
+
+
+def parse_gitlab_repository_reference(
+    text: str, *, allowed_hosts: frozenset[str] = frozenset()
+) -> GitlabRepoScope | None:
+    """Return the last GitLab project/file scope found in *text*."""
+    references = find_gitlab_repository_references(text, allowed_hosts=allowed_hosts)
+    return references[-1] if references else None
 
 
 def _parse_git_remote_scope(url: str, allowed_hosts: frozenset[str]) -> GitlabRepoScope | None:
@@ -215,6 +228,26 @@ class _GitlabVcsRepoScopeProvider:
         file_path = scope[2] if len(scope) > 2 else ""
         return apply_gitlab_repo_scope(resolved, project_id, ref_name, file_path)
 
+    def repository_key(self, scope: tuple[str, ...]) -> str:
+        """Return the project identity without its optional ref or file path."""
+        return scope[0]
+
+    def referenced_scopes(
+        self,
+        *,
+        text: str,
+        env: Mapping[str, str] | None,
+    ) -> tuple[tuple[str, ...], ...]:
+        """Return all GitLab repositories explicitly named in ``text``."""
+        env_map = env if env is not None else os.environ
+        return tuple(
+            tuple(scope)
+            for scope in find_gitlab_repository_references(
+                text,
+                allowed_hosts=_configured_hosts(env_map),
+            )
+        )
+
 
 GITLAB_VCS_REPO_SCOPE_PROVIDER = _GitlabVcsRepoScopeProvider()
 
@@ -224,6 +257,7 @@ __all__ = [
     "GitlabRepoScope",
     "apply_gitlab_repo_scope",
     "detect_git_remote_repo_scope",
+    "find_gitlab_repository_references",
     "infer_gitlab_repo_scope",
     "parse_gitlab_repository_reference",
 ]

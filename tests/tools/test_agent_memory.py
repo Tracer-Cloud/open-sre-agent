@@ -79,6 +79,28 @@ class TestRemember:
         _remember()
         assert _remember(content="Now eks-prod-2.")["status"] == "updated"
 
+    def test_repository_type_keeps_distinct_repositories(self) -> None:
+        first = memory_remember(
+            name="repo-tracer-cloud-opensre",
+            type="repository",
+            description="OpenSRE repository",
+            content="Tracer-Cloud/opensre uses main.",
+        )
+        second = memory_remember(
+            name="repo-acme-payments",
+            type="repository",
+            description="Payments repository",
+            content="acme/payments uses release.",
+        )
+
+        assert first["status"] == "created"
+        assert second["status"] == "created"
+        recalled = memory_recall(query="repository")
+        assert {item["name"] for item in recalled["memories"]} == {
+            "repo-tracer-cloud-opensre",
+            "repo-acme-payments",
+        }
+
     def test_free_form_name_normalized(self) -> None:
         result = _remember(name="Prod Cluster Conventions!")
         assert result["name"] == "prod-cluster-conventions"

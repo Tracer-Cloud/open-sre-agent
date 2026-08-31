@@ -40,6 +40,17 @@ class VcsRepoScopeProvider(Protocol):
         """Return a copy of *resolved* enriched with this vendor's scope."""
         raise NotImplementedError
 
+    def repository_key(self, scope: tuple[str, ...]) -> str:
+        """Return the stable repository identity represented by ``scope``."""
+
+    def referenced_scopes(
+        self,
+        *,
+        text: str,
+        env: Mapping[str, str] | None,
+    ) -> tuple[tuple[str, ...], ...]:
+        """Return every repository scope explicitly referenced in ``text``."""
+
 
 _vcs_repo_scope_providers: list[VcsRepoScopeProvider] = []
 
@@ -61,6 +72,7 @@ def enrich_resolved_with_repo_scopes(
     cwd: str | Path | None,
     cached_scopes: Mapping[str, tuple[str, ...]],
     set_cached_scope: Callable[[str, tuple[str, ...] | None], None] | None = None,
+    remember_scope: Callable[[str, str, tuple[str, ...]], None] | None = None,
 ) -> dict[str, Any]:
     """Apply all registered VCS repo-scope providers to ``resolved``.
 
@@ -68,6 +80,18 @@ def enrich_resolved_with_repo_scopes(
     """
     out = dict(resolved)
     for provider in _vcs_repo_scope_providers:
+        if remember_scope is not None:
+            reference_texts = [
+                *(content for _role, content in conversation_messages or ()),
+                message,
+            ]
+            for text in reference_texts:
+                for referenced_scope in provider.referenced_scopes(text=text, env=env):
+                    remember_scope(
+                        provider.vendor,
+                        provider.repository_key(referenced_scope),
+                        referenced_scope,
+                    )
         scope = provider.infer(
             message=message,
             conversation_messages=conversation_messages,
@@ -77,6 +101,8 @@ def enrich_resolved_with_repo_scopes(
         )
         if not scope:
             continue
+        if remember_scope is not None:
+            remember_scope(provider.vendor, provider.repository_key(scope), scope)
         if set_cached_scope is not None:
             set_cached_scope(provider.vendor, scope)
         out = provider.apply(out, scope)

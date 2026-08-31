@@ -196,6 +196,44 @@ class TestExtraction:
         )
         assert [r.slug for r in list_memories()] == ["prod-cluster"]
 
+    def test_user_grounded_repositories_save_as_separate_memories(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        _patch_llm(
+            monkeypatch,
+            json.dumps(
+                [
+                    {
+                        "name": "repo-tracer-cloud-opensre",
+                        "type": "repository",
+                        "description": "OpenSRE repository",
+                        "content": "Tracer-Cloud/opensre uses main as its default branch.",
+                    },
+                    {
+                        "name": "repo-acme-payments",
+                        "type": "repository",
+                        "description": "Payments repository",
+                        "content": "acme/payments deploys checkout-api from release.",
+                    },
+                ]
+            ),
+        )
+
+        extraction.extract_memories_from_messages(
+            [
+                (
+                    "user",
+                    "Tracer-Cloud/opensre uses main; acme/payments deploys checkout-api from release.",
+                ),
+                ("assistant", "Got it."),
+            ]
+        )
+
+        assert {record.slug for record in list_memories()} == {
+            "repo-tracer-cloud-opensre",
+            "repo-acme-payments",
+        }
+
     def test_cap_of_five_memories(self, monkeypatch: pytest.MonkeyPatch) -> None:
         items = [_valid_item(f"mem-{i}") for i in range(extraction.MAX_MEMORIES_PER_SESSION + 3)]
         _patch_llm(monkeypatch, json.dumps(items))

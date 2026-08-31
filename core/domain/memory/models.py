@@ -11,6 +11,7 @@ class MemoryType(StrEnum):
 
     USER = "user"
     INFRASTRUCTURE = "infrastructure"
+    REPOSITORY = "repository"
     PREFERENCE = "preference"
     INVESTIGATION_LEARNING = "investigation_learning"
 

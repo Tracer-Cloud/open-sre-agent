@@ -128,7 +128,10 @@ subpackage. Default port implementations live with the concern they serve, not i
        gate route selection.
     Resolves base integrations **once** at the top of the turn, enriches that
     per-turn copy with repository scopes from the frozen message/history, and
-    stores it on `turn_snapshot`, so `turn_snapshot.resolved_integrations` is
+    stores the enriched view on `turn_snapshot`. One active scope per vendor
+    drives unqualified tool calls while the session retains a bounded collection
+    of every repository scope it has encountered. Thus
+    `turn_snapshot.resolved_integrations` is
     the single source of truth for what the turn knows without mutating the
     session's base integration cache. Downstream components (e.g.
     `action_driver._resolved_integrations_for_turn`) read it from there rather

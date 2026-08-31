@@ -25,6 +25,7 @@ from core.agent_harness.prompts.action import (
     connected_integrations_block,
     prior_action_facts_block,
     recent_conversation_block,
+    repository_context_block,
     sanitize_action_text,
 )
 from core.agent_harness.prompts.grounding import build_environment_block
@@ -69,6 +70,7 @@ __all__ = [
     "load_skills_index",
     "prior_action_facts_block",
     "recent_conversation_block",
+    "repository_context_block",
     "sanitize_action_text",
     "skills_dir",
 ]
