@@ -1761,3 +1761,17 @@ def test_start_background_cli_task_echoes_command_markup_literally(
 
     assert task is not None
     assert f"$ {display_command}" in buf.getvalue().replace("\n", "")
+
+
+def test_highlight_command_leaves_argument_keywords_plain() -> None:
+    """``done`` after ``echo`` is an argument, not the bash loop keyword — a shell
+    lexer mis-colours it. Command words are highlighted; ``done`` stays plain."""
+    from surfaces.interactive_shell.runtime.subprocess_runner.repl_presenter import (
+        _highlight_command,
+    )
+
+    text = _highlight_command("sleep 8 && echo done")
+    styled = {text.plain[s.start : s.end].strip() for s in text.spans}
+    assert "sleep" in styled  # first command highlighted
+    assert "echo" in styled  # command after the operator highlighted
+    assert "done" not in styled  # argument left in the base style, not recoloured

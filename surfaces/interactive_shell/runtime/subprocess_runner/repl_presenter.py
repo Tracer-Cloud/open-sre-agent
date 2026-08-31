@@ -11,11 +11,9 @@ from typing import Any
 
 from rich.console import Console
 from rich.markup import escape
-from rich.syntax import Syntax
 from rich.text import Text
 
 from infrastructure.scheduling.task_types import TaskKind
-from infrastructure.terminal.theme import MARKDOWN_CODE_THEME
 from surfaces.interactive_shell.session import Session
 from surfaces.interactive_shell.ui import DIM, ERROR, HIGHLIGHT, WARNING, print_command_output
 from surfaces.interactive_shell.ui.execution_confirm import execution_allowed
@@ -38,6 +36,26 @@ _MARKUP_STYLE_ALIASES: dict[str, str] = {
     "highlight": str(HIGHLIGHT),
     "warning": str(WARNING),
 }
+
+# Command-focused highlighting: colour the command word (first token and each
+# token after a pipeline operator), flags, and operators; leave bare arguments
+# in the base bold. A shell lexer mis-colours argument words that happen to be
+# bash keywords (e.g. ``echo done`` → ``done`` as the loop keyword).
+_SHELL_OPERATOR_RE = r"&&|\|\||[|;<>&]"
+_SHELL_FLAG_RE = r"(?<!\S)--?[A-Za-z][\w-]*"
+_SHELL_FIRST_COMMAND_RE = r"^\s*[\w./+-]+"
+_SHELL_PIPED_COMMAND_RE = r"(?<=[|&;]) *[\w./+-]+"
+
+
+def _highlight_command(command: str) -> Text:
+    """Return ``command`` as a Text with command/flag/operator colouring."""
+    text = Text(command, style="bold")
+    text.highlight_regex(_SHELL_OPERATOR_RE, style=str(DIM))
+    text.highlight_regex(_SHELL_FLAG_RE, style=str(WARNING))
+    text.highlight_regex(_SHELL_FIRST_COMMAND_RE, style=f"bold {HIGHLIGHT}")
+    text.highlight_regex(_SHELL_PIPED_COMMAND_RE, style=f"bold {HIGHLIGHT}")
+    return text
+
 
 # Intentional Rich markup tags used by subprocess presenters and action tools.
 _ALLOWED_MARKUP_TAG = re.compile(
@@ -135,17 +153,8 @@ class ReplSubprocessPresenter:
         # as one block; a blank between header and output would visually attach
         # the output to the following command instead.
         self._console.print()
-        # Syntax-highlight the command (bash lexer) so its keywords, arguments,
-        # and operators are coloured rather than a flat monochrome line.
-        highlighted = Syntax(
-            display_command,
-            "bash",
-            theme=MARKDOWN_CODE_THEME,
-            background_color="default",
-        ).highlight(display_command)
-        highlighted.rstrip()
         line = Text("$ ", style="bold")
-        line.append_text(highlighted)
+        line.append_text(_highlight_command(display_command))
         self._console.print(line)
 
     def print_command_output(self, text: str, *, style: str | None = None) -> None:
