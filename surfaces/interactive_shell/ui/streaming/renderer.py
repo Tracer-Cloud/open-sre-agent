@@ -7,6 +7,7 @@ import sys
 from typing import TYPE_CHECKING
 
 from rich.console import Console
+from rich.padding import Padding
 
 import infrastructure.terminal.theme as ui_theme
 from core.agent_harness.spi.prompt_chrome import normalize_three_tier_spacing
@@ -68,6 +69,23 @@ def render_markdown_block(console: Console, text: str) -> None:
         return
     with console.use_theme(ui_theme.MARKDOWN_THEME):
         console.print(_build_markdown_block(visible))
+
+
+def render_note_block(console: Console, text: str) -> None:
+    """Render intermediate agent narration as a dim, indented note.
+
+    Distinct from the bright ``∴`` reply and the recessed grey ``[n] ❯`` user
+    row: a note carries no glyph, only a dim left indent, so the three turn
+    roles — your ask, opensre's working notes, and its final reply — read apart.
+    Bold spans (the action words) stay bold within the dim base.
+    """
+    visible = strip_session_goal_progress_tags(text)
+    if not visible.strip():
+        return
+    with console.use_theme(ui_theme.MARKDOWN_THEME):
+        console.print(
+            Padding(_build_markdown_block(visible), (0, 0, 0, 3)), style=str(ui_theme.DIM)
+        )
 
 
 def render_response_header(console: Console, label: str) -> None:

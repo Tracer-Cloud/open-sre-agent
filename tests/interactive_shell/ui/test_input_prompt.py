@@ -117,17 +117,18 @@ class TestPromptTurnCounter:
         render_submitted_prompt(console, session, "and again")
         assert _prompt_turn_number(session) == 3
 
-    def test_user_prompt_row_has_a_left_accent_bar(self) -> None:
-        """A user prompt is marked by a left colour accent bar before ``[N] ❯``."""
-        from surfaces.interactive_shell.ui.input_prompt.rendering import _PROMPT_ACCENT_BAR
-
+    def test_user_prompt_row_is_recessed_grey_without_accent_bar(self) -> None:
+        """Droid-style: the user row is recessed SECONDARY grey with no bright ``▌``
+        accent bar, so the agent reply (``∴``) and notes carry the visual weight."""
         session = Session()
-        console = _render_console()
+        buf = io.StringIO()
+        console = Console(file=buf, force_terminal=True, color_system="truecolor", highlight=False)
         render_submitted_prompt(console, session, "why does it show that?")
-        out = console.file.getvalue()  # type: ignore[union-attr]
-        assert _PROMPT_ACCENT_BAR in out
-        assert out.index(_PROMPT_ACCENT_BAR) < out.index("[1]")  # bar leads the row
-        assert "why does it show that?" in out
+        raw = buf.getvalue()
+        assert "▌" not in raw  # no bright accent bar
+        visible = re.sub(r"\x1b\[[0-9;]*m", "", raw)
+        assert "[1] ❯ why does it show that?" in visible  # turn number + text kept
+        assert "166;166;166" in raw  # body in SECONDARY (#A6A6A6) recessed grey
 
     def test_autosubmitted_goal_condition_gets_work_turn_marker(self) -> None:
         """``/goal set`` autosubmit must not look like part of the slash turn."""

@@ -24,8 +24,6 @@ from surfaces.interactive_shell.ui.input_prompt.layout import (
 
 DEFAULT_PLACEHOLDER_TEXT = 'Try "Investigate this alert"'
 _PLAN_CONTINUE_PLACEHOLDER = "continue the plan, or type a message"
-# Left accent bar that marks a user-prompt row (agent responses use ``●``).
-_PROMPT_ACCENT_BAR = "▌"
 
 
 def _prompt_turn_number(session: Session) -> int:
@@ -111,23 +109,22 @@ def render_submitted_prompt(console: Console, session: Session, text: str) -> No
     lines = text.splitlines() or [""]
     # Rich's Style.parse() reads the bare str value of a _LazyRichStyle (""),
     # so resolve to a concrete string at the call site to keep palette colors.
-    body_style = handoff_answer_style() if is_handoff_answer else str(ui_theme.TEXT)
-    # A colour accent bar down the left marks the row as the user's prompt —
-    # distinct from the agent response, which opens with the ``●`` glyph and no
-    # bar. The bar repeats on every wrapped line so the whole submission reads as
-    # one block.
-    bar_style = f"bold {ui_theme.HIGHLIGHT}"
+    # The user row is recessed grey (no bright accent): the agent's ``∴`` reply
+    # and working notes carry the visual weight, and SECONDARY keeps the ask
+    # readable while sitting a shade above the darker DIM notes so the three
+    # turn roles still read apart. The ``[N] ❯`` prefix is dimmer still.
+    body_style = handoff_answer_style() if is_handoff_answer else str(ui_theme.SECONDARY)
+    prefix_style = str(ui_theme.DIM)
     continuation_prefix = " " * (len(counter) + len("❯ "))
     rendered = Text()
     for index, line in enumerate(lines):
         if index:
             rendered.append("\n")
-        rendered.append(f"{_PROMPT_ACCENT_BAR} ", style=bar_style)
         if index == 0:
-            rendered.append(counter, style=str(ui_theme.DIM))
-            rendered.append("❯ ", style=bar_style)
+            rendered.append(counter, style=prefix_style)
+            rendered.append("❯ ", style=prefix_style)
         else:
-            rendered.append(continuation_prefix, style=str(ui_theme.DIM))
+            rendered.append(continuation_prefix, style=prefix_style)
         rendered.append(line, style=body_style)
     console.print(rendered)
 

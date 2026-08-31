@@ -14,6 +14,7 @@ from surfaces.interactive_shell.ui.streaming import (
     finish_deferred_closer,
     format_token_count_short,
     render_markdown_block,
+    render_note_block,
     render_response_header,
     stream_to_console,
     stream_to_console_state,
@@ -23,6 +24,24 @@ from surfaces.interactive_shell.ui.streaming import (
 def _strip_ansi(text: str) -> str:
     """Drop ANSI escapes so assertions check the visible output."""
     return re.sub(r"\x1b\[[0-9;?]*[A-Za-z]", "", text)
+
+
+def test_render_note_block_is_dim_and_indented_but_keeps_bold() -> None:
+    # A working note reads as dim + indented (no glyph), distinct from the bright
+    # reply, while the bold action word stays bold within the dim base.
+    buf = io.StringIO()
+    console = Console(
+        file=buf, force_terminal=True, color_system="standard", width=80, highlight=False
+    )
+
+    render_note_block(console, "I'll **load** the workflow.")
+
+    raw = buf.getvalue()
+    assert "\x1b[90m" in raw  # dim grey base applied to the note body
+    assert re.search(r"\x1b\[[0-9;]*1[;m]", raw)  # bold action word survives the dim base
+    first_line = _strip_ansi(raw).splitlines()[0]
+    assert first_line.startswith("   ")  # three-space left indent, no glyph
+    assert "load the workflow" in first_line
 
 
 def _tty_console() -> tuple[Console, io.StringIO]:

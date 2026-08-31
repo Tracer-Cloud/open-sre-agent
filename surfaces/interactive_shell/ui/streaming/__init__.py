@@ -46,6 +46,7 @@ from surfaces.interactive_shell.ui.streaming.renderer import (
     STREAM_LABEL_ANSWER,
     STREAM_LABEL_ASSISTANT,
     render_markdown_block,
+    render_note_block,
     render_response_header,
 )
 from surfaces.shared.terminal.components.token_format import (
@@ -62,6 +63,7 @@ __all__ = [
     "format_token_count_short",
     "publish_full_response",
     "render_markdown_block",
+    "render_note_block",
     "render_response_header",
     "stream_to_console",
     "stream_to_console_state",

@@ -30,7 +30,7 @@ from infrastructure.safety.terminal_output import strip_terminal_controls
 from infrastructure.terminal.theme import BOLD_SKILL, BRAND, DIM, HIGHLIGHT, MARKDOWN_CODE_THEME
 from surfaces.interactive_shell.runtime import Session
 from surfaces.interactive_shell.runtime.core.state import SpinnerState
-from surfaces.interactive_shell.ui.streaming import render_markdown_block
+from surfaces.interactive_shell.ui.streaming import render_note_block
 from surfaces.shared.terminal.output.console_state import get_investigation_spinner
 from tools.interactive_shell.action_names import ActionToolName
 from tools.interactive_shell.shell.display import format_shell_command_for_display
@@ -467,10 +467,10 @@ class ActionRenderObserver:
         if is_plan_diagnosis_prose(content):
             return
         self.console.print()
-        # ``render_markdown_block`` sanitizes model text at ``_build_markdown_block``.
-        # No ``∴`` header here: the turn's single marker sits on the final
-        # response, so a mid-turn narration must not add a second one.
-        render_markdown_block(self.console, content)
+        # Intermediate narration is a working note: dim + indented, no glyph, so
+        # it reads apart from the recessed ``[n] ❯`` user row and bright ``∴`` reply.
+        # ``render_note_block`` sanitizes model text at ``_build_markdown_block``.
+        render_note_block(self.console, content)
 
     def _render_skill_start(self, data: dict[str, Any]) -> None:
         """Print ``Skill <name>`` when the agent starts loading a skill."""
