@@ -76,7 +76,9 @@ def run_harness_turn(
         rendered = format_session_goal_progress(goal, session=session)
         if rendered:
             # Checklist uses ``[x]`` / ``[ ]`` — Rich markup must stay off.
-            console.print(rendered, markup=False)
+            from surfaces.shared.terminal.components.rendering import print_repl_text
+
+            print_repl_text(console, rendered, markup=False)
 
     def _accounting(message: str) -> ShellTurnAccounting:
         return ShellTurnAccounting(session=session, text=message, recorder=recorder)

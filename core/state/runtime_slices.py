@@ -84,6 +84,7 @@ class InvestigationRuntimeSlice(TypedDict, total=False):
     hypothesis_results: list[dict[str, Any]]
     action_to_run: str
     investigation_started_at: float
+    pipeline_steps: list[str]
 
 
 class DiagnosisSlice(TypedDict, total=False):

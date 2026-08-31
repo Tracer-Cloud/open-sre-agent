@@ -19,6 +19,7 @@ from surfaces.interactive_shell.command_registry.types import SlashCommand
 from surfaces.interactive_shell.runtime import Session
 from surfaces.interactive_shell.ui.ask_user import CUSTOM_OPTION, repl_ask_user
 from surfaces.interactive_shell.ui.handoff_questions import render_choice_selection
+from surfaces.interactive_shell.ui.prompt_visibility import clear_live_prompt_paint
 from surfaces.shared.terminal.components.choice_menu import (
     print_valid_choice_list,
     repl_choose_one,
@@ -45,38 +46,32 @@ def _cmd_choose(session: Session, console: Console, args: list[str]) -> bool:
         return True
 
     items = pending.items()
+    clear_live_prompt_paint(session)
     if pending.is_batch():
         picked = repl_ask_user(items)
         if picked is None:
             console.print(f"[{ui_theme.DIM}]Selection cancelled — type a reply instead.[/]")
             session.terminal.awaiting_handoff_answer = False
             return True
-        if CUSTOM_OPTION in picked:
-            # Keep the answers already chosen; only the "type your own" slots
-            # need the user. Prefill the Q→A block with the picked answers filled
-            # and the custom slots blank, and do NOT auto-submit — the user
-            # completes the blanks and presses Enter.
-            partial = tuple("" if answer == CUSTOM_OPTION else answer for answer in picked)
-            console.print(f"[{ui_theme.DIM}]Fill in your own answer, then press Enter.[/]")
-            session.terminal.pending_prompt_default = format_ask_user_answers(items, partial)
-            session.terminal.awaiting_handoff_answer = True
-            session.terminal.notify_prompt_changed()
-            return True
         session.terminal.set_auto_command(format_ask_user_answers(items, picked))
         session.terminal.awaiting_handoff_answer = True
         return True
 
+    option_choices = [(option, option) for option in items[0].options]
+    option_choices.append((CUSTOM_OPTION, CUSTOM_OPTION))
+    # Custom row: type in place on the OpenSRE option array (Droid-style).
     picked_one = repl_choose_one(
         title=items[0].title,
-        choices=[(option, option) for option in items[0].options],
+        choices=option_choices,
+        custom_label=CUSTOM_OPTION,
+        multi_select=items[0].multi_select,
+        header="Ask User",
     )
     if picked_one is None:
         console.print(f"[{ui_theme.DIM}]Selection cancelled — type a reply instead.[/]")
         session.terminal.awaiting_handoff_answer = False
         return True
 
-    # The picker is transient, so leave one compact result in scrollback. The
-    # synthetic answer turn itself stays hidden by submitted-prompt rendering.
     render_choice_selection(console, items[0].title, picked_one)
     session.terminal.set_auto_command(picked_one)
     session.terminal.awaiting_handoff_answer = True

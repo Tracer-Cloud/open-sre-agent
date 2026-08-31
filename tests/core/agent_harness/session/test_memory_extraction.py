@@ -256,6 +256,27 @@ class TestSchedule:
         )
         assert order == ["extract:2"]
 
+    def test_wait_for_completion_waits_past_a_slow_extraction(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """Close-path extraction must not abandon a slow worker (silent data loss)."""
+        import time
+
+        done = threading.Event()
+
+        def _extract(messages: list[tuple[str, str]]) -> None:
+            time.sleep(0.4)
+            done.set()
+
+        monkeypatch.setattr(extraction, "_extract_memories_safe", _extract)
+        started = time.monotonic()
+        extraction.schedule_memory_extraction(
+            [("user", "hi"), ("assistant", "hello")],
+            wait_for_completion=True,
+        )
+        assert done.is_set()
+        assert time.monotonic() - started >= 0.35
+
     def test_async_schedule_coalesces_to_latest_snapshot(
         self, monkeypatch: pytest.MonkeyPatch
     ) -> None:
@@ -349,3 +370,24 @@ def test_scheduled_extraction_thread_inherits_storage_scope(
 
     assert done.wait(timeout=5), "extraction thread never ran"
     assert seen["scope"] is scope
+
+
+def test_close_extraction_runs_off_the_main_thread(monkeypatch: pytest.MonkeyPatch) -> None:
+    # Session-close extraction must run its blocking LLM call in the bounded
+    # daemon thread, never on the main thread — otherwise a slow provider hangs
+    # shutdown and a Ctrl+C during exit crashes through the network read.
+    seen: list[str] = []
+
+    def fake_invoke(messages: list[tuple[str, str]]) -> str:
+        seen.append(threading.current_thread().name)
+        return json.dumps([_valid_item()])
+
+    monkeypatch.setattr(extraction, "_invoke_extraction_llm", fake_invoke)
+
+    extraction.schedule_memory_extraction(
+        [("user", "hi, I'm Vaibhav"), ("assistant", "hello!")],
+        wait_for_completion=True,
+    )
+
+    assert seen == ["opensre-memory-extraction-close"]
+    assert threading.current_thread().name not in seen

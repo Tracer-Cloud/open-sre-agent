@@ -394,7 +394,7 @@ class ReactLoop[RuntimeToolT: RuntimeTool]:
     def _handle_conclusion(
         self, response: Any, assistant_message: Any, iteration: int
     ) -> _IterationResult:
-        """Accept a no-tool reply unless a follow-up is already queued."""
+        """Accept a no-tool reply, or nudge and continue when the host rejects it."""
         follow_up = self._host._pop_follow_up_message()
         if follow_up is not None:
             self._messages.append(UserRuntimeMessage(content=follow_up))
@@ -406,6 +406,26 @@ class ReactLoop[RuntimeToolT: RuntimeTool]:
                 )
             )
             return _IterationResult(should_stop=False, outcome="conclusion_deferred")
+
+        accept, nudge = self._host._should_accept_conclusion(
+            evidence_count=len(self._executed),
+            iteration=iteration,
+            final_text=response.content or "",
+        )
+        if not accept:
+            nudge_text = (nudge or "").strip() or (
+                "Continue working toward the goal; do not end the turn yet."
+            )
+            self._messages.append(UserRuntimeMessage(content=nudge_text))
+            self._host._emit_runtime(
+                TurnEndEvent(
+                    iteration=iteration,
+                    message=assistant_message,
+                    data={"accepted": False, "goal_nudge": True},
+                )
+            )
+            return _IterationResult(should_stop=False, outcome="conclusion_deferred")
+
         self._host._emit_runtime(
             TurnEndEvent(
                 iteration=iteration,

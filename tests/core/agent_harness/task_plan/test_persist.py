@@ -97,6 +97,49 @@ def test_apply_task_plan_state_restores_plan_only_latch() -> None:
     assert restored.task_plan.current_index == 2
 
 
+def test_apply_task_plan_state_restores_disarmed_latch() -> None:
+    session = SessionCore(store=InMemorySessionStore())
+    session.task_plan = _plan()
+    payload = task_plan_state_snapshot(session)
+    assert payload is not None
+    assert payload["plan_only_until_authorized"] is False
+
+    restored = SessionCore(store=InMemorySessionStore())
+    restored.plan_only_until_authorized = True
+    apply_task_plan_state(restored, payload)
+    assert restored.plan_only_until_authorized is False
+
+
+def test_should_not_persist_identical_snapshot() -> None:
+    session = SessionCore(store=InMemorySessionStore())
+    session.task_plan = _plan()
+    snapshot = task_plan_state_snapshot(session)
+    assert snapshot is not None
+    assert not should_persist_task_plan_state(
+        snapshot,
+        prior_records=[
+            {
+                "type": "custom_message",
+                "custom_type": TASK_PLAN_STATE_CUSTOM_TYPE,
+                "content": snapshot,
+            }
+        ],
+    )
+
+
+def test_should_not_tombstone_a_session_that_never_planned() -> None:
+    assert not should_persist_task_plan_state(None, prior_records=[])
+
+
+def test_apply_non_dict_payload_is_a_tombstone() -> None:
+    session = SessionCore(store=InMemorySessionStore())
+    session.task_plan = _plan()
+    session.plan_only_until_authorized = True
+    apply_task_plan_state(session, ["not", "a", "dict"])
+    assert session.task_plan is None
+    assert session.plan_only_until_authorized is False
+
+
 def test_legacy_snapshot_without_latch_key_does_not_arm_authorization() -> None:
     session = SessionCore(store=InMemorySessionStore())
     session.plan_only_until_authorized = True

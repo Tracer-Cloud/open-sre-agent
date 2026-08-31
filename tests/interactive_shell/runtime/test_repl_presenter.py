@@ -9,8 +9,14 @@ from rich.console import Console
 from surfaces.interactive_shell.runtime.subprocess_runner.repl_presenter import (
     ReplSubprocessPresenter,
     _escape_markup_message,
+    _highlight_command,
 )
 from surfaces.interactive_shell.session import Session
+
+
+def _styled_spans(command: str) -> set[str]:
+    text = _highlight_command(command)
+    return {text.plain[span.start : span.end].strip() for span in text.spans}
 
 
 def _presenter() -> tuple[ReplSubprocessPresenter, StringIO]:
@@ -68,3 +74,52 @@ def test_print_preserves_task_id_markup_with_escaped_brackets() -> None:
     output = buffer.getvalue()
     assert task_id in output
     assert "/tasks" in output
+
+
+def test_highlight_command_leaves_quoted_operators_plain() -> None:
+    styled = _styled_spans('echo "a && b"')
+    assert "echo" in styled
+    assert "&&" not in styled
+    assert "b" not in styled
+
+
+def test_highlight_command_leaves_quoted_flags_plain() -> None:
+    styled = _styled_spans('echo "use --force"')
+    assert "echo" in styled
+    assert "--force" not in styled
+
+
+def test_highlight_command_leaves_quoted_pipes_plain() -> None:
+    styled = _styled_spans('grep -E "(foo|bar)" file')
+    assert "grep" in styled
+    assert "-E" in styled
+    assert "|" not in styled
+    assert "bar" not in styled
+
+
+def test_highlight_command_still_colours_unquoted_syntax_after_quotes() -> None:
+    command = 'echo "a && b" && echo done'
+    quoted_and = command.index("&&")
+    unquoted_and = command.index("&&", quoted_and + 2)
+    text = _highlight_command(command)
+    operator_starts = {
+        span.start for span in text.spans if command[span.start : span.end].strip() == "&&"
+    }
+    assert unquoted_and in operator_starts
+    assert quoted_and not in operator_starts
+    styled = {command[span.start : span.end].strip() for span in text.spans}
+    assert "echo" in styled
+    assert "done" not in styled
+
+
+def test_highlight_command_leaves_single_quoted_syntax_plain() -> None:
+    styled = _styled_spans("echo 'a && b --force'")
+    assert "echo" in styled
+    assert "&&" not in styled
+    assert "--force" not in styled
+
+
+def test_highlight_command_ignores_escaped_quotes_inside_double_quotes() -> None:
+    styled = _styled_spans(r'echo "say \"--force\""')
+    assert "echo" in styled
+    assert "--force" not in styled

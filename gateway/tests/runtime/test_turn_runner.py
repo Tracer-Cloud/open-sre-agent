@@ -86,7 +86,7 @@ def test_turn_runner_resolves_action_tools_from_live_session(monkeypatch: Any) -
         return [MagicMock(name="slack_send_message")]
 
     monkeypatch.setattr(
-        "core.agent_harness.tools.tool_provider.get_action_tools_from_integrations_context",
+        "core.agent_harness.tools.tool_provider.get_action_tools_from_integrations_view",
         _fake_get_tools,
     )
 
@@ -130,6 +130,22 @@ def _empty_turn_result(*, streamed: bool = False) -> TurnResult:
             response_streamed=streamed,
         ),
         assistant_response_text="",
+    )
+
+
+def _turn_result_with_text(text: str) -> TurnResult:
+    """A handled turn whose primary response is ``text`` (not streamed, not answered)."""
+    return TurnResult(
+        final_intent="cli_agent_handled",
+        action_result=ToolCallingTurnResult(
+            planned_count=0,
+            executed_count=0,
+            executed_success_count=0,
+            has_unhandled_clause=False,
+            handled=True,
+            response_text=text,
+        ),
+        assistant_response_text=text,
     )
 
 
@@ -656,3 +672,343 @@ def test_run_cancelled_during_successful_admission_still_starts_turn(
 
     assert returned is not None
     factory.assert_called_once()
+
+
+# ---------------------------------------------------------------------------
+# Concurrency tests — ported up from test_session_agents.py to the door every
+# host actually goes through.  The pool tests prove the lock works when the pool
+# is called correctly; these prove TurnRunner calls it correctly.
+# ---------------------------------------------------------------------------
+
+
+def test_turn_runner_concurrent_sessions_do_not_bleed(monkeypatch: Any) -> None:
+    """Two sessions through TurnRunner run concurrently; each sink gets only its own text.
+
+    Port of ``test_session_agents.test_different_sessions_still_run_concurrently``
+    up one layer.  Different sessions take different per-session locks, so with a
+    raised capacity gate both turns must overlap inside dispatch — proved by a
+    controllable Event neither dispatch can pass until the test releases it.
+    """
+    release = threading.Event()
+    entered_alpha = threading.Event()
+    entered_beta = threading.Event()
+
+    def _dispatch(message: str) -> TurnResult:
+        if message == "alpha":
+            entered_alpha.set()
+        else:
+            entered_beta.set()
+        release.wait(timeout=10)
+        return _turn_result_with_text(f"reply-{message}")
+
+    factory = _patch_headless_agent(monkeypatch, _turn_result_with_text(""))
+    factory.return_value.dispatch.side_effect = _dispatch
+
+    from infrastructure.turn_host.concurrency import TurnConcurrencyGate
+
+    handler = TurnRunner(
+        console=Console(force_terminal=False),
+        gate=TurnConcurrencyGate(4),
+    )
+    session_a = SessionCore(store=InMemorySessionStore())
+    session_b = SessionCore(store=InMemorySessionStore())
+    sink_a = RecordingTurnOutput()
+    sink_b = RecordingTurnOutput()
+    logger = logging.getLogger("test.concurrent.sessions")
+
+    results: dict[str, TurnResult | None] = {}
+    errors: list[Exception] = []
+
+    def _run(message: str, session: SessionCore, sink: Any) -> None:
+        try:
+            results[message] = handler.run(message, session, sink, logger)
+        except Exception as exc:
+            errors.append(exc)
+
+    t_a = threading.Thread(target=_run, args=("alpha", session_a, sink_a))
+    t_b = threading.Thread(target=_run, args=("beta", session_b, sink_b))
+
+    # Act — both threads must reach dispatch before either can proceed.
+    t_a.start()
+    t_b.start()
+    assert entered_alpha.wait(timeout=10), "session A never entered dispatch"
+    assert entered_beta.wait(timeout=10), "session B never entered dispatch"
+    release.set()
+    t_a.join(timeout=10)
+    t_b.join(timeout=10)
+
+    # Assert — both returned, and neither sink received the other session's text.
+    assert not errors, errors
+    assert results.get("alpha") is not None
+    assert results.get("beta") is not None
+    assert sink_a.finalized == "reply-alpha"
+    assert sink_b.finalized == "reply-beta"
+
+
+def test_turn_runner_same_session_turns_do_not_interleave(monkeypatch: Any) -> None:
+    """Two turns for one session through TurnRunner must serialize.
+
+    Port of ``test_session_agents.test_same_session_turns_do_not_interleave``
+    up one layer.  The per-session lock is held for the whole turn so a second
+    turn cannot rebind the pooled ``BindableOutput`` while the first is still
+    dispatching — without it, the first turn's remaining write lands on the
+    second turn's sink.
+
+    Serialization is pinned by the overlap / second-entered handshake.
+    Sink isolation is pinned by writing through the pooled ``BindableOutput``
+    (not ``TurnRunner``'s stack-local ``output.finalize``): that local finalize
+    still hits the per-call sink even when the lock is gone, so it cannot
+    detect the bleed #5493 named.
+    """
+    release = threading.Event()
+    first_entered = threading.Event()
+    second_started = threading.Event()
+    second_entered = threading.Event()
+    overlapped = threading.Event()
+    call_lock = threading.Lock()
+    call_count = 0
+
+    from infrastructure.turn_host.concurrency import TurnConcurrencyGate
+
+    handler = TurnRunner(
+        console=Console(force_terminal=False),
+        gate=TurnConcurrencyGate(4),
+    )
+    session = SessionCore(store=InMemorySessionStore())
+    sink_1 = RecordingTurnOutput()
+    sink_2 = RecordingTurnOutput()
+    logger = logging.getLogger("test.serialize.same_session")
+
+    def _write_through_bound_output(message: str) -> None:
+        # The real agent writes through this BindableOutput; rebinding it mid-
+        # turn is the bleed path.  TurnRunner's stack-local finalize is not.
+        bound = handler._pool._outputs[session.session_id]  # noqa: SLF001
+        bound.print(message)
+
+    def _dispatch(message: str) -> TurnResult:
+        nonlocal call_count
+        with call_lock:
+            call_count += 1
+            n = call_count
+        if n == 1:
+            first_entered.set()
+            release.wait(timeout=10)
+            _write_through_bound_output(message)
+            return _turn_result_with_text(message)
+        second_entered.set()
+        if not release.is_set():
+            overlapped.set()
+        release.wait(timeout=10)
+        _write_through_bound_output(message)
+        return _turn_result_with_text(message)
+
+    factory = _patch_headless_agent(monkeypatch, _turn_result_with_text(""))
+    factory.return_value.dispatch.side_effect = _dispatch
+
+    results: dict[str, TurnResult | None] = {}
+    errors: list[Exception] = []
+
+    def _run(message: str, sink: Any) -> None:
+        if message == "beta":
+            second_started.set()
+        try:
+            results[message] = handler.run(message, session, sink, logger)
+        except Exception as exc:
+            errors.append(exc)
+
+    t1 = threading.Thread(target=_run, args=("alpha", sink_1))
+    t2 = threading.Thread(target=_run, args=("beta", sink_2))
+
+    # Act — the first dispatch holds the lock while blocked on ``release``.
+    t1.start()
+    assert first_entered.wait(timeout=5), "first turn never entered dispatch"
+    t2.start()
+    # Handshake: the second thread is running and heading for the lock.
+    assert second_started.wait(timeout=5), "second thread never started"
+
+    # If the lock works, the second is blocked and ``second_entered`` is
+    # never set.  If the lock is bypassed, the second enters dispatch almost
+    # immediately and sets ``second_entered`` (and ``overlapped``).
+    try:
+        assert not second_entered.wait(timeout=0.5), (
+            "second dispatch entered while first still held the lock"
+        )
+        assert not overlapped.is_set(), "turns interleaved"
+    finally:
+        release.set()
+
+    t1.join(timeout=5)
+    t2.join(timeout=5)
+
+    # Assert — no overlap, and each bound-output write hit its own sink.
+    assert not errors, errors
+    assert not overlapped.is_set(), "turns interleaved"
+    assert second_entered.is_set(), "second dispatch never ran after first released"
+    assert results.get("alpha") is not None
+    assert results.get("beta") is not None
+    assert sink_1.lines == ["alpha"], (
+        "first turn's bound-output write must stay on sink_1 "
+        f"(got {sink_1.lines!r}; sink_2={sink_2.lines!r})"
+    )
+    assert sink_2.lines == ["beta"], (
+        "second turn's bound-output write must stay on sink_2 "
+        f"(got {sink_2.lines!r}; sink_1={sink_1.lines!r})"
+    )
+
+
+@pytest.mark.parametrize(
+    ("cancelled_msg", "survivor_msg"),
+    [
+        ("alpha", "beta"),
+        ("beta", "alpha"),
+    ],
+    ids=["cancel-alpha-survive-beta", "cancel-beta-survive-alpha"],
+)
+def test_turn_runner_cancel_under_overlap_releases_slot_and_preserves_survivor(
+    monkeypatch: Any,
+    tmp_path: Any,
+    cancelled_msg: str,
+    survivor_msg: str,
+) -> None:
+    """Cancelling a turn while another session's turn runs is clean.
+
+    The cancel path skips the normal dispatch return, so it is where a capacity
+    slot is most likely to leak. Under overlap — two sessions, both turns
+    provably in flight before the cancel — cancelling one turn must:
+
+    * release the cancelled turn's capacity slot (the gate reflects only the
+      survivor afterward),
+    * leave the survivor's reply untouched, and
+    * keep the cancelled session's JSONL file readable end to end (no torn line
+      from a flush interrupted mid-append).
+
+    Cancel is driven through :class:`ActiveTurnRegistry` — the path a
+    transport's ``/stop`` takes — not by reaching into the runner's internals.
+    The case is run twice with the roles reversed so it does not depend on
+    whichever turn happened to start first.
+    """
+    import json
+
+    from core.agent_harness.session.persistence.jsonl_store import JsonlSessionStore
+    from core.agent_harness.session.persistence.paths import session_path
+    from gateway.core.middleware.active_turns import ActiveTurnRegistry
+    from infrastructure.turn_host.concurrency import TurnConcurrencyGate
+
+    # Session JSONL files land under OPENSRE_HOME_DIR; redirect to tmp_path so the
+    # cancelled session's file is isolated and inspectable after the run.
+    monkeypatch.setattr("config.constants.paths.OPENSRE_HOME_DIR", tmp_path)
+
+    release = threading.Event()  # barrier the survivor blocks on until released
+    entered_cancelled = threading.Event()
+    entered_survivor = threading.Event()
+    cancel_event = threading.Event()  # the cancelled turn's ``turn_cancel`` Event
+
+    def _dispatch(message: str) -> TurnResult:
+        if message == cancelled_msg:
+            entered_cancelled.set()
+            # Block until /stop sets the cancel event, then return. A real turn
+            # checks cancel between LLM/tool iterations; the fake blocks on the
+            # same Event the registry sets.
+            cancel_event.wait(timeout=10)
+            return _turn_result_with_text("")
+        entered_survivor.set()
+        release.wait(timeout=10)
+        return _turn_result_with_text(f"reply-{message}")
+
+    factory = _patch_headless_agent(monkeypatch, _turn_result_with_text(""))
+    factory.return_value.dispatch.side_effect = _dispatch
+
+    # Limit 2: both turns fill the gate, so a leaked slot leaves zero free and
+    # the survivor cannot be mistaken for the leak.
+    gate = TurnConcurrencyGate(2)
+    handler = TurnRunner(console=Console(force_terminal=False), gate=gate)
+    logger = logging.getLogger("test.cancel.overlap")
+
+    # Cancelled session: pre-attach the cancel Event so the registry and the
+    # runner share one signal, and seed a turn so flush writes an end-of-session
+    # leaf (an empty session file is otherwise unlinked on flush).
+    store_cancelled = JsonlSessionStore()
+    session_cancelled = SessionCore(store=store_cancelled)
+    store_cancelled.open_session(session_cancelled)
+    store_cancelled.append_turn(session_cancelled, "chat", cancelled_msg)
+    sink_cancelled = RecordingTurnOutput()
+    sink_cancelled.turn_cancel = cancel_event
+
+    # Survivor session: no cancel Event; runs to completion.
+    store_survivor = JsonlSessionStore()
+    session_survivor = SessionCore(store=store_survivor)
+    store_survivor.open_session(session_survivor)
+    store_survivor.append_turn(session_survivor, "chat", survivor_msg)
+    sink_survivor = RecordingTurnOutput()
+
+    registry = ActiveTurnRegistry()
+    results: dict[str, TurnResult | None] = {}
+    errors: list[Exception] = []
+
+    def _run_cancelled() -> None:
+        try:
+            with registry.track(cancelled_msg, cancel_event):
+                results[cancelled_msg] = handler.run(
+                    cancelled_msg, session_cancelled, sink_cancelled, logger
+                )
+        except Exception as exc:
+            errors.append(exc)
+
+    def _run_survivor() -> None:
+        try:
+            results[survivor_msg] = handler.run(
+                survivor_msg, session_survivor, sink_survivor, logger
+            )
+        except Exception as exc:
+            errors.append(exc)
+
+    t_cancelled = threading.Thread(target=_run_cancelled)
+    t_survivor = threading.Thread(target=_run_survivor)
+    t_cancelled.start()
+    t_survivor.start()
+
+    # Both turns must reach dispatch before the cancel — proving overlap.
+    assert entered_cancelled.wait(timeout=10), "cancelled turn never entered dispatch"
+    assert entered_survivor.wait(timeout=10), "survivor turn never entered dispatch"
+
+    # Cancel via the path a transport /stop takes: request_stop sets the tracked
+    # turn_cancel Event outside the turn lock.
+    assert registry.request_stop(cancelled_msg) is True
+
+    # The finally unblocks the survivor and joins both threads even when a slot
+    # assertion fails, so a leaked-slot failure cannot leave a thread behind.
+    probe_acquired = False
+    try:
+        # The cancelled turn returns from dispatch, flushes, and releases its slot.
+        t_cancelled.join(timeout=10)
+        assert not t_cancelled.is_alive(), "cancelled turn did not return after stop"
+
+        # Slot assertion: the cancelled turn released its permit, so exactly one
+        # slot is free (the survivor still holds the other). If the cancel path
+        # leaked, the first try_acquire fails — the process would answer "at
+        # capacity" forever.
+        probe_acquired = gate.try_acquire()
+        assert probe_acquired is True, "cancelled turn leaked its capacity slot"
+        assert gate.try_acquire() is False, "survivor's slot was disturbed by the cancel"
+
+        # Release the survivor; it must complete with its own reply, untouched.
+        release.set()
+        t_survivor.join(timeout=10)
+        assert not t_survivor.is_alive(), "survivor turn did not complete"
+        assert not errors, errors
+        assert sink_survivor.finalized == f"reply-{survivor_msg}"
+        assert results[survivor_msg] is not None
+
+        # The cancelled session's JSONL must parse end to end — no torn line
+        # from a flush interrupted mid-append (a real /stop leaves it readable).
+        cancelled_path = session_path(session_cancelled.session_id)
+        assert cancelled_path.exists(), f"cancelled session file missing: {cancelled_path}"
+        for line in cancelled_path.read_text(encoding="utf-8").splitlines():
+            if line.strip():
+                json.loads(line)  # raises JSONDecodeError on a torn tail
+    finally:
+        if probe_acquired:
+            gate.release()  # return the probe so the survivor's slot accounting stands
+        release.set()
+        t_cancelled.join(timeout=10)
+        t_survivor.join(timeout=10)

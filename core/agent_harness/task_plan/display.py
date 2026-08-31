@@ -35,16 +35,36 @@ def promote_first_pending_step(plan: TaskPlan) -> TaskPlan:
     """Mark the first step in_progress when every step is still pending."""
     if not plan.all_pending or not plan.steps:
         return plan
+    return ensure_active_step(plan)
+
+
+def ensure_active_step(plan: TaskPlan) -> TaskPlan:
+    """Promote the next pending step when work remains and nothing is in_progress.
+
+    Models often mark a step ``completed`` and leave the rest ``pending`` without
+    setting the next row ``in_progress``. The overlay then shows ``Plan · 2/3``
+    with only empty circles and the turn goes idle. Host-normalize so the
+    focused step is always ``●`` until the plan is finished or plan-only.
+    """
+    if not plan.steps or plan.all_completed:
+        return plan
+    if any(item.status is PlanStepStatus.IN_PROGRESS for item in plan.steps):
+        return plan
     steps: list[PlanStep] = []
-    for index, item in enumerate(plan.steps):
-        if index == 0:
+    promoted = False
+    for item in plan.steps:
+        if not promoted and item.status is PlanStepStatus.PENDING:
             steps.append(PlanStep(step=item.step, status=PlanStepStatus.IN_PROGRESS))
+            promoted = True
         else:
             steps.append(item)
+    if not promoted:
+        return plan
     return TaskPlan(steps=tuple(steps), explanation=plan.explanation)
 
 
 __all__ = [
+    "ensure_active_step",
     "is_plan_diagnosis_prose",
     "promote_first_pending_step",
 ]

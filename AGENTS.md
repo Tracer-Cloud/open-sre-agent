@@ -17,6 +17,9 @@ Agents **must** close the loop on CI and tests. Do not treat "pushed a fix" or "
 3. **Tests that fail under CI load** (xdist, barriers, fan-out concurrency) are real bugs in the test harness — harden synchronization; do not ignore flakes.
 4. **Import / API-border failures** (`check_imports.py`, `test_integrations_api_border`) mean the wrong module edge was used — import the package API allowlisted in `.importlinter.strict` / the border allowlist, not an internal leaf, unless the ignore list explicitly names that edge.
 5. Keep monitoring until merge requirements in [CI.md §8](CI.md) (green checks + Greptile 5/5) are met.
+6. After merge, monitor the merge commit's `main` CI, full CodeQL, and release
+   workflows. A post-merge failure is unfinished delivery: fix or revert it
+   before reporting completion.
 
 The Cursor project hook [`.cursor/hooks/check-ci-failures.sh`](.cursor/hooks/check-ci-failures.sh) (wired in `.cursor/hooks.json`) re-injects this checklist on agent stop when the current branch's PR has failing checks — treat that follow-up as blocking work, not a suggestion.
 
@@ -47,9 +50,10 @@ The Cursor project hook [`.cursor/hooks/check-ci-failures.sh`](.cursor/hooks/che
   under `config/constants/` (e.g. `config/constants/billing.py`,
   `config/constants/llm.py`) — a leaf that any layer can import without a cycle —
   and re-export via `config/constants/__init__.py`. Do **not** define shared env
-  names in `config/config.py`: it imports `config.llm_auth.*`, so a name it and
-  one of those modules both need would force a cyclic import. Only a name used
-  solely inside `config/config.py` (nothing it imports needs it) may live there.
+  names in `config/llm_settings.py`: it imports `config.llm_auth.*`, so a name it
+  and one of those modules both need would force a cyclic import. Only a name
+  used solely inside `config/llm_settings.py` (nothing it imports needs it) may
+  live there.
 - Do not keep compatibility-only forwarding modules after refactors. Once imports and tests
   are migrated, remove the old module path in the same change and use one canonical import path.
 - Test fakes: never inline a lambda that builds an ad-hoc `type(...)` object (or
@@ -257,16 +261,20 @@ Steps:
 
 ### Changing the investigation pipeline
 
-Investigations are coordinated in `tools/investigation/lifecycle.py` and exposed via
+Investigations are coordinated in `tools/investigation/agent_pipeline.py`
+(`run_agent_investigation`) and exposed via
 `tools/investigation/capability.py`. Semantic stages live under
 `tools/investigation/stages/`; reporting lives under
 `tools/investigation/reporting/`. See
 [docs/investigation-pipeline-architecture.md](docs/investigation-pipeline-architecture.md)
 for the end-to-end stage/loop diagrams before making structural changes.
 
+`tools/investigation/lifecycle.py` is a **deprecated** compatibility facade
+over `agent_pipeline` — do not add new callers; keep the module until removal.
+
 Files to touch:
 
-- `tools/investigation/lifecycle.py` for high-level stage ordering.
+- `tools/investigation/agent_pipeline.py` for high-level stage ordering.
 - `core/state/` for shared agent state and investigation pipeline slice contracts
   that cross stage boundaries.
 - `core/domain/` for pure investigation rules (alert source mapping, tool planning,

@@ -7,6 +7,7 @@ import re
 from typing import TYPE_CHECKING
 
 from core.agent_harness.prompts.action.text import _SYSTEM_PROMPT_BASE
+from core.agent_harness.prompts.action.turn_interaction import turn_interaction_facts_block
 from core.agent_harness.prompts.kernel.envelope import (
     PromptBlock,
     PromptBlockId,
@@ -23,7 +24,6 @@ from core.agent_harness.prompts.skills.loader import load_skills_demo_block, loa
 from core.agent_harness.task_plan.prompt import (
     ask_user_answered_block,
     current_task_plan_block,
-    load_planning_instructions,
 )
 from infrastructure.harness_providers import action_prompt_vendor_fragments
 
@@ -128,15 +128,6 @@ def build_action_system_prompt_envelope(turn_snapshot: TurnSnapshot) -> PromptEn
             provenance="core.agent_harness.prompts.skills",
         )
     )
-    blocks.append(
-        PromptBlock(
-            id=PromptBlockId.ACTION_PLANNING_INSTRUCTIONS,
-            kind=PromptBlockKind.RULE,
-            tier=PromptTier.STABLE,
-            content="".join((load_planning_instructions(), "\n\n")),
-            provenance="core.agent_harness.task_plan.planning_instructions.md",
-        )
-    )
     if turn_snapshot.setup_state:
         blocks.append(
             PromptBlock(
@@ -179,6 +170,15 @@ def build_action_system_prompt_envelope(turn_snapshot: TurnSnapshot) -> PromptEn
             ),
             provenance="core.agent_harness.task_plan.prompt",
             suffix="\n\n",
+        )
+    )
+    blocks.append(
+        PromptBlock(
+            id=PromptBlockId.TURN_INTERACTION,
+            kind=PromptBlockKind.CONTEXT,
+            tier=PromptTier.EPHEMERAL,
+            content=turn_interaction_facts_block(turn_snapshot),
+            provenance="core.agent_harness.prompts.action.turn_interaction",
         )
     )
     blocks.append(

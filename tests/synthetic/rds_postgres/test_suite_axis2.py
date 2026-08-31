@@ -28,7 +28,7 @@ from __future__ import annotations
 
 import pytest
 
-from config.config import has_credentials_for_active_llm_provider
+from config.llm_settings import has_credentials_for_active_llm_provider
 from tests.synthetic.mock_grafana_backend.selective_backend import SelectiveGrafanaBackend
 from tests.synthetic.rds_postgres.run_suite import run_scenario
 from tests.synthetic.rds_postgres.scenario_loader import load_all_scenarios

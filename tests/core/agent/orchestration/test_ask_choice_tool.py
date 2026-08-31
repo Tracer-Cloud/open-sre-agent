@@ -60,6 +60,18 @@ def test_ask_user_choice_tool_is_action_surface_read_only() -> None:
     assert "action" in ask_user_choice_tool.surfaces
     assert ask_user_choice_tool.side_effect_level == "read_only"
     assert ask_user_choice_tool.parallel_safe is False
+    assert any(
+        "headless, scheduled, gateway, or /goal" in example
+        for example in ask_user_choice_tool.anti_examples
+    )
+    assert any(
+        "investigation_start instead of Ask User" in example
+        for example in ask_user_choice_tool.anti_examples
+    )
+    assert any(
+        "no investigate/RCA verb with a concrete alert payload" in case
+        for case in ask_user_choice_tool.use_cases
+    )
 
 
 def test_interactive_repl_defers_menu_to_choose_turn() -> None:
@@ -200,3 +212,49 @@ def test_malformed_question_is_rejected() -> None:
         _ctx(),
     )
     assert result["ok"] is False
+
+
+def test_multi_select_string_false_is_not_truthy() -> None:
+    session = Session()
+    result = execute_ask_user_choice_tool(
+        {"title": _TITLE, "options": _OPTIONS, "multi_select": "false"},
+        _ctx(session=session),
+    )
+    assert result["ok"] is True
+    assert session.pending_user_choice is not None
+    assert session.pending_user_choice.multi_select is False
+
+
+def test_multi_select_true_on_single_decision() -> None:
+    session = Session()
+    result = execute_ask_user_choice_tool(
+        {"title": _TITLE, "options": _OPTIONS, "multi_select": True},
+        _ctx(session=session),
+    )
+    assert result["ok"] is True
+    assert session.pending_user_choice is not None
+    assert session.pending_user_choice.multi_select is True
+
+
+def test_per_question_multi_select_string_false() -> None:
+    session = Session()
+    questions = [
+        {
+            "label": "Extras",
+            "title": "Which extras?",
+            "options": ["Unit tests", "Dockerfile"],
+            "multi_select": "false",
+        },
+        {
+            "label": "Lang",
+            "title": "Language?",
+            "options": ["Python", "Go"],
+        },
+    ]
+    result = execute_ask_user_choice_tool(
+        {"title": "Ask User", "questions": questions},
+        _ctx(session=session),
+    )
+    assert result["ok"] is True
+    assert session.pending_user_choice is not None
+    assert session.pending_user_choice.questions[0].multi_select is False

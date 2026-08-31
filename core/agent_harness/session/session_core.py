@@ -175,6 +175,15 @@ class SessionCore:
     """Live execution checklist for the current workload, rendered above the
     prompt and persisted so it survives transcript compaction."""
 
+    task_plan_work: list[list[str]] = field(default_factory=list)
+    """Host-owned work lines per plan step index (not model-writable)."""
+
+    task_plan_work_step_texts: tuple[str, ...] | None = None
+    """Checklist identity for ``task_plan_work`` — step texts, ignoring status."""
+
+    task_plan_breakdown_emitted: bool = False
+    """True after the post-execution breakdown was printed for this checklist."""
+
     plan_only_until_authorized: bool = False
     """Set when the user asked for a plan without running it; the execution gate
     keeps mutating steps behind confirmation until a step is confirmed. Set-only
@@ -425,6 +434,9 @@ class SessionCore:
         self.pending_user_choice = None
         self.ask_user_rounds = 0
         self.task_plan = None
+        self.task_plan_work = []
+        self.task_plan_work_step_texts = None
+        self.task_plan_breakdown_emitted = False
         self.plan_only_until_authorized = False
         self.pending_recovery_note = None
         self.gather_unreachable_tools.clear()

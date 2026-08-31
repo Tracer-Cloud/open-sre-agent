@@ -6,7 +6,8 @@ transport-layer modules. Integration-specific wiring lives behind the
 similar factories for future correlation sources).
 
 Without this guard the dependency drift is easy:
-``tools.investigation.lifecycle`` previously imported ``DatadogClient``
+``tools.investigation.agent_pipeline`` (and the deprecated
+``tools.investigation.lifecycle`` facade) previously imported ``DatadogClient``
 directly, coupling the orchestrator to one vendor and making "add a
 second correlation source" an edit-this-file change instead of a
 new-file change. See issue #34 and the refactor that introduced
@@ -21,6 +22,7 @@ from pathlib import Path
 import pytest
 
 _ORCHESTRATION_PIPELINE_FILES: tuple[Path, ...] = (
+    Path("tools/investigation/agent_pipeline.py"),
     Path("tools/investigation/lifecycle.py"),
     Path("tools/investigation/capability.py"),
     Path("tools/investigation/state_factory.py"),

@@ -140,7 +140,7 @@ def test_explicit_ask_tty_accepts_empty_confirmation() -> None:
         confirm_fn=_confirm,
         is_tty=True,
     )
-    assert captured == ["Yes, allow? [Y/n] "]
+    assert captured == ["Approve this action?"]
     assert "Command to approve" in buf.getvalue()
     assert "Why this needs approval:" in buf.getvalue()
 
@@ -246,3 +246,130 @@ def test_auto_off_shows_command_to_approve() -> None:
     )
     assert "Command to approve" in buf.getvalue()
     assert "Why this needs approval:" in buf.getvalue()
+
+
+# --- plan-only execution gate (integration + latch clearing) -----------------
+
+
+def test_plan_only_guard_prompts_then_clears_on_a_confirmed_mutating_step() -> None:
+    session = Session()
+    session.plan_only_until_authorized = True
+    buf = io.StringIO()
+    console = Console(file=buf, force_terminal=False)
+
+    # A mutating step under a standing plan-only request must prompt...
+    assert execution_allowed(
+        allow_tool("shell"),
+        session=session,
+        console=console,
+        action_summary="!deploy",
+        confirm_fn=lambda _: "y",
+        is_tty=True,
+    )
+    assert "Command to approve" in buf.getvalue()
+    # ...and confirming it is the explicit authorization that lifts the guard.
+    assert session.plan_only_until_authorized is False
+
+
+def test_plan_only_guard_survives_a_declined_confirmation() -> None:
+    session = Session()
+    session.plan_only_until_authorized = True
+    buf = io.StringIO()
+    console = Console(file=buf, force_terminal=False)
+
+    assert not execution_allowed(
+        allow_tool("shell"),
+        session=session,
+        console=console,
+        action_summary="!deploy",
+        confirm_fn=lambda _: "n",
+        is_tty=True,
+    )
+    # Declining does not authorize; the guard still stands for the next step.
+    assert session.plan_only_until_authorized is True
+
+
+def test_plan_only_guard_is_not_cleared_by_a_read_only_step() -> None:
+    session = Session()
+    session.plan_only_until_authorized = True
+    buf = io.StringIO()
+    console = Console(file=buf, force_terminal=False)
+
+    # A read-only tool runs without a prompt and must NOT lift the plan-only latch.
+    assert execution_allowed(
+        allow_tool("investigation"),
+        session=session,
+        console=console,
+        action_summary="investigate the 502s",
+        is_tty=True,
+    )
+    assert session.plan_only_until_authorized is True
+
+
+def test_always_allow_approves_and_raises_the_auto_level() -> None:
+    from config.constants.repl_autonomy import AutoLevel
+
+    session = Session()
+    session.terminal.auto_level = AutoLevel.LOW
+    buf = io.StringIO()
+    console = Console(file=buf, force_terminal=False)
+
+    # A reversible command approved with "always" runs now AND lifts Auto to Med
+    # so commands like it stop asking.
+    assert execution_allowed(
+        ExecutionPolicyResult(verdict="ask", tool_type="shell", reason=None),
+        session=session,
+        console=console,
+        action_summary="echo hi > /tmp/s1.txt",
+        confirm_fn=lambda _: "always",
+        is_tty=True,
+    )
+    assert session.terminal.auto_level is AutoLevel.MED
+    assert "medium risk" in buf.getvalue()
+
+
+def test_plain_yes_does_not_change_the_auto_level() -> None:
+    from config.constants.repl_autonomy import AutoLevel
+
+    session = Session()
+    session.terminal.auto_level = AutoLevel.LOW
+    buf = io.StringIO()
+    console = Console(file=buf, force_terminal=False)
+
+    assert execution_allowed(
+        ExecutionPolicyResult(verdict="ask", tool_type="shell", reason=None),
+        session=session,
+        console=console,
+        action_summary="echo hi > /tmp/s1.txt",
+        confirm_fn=lambda _: "y",
+        is_tty=True,
+    )
+    assert session.terminal.auto_level is AutoLevel.LOW
+
+
+def test_non_shell_action_gets_plain_confirmation_no_risk_grade() -> None:
+    from config.constants.repl_autonomy import AutoLevel
+
+    session = Session()
+    session.terminal.auto_level = AutoLevel.LOW
+    buf = io.StringIO()
+    console = Console(file=buf, force_terminal=False)
+    captured: list[str] = []
+
+    # A slash command is not a shell mutation: no "risk" grade, no "always allow
+    # reversible" row, and "always" must not raise the auto level.
+    execution_allowed(
+        ExecutionPolicyResult(verdict="ask", tool_type="slash", reason="explains itself"),
+        session=session,
+        console=console,
+        action_summary="/auto low",
+        confirm_fn=lambda p: captured.append(p) or "always",
+        is_tty=True,
+    )
+    out = buf.getvalue()
+    assert "needs confirmation" in out
+    assert "low risk" not in out
+    assert "medium risk" not in out
+    assert "high risk" not in out
+    assert "always allow" not in out
+    assert session.terminal.auto_level is AutoLevel.LOW

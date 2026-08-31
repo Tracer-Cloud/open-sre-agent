@@ -83,6 +83,20 @@ def test_muted_tokens_are_readable_on_theme_background() -> None:
         assert _contrast(theme.DIM, theme.BG) >= 3.0, name
 
 
+def test_fade_fg_ansi_interpolates_dim_to_text() -> None:
+    """Live-action glow must come from theme tokens, not a raw RGB escape."""
+    from infrastructure.terminal import theme as ui_theme
+
+    ui_theme.set_active_theme("solarized")
+    assert ui_theme.fade_fg_ansi(0.0) == ui_theme.DIM_ANSI
+    assert ui_theme.fade_fg_ansi(1.0) == ui_theme.TEXT_ANSI
+    assert ui_theme.fade_fg_ansi(0.0) != ui_theme.fade_fg_ansi(1.0)
+    mid = ui_theme.fade_fg_ansi(0.5)
+    assert mid.startswith("\x1b[38;2;")
+    assert mid != ui_theme.DIM_ANSI
+    assert mid != ui_theme.TEXT_ANSI
+
+
 def test_palette_registry_keys_match_the_config_vocabulary() -> None:
     """The infra palettes must cover exactly the config-owned theme names.
 

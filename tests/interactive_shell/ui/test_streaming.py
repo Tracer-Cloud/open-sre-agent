@@ -56,11 +56,9 @@ class TestNonTtyFallback:
 
         output = buf.getvalue()
         assert result == "Hello, world"
-        # Bullet header + label + text reach piped output so captured
-        # logs are useful. ``●`` is the row marker; ``assistant`` is the
-        # dim label alongside it.
-        assert "●" in output
-        assert "assistant" in output
+        # The inline ``∴`` marker + text reach piped output so captured logs
+        # are useful (the standalone label header was removed).
+        assert "∴" in output
         assert "Hello, world" in output
         # No spinner / Live cursor-movement artifacts in non-TTY captures.
         assert "thinking" not in output
@@ -91,7 +89,7 @@ class TestNonTtyFallback:
         assert result == '{"actions":[]}'
         output = buf.getvalue()
         # No bullet header for suppressed responses.
-        assert "●" not in output
+        assert "∴" not in output
         assert '{"actions"' not in output
 
 
@@ -133,7 +131,7 @@ class TestTtyParagraphRender:
         output = _strip_ansi(buf.getvalue())
         assert result == "Run **opensre investigate** to start."
         # Bullet row marker pinned above the rendered paragraph.
-        assert "●" in output
+        assert "∴" in output
         # End-of-stream force-flush rendered Markdown — ``**`` stripped.
         assert "**opensre" not in output
         assert "opensre investigate" in output
@@ -570,9 +568,9 @@ class TestTtyParagraphRender:
         )
 
         assert result == ""
-        # Bullet still printed (header fires before chunk processing),
-        # but no spinner residue at finalize.
-        assert "●" in _strip_ansi(buf.getvalue())
+        # The marker is inline on the first paragraph, so an empty stream prints
+        # no marker at all — and no spinner residue at finalize.
+        assert "∴" not in _strip_ansi(buf.getvalue())
 
 
 class TestMidStreamError:
@@ -643,7 +641,8 @@ class TestMidStreamError:
 class TestTimingFooter:
     """A small dim ``· Ns`` footer appears after a rendered live response."""
 
-    def test_footer_printed_after_streamed_response(self) -> None:
+    def test_no_timing_footer_after_streamed_response(self) -> None:
+        """The per-turn ``· Ns · ↓ tokens`` footer was removed for compactness."""
         console, buf = _tty_console()
         stream_to_console(
             console,
@@ -652,7 +651,7 @@ class TestTimingFooter:
         )
 
         output = _strip_ansi(buf.getvalue())
-        assert re.search(r"·\s+\d+\.\d+s", output) is not None
+        assert re.search(r"·\s+\d+\.\d+s", output) is None
 
     def test_footer_skipped_when_stream_is_empty(self) -> None:
         """Empty stream must not print a timing footer under nothing."""
@@ -690,7 +689,7 @@ class TestRenderResponseHeader:
         console, buf = _tty_console()
         render_response_header(console, "assistant")
         output = _strip_ansi(buf.getvalue())
-        assert "●" in output
+        assert "∴" in output
         assert "assistant" in output
 
     def test_label_is_passthrough(self) -> None:
@@ -1002,7 +1001,7 @@ class TestSuppressionPeek:
         assert result == '{"actions":[]}'
         # No bullet header, no markdown, no live-region artifacts.
         output = _strip_ansi(buf.getvalue())
-        assert "●" not in output
+        assert "∴" not in output
         assert '{"actions"' not in output
 
     def test_renders_normally_when_first_char_does_not_match(self) -> None:
@@ -1016,7 +1015,7 @@ class TestSuppressionPeek:
 
         assert result == "Hello, world"
         output = _strip_ansi(buf.getvalue())
-        assert "●" in output
+        assert "∴" in output
         assert "Hello, world" in output
 
     def test_skips_leading_whitespace_before_deciding(self) -> None:
@@ -1031,7 +1030,7 @@ class TestSuppressionPeek:
 
         assert result == '  \n{"action":"slash"}'
         output = _strip_ansi(buf.getvalue())
-        assert "●" not in output
+        assert "∴" not in output
 
 
 class TestRenderMarkdownBlock:

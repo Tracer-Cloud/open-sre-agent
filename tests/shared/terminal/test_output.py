@@ -593,6 +593,28 @@ def test_repl_tracker_skips_per_tool_call_lines(
     tracker.complete("investigation_agent")
 
 
+def test_record_tool_start_sets_invoking_tools_on_investigation_spinner(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """While tools run, the line under the plan is Droid's 'Invoking tools…'."""
+    from surfaces.interactive_shell.runtime.core.state import SpinnerState
+    from surfaces.shared.terminal.output.console_state import set_investigation_spinner
+
+    monkeypatch.setattr(output_tracker, "get_output_format", lambda: "rich")
+    monkeypatch.setattr(output_tracker, "_repl_progress_active", lambda: True)
+    spinner = SpinnerState()
+    spinner.start()
+    spinner.set_phase("Investigation")
+    set_investigation_spinner(spinner)
+    try:
+        tracker = ProgressTracker()
+        tracker.start("investigation_agent")
+        tracker.record_tool_start("query_datadog_logs", event_key="call-1")
+        assert spinner.phase == SpinnerState.INVOKING_TOOLS_PHASE
+    finally:
+        set_investigation_spinner(None)
+
+
 class TestReplHintAnimation:
     """Tests for _ReplEventLogDisplay lap hints and prompt-spinner phase drive."""
 

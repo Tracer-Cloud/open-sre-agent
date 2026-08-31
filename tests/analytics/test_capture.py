@@ -2,7 +2,12 @@ from __future__ import annotations
 
 import pytest
 
-from infrastructure.analytics import cli
+from infrastructure.analytics import (
+    capture,
+    event_properties,
+    github_identity,
+    investigation_tracker,
+)
 from infrastructure.analytics.events import Event
 from infrastructure.analytics.source import EntrypointSource, TriggerMode
 
@@ -50,9 +55,9 @@ class _StubAnalytics:
 
 def test_capture_cli_invoked_uses_safe_capture(monkeypatch: pytest.MonkeyPatch) -> None:
     stub = _StubAnalytics()
-    monkeypatch.setattr(cli, "get_analytics", lambda: stub)
+    monkeypatch.setattr(capture, "get_analytics", lambda: stub)
 
-    cli.capture_cli_invoked({"command_path": "opensre version"})
+    capture.capture_cli_invoked({"command_path": "opensre version"})
 
     assert stub.events == [
         (Event.CLI_INVOKED, {"command_path": "opensre version"}),
@@ -68,19 +73,19 @@ def test_capture_cli_invoked_reports_analytics_failures_to_sentry(
     def raise_error() -> _StubAnalytics:
         raise expected_error
 
-    monkeypatch.setattr(cli, "get_analytics", raise_error)
-    monkeypatch.setattr(cli, "capture_exception", captured_errors.append)
+    monkeypatch.setattr(capture, "get_analytics", raise_error)
+    monkeypatch.setattr(capture, "capture_exception", captured_errors.append)
 
-    cli.capture_cli_invoked()
+    capture.capture_cli_invoked()
 
     assert captured_errors == [expected_error]
 
 
 def test_identify_github_username_sets_person_property(monkeypatch: pytest.MonkeyPatch) -> None:
     stub = _StubAnalytics()
-    monkeypatch.setattr(cli, "get_analytics", lambda: stub)
+    monkeypatch.setattr(github_identity, "get_analytics", lambda: stub)
 
-    cli.identify_github_username("octocat")
+    github_identity.identify_github_username("octocat")
 
     assert stub.identified == [{"github_username": "octocat"}]
     assert stub.persistent_properties == {"github_username": "octocat"}
@@ -88,22 +93,22 @@ def test_identify_github_username_sets_person_property(monkeypatch: pytest.Monke
 
 def test_identify_github_username_noop_on_empty(monkeypatch: pytest.MonkeyPatch) -> None:
     stub = _StubAnalytics()
-    monkeypatch.setattr(cli, "get_analytics", lambda: stub)
+    monkeypatch.setattr(github_identity, "get_analytics", lambda: stub)
 
-    cli.identify_github_username("")
+    github_identity.identify_github_username("")
 
     assert stub.identified == []
 
 
 def test_identify_saved_github_username_reads_store(monkeypatch: pytest.MonkeyPatch) -> None:
     stub = _StubAnalytics()
-    monkeypatch.setattr(cli, "get_analytics", lambda: stub)
+    monkeypatch.setattr(github_identity, "get_analytics", lambda: stub)
     # Patch the package API surface (what production imports). Patching only
     # ``integrations.github.identity`` misses when another test has bound the
     # name on ``integrations.github`` and shadowed ``__getattr__``.
     monkeypatch.setattr("integrations.github.saved_github_username", lambda: "octocat")
 
-    cli.identify_saved_github_username()
+    github_identity.identify_saved_github_username()
 
     assert stub.identified == [{"github_username": "octocat"}]
     assert stub.persistent_properties == {"github_username": "octocat"}
@@ -113,10 +118,10 @@ def test_identify_saved_github_username_noop_when_store_empty(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     stub = _StubAnalytics()
-    monkeypatch.setattr(cli, "get_analytics", lambda: stub)
+    monkeypatch.setattr(github_identity, "get_analytics", lambda: stub)
     monkeypatch.setattr("integrations.github.saved_github_username", lambda: "")
 
-    cli.identify_saved_github_username()
+    github_identity.identify_saved_github_username()
 
     assert stub.identified == []
 
@@ -130,16 +135,16 @@ def test_identify_github_username_reports_failures_to_sentry(
     def raise_error() -> _StubAnalytics:
         raise expected_error
 
-    monkeypatch.setattr(cli, "get_analytics", raise_error)
-    monkeypatch.setattr(cli, "capture_exception", captured_errors.append)
+    monkeypatch.setattr(github_identity, "get_analytics", raise_error)
+    monkeypatch.setattr(github_identity, "capture_exception", captured_errors.append)
 
-    cli.identify_github_username("octocat")
+    github_identity.identify_github_username("octocat")
 
     assert captured_errors == [expected_error]
 
 
 def test_build_cli_invoked_properties_includes_full_command_path() -> None:
-    properties = cli.build_cli_invoked_properties(
+    properties = event_properties.build_cli_invoked_properties(
         entrypoint="opensre",
         command_parts=["remote", "ops", "status"],
         debug=True,
@@ -160,7 +165,7 @@ def test_build_cli_invoked_properties_includes_full_command_path() -> None:
 
 
 def test_build_cli_invoked_properties_handles_root_invocation() -> None:
-    properties = cli.build_cli_invoked_properties(
+    properties = event_properties.build_cli_invoked_properties(
         entrypoint="opensre",
         command_parts=[],
     )
@@ -173,11 +178,11 @@ def test_build_cli_invoked_properties_handles_root_invocation() -> None:
 
 def test_capture_update_helpers_emit_expected_events(monkeypatch: pytest.MonkeyPatch) -> None:
     stub = _StubAnalytics()
-    monkeypatch.setattr(cli, "get_analytics", lambda: stub)
+    monkeypatch.setattr(capture, "get_analytics", lambda: stub)
 
-    cli.capture_update_started(check_only=True)
-    cli.capture_update_completed(check_only=False, updated=True)
-    cli.capture_update_failed(check_only=False, reason="RuntimeError")
+    capture.capture_update_started(check_only=True)
+    capture.capture_update_completed(check_only=False, updated=True)
+    capture.capture_update_failed(check_only=False, reason="RuntimeError")
 
     assert stub.events == [
         (Event.UPDATE_STARTED, {"check_only": True}),
@@ -188,15 +193,15 @@ def test_capture_update_helpers_emit_expected_events(monkeypatch: pytest.MonkeyP
 
 def test_capture_terminal_metrics_emit_expected_contract(monkeypatch: pytest.MonkeyPatch) -> None:
     stub = _StubAnalytics()
-    monkeypatch.setattr(cli, "get_analytics", lambda: stub)
+    monkeypatch.setattr(capture, "get_analytics", lambda: stub)
 
-    cli.capture_terminal_actions_planned(planned_count=3, has_unhandled_clause=True)
-    cli.capture_terminal_actions_executed(
+    capture.capture_terminal_actions_planned(planned_count=3, has_unhandled_clause=True)
+    capture.capture_terminal_actions_executed(
         planned_count=3,
         executed_count=2,
         executed_success_count=1,
     )
-    cli.capture_terminal_turn_summarized(
+    capture.capture_terminal_turn_summarized(
         planned_count=3,
         executed_count=2,
         executed_success_count=1,
@@ -209,7 +214,7 @@ def test_capture_terminal_metrics_emit_expected_contract(monkeypatch: pytest.Mon
 
     for event, properties in stub.events:
         assert properties is not None
-        required = cli.EVAL_AND_TERMINAL_EVENT_CONTRACT.get(event)
+        required = capture.EVAL_AND_TERMINAL_EVENT_CONTRACT.get(event)
         if required is None:
             continue
         assert required.issubset(properties.keys())
@@ -220,16 +225,16 @@ def test_eval_and_terminal_kpi_queries_cover_core_metrics() -> None:
         "terminal_action_execution_success_rate",
         "terminal_fallback_rate",
     }
-    assert expected_keys.issubset(cli.EVAL_AND_TERMINAL_KPI_QUERIES.keys())
-    for query in cli.EVAL_AND_TERMINAL_KPI_QUERIES.values():
+    assert expected_keys.issubset(capture.EVAL_AND_TERMINAL_KPI_QUERIES.keys())
+    for query in capture.EVAL_AND_TERMINAL_KPI_QUERIES.values():
         assert "FROM events" in query
 
 
 def test_track_investigation_emits_lifecycle_once(monkeypatch: pytest.MonkeyPatch) -> None:
     stub = _StubAnalytics()
-    monkeypatch.setattr(cli, "get_analytics", lambda: stub)
+    monkeypatch.setattr(capture, "get_analytics", lambda: stub)
 
-    with cli.track_investigation(
+    with investigation_tracker.track_investigation(
         entrypoint=EntrypointSource.CLI_COMMAND,
         trigger_mode=TriggerMode.FILE,
         input_path="alert.json",
@@ -255,7 +260,7 @@ def test_track_investigation_emits_failed_on_exception(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     stub = _StubAnalytics()
-    monkeypatch.setattr(cli, "get_analytics", lambda: stub)
+    monkeypatch.setattr(capture, "get_analytics", lambda: stub)
 
     # Wrap the raise in a callable so the ``raise`` lives inside ``_trigger``
     # rather than directly in the test body. ``pytest.raises`` then sees a
@@ -263,7 +268,7 @@ def test_track_investigation_emits_failed_on_exception(
     # ``py/unreachable-statement`` prove the assertions below are reachable
     # (the previous nested-``with`` workaround still tripped the rule).
     def _trigger() -> None:
-        with cli.track_investigation(
+        with investigation_tracker.track_investigation(
             entrypoint=EntrypointSource.MCP,
             trigger_mode=TriggerMode.SERVICE_RUNTIME,
         ):
@@ -284,9 +289,9 @@ def test_capture_investigation_failed_includes_state_loop_metrics(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     stub = _StubAnalytics()
-    monkeypatch.setattr(cli, "get_analytics", lambda: stub)
+    monkeypatch.setattr(capture, "get_analytics", lambda: stub)
 
-    cli.capture_investigation_failed(
+    capture.capture_investigation_failed(
         failure_type="RuntimeError",
         failure_message="boom",
         shared_properties={"investigation_id": "inv-fail"},
@@ -302,10 +307,10 @@ def test_track_investigation_failed_uses_tracker_loop_metrics(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     stub = _StubAnalytics()
-    monkeypatch.setattr(cli, "get_analytics", lambda: stub)
+    monkeypatch.setattr(capture, "get_analytics", lambda: stub)
 
     def _trigger() -> None:
-        with cli.track_investigation(
+        with investigation_tracker.track_investigation(
             entrypoint=EntrypointSource.CLI_COMMAND,
             trigger_mode=TriggerMode.FILE,
         ) as tracker:
@@ -324,9 +329,9 @@ def test_track_investigation_failed_uses_tracker_loop_metrics(
 
 def test_capture_investigation_outcome_and_cancelled(monkeypatch: pytest.MonkeyPatch) -> None:
     stub = _StubAnalytics()
-    monkeypatch.setattr(cli, "get_analytics", lambda: stub)
+    monkeypatch.setattr(capture, "get_analytics", lambda: stub)
 
-    cli.capture_investigation_outcome(
+    capture.capture_investigation_outcome(
         investigation_id="inv-123",
         status="failed",
         investigation_target="generic",
@@ -334,7 +339,7 @@ def test_capture_investigation_outcome_and_cancelled(monkeypatch: pytest.MonkeyP
         failure_category="unknown",
         state={"investigation_loop_count": 5, "investigation_iteration_cap": 20},
     )
-    cli.capture_investigation_cancelled(
+    capture.capture_investigation_cancelled(
         investigation_id="inv-456",
         investigation_target="alert.json",
         state={"investigation_loop_count": 2, "investigation_iteration_cap": 20},
@@ -358,9 +363,9 @@ def test_track_investigation_records_loop_metrics_on_completion(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     stub = _StubAnalytics()
-    monkeypatch.setattr(cli, "get_analytics", lambda: stub)
+    monkeypatch.setattr(capture, "get_analytics", lambda: stub)
 
-    with cli.track_investigation(
+    with investigation_tracker.track_investigation(
         entrypoint=EntrypointSource.CLI_COMMAND,
         trigger_mode=TriggerMode.FILE,
     ) as tracker:
@@ -375,14 +380,14 @@ def test_track_investigation_records_loop_metrics_on_completion(
 
 def test_track_investigation_nested_context_dedupes(monkeypatch: pytest.MonkeyPatch) -> None:
     stub = _StubAnalytics()
-    monkeypatch.setattr(cli, "get_analytics", lambda: stub)
+    monkeypatch.setattr(capture, "get_analytics", lambda: stub)
 
     with (
-        cli.track_investigation(
+        investigation_tracker.track_investigation(
             entrypoint=EntrypointSource.SDK,
             trigger_mode=TriggerMode.SERVICE_RUNTIME,
         ),
-        cli.track_investigation(
+        investigation_tracker.track_investigation(
             entrypoint=EntrypointSource.CLI_COMMAND,
             trigger_mode=TriggerMode.FILE,
         ),
@@ -396,9 +401,9 @@ def test_track_investigation_nested_context_dedupes(monkeypatch: pytest.MonkeyPa
 
 def test_capture_diagnosis_category_mismatch(monkeypatch: pytest.MonkeyPatch) -> None:
     stub = _StubAnalytics()
-    monkeypatch.setattr(cli, "get_analytics", lambda: stub)
+    monkeypatch.setattr(capture, "get_analytics", lambda: stub)
 
-    cli.capture_diagnosis_category_mismatch(
+    capture.capture_diagnosis_category_mismatch(
         root_cause_category="dns_resolution_failure",
         mismatch_reason="root cause text signals database (2 keyword hits)",
     )
@@ -424,7 +429,7 @@ def test_investigation_started_properties_use_current_model_env(
     monkeypatch.delenv("OPENAI_MODEL", raising=False)
     monkeypatch.delenv("OPENAI_REASONING_MODEL", raising=False)
 
-    properties = cli._investigation_started_properties(
+    properties = event_properties._investigation_started_properties(
         input_path=None,
         input_json=None,
         interactive=False,

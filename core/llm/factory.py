@@ -69,7 +69,7 @@ def resolve_llm_route() -> LLMRoute:
 def _resolve_settings_or_raise() -> Any:
     from pydantic import ValidationError
 
-    from config.config import resolve_llm_settings
+    from config.llm_settings import resolve_llm_settings
 
     try:
         return resolve_llm_settings()

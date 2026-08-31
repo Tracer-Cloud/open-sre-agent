@@ -17,6 +17,11 @@ from integrations.groundcover.guidance import (
 )
 from integrations.groundcover.params import base_extract_params
 from integrations.groundcover.query_runner import run_signal_query
+from integrations.groundcover.tools._evidence import (
+    map_get_groundcover_query_reference,
+    map_query_groundcover_logs,
+    map_query_groundcover_traces,
+)
 
 _LOGS_SOURCE = "groundcover_logs"
 _LOGS_MCP_TOOL = "query_logs"
@@ -74,6 +79,7 @@ def _logs_extract_params(sources: dict[str, dict]) -> dict[str, Any]:
     },
     is_available=_logs_is_available,
     extract_params=_logs_extract_params,
+    evidence_mapper=map_query_groundcover_logs,
 )
 def query_groundcover_logs(
     query: str = "",
@@ -145,6 +151,7 @@ def _query_ref_extract_params(sources: dict[str, dict]) -> dict[str, Any]:
     input_schema={"type": "object", "properties": {}, "additionalProperties": False},
     is_available=_query_ref_is_available,
     extract_params=_query_ref_extract_params,
+    evidence_mapper=map_get_groundcover_query_reference,
 )
 def get_groundcover_query_reference(
     _groundcover_client: GroundcoverClient | None = None,
@@ -246,6 +253,7 @@ def _traces_extract_params(sources: dict[str, dict]) -> dict[str, Any]:
     },
     is_available=_traces_is_available,
     extract_params=_traces_extract_params,
+    evidence_mapper=map_query_groundcover_traces,
 )
 def query_groundcover_traces(
     query: str = "",

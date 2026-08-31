@@ -32,6 +32,9 @@ class AskUserQuestion:
     options: tuple[str, ...]
     """Option labels in display order."""
 
+    multi_select: bool = False
+    """When True, the menu shows checkboxes and the user may pick several options."""
+
 
 @dataclass(frozen=True, slots=True)
 class PendingUserChoice:
@@ -46,11 +49,21 @@ class PendingUserChoice:
     questions: tuple[AskUserQuestion, ...] = ()
     """Batched Ask User questions; empty means a single ``title`` + ``options`` menu."""
 
+    multi_select: bool = False
+    """Multi-select for the single-question path (ignored when ``questions`` is set)."""
+
     def items(self) -> tuple[AskUserQuestion, ...]:
         """Questions to render: ``questions`` when set, otherwise one from title/options."""
         if self.questions:
             return self.questions
-        return (AskUserQuestion(label="", title=self.title, options=self.options),)
+        return (
+            AskUserQuestion(
+                label="",
+                title=self.title,
+                options=self.options,
+                multi_select=self.multi_select,
+            ),
+        )
 
     def is_batch(self) -> bool:
         """True when the menu is a multi-question Ask User wizard."""

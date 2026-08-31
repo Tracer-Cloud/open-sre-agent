@@ -20,7 +20,7 @@ import logging
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
-from infrastructure.analytics.cli import (
+from infrastructure.analytics.capture import (
     capture_loop_suggestion_prompted,
     capture_loop_suggestion_selected,
     capture_loop_suggestion_skipped,

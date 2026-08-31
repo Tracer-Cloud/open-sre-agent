@@ -1,4 +1,4 @@
-"""Commit and push a CI fix to the PR head branch or the requested branch."""
+"""Commit and push a CI fix to a PR head or repair branch."""
 
 from __future__ import annotations
 
@@ -46,33 +46,18 @@ class PushResult:
 
 
 def checkout_target_branch(workspace: str, ctx: CiFixContext) -> None:
-    """Switch the workspace to the branch the fix will edit and push.
+    """Switch the workspace to the PR head branch the fix will edit and push.
 
-    PR mode refuses protected/base branches; branch mode targets the requested
-    branch itself (approval-gated upstream), fast-forwards it to origin so the
-    fix edits the code that is actually failing, and refuses to continue when
-    the branch head no longer matches the inspected CI context.
+    PR mode refuses protected/base branches. Branch-target repairs use a linked
+    worktree instead of this path.
     """
     try:
         ensure_git_repo(workspace)
-        if not ctx.is_branch_target:
-            assert_not_protected(ctx.head_branch, protected_extra=ctx.base_branch)
+        assert_not_protected(ctx.head_branch, protected_extra=ctx.base_branch)
         if current_branch(workspace) != ctx.head_branch:
             if not _local_branch_exists(workspace, ctx.head_branch):
                 _fetch_branch(workspace, ctx.head_branch)
             checkout_branch(workspace, ctx.head_branch)
-        if ctx.is_branch_target:
-            _fast_forward_to_origin(workspace, ctx.head_branch)
-            head = _head_sha(workspace)
-            if ctx.head_sha and head != ctx.head_sha:
-                raise GitCommandError(
-                    BRANCH_FAILED,
-                    (
-                        f"Branch '{ctx.head_branch}' moved from {ctx.head_sha[:12]} to "
-                        f"{head[:12]} since its CI was inspected; re-run the fix against "
-                        "the new head. No push was made."
-                    ),
-                )
     except GitCommandError as exc:
         raise GitHubCiFixError(exc.kind, exc.message, branch_name=ctx.head_branch) from exc
 
@@ -85,12 +70,21 @@ def push_ci_fix(
     baseline: Mapping[str, str] | None = None,
     github_token: str | None = None,
 ) -> PushResult:
-    """Commit files changed by the fix run and push the target branch."""
+    """Commit files changed by the fix run and push the repair or PR branch."""
     token = resolve_github_token(github_token)
     pushed_head_sha = ""
     try:
         ensure_git_repo(workspace)
         if current_branch(workspace) != ctx.head_branch:
+            if ctx.is_branch_target:
+                raise GitHubCiFixError(
+                    BRANCH_FAILED,
+                    (
+                        f"CI fix worktree is not on repair branch {ctx.head_branch}; "
+                        "no push was made."
+                    ),
+                    branch_name=ctx.head_branch,
+                )
             checkout_target_branch(workspace, ctx)
         changed = _changed_since_baseline(workspace, baseline=baseline)
         if not changed:
@@ -106,7 +100,7 @@ def push_ci_fix(
             ctx.head_branch,
             base_default="" if ctx.is_branch_target else ctx.base_branch,
             token=token or None,
-            allow_protected=ctx.is_branch_target,
+            allow_protected=False,
         )
     except GitCommandError as exc:
         raise GitHubCiFixError(exc.kind, exc.message, branch_name=ctx.head_branch) from exc
@@ -130,7 +124,10 @@ def _changed_since_baseline(workspace: str, *, baseline: Mapping[str, str] | Non
 
 def _commit_message(ctx: CiFixContext, summary: str) -> str:
     subject_tail = _subject_tail(summary, fallback="repair failing CI")
-    target = f"PR #{ctx.number}" if ctx.number is not None else ctx.head_branch
+    if ctx.is_branch_target:
+        target = ctx.target_branch or ctx.base_branch or ctx.head_branch
+    else:
+        target = f"PR #{ctx.number}"
     subject = f"fix: repair CI for {target} - {subject_tail}"[:_SUBJECT_MAX]
     lines = [subject, ""]
     if summary.strip():
@@ -197,26 +194,6 @@ def _fetch_branch(workspace: str, branch: str) -> None:
         raise GitCommandError(
             BRANCH_FAILED,
             f"Could not fetch PR branch '{branch}': {result.stderr.strip()}",
-        )
-
-
-def _fast_forward_to_origin(workspace: str, branch: str) -> None:
-    """Bring the checked-out branch up to origin; refuse a diverged local branch."""
-    result = subprocess.run(
-        ["git", "pull", "--ff-only", "origin", branch],
-        cwd=workspace,
-        capture_output=True,
-        text=True,
-        timeout=_GIT_TIMEOUT_SEC,
-        check=False,
-    )
-    if result.returncode != 0:
-        raise GitCommandError(
-            BRANCH_FAILED,
-            (
-                f"Could not fast-forward '{branch}' to origin "
-                f"(local branch diverged or fetch failed): {result.stderr.strip()}"
-            ),
         )
 
 

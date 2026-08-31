@@ -10,7 +10,7 @@ from rich.console import Console
 from rich.text import Text
 
 from core.domain.stream import StreamEvent
-from infrastructure.analytics.cli import capture_investigation_lifecycle_event
+from infrastructure.analytics.capture import capture_investigation_lifecycle_event
 from infrastructure.analytics.events import Event
 from infrastructure.observability.trace.redaction import format_json_preview
 from surfaces.shared.terminal.output import (
@@ -463,11 +463,17 @@ class StreamRenderer:
 
         Closes any previous spinner-driven node (e.g. ``investigate``)
         first so the helper takes over stdout cleanly.
+
+        REPL diagnose skips ``ProgressTracker.start`` (no Live spinner), so
+        advance the pinned task plan here explicitly.
         """
         if self._active_node and self._active_node != canonical:
             self._finish_active_node()
         self._active_node = canonical
         self._mark_node_seen(canonical)
+        from surfaces.shared.terminal.output.console_state import advance_investigation_plan
+
+        advance_investigation_plan(canonical)
         self._diagnose.start()
 
     def _end_diagnose(self) -> None:

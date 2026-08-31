@@ -19,7 +19,7 @@ _logger = logging.getLogger(__name__)
 _SESSION_EVENT_POLL_SECONDS = 0.25
 
 if TYPE_CHECKING:
-    from infrastructure.analytics.cli import InvestigationTracker
+    from infrastructure.analytics.investigation_tracker import InvestigationTracker
 
 
 def _reraise_cli_investigation_failure(exc: BaseException) -> NoReturn:

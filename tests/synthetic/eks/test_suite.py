@@ -7,7 +7,7 @@ from types import SimpleNamespace
 
 import pytest
 
-from config.config import has_credentials_for_active_llm_provider
+from config.llm_settings import has_credentials_for_active_llm_provider
 from tests.synthetic.eks.run_suite import run_scenario, score_result
 from tests.synthetic.eks.scenario_loader import (
     SUITE_DIR,

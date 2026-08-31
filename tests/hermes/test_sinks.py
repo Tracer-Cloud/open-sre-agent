@@ -740,7 +740,10 @@ class TestCloseIdempotency:
         sink = TelegramSink(
             dispatcher,
             investigation_bridge=_bridge,
-            config=TelegramSinkConfig(bridge_workers=1),
+            # Inline bridge: this class exercises close() idempotency, not the pool.
+            # A pooled executor left running can stall the next test on the same
+            # xdist worker under loaded coverage on CI.
+            config=TelegramSinkConfig(bridge_workers=1, bridge_run_inline=True),
         )
         # Multiple close() calls must not raise (SIGTERM handlers may double-fire).
         sink.close()

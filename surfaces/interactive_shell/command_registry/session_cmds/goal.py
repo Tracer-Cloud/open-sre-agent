@@ -30,6 +30,7 @@ from core.agent_harness.spi.session_state import clear_pending_autosubmit, set_a
 from infrastructure.evidence.evidence_compaction import truncate_message
 from infrastructure.terminal.theme import DIM, ERROR, HIGHLIGHT
 from surfaces.interactive_shell.runtime import Session
+from surfaces.shared.terminal.components.rendering import print_repl_text
 
 _USAGE = "/goal [show|set|pause|resume|edit|clear|help]  or  /goal <condition>"
 # A condition is plain prose describing the state to reach or the request to
@@ -85,7 +86,7 @@ def _show(session: Session, console: Console) -> bool:
             f"[{DIM}]— e.g.[/] [{HIGHLIGHT}]{_SET_EXAMPLES[0]}[/]"
         )
         return True
-    console.print(format_session_goal_progress(goal, session=session), markup=False)
+    print_repl_text(console, format_session_goal_progress(goal, session=session), markup=False)
     return True
 
 
@@ -118,7 +119,7 @@ def _set(session: Session, console: Console, args: list[str]) -> bool:
     # (no-op terminal → turn-outcome hint on headless SessionCore).
     set_auto_command(session, condition)
     _persist_goal_state(session)
-    console.print(format_session_goal_progress(goal, session=session), markup=False)
+    print_repl_text(console, format_session_goal_progress(goal, session=session), markup=False)
     console.print(
         f"[{DIM}]→ next: condition runs as its own prompt turn "
         f"(look for [/][{HIGHLIGHT}][N] ❯[/][{DIM}] below). [/]"
@@ -131,7 +132,9 @@ def _pause(session: Session, console: Console) -> bool:
     goal = getattr(session, "session_goal", None)
     if not isinstance(goal, SessionGoal) or not session_goal_is_active(session):
         if isinstance(goal, SessionGoal) and session_goal_is_paused(session):
-            console.print(format_session_goal_progress(goal, session=session), markup=False)
+            print_repl_text(
+                console, format_session_goal_progress(goal, session=session), markup=False
+            )
             console.print(f"[{DIM}]already paused.[/]")
             return True
         console.print(f"[{DIM}]no active goal to pause.[/]")
@@ -145,7 +148,7 @@ def _pause(session: Session, console: Console) -> bool:
     # before flush (or the next inbound message restores ACTIVE).
     clear_pending_autosubmit(session)
     _persist_goal_state(session)
-    console.print(format_session_goal_progress(paused, session=session), markup=False)
+    print_repl_text(console, format_session_goal_progress(paused, session=session), markup=False)
     console.print(f"[{DIM}]paused. {_HELP_FOOTER.replace('pause · ', '')}[/]")
     return True
 
@@ -154,7 +157,9 @@ def _resume(session: Session, console: Console) -> bool:
     goal = getattr(session, "session_goal", None)
     if not isinstance(goal, SessionGoal) or not session_goal_is_paused(session):
         if isinstance(goal, SessionGoal) and session_goal_is_active(session):
-            console.print(format_session_goal_progress(goal, session=session), markup=False)
+            print_repl_text(
+                console, format_session_goal_progress(goal, session=session), markup=False
+            )
             console.print(f"[{DIM}]already active.[/]")
             return True
         console.print(f"[{DIM}]no paused goal to resume.[/]")
@@ -167,7 +172,7 @@ def _resume(session: Session, console: Console) -> bool:
     resumed = attach_session_goal(session, resumed)
     set_auto_command(session, resumed.condition)
     _persist_goal_state(session)
-    console.print(format_session_goal_progress(resumed, session=session), markup=False)
+    print_repl_text(console, format_session_goal_progress(resumed, session=session), markup=False)
     console.print(
         f"[{DIM}]→ next: condition runs as its own prompt turn "
         f"(look for [/][{HIGHLIGHT}][N] ❯[/][{DIM}] below). [/]"
@@ -194,7 +199,7 @@ def _edit(session: Session, console: Console, args: list[str]) -> bool:
     if session_goal_is_active(session):
         set_auto_command(session, condition)
     _persist_goal_state(session)
-    console.print(format_session_goal_progress(edited, session=session), markup=False)
+    print_repl_text(console, format_session_goal_progress(edited, session=session), markup=False)
     if session_goal_is_active(session):
         console.print(
             f"[{DIM}]→ next: updated condition runs as its own prompt turn "

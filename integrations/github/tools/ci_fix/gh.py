@@ -1,4 +1,4 @@
-"""Narrow GitHub CLI access for PR CI inspection."""
+"""Narrow GitHub CLI access for CI inspection."""
 
 from __future__ import annotations
 
@@ -36,12 +36,12 @@ def run_gh_json(
     except json.JSONDecodeError as exc:
         raise GitHubCiFixError(
             ERR_GH_UNAVAILABLE,
-            "GitHub CLI returned invalid JSON while inspecting PR CI; no push was made.",
+            "GitHub CLI returned invalid JSON while inspecting CI; no push was made.",
         ) from exc
     if not isinstance(parsed, dict):
         raise GitHubCiFixError(
             ERR_GH_UNAVAILABLE,
-            "GitHub CLI returned an unexpected response while inspecting PR CI; no push was made.",
+            "GitHub CLI returned an unexpected response while inspecting CI; no push was made.",
         )
     return parsed
 
@@ -63,12 +63,12 @@ def run_gh_text(
     if not token:
         raise GitHubCiFixError(
             ERR_GITHUB_TOKEN,
-            "A GitHub token is required to inspect PR CI and push fixes; no push was made.",
+            "A GitHub token is required to inspect CI and push fixes; no push was made.",
         )
     if shutil.which("gh") is None:
         raise GitHubCiFixError(
             ERR_GH_UNAVAILABLE,
-            "GitHub CLI is required to inspect PR CI logs; no push was made.",
+            "GitHub CLI is required to inspect CI logs; no push was made.",
         )
 
     env = os.environ.copy()
@@ -88,12 +88,12 @@ def run_gh_text(
     except subprocess.TimeoutExpired as exc:
         raise GitHubCiFixError(
             ERR_GH_UNAVAILABLE,
-            f"GitHub CLI timed out while inspecting PR CI after {timeout}s; no push was made.",
+            f"GitHub CLI timed out while inspecting CI after {timeout}s; no push was made.",
         ) from exc
     except OSError as exc:
         raise GitHubCiFixError(
             ERR_GH_UNAVAILABLE,
-            f"GitHub CLI failed while inspecting PR CI: {exc}; no push was made.",
+            f"GitHub CLI failed while inspecting CI: {exc}; no push was made.",
         ) from exc
 
     stdout = _redact(completed.stdout or "", token)

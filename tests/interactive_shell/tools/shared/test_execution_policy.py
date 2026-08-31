@@ -23,6 +23,7 @@ from tools.interactive_shell.shared import (
     ToolExecutionPlan,
     allow_tool,
     apply_auto_level,
+    apply_plan_only_gate,
     plan_foreground_tool,
     resolve_confirmation,
 )
@@ -158,3 +159,25 @@ def test_auto_med_allows_sample_alert() -> None:
 def test_auto_off_asks_every_tool_type() -> None:
     result = apply_auto_level(allow_tool("slash"), AutoLevel.OFF)
     assert result.verdict == "ask"
+
+
+# --- plan-only execution gate (pure decision) --------------------------------
+
+
+def test_plan_only_gate_asks_before_every_mutating_tool_even_at_high() -> None:
+    # A standing plan-only request gates mutating tools regardless of /auto.
+    for mutating in ("shell", "code_agent", "slash", "synthetic_test", "sentry_issue_fix"):
+        result = apply_plan_only_gate(allow_tool(mutating), plan_only_active=True)
+        assert result.verdict == "ask", mutating
+    # Read-only tool types still run — plan-only gates mutation, not evidence.
+    read_only = apply_plan_only_gate(allow_tool("investigation"), plan_only_active=True)
+    assert read_only.verdict == "allow"
+
+
+def test_plan_only_gate_is_a_noop_when_not_active() -> None:
+    assert apply_plan_only_gate(allow_tool("shell"), plan_only_active=False).verdict == "allow"
+
+
+def test_plan_only_gate_leaves_a_non_allow_verdict_untouched() -> None:
+    denied = ExecutionPolicyResult(verdict="deny", tool_type="shell", reason="empty")
+    assert apply_plan_only_gate(denied, plan_only_active=True).verdict == "deny"

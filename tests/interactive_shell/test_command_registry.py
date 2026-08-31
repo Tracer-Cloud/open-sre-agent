@@ -73,3 +73,27 @@ def test_registry_first_arg_completion_hints_co_located_with_handlers() -> None:
         assert SLASH_COMMANDS[name].first_arg_completions == tup
 
     assert SLASH_COMMANDS["/help"].first_arg_completions == ()
+
+
+def test_exit_and_quit_are_non_mutating() -> None:
+    # Control commands must be declared non-mutating so the execution gate skips them.
+    assert SLASH_COMMANDS["/exit"].mutating is False
+    assert SLASH_COMMANDS["/quit"].mutating is False
+
+
+def test_plan_only_gate_does_not_block_exit() -> None:
+    # A standing plan-only request must never stop the user from leaving the shell:
+    # /exit is non-mutating, so it runs without a confirmation prompt.
+    console, _ = _capture()
+    session = Session()
+    session.plan_only_until_authorized = True
+    prompted = {"asked": False}
+
+    def _confirm(_prompt: str) -> str:
+        prompted["asked"] = True
+        return "n"
+
+    result = dispatch_slash("/exit", session, console, confirm_fn=_confirm, is_tty=True)
+
+    assert prompted["asked"] is False
+    assert result is False  # the REPL should exit

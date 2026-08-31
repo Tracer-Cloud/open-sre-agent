@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from config.config import get_configured_llm_provider
+from config.llm_settings import get_configured_llm_provider
 
 UNSUPPORTED_SYNTHETIC_LLM_PROVIDERS = frozenset({"ollama"})
 

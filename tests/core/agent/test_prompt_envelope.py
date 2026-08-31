@@ -74,8 +74,8 @@ def test_action_system_prompt_envelope_matches_legacy_rendering(
         PromptBlockId.ACTION_VENDOR_FRAGMENTS,
         PromptBlockId.ACTION_RUNTIME_FACTS,
         PromptBlockId.ACTION_SKILLS,
-        PromptBlockId.ACTION_PLANNING_INSTRUCTIONS,
         PromptBlockId.CONNECTED_INTEGRATIONS,
+        PromptBlockId.TURN_INTERACTION,
         PromptBlockId.RECENT_CONVERSATION,
     ]
     assert (
@@ -87,10 +87,6 @@ def test_action_system_prompt_envelope_matches_legacy_rendering(
         envelope.require_block(PromptBlockId.ACTION_RUNTIME_FACTS).kind == PromptBlockKind.CONTEXT
     )
     assert envelope.require_block(PromptBlockId.ACTION_SKILLS).kind == PromptBlockKind.RULE
-    assert (
-        envelope.require_block(PromptBlockId.ACTION_PLANNING_INSTRUCTIONS).kind
-        == PromptBlockKind.RULE
-    )
     assert (
         envelope.require_block(PromptBlockId.CONNECTED_INTEGRATIONS).kind == PromptBlockKind.CONTEXT
     )
@@ -191,8 +187,8 @@ def test_every_block_declares_which_tier_it_belongs_to(
         PromptBlockId.ACTION_VENDOR_FRAGMENTS: PromptTier.STABLE,
         PromptBlockId.ACTION_RUNTIME_FACTS: PromptTier.STABLE,
         PromptBlockId.ACTION_SKILLS: PromptTier.STABLE,
-        PromptBlockId.ACTION_PLANNING_INSTRUCTIONS: PromptTier.STABLE,
         PromptBlockId.CONNECTED_INTEGRATIONS: PromptTier.CONTEXT,
+        PromptBlockId.TURN_INTERACTION: PromptTier.EPHEMERAL,
         PromptBlockId.RECENT_CONVERSATION: PromptTier.EPHEMERAL,
     }
 

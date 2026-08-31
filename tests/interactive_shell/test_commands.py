@@ -1048,7 +1048,7 @@ class TestIntegrationsCommand:
         assert captured == [["integrations", "setup"]]
 
     def test_remove_uses_native_store_removal(self, monkeypatch: object) -> None:
-        import infrastructure.analytics.cli as analytics_cli
+        import infrastructure.analytics.capture as analytics_cli
         import integrations.store as store
         from surfaces.interactive_shell.command_registry import integrations as m
 
@@ -1108,7 +1108,7 @@ class TestMcpCommand:
         assert captured == [["integrations", "setup"]]
 
     def test_disconnect_uses_native_store_removal(self, monkeypatch: object) -> None:
-        import infrastructure.analytics.cli as analytics_cli
+        import infrastructure.analytics.capture as analytics_cli
         import integrations.store as store
         from surfaces.interactive_shell.command_registry import integrations as m
 
@@ -1781,7 +1781,9 @@ class TestInvestigateFileCommand:
             track_calls.append((entrypoint.value, trigger_mode.value, input_path))
             return _TrackContext()
 
-        monkeypatch.setattr("infrastructure.analytics.cli.track_investigation", _fake_track)
+        monkeypatch.setattr(
+            "infrastructure.analytics.investigation_tracker.track_investigation", _fake_track
+        )
         monkeypatch.setattr(
             "surfaces.interactive_shell.runtime.investigation_adapter.run_sample_alert_for_session",
             lambda **_kwargs: {"root_cause": "sample cause"},
@@ -1936,7 +1938,9 @@ class TestInvestigateFileCommand:
             track_calls.append((entrypoint.value, trigger_mode.value))
             return _TrackContext()
 
-        monkeypatch.setattr("infrastructure.analytics.cli.track_investigation", _fake_track)
+        monkeypatch.setattr(
+            "infrastructure.analytics.investigation_tracker.track_investigation", _fake_track
+        )
         monkeypatch.setattr(
             "surfaces.interactive_shell.runtime.investigation_adapter.run_investigation_for_session",
             lambda **_kwargs: {"root_cause": "test cause"},

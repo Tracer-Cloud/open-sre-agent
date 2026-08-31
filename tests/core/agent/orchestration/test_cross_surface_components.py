@@ -247,7 +247,7 @@ def test_action_tools_uses_passed_resolved_integrations(
         return []
 
     monkeypatch.setattr(
-        "core.agent_harness.tools.tool_provider.get_action_tools_from_integrations_context",
+        "core.agent_harness.tools.tool_provider.get_action_tools_from_integrations_view",
         _fake_build,
     )
     provider = DefaultToolProvider(
@@ -272,7 +272,7 @@ def test_action_tools_falls_back_to_session_resolve_when_none(
         return []
 
     monkeypatch.setattr(
-        "core.agent_harness.tools.tool_provider.get_action_tools_from_integrations_context",
+        "core.agent_harness.tools.tool_provider.get_action_tools_from_integrations_view",
         _fake_build,
     )
     monkeypatch.setattr(

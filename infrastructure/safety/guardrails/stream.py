@@ -23,7 +23,7 @@ from __future__ import annotations
 
 from collections.abc import Callable
 
-from infrastructure.analytics.cli import capture_agent_secret_detected
+from infrastructure.analytics.capture import capture_agent_secret_detected
 from infrastructure.safety.guardrails.audit import AuditLogger
 from infrastructure.safety.guardrails.evaluator import GuardrailEvaluator, ScanMatch
 from infrastructure.safety.guardrails.rules import GuardrailAction

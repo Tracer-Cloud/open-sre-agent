@@ -13,7 +13,7 @@ from prompt_toolkit.patch_stdout import patch_stdout
 from rich.console import Console
 from rich.markup import escape
 
-from infrastructure.analytics.cli import track_investigation
+from infrastructure.analytics.investigation_tracker import track_investigation
 from infrastructure.analytics.source import EntrypointSource, TriggerMode
 from infrastructure.errors import OpenSREError
 from surfaces.interactive_shell.runtime import (

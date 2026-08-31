@@ -163,8 +163,33 @@ def test_build_prompt_session_uses_persistent_history(
     assert tmp_path.exists()
     assert isinstance(prompt.completer, ShellCompleter)
     assert prompt.multiline is True
-    assert prompt.reserve_space_for_menu == 8
+    assert prompt.reserve_space_for_menu == 0
     assert prompt.app.key_bindings is not None
+
+
+def test_build_prompt_session_installs_single_row_bordered_composer() -> None:
+    from prompt_toolkit.layout.containers import (
+        FloatContainer,
+        HSplit,
+        Window,
+    )
+
+    with create_app_session(input=DummyInput(), output=DummyOutput()):
+        prompt = input_prompt.build_prompt_session()
+
+    root = prompt.layout.container
+    assert isinstance(root, HSplit)
+    framed_input = root.children[0]
+    assert isinstance(framed_input, FloatContainer)
+    chrome = framed_input.content
+    assert isinstance(chrome, HSplit)
+    assert len(chrome.children) == 3
+    composer = chrome.children[1]
+    footer = chrome.children[2]
+    assert isinstance(composer, HSplit)
+    assert composer.height == 3  # top border + one edit row + bottom border
+    assert isinstance(footer, Window)
+    assert chrome.preferred_width(80).preferred == 79
 
 
 def test_build_prompt_session_falls_back_to_memory_history(
@@ -204,7 +229,7 @@ def test_prompt_message_uses_accent_glyph() -> None:
     rendered = _prompt_message(Session()).value
 
     assert ui_theme.PROMPT_ACCENT_ANSI in rendered
-    assert "❯" in rendered
+    assert ">" in rendered
     assert ANSI_RESET in rendered
 
 
@@ -395,6 +420,14 @@ def test_completion_menu_current_item_uses_highlight_style() -> None:
     assert attrs_menu.bgcolor == BG.lstrip("#")
     assert attrs_menu.reverse is False
     assert attrs_menu.bold is True
+
+
+def test_composer_uses_terminal_background_without_a_highlight_fill() -> None:
+    set_active_theme("green")
+    style = _build_prompt_style()
+
+    for style_name in ("class:frame", "class:composer", "class:composer-footer"):
+        assert not style.get_attrs_for_style_str(style_name).bgcolor
 
 
 def test_lazy_rich_style_split_tracks_active_theme() -> None:
@@ -680,15 +713,27 @@ class TestSpinnerState:
         assert spinner.streaming is False
         assert spinner.inline_spinner_ansi() == ""
 
-    def test_inline_spinner_uses_active_theme_highlight(self) -> None:
+    def test_inline_spinner_thinking_uses_active_theme_highlight(self) -> None:
         from infrastructure.terminal.theme import set_active_theme
 
         set_active_theme("blue")
         spinner = loop_state.SpinnerState()
         spinner.start()
+        spinner.set_phase(loop_state.SpinnerState.THINKING_PHASE)
         raw = spinner.inline_spinner_ansi()
-        assert "168;212;255" in raw
+        assert "168;212;255" in raw  # highlight — the Thinking accent
         assert "185;237;175" not in raw
+
+    def test_inline_spinner_invoking_tools_uses_brand(self) -> None:
+        from infrastructure.terminal.theme import set_active_theme
+
+        set_active_theme("blue")
+        spinner = loop_state.SpinnerState()
+        spinner.start()
+        spinner.set_phase(loop_state.SpinnerState.INVOKING_TOOLS_PHASE)
+        raw = spinner.inline_spinner_ansi()
+        assert "111;165;216" in raw  # blue BRAND
+        assert "168;212;255" not in raw.split("(Press ESC")[0]
 
     @staticmethod
     def _all_verbs(spinner: loop_state.SpinnerState) -> tuple[str, ...]:
@@ -1245,13 +1290,14 @@ class TestBuildCancelKeyBindings:
     machinery; this test instantiates the bindings and verifies they
     were registered for the right keys."""
 
-    def test_returns_bindings_for_escape_and_ctrl_l(self) -> None:
+    def test_returns_bindings_for_ctrl_c_escape_and_ctrl_l(self) -> None:
         state = loop_state.ReplState()
         kb = build_cancel_key_bindings(state)
         # Flatten each binding's keys tuple. ``Keys`` enum members have
         # ``.value`` strings like ``"escape"``/``"c-l"`` matching the
         # decorator argument; plain string keys are themselves.
         registered = {getattr(k, "value", k) for b in kb.bindings for k in b.keys}
+        assert "c-c" in registered, f"Ctrl+C binding missing — registered: {registered}"
         assert "escape" in registered, f"escape binding missing — registered: {registered}"
         assert "c-l" in registered, f"Ctrl+L binding missing — registered: {registered}"
 
@@ -1555,6 +1601,43 @@ class TestRequestConfirmationViaPrompt:
         assert result == [""]
         assert state.confirm_event is None
         assert state.confirm_response == []
+
+
+def test_reset_prompt_buffer_schedules_on_the_ui_loop() -> None:
+    """Confirmation parks on a worker thread; buffer.reset must not run there."""
+    from surfaces.interactive_shell.runtime.turn_host import _reset_prompt_buffer
+
+    scheduled: list[object] = []
+
+    class _Loop:
+        def call_soon_threadsafe(self, fn: object, *args: object) -> None:
+            scheduled.append((fn, args))
+
+    class _Buffer:
+        def __init__(self) -> None:
+            self.resets = 0
+
+        def reset(self) -> None:
+            self.resets += 1
+
+    class _App:
+        def __init__(self) -> None:
+            self.current_buffer = _Buffer()
+
+    session = Session()
+    app = _App()
+    session.terminal.prompt_app = app
+    session.terminal.main_loop = _Loop()
+
+    _reset_prompt_buffer(session)
+
+    assert app.current_buffer.resets == 0
+    assert len(scheduled) == 1
+    fn, args = scheduled[0]
+    assert args == ()
+    assert callable(fn)
+    fn()
+    assert app.current_buffer.resets == 1
 
 
 class TestExecutionAllowedRespectsDispatchCancelled:

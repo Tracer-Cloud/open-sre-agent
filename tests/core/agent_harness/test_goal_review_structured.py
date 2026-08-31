@@ -44,12 +44,61 @@ def _obs(*, text: str = "done", evidence: int = 1) -> GoalObservation:
     )
 
 
-def test_goal_reviewer_rejects_on_structured_not_reached() -> None:
-    llm = _ScriptedLLM('{"verdict": "NOT_REACHED"}')
-    goal = build_goal_reviewer(llm, "delete the cron", executed_tool_names=["shell_run"])
+def test_goal_reviewer_rejects_while_task_plan_incomplete() -> None:
+    """Do not idle with Plan · n/m and a mid-list ● — keep the turn going."""
+    llm = _ScriptedLLM('{"verdict": "GOAL_REACHED"}')
+    goal = build_goal_reviewer(
+        llm,
+        "check checkout latency",
+        executed_tool_names=["call_mcp_tool"],
+        plan_incomplete=lambda: True,
+    )
     assert goal.verify is not None
     assert goal.verify(_obs()) is False
+    assert llm.invokes == 0  # deterministic plan gate — no LLM spend
+    assert goal.nudge is not None
+    assert "unfinished steps" in goal.nudge(_obs())
+
+
+def test_goal_reviewer_ignores_plan_gate_when_complete() -> None:
+    llm = _ScriptedLLM('{"verdict": "GOAL_REACHED"}')
+    goal = build_goal_reviewer(
+        llm,
+        "check checkout latency",
+        executed_tool_names=["call_mcp_tool"],
+        plan_incomplete=lambda: False,
+    )
+    assert goal.verify is not None
+    assert goal.verify(_obs()) is True
     assert llm.invokes == 1
+
+
+def test_task_plan_blocks_conclusion_helpers() -> None:
+    from core.agent_harness.task_plan.plan import parse_task_plan
+    from core.agent_harness.turns.goal_review import task_plan_blocks_conclusion
+
+    incomplete, _ = parse_task_plan(
+        {
+            "plan": [
+                {"step": "Discover", "status": "completed"},
+                {"step": "Query", "status": "in_progress"},
+                {"step": "Verify", "status": "pending"},
+            ]
+        }
+    )
+    done, _ = parse_task_plan(
+        {
+            "plan": [
+                {"step": "Discover", "status": "completed"},
+                {"step": "Verify", "status": "completed"},
+            ]
+        }
+    )
+    assert incomplete is not None and done is not None
+    assert task_plan_blocks_conclusion(task_plan=incomplete, plan_only=False) is True
+    assert task_plan_blocks_conclusion(task_plan=incomplete, plan_only=True) is False
+    assert task_plan_blocks_conclusion(task_plan=done, plan_only=False) is False
+    assert task_plan_blocks_conclusion(task_plan=None, plan_only=False) is False
 
 
 def test_goal_reviewer_accepts_on_structured_reached() -> None:

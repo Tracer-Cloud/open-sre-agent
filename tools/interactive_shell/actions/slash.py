@@ -219,6 +219,12 @@ def execute_slash_tool(args: dict[str, Any], ctx: ActionToolScope) -> bool | dic
         set_auto_command(ctx.session, stripped)
         return True
 
+    # Control commands (exit/quit) never mutate state, so they run without the
+    # execution gate — a standing plan-only request must not trap the user in
+    # the shell.
+    if not ctx.slash_ports.command_is_mutating(name):
+        return _dispatch_and_translate_exit(stripped, ctx, policy_precleared=True)
+
     plan = plan_foreground_tool("slash", "slash")
     if not ctx.slash_ports.execution_allowed(
         policy=plan.policy,

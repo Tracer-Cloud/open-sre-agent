@@ -3,7 +3,7 @@
 Where a piece of agent-callable capability lives is decided by **how many
 vendor integrations its domain logic touches**, not by convenience or file
 size. This is the decision rule referenced from
-[ARCHITECTURE.md](ARCHITECTURE.md#tier-2--tools-and-integrations).
+[ARCHITECTURE.md](ARCHITECTURE.md#tier-3--tools-and-integrations).
 
 ## Decision rule
 

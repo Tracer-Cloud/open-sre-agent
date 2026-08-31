@@ -8,7 +8,9 @@ this module.
 Token reference
 ---------------
   HIGHLIGHT  brand name, ❯ prompt, ✓ success, /commands, key findings, live indicator
+             (Thinking… / stage spinner lead)
   BRAND      model name, file paths, version numbers, secondary labels
+             (Invoking tools… spinner lead — distinct from Thinking)
   TEXT       all primary body text, step names, values, section headers
   SECONDARY  tips, descriptions, muted info, secondary body text
   DIM        timestamps, dividers, labels, ruled-out items, dim context
@@ -251,6 +253,24 @@ def _fg(rgb: tuple[int, int, int]) -> str:
     return f"\x1b[38;2;{rgb[0]};{rgb[1]};{rgb[2]}m"
 
 
+def fade_fg_ansi(intensity: float) -> str:
+    """Foreground between DIM and TEXT.
+
+    ``intensity`` is 0 (DIM) to 1 (TEXT). Live-action glow uses this so
+    runtime code never builds a raw truecolor escape.
+    """
+    clamped = 0.0 if intensity < 0.0 else 1.0 if intensity > 1.0 else intensity
+    dim = _parse_hex_color(_ACTIVE_THEME.DIM)
+    text = _parse_hex_color(_ACTIVE_THEME.TEXT)
+    return _fg(
+        (
+            int(dim[0] + (text[0] - dim[0]) * clamped),
+            int(dim[1] + (text[1] - dim[1]) * clamped),
+            int(dim[2] + (text[2] - dim[2]) * clamped),
+        )
+    )
+
+
 def _parse_hex_color(value: str) -> tuple[int, int, int]:
     stripped = value.lstrip("#")
     return (int(stripped[0:2], 16), int(stripped[2:4], 16), int(stripped[4:6], 16))
@@ -384,6 +404,15 @@ def _apply_theme(theme: CliTheme) -> None:
             "markdown.h1": f"bold {theme.HIGHLIGHT}",
             "markdown.h2": f"bold {theme.BRAND}",
             "markdown.h3": f"bold {theme.BRAND}",
+            "markdown.h4": f"bold {theme.SECONDARY}",
+            "markdown.strong": f"bold {theme.TEXT}",
+            "markdown.em": f"italic {theme.SECONDARY}",
+            "markdown.item.bullet": f"bold {theme.BRAND}",
+            "markdown.item.number": f"bold {theme.BRAND}",
+            "markdown.block_quote": theme.SECONDARY,
+            "markdown.link": f"underline {theme.BRAND}",
+            "markdown.link_url": theme.DIM,
+            "markdown.hr": theme.DIM,
         }
     )
 
@@ -451,6 +480,7 @@ __all__ = [
     "DIM_ANSI",
     "DIM_COUNTER_ANSI",
     "ERROR",
+    "fade_fg_ansi",
     "GLYPH_ACTIVE",
     "GLYPH_BULLET",
     "GLYPH_ERROR",

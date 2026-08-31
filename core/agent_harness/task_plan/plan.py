@@ -88,8 +88,12 @@ class TaskPlan:
 def parse_task_plan(args: dict[str, Any]) -> tuple[TaskPlan | None, str | None]:
     """Validate ``update_plan`` arguments. Returns ``(plan, error)``."""
     explanation_raw = args.get("explanation")
+    # The explanation is multi-line markdown (Facts, hypothesis table); keep its
+    # newlines so the rendered diagnosis is not flattened onto one line.
     explanation = (
-        strip_terminal_controls(explanation_raw).strip() if isinstance(explanation_raw, str) else ""
+        strip_terminal_controls(explanation_raw, keep_whitespace=True).strip()
+        if isinstance(explanation_raw, str)
+        else ""
     )
     raw_plan = args.get("plan")
     if not isinstance(raw_plan, list) or len(raw_plan) < 2:

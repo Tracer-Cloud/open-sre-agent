@@ -60,6 +60,10 @@ def execute_update_plan_tool(args: dict[str, Any], ctx: ActionToolScope) -> dict
         payload["instruction"] += (
             " Execution is authorized: the first step is in_progress — run it now."
         )
+    elif not plan.all_completed:
+        payload["instruction"] += (
+            " Continue the in_progress step now — do not end the turn while pending steps remain."
+        )
     return payload
 
 
@@ -102,10 +106,12 @@ update_plan_tool = RegisteredTool(
         properties={
             "explanation": string_property(
                 description=(
-                    "Markdown diagnosis rendered under the checklist: Facts, "
-                    "What the signature tells us, hypothesis-ranking table; "
-                    "for plan-only requests add phased narrative and biggest "
-                    "risk. Do not repeat in assistant closing prose."
+                    "Markdown rationale under the checklist. For incident/"
+                    "investigation workloads: Facts, what the signature tells "
+                    "us, hypothesis-ranking table. For ordinary implementation "
+                    "or plan-only with no incident signals: goal, approach, "
+                    "biggest risk — do not invent causal hypotheses. Do not "
+                    "repeat in assistant closing prose."
                 ),
             ),
             "plan": {

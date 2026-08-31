@@ -60,6 +60,7 @@ from config.constants.buzz import (
     BUZZ_PRIVATE_KEY_ENV,
     BUZZ_RELAY_URL_ENV,
 )
+from config.constants.clerk import CLERK_ISSUER_ENV, CLERK_JWKS_URL_ENV
 from config.constants.coralogix import (
     CORALOGIX_API_KEY_ENV,
     CORALOGIX_APPLICATION_NAME_ENV,
@@ -72,6 +73,7 @@ from config.constants.datadog import (
     DATADOG_APP_KEY_ENV,
     DATADOG_SITE_ENV,
 )
+from config.constants.environment import DEPLOYMENT_ENV_ENV
 from config.constants.filestorage import (
     BLOB_READ_WRITE_TOKEN_ENV,
     DEFAULT_MAX_PARALLEL_UPLOADS,
@@ -149,6 +151,7 @@ from config.constants.helm import (
     HELM_PATH_ENV,
     OSRE_HELM_INTEGRATION_ENV,
 )
+from config.constants.hermes import HERMES_LOG_PATH_ENV
 from config.constants.honeycomb import (
     HONEYCOMB_API_KEY_ENV,
     HONEYCOMB_BASE_URL_ENV,
@@ -166,6 +169,13 @@ from config.constants.jenkins import (
     JENKINS_API_TOKEN_ENV,
     JENKINS_BASE_URL_ENV,
     JENKINS_USERNAME_ENV,
+)
+from config.constants.kafka import (
+    KAFKA_BOOTSTRAP_SERVERS_ENV,
+    KAFKA_SASL_MECHANISM_ENV,
+    KAFKA_SASL_PASSWORD_ENV,
+    KAFKA_SASL_USERNAME_ENV,
+    KAFKA_SECURITY_PROTOCOL_ENV,
 )
 from config.constants.kubernetes import (
     KUBECONFIG_CONTENT_ENV,
@@ -293,6 +303,15 @@ from config.constants.product import (
     RELEASES_API_URL_ENV,
     UV_RUN_RECURSION_DEPTH_ENV,
 )
+from config.constants.rabbitmq import (
+    RABBITMQ_HOST_ENV,
+    RABBITMQ_MANAGEMENT_PORT_ENV,
+    RABBITMQ_PASSWORD_ENV,
+    RABBITMQ_SSL_ENV,
+    RABBITMQ_USERNAME_ENV,
+    RABBITMQ_VERIFY_SSL_ENV,
+    RABBITMQ_VHOST_ENV,
+)
 from config.constants.rds import RDS_DB_INSTANCE_IDENTIFIER_ENV, RDS_REGION_ENV
 from config.constants.redis import (
     REDIS_DATABASE_ENV,
@@ -354,6 +373,7 @@ from config.constants.slack import (
     SLACK_ACCESS_TOKEN_ENV,
     SLACK_APP_TOKEN_ENV,
     SLACK_BOT_TOKEN_ENV,
+    SLACK_CHANNEL,
     SLACK_DEFAULT_CHAT_ID_ENV,
     SLACK_FILE_HOST_SUFFIXES,
     SLACK_HEARTBEAT_STOP_TIMEOUT_SECONDS,
@@ -395,7 +415,12 @@ from config.constants.tenancy import (
     INTEGRATIONS_SECRET_ARN_ENV,
     INTEGRATIONS_STORE_PATH_ENV,
 )
-from config.constants.tracer import TRACER_BASE_URL_ENV, TRACER_JWT_TOKEN_ENV
+from config.constants.tracer import (
+    TRACER_BASE_URL_DEV,
+    TRACER_BASE_URL_ENV,
+    TRACER_BASE_URL_PROD,
+    TRACER_JWT_TOKEN_ENV,
+)
 from config.constants.turn_concurrency import (
     OPENSRE_MAX_CONCURRENT_TURNS_ENV,
     OPENSRE_SIZE_PROFILE_ENV,
@@ -481,6 +506,8 @@ __all__ = [
     "BUZZ_PATH_ENV",
     "BUZZ_PRIVATE_KEY_ENV",
     "BUZZ_RELAY_URL_ENV",
+    "CLERK_ISSUER_ENV",
+    "CLERK_JWKS_URL_ENV",
     "ATTACHMENT_MAX_FILE_CHARS",
     "ATTACHMENT_MAX_TOTAL_CHARS",
     "CREDITS_DENIED_MESSAGE",
@@ -529,6 +556,7 @@ __all__ = [
     "DATADOG_API_KEY_ENV",
     "DATADOG_APP_KEY_ENV",
     "DATADOG_SITE_ENV",
+    "DEPLOYMENT_ENV_ENV",
     "DEFAULT_POSTHOG_TIMEOUT_SECONDS",
     "DEFAULT_POSTHOG_URL",
     "DEFAULT_SENTRY_BASE_URL",
@@ -566,6 +594,7 @@ __all__ = [
     "HELM_NAMESPACE_ENV",
     "HELM_PATH_ENV",
     "OSRE_HELM_INTEGRATION_ENV",
+    "HERMES_LOG_PATH_ENV",
     "HONEYCOMB_API_KEY_ENV",
     "HONEYCOMB_BASE_URL_ENV",
     "HONEYCOMB_DATASET_ENV",
@@ -575,6 +604,11 @@ __all__ = [
     "JENKINS_API_TOKEN_ENV",
     "JENKINS_BASE_URL_ENV",
     "JENKINS_USERNAME_ENV",
+    "KAFKA_BOOTSTRAP_SERVERS_ENV",
+    "KAFKA_SASL_MECHANISM_ENV",
+    "KAFKA_SASL_PASSWORD_ENV",
+    "KAFKA_SASL_USERNAME_ENV",
+    "KAFKA_SECURITY_PROTOCOL_ENV",
     "KUBECONFIG_CONTENT_ENV",
     "KUBECONFIG_CONTEXT_ENV",
     "KUBECONFIG_NAMESPACE_ENV",
@@ -668,6 +702,13 @@ __all__ = [
     "POSTHOG_PERSONAL_API_KEY_ENV",
     "POSTHOG_PROJECT_ID_ENV",
     "POSTHOG_TIMEOUT_SECONDS_ENV",
+    "RABBITMQ_HOST_ENV",
+    "RABBITMQ_MANAGEMENT_PORT_ENV",
+    "RABBITMQ_PASSWORD_ENV",
+    "RABBITMQ_SSL_ENV",
+    "RABBITMQ_USERNAME_ENV",
+    "RABBITMQ_VERIFY_SSL_ENV",
+    "RABBITMQ_VHOST_ENV",
     "RDS_DB_INSTANCE_IDENTIFIER_ENV",
     "RDS_REGION_ENV",
     "REDIS_DATABASE_ENV",
@@ -702,6 +743,7 @@ __all__ = [
     "SLACK_ACCESS_TOKEN_ENV",
     "SLACK_APP_TOKEN_ENV",
     "SLACK_BOT_TOKEN_ENV",
+    "SLACK_CHANNEL",
     "SLACK_DEFAULT_CHAT_ID_ENV",
     "SLACK_USER_TOKEN_PREFIXES",
     "SLACK_WEBHOOK_URL_ENV",
@@ -727,7 +769,9 @@ __all__ = [
     "TEMPO_USERNAME_ENV",
     "THEME_NAMES",
     "Theme",
+    "TRACER_BASE_URL_DEV",
     "TRACER_BASE_URL_ENV",
+    "TRACER_BASE_URL_PROD",
     "TRACER_JWT_TOKEN_ENV",
     "TWILIO_ACCOUNT_SID_ENV",
     "TWILIO_AUTH_TOKEN_ENV",

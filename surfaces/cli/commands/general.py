@@ -11,12 +11,12 @@ import click
 
 from config.constants.investigation import ALERT_TEMPLATE_CHOICES
 from config.version import get_opensre_version
-from infrastructure.analytics.cli import (
+from infrastructure.analytics.capture import (
     capture_update_completed,
     capture_update_failed,
     capture_update_started,
-    track_investigation,
 )
+from infrastructure.analytics.investigation_tracker import track_investigation
 from infrastructure.analytics.source import EntrypointSource, TriggerMode
 from infrastructure.process.exit_codes import ERROR, SUCCESS
 from infrastructure.process.runtime_flags import is_json_output, is_yes
@@ -84,8 +84,8 @@ def version_command() -> None:
 )
 def health_command(watch: bool, rate: int) -> None:
     """Show a quick health summary of the local agent setup."""
-    from config.config import get_environment
     from config.constants.paths import integrations_store_path
+    from config.environment import get_environment
     from integrations.verify import verify_integrations
     from surfaces.shared.terminal.health import render_health_json, render_health_report
 

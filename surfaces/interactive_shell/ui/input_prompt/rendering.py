@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-from prompt_toolkit.application.current import get_app_or_none
 from prompt_toolkit.formatted_text import ANSI
 from rich.console import Console
 from rich.text import Text
@@ -22,25 +21,11 @@ from surfaces.interactive_shell.ui.input_prompt.layout import (
     clip_prompt_text,
     prompt_line_width,
 )
-from surfaces.shared.terminal.banner.banner_state import integration_display_name
 
-_PROMPT_RULE_CHAR = "─"
-DEFAULT_PLACEHOLDER_TEXT = "Type a message, /command, or paste an alert"
-_DEFAULT_PLACEHOLDER_ANSI = ANSI(
-    f"{ui_theme.ANSI_DIM}{DEFAULT_PLACEHOLDER_TEXT}{ui_theme.ANSI_RESET}"
-)
-
-
-def _prompt_rule_line(width: int) -> str:
-    return _PROMPT_RULE_CHAR * max(width, 1)
-
-
-def _prompt_rule_ansi() -> str:
-    # One column short of the terminal width so shrink-resize cannot soft-wrap
-    # this line and orphan stale prompt frames in scrollback.
-    return (
-        f"{ui_theme.PROMPT_FRAME_ANSI}{_prompt_rule_line(prompt_line_width())}{ui_theme.ANSI_RESET}"
-    )
+DEFAULT_PLACEHOLDER_TEXT = 'Try "Investigate this alert"'
+_PLAN_CONTINUE_PLACEHOLDER = "continue the plan, or type a message"
+# Left accent bar that marks a user-prompt row (agent responses use ``●``).
+_PROMPT_ACCENT_BAR = "▌"
 
 
 def _prompt_turn_number(session: Session) -> int:
@@ -62,14 +47,13 @@ def _prompt_counter_text(session: Session) -> str:
 
 
 def _prompt_line_ansi(session: Session) -> ANSI:
-    counter = _prompt_counter_text(session)
-    prefix = f"{ui_theme.DIM_COUNTER_ANSI}{counter}{ui_theme.ANSI_RESET}"
-    return ANSI(f"{prefix}{ui_theme.PROMPT_ACCENT_ANSI}❯{ui_theme.ANSI_RESET} ")
+    del session
+    return ANSI(f" {ui_theme.PROMPT_ACCENT_ANSI}>{ui_theme.ANSI_RESET} ")
 
 
 def _prompt_message(session: Session) -> ANSI:
-    """Top border rule plus cursor line: the top two rows of the input box."""
-    return ANSI(f"{_prompt_rule_ansi()}\n{_prompt_line_ansi(session).value}")
+    """Return the cursor line rendered inside the composer frame."""
+    return _prompt_line_ansi(session)
 
 
 def render_submitted_prompt(console: Console, session: Session, text: str) -> None:
@@ -125,17 +109,25 @@ def render_submitted_prompt(console: Console, session: Session, text: str) -> No
         )
     counter = _counter_text(session.terminal.claim_turn_number())
     lines = text.splitlines() or [""]
-    continuation_prefix = " " * (len(counter) + len("❯ "))
-    rendered = Text()
     # Rich's Style.parse() reads the bare str value of a _LazyRichStyle (""),
     # so resolve to a concrete string at the call site to keep palette colors.
     body_style = handoff_answer_style() if is_handoff_answer else str(ui_theme.TEXT)
-    rendered.append(counter, style=str(ui_theme.DIM))
-    rendered.append("❯ ", style=f"bold {ui_theme.HIGHLIGHT}")
-    rendered.append(lines[0], style=body_style)
-    for line in lines[1:]:
-        rendered.append("\n")
-        rendered.append(continuation_prefix, style=str(ui_theme.DIM))
+    # A colour accent bar down the left marks the row as the user's prompt —
+    # distinct from the agent response, which opens with the ``●`` glyph and no
+    # bar. The bar repeats on every wrapped line so the whole submission reads as
+    # one block.
+    bar_style = f"bold {ui_theme.HIGHLIGHT}"
+    continuation_prefix = " " * (len(counter) + len("❯ "))
+    rendered = Text()
+    for index, line in enumerate(lines):
+        if index:
+            rendered.append("\n")
+        rendered.append(f"{_PROMPT_ACCENT_BAR} ", style=bar_style)
+        if index == 0:
+            rendered.append(counter, style=str(ui_theme.DIM))
+            rendered.append("❯ ", style=bar_style)
+        else:
+            rendered.append(continuation_prefix, style=str(ui_theme.DIM))
         rendered.append(line, style=body_style)
     console.print(rendered)
 
@@ -149,38 +141,38 @@ def resolve_prompt_prefix_ansi(*, inline_spinner: str, idle_hint: str) -> str:
 
 
 def resolve_idle_hint_ansi(session: Session) -> str:
-    """Status line when no turn is running: ``Ready`` plus shortcuts.
+    """Return the idle spacer used by the fixed-height prompt region."""
+    del session
+    return ""
 
-    The live prompt always shows either ``Thinking…`` (spinner) or ``Ready``.
-    Without ``Ready``, an in-progress plan overlay looks like the agent is
-    still working after the turn has already returned the prompt.
-    """
-    parts = ["/ for commands", "tab tool details", "↑↓ history"]
-    if session.configured_integrations_known and session.configured_integrations:
-        max_shown = 4
-        names = [integration_display_name(name) for name in sorted(session.configured_integrations)]
-        shown = names[:max_shown]
-        overflow = len(names) - len(shown)
-        integration_segment = " · ".join(shown)
-        if overflow:
-            integration_segment += f" +{overflow}"
-        parts.append(integration_segment)
-    app = get_app_or_none()
-    if app is not None and app.current_buffer.text:
-        parts.append("esc to clear")
-    # Clip to the safe prompt-region width so a long integration list cannot
-    # reach the last column and soft-wrap on shrink-resize.
+
+def ctrl_c_exit_hint_ansi() -> str:
+    """Return the transient double-press exit hint for the fixed status row."""
+    return f"{ui_theme.DIM_ANSI}(Press Ctrl+C again to exit){ui_theme.ANSI_RESET}"
+
+
+def composer_footer_ansi() -> str:
+    """Return the help hint and terminal-mode label below the composer."""
+    left = "? for help"
+    right = "TERMINAL ■"
     width = prompt_line_width()
-    status = "Ready"
-    rest = clip_prompt_text(" · ".join(parts), max(width - len(status) - 3, 1))
+    if len(left) + len(right) + 2 > width:
+        clipped = clip_prompt_text(left, width)
+        return f"{ui_theme.DIM_ANSI}{clipped}{ui_theme.ANSI_RESET}"
+    pad = width - len(left) - len(right)
     return (
-        f"{ui_theme.PROMPT_ACCENT_ANSI}{status}{ui_theme.ANSI_RESET}"
-        f"{ui_theme.DIM_ANSI} · {rest}{ui_theme.ANSI_RESET}"
+        f"{ui_theme.DIM_ANSI}{left}{ui_theme.ANSI_RESET}"
+        f"{' ' * pad}{ui_theme.BRAND_ANSI}TERMINAL "
+        f"{ui_theme.HIGHLIGHT_ANSI}■{ui_theme.ANSI_RESET}"
     )
 
 
 def resolve_prompt_placeholder(session: Session) -> ANSI:
-    """Contextual ghost text when the input buffer is empty."""
+    """Contextual ghost text when the input buffer is empty.
+
+    Built per redraw (not at import) so theme ANSI cannot freeze stale, and so
+    an unfinished live plan can replace the default Investigate hint.
+    """
     parts: list[str] = []
     if session.terminal.trust_mode:
         parts.append("trust on")
@@ -190,13 +182,21 @@ def resolve_prompt_placeholder(session: Session) -> ANSI:
     if session.resumed_from_name:
         parts.append(f"resumed: {_short_meta(session.resumed_from_name, max_len=32)}")
     if parts:
-        return ANSI(f"{ui_theme.ANSI_DIM}{' · '.join(parts)}{ui_theme.ANSI_RESET}")
+        return ANSI(f"{ui_theme.DIM_ANSI}{' · '.join(parts)}{ui_theme.ANSI_RESET}")
     if (
         session.task_plan is not None
         and session.task_plan.all_pending
         and session.plan_only_until_authorized
     ):
         return ANSI(
-            f"{ui_theme.ANSI_DIM}say go to start the plan, or type a message{ui_theme.ANSI_RESET}"
+            f"{ui_theme.DIM_ANSI}say go to start the plan, or type a message{ui_theme.ANSI_RESET}"
         )
-    return _DEFAULT_PLACEHOLDER_ANSI
+    plan = session.task_plan
+    if (
+        plan is not None
+        and plan.steps
+        and not plan.all_completed
+        and not session.plan_only_until_authorized
+    ):
+        return ANSI(f"{ui_theme.DIM_ANSI}{_PLAN_CONTINUE_PLACEHOLDER}{ui_theme.ANSI_RESET}")
+    return ANSI(f"{ui_theme.DIM_ANSI}{DEFAULT_PLACEHOLDER_TEXT}{ui_theme.ANSI_RESET}")

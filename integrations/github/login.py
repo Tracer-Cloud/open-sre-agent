@@ -74,7 +74,7 @@ def authenticate_and_configure_github(
     push_webapp_org_integration("github", credentials)
     username = result.authenticated_user
     if username:
-        from infrastructure.analytics.cli import identify_github_username
+        from infrastructure.analytics.github_identity import identify_github_username
 
         identify_github_username(username)
     return GitHubLoginResult(ok=True, username=username, detail=result.detail)

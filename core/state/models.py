@@ -121,6 +121,10 @@ class AgentStateModel(StrictConfigModel):
     hypothesis_results: list[dict[str, Any]] = Field(default_factory=list)
     action_to_run: str = ""
     investigation_started_at: float = 0.0
+    pipeline_steps: list[str] = Field(
+        default_factory=list,
+        description="Host stage span names completed by the agent investigation pipeline",
+    )
     incident_window: dict[str, Any] | None = None
     incident_window_history: list[dict[str, Any]] | None = None
     masking_map: dict[str, str] = Field(default_factory=dict)
