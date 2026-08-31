@@ -304,8 +304,8 @@ class SpinnerState:
         """Drop one in-flight action, or all of them.
 
         ``None`` clears every slot. A non-empty ``action_id`` removes that
-        tool only. An empty string pops the oldest slot (events that omitted
-        an id).
+        tool only. An empty string pops the oldest slot that also omitted
+        an id, so an untracked ``tool_end`` cannot wipe a named action.
         """
         if action_id is None:
             self._in_flight_actions.clear()
@@ -315,8 +315,10 @@ class SpinnerState:
                 action for action in self._in_flight_actions if action.action_id != action_id
             ]
             return
-        if self._in_flight_actions:
-            del self._in_flight_actions[0]
+        for index, action in enumerate(self._in_flight_actions):
+            if not action.action_id:
+                del self._in_flight_actions[index]
+                return
 
     def active_action_ansi(self) -> str:
         """The indented, shimmering action line, or ``""`` when none is running.

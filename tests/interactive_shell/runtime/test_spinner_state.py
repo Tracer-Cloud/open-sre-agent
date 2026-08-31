@@ -166,3 +166,22 @@ def test_active_action_row_clips_wide_glyphs_to_one_prompt_column_budget() -> No
     spinner.set_active_action("查询 · " + "中" * 200)
     rendered = re.sub(r"\x1b\[[0-9;]*m", "", spinner.active_action_ansi())
     assert prompt_text_width(rendered) <= prompt_line_width()
+
+
+def test_untracked_tool_end_pops_only_an_untracked_slot() -> None:
+    """Regression: an id-less tool_end popped the oldest slot (del[0]) and could
+    wipe a still-running named action. It must pop only an id-less slot."""
+    spinner = SpinnerState()
+    spinner.start()
+    spinner.set_active_action("Execute · true", action_id="b")  # named, still running
+
+    spinner.clear_active_action("")  # an untracked tool_end (no id)
+    assert spinner.active_action.startswith("Execute")  # named action survives
+
+    # An id-less action is still cleared by an id-less end.
+    spinner.set_active_action("GitHub CLI · gh pr list")  # no id
+    spinner.clear_active_action("")
+    assert spinner.active_action.startswith("Execute")  # popped the id-less one, kept "b"
+
+    spinner.clear_active_action("b")
+    assert spinner.active_action == ""
