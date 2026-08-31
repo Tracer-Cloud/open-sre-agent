@@ -11,9 +11,11 @@ from typing import Any
 
 from rich.console import Console
 from rich.markup import escape
+from rich.syntax import Syntax
 from rich.text import Text
 
 from infrastructure.scheduling.task_types import TaskKind
+from infrastructure.terminal.theme import MARKDOWN_CODE_THEME
 from surfaces.interactive_shell.session import Session
 from surfaces.interactive_shell.ui import DIM, ERROR, HIGHLIGHT, WARNING, print_command_output
 from surfaces.interactive_shell.ui.execution_confirm import execution_allowed
@@ -133,7 +135,18 @@ class ReplSubprocessPresenter:
         # as one block; a blank between header and output would visually attach
         # the output to the following command instead.
         self._console.print()
-        self._console.print(f"[bold]$ {escape(display_command)}[/bold]")
+        # Syntax-highlight the command (bash lexer) so its keywords, arguments,
+        # and operators are coloured rather than a flat monochrome line.
+        highlighted = Syntax(
+            display_command,
+            "bash",
+            theme=MARKDOWN_CODE_THEME,
+            background_color="default",
+        ).highlight(display_command)
+        highlighted.rstrip()
+        line = Text("$ ", style="bold")
+        line.append_text(highlighted)
+        self._console.print(line)
 
     def print_command_output(self, text: str, *, style: str | None = None) -> None:
         resolved: str | None

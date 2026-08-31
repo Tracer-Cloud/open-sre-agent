@@ -265,7 +265,8 @@ class SpinnerState:
     # the clock, like the spinner glyph, so it never freezes on a busy render.
     _SHIMMER_PERIOD_SECONDS = 1.1
     _SHIMMER_LEAD_SECONDS = _SHIMMER_PERIOD_SECONDS / 2  # rising half of the glow
-    _ACTION_GLYPH = "⟩"
+    # The action line carries no leading glyph — just an indent under the header.
+    _ACTION_INDENT = "  "
 
     def __init__(self) -> None:
         self.streaming: bool = False
@@ -340,7 +341,7 @@ class SpinnerState:
         else:
             level = 1.0  # solid fill once in progress
         fill = ui_theme.fade_fg_ansi(level)
-        lead = f"  {self._ACTION_GLYPH} "
+        lead = self._ACTION_INDENT
         text = clip_prompt_text(current.text, prompt_line_width() - prompt_text_width(lead))
         return f"{fill}{lead}{text}{ui_theme.ANSI_RESET}"
 

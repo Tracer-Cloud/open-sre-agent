@@ -132,7 +132,7 @@ def test_active_action_renders_indented_line_and_clears() -> None:
     spinner.set_active_action("Execute · cd /tmp")
     rendered = spinner.active_action_ansi()
     assert "Execute · cd /tmp" in rendered
-    assert SpinnerState._ACTION_GLYPH in rendered
+    assert SpinnerState._ACTION_INDENT in rendered  # indented under the header, no glyph
     assert "\x1b[38;2;" in rendered  # a 24-bit theme fill
 
     spinner.clear_active_action()
