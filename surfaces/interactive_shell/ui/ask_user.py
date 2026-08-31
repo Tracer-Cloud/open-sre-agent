@@ -10,9 +10,9 @@ when that row is focused you type on it in place — the panel never leaves
 for a separate ``Your answer:`` or ``[N] ❯`` prompt.
 
 Options are labelled ``(A)``, ``(B)``, ``(C)`` and selected by the matching
-letter key or the arrows. Questions with ``multi_select`` show ``[ ]`` /
-``[x]`` checkboxes; Space, Enter, and the option letters toggle. Submit
-commits the checked set.
+letter key or the arrows. Questions with ``multi_select`` keep those letter
+labels next to ``[ ]`` / ``[x]`` checkboxes; Space, Enter, and the option
+letters toggle. Submit commits the checked set.
 """
 
 from __future__ import annotations
@@ -170,11 +170,13 @@ def _draw_ask_user(
             body = f"{custom_draft}{_CURSOR}"
         else:
             body = label
+        token = f"({chr(ord('A') + position)})"
         if multi:
             box = _CHECKED if position in checked else _UNCHECKED
-            _write_option_row(prefix=box, label=body, width=width, selected=is_selected)
+            _write_option_row(
+                prefix=box, label=f"{token} {body}", width=width, selected=is_selected
+            )
         else:
-            token = f"({chr(ord('A') + position)})"
             marker = "❯" if is_selected else " "
             _write_option_row(
                 prefix=marker, label=f"{token} {body}", width=width, selected=is_selected

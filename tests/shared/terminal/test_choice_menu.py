@@ -126,9 +126,35 @@ def test_draw_menu_multi_select_checkboxes(monkeypatch) -> None:
     )
 
     plain = _ANSI_RE.sub("", out.getvalue())
-    assert "[ ] Unit tests" in plain
-    assert "[x] Dockerfile" in plain
+    assert "[ ] 1. Unit tests" in plain
+    assert "[x] 2. Dockerfile" in plain
+    assert "Space/Enter/1-9 Toggle" in plain
     assert "Submit" in plain
+
+
+def test_draw_menu_multi_select_letter_keys_labels_options(monkeypatch) -> None:
+    # Multi-select still advertises A-…; the checkbox row must show the letter.
+    out = io.StringIO()
+    monkeypatch.setattr(sys, "stdout", out)
+    monkeypatch.setattr(choice_menu, "_cols", lambda: 80)
+
+    choice_menu._draw_menu(
+        title="Extras",
+        crumb="",
+        labels=["Unit tests", "Dockerfile", "Or type your own answer..."],
+        index=0,
+        erase_lines=0,
+        multi_select=True,
+        checked={0},
+        letter_keys=True,
+    )
+
+    plain = _ANSI_RE.sub("", out.getvalue())
+    assert "[x] (A) Unit tests" in plain
+    assert "[ ] (B) Dockerfile" in plain
+    assert "[ ] (C) Or type your own answer..." in plain
+    assert "Space/Enter/A-C Toggle" in plain
+    assert "1." not in plain
 
 
 def test_pick_multi_select_returns_values_not_labels(monkeypatch) -> None:

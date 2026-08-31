@@ -290,11 +290,11 @@ def _draw_menu(
     write_menu_line()
     for i, label in enumerate(labels):
         here = i == index
+        token = _option_token(i, letter_keys=letter_keys)
         if multi_select:
             box = _CHECKED if i in checked else _UNCHECKED
-            _write_option_row(prefix=box, label=label, width=w, selected=here)
+            _write_option_row(prefix=box, label=f"{token} {label}", width=w, selected=here)
         else:
-            token = _option_token(i, letter_keys=letter_keys)
             sym = "❯" if here else " "
             _write_option_row(prefix=sym, label=f"{token} {label}", width=w, selected=here)
     if multi_select:
@@ -343,7 +343,7 @@ def _pick(
 
     When ``multi_select`` is True, return a newline-joined string of checked
     **values** (``values[i]`` when provided, else ``labels[i]``). Submit commits.
-    Space/Enter/1-9 toggle checkboxes.
+    Space/Enter and the visible row keys (``1-9`` or ``A-…``) toggle checkboxes.
     """
     from surfaces.shared.terminal.components.key_reader import read_menu_or_char
 

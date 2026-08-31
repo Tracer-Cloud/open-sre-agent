@@ -258,6 +258,7 @@ def test_draw_ask_user_multi_uses_checkboxes(monkeypatch) -> None:
         checked={0},
     )
     plain = re.sub(r"\x1b\[[0-9;:]*[A-Za-z]", "", out.getvalue())
-    assert "[x] Unit tests" in plain
-    assert "[ ] Dockerfile" in plain
+    assert "[x] (A) Unit tests" in plain
+    assert "[ ] (B) Dockerfile" in plain
+    assert "Space/Enter/A-C Toggle" in plain
     assert "1. Unit tests" not in plain
