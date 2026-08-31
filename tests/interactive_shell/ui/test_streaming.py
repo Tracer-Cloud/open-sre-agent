@@ -29,15 +29,22 @@ def _strip_ansi(text: str) -> str:
 def test_render_note_block_is_dim_and_indented_but_keeps_bold() -> None:
     # A working note reads as dim + indented (no glyph), distinct from the bright
     # reply, while the bold action word stays bold within the dim base.
+    from infrastructure.terminal import theme as ui_theme
+
     buf = io.StringIO()
     console = Console(
-        file=buf, force_terminal=True, color_system="standard", width=80, highlight=False
+        file=buf, force_terminal=True, color_system="truecolor", width=80, highlight=False
     )
 
     render_note_block(console, "I'll **load** the workflow.")
 
     raw = buf.getvalue()
-    assert "\x1b[90m" in raw  # dim grey base applied to the note body
+    dim = str(ui_theme.DIM)  # e.g. "#6E6E6E"
+    r, g, b = (int(dim[i : i + 2], 16) for i in (1, 3, 5))
+    # DIM may render as 8-colour (``90m``) or truecolor (``38;2;r;g;b``) depending
+    # on the color system the runner advertises — accept either so the test does
+    # not hinge on terminal capability.
+    assert f"38;2;{r};{g};{b}" in raw or "\x1b[90m" in raw  # dim base on the note body
     assert re.search(r"\x1b\[[0-9;]*1[;m]", raw)  # bold action word survives the dim base
     first_line = _strip_ansi(raw).splitlines()[0]
     assert first_line.startswith("   ")  # three-space left indent, no glyph
