@@ -67,10 +67,21 @@ def restore_stdin_terminal() -> None:
         termios.tcflush(fd, termios.TCIFLUSH)  # type: ignore[attr-defined]
 
 
+def _alpha_option_key(byte: int) -> str | None:
+    """Uppercase letter for an ascii-letter byte, else ``None``.
+
+    Used by letter-select menus (the Ask User clarification picker), where an
+    option is chosen by its ``(A)``/``(B)`` letter instead of a digit.
+    """
+    char = chr(byte)
+    return char.upper() if char.isascii() and char.isalpha() else None
+
+
 def read_key_unix(
     *,
     also_cancel: tuple[bytes, ...] = (),
     space_confirms: bool = True,
+    alpha_keys: bool = False,
 ) -> str:
     """Read one logical keypress in raw mode; return a normalised key name.
 
@@ -99,13 +110,17 @@ def read_key_unix(
             return "enter"
         if b == 9:  # Tab
             return "tab"
-        if 0x31 <= b <= 0x39:  # 1-9
+        if alpha_keys:
+            letter = _alpha_option_key(b)
+            if letter is not None:  # (A)/(B)/… select; arrows still navigate
+                return letter
+        elif 0x31 <= b <= 0x39:  # 1-9
             return chr(b)
-        if ch in (b"j", b"J"):
+        if not alpha_keys and ch in (b"j", b"J"):
             return "down"
-        if ch in (b"k", b"K"):
+        if not alpha_keys and ch in (b"k", b"K"):
             return "up"
-        if ch in (b"q", b"Q"):
+        if not alpha_keys and ch in (b"q", b"Q"):
             return "cancel"
         if b == 27:  # ESC or arrow-key prefix
             if _sel.select([fd], [], [], 0.1)[0]:
@@ -140,6 +155,7 @@ def read_key_windows(
     *,
     also_cancel: tuple[bytes, ...] = (),
     space_confirms: bool = True,
+    alpha_keys: bool = False,
 ) -> str:
     """Read one logical keypress on Windows; return a normalised key name.
 
@@ -158,13 +174,17 @@ def read_key_windows(
         return "enter"
     if ch == b"\t":
         return "tab"
-    if len(ch) == 1 and b"1" <= ch <= b"9":
+    if alpha_keys and len(ch) == 1:
+        letter = _alpha_option_key(ch[0])
+        if letter is not None:  # (A)/(B)/… select; arrows still navigate
+            return letter
+    elif len(ch) == 1 and b"1" <= ch <= b"9":
         return str(ch.decode("ascii"))
-    if ch in (b"j", b"J"):
+    if not alpha_keys and ch in (b"j", b"J"):
         return "down"
-    if ch in (b"k", b"K"):
+    if not alpha_keys and ch in (b"k", b"K"):
         return "up"
-    if ch in (b"q", b"Q"):
+    if not alpha_keys and ch in (b"q", b"Q"):
         return "cancel"
     if ch in (b"\xe0", b"\x00"):
         ch2 = msvcrt.getch()  # type: ignore[attr-defined]
@@ -194,18 +214,20 @@ def read_typing_key() -> str:
     return _read_typing_key_unix()
 
 
-def read_menu_or_char(*, allow_chars: bool = False) -> str:
+def read_menu_or_char(*, allow_chars: bool = False, alpha_keys: bool = False) -> str:
     """Menu navigation keys, optionally plus printable chars / backspace.
 
     When ``allow_chars`` is True (custom option row focused), typing inserts
-    on that row in place; arrows/tab still move between options.
+    on that row in place; arrows/tab still move between options. When
+    ``alpha_keys`` is True (and not typing), an option is selected by its
+    ``(A)``/``(B)`` letter instead of a digit.
     """
     if os.name == "nt":
-        return _read_menu_or_char_windows(allow_chars=allow_chars)
-    return _read_menu_or_char_unix(allow_chars=allow_chars)
+        return _read_menu_or_char_windows(allow_chars=allow_chars, alpha_keys=alpha_keys)
+    return _read_menu_or_char_unix(allow_chars=allow_chars, alpha_keys=alpha_keys)
 
 
-def _read_menu_or_char_unix(*, allow_chars: bool) -> str:
+def _read_menu_or_char_unix(*, allow_chars: bool, alpha_keys: bool = False) -> str:
     import select as _sel
     import termios
     import tty
@@ -226,14 +248,19 @@ def _read_menu_or_char_unix(*, allow_chars: bool) -> str:
             return "backspace"
         if b == 9:
             return "tab"
-        # Digits stay as select shortcuts unless typing on the custom row.
-        if not allow_chars and 0x31 <= b <= 0x39:
+        # Letters select in alpha mode; otherwise digits stay as select
+        # shortcuts unless typing on the custom row.
+        if alpha_keys and not allow_chars:
+            letter = _alpha_option_key(b)
+            if letter is not None:
+                return letter
+        elif not allow_chars and 0x31 <= b <= 0x39:
             return chr(b)
-        if ch in (b"j", b"J") and not allow_chars:
+        if not alpha_keys and ch in (b"j", b"J") and not allow_chars:
             return "down"
-        if ch in (b"k", b"K") and not allow_chars:
+        if not alpha_keys and ch in (b"k", b"K") and not allow_chars:
             return "up"
-        if ch in (b"q", b"Q") and not allow_chars:
+        if not alpha_keys and ch in (b"q", b"Q") and not allow_chars:
             return "cancel"
         if b == 27:
             if _sel.select([fd], [], [], 0.1)[0]:
@@ -266,7 +293,7 @@ def _read_menu_or_char_unix(*, allow_chars: bool) -> str:
         termios.tcsetattr(fd, termios.TCSADRAIN, old)  # type: ignore[attr-defined]
 
 
-def _read_menu_or_char_windows(*, allow_chars: bool) -> str:
+def _read_menu_or_char_windows(*, allow_chars: bool, alpha_keys: bool = False) -> str:
     import msvcrt  # type: ignore[import,attr-defined]
 
     ch = msvcrt.getch()  # type: ignore[attr-defined]
@@ -280,13 +307,17 @@ def _read_menu_or_char_windows(*, allow_chars: bool) -> str:
         return "tab"
     if ch == b"\x1b":
         return "cancel"
-    if not allow_chars and len(ch) == 1 and b"1" <= ch <= b"9":
+    if alpha_keys and not allow_chars and len(ch) == 1:
+        letter = _alpha_option_key(ch[0])
+        if letter is not None:
+            return letter
+    elif not allow_chars and len(ch) == 1 and b"1" <= ch <= b"9":
         return str(ch.decode("ascii"))
-    if not allow_chars and ch in (b"j", b"J"):
+    if not alpha_keys and not allow_chars and ch in (b"j", b"J"):
         return "down"
-    if not allow_chars and ch in (b"k", b"K"):
+    if not alpha_keys and not allow_chars and ch in (b"k", b"K"):
         return "up"
-    if not allow_chars and ch in (b"q", b"Q"):
+    if not alpha_keys and not allow_chars and ch in (b"q", b"Q"):
         return "cancel"
     if ch in (b"\xe0", b"\x00"):
         ch2 = msvcrt.getch()  # type: ignore[attr-defined]

@@ -47,6 +47,69 @@ def test_draw_menu_uses_carriage_return_newlines(monkeypatch) -> None:
     assert "─" not in plain
 
 
+def test_draw_menu_letter_keys_labels_options_alphabetically(monkeypatch) -> None:
+    # The clarification (Ask User) picker labels options (A)/(B)/(C) and its hint
+    # advertises the letter-key range instead of digits.
+    out = io.StringIO()
+    monkeypatch.setattr(sys, "stdout", out)
+    monkeypatch.setattr(choice_menu, "_cols", lambda: 80)
+
+    choice_menu._draw_menu(
+        title="How should I select repos?",
+        crumb="",
+        labels=["Local repos", "GitHub account", "Or type your own answer..."],
+        index=0,
+        erase_lines=0,
+        header="Ask User",
+        letter_keys=True,
+    )
+
+    plain = _ANSI_RE.sub("", out.getvalue())
+    assert "❯ (A) Local repos" in plain
+    assert "(B) GitHub account" in plain
+    assert "(C) Or type your own answer..." in plain
+    assert "Enter/A-C Select" in plain
+    assert "1." not in plain
+
+
+def test_pick_letter_key_selects_matching_option(monkeypatch) -> None:
+    # Pressing the option's letter returns that option's index (case-insensitive).
+    out = io.StringIO()
+    actions = iter(["b"])
+    monkeypatch.setattr(sys, "stdout", out)
+    monkeypatch.setattr(choice_menu, "_cols", lambda: 80)
+    monkeypatch.setattr(choice_menu, "_read_action", lambda **_kwargs: next(actions))
+    monkeypatch.setattr(choice_menu, "repl_tty_interactive", lambda: True)
+
+    result = choice_menu._pick(
+        title="Q",
+        crumb="",
+        labels=["Local", "GitHub", "Other"],
+        letter_keys=True,
+    )
+
+    assert result == 1
+
+
+def test_pick_letter_keys_still_navigates_with_arrows(monkeypatch) -> None:
+    # Requirement: letter menus stay navigable by up/down arrows, not only keys.
+    out = io.StringIO()
+    actions = iter(["down", "down", "enter"])
+    monkeypatch.setattr(sys, "stdout", out)
+    monkeypatch.setattr(choice_menu, "_cols", lambda: 80)
+    monkeypatch.setattr(choice_menu, "_read_action", lambda **_kwargs: next(actions))
+    monkeypatch.setattr(choice_menu, "repl_tty_interactive", lambda: True)
+
+    result = choice_menu._pick(
+        title="Q",
+        crumb="",
+        labels=["Local", "GitHub", "Other"],
+        letter_keys=True,
+    )
+
+    assert result == 2
+
+
 def test_draw_menu_multi_select_checkboxes(monkeypatch) -> None:
     out = io.StringIO()
     monkeypatch.setattr(sys, "stdout", out)

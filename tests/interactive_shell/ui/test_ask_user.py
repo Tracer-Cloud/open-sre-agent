@@ -104,6 +104,46 @@ def test_wizard_esc_cancels(monkeypatch) -> None:
     assert repl_ask_user(_QUESTIONS) is None
 
 
+def test_wizard_labels_options_with_letters(monkeypatch) -> None:
+    # Arrange: capture the drawn panel for the first question.
+    import io
+    import re
+    import sys
+
+    from surfaces.interactive_shell.ui import ask_user
+
+    out = io.StringIO()
+    monkeypatch.setattr(sys, "stdout", out)
+    monkeypatch.setattr(ask_user, "menu_columns", lambda: 80)
+
+    # Act
+    ask_user._draw_ask_user(
+        questions=_QUESTIONS,
+        current=0,
+        answers=[None, None, None],
+        option_index=0,
+        erase_lines=0,
+    )
+
+    # Assert: (A)/(B) chips and a letter-range hint, no numeric labels.
+    plain = re.sub(r"\x1b\[[0-9;:]*[A-Za-z]", "", out.getvalue())
+    assert "(A) Hypothetical/demo scenario, no real code" in plain
+    assert "(B) I'll point you at a repo" in plain
+    assert "Enter/A-C Select" in plain
+    assert "1." not in plain
+
+
+def test_wizard_selects_option_by_letter_key(monkeypatch) -> None:
+    # Pressing (B) on each question chooses the second option without arrows.
+    _patch_wizard(monkeypatch, ["B", "B", "B"])
+    picked = repl_ask_user(_QUESTIONS)
+    assert picked == (
+        "I'll point you at a repo",
+        "Query Datadog",
+        "Last 24 hours",
+    )
+
+
 def test_wizard_flushes_leftover_keys_before_reading(monkeypatch) -> None:
     flushed = {"count": 0}
 

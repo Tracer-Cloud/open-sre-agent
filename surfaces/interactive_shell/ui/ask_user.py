@@ -9,8 +9,10 @@ Free text is the last row of the same OpenSRE option array (Droid-style):
 when that row is focused you type on it in place — the panel never leaves
 for a separate ``Your answer:`` or ``[N] ❯`` prompt.
 
-Questions with ``multi_select`` show ``[ ]`` / ``[x]`` checkboxes; Space,
-Enter, and digits toggle. Submit commits the checked set.
+Options are labelled ``(A)``, ``(B)``, ``(C)`` and selected by the matching
+letter key or the arrows. Questions with ``multi_select`` show ``[ ]`` /
+``[x]`` checkboxes; Space, Enter, and the option letters toggle. Submit
+commits the checked set.
 """
 
 from __future__ import annotations
@@ -38,9 +40,18 @@ from surfaces.shared.terminal.components.key_reader import (
 CUSTOM_OPTION = "Or type your own answer..."
 _HEADER = "Ask User"
 _SUBMIT = "Submit"
-_HINT = "Tab/⇧Tab or ←/→ Questions    ↑/↓ Navigate    Enter/1-9 Select    Esc cancel"
-_HINT_MULTI = "Tab/⇧Tab or ←/→ Questions    ↑/↓ Navigate    Space/Enter/1-9 Toggle    Esc cancel"
 _HINT_TYPING = "Type on this row    Enter confirm    ↑/↓ leave    Esc cancel"
+_HINT_NAV = "Tab/⇧Tab or ←/→ Questions    ↑/↓ Navigate    "
+
+
+def _ask_user_hint(count: int, *, multi_select: bool) -> str:
+    """Key hint naming the ``A-…`` letter selectors for the visible options."""
+    keys = f"A-{chr(ord('A') + count - 1)}" if count > 1 else "A"
+    if multi_select:
+        return f"{_HINT_NAV}Space/Enter/{keys} Toggle    Esc cancel"
+    return f"{_HINT_NAV}Enter/{keys} Select    Esc cancel"
+
+
 _CURSOR = "█"
 _BREADCRUMB_SEP = " → "
 _FILLED = "●"
@@ -72,6 +83,11 @@ def _breadcrumb_items(
         label = strip_terminal_controls(question.label).strip() or f"Q{index + 1}"
         items.append((glyph, label))
     return items
+
+
+def _letter_index(action: str) -> int | None:
+    """Zero-based option index an ``(A)``/``(B)`` letter keystroke names, or ``None``."""
+    return ord(action.upper()) - ord("A") if len(action) == 1 and action.isalpha() else None
 
 
 def _option_labels(question: AskUserQuestion) -> list[str]:
@@ -158,9 +174,11 @@ def _draw_ask_user(
             box = _CHECKED if position in checked else _UNCHECKED
             _write_option_row(prefix=box, label=body, width=width, selected=is_selected)
         else:
-            numbered = f"{position + 1}. {body}"
+            token = f"({chr(ord('A') + position)})"
             marker = "❯" if is_selected else " "
-            _write_option_row(prefix=marker, label=numbered, width=width, selected=is_selected)
+            _write_option_row(
+                prefix=marker, label=f"{token} {body}", width=width, selected=is_selected
+            )
     submit_selected = option_index == submit_row and not typing
     submit_marker = "❯" if submit_selected else " "
     _write_option_row(
@@ -171,10 +189,8 @@ def _draw_ask_user(
     )
     if typing:
         hint = _HINT_TYPING
-    elif multi:
-        hint = _HINT_MULTI
     else:
-        hint = _HINT
+        hint = _ask_user_hint(len(labels), multi_select=multi)
     write_menu_line(f"{ui_theme.DIM_COUNTER_ANSI}{hint}{ui_theme.ANSI_RESET}")
     sys.stdout.flush()
 
@@ -286,7 +302,7 @@ def _run_ask_user(
             flush_pending_input()
             first = False
         current_height = _menu_height(question)
-        action = read_menu_or_char(allow_chars=on_custom)
+        action = read_menu_or_char(allow_chars=on_custom, alpha_keys=not on_custom)
         if action in ("tab", "right"):
             q_idx = min(q_idx + 1, len(items) - 1)
             opt_idx = 0
@@ -324,10 +340,12 @@ def _run_ask_user(
             toggle_index: int | None = None
             if action in (" ", "enter") and opt_idx < len(labels):
                 toggle_index = opt_idx
-            elif (not on_custom) and len(action) == 1 and action.isdigit():
-                picked = int(action) - 1
-                if 0 <= picked < len(labels):
-                    toggle_index = picked
+            elif (
+                not on_custom
+                and (picked := _letter_index(action)) is not None
+                and 0 <= picked < len(labels)
+            ):
+                toggle_index = picked
             if toggle_index is not None:
                 if toggle_index == custom_index and not drafts[q_idx].strip():
                     opt_idx = toggle_index
@@ -374,8 +392,7 @@ def _run_ask_user(
             selected = option_focus if opt_idx == submit_row else opt_idx
             if selected < len(labels):
                 option_focus = selected
-        elif (not on_custom) and len(action) == 1 and action.isdigit():
-            picked = int(action) - 1
+        elif not on_custom and (picked := _letter_index(action)) is not None:
             if 0 <= picked < len(labels):
                 selected = picked
 

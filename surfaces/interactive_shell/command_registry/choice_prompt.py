@@ -66,6 +66,7 @@ def _cmd_choose(session: Session, console: Console, args: list[str]) -> bool:
         custom_label=CUSTOM_OPTION,
         multi_select=items[0].multi_select,
         header="Ask User",
+        letter_keys=True,
     )
     if picked_one is None:
         console.print(f"[{ui_theme.DIM}]Selection cancelled — type a reply instead.[/]")

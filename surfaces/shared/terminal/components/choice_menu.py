@@ -24,6 +24,32 @@ from surfaces.shared.terminal.components.key_reader import read_key_unix, read_k
 
 _HINT = "↑↓ Navigate • Enter/1-9 Select • Esc cancel"
 _HINT_MULTI = "↑↓ Navigate • Space/Enter/1-9 Toggle • Submit to confirm • Esc cancel"
+
+
+def _option_token(index: int, *, letter_keys: bool) -> str:
+    """Row prefix: ``(A)`` in letter mode, else ``1.`` (1-based)."""
+    return f"({chr(ord('A') + index)})" if letter_keys else f"{index + 1}."
+
+
+def _option_index_from_key(action: str, *, letter_keys: bool) -> int | None:
+    """Zero-based option index a select keystroke names, or ``None``."""
+    if len(action) != 1:
+        return None
+    if letter_keys:
+        return ord(action.upper()) - ord("A") if action.isalpha() else None
+    return int(action) - 1 if action.isdigit() else None
+
+
+def _select_hint(count: int, *, letter_keys: bool, multi_select: bool) -> str:
+    """Key hint reflecting letter vs numeric selectors and the option count."""
+    if not letter_keys:
+        return _HINT_MULTI if multi_select else _HINT
+    keys = f"A-{chr(ord('A') + count - 1)}" if count > 1 else "A"
+    if multi_select:
+        return f"↑↓ Navigate • Space/Enter/{keys} Toggle • Submit to confirm • Esc cancel"
+    return f"↑↓ Navigate • Enter/{keys} Select • Esc cancel"
+
+
 # Airy block indent so the panel is not flush against the left margin.
 _BLOCK_INDENT = "  "
 _SUBMIT = "Submit"
@@ -65,14 +91,19 @@ def repl_section_break(console: Console) -> None:
 # ── raw key reader ───────────────────────────────────────────────────────────
 
 
-def _read_action() -> MenuAction:
+def _read_action(*, alpha_keys: bool = False) -> MenuAction:
     """Map a raw keypress to a menu action.
 
     Delegates terminal I/O to :mod:`key_reader` and applies
     choice_menu-specific overrides: Tab → ``"down"``,
-    right-arrow → ``"enter"``, left-arrow → ``"ignore"``.
+    right-arrow → ``"enter"``, left-arrow → ``"ignore"``. With ``alpha_keys``
+    an option letter (``A``/``B``/…) is returned verbatim for letter select.
     """
-    key = read_key_windows() if os.name == "nt" else read_key_unix()
+    key = (
+        read_key_windows(alpha_keys=alpha_keys)
+        if os.name == "nt"
+        else read_key_unix(alpha_keys=alpha_keys)
+    )
     if key == "tab":
         return "down"
     if key == "right":
@@ -233,6 +264,7 @@ def _draw_menu(
     multi_select: bool = False,
     checked: set[int] | None = None,
     header: str = "",
+    letter_keys: bool = False,
 ) -> None:
     out = sys.stdout
     w = _cols()
@@ -262,9 +294,9 @@ def _draw_menu(
             box = _CHECKED if i in checked else _UNCHECKED
             _write_option_row(prefix=box, label=label, width=w, selected=here)
         else:
-            numbered = f"{i + 1}. {label}"
+            token = _option_token(i, letter_keys=letter_keys)
             sym = "❯" if here else " "
-            _write_option_row(prefix=sym, label=numbered, width=w, selected=here)
+            _write_option_row(prefix=sym, label=f"{token} {label}", width=w, selected=here)
     if multi_select:
         submit_selected = index == len(labels)
         _write_option_row(
@@ -273,9 +305,7 @@ def _draw_menu(
             width=w,
             selected=submit_selected,
         )
-        hint = _HINT_MULTI
-    else:
-        hint = _HINT
+    hint = _select_hint(len(labels), letter_keys=letter_keys, multi_select=multi_select)
     write_menu_line()
     write_menu_line(f"{_BLOCK_INDENT}{ui_theme.DIM_COUNTER_ANSI}{hint}{ui_theme.ANSI_RESET}")
     out.flush()
@@ -304,6 +334,7 @@ def _pick(
     multi_select: bool = False,
     values: list[str] | None = None,
     header: str = "",
+    letter_keys: bool = False,
 ) -> int | str | None:
     """Draw an inline menu; return index, custom typed string, or None on Esc.
 
@@ -343,14 +374,18 @@ def _pick(
             multi_select=multi_select,
             checked=checked if multi_select else None,
             header=header,
+            letter_keys=letter_keys,
         )
         first = False
         height = _menu_height(crumb, display, multi_select=multi_select, header=header)
-        action = (
-            read_menu_or_char(allow_chars=True)
-            if on_custom
-            else (read_menu_or_char(allow_chars=False) if multi_select else _read_action())
-        )
+        if on_custom:
+            action = read_menu_or_char(allow_chars=True)
+        elif multi_select:
+            action = read_menu_or_char(allow_chars=False, alpha_keys=letter_keys)
+        elif letter_keys:
+            action = _read_action(alpha_keys=True)
+        else:
+            action = _read_action()
         if on_custom and action == "backspace":
             draft = draft[:-1]
             if multi_select and custom_index >= 0 and not draft.strip():
@@ -371,9 +406,9 @@ def _pick(
             toggle_index: int | None = None
             if action in (" ", "enter") and idx < len(labels):
                 toggle_index = idx
-            elif len(action) == 1 and action.isdigit():
-                picked = int(action) - 1
-                if 0 <= picked < len(labels):
+            else:
+                picked = _option_index_from_key(action, letter_keys=letter_keys)
+                if picked is not None and 0 <= picked < len(labels):
                     toggle_index = picked
             if toggle_index is not None:
                 if toggle_index == custom_index and not draft.strip():
@@ -403,14 +438,16 @@ def _pick(
                 _erase_menu(crumb, display, multi_select=True, header=header)
                 return None
             continue
-        if (not on_custom) and len(action) == 1 and action.isdigit():
-            picked = int(action) - 1
-            if 0 <= picked < len(labels):
-                if picked == custom_index:
-                    idx = picked
+        select_index = (
+            None if on_custom else _option_index_from_key(action, letter_keys=letter_keys)
+        )
+        if select_index is not None:
+            if 0 <= select_index < len(labels):
+                if select_index == custom_index:
+                    idx = select_index
                     continue
                 _erase_menu(crumb, labels, header=header)
-                return picked
+                return select_index
             continue
         if action == "enter":
             if on_custom:
@@ -437,6 +474,7 @@ def repl_choose_one(
     custom_label: str | None = None,
     multi_select: bool = False,
     header: str = "",
+    letter_keys: bool = False,
 ) -> str | None:
     """Show an inline erasing arrow-key menu; return selected value or None on Esc.
 
@@ -478,6 +516,7 @@ def repl_choose_one(
             multi_select=multi_select,
             values=values,
             header=header,
+            letter_keys=letter_keys,
         )
         if picked is None:
             return None

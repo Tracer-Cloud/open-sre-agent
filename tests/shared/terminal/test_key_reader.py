@@ -44,3 +44,42 @@ def test_restore_stdin_terminal_is_a_no_op_when_not_a_tty(monkeypatch: pytest.Mo
         SimpleNamespace(isatty=lambda: False, fileno=lambda: (_ for _ in ()).throw(AssertionError)),
     )
     key_reader.restore_stdin_terminal()  # returns without touching termios
+
+
+def test_alpha_option_key_maps_only_ascii_letters() -> None:
+    # Arrange / Act / Assert: letters map to their uppercase; anything else is None.
+    assert key_reader._alpha_option_key(ord("a")) == "A"
+    assert key_reader._alpha_option_key(ord("C")) == "C"
+    assert key_reader._alpha_option_key(ord("1")) is None
+    assert key_reader._alpha_option_key(ord("-")) is None
+
+
+def _drive_read_key_unix(monkeypatch: pytest.MonkeyPatch, byte: bytes, *, alpha_keys: bool) -> str:
+    """Run read_key_unix once with ``byte`` queued on a faked raw TTY."""
+    termios = pytest.importorskip("termios")
+    tty = pytest.importorskip("tty")
+    monkeypatch.setattr(key_reader.os, "name", "posix")
+    monkeypatch.setattr(key_reader.sys, "stdin", SimpleNamespace(fileno=lambda: 0))
+    monkeypatch.setattr(key_reader.os, "read", lambda _fd, _n: byte)
+    monkeypatch.setattr(termios, "tcgetattr", lambda _fd: [0, 0, 0, 0, 0, 0, []])
+    monkeypatch.setattr(termios, "tcsetattr", lambda _fd, _when, _attrs: None)
+    monkeypatch.setattr(tty, "setraw", lambda _fd: None)
+    return key_reader.read_key_unix(alpha_keys=alpha_keys)
+
+
+def test_read_key_unix_alpha_mode_surfaces_option_letter(monkeypatch: pytest.MonkeyPatch) -> None:
+    # Arrange / Act / Assert: in alpha mode a letter key IS the selection.
+    assert _drive_read_key_unix(monkeypatch, b"b", alpha_keys=True) == "B"
+
+
+def test_read_key_unix_alpha_mode_disables_vim_navigation(monkeypatch: pytest.MonkeyPatch) -> None:
+    # 'j'/'k' are vim nav only when numeric; as an option letter they must select,
+    # otherwise pressing option (J) would scroll instead of choosing it.
+    assert _drive_read_key_unix(monkeypatch, b"j", alpha_keys=True) == "J"
+    assert _drive_read_key_unix(monkeypatch, b"j", alpha_keys=False) == "down"
+
+
+def test_read_key_unix_alpha_mode_ignores_digits(monkeypatch: pytest.MonkeyPatch) -> None:
+    # Numbering is off in letter menus, so a digit is inert rather than a selector.
+    assert _drive_read_key_unix(monkeypatch, b"2", alpha_keys=True) == "ignore"
+    assert _drive_read_key_unix(monkeypatch, b"2", alpha_keys=False) == "2"
