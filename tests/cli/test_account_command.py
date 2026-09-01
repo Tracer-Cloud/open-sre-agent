@@ -168,7 +168,7 @@ def test_logout_without_personal_account_preserves_manual_github_integration(
         return True
 
     monkeypatch.setattr(account_auth, "load_account_record", lambda: None)
-    monkeypatch.setattr(account_auth, "resolve_account_token", lambda: "")
+    monkeypatch.setattr(account_auth, "stored_account_token", lambda: "")
     monkeypatch.setattr(account_auth, "delete_account_token", lambda: None)
     monkeypatch.setattr(account_auth, "delete_account_record", lambda: None)
     monkeypatch.setattr(account_auth, "disconnect_personal_github", disconnect)
@@ -177,3 +177,26 @@ def test_logout_without_personal_account_preserves_manual_github_integration(
 
     assert result.remote_revoked is True
     assert disconnected is False
+
+
+def test_logout_revokes_the_file_token_not_an_environment_override(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    revoked: list[tuple[str, str]] = []
+
+    def fake_revoke(app_url: str, token: str) -> bool:
+        revoked.append((app_url, token))
+        return True
+
+    monkeypatch.setenv("OPENSRE_ACCOUNT_TOKEN", "osre_pat_from_env")
+    monkeypatch.setattr(account_auth, "load_account_record", _record)
+    monkeypatch.setattr(account_auth, "stored_account_token", lambda: "osre_pat_file")
+    monkeypatch.setattr(account_auth, "delete_account_token", lambda: None)
+    monkeypatch.setattr(account_auth, "delete_account_record", lambda: None)
+    monkeypatch.setattr(account_auth, "disconnect_personal_github", lambda: True)
+    monkeypatch.setattr(account_auth, "_revoke_remote", fake_revoke)
+
+    result = account_auth.logout_account()
+
+    assert revoked == [("https://app.opensre.com", "osre_pat_file")]
+    assert "OPENSRE_ACCOUNT_TOKEN" in result.detail

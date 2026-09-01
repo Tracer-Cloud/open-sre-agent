@@ -142,7 +142,7 @@ def _login_url(app_url: str, *, callback_port: int, state: str, code_challenge: 
     return f"{_app_endpoint(app_url, _LOGIN_PATH)}?{query}"
 
 
-class _CallbackHandler(BaseHTTPRequestHandler):
+class _LoopbackCallback(BaseHTTPRequestHandler):
     def __init__(
         self,
         *args: Any,
@@ -335,7 +335,7 @@ def login_account(
     server = HTTPServer(
         ("127.0.0.1", 0),
         partial(
-            _CallbackHandler,
+            _LoopbackCallback,
             expected_state=state,
             success_url=_app_endpoint(resolved_app_url, _SUCCESS_PATH),
             results=results,
@@ -442,7 +442,7 @@ def account_status(*, app_url: str | None = None) -> AccountStatus:
 def logout_account() -> AccountLogoutResult:
     """Revoke the remote token and remove account-managed local credentials."""
     record = load_account_record()
-    token = resolve_account_token()
+    token = stored_account_token()
     app_url = record.app_url if record else normalize_app_url()
     remote_revoked = not token or _revoke_remote(app_url, token)
 
