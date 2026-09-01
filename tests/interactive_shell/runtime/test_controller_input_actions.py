@@ -131,3 +131,93 @@ def test_goal_autosubmit_waits_even_without_exclusive_stdin() -> None:
         )
         is True
     )
+
+
+def _plan(*statuses: str):
+    from core.agent_harness.task_plan.plan import parse_task_plan
+
+    items = [{"step": f"Step {i}", "status": status} for i, status in enumerate(statuses, start=1)]
+    plan, error = parse_task_plan({"plan": items})
+    assert error is None and plan is not None
+    return plan
+
+
+def _controller():
+    from io import StringIO
+
+    from rich.console import Console
+
+    from surfaces.interactive_shell.controller import InteractiveShellController
+    from surfaces.interactive_shell.session import Session
+
+    captured = Console(file=StringIO(), force_terminal=False, width=80)
+    return InteractiveShellController(Session(), console=captured)
+
+
+@pytest.mark.asyncio
+async def test_idle_continuation_keeps_an_unfinished_plan() -> None:
+    """A plan waiting between turns must survive the next typed prompt.
+
+    Dispatch is idle then, so clearing on ``is_dispatch_running() is False``
+    would drop pending-step state and the pinned overlay before the turn runs.
+    """
+    controller = _controller()
+    plan = _plan("in_progress", "pending")
+    controller.session.task_plan = plan
+
+    kept = await controller._handle_input_action(SubmitTurn(text="continue the plan"))
+
+    assert kept is True
+    assert controller.session.task_plan is plan
+
+
+@pytest.mark.asyncio
+async def test_idle_go_keeps_an_all_pending_plan() -> None:
+    """Plan-only overlay invites ``go``; that submit must not wipe the checklist."""
+    controller = _controller()
+    plan = _plan("pending", "pending")
+    controller.session.task_plan = plan
+    controller.session.plan_only_until_authorized = True
+
+    kept = await controller._handle_input_action(SubmitTurn(text="go"))
+
+    assert kept is True
+    assert controller.session.task_plan is plan
+
+
+@pytest.mark.asyncio
+async def test_idle_new_turn_clears_a_completed_plan() -> None:
+    """A finished plan must not linger over the next unrelated typed turn."""
+    controller = _controller()
+    controller.session.task_plan = _plan("completed", "completed")
+
+    kept = await controller._handle_input_action(SubmitTurn(text="new question"))
+
+    assert kept is True
+    assert controller.session.task_plan is None
+
+
+@pytest.mark.asyncio
+async def test_running_dispatch_keeps_a_completed_plan() -> None:
+    """A still-running task keeps its plan even after every step is done."""
+    import asyncio
+    import contextlib
+    import threading
+
+    controller = _controller()
+    plan = _plan("completed", "completed")
+    controller.session.task_plan = plan
+
+    async def _hold() -> None:
+        await asyncio.Event().wait()
+
+    task = asyncio.create_task(_hold())
+    controller.state.start_dispatch(task=task, cancel_event=threading.Event())
+    try:
+        kept = await controller._handle_input_action(SubmitTurn(text="queued follow-up"))
+        assert kept is True
+        assert controller.session.task_plan is plan
+    finally:
+        task.cancel()
+        with contextlib.suppress(asyncio.CancelledError):
+            await task
