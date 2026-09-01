@@ -4,6 +4,10 @@ description: >-
   Fix failing GitHub CI / Actions checks via fix_github_pr_ci and push to the
   existing PR head, or fix a branch's failing CI via a linked repair worktree
 demo: Find open PRs with failing CI and fix them
+
+
+
+
 ---
 ══════════════════════════════════════════════════════════
 GITHUB CI FIX SKILL — interactive-shell action agent:
