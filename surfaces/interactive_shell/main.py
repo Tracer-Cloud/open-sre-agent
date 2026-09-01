@@ -64,8 +64,9 @@ async def run_repl_async(
         session.warm_resolved_integrations()
         return run_initial_input(initial_input, session, out)
 
-    if not pass_sign_in_gate(out):
-        return 0
+    # The sign-in gate runs once, in the synchronous ``run_repl`` entrypoint,
+    # where it interleaves with the launch-banner paint. This coroutine is the
+    # shell body only; embedders driving it directly manage their own auth.
 
     # Open the session file now that we know this is an interactive REPL run.
     SessionManager.for_session(session).open_store(session)

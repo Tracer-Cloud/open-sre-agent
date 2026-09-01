@@ -164,7 +164,10 @@ def test_run_repl_skips_the_launch_banner_when_the_gate_paints_it(monkeypatch: A
     assert painted == []
 
 
-def test_run_repl_async_unsigned_exit_does_not_start_the_controller(monkeypatch: Any) -> None:
+def test_run_repl_async_does_not_run_the_gate_itself(monkeypatch: Any) -> None:
+    # The gate runs once in the synchronous run_repl; the coroutine is the shell
+    # body only, so it must not invoke pass_sign_in_gate a second time.
+    gated: list[bool] = []
     started: list[bool] = []
 
     class _Controller:
@@ -180,32 +183,9 @@ def test_run_repl_async_unsigned_exit_does_not_start_the_controller(monkeypatch:
         "create_repl_runtime",
         lambda **_kwargs: SimpleNamespace(session=Session(), inbox=None),
     )
-    monkeypatch.setattr(main_entrypoint, "pass_sign_in_gate", lambda _c: False)
-    monkeypatch.setattr(main_entrypoint, "InteractiveShellController", _Controller)
-
-    exit_code = asyncio.run(main_entrypoint.run_repl_async())
-
-    assert exit_code == 0
-    assert started == []
-
-
-def test_run_repl_async_proceeds_to_the_controller_after_the_gate(monkeypatch: Any) -> None:
-    started: list[bool] = []
-
-    class _Controller:
-        def __init__(self, *_args: object, **_kwargs: object) -> None:
-            del _args, _kwargs
-
-        async def start_interactive_shell(self) -> None:
-            started.append(True)
-
-    monkeypatch.setattr(main_entrypoint, "identify_saved_github_username", lambda: None)
     monkeypatch.setattr(
-        main_entrypoint,
-        "create_repl_runtime",
-        lambda **_kwargs: SimpleNamespace(session=Session(), inbox=None),
+        main_entrypoint, "pass_sign_in_gate", lambda _c: gated.append(True) or False
     )
-    monkeypatch.setattr(main_entrypoint, "pass_sign_in_gate", lambda _c: True)
     monkeypatch.setattr(main_entrypoint, "offer_loop_suggestions", lambda *_a, **_k: None)
     monkeypatch.setattr(main_entrypoint, "InteractiveShellController", _Controller)
 
@@ -225,6 +205,7 @@ def test_run_repl_async_proceeds_to_the_controller_after_the_gate(monkeypatch: A
     exit_code = asyncio.run(main_entrypoint.run_repl_async())
 
     assert exit_code == 0
+    assert gated == []  # the coroutine never re-runs the gate
     assert started == [True]
 
 
