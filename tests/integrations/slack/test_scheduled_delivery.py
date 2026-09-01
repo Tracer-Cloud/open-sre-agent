@@ -8,6 +8,7 @@ and ``[label](url)`` rendered literally in Slack.
 
 from __future__ import annotations
 
+from http import HTTPStatus
 from unittest.mock import patch
 
 from infrastructure.scheduling.scheduler.types import Provider, ScheduledTask, TaskKind
@@ -56,7 +57,7 @@ def test_bot_token_delivery_converts_markdown_to_mrkdwn() -> None:
         patch("integrations.slack.scheduled_delivery.post_json") as mock_post,
     ):
         mock_post.return_value.ok = True
-        mock_post.return_value.status_code = 200
+        mock_post.return_value.status_code = HTTPStatus.OK
         mock_post.return_value.data = {"ok": True, "ts": "123.456"}
 
         ok, error, ts = SlackScheduledDelivery().deliver(_task(chat_id="C123"), _MARKDOWN_MESSAGE)
