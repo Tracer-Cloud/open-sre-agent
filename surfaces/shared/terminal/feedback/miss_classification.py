@@ -6,7 +6,7 @@ import sys
 from typing import TYPE_CHECKING, Any
 
 from surfaces.shared.terminal.feedback.analytics import _emit_miss_classified
-from surfaces.shared.terminal.feedback.prompts import _DIM, _HIGHLIGHT, _RESET, _pick_taxonomy
+from surfaces.shared.terminal.feedback.prompts import _DIM, _RESET, _pick_taxonomy
 
 if TYPE_CHECKING:
     from rich.console import Console
@@ -24,7 +24,7 @@ def _classify_miss(
     taxonomy picker (the rating + note are still kept in feedback.jsonl).
     """
     from core.domain.feedback import MissTaxonomy, record_miss
-    from infrastructure.terminal.theme import BRAND, DIM
+    from infrastructure.terminal.theme import BRAND, DIM, PROMPT_ACCENT_ANSI
 
     if console is not None:
         console.print(
@@ -32,7 +32,7 @@ def _classify_miss(
         )
     else:
         sys.stdout.write(
-            f"\n{_HIGHLIGHT}Where did this miss come from?{_RESET}"
+            f"\n{PROMPT_ACCENT_ANSI}Where did this miss come from?{_RESET}"
             f"  {_DIM}↑↓ · Enter · Esc to skip{_RESET}\n\n"
         )
         sys.stdout.flush()

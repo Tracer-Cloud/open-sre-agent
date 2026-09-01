@@ -40,8 +40,8 @@ _CHOICES: list[tuple[str, str]] = [
 
 _SKIP_KEYS = (b"s", b"S")
 
-# ANSI helpers (theme colours inlined to avoid import at module level)
-_HIGHLIGHT = "\x1b[1;38;2;185;237;175m"  # bold  (#B9EDAF)
+# Theme-independent ANSI attributes. The accent colour is read from the active
+# theme at render time in ``_run_select`` so it tracks theme changes.
 _DIM = "\x1b[2m"
 _RESET = "\x1b[0m"
 _HINT = f"  {_DIM}↑↓ / j k  ·  Enter  ·  Esc / s to skip{_RESET}"
@@ -72,6 +72,8 @@ def _run_select(choices: list[tuple[str, str]]) -> str | None:
 
     Returns the selected key string, or None on Esc / Ctrl-C / s.
     """
+    from infrastructure.terminal.theme import PROMPT_ACCENT_ANSI
+
     restore_stdin_terminal()
     labels = [label for _, label in choices]
     n = len(labels)
@@ -91,7 +93,7 @@ def _run_select(choices: list[tuple[str, str]]) -> str | None:
             _out(f"\x1b[{total_lines}A")
         for i, label in enumerate(labels):
             if i == idx:
-                _out(f"\r\x1b[2K{_HIGHLIGHT}  > {label}{_RESET}\r\n")
+                _out(f"\r\x1b[2K{PROMPT_ACCENT_ANSI}  > {label}{_RESET}\r\n")
             else:
                 _out(f"\r\x1b[2K{_DIM}    {label}{_RESET}\r\n")
         _out(f"\r\x1b[2K{_HINT}\r\n")

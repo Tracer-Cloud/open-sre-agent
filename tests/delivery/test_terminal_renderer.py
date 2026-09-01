@@ -4,7 +4,7 @@ from collections.abc import Generator
 
 import pytest
 
-from infrastructure.terminal.theme import DEFAULT_THEME_NAME, set_active_theme
+from infrastructure.terminal.theme import DEFAULT_THEME_NAME, THEME_REGISTRY, set_active_theme
 from tools.investigation.reporting.formatters.base import slack_links_to_plain_text
 from tools.investigation.reporting.renderers.terminal import (
     _rich_line_with_links,
@@ -20,10 +20,10 @@ def restore_active_theme() -> Generator[None]:
     set_active_theme(DEFAULT_THEME_NAME)
 
 
-_GREEN_BRAND_HEX = "#66A17D"
-_AMBER_BRAND_HEX = "#C99944"
-_GREEN_HIGHLIGHT_HEX = "#B9EDAF"
-_AMBER_HIGHLIGHT_HEX = "#F2D48A"
+_GREEN_BRAND_HEX = THEME_REGISTRY["green"].BRAND
+_AMBER_BRAND_HEX = THEME_REGISTRY["amber"].BRAND
+_GREEN_HIGHLIGHT_HEX = THEME_REGISTRY["green"].HIGHLIGHT
+_AMBER_HIGHLIGHT_HEX = THEME_REGISTRY["amber"].HIGHLIGHT
 
 
 def test_rich_line_with_links_tracks_active_brand(restore_active_theme: None) -> None:

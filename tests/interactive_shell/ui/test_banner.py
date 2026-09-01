@@ -13,6 +13,12 @@ from surfaces.shared.terminal.banner import banner_state as banner_state_module
 from surfaces.shared.terminal.banner.banner_state import LaunchStatus
 
 
+def _rgb(hex_color: str) -> str:
+    """``"#RRGGBB"`` → the ``"r;g;b"`` truecolor triple."""
+    h = hex_color.lstrip("#")
+    return f"{int(h[0:2], 16)};{int(h[2:4], 16)};{int(h[4:6], 16)}"
+
+
 def _fixed_status() -> LaunchStatus:
     return LaunchStatus(
         skill_count=21,
@@ -53,12 +59,12 @@ def test_launch_banner_draws_two_overlapping_equal_rings(monkeypatch: object) ->
 
 
 def test_launch_banner_uses_active_theme_palette(monkeypatch: object) -> None:
-    from infrastructure.terminal.theme import set_active_theme
+    from infrastructure.terminal.theme import THEME_REGISTRY, set_active_theme
 
     monkeypatch.setattr(banner_module, "load_launch_status", _fixed_status)
     set_active_theme("pink")
-    pink_rgb = "255;179;217"
-    green_rgb = "185;237;175"
+    pink_rgb = _rgb(THEME_REGISTRY["pink"].HIGHLIGHT)
+    green_rgb = _rgb(THEME_REGISTRY["green"].HIGHLIGHT)
 
     console = Console(record=True, width=120)
     console.print(banner_module.build_launch_banner(console))

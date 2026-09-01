@@ -275,7 +275,11 @@ def test_repl_render_launch_poster_uses_crlf_on_tty(monkeypatch: pytest.MonkeyPa
     fake_stdout = _FakeStdout()
     monkeypatch.setattr("sys.stdout", fake_stdout)
 
-    from infrastructure.terminal.theme import set_active_theme
+    from infrastructure.terminal.theme import THEME_REGISTRY, set_active_theme
+
+    def _rgb(hex_color: str) -> str:
+        h = hex_color.lstrip("#")
+        return f"{int(h[0:2], 16)};{int(h[2:4], 16)};{int(h[4:6], 16)}"
 
     set_active_theme("blue")
     console = Console(
@@ -290,8 +294,8 @@ def test_repl_render_launch_poster_uses_crlf_on_tty(monkeypatch: pytest.MonkeyPa
     written = "".join(fake_stdout.writes)
     assert "theme set:" in written
     assert "blue" in written
-    assert "38;2;168;212;255" in written
-    assert "185;237;175" not in written
+    assert f"38;2;{_rgb(THEME_REGISTRY['blue'].HIGHLIGHT)}" in written
+    assert _rgb(THEME_REGISTRY["green"].HIGHLIGHT) not in written
     assert "opensre" in written
     assert "Skills" in written
     assert "Welcome" not in written

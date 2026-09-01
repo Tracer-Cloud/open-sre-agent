@@ -25,9 +25,16 @@ from prompt_toolkit.output import DummyOutput
 from infrastructure.terminal import theme as ui_theme
 from infrastructure.terminal.theme import (
     ANSI_RESET,
+    THEME_REGISTRY,
     get_active_theme_name,
     set_active_theme,
 )
+
+
+def _rgb(hex_color: str) -> str:
+    """``"#RRGGBB"`` → the ``"r;g;b"`` triple as it appears in a truecolor escape."""
+    h = hex_color.lstrip("#")
+    return f"{int(h[0:2], 16)};{int(h[2:4], 16)};{int(h[4:6], 16)}"
 from surfaces.interactive_shell.command_registry import SLASH_COMMANDS, dispatch_slash
 from surfaces.interactive_shell.runtime.core import confirmation as controller_runtime
 from surfaces.interactive_shell.runtime.core import state as loop_state
@@ -444,8 +451,8 @@ def test_build_prompt_style_tracks_active_theme() -> None:
     amber_attrs = _build_prompt_style().get_attrs_for_style_str("class:prompt-frame-line")
     set_active_theme("teal")
     teal_attrs = _build_prompt_style().get_attrs_for_style_str("class:prompt-frame-line")
-    assert amber_attrs.color and amber_attrs.color.lower() == "f2d48a"
-    assert teal_attrs.color and teal_attrs.color.lower() == "8ae2d6"
+    assert amber_attrs.color and amber_attrs.color.lower() == THEME_REGISTRY["amber"].HIGHLIGHT.lstrip("#").lower()
+    assert teal_attrs.color and teal_attrs.color.lower() == THEME_REGISTRY["teal"].HIGHLIGHT.lstrip("#").lower()
     assert amber_attrs.color != teal_attrs.color
 
 
@@ -767,8 +774,8 @@ class TestSpinnerState:
         spinner.start()
         spinner.set_phase(loop_state.SpinnerState.THINKING_PHASE)
         raw = spinner.inline_spinner_ansi()
-        assert "168;212;255" in raw  # highlight — the Thinking accent
-        assert "185;237;175" not in raw
+        assert _rgb(THEME_REGISTRY["blue"].HIGHLIGHT) in raw  # highlight — the Thinking accent
+        assert _rgb(THEME_REGISTRY["green"].HIGHLIGHT) not in raw
 
     def test_inline_spinner_invoking_tools_uses_brand(self) -> None:
         from infrastructure.terminal.theme import set_active_theme
@@ -778,8 +785,8 @@ class TestSpinnerState:
         spinner.start()
         spinner.set_phase(loop_state.SpinnerState.INVOKING_TOOLS_PHASE)
         raw = spinner.inline_spinner_ansi()
-        assert "111;165;216" in raw  # blue BRAND
-        assert "168;212;255" not in raw.split("(Press ESC")[0]
+        assert _rgb(THEME_REGISTRY["blue"].BRAND) in raw  # blue BRAND
+        assert _rgb(THEME_REGISTRY["blue"].HIGHLIGHT) not in raw.split("(Press ESC")[0]
 
     @staticmethod
     def _all_verbs(spinner: loop_state.SpinnerState) -> tuple[str, ...]:

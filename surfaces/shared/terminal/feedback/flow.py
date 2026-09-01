@@ -27,7 +27,6 @@ from surfaces.shared.terminal.feedback.persistence import (
 )
 from surfaces.shared.terminal.feedback.prompts import (
     _DIM,
-    _HIGHLIGHT,
     _RESET,
     _pick_rating,
     _read_note,
@@ -46,7 +45,7 @@ def _collect(final_state: dict[str, Any], *, console: Console | None) -> None:
 
     _print_context(final_state, console=console)
 
-    from infrastructure.terminal.theme import BRAND, DIM, GLYPH_SUCCESS
+    from infrastructure.terminal.theme import BRAND, DIM, GLYPH_SUCCESS, PROMPT_ACCENT_ANSI
 
     if console is not None:
         console.print(
@@ -54,7 +53,7 @@ def _collect(final_state: dict[str, Any], *, console: Console | None) -> None:
         )
     else:
         _write_raw(
-            f"\n{_HIGHLIGHT}Was this RCA accurate?{_RESET}"
+            f"\n{PROMPT_ACCENT_ANSI}Was this RCA accurate?{_RESET}"
             f"  {_DIM}↑↓ · Enter · Esc or s to skip{_RESET}\n\n"
         )
 
@@ -110,7 +109,7 @@ def _collect(final_state: dict[str, Any], *, console: Console | None) -> None:
 
             console.print(f"[{DIM}]  Miss recorded → {misses_path()}[/]")
     else:
-        message = f"\n{_HIGHLIGHT}{GLYPH_SUCCESS} Feedback saved.{_RESET}  {_DIM}{_feedback_path()}{_RESET}\n"
+        message = f"\n{PROMPT_ACCENT_ANSI}{GLYPH_SUCCESS} Feedback saved.{_RESET}  {_DIM}{_feedback_path()}{_RESET}\n"
         if miss_record is not None:
             from core.domain.feedback import misses_path
 

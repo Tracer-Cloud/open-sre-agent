@@ -7,6 +7,13 @@ import time
 
 from surfaces.interactive_shell.runtime.core.state import SpinnerState
 
+
+def _rgb(hex_color: str) -> str:
+    """``"#RRGGBB"`` → the ``"r;g;b"`` triple as it appears in a truecolor escape."""
+    h = hex_color.lstrip("#")
+    return f"{int(h[0:2], 16)};{int(h[2:4], 16)};{int(h[4:6], 16)}"
+
+
 _GLYPHS = SpinnerState._SPINNER_FRAMES
 
 
@@ -72,31 +79,33 @@ def test_spinner_invoking_tools_phase_matches_factory_copy() -> None:
 def test_load_state_phases_use_distinct_accents() -> None:
     """Thinking=highlight, Executing=brand, Invoking tools=bold brand — a glance
     tells LLM latency (thinking) from tool work (invoking)."""
-    from infrastructure.terminal.theme import set_active_theme
+    from infrastructure.terminal.theme import THEME_REGISTRY, set_active_theme
 
     set_active_theme("blue")
+    highlight = _rgb(THEME_REGISTRY["blue"].HIGHLIGHT)
+    brand = _rgb(THEME_REGISTRY["blue"].BRAND)
     spinner = SpinnerState()
     spinner.start()
 
     spinner.set_phase(SpinnerState.THINKING_PHASE)
     thinking = spinner.inline_spinner_ansi().split("(Press ESC")[0]
     assert SpinnerState.THINKING_PHASE in thinking
-    assert "168;212;255" in thinking  # highlight
-    assert "111;165;216" not in thinking  # not brand
+    assert highlight in thinking
+    assert brand not in thinking
 
     spinner.set_phase(SpinnerState.EXECUTING_PHASE)
     executing = spinner.inline_spinner_ansi().split("(Press ESC")[0]
     assert SpinnerState.EXECUTING_PHASE in executing
-    assert "111;165;216" in executing  # brand
-    assert "168;212;255" not in executing  # not highlight
+    assert brand in executing
+    assert highlight not in executing
     assert "\x1b[1m" not in executing  # brand is not bold in the executing phase
 
     spinner.set_phase(SpinnerState.INVOKING_TOOLS_PHASE)
     invoking = spinner.inline_spinner_ansi().split("(Press ESC")[0]
     assert SpinnerState.INVOKING_TOOLS_PHASE in invoking
-    assert "111;165;216" in invoking  # brand
+    assert brand in invoking
     assert "\x1b[1m" in invoking  # bold brand — the hottest state
-    assert "168;212;255" not in invoking  # not highlight
+    assert highlight not in invoking
 
 
 def test_spinner_empty_when_not_streaming() -> None:
