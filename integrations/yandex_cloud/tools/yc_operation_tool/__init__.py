@@ -126,6 +126,12 @@ def execute_yc_operation(
     **credentials: Any,
 ) -> dict[str, Any]:
     """Read a Yandex Cloud resource."""
+    # Canonicalise once, up front: host resolution case-folds the service, so a
+    # caller-supplied "Compute" or "Resource-Manager" must read as the same
+    # service everywhere below (the index gate, the folder-scope exception, and
+    # what gets sent) as its lowercase form -- not as an unknown service to one
+    # check and the real thing to another.
+    service = canonical_service(service)
     # Checked here rather than only in the client: the synthetic-backend path
     # never reaches the client, and a read-only guarantee that depends on which
     # branch the call took is not a guarantee.
@@ -144,11 +150,8 @@ def execute_yc_operation(
     # path that Yandex binds to GET, or a path the generator never listed.
     # Unknown services still fall through to the client, which names them as
     # unknown. A known service with a path the index does not list is refused
-    # here so a well-formed write never reaches the network. Canonicalise first:
-    # the caller may use the name the tools and the registry use, and asking the
-    # index about a name it does not carry would read as "unknown service" and
-    # skip the check.
-    if canonical_service(service) in known_services() and lookup(service, path) is None:
+    # here so a well-formed write never reaches the network.
+    if service in known_services() and lookup(service, path) is None:
         return {
             "success": False,
             "service": service,

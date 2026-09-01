@@ -114,6 +114,25 @@ class TestFolderScope:
         assert "folderId" not in backend.query
         assert backend.query["cloudId"] == "b1gcloud"
 
+    def test_no_folder_is_added_however_resource_manager_is_spelled(self) -> None:
+        """Host resolution case-folds the service, so the folder-scope
+        exception must too -- otherwise a case-variant "Resource-Manager"
+        defeats it and gets a stray folderId injected, which Yandex answers
+        with a bare 404.
+        """
+        backend = _RecordingBackend()
+        tool = get_registered_tool_map()["execute_yc_operation"]
+        tool.run(
+            service="Resource-Manager",
+            path="/resource-manager/v1/folders",
+            params={"cloudId": "b1gcloud"},
+            yc_backend=backend,
+            folder_id="b1gtest",
+        )
+
+        assert "folderId" not in backend.query
+        assert backend.query["cloudId"] == "b1gcloud"
+
     def test_a_caller_scoping_by_cloud_is_left_alone(self) -> None:
         """cloudId means the caller already chose a scope, whatever the service."""
         backend = _RecordingBackend()
