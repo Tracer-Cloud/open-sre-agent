@@ -94,7 +94,7 @@ class PromptBuilder:
         # hook so a selection change repaints immediately.
         confirm_kb = install_confirmation_key_bindings(self.state, self._invalidate_prompt)
         install_session_key_bindings(self.pt_session, confirm_kb)
-        # Alt/Option+P (and Ctrl+P) expands/collapses the pinned plan while one
+        # Ctrl+P (and Alt/Option+P) expands/collapses the pinned plan while one
         # is on screen.
         plan_kb = install_plan_expand_key_bindings(
             self.state,

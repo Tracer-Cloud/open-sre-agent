@@ -1,4 +1,4 @@
-"""Alt/Option+P and Ctrl+P toggle the plan overlay only while a plan is on screen."""
+"""Ctrl+P and Alt/Option+P toggle the plan overlay only while a plan is on screen."""
 
 from __future__ import annotations
 

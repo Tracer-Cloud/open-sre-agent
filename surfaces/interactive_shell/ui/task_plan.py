@@ -24,7 +24,7 @@ _STEP_INDENT = "  "
 # Steps shown before the plan collapses; a longer plan folds to a window
 # around the current step until the user expands it.
 _COLLAPSED_MAX_STEPS = 3
-_EXPAND_HINT = "Alt/Option+P to view all"
+_EXPAND_HINT = "Ctrl+P to view all"
 
 
 def task_plan_from_tool_args(args: dict[str, object]) -> TaskPlan | None:
