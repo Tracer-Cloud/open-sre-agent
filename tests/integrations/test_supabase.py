@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from http import HTTPStatus
 from typing import Any
 from unittest.mock import patch
 
@@ -164,7 +165,7 @@ class TestVerifySupabase:
         monkeypatch.setenv("SUPABASE_URL", "https://proj.supabase.co")
         monkeypatch.setenv("SUPABASE_SERVICE_KEY", "svc")
 
-        with patch("integrations.supabase._make_request", return_value=(200, {})):
+        with patch("integrations.supabase._make_request", return_value=(HTTPStatus.OK, {})):
             result = verify_supabase(
                 "local env", {"project_url": "https://proj.supabase.co", "integration_id": ""}
             )
@@ -190,7 +191,7 @@ class TestVerifySupabase:
         url/service_key dict must still build normally."""
         from integrations.supabase.verifier import verify_supabase
 
-        with patch("integrations.supabase._make_request", return_value=(200, {})):
+        with patch("integrations.supabase._make_request", return_value=(HTTPStatus.OK, {})):
             result = verify_supabase(
                 "local env",
                 {"url": "https://proj.supabase.co", "service_key": "svc"},
