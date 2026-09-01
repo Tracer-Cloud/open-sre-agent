@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from typing import Any
+
 from core.agent_harness.session.session_core import SessionCore
 from core.agent_harness.session_goal.goal import (
     SessionGoal,
@@ -91,6 +93,11 @@ def test_five_step_outer_loop_continues_until_achieved() -> None:
     assert "session_goal:" not in (outcome.last_result.assistant_response_text or "")
 
 
+def _stay_active(goal: SessionGoal, result: Any, *, session: Any | None = None) -> str:
+    """Evaluate stub that never achieves, so only the turn budget stops the loop."""
+    return SessionGoalStatus.ACTIVE
+
+
 def test_outer_loop_disabled_fails_five_step_probe() -> None:
     session = SessionCore()
     turns: list[str] = []
@@ -117,7 +124,7 @@ def test_outer_loop_disabled_fails_five_step_probe() -> None:
             condition="complete all five steps",
             max_outer_turns=1,
         ),
-        evaluate=lambda *_a, **_k: SessionGoalStatus.ACTIVE,
+        evaluate=_stay_active,
     )
 
     assert len(turns) == 1
