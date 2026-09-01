@@ -2,12 +2,14 @@
 
 from __future__ import annotations
 
+from typing import Any
 from unittest.mock import patch
 
 from infrastructure.safety.sandbox.runner import SandboxResult
 from tests.tools.conftest import BaseToolContract
 from tools.registry import clear_tool_registry_cache, get_registered_tool_map
 from tools.system.python_execution_tool import execute_python_code
+from tools.system.python_execution_tool._evidence import map_execute_python_code
 
 
 class TestPythonExecutionToolContract(BaseToolContract):
@@ -184,3 +186,51 @@ class TestPythonExecutionToolCredentials:
         assert result["credentials_available"] == ["github"]
         assert "ghp_explicit_secret" not in result["stdout"]
         assert "[redacted]" in result["stdout"]
+
+
+class TestMapExecutePythonCode:
+    def test_records_stdout_on_success(self) -> None:
+        evidence: dict[str, Any] = {}
+        map_execute_python_code(evidence, {"success": True, "stdout": "42\n"}, {})
+        entries = evidence["catalog_entries"]
+        assert len(entries) == 1
+        assert entries[0]["source"] == "execute_python_code"
+        assert entries[0]["summary"] == "42"
+
+    def test_skips_successful_run_with_no_output(self) -> None:
+        evidence: dict[str, Any] = {}
+        map_execute_python_code(evidence, {"success": True, "stdout": ""}, {})
+        assert "catalog_entries" not in evidence
+
+    def test_records_failure_reason_even_without_output(self) -> None:
+        """A failure is diagnostic information by itself -- unlike an empty
+        successful run, it must not be silently dropped."""
+        evidence: dict[str, Any] = {}
+        map_execute_python_code(
+            evidence, {"success": False, "timed_out": True, "stdout": "", "stderr": ""}, {}
+        )
+        entries = evidence["catalog_entries"]
+        assert len(entries) == 1
+        assert entries[0]["summary"] == "execution failed (timed out)"
+
+    def test_records_failure_with_stderr_detail(self) -> None:
+        evidence: dict[str, Any] = {}
+        map_execute_python_code(
+            evidence,
+            {"success": False, "exit_code": 1, "stderr": "ZeroDivisionError: division by zero"},
+            {},
+        )
+        summary = evidence["catalog_entries"][0]["summary"]
+        assert summary.startswith("execution failed (exit code 1)")
+        assert "ZeroDivisionError" in summary
+
+    def test_disambiguates_repeat_calls(self) -> None:
+        """Regression: this tool can be called many times per investigation
+        with different code -- record_evidence_entry lets the first entry
+        for a source win, so reusing one source key would silently drop
+        every call after the first."""
+        evidence: dict[str, Any] = {}
+        map_execute_python_code(evidence, {"success": True, "stdout": "1"}, {})
+        map_execute_python_code(evidence, {"success": True, "stdout": "2"}, {})
+        sources = [e["source"] for e in evidence["catalog_entries"]]
+        assert sources == ["execute_python_code", "execute_python_code#2"]

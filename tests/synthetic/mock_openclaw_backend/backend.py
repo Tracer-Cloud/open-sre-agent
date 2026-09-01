@@ -121,9 +121,8 @@ class FixtureOpenClawBackend:
     def _tool_handlers(self) -> dict[str, Any]:
         return {
             "conversations_list": self._handle_conversations_list,
-            "conversations_get": self._handle_conversations_get,
-            "conversations_create": self._handle_conversations_create,
-            "message_send": self._handle_message_send,
+            "conversation_get": self._handle_conversation_get,
+            "messages_send": self._handle_messages_send,
         }
 
     def _handle_conversations_list(self, arguments: dict[str, object]) -> dict[str, object]:
@@ -150,13 +149,13 @@ class FixtureOpenClawBackend:
             "structured_content": {"conversations": conversations},
         }
 
-    def _handle_conversations_get(self, arguments: dict[str, object]) -> dict[str, object]:
-        conversation_id = str(arguments.get("conversationId", ""))
+    def _handle_conversation_get(self, arguments: dict[str, object]) -> dict[str, object]:
+        conversation_id = str(arguments.get("session_key") or "").strip()
         for conv in self._scenario.fixture_conversations:
             if conv.get("id") == conversation_id:
                 return {
                     "is_error": False,
-                    "tool": "conversations_get",
+                    "tool": "conversation_get",
                     "arguments": arguments,
                     "text": conv.get("lastMessage", ""),
                     "content": [{"type": "text", "text": str(conv.get("lastMessage", ""))}],
@@ -164,27 +163,17 @@ class FixtureOpenClawBackend:
                 }
         return {
             "is_error": True,
-            "tool": "conversations_get",
+            "tool": "conversation_get",
             "arguments": arguments,
             "text": f"Conversation '{conversation_id}' not found.",
             "content": [],
             "structured_content": None,
         }
 
-    def _handle_conversations_create(self, arguments: dict[str, object]) -> dict[str, object]:
+    def _handle_messages_send(self, arguments: dict[str, object]) -> dict[str, object]:
         return {
             "is_error": False,
-            "tool": "conversations_create",
-            "arguments": arguments,
-            "text": "Conversation created successfully.",
-            "content": [{"type": "text", "text": "Conversation created successfully."}],
-            "structured_content": {"id": "fixture-conv-new", "title": arguments.get("title", "")},
-        }
-
-    def _handle_message_send(self, arguments: dict[str, object]) -> dict[str, object]:
-        return {
-            "is_error": False,
-            "tool": "message_send",
+            "tool": "messages_send",
             "arguments": arguments,
             "text": "Message sent.",
             "content": [{"type": "text", "text": "Message sent."}],

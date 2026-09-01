@@ -4,7 +4,13 @@ from __future__ import annotations
 
 import importlib.metadata
 import tomllib
+from datetime import UTC, datetime
 from pathlib import Path
+
+#: Base public version when no full release string is available.
+_DEV_BASE_VERSION = "0.1"
+#: Local-version channel for dev builds — the same lineage releases build from.
+_DEV_CHANNEL = "main"
 
 
 def _installed_version() -> str | None:
@@ -27,6 +33,33 @@ def _pyproject_version() -> str | None:
     return None
 
 
+def _dev_build_version(base: str) -> str:
+    """Expand *base* to the release shape ``base.Y.M.D+main.<sha>`` from git.
+
+    Mirrors the release version so a dev checkout reports the same specific
+    build shape. Falls back to *base* when git metadata is unreadable (a
+    stripped checkout / wheel without metadata).
+    """
+    from config.runtime_metadata.build_info import find_git_layout, read_git_head_sha
+
+    layout = find_git_layout()
+    if layout is None:
+        return base
+    sha = read_git_head_sha(layout)
+    if not sha:
+        return base
+    today = datetime.now(tz=UTC)
+    return f"{base}.{today.year}.{today.month}.{today.day}+{_DEV_CHANNEL}.{sha}"
+
+
 def get_opensre_version() -> str:
-    """Return the installed package version, else checkout metadata, else the dev fallback."""
-    return _installed_version() or _pyproject_version() or "0.1"
+    """Return the specific build version: the released string, else a git dev build.
+
+    A release build carries the canonical ``0.1.YYYY.M.D+main.<sha>`` string in
+    package metadata / ``pyproject`` and is returned verbatim. A dev checkout has
+    only the base version, so it is expanded to the same shape from git.
+    """
+    version = _installed_version() or _pyproject_version()
+    if version and "+" in version:
+        return version
+    return _dev_build_version(version or _DEV_BASE_VERSION)

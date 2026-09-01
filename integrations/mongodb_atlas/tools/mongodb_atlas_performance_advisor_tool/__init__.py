@@ -10,6 +10,9 @@ from integrations.mongodb_atlas import (
     atlas_is_available,
     get_performance_advisor,
 )
+from integrations.mongodb_atlas.tools._evidence import (
+    map_get_mongodb_atlas_performance_advisor,
+)
 
 
 @tool(
@@ -20,6 +23,7 @@ from integrations.mongodb_atlas import (
     is_available=atlas_is_available,
     injected_params=("api_private_key", "api_public_key", "base_url"),
     extract_params=atlas_extract_params,
+    evidence_mapper=map_get_mongodb_atlas_performance_advisor,
 )
 def get_mongodb_atlas_performance_advisor(
     api_public_key: str,

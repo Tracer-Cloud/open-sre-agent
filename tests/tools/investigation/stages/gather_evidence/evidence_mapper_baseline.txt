@@ -21,7 +21,6 @@ check_s3_marker
 create_google_docs_incident_report
 describe_eks_addon
 describe_eks_cluster
-execute_python_code
 execute_yc_operation
 fetch_failed_run
 find_yc_api
@@ -51,16 +50,9 @@ get_hermes_session_log
 get_hermes_session_topology
 get_hermes_workflow_run
 get_host_metrics
-get_jenkins_build_log
-get_jenkins_pipeline_stages
 get_lambda_configuration
 get_lambda_errors
 get_lambda_invocation_logs
-get_mongodb_atlas_alerts
-get_mongodb_atlas_cluster_events
-get_mongodb_atlas_cluster_metrics
-get_mongodb_atlas_clusters
-get_mongodb_atlas_performance_advisor
 get_pods_on_node
 get_postgresql_current_queries
 get_postgresql_lock_status
@@ -75,7 +67,6 @@ get_redis_replication
 get_redis_server_info
 get_redis_slowlog
 get_s3_object
-get_sre_guidance
 get_tracer_run
 get_tracer_tasks
 get_yc_instance_diagnostics
@@ -109,9 +100,6 @@ list_eks_clusters
 list_eks_deployments
 list_eks_namespaces
 list_eks_pods
-list_jenkins_builds
-list_jenkins_jobs
-list_jenkins_running_builds
 list_posthog_tools
 list_s3_objects
 list_sentry_tools
@@ -119,7 +107,6 @@ list_x_tools
 list_yc_instances
 list_yc_log_groups
 list_yc_metrics
-memory_recall
 memory_remember
 pi_coding_task
 query_azure_monitor_logs
@@ -143,7 +130,5 @@ telegram_send_message
 twilio_notify
 work_task_add
 work_task_complete
-work_task_list
-work_task_prioritize
 work_task_schedule_checkin
 work_task_update

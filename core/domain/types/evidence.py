@@ -45,3 +45,25 @@ def record_evidence_entry(
     entries.append(
         {"source": source, "label": label, "summary": summary, "url": url, "snippet": snippet}
     )
+
+
+def unique_evidence_source(evidence: dict[str, Any], base: str) -> str:
+    """Disambiguate repeat calls to a tool that can run many times per investigation.
+
+    ``record_evidence_entry`` lets the first entry for a given ``source``
+    win, which silently drops every later call's evidence for a tool the
+    agent invokes repeatedly with different arguments (e.g. a generic
+    dispatcher or a recall/search tool called once per topic). Call this to
+    get ``base`` on the first use and an incrementing ``base#N`` suffix on
+    each repeat, so every call keeps its own citeable entry.
+    """
+    entries = evidence.get(CATALOG_ENTRIES_KEY)
+    if not isinstance(entries, list):
+        return base
+    existing = {e.get("source") for e in entries if isinstance(e, dict)}
+    if base not in existing:
+        return base
+    suffix = 2
+    while f"{base}#{suffix}" in existing:
+        suffix += 1
+    return f"{base}#{suffix}"

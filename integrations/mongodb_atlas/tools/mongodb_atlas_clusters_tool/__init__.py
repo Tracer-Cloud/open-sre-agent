@@ -10,6 +10,7 @@ from integrations.mongodb_atlas import (
     atlas_is_available,
     get_clusters,
 )
+from integrations.mongodb_atlas.tools._evidence import map_get_mongodb_atlas_clusters
 
 
 @tool(
@@ -20,6 +21,7 @@ from integrations.mongodb_atlas import (
     is_available=atlas_is_available,
     injected_params=("api_private_key", "api_public_key", "base_url"),
     extract_params=atlas_extract_params,
+    evidence_mapper=map_get_mongodb_atlas_clusters,
 )
 def get_mongodb_atlas_clusters(
     api_public_key: str,

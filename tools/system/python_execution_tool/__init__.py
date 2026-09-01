@@ -13,6 +13,7 @@ from core.domain.types.tools import ToolSurface
 from core.tool import BaseTool, SideEffectLevel
 from infrastructure.observability.trace.spans import component_span
 from infrastructure.safety.sandbox import python_interpreter_available
+from tools.system.python_execution_tool._evidence import map_execute_python_code
 from tools.system.python_execution_tool.credentials import execution_env, github_extract_params
 from tools.system.python_execution_tool.runner import run_python_execution
 
@@ -32,6 +33,7 @@ class PythonExecutionTool(BaseTool):
     name = "execute_python_code"
     display_name = "Python execution"
     source = "knowledge"
+    evidence_mapper = map_execute_python_code
     side_effect_level = SideEffectLevel.READ_ONLY
     surfaces = (ToolSurface.INVESTIGATION, ToolSurface.CHAT)
     injected_params = ["github_token"]

@@ -13,10 +13,12 @@ from infrastructure.analytics.event_properties import (
     _investigation_failed_properties,
     _investigation_outcome_properties,
     _onboard_completed_properties,
-    _with_investigation_loop_metrics,
 )
 from infrastructure.analytics.events import Event
-from infrastructure.analytics.investigation_tracker import InvestigationTracker
+from infrastructure.analytics.investigation_tracker_types import (
+    InvestigationTracker,
+    _with_investigation_loop_metrics,
+)
 from infrastructure.analytics.provider import Properties, get_analytics
 from infrastructure.observability.errors.sentry import capture_exception
 

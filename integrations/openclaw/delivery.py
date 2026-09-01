@@ -18,6 +18,10 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 _OVERRIDABLE_KEYS = ("url", "mode", "auth_token", "command", "args", "headers", "timeout_seconds")
+MISSING_CONVERSATION_ID = (
+    "OpenClaw write-back requires openclaw_conversation_id; "
+    "creating a new conversation is not supported."
+)
 
 
 def _report_body(state: InvestigationState, report: str) -> str:
@@ -52,7 +56,6 @@ def _merge_openclaw_credentials(
 
 
 def _send_message(
-    tool_name: str,
     config_payload: dict[str, Any],
     arguments: dict[str, Any],
 ) -> tuple[bool, str | None]:
@@ -62,7 +65,7 @@ def _send_message(
         return False, runtime_error
 
     try:
-        result = call_openclaw_tool(config, tool_name, arguments)
+        result = call_openclaw_tool(config, "messages_send", arguments)
         if result.get("is_error"):
             return False, str(result.get("text") or "OpenClaw tool call failed.")
         return True, None
@@ -95,26 +98,21 @@ def send_openclaw_report(
     except Exception as exc:
         return False, f"OpenClaw config invalid: {exc}"
 
-    title = (
-        str(state.get("alert_name") or "OpenSRE Investigation").strip() or "OpenSRE Investigation"
-    )
     content = _report_body(state, report)
-    conversation_id = str(openclaw_context.get("conversation_id") or "").strip()
+    conversation_id = str(
+        openclaw_context.get("conversation_id")
+        or merged_creds.get("openclaw_conversation_id")
+        or merged_creds.get("conversation_id")
+        or ""
+    ).strip()
+    if not conversation_id:
+        return False, MISSING_CONVERSATION_ID
 
-    attempts: list[tuple[str, dict[str, Any]]] = []
-    if conversation_id:
-        attempts.append(("message_send", {"conversationId": conversation_id, "content": content}))
-    create_arguments: dict[str, Any] = {"title": title, "content": content}
-    if conversation_id:
-        create_arguments["conversationId"] = conversation_id
-    attempts.append(("conversations_create", create_arguments))
-
-    last_error: str | None = None
-    for tool_name, arguments in attempts:
-        posted, error = _send_message(tool_name, config_payload, arguments)
-        if posted:
-            return True, None
-        last_error = error
-        logger.debug("[openclaw_delivery] %s failed: %s", tool_name, error)
-
-    return False, last_error
+    posted, error = _send_message(
+        config_payload,
+        {"session_key": conversation_id, "text": content},
+    )
+    if posted:
+        return True, None
+    logger.debug("[openclaw_delivery] messages_send failed: %s", error)
+    return False, error

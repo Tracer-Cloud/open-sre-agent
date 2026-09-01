@@ -9,7 +9,7 @@ Test cases:
 1. Gateway Unavailable       — openclaw gateway process has crashed
 2. MCP Auth Failure          — bearer token rejected (401) on the HTTP MCP endpoint
 3. Stdio Command Not Found   — legacy openclaw-mcp binary replaced by 'openclaw mcp serve'
-4. Write-back Failure        — conversations_create returns is_error=True after investigation
+4. Write-back Failure        — messages_send returns is_error=True after investigation
 5. connection_verified Bug   — bridge tools permanently unavailable due to missing flag in catalog
 
 Run with:
@@ -373,14 +373,14 @@ class TestOpenClawStdioCommandNotFound:
 
 
 # ---------------------------------------------------------------------------
-# Test 4 — Write-back Failure (conversations_create returns is_error=True)
+# Test 4 — Write-back Failure (messages_send returns is_error=True)
 # ---------------------------------------------------------------------------
 
 
 class TestOpenClawWriteBackFailure:
     """
     Scenario: After a successful RCA investigation, publish_findings calls
-    send_openclaw_report() which in turn calls conversations_create on the MCP bridge.
+    send_openclaw_report() which in turn calls messages_send on the MCP bridge.
     The bridge returns is_error=True ('OpenClaw tool call failed.').
     OpenSRE must:
       - return (False, error_message) from send_openclaw_report
@@ -391,7 +391,7 @@ class TestOpenClawWriteBackFailure:
     def test_fixture_is_valid_json(self) -> None:
         alert = _load_fixture("write_back_failure_alert.json")
         assert alert["status"] == "firing"
-        assert "conversations_create" in alert["commonAnnotations"]["mcp_tool"]
+        assert "messages_send" in alert["commonAnnotations"]["mcp_tool"]
 
     def test_fixture_mentions_investigation_name(self) -> None:
         alert = _load_fixture("write_back_failure_alert.json")
@@ -404,6 +404,7 @@ class TestOpenClawWriteBackFailure:
             root_cause="Increased 5xx rate due to upstream database timeouts",
             remediation_steps=["Scale RDS read replica", "Add circuit breaker"],
             validity_score=0.91,
+            openclaw_context={"conversation_id": "conv-1"},
         )
         creds = _openclaw_http_resolved()
 
@@ -429,6 +430,7 @@ class TestOpenClawWriteBackFailure:
             root_cause="Database connection pool exhausted",
             remediation_steps=["Increase max_connections to 1200"],
             validity_score=0.95,
+            openclaw_context={"conversation_id": "conv-1"},
         )
         creds = _openclaw_http_resolved()
 
@@ -448,6 +450,7 @@ class TestOpenClawWriteBackFailure:
         state = _minimal_investigation_state(
             alert_name="Test Alert",
             root_cause="Database connection pool exhausted",
+            openclaw_context={"conversation_id": "conv-1"},
         )
         creds = _openclaw_http_resolved()
 
@@ -468,7 +471,7 @@ class TestOpenClawWriteBackFailure:
 
         assert captured_arguments, "call_openclaw_tool must be invoked at least once"
         last_call = captured_arguments[-1]
-        body = last_call.get("content", "")
+        body = last_call.get("text", "")
         assert "Database connection pool exhausted" in body
 
     def test_send_report_includes_remediation_steps_in_body(self) -> None:
@@ -476,6 +479,7 @@ class TestOpenClawWriteBackFailure:
         state = _minimal_investigation_state(
             alert_name="Test Alert",
             remediation_steps=["Increase max_connections", "Restart connection pool"],
+            openclaw_context={"conversation_id": "conv-1"},
         )
         creds = _openclaw_http_resolved()
 
@@ -495,7 +499,7 @@ class TestOpenClawWriteBackFailure:
             send_openclaw_report(state, "RCA report", creds)
 
         last_call = captured_arguments[-1]
-        body = last_call.get("content", "")
+        body = last_call.get("text", "")
         assert "Increase max_connections" in body
         assert "Restart connection pool" in body
 
@@ -523,10 +527,9 @@ class TestOpenClawWriteBackFailure:
             send_openclaw_report(state, "RCA report", creds)
 
         assert captured, "No MCP calls were made"
-        # The first attempt should be message_send targeting the existing conversation
         first_tool, first_args = captured[0]
-        assert first_tool == "message_send"
-        assert first_args.get("conversationId") == "conv-existing-123"
+        assert first_tool == "messages_send"
+        assert first_args.get("session_key") == "conv-existing-123"
 
     def test_send_report_invalid_config_returns_false(self) -> None:
         """send_openclaw_report returns (False, error) when creds are invalid."""

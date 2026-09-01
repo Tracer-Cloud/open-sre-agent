@@ -18,7 +18,7 @@
     "summary": "OpenSRE failed to write investigation report back to OpenClaw",
     "description": "After completing an RCA investigation for 'Checkout API Error Rate Spike', the publish_findings node attempted to call conversations_create on the OpenClaw MCP bridge but received an error. The investigation report was successfully delivered to Slack but is missing from OpenClaw. Engineers will not see the RCA findings in their AI assistant.",
     "investigation": "Checkout API Error Rate Spike",
-    "mcp_tool": "conversations_create",
+    "mcp_tool": "messages_send",
     "error": "OpenClaw tool call failed."
   },
   "externalURL": "http://alertmanager.monitoring.svc:9093",

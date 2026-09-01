@@ -55,17 +55,12 @@ def _load_fixture_tools(scenario_dir: Path) -> list[dict[str, Any]]:
                 "input_schema": None,
             },
             {
-                "name": "conversations_get",
-                "description": "Get a specific OpenClaw conversation by ID.",
+                "name": "conversation_get",
+                "description": "Get a specific OpenClaw conversation by session key.",
                 "input_schema": None,
             },
             {
-                "name": "conversations_create",
-                "description": "Create a new OpenClaw conversation.",
-                "input_schema": None,
-            },
-            {
-                "name": "message_send",
+                "name": "messages_send",
                 "description": "Send a message into an OpenClaw conversation.",
                 "input_schema": None,
             },

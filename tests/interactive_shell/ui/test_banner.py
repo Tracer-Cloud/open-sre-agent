@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import io
-from pathlib import Path
 
 from rich.console import Console
 
@@ -17,9 +16,7 @@ from surfaces.shared.terminal.banner.banner_state import LaunchStatus
 def _fixed_status() -> LaunchStatus:
     return LaunchStatus(
         skill_count=21,
-        mcp_count=2,
-        mcps_ready=True,
-        agents_md_available=True,
+        integration_count=2,
     )
 
 
@@ -36,10 +33,11 @@ def test_launch_banner_is_borderless_and_shows_only_compact_identity(
     output = console_file.getvalue()
     assert "opensre  ·  v2026.8.27+main.85fd865" in output
     assert "Skills (21) ✓" in output
-    assert "MCPs (2) ✓" in output
-    assert "AGENTS.md ✓" in output
-    assert "Welcome" not in output
-    assert "Integrations" not in output
+    assert "Integrations (2) ✓" in output
+    # Only the two capability items — no MCPs or AGENTS.md line.
+    assert "MCPs" not in output
+    assert "AGENTS.md" not in output
+    assert "Welcome" not in output  # welcome copy lives on the sign-in screen, not the banner
     assert not any(char in output for char in "╭╮╰╯│")
 
 
@@ -50,9 +48,8 @@ def test_launch_banner_draws_two_overlapping_equal_rings(monkeypatch: object) ->
     console.print(banner_module.build_launch_banner(console))
 
     output = console.export_text(styles=False)
-    assert "    ••••••••••    " in output
-    assert "•• ••        •• ••" in output
-    assert " ••••••    •••••• " in output
+    # Braille rendering of the canonical OpenSRE "O" mark: the two ring-wall rows.
+    assert "⣿⣿⠀⠀⣿⣿⡇⠀⠀⠀⠀⠀⠀⠀⠀⢸⣿⣿⠀⢸⣿⣿" in output
 
 
 def test_launch_banner_uses_active_theme_palette(monkeypatch: object) -> None:
@@ -90,9 +87,7 @@ def test_status_marks_empty_or_unavailable_capabilities(monkeypatch: object) -> 
         "load_launch_status",
         lambda: LaunchStatus(
             skill_count=0,
-            mcp_count=0,
-            mcps_ready=False,
-            agents_md_available=False,
+            integration_count=0,
         ),
     )
     console = Console(record=True, force_terminal=False, highlight=False, width=120)
@@ -101,17 +96,17 @@ def test_status_marks_empty_or_unavailable_capabilities(monkeypatch: object) -> 
 
     output = console.export_text(styles=False)
     assert "Skills (0) ✗" in output
-    assert "MCPs (0) ✗" in output
-    assert "AGENTS.md ✗" in output
+    assert "Integrations (0) ✗" in output
 
 
-def test_mcp_health_counts_only_mcp_integrations(monkeypatch: object) -> None:
+def test_integration_count_includes_all_configured(monkeypatch: object) -> None:
+    # Every configured integration counts (not just MCP ones), any health state.
     monkeypatch.setattr(
         "integrations.catalog.configured_integration_health",
         lambda: [("datadog", "ok"), ("github", "ok"), ("openclaw", "incomplete")],
     )
 
-    assert banner_state_module._mcp_health() == (2, False)
+    assert banner_state_module._count_configured_integrations() == 3
 
 
 def test_status_probes_survive_loader_failures(monkeypatch: object) -> None:
@@ -130,18 +125,7 @@ def test_status_probes_survive_loader_failures(monkeypatch: object) -> None:
     monkeypatch.setattr(builtins, "__import__", _fail_startup_probes)
 
     assert banner_state_module._count_loaded_skills() == 0
-    assert banner_state_module._mcp_health() == (0, False)
-
-
-def test_agents_md_status_tracks_repository_instructions(
-    monkeypatch: object,
-    tmp_path: Path,
-) -> None:
-    monkeypatch.setattr(banner_state_module, "REPO_ROOT", tmp_path)
-    assert banner_state_module._has_agents_md() is False
-
-    (tmp_path / "AGENTS.md").write_text("# instructions\n", encoding="utf-8")
-    assert banner_state_module._has_agents_md() is True
+    assert banner_state_module._count_configured_integrations() == 0
 
 
 def test_banner_uses_runtime_version(monkeypatch: object) -> None:

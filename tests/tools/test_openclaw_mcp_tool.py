@@ -371,13 +371,13 @@ def test_get_openclaw_conversation_happy_path() -> None:
             "integrations.openclaw.tools.openclaw_mcp_tool.invoke_openclaw_mcp_tool",
             return_value={
                 "is_error": False,
-                "tool": "conversations_get",
-                "arguments": {"conversationId": "conv-1"},
+                "tool": "conversation_get",
+                "arguments": {"session_key": "conv-1"},
                 "text": "ok",
                 "structured_content": {"id": "conv-1", "title": "Checkout debugging"},
                 "content": [],
             },
-        ),
+        ) as invoke,
     ):
         result = get_openclaw_conversation(
             conversation_id="conv-1",
@@ -387,7 +387,8 @@ def test_get_openclaw_conversation_happy_path() -> None:
         )
 
     assert result["available"] is True
-    assert result["tool"] == "conversations_get"
+    assert result["tool"] == "conversation_get"
+    invoke.assert_called_once_with(mock_config, "conversation_get", {"session_key": "conv-1"})
 
 
 def test_send_openclaw_message_happy_path() -> None:
@@ -410,13 +411,13 @@ def test_send_openclaw_message_happy_path() -> None:
             "integrations.openclaw.tools.openclaw_mcp_tool.invoke_openclaw_mcp_tool",
             return_value={
                 "is_error": False,
-                "tool": "message_send",
-                "arguments": {"conversationId": "conv-1", "content": "hello"},
+                "tool": "messages_send",
+                "arguments": {"session_key": "conv-1", "text": "hello"},
                 "text": "sent",
                 "structured_content": {"ok": True},
                 "content": [],
             },
-        ),
+        ) as invoke,
     ):
         result = send_openclaw_message(
             conversation_id="conv-1",
@@ -427,4 +428,9 @@ def test_send_openclaw_message_happy_path() -> None:
         )
 
     assert result["available"] is True
-    assert result["tool"] == "message_send"
+    assert result["tool"] == "messages_send"
+    invoke.assert_called_once_with(
+        mock_config,
+        "messages_send",
+        {"session_key": "conv-1", "text": "hello"},
+    )

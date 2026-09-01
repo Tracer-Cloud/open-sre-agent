@@ -10,6 +10,7 @@ import pytest
 
 from core.domain.work_items import WorkItemChannelTarget, WorkItemPriority, make_work_item
 from infrastructure.scheduling.scheduler.types import Provider
+from tools.system.work_items._evidence import map_work_task_list, map_work_task_prioritize
 from tools.system.work_items.delivery import (
     delivery_targets,
     gateway_delivery_context,
@@ -243,3 +244,77 @@ def test_work_task_tools_lifecycle(tmp_path: Path, monkeypatch: pytest.MonkeyPat
     # Verify list is now empty of open items
     list_after = work_task_list(status="open", project="infra")
     assert list_after["total"] == 0
+
+
+class TestMapWorkTaskList:
+    def test_records_entry(self) -> None:
+        evidence: dict[str, Any] = {}
+        map_work_task_list(
+            evidence, {"tasks": [{}, {}], "returned": 2, "total": 2}, {"status": "open"}
+        )
+        entries = evidence["catalog_entries"]
+        assert len(entries) == 1
+        assert entries[0]["source"] == "work_task_list"
+        assert entries[0]["summary"] == "2 task(s) with status 'open'"
+
+    def test_notes_when_page_is_smaller_than_total(self) -> None:
+        evidence: dict[str, Any] = {}
+        map_work_task_list(
+            evidence, {"tasks": [{}] * 5, "returned": 5, "total": 12}, {"status": "open"}
+        )
+        assert evidence["catalog_entries"][0]["summary"] == (
+            "12 task(s) with status 'open' (5 shown)"
+        )
+
+    def test_skips_empty_and_error(self) -> None:
+        evidence: dict[str, Any] = {}
+        map_work_task_list(evidence, {"tasks": [], "returned": 0, "total": 0}, {})
+        assert "catalog_entries" not in evidence
+
+        evidence2: dict[str, Any] = {}
+        map_work_task_list(evidence2, {"error": "invalid_status"}, {})
+        assert "catalog_entries" not in evidence2
+
+    def test_disambiguates_repeat_calls(self) -> None:
+        evidence: dict[str, Any] = {}
+        map_work_task_list(evidence, {"tasks": [{}], "returned": 1, "total": 1}, {"status": "open"})
+        map_work_task_list(
+            evidence, {"tasks": [{}], "returned": 1, "total": 1}, {"status": "closed"}
+        )
+        sources = [e["source"] for e in evidence["catalog_entries"]]
+        assert sources == ["work_task_list", "work_task_list#2"]
+
+
+class TestMapWorkTaskPrioritize:
+    def test_records_entry(self) -> None:
+        evidence: dict[str, Any] = {}
+        map_work_task_prioritize(
+            evidence,
+            {
+                "recommendations": [
+                    {"rank": 1, "score": 9.5, "task": {"title": "Fix prod outage"}},
+                    {"rank": 2, "score": 5.0, "task": {"title": "Update docs"}},
+                ]
+            },
+            {},
+        )
+        entries = evidence["catalog_entries"]
+        assert len(entries) == 1
+        assert entries[0]["source"] == "work_task_prioritize"
+        assert entries[0]["summary"] == "2 task(s) ranked, top: 'Fix prod outage'"
+
+    def test_skips_empty(self) -> None:
+        evidence: dict[str, Any] = {}
+        map_work_task_prioritize(evidence, {"recommendations": []}, {})
+        assert "catalog_entries" not in evidence
+
+    def test_disambiguates_repeat_calls(self) -> None:
+        evidence: dict[str, Any] = {}
+        map_work_task_prioritize(
+            evidence, {"recommendations": [{"task": {"title": "Fix prod outage"}}]}, {}
+        )
+        map_work_task_prioritize(
+            evidence, {"recommendations": [{"task": {"title": "Update docs"}}]}, {}
+        )
+        sources = [e["source"] for e in evidence["catalog_entries"]]
+        assert sources == ["work_task_prioritize", "work_task_prioritize#2"]

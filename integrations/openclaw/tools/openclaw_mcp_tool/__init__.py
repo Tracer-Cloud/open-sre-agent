@@ -91,7 +91,7 @@ def _normalize_named_bridge_call(
 ) -> OpenClawBridgeResponse:
     """Invoke a named MCP tool and normalise its result.
 
-    ``tool_name`` is the MCP-side tool identifier (e.g. ``conversations_get``);
+    ``tool_name`` is the MCP-side tool identifier (e.g. ``conversation_get``);
     ``surface_tool_name`` is the OpenSRE registered tool name that this call
     is running on behalf of (e.g. ``get_openclaw_conversation``) so the Sentry
     ``tool_name`` tag matches the tool's declared metadata.
@@ -368,8 +368,8 @@ def get_openclaw_conversation(
 
     return _normalize_named_bridge_call(
         config,
-        tool_name="conversations_get",
-        arguments={"conversationId": normalized_conversation_id},
+        tool_name="conversation_get",
+        arguments={"session_key": normalized_conversation_id},
         surface_tool_name="get_openclaw_conversation",
     )
 
@@ -434,8 +434,8 @@ def send_openclaw_message(
 
     return _normalize_named_bridge_call(
         config,
-        tool_name="message_send",
-        arguments={"conversationId": normalized_conversation_id, "content": normalized_content},
+        tool_name="messages_send",
+        arguments={"session_key": normalized_conversation_id, "text": normalized_content},
         surface_tool_name="send_openclaw_message",
     )
 

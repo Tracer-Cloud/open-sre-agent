@@ -25,6 +25,7 @@ from core.tool import AgentToolContext, SideEffectLevel
 from core.tool_framework import tool
 from infrastructure.scheduling.scheduler.store import add_task as add_scheduled_task
 from infrastructure.scheduling.scheduler.types import Provider, ScheduledTask, TaskKind
+from tools.system.work_items._evidence import map_work_task_list, map_work_task_prioritize
 from tools.system.work_items.delivery import delivery_targets, invalid_delivery_targets
 from tools.system.work_items.reminders import schedule_item_reminder
 from tools.system.work_items.results import (
@@ -216,6 +217,7 @@ def work_task_add(
         "required": [],
         "additionalProperties": False,
     },
+    evidence_mapper=map_work_task_list,
 )
 def work_task_list(
     status: str = "open",
@@ -446,6 +448,7 @@ def work_task_update(
         "required": [],
         "additionalProperties": False,
     },
+    evidence_mapper=map_work_task_prioritize,
 )
 def work_task_prioritize(
     project: str = "",
