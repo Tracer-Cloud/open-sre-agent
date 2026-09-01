@@ -13,6 +13,7 @@ from infrastructure.scheduling.scheduler.delivery import (
 )
 from infrastructure.scheduling.scheduler.types import ScheduledTask
 from integrations.slack.delivery import send_slack_webhook_message
+from integrations.slack.formatting import markdown_to_slack_mrkdwn
 
 
 class SlackScheduledDelivery:
@@ -42,7 +43,10 @@ class SlackScheduledDelivery:
                 return False, "Missing chat_id or webhook_url for Slack delivery", ""
             return False, "Scheduled tasks require Slack bot access_token for chat_id delivery", ""
 
-        plain_message = strip_html(message)
+        # Strip any stray HTML first, then convert Markdown to mrkdwn -- the
+        # reverse order would have strip_html's <tag> regex eat the <url|label>
+        # links markdown_to_slack_mrkdwn just produced.
+        plain_message = markdown_to_slack_mrkdwn(strip_html(message))
 
         if access_token and chat_id:
             headers = {
