@@ -41,9 +41,24 @@ class _BuildGate:
     done: threading.Event = field(default_factory=threading.Event)
     client: GrafanaClient | None = None
     error: BaseException | None = None
+    #: Assigned when this gate becomes the build leader; see
+    #: ``_grafana_identity_versions`` for why this exists.
+    sequence: int = 0
 
 
 _grafana_build_inflight: dict[str, _BuildGate] = {}
+
+#: Monotonic counter assigned to each build leader, and the highest sequence
+#: number successfully cached per (account, endpoint) identity. Two different
+#: credential versions of the same identity build under different cache keys
+#: with independent gates, so nothing else serializes them: without this, an
+#: old-credential build that happens to finish after a newer one would win the
+#: eviction race and leave the stale client cached. A build only wins the
+#: cache slot when its sequence is not older than the identity's current
+#: winner; a build that loses the race still returns its own correctly-built
+#: client to its caller -- it just isn't cached for reuse.
+_grafana_next_sequence = 0
+_grafana_identity_versions: dict[str, int] = {}
 
 #: Hex chars of the credential/TLS fingerprint folded into the cache key.
 #: 16 hex chars = 64 bits of SHA-256 -- collision-safe for the handful of live
@@ -155,7 +170,9 @@ def get_grafana_client_from_credentials(
             return cached
         gate = _grafana_build_inflight.get(cache_key)
         if gate is None:
-            gate = _BuildGate()
+            global _grafana_next_sequence
+            _grafana_next_sequence += 1
+            gate = _BuildGate(sequence=_grafana_next_sequence)
             _grafana_build_inflight[cache_key] = gate
             leader = True
 
@@ -180,6 +197,7 @@ def get_grafana_client_from_credentials(
     try:
         client = _build_and_cache_client(
             cache_key=cache_key,
+            sequence=gate.sequence,
             endpoint=endpoint,
             api_key=api_key,
             account_id=account_id,
@@ -203,6 +221,7 @@ def get_grafana_client_from_credentials(
 def _build_and_cache_client(
     *,
     cache_key: str,
+    sequence: int,
     endpoint: str,
     api_key: str,
     account_id: str,
@@ -263,18 +282,25 @@ def _build_and_cache_client(
             account_id,
         )
 
+    identity = _cache_key_identity(account_id=account_id, endpoint=endpoint)
     with _grafana_client_lock:
-        # Evict superseded credential versions of the same (account, endpoint):
-        # on rotation a fresh fingerprint would otherwise leave the old
-        # token/password cached forever.
-        identity_prefix = (
-            f"{_cache_key_identity(account_id=account_id, endpoint=endpoint)}{_FINGERPRINT_SEP}"
-        )
-        for stale_key in [
-            key
-            for key in _grafana_client_cache
-            if key != cache_key and key.startswith(identity_prefix)
-        ]:
-            del _grafana_client_cache[stale_key]
-        _grafana_client_cache[cache_key] = client
+        # Two different credential versions of the same identity build under
+        # different cache keys with independent gates, so nothing else
+        # serializes them. Only cache this build if no newer-sequenced build
+        # for the same identity has already won -- otherwise a slow rebuild
+        # for since-rotated (possibly now-invalid) credentials could finish
+        # after the current one and silently evict it.
+        if sequence >= _grafana_identity_versions.get(identity, 0):
+            # Evict superseded credential versions of the same (account,
+            # endpoint): on rotation a fresh fingerprint would otherwise
+            # leave the old token/password cached forever.
+            identity_prefix = f"{identity}{_FINGERPRINT_SEP}"
+            for stale_key in [
+                key
+                for key in _grafana_client_cache
+                if key != cache_key and key.startswith(identity_prefix)
+            ]:
+                del _grafana_client_cache[stale_key]
+            _grafana_client_cache[cache_key] = client
+            _grafana_identity_versions[identity] = sequence
     return client

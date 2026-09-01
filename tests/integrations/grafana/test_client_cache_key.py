@@ -10,6 +10,8 @@ change constructs a fresh client while an identical config still reuses one.
 
 from __future__ import annotations
 
+import threading
+import time
 from typing import Any
 
 import pytest
@@ -25,8 +27,10 @@ _NEW_TOKEN = "new-token"
 @pytest.fixture(autouse=True)
 def _clear_client_cache() -> Any:
     grafana_client._grafana_client_cache.clear()
+    grafana_client._grafana_identity_versions.clear()
     yield
     grafana_client._grafana_client_cache.clear()
+    grafana_client._grafana_identity_versions.clear()
 
 
 @pytest.fixture(autouse=True)
@@ -160,3 +164,49 @@ def test_different_account_id_does_not_evict_the_other_accounts_client() -> None
         endpoint=_ENDPOINT, api_key=_OLD_TOKEN, account_id="acct-other"
     )
     assert unchanged is other
+
+
+def test_a_slow_old_build_finishing_after_a_new_one_does_not_win_the_cache(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Two different credential versions build under independent gates, so
+    nothing else serializes them. If an in-flight old-credential build (e.g.
+    one already underway when a rotation happens) finishes after the new
+    build, it must not evict the newer, still-valid client -- that would
+    force the very next current-credential call to rebuild and repeat
+    datasource discovery.
+    """
+    real_discover = grafana_client.GrafanaClient.discover_datasource_uids
+
+    def _discover(self: Any) -> dict[str, str]:
+        if self.read_token == _OLD_TOKEN:
+            time.sleep(0.1)  # the old build is the slow one, so it finishes last
+        return real_discover(self)
+
+    monkeypatch.setattr(grafana_client.GrafanaClient, "discover_datasource_uids", _discover)
+
+    results: dict[str, Any] = {}
+
+    def _build(token: str) -> None:
+        results[token] = grafana_client.get_grafana_client_from_credentials(
+            endpoint=_ENDPOINT, api_key=token, account_id=_ACCOUNT_ID
+        )
+
+    old_thread = threading.Thread(target=_build, args=(_OLD_TOKEN,))
+    old_thread.start()
+    time.sleep(0.02)  # let the old build start (and reserve the earlier sequence) first
+    new_thread = threading.Thread(target=_build, args=(_NEW_TOKEN,))
+    new_thread.start()
+    old_thread.join(timeout=5)
+    new_thread.join(timeout=5)
+
+    # Both callers still get their own correctly-built client...
+    assert results[_OLD_TOKEN].read_token == _OLD_TOKEN
+    assert results[_NEW_TOKEN].read_token == _NEW_TOKEN
+    # ...but the cache holds only the newer one, so a subsequent call with the
+    # current credentials reuses it instead of rebuilding.
+    assert len(grafana_client._grafana_client_cache) == 1
+    reused = grafana_client.get_grafana_client_from_credentials(
+        endpoint=_ENDPOINT, api_key=_NEW_TOKEN, account_id=_ACCOUNT_ID
+    )
+    assert reused is results[_NEW_TOKEN]
