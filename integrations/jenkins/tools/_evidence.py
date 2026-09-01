@@ -10,18 +10,31 @@ _FAILED_BUILD_STATUSES = frozenset({"FAILURE"})
 _FAILED_JOB_STATUSES = frozenset({"FAILURE"})
 _FAILED_STAGE_STATUSES = frozenset({"FAILED"})
 
+#: The client's own hard ceiling on how many builds it will ever fetch or
+#: return in one call (``max(1, min(limit, 50))`` for the unfiltered path).
+#: A caller-requested ``limit`` above this is never actually honored, so the
+#: real ceiling to compare against is always ``min(limit, _JENKINS_BUILD_FETCH_CAP)``.
+_JENKINS_BUILD_FETCH_CAP = 50
+
 
 def map_list_jenkins_builds(
     evidence: dict[str, Any], output: dict[str, Any], tool_input: dict[str, Any]
 ) -> None:
     """Cite the build count and how many failed, qualifying page-capped totals.
 
-    ``total`` mirrors ``len(builds)`` after the client's own limit slice, so a
-    returned count at that ceiling may understate the true number of builds
-    -- use the "N+" convention against the caller's requested limit. When a
-    ``status`` filter is set, every returned build already matches it, so
-    cite the filter instead of a derived failed count (a filtered "0 failed"
-    would misrepresent unfiltered reality).
+    ``total`` mirrors ``len(builds)`` after the client's own limit slice, so
+    a returned count at that ceiling may understate the true number of
+    builds -- use the "N+" convention against ``min(limit, 50)``, the
+    client's real ceiling (a caller-requested ``limit`` above 50 is never
+    actually honored).
+
+    When a ``status`` filter is set, the client always scans only the 50
+    *most recent* builds before filtering -- regardless of ``limit`` -- and
+    doesn't expose whether history beyond that window also matches. The
+    result can never be proven exact in that case, so it's always qualified
+    with "+"; citing the filter instead of a derived failed count too, since
+    every returned build already matches it (a filtered "0 failed" would
+    misrepresent unfiltered reality).
     """
     if not output.get("available"):
         return
@@ -29,13 +42,14 @@ def map_list_jenkins_builds(
     if not builds:
         return
     total = output.get("total", len(builds))
-    requested_limit = tool_input.get("limit", 10)
-    truncated = total >= max(requested_limit, 1)
-    total_label = f"{total}+" if truncated else str(total)
     status_filter = tool_input.get("status")
     if status_filter:
-        summary = f"{total_label} build(s) with status '{status_filter}'"
+        summary = f"{total}+ build(s) with status '{status_filter}'"
     else:
+        requested_limit = tool_input.get("limit", 10)
+        effective_limit = min(max(requested_limit, 1), _JENKINS_BUILD_FETCH_CAP)
+        truncated = total >= effective_limit
+        total_label = f"{total}+" if truncated else str(total)
         failed = sum(
             1 for b in builds if str(b.get("status", "")).upper() in _FAILED_BUILD_STATUSES
         )

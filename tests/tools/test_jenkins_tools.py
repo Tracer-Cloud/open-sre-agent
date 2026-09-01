@@ -56,7 +56,10 @@ def test_map_list_jenkins_builds_qualifies_when_page_is_saturated() -> None:
 def test_map_list_jenkins_builds_cites_status_filter_instead_of_failed_count() -> None:
     """Regression: when a status filter is set, every returned build already
     matches it, so a derived failed count from an unfiltered read would be
-    misleading (e.g. state='success' showing '0 failed')."""
+    misleading (e.g. state='success' showing '0 failed'). The count itself
+    is also always qualified: the client scans only the 50 most recent
+    builds before filtering, regardless of `limit`, so history beyond that
+    window could hold more matches that were never seen."""
     evidence: dict[str, Any] = {}
     map_list_jenkins_builds(
         evidence,
@@ -70,8 +73,29 @@ def test_map_list_jenkins_builds_cites_status_filter_instead_of_failed_count() -
     )
     assert (
         evidence["catalog_entries"][0]["summary"]
-        == "1 build(s) with status 'SUCCESS' for 'deploy-prod'"
+        == "1+ build(s) with status 'SUCCESS' for 'deploy-prod'"
     )
+
+
+def test_map_list_jenkins_builds_qualifies_against_the_clients_hard_cap_not_a_larger_limit() -> (
+    None
+):
+    """Regression: the client never fetches or returns more than 50 builds
+    regardless of the caller's requested `limit` -- comparing only against
+    `limit` (e.g. 1000) would miss that the real ceiling actually hit was
+    50, silently reporting a saturated page as an exact count."""
+    evidence: dict[str, Any] = {}
+    map_list_jenkins_builds(
+        evidence,
+        {
+            "available": True,
+            "job": "deploy-prod",
+            "builds": [{"number": i, "status": "SUCCESS"} for i in range(50)],
+            "total": 50,
+        },
+        {"limit": 1000},
+    )
+    assert evidence["catalog_entries"][0]["summary"].startswith("50+ build(s)")
 
 
 def test_map_list_jenkins_builds_skips_empty_and_unavailable() -> None:
