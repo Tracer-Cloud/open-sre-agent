@@ -146,7 +146,7 @@ def ctrl_c_exit_hint_ansi() -> str:
 
 def composer_footer_ansi() -> str:
     """Return the help hint and terminal-mode label below the composer."""
-    left = "? for help"
+    left = "Enter send · Shift+Enter newline · ? help"
     right = "TERMINAL ■"
     width = prompt_line_width()
     if len(left) + len(right) + 2 > width:

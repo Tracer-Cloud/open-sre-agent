@@ -192,7 +192,7 @@ class TestComposerFooter:
     ) -> None:
         monkeypatch.setattr(prompt_rendering, "prompt_line_width", lambda: 79)
         footer = _strip_ansi(composer_footer_ansi())
-        assert footer.startswith("? for help")
+        assert footer.startswith("Enter send · Shift+Enter newline · ? help")
         assert footer.endswith("TERMINAL ■")
         assert len(footer) == 79
 
@@ -201,7 +201,7 @@ class TestComposerFooter:
     ) -> None:
         monkeypatch.setattr(prompt_rendering, "prompt_line_width", lambda: 6)
         footer = _strip_ansi(composer_footer_ansi())
-        assert footer == "? for…"
+        assert footer == "Enter…"
 
 
 class TestPromptMessage:

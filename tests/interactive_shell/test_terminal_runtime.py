@@ -167,7 +167,7 @@ def test_build_prompt_session_uses_persistent_history(
     assert prompt.app.key_bindings is not None
 
 
-def test_build_prompt_session_installs_single_row_bordered_composer() -> None:
+def test_build_prompt_session_installs_growing_bordered_composer() -> None:
     from prompt_toolkit.layout.containers import (
         FloatContainer,
         HSplit,
@@ -187,9 +187,43 @@ def test_build_prompt_session_installs_single_row_bordered_composer() -> None:
     composer = chrome.children[1]
     footer = chrome.children[2]
     assert isinstance(composer, HSplit)
-    assert composer.height == 3  # top border + one edit row + bottom border
+    assert composer.height is None
+    editable_row = composer.children[1]
+    editable_body = editable_row.children[1].get_container()
+    default_buffer_slot = editable_body.children[0]
+    assert default_buffer_slot.content.height.min == 1
+    assert default_buffer_slot.content.height.max == 8
     assert isinstance(footer, Window)
     assert chrome.preferred_width(80).preferred == 79
+
+
+@pytest.mark.asyncio
+async def test_bordered_composer_grows_with_input_up_to_eight_edit_rows() -> None:
+    with (
+        create_pipe_input() as pipe_input,
+        create_app_session(input=pipe_input, output=DummyOutput()),
+    ):
+        prompt = input_prompt.build_prompt_session()
+        task = asyncio.create_task(prompt.prompt_async(""))
+        await asyncio.sleep(0)
+
+        composer = prompt.layout.container.children[0].content.children[1]
+        prompt.default_buffer.text = "first"
+        single_line_height = composer.preferred_height(79, 30).preferred
+        prompt.default_buffer.text = "x" * 200
+        wrapped_line_height = composer.preferred_height(79, 30).preferred
+        prompt.default_buffer.text = "first\nsecond\nthird"
+        multiline_height = composer.preferred_height(79, 30).preferred
+        prompt.default_buffer.text = "\n".join(str(index) for index in range(12))
+        capped_height = composer.preferred_height(79, 30).preferred
+
+        pipe_input.send_text("\r")
+        await asyncio.wait_for(task, timeout=5.0)
+
+    assert single_line_height == 3
+    assert single_line_height < wrapped_line_height <= 10
+    assert multiline_height == 5
+    assert capped_height == 10
 
 
 def test_build_prompt_session_falls_back_to_memory_history(
@@ -233,9 +267,21 @@ def test_prompt_message_uses_accent_glyph() -> None:
     assert ANSI_RESET in rendered
 
 
-def test_shift_enter_inserts_newline_before_submit(
+@pytest.mark.parametrize(
+    "newline_sequence",
+    [
+        _SHIFT_ENTER_SEQUENCE,
+        "\x1b[13;2u",  # CSI-u Shift+Enter
+        "\x1b[27;5;13~",  # xterm Ctrl+Enter
+        "\x1b[13;5u",  # CSI-u Ctrl+Enter
+        "\x1b\r",  # Alt/Option+Enter
+        "\n",  # Shift+Enter in terminals that emit LF
+    ],
+)
+def test_modified_enter_inserts_newline_before_submit(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
+    newline_sequence: str,
 ) -> None:
     import config.constants as const_module
 
@@ -253,7 +299,7 @@ def test_shift_enter_inserts_newline_before_submit(
             # under loaded ``test-cov`` (xdist + coverage) a 1s wait_for flakes.
             await asyncio.sleep(0)
             pipe_input.send_bytes(b"first line")
-            pipe_input.send_bytes(_SHIFT_ENTER_SEQUENCE.encode())
+            pipe_input.send_bytes(newline_sequence.encode())
             pipe_input.send_bytes(b"second line\r")
             return await asyncio.wait_for(task, timeout=5.0)
 

@@ -13,8 +13,10 @@ from prompt_toolkit.layout.containers import (
     FloatContainer,
     HSplit,
     Window,
+    to_container,
 )
 from prompt_toolkit.layout.controls import FormattedTextControl
+from prompt_toolkit.layout.dimension import Dimension
 from prompt_toolkit.widgets import Frame
 
 from infrastructure.terminal import theme as ui_theme
@@ -31,9 +33,21 @@ from surfaces.interactive_shell.ui.input_prompt.rendering import (
 )
 from surfaces.interactive_shell.ui.input_prompt.style import _build_prompt_style
 
-# Frame (height 3) plus the help/status footer (height 1): the blank stand-in
-# shown while the composer is hidden must match this so the region height holds.
-_COMPOSER_ROWS = 4
+_COMPOSER_MAX_EDIT_ROWS = 8
+_COMPOSER_MIN_FRAME_ROWS = 3
+_COMPOSER_MAX_FRAME_ROWS = _COMPOSER_MAX_EDIT_ROWS + 2
+
+
+def _limit_editable_height(main_input: HSplit) -> HSplit:
+    """Return the editable prompt body capped to a chat-composer-sized viewport."""
+    editable_children = main_input.children[1:]
+    default_buffer_slot = editable_children[0]
+    if not isinstance(default_buffer_slot, ConditionalContainer) or not isinstance(
+        default_buffer_slot.content, Window
+    ):
+        raise RuntimeError("prompt-toolkit input container is missing its editable window")
+    default_buffer_slot.content.height = Dimension(min=1, max=_COMPOSER_MAX_EDIT_ROWS)
+    return HSplit(editable_children)
 
 
 def _install_prompt_frame(
@@ -60,8 +74,8 @@ def _install_prompt_frame(
         raise RuntimeError("prompt-toolkit input container is missing its buffer")
 
     before_input = main_input.content.children[0]
-    editable_body = HSplit(main_input.content.children[1:])
-    composer: AnyContainer = Frame(editable_body, style="class:composer", height=3)
+    editable_body = _limit_editable_height(main_input.content)
+    composer: AnyContainer = Frame(editable_body, style="class:composer")
     footer: AnyContainer = Window(
         FormattedTextControl(lambda: ANSI(composer_footer_ansi())),
         height=1,
@@ -71,14 +85,29 @@ def _install_prompt_frame(
     box_rows: list[AnyContainer] = [composer, footer]
     if hide_composer is not None:
         shown = Condition(lambda: not hide_composer())
+        composer_container = to_container(composer)
+
+        def _current_composer_rows() -> int:
+            preferred = composer_container.preferred_height(
+                prompt_line_width(),
+                _COMPOSER_MAX_FRAME_ROWS,
+            ).preferred
+            return max(
+                _COMPOSER_MIN_FRAME_ROWS,
+                min(preferred, _COMPOSER_MAX_FRAME_ROWS),
+            )
+
         # Swap the box for a blank pad of the SAME height while structured input
         # owns the keyboard. Collapsing to zero height shrinks the region, and a
         # shrinking prompt under patch_stdout leaves stale border fragments — a
-        # constant-height stand-in overwrites the box cleanly instead.
+        # same-height stand-in overwrites the growing box cleanly instead.
         box_rows = [
             ConditionalContainer(composer, filter=shown),
             ConditionalContainer(footer, filter=shown),
-            ConditionalContainer(Window(height=_COMPOSER_ROWS, char=" "), filter=~shown),
+            ConditionalContainer(
+                Window(height=lambda: _current_composer_rows() + 1, char=" "),
+                filter=~shown,
+            ),
         ]
     # Keep the final terminal column empty. Painting a frame border there puts
     # the cursor in pending-wrap, which makes patch_stdout redraws jump and
