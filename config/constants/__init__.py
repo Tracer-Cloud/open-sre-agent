@@ -298,10 +298,14 @@ from config.constants.posthog_mcp import (
     POSTHOG_MCP_URL_ENV,
 )
 from config.constants.product import (
+    PRODUCT_NAME,
     RELEASE_STAGE,
     RELEASE_STAGE_BANNER,
     RELEASES_API_URL_ENV,
+    SIGN_IN_PROMPT,
     UV_RUN_RECURSION_DEPTH_ENV,
+    WELCOME_DESCRIPTION,
+    WELCOME_TITLE,
 )
 from config.constants.rabbitmq import (
     RABBITMQ_HOST_ENV,
@@ -460,10 +464,14 @@ from config.constants.yandex_cloud import (
 )
 
 __all__ = [
+    "PRODUCT_NAME",
     "RELEASE_STAGE",
     "RELEASE_STAGE_BANNER",
     "RELEASES_API_URL_ENV",
+    "SIGN_IN_PROMPT",
     "UV_RUN_RECURSION_DEPTH_ENV",
+    "WELCOME_DESCRIPTION",
+    "WELCOME_TITLE",
     "ALERT_TEMPLATE_CHOICES",
     "ALERTMANAGER_BEARER_TOKEN_ENV",
     "ALERTMANAGER_PASSWORD_ENV",

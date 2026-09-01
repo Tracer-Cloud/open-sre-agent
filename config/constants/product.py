@@ -9,6 +9,17 @@ from __future__ import annotations
 
 from typing import Final
 
+#: The CLI identity shown on the launch banner and sign-in screen.
+PRODUCT_NAME: Final[str] = "opensre"
+
+#: Sign-in / welcome screen copy, shown when the shell requires login.
+WELCOME_TITLE: Final[str] = "Welcome to OpenSRE CLI"
+WELCOME_DESCRIPTION: Final[str] = (
+    "OpenSRE is an AI-powered DevOps assistant that diagnoses, fixes and "
+    "optimizes your production software."
+)
+SIGN_IN_PROMPT: Final[str] = "Please login with your OpenSRE account to continue."
+
 #: Release maturity, as users see it. Keep in step with the README badge.
 RELEASE_STAGE: Final[str] = "Public Alpha"
 
@@ -25,8 +36,12 @@ RELEASES_API_URL_ENV: Final[str] = "OPENSRE_RELEASES_API_URL"
 UV_RUN_RECURSION_DEPTH_ENV: Final[str] = "UV_RUN_RECURSION_DEPTH"
 
 __all__ = [
+    "PRODUCT_NAME",
     "RELEASES_API_URL_ENV",
     "RELEASE_STAGE",
     "RELEASE_STAGE_BANNER",
+    "SIGN_IN_PROMPT",
     "UV_RUN_RECURSION_DEPTH_ENV",
+    "WELCOME_DESCRIPTION",
+    "WELCOME_TITLE",
 ]
