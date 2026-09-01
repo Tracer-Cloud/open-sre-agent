@@ -3,44 +3,18 @@
 from __future__ import annotations
 
 import datetime as _dt
-import os
-import subprocess
 import zlib
 from pathlib import Path
 
 from config.runtime_metadata.build_info import (
     GitLayout,
     read_git_head_commit_date,
-    read_git_head_full_sha,
     read_git_head_sha,
     read_latest_release_tag,
     resolve_gitdir,
 )
 
 _DETACHED_HEAD_SHA = "abcdef0123456789abcdef0123456789abcdef01"
-
-
-def _git(repo: Path, *args: str, env: dict[str, str] | None = None) -> None:
-    subprocess.run(["git", *args], cwd=repo, check=True, capture_output=True, env=env)
-
-
-def _commit_repo(repo: Path, *, committed: str) -> GitLayout:
-    """Init *repo*, make one commit with a fixed committer date, return its layout."""
-    env = {
-        **os.environ,
-        "GIT_AUTHOR_NAME": "T",
-        "GIT_AUTHOR_EMAIL": "t@x",
-        "GIT_COMMITTER_NAME": "T",
-        "GIT_COMMITTER_EMAIL": "t@x",
-        "GIT_AUTHOR_DATE": committed,
-        "GIT_COMMITTER_DATE": committed,
-    }
-    repo.mkdir(parents=True, exist_ok=True)
-    _git(repo, "init", "-q")
-    (repo / "f.txt").write_text("hi", encoding="utf-8")
-    _git(repo, "add", "f.txt", env=env)
-    _git(repo, "commit", "-q", "-m", "c", env=env)
-    return GitLayout(gitdir=repo / ".git", commondir=repo / ".git")
 
 
 def test_resolve_gitdir_follows_linked_worktree_pointer_file(tmp_path: Path) -> None:
@@ -137,29 +111,9 @@ def test_head_commit_date_reads_committer_timestamp_from_loose_object(tmp_path: 
     assert result.date() == _dt.date(2026, 8, 27)
 
 
-def test_head_commit_date_is_storage_independent_across_git_gc(tmp_path: Path) -> None:
-    """The build identity must not change when git packs the HEAD object. The
-    committer date reads the same before and after repacking (loose → packed)."""
-    layout = _commit_repo(tmp_path / "repo", committed="2026-08-27T12:00:00 +0000")
-
-    loose_date = read_git_head_commit_date(layout)
-
-    _git(tmp_path / "repo", "repack", "-ad", "-q")  # pack all objects, drop loose
-    full_sha = read_git_head_full_sha(layout)
-    assert full_sha is not None
-    loose_path = layout.commondir / "objects" / full_sha[:2] / full_sha[2:]
-    assert not loose_path.exists()  # the packed reader is now what is under test
-
-    packed_date = read_git_head_commit_date(layout)
-
-    assert loose_date is not None
-    assert loose_date.date() == _dt.date(2026, 8, 27)
-    assert packed_date == loose_date
-
-
-def test_head_commit_date_is_none_when_object_is_absent(tmp_path: Path) -> None:
-    """A HEAD sha with no loose object and no pack is unreadable; the reader
-    returns None so the version falls back rather than guessing a date."""
+def test_head_commit_date_is_none_when_object_is_packed(tmp_path: Path) -> None:
+    """A packed HEAD object has no loose file; the reader returns None so the
+    build version falls back to a sha-only id rather than guessing a date."""
     (tmp_path / "HEAD").write_text(f"{_DETACHED_HEAD_SHA}\n", encoding="utf-8")
 
     result = read_git_head_commit_date(GitLayout(gitdir=tmp_path, commondir=tmp_path))

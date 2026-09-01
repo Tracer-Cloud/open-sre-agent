@@ -175,117 +175,24 @@ def _parse_committer_date(commit_object: bytes) -> datetime | None:
     return None
 
 
-_PACK_IDX_MAGIC = b"\xfftOc"
-_PACK_IDX_V2 = 2
-_PACK_OBJ_COMMIT = 1
-_PACK_LARGE_OFFSET_FLAG = 0x80000000
-_VARINT_CONTINUE = 0x80
-
-
-def _read_loose_commit_object(commondir: Path, sha: str) -> bytes | None:
-    """Inflated loose object bytes for *sha*, or ``None`` when not stored loose."""
-    loose_object = commondir / "objects" / sha[:2] / sha[2:]
-    if not loose_object.is_file():
-        return None
-    try:
-        return zlib.decompress(loose_object.read_bytes())
-    except (OSError, zlib.error):
-        return None
-
-
-def _find_object_offset_in_pack_idx(idx_path: Path, sha_bytes: bytes) -> int | None:
-    """Byte offset of *sha_bytes* within the paired pack, via its v2 idx, or ``None``."""
-    try:
-        data = idx_path.read_bytes()
-    except OSError:
-        return None
-    if data[:4] != _PACK_IDX_MAGIC or int.from_bytes(data[4:8], "big") != _PACK_IDX_V2:
-        return None  # only the modern idx v2 layout is parsed
-    fanout = 8
-    sha_table = fanout + 256 * 4
-    count = int.from_bytes(data[fanout + 255 * 4 : sha_table], "big")
-    first = sha_bytes[0]
-    lo = int.from_bytes(data[fanout + (first - 1) * 4 : fanout + first * 4], "big") if first else 0
-    hi = int.from_bytes(data[fanout + first * 4 : fanout + (first + 1) * 4], "big")
-    index = next(
-        (i for i in range(lo, hi) if data[sha_table + i * 20 : sha_table + (i + 1) * 20] == sha_bytes),
-        None,
-    )
-    if index is None:
-        return None
-    small_offsets = sha_table + count * 20 + count * 4  # after the sha and crc32 tables
-    packed = int.from_bytes(data[small_offsets + index * 4 : small_offsets + (index + 1) * 4], "big")
-    if not packed & _PACK_LARGE_OFFSET_FLAG:
-        return packed
-    large = small_offsets + count * 4 + (packed & ~_PACK_LARGE_OFFSET_FLAG) * 8
-    return int.from_bytes(data[large : large + 8], "big")
-
-
-def _read_pack_commit_at(pack_path: Path, offset: int) -> bytes | None:
-    """Inflated bytes of the object at *offset* when it is a base commit, else ``None``.
-
-    Deltified objects (their type is ofs/ref-delta, not commit) are skipped —
-    reconstructing them needs base resolution, and a tip commit is virtually
-    never stored as a delta.
-    """
-    try:
-        with pack_path.open("rb") as pack:
-            pack.seek(offset)
-            header = pack.read(1)
-            if not header:
-                return None
-            obj_type = (header[0] >> 4) & 0x7
-            while header[0] & _VARINT_CONTINUE:  # consume the size varint header
-                header = pack.read(1)
-                if not header:
-                    return None
-            if obj_type != _PACK_OBJ_COMMIT:
-                return None
-            stream = pack.read()  # zlib stops at the object's stream end
-    except OSError:
-        return None
-    try:
-        return zlib.decompress(stream)
-    except zlib.error:
-        return None
-
-
-def _read_packed_commit_object(commondir: Path, sha: str) -> bytes | None:
-    """Inflated bytes of *sha* from any pack that holds it as a base commit."""
-    pack_dir = commondir / "objects" / "pack"
-    if not pack_dir.is_dir():
-        return None
-    try:
-        sha_bytes = bytes.fromhex(sha)
-    except ValueError:
-        return None
-    for idx_path in sorted(pack_dir.glob("*.idx")):
-        offset = _find_object_offset_in_pack_idx(idx_path, sha_bytes)
-        if offset is None:
-            continue
-        commit = _read_pack_commit_at(idx_path.with_suffix(".pack"), offset)
-        if commit is not None:
-            return commit
-    return None
-
-
 def read_git_head_commit_date(layout: GitLayout) -> datetime | None:
-    """UTC date of the HEAD commit, read from its git object, or ``None``.
+    """UTC date of the HEAD commit, read from its loose object, or ``None``.
 
     Reproducible per commit — the committer timestamp is baked into the object,
-    unlike wall-clock time — and storage-independent: the object is read whether
-    it is loose or packed, so packing (``git gc``) does not change the build
-    identity. Returns ``None`` only when the object is genuinely unreadable (a
-    full 40-char sha is required to address a pack), so callers fall back to a
-    date-less identity rather than a date that drifts by run.
+    unlike wall-clock time. Returns ``None`` when the object is packed or
+    unreadable, so callers fall back to a date-less build identity rather than a
+    date that drifts by run.
     """
     sha = read_git_head_full_sha(layout)
-    if sha is None or len(sha) != 40:
+    if sha is None or len(sha) < 3:
         return None
-    commit_object = _read_loose_commit_object(layout.commondir, sha) or _read_packed_commit_object(
-        layout.commondir, sha
-    )
-    return _parse_committer_date(commit_object) if commit_object else None
+    loose_object = layout.commondir / "objects" / sha[:2] / sha[2:]
+    if not loose_object.is_file():
+        return None  # packed object: no cheap filesystem read
+    try:
+        return _parse_committer_date(zlib.decompress(loose_object.read_bytes()))
+    except (OSError, zlib.error):
+        return None
 
 
 def release_tag_sort_key(name: str) -> tuple[int, ...] | None:
