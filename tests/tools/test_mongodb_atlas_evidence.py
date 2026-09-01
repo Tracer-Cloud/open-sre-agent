@@ -109,9 +109,7 @@ def test_map_get_mongodb_atlas_cluster_metrics_records_entry() -> None:
 
 
 def test_map_get_mongodb_atlas_cluster_metrics_skips_when_no_process_found() -> None:
-    """Regression: when no process is found for the cluster, the tool
-    returns an empty measurements dict with an explanatory note -- that's
-    not a finding worth citing."""
+    """Do not cite evidence when no cluster process is found."""
     evidence: dict[str, Any] = {}
     map_get_mongodb_atlas_cluster_metrics(
         evidence,
