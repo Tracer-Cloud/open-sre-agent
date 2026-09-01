@@ -7,7 +7,9 @@ without misreading spikes and baselines.
 
 from __future__ import annotations
 
-from infrastructure.evidence.metric_summary import summarize_prometheus_metrics
+import pytest
+
+from infrastructure.evidence.metric_summary import _format_bytes, summarize_prometheus_metrics
 
 
 def _series(metric_name: str, points: list[tuple[float, float]]) -> dict[str, object]:
@@ -62,3 +64,21 @@ def test_empty_series_does_not_crash() -> None:
     # Optional enriched fields should not be present without datapoints.
     assert "mean" not in summary
     assert "p95" not in summary
+
+
+class TestFormatBytes:
+    @pytest.mark.parametrize(
+        ("value", "expected"),
+        [
+            (0, "0 B"),
+            (500, "500 B"),
+            (1024, "1.00 KiB"),
+            # Rounds up to the unit boundary at its current precision --
+            # must roll into the next unit rather than rendering 4 digits.
+            (1023.5, "1.00 KiB"),
+            (1048570.9, "1.00 MiB"),
+            (-1023.5, "-1.00 KiB"),
+        ],
+    )
+    def test_formats_at_boundaries(self, value: float, expected: str) -> None:
+        assert _format_bytes(value) == expected

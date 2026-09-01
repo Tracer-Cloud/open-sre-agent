@@ -17,7 +17,7 @@ from rich.console import Console
 from rich.table import Table
 
 from surfaces.shared.terminal.agents import agents_view as agents_view_mod
-from surfaces.shared.terminal.agents.agents_view import _build_agents_table
+from surfaces.shared.terminal.agents.agents_view import _build_agents_table, _format_tokens_per_min
 from tools.system.fleet_monitoring import config as config_mod
 from tools.system.fleet_monitoring.probe import ProcessSnapshot
 from tools.system.fleet_monitoring.registry import AgentRecord
@@ -359,3 +359,21 @@ def test_record_name_is_rich_escaped_so_markup_does_not_render() -> None:
 # Resilience to a schema-invalid ``agents.yaml`` is now enforced by
 # the sampler's catch-all around ``load_agents_config`` (see
 # ``test_sampler.py``); the view no longer touches the config.
+
+
+class TestFormatTokensPerMin:
+    @pytest.mark.parametrize(
+        ("value", "expected"),
+        [
+            (None, "-"),
+            (999.4, "999"),
+            (999.6, "1.0k"),
+            (1234.0, "1.2k"),
+            # Rounds up to the k-tier boundary at .1f precision -- must roll
+            # into the M tier rather than rendering four-digit "1000.0k".
+            (999950.0, "1.0M"),
+            (2500000.0, "2.5M"),
+        ],
+    )
+    def test_formats_at_boundaries(self, value: float | None, expected: str) -> None:
+        assert _format_tokens_per_min(value) == expected

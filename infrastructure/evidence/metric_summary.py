@@ -255,7 +255,14 @@ def _format_bytes(value: float) -> str:
     units = ("B", "KiB", "MiB", "GiB", "TiB")
     amount = abs(value)
     unit_index = 0
-    while amount >= 1024 and unit_index < len(units) - 1:
+    # Advance while the amount *rendered at its current unit's precision*
+    # would still show 1024 -- comparing the raw amount let e.g. 1023.5 stop
+    # at the B tier and round up to the four-digit "1024 B" instead of
+    # rolling into "1.00 KiB".
+    while unit_index < len(units) - 1:
+        precision = 0 if unit_index == 0 else 2
+        if round(amount, precision) < 1024:
+            break
         amount /= 1024
         unit_index += 1
     signed = -amount if value < 0 else amount

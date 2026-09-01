@@ -769,6 +769,10 @@ class TestFormatTokenCountShort:
             (1234, "1.2k"),
             (10000, "10.0k"),
             (123456, "123.5k"),
+            (999949, "999.9k"),
+            (999950, "1.0M"),
+            (1000000, "1.0M"),
+            (2500000, "2.5M"),
         ],
     )
     def test_formats_at_boundaries(self, count: int, expected: str) -> None:
