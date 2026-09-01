@@ -8,7 +8,9 @@ marker: ``""`` for installed wheels, ``dev, <tag> @ <sha>`` for checkouts.
 from __future__ import annotations
 
 import re
+import zlib
 from dataclasses import dataclass
+from datetime import UTC, datetime
 from pathlib import Path
 
 _RELEASE_TAG_PATTERN = re.compile(r"^v\d+\.\d+(\.\d+){2,}$")
@@ -136,15 +138,61 @@ def _read_head(layout: GitLayout) -> str | None:
     return head_file.read_text(encoding="utf-8").strip() or None
 
 
-def read_git_head_sha(layout: GitLayout) -> str | None:
-    """Short SHA the working tree currently points at, or ``None``."""
+def read_git_head_full_sha(layout: GitLayout) -> str | None:
+    """Full SHA the working tree currently points at, or ``None``."""
     head = _read_head(layout)
     if head is None:
         return None
     if not head.startswith(_HEAD_SYMREF_PREFIX):
-        return head[:7]  # detached HEAD: the sha is HEAD itself
-    sha = read_ref_sha(layout, head.removeprefix(_HEAD_SYMREF_PREFIX).strip())
+        return head  # detached HEAD: HEAD is the full sha
+    return read_ref_sha(layout, head.removeprefix(_HEAD_SYMREF_PREFIX).strip())
+
+
+def read_git_head_sha(layout: GitLayout) -> str | None:
+    """Short SHA the working tree currently points at, or ``None``."""
+    sha = read_git_head_full_sha(layout)
     return sha[:7] if sha else None
+
+
+_COMMITTER_LINE_PREFIX = b"committer "
+
+
+def _parse_committer_date(commit_object: bytes) -> datetime | None:
+    """UTC datetime from a commit object's ``committer`` line, or ``None``.
+
+    The line ends ``… <unix_seconds> <tz>``; the trailing two tokens are the
+    epoch timestamp and the author's zone. UTC is used for a zone-independent,
+    reproducible build date.
+    """
+    for line in commit_object.split(b"\n"):
+        if not line.startswith(_COMMITTER_LINE_PREFIX):
+            continue
+        fields = line.split(b" ")
+        try:
+            return datetime.fromtimestamp(int(fields[-2]), tz=UTC)
+        except (IndexError, ValueError):
+            return None
+    return None
+
+
+def read_git_head_commit_date(layout: GitLayout) -> datetime | None:
+    """UTC date of the HEAD commit, read from its loose object, or ``None``.
+
+    Reproducible per commit — the committer timestamp is baked into the object,
+    unlike wall-clock time. Returns ``None`` when the object is packed or
+    unreadable, so callers fall back to a date-less build identity rather than a
+    date that drifts by run.
+    """
+    sha = read_git_head_full_sha(layout)
+    if sha is None or len(sha) < 3:
+        return None
+    loose_object = layout.commondir / "objects" / sha[:2] / sha[2:]
+    if not loose_object.is_file():
+        return None  # packed object: no cheap filesystem read
+    try:
+        return _parse_committer_date(zlib.decompress(loose_object.read_bytes()))
+    except (OSError, zlib.error):
+        return None
 
 
 def release_tag_sort_key(name: str) -> tuple[int, ...] | None:
@@ -207,6 +255,8 @@ __all__ = [
     "detect_build_info",
     "find_git_layout",
     "iter_release_tag_names",
+    "read_git_head_commit_date",
+    "read_git_head_full_sha",
     "read_git_head_sha",
     "read_latest_release_tag",
     "read_packed_refs",

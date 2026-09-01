@@ -2,14 +2,19 @@
 
 from __future__ import annotations
 
+import datetime as _dt
+import zlib
 from pathlib import Path
 
 from config.runtime_metadata.build_info import (
     GitLayout,
+    read_git_head_commit_date,
     read_git_head_sha,
     read_latest_release_tag,
     resolve_gitdir,
 )
+
+_DETACHED_HEAD_SHA = "abcdef0123456789abcdef0123456789abcdef01"
 
 
 def test_resolve_gitdir_follows_linked_worktree_pointer_file(tmp_path: Path) -> None:
@@ -83,6 +88,37 @@ def test_latest_release_tag_reads_from_commondir_in_linked_worktree(tmp_path: Pa
     (tags_dir / "v0.1.2026.7.11").write_text("sha\n", encoding="utf-8")
 
     assert read_latest_release_tag(commondir) == "v0.1.2026.7.11"
+
+
+def test_head_commit_date_reads_committer_timestamp_from_loose_object(tmp_path: Path) -> None:
+    """The dev build date is the commit's own date (reproducible per commit),
+    read from the committer line of the zlib-deflated loose commit object."""
+    committed = _dt.datetime(2026, 8, 27, 15, 30, tzinfo=_dt.UTC)
+    body = (
+        b"commit 0\x00tree 0\n"
+        b"author A <a@x> 1000 +0000\n"
+        b"committer C <c@x> " + str(int(committed.timestamp())).encode() + b" +0000\n"
+        b"\ncommit message\n"
+    )
+    (tmp_path / "HEAD").write_text(f"{_DETACHED_HEAD_SHA}\n", encoding="utf-8")
+    obj_dir = tmp_path / "objects" / _DETACHED_HEAD_SHA[:2]
+    obj_dir.mkdir(parents=True)
+    (obj_dir / _DETACHED_HEAD_SHA[2:]).write_bytes(zlib.compress(body))
+
+    result = read_git_head_commit_date(GitLayout(gitdir=tmp_path, commondir=tmp_path))
+
+    assert result is not None
+    assert result.date() == _dt.date(2026, 8, 27)
+
+
+def test_head_commit_date_is_none_when_object_is_packed(tmp_path: Path) -> None:
+    """A packed HEAD object has no loose file; the reader returns None so the
+    build version falls back to a sha-only id rather than guessing a date."""
+    (tmp_path / "HEAD").write_text(f"{_DETACHED_HEAD_SHA}\n", encoding="utf-8")
+
+    result = read_git_head_commit_date(GitLayout(gitdir=tmp_path, commondir=tmp_path))
+
+    assert result is None
 
 
 def test_latest_release_tag_sorts_numerically_not_lexicographically(tmp_path: Path) -> None:

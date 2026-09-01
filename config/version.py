@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import importlib.metadata
 import tomllib
-from datetime import UTC, datetime
 from pathlib import Path
 
 #: Base public version when no full release string is available.
@@ -37,10 +36,16 @@ def _dev_build_version(base: str) -> str:
     """Expand *base* to the release shape ``base.Y.M.D+main.<sha>`` from git.
 
     Mirrors the release version so a dev checkout reports the same specific
-    build shape. Falls back to *base* when git metadata is unreadable (a
-    stripped checkout / wheel without metadata).
+    build shape. The date is the HEAD commit's date, not wall-clock time, so an
+    unchanged commit reports the same version, telemetry, and release id on any
+    day. Falls back to ``base+main.<sha>`` when the commit date is unreadable,
+    and to *base* when git metadata is absent (a stripped checkout / wheel).
     """
-    from config.runtime_metadata.build_info import find_git_layout, read_git_head_sha
+    from config.runtime_metadata.build_info import (
+        find_git_layout,
+        read_git_head_commit_date,
+        read_git_head_sha,
+    )
 
     layout = find_git_layout()
     if layout is None:
@@ -48,8 +53,10 @@ def _dev_build_version(base: str) -> str:
     sha = read_git_head_sha(layout)
     if not sha:
         return base
-    today = datetime.now(tz=UTC)
-    return f"{base}.{today.year}.{today.month}.{today.day}+{_DEV_CHANNEL}.{sha}"
+    commit_date = read_git_head_commit_date(layout)
+    if commit_date is None:
+        return f"{base}+{_DEV_CHANNEL}.{sha}"
+    return f"{base}.{commit_date.year}.{commit_date.month}.{commit_date.day}+{_DEV_CHANNEL}.{sha}"
 
 
 def get_opensre_version() -> str:
