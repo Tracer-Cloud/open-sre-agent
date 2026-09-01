@@ -539,3 +539,30 @@ class TestNothingIsDroppedOffTheEndOfAPage:
 
         assert [host["name"] for host in result["hosts"]] == ["master-1", "seg-1", "seg-2"]
         assert [host["name"] for host in result["unhealthy_hosts"]] == ["seg-2"]
+
+
+class TestTheHandoffToAnOperatorIsInEveryDescription:
+    """An investigation that only touched these tools must still be told.
+
+    The SKILL.md slice carrying that instruction attaches to the two generic
+    readers, so a database-only investigation never sees it - and ends with
+    "increase the timeout" instead of the command that does it.
+    """
+
+    @pytest.mark.parametrize(
+        "name", ["list_yc_db_clusters", "get_yc_db_cluster", "read_yc_db_logs"]
+    )
+    def test_the_description_asks_for_the_command(self, name: str) -> None:
+        from tools.registry import clear_tool_registry_cache, get_registered_tool_map
+
+        clear_tool_registry_cache()
+        description = get_registered_tool_map("investigation")[name].description
+
+        assert "yc ..." in description
+        assert "only read" in description
+
+    def test_it_stays_a_sentence_and_not_a_second_copy_of_the_skill(self) -> None:
+        """Duplicating the 2400-character slice per tool buys nothing."""
+        from integrations.yandex_cloud.tools.yc_db_tool import _READ_ONLY_HANDOFF
+
+        assert len(_READ_ONLY_HANDOFF) < 200
