@@ -141,6 +141,27 @@ def test_map_helm_list_releases_qualifies_when_capped() -> None:
     assert evidence["catalog_entries"][0]["summary"].startswith("5+ release(s)")
 
 
+def test_map_helm_list_releases_qualifies_against_the_clients_hard_cap_not_a_larger_request() -> (
+    None
+):
+    """Regression: list_releases clamps max_releases to MAX_MESSAGE_SIZE
+    (4096) before ever calling the CLI, so a caller-requested value above
+    that is never actually honored -- comparing only against the raw
+    requested max would miss that the real ceiling hit was 4096, silently
+    reporting a saturated page as an exact count."""
+    evidence: dict[str, Any] = {}
+    map_helm_list_releases(
+        evidence,
+        {
+            "available": True,
+            "releases": [{"name": f"r{i}"} for i in range(4096)],
+            "all_namespaces": True,
+        },
+        {"max_releases": 1_000_000},
+    )
+    assert evidence["catalog_entries"][0]["summary"].startswith("4096+ release(s)")
+
+
 def test_map_helm_list_releases_skips_empty_and_unavailable() -> None:
     evidence: dict[str, Any] = {}
     map_helm_list_releases(evidence, {"available": True, "releases": []}, {})

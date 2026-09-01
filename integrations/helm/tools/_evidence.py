@@ -5,6 +5,7 @@ from __future__ import annotations
 from typing import Any
 
 from core.domain.types.evidence import record_evidence_entry
+from infrastructure.delivery.notifications.limits import MAX_MESSAGE_SIZE
 
 _FAILED_REVISION_STATUS = "failed"
 
@@ -17,7 +18,10 @@ def map_helm_list_releases(
     ``helm list --max`` silently caps the CLI's own output with no
     truncation signal echoed back, so a returned count at that ceiling may
     understate the true number of releases -- use the "N+" convention
-    against the caller's requested ``max_releases``.
+    against ``min(max_releases, MAX_MESSAGE_SIZE)``, the client's real
+    ceiling (``list_releases`` clamps ``max_releases`` to
+    ``MAX_MESSAGE_SIZE`` before ever calling the CLI, so a caller-requested
+    value above that is never actually honored).
     """
     if not output.get("available"):
         return
@@ -26,7 +30,8 @@ def map_helm_list_releases(
         return
     total = len(releases)
     requested_max = tool_input.get("max_releases", 256)
-    truncated = total >= max(requested_max, 1)
+    effective_max = min(max(requested_max, 1), MAX_MESSAGE_SIZE)
+    truncated = total >= effective_max
     total_label = f"{total}+" if truncated else str(total)
     scope = "all namespaces" if output.get("all_namespaces") else (output.get("namespace") or "")
     summary = f"{total_label} release(s)"
