@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from core.domain.types.evidence import record_evidence_entry
+from core.domain.types.evidence import record_evidence_entry, unique_evidence_source
 from infrastructure.text.truncation import truncate
 
 #: Bound a task title echoed into a report summary.
@@ -34,7 +34,7 @@ def map_work_task_list(
         summary += f" ({returned} shown)"
     record_evidence_entry(
         evidence,
-        source="work_task_list",
+        source=unique_evidence_source(evidence, "work_task_list"),
         label="Work Tasks",
         summary=summary,
     )
@@ -55,7 +55,7 @@ def map_work_task_prioritize(
         summary += f", top: '{truncate(str(top_title), _TITLE_SUMMARY_TRUNCATE_LEN)}'"
     record_evidence_entry(
         evidence,
-        source="work_task_prioritize",
+        source=unique_evidence_source(evidence, "work_task_prioritize"),
         label="Work Task Priorities",
         summary=summary,
     )

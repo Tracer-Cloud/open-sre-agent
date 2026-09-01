@@ -53,3 +53,11 @@ def test_map_get_sre_guidance_skips_empty_topics() -> None:
     evidence: dict[str, Any] = {}
     map_get_sre_guidance(evidence, {"topics": []}, {})
     assert "catalog_entries" not in evidence
+
+
+def test_map_get_sre_guidance_disambiguates_repeat_calls() -> None:
+    evidence: dict[str, Any] = {}
+    map_get_sre_guidance(evidence, {"topics": ["slo_freshness"]}, {})
+    map_get_sre_guidance(evidence, {"topics": ["hotspotting"]}, {})
+    sources = [e["source"] for e in evidence["catalog_entries"]]
+    assert sources == ["get_sre_guidance", "get_sre_guidance#2"]

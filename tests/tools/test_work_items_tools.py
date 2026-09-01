@@ -275,6 +275,15 @@ class TestMapWorkTaskList:
         map_work_task_list(evidence2, {"error": "invalid_status"}, {})
         assert "catalog_entries" not in evidence2
 
+    def test_disambiguates_repeat_calls(self) -> None:
+        evidence: dict[str, Any] = {}
+        map_work_task_list(evidence, {"tasks": [{}], "returned": 1, "total": 1}, {"status": "open"})
+        map_work_task_list(
+            evidence, {"tasks": [{}], "returned": 1, "total": 1}, {"status": "closed"}
+        )
+        sources = [e["source"] for e in evidence["catalog_entries"]]
+        assert sources == ["work_task_list", "work_task_list#2"]
+
 
 class TestMapWorkTaskPrioritize:
     def test_records_entry(self) -> None:
@@ -298,3 +307,14 @@ class TestMapWorkTaskPrioritize:
         evidence: dict[str, Any] = {}
         map_work_task_prioritize(evidence, {"recommendations": []}, {})
         assert "catalog_entries" not in evidence
+
+    def test_disambiguates_repeat_calls(self) -> None:
+        evidence: dict[str, Any] = {}
+        map_work_task_prioritize(
+            evidence, {"recommendations": [{"task": {"title": "Fix prod outage"}}]}, {}
+        )
+        map_work_task_prioritize(
+            evidence, {"recommendations": [{"task": {"title": "Update docs"}}]}, {}
+        )
+        sources = [e["source"] for e in evidence["catalog_entries"]]
+        assert sources == ["work_task_prioritize", "work_task_prioritize#2"]

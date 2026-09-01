@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from core.domain.types.evidence import record_evidence_entry
+from core.domain.types.evidence import record_evidence_entry, unique_evidence_source
 from infrastructure.text.truncation import truncate
 
 #: Bound the joined topic list echoed into a report summary -- max_topics is
@@ -22,7 +22,7 @@ def map_get_sre_guidance(
     joined = truncate(", ".join(str(t) for t in topics), _TOPICS_SUMMARY_TRUNCATE_LEN)
     record_evidence_entry(
         evidence,
-        source="get_sre_guidance",
+        source=unique_evidence_source(evidence, "get_sre_guidance"),
         label="SRE Guidance",
         summary=f"{len(topics)} topic(s): {joined}",
     )

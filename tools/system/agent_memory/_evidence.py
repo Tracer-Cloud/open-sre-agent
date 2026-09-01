@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from core.domain.types.evidence import record_evidence_entry
+from core.domain.types.evidence import record_evidence_entry, unique_evidence_source
 from infrastructure.text.truncation import truncate
 
 #: Bound a caller-supplied query echoed into a report summary.
@@ -35,7 +35,7 @@ def map_memory_recall(
         summary = f"{len(memories)} memory index entries (of {total_stored} stored)"
     record_evidence_entry(
         evidence,
-        source="memory_recall",
+        source=unique_evidence_source(evidence, "memory_recall"),
         label="Memory Recall",
         summary=summary,
     )

@@ -226,3 +226,10 @@ class TestMapMemoryRecall:
         evidence2: dict[str, Any] = {}
         map_memory_recall(evidence2, {"error": "not_found", "name": "x"}, {"name": "x"})
         assert "catalog_entries" not in evidence2
+
+    def test_disambiguates_repeat_calls(self) -> None:
+        evidence: dict[str, Any] = {}
+        map_memory_recall(evidence, {"memories": [{"name": "a"}]}, {"name": "a"})
+        map_memory_recall(evidence, {"memories": [{"name": "b"}]}, {"name": "b"})
+        sources = [e["source"] for e in evidence["catalog_entries"]]
+        assert sources == ["memory_recall", "memory_recall#2"]

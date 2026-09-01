@@ -4,32 +4,12 @@ from __future__ import annotations
 
 from typing import Any
 
-from core.domain.types.evidence import record_evidence_entry
+from core.domain.types.evidence import record_evidence_entry, unique_evidence_source
 from infrastructure.text.truncation import truncate
 
 #: Bound stdout/stderr echoed into a report summary -- generated code output
 #: is unbounded.
 _OUTPUT_SUMMARY_TRUNCATE_LEN = 120
-
-
-def _next_unique_source(evidence: dict[str, Any], base: str) -> str:
-    """Disambiguate repeat calls.
-
-    ``record_evidence_entry`` lets the first entry for a given ``source``
-    win, but the agent can call this tool many times per investigation with
-    different code -- reusing one source key would silently drop every call
-    after the first.
-    """
-    entries = evidence.get("catalog_entries")
-    if not isinstance(entries, list):
-        return base
-    existing = {e.get("source") for e in entries if isinstance(e, dict)}
-    if base not in existing:
-        return base
-    suffix = 2
-    while f"{base}#{suffix}" in existing:
-        suffix += 1
-    return f"{base}#{suffix}"
 
 
 def map_execute_python_code(
@@ -55,7 +35,7 @@ def map_execute_python_code(
             summary += f": {truncate(detail, _OUTPUT_SUMMARY_TRUNCATE_LEN)}"
     record_evidence_entry(
         evidence,
-        source=_next_unique_source(evidence, "execute_python_code"),
+        source=unique_evidence_source(evidence, "execute_python_code"),
         label="Python Execution",
         summary=summary,
     )
