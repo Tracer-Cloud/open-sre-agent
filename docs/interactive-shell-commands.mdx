@@ -133,6 +133,7 @@ These commands delegate to the same Click CLI you would run outside the REPL.
 
 | Command | What it does |
 | --- | --- |
+| `/account` | Sign in to OpenSRE with GitHub, inspect the local account, or sign out |
 | `/auth` | Log in to LLM providers, show provider auth status, or clear credentials |
 | `/login` | Shortcut for `/auth login` (`/login openai`, `/login anthropic`, `/login deepseek`) |
 | `/onboard` | Interactive onboarding wizard |
@@ -1058,6 +1059,19 @@ If the listener is inactive, prints a warning. Incoming alerts also appear in `/
 These spawn `opensre …` subprocesses. Output is captured into the REPL buffer for non-interactive subcommands; wizards attach to the real TTY.
 
 <AccordionGroup>
+<Accordion title="/account">
+
+```text
+/account
+/account login
+/account status
+/account logout
+```
+
+Sign in to a personal OpenSRE account with GitHub, inspect the local login, or sign out. Same as `opensre account`. Interactive login opens a browser and prompts on the real TTY. If `OPENSRE_ACCOUNT_TOKEN` is set in the environment, it overrides the token saved by login until you unset it.
+
+</Accordion>
+
 <Accordion title="/auth">
 
 ```text

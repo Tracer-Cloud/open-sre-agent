@@ -68,6 +68,30 @@ def test_native_sdk_clients_built_via_registry(
     assert type(build_reasoning_client(_route(provider), "reasoning")).__name__ == reasoning_class
 
 
+def test_openai_clients_use_account_proxy_when_personal_login_exists(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    def account_route() -> SimpleNamespace:
+        return SimpleNamespace(
+            base_url="https://app.opensre.com/api/llm/v1",
+            model="gpt-account",
+        )
+
+    def account_token() -> str:
+        return "osre_pat_test"
+
+    monkeypatch.setattr("config.account.account_llm_route", account_route)
+    monkeypatch.setattr("config.account.resolve_account_token", account_token)
+
+    agent = build_agent_client(_route("openai"))
+    reasoning = build_reasoning_client(_route("openai"), "reasoning")
+
+    assert agent.model_id == "gpt-account"
+    assert str(agent._client.base_url) == "https://app.opensre.com/api/llm/v1/"
+    assert reasoning._model == "gpt-account"
+    assert reasoning._base_url == "https://app.opensre.com/api/llm/v1"
+
+
 @pytest.mark.parametrize("provider", ["anthropic", "openai", "bedrock"])
 def test_litellm_clients_built_via_registry(provider: str) -> None:
     route = _route(provider, use_litellm=True)

@@ -21,6 +21,7 @@ def _literal_slash_command_text(text: str) -> str | None:
 _EXCLUSIVE_STDIN_MENU_COMMANDS: frozenset[str] = frozenset(
     {
         "/history",
+        "/account",
         "/auth",
         # ``/choose`` renders the pending ask_user_choice arrow-key picker (raw
         # os.read on stdin), so the turn must own stdin exclusively.
@@ -94,6 +95,7 @@ _WAIT_FOR_COMPLETION_COMMANDS: frozenset[str] = frozenset(
         "/setup",
         "/onboard",
         "/config",
+        "/account",
         "/auth",
         "/login",
         # ``/goal set|resume`` queues the condition as the next prompt turn.

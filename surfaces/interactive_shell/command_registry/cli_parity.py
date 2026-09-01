@@ -226,6 +226,23 @@ def _cmd_setup(session: Session, console: Console, args: list[str]) -> bool:  # 
     return run_cli_command(console, ["setup", *args], capture_output=False, session=session)
 
 
+def _cmd_account(session: Session, console: Console, args: list[str]) -> bool:  # noqa: ARG001
+    subcommand = args[0].lower() if args else "status"
+    if session_terminal(session) is None and subcommand == "login":
+        message = (
+            "GitHub account login opens a browser and cannot run inside a chat.\n\n"
+            "Run on the server:\n  uv run opensre account login"
+        )
+        console.print()
+        console.print(message)
+        publish_headless_slash_response(session, message=message)
+        return True
+    capture_output = subcommand in {"status", "logout"}
+    return run_cli_command(
+        console, ["account", *args], capture_output=capture_output, session=session
+    )
+
+
 def _cmd_auth(session: Session, console: Console, args: list[str]) -> bool:  # noqa: ARG001
     # ``login`` (and provider flows) prompt on the real TTY; status/logout print.
     capture_output = not args or args[0].lower() in {"status", "logout"}
@@ -427,6 +444,12 @@ def _cmd_misses(session: Session, console: Console, args: list[str]) -> bool:
 
 
 COMMANDS: list[SlashCommand] = [
+    SlashCommand(
+        "/account",
+        "Sign in to OpenSRE with GitHub and inspect the local account.",
+        _cmd_account,
+        usage=("/account", "/account login", "/account status", "/account logout"),
+    ),
     SlashCommand(
         "/auth",
         "Log in to LLM providers and inspect local auth state.",

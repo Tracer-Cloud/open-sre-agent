@@ -26,6 +26,7 @@ from config.secrets.store import (
     delete_secret,
     lookup,
     resolve_secret,
+    resolve_stored_secret,
     save_secret,
     secret_source,
 )
@@ -83,6 +84,14 @@ def test_env_wins_over_the_stored_copy(monkeypatch) -> None:
 
     assert found.value == "sk-from-env"
     assert found.tier == "env"
+
+
+def test_stored_secret_ignores_the_environment(monkeypatch) -> None:
+    save_secret(_ENV_VAR, "sk-stored")
+    monkeypatch.setenv(_ENV_VAR, "sk-from-env")
+
+    assert resolve_stored_secret(_ENV_VAR) == "sk-stored"
+    assert resolve_secret(_ENV_VAR) == "sk-from-env"
 
 
 def test_lookup_tolerates_a_credential_file_lock_timeout(monkeypatch) -> None:

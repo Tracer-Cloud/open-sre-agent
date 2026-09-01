@@ -59,6 +59,16 @@ MCP_BY_COMMAND: dict[str, _SlashMcpFields] = {
         "User types ? or asks for command help via the shortcut alias",
         anti_examples=("User asks a docs/how-to question about OpenSRE features",),
     ),
+    "/account": _mcp(
+        "Sign in to a personal OpenSRE account with GitHub, inspect the local login, "
+        "or sign out. Subcommands: login, status, logout.",
+        "User asks to sign in to OpenSRE with GitHub or create a personal account",
+        "User asks whether they are logged into OpenSRE or which GitHub user is linked",
+        anti_examples=(
+            "User asks to log in to an LLM provider (use /auth)",
+            "User asks to configure the GitHub integration only (use /integrations)",
+        ),
+    ),
     "/alerts": _mcp(
         "Show status of the local alert listener inbox: queue depth, dropped count, "
         "and the most recent ingested alerts.",

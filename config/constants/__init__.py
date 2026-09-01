@@ -2,6 +2,15 @@
 
 from __future__ import annotations
 
+from config.constants.account import (
+    OPENSRE_ACCOUNT_FILENAME,
+    OPENSRE_ACCOUNT_LLM_BASE_PATH,
+    OPENSRE_ACCOUNT_METADATA_PATH_ENV,
+    OPENSRE_ACCOUNT_TOKEN_ENV,
+    OPENSRE_APP_URL_DEFAULT,
+    OPENSRE_APP_URL_DEV,
+    OPENSRE_APP_URL_ENV,
+)
 from config.constants.alertmanager import (
     ALERTMANAGER_BEARER_TOKEN_ENV,
     ALERTMANAGER_PASSWORD_ENV,
@@ -114,6 +123,7 @@ from config.constants.git import (
 from config.constants.github import (
     GH_TOKEN_ENV,
     GITHUB_API_BASE_URL,
+    GITHUB_CLI_RECOMMENDED_SCOPES,
     GITHUB_MCP_ARGS_ENV,
     GITHUB_MCP_AUTH_TOKEN_ENV,
     GITHUB_MCP_COMMAND_ENV,
@@ -460,6 +470,13 @@ from config.constants.yandex_cloud import (
 )
 
 __all__ = [
+    "OPENSRE_ACCOUNT_FILENAME",
+    "OPENSRE_ACCOUNT_LLM_BASE_PATH",
+    "OPENSRE_ACCOUNT_METADATA_PATH_ENV",
+    "OPENSRE_ACCOUNT_TOKEN_ENV",
+    "OPENSRE_APP_URL_DEFAULT",
+    "OPENSRE_APP_URL_DEV",
+    "OPENSRE_APP_URL_ENV",
     "RELEASE_STAGE",
     "RELEASE_STAGE_BANNER",
     "RELEASES_API_URL_ENV",
@@ -565,6 +582,7 @@ __all__ = [
     "DEFAULT_SENTRY_BASE_URL",
     "GH_TOKEN_ENV",
     "GITHUB_API_BASE_URL",
+    "GITHUB_CLI_RECOMMENDED_SCOPES",
     "GITHUB_MCP_ARGS_ENV",
     "GITHUB_MCP_AUTH_TOKEN_ENV",
     "GITHUB_MCP_COMMAND_ENV",

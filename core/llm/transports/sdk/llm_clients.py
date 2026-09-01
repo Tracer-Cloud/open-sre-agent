@@ -8,7 +8,7 @@ from __future__ import annotations
 import logging
 import os
 import time
-from collections.abc import Iterator
+from collections.abc import Callable, Iterator
 from typing import Any
 
 import boto3
@@ -697,8 +697,10 @@ class OpenAILLMClient:
         api_key_env: str = "OPENAI_API_KEY",
         api_key_default: str = "",
         default_headers: dict[str, str] | None = None,
+        credential_resolver: Callable[[str], str] | None = None,
     ) -> None:
-        api_key = provider_credentials.resolve_llm_api_key(api_key_env) or api_key_default
+        self._credential_resolver = credential_resolver or provider_credentials.resolve_llm_api_key
+        api_key = self._credential_resolver(api_key_env) or api_key_default
         self._api_key = api_key
         self._api_key_default = api_key_default
         self._base_url = base_url
@@ -794,9 +796,7 @@ class OpenAILLMClient:
         raise RuntimeError("OpenAI structured invocation failed") from last_err
 
     def _ensure_client(self) -> OpenAI:
-        api_key = (
-            provider_credentials.resolve_llm_api_key(self._api_key_env) or self._api_key_default
-        )
+        api_key = self._credential_resolver(self._api_key_env) or self._api_key_default
         if not api_key:
             raise RuntimeError(
                 f"Missing {self._api_key_env}. Set it in your environment, .env, or secure local keychain before running LLM steps."

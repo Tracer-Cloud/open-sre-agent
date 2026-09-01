@@ -23,6 +23,13 @@ if TYPE_CHECKING:
 __all__ = ["build_agent_client", "build_reasoning_client"]
 
 
+def _resolve_account_token(_env_name: str) -> str:
+    """Adapt the account token resolver to the provider credential callback."""
+    from config.account import resolve_account_token
+
+    return resolve_account_token()
+
+
 # ---------------------------------------------------------------------------
 # Tool-calling (agent) clients
 # ---------------------------------------------------------------------------
@@ -122,6 +129,16 @@ def _native_sdk_agent_client(route: LLMRoute) -> AgentLLMClient:
         return sdk.BedrockConverseAgentClient(model=model, max_tokens=spec.max_tokens)
 
     if provider == PROVIDER_OPENAI:
+        from config.account import account_llm_route
+
+        account_route = account_llm_route()
+        if account_route is not None:
+            return sdk.OpenAIAgentClient(
+                model=account_route.model,
+                max_tokens=spec.max_tokens,
+                base_url=account_route.base_url,
+                credential_resolver=_resolve_account_token,
+            )
         return sdk.OpenAIAgentClient(model=model, max_tokens=spec.max_tokens)
     return sdk.AnthropicAgentClient(model=model, max_tokens=spec.max_tokens)
 
@@ -213,6 +230,16 @@ def _native_sdk_llm_client(route: LLMRoute, model_type: ModelType) -> Any:
     spec = FIRST_PARTY_PROVIDERS.get(provider) or FIRST_PARTY_PROVIDERS[PROVIDER_ANTHROPIC]
     model = str(getattr(settings, f"{spec.env_prefix}_{model_type}_model"))
     if provider == PROVIDER_OPENAI:
+        from config.account import account_llm_route
+
+        account_route = account_llm_route()
+        if account_route is not None:
+            return sdk.OpenAILLMClient(
+                model=account_route.model,
+                max_tokens=spec.max_tokens,
+                base_url=account_route.base_url,
+                credential_resolver=_resolve_account_token,
+            )
         return sdk.OpenAILLMClient(
             model=model,
             model_fallback=_fallback_model("openai"),

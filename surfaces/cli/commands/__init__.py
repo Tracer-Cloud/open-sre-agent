@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import click
 
+from surfaces.cli.commands.account import account_command
 from surfaces.cli.commands.agent import fleet
 from surfaces.cli.commands.ask import ask_command
 from surfaces.cli.commands.auth import auth_command
@@ -35,6 +36,7 @@ from surfaces.cli.commands.watchdog import watchdog_command
 from surfaces.cli.commands.work import work_command
 
 _COMMANDS: tuple[click.Command, ...] = (
+    account_command,
     ask_command,
     investigate_command,
     setup_command,

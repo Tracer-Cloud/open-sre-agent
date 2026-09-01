@@ -84,6 +84,16 @@ def resolve_secret(env_var: str, *, default: str = "") -> str:
     return lookup(env_var, default=default).value
 
 
+def resolve_stored_secret(env_var: str) -> str:
+    """Return the file-stored secret, ignoring any environment override."""
+    if keyring_is_disabled():
+        return ""
+    try:
+        return local_file.get(env_var)
+    except local_file.LOCAL_STORE_ERRORS:
+        return ""
+
+
 def secret_source(env_var: str) -> SecretTier:
     """Which tier would serve this secret, without exposing its value."""
     return lookup(env_var).tier
@@ -145,6 +155,7 @@ __all__ = [
     "keyring_is_disabled",
     "lookup",
     "resolve_secret",
+    "resolve_stored_secret",
     "save_secret",
     "secret_source",
 ]
