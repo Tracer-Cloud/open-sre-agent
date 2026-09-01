@@ -2,12 +2,14 @@
 
 from __future__ import annotations
 
+import os
 from pathlib import Path
 
 import pytest
 
 from infrastructure.scheduling.scheduler.claim_store import get_runs, try_claim
 from infrastructure.scheduling.scheduler.store import (
+    _quarantine_unreadable,
     add_task,
     get_task,
     list_tasks,
@@ -390,3 +392,44 @@ class TestStoreSurvivesTornWrites:
             "first torn write",
             "second torn write",
         }
+
+    def test_save_fsyncs_the_parent_directory_after_replace(
+        self, store_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """The rename itself, not just the file's contents, must survive a
+        power loss -- os.replace alone only guarantees the latter.
+        """
+        fsync_calls: list[int] = []
+        real_fsync = os.fsync
+
+        def _counting_fsync(fd: int) -> None:
+            real_fsync(fd)
+            fsync_calls.append(fd)
+
+        monkeypatch.setattr("infrastructure.scheduling.scheduler.store.os.fsync", _counting_fsync)
+
+        add_task(self._digest(7), store_path)
+
+        # Two fsyncs per save: once for the temp file's contents, once for
+        # the parent directory so the rename itself is durable too.
+        assert len(fsync_calls) == 2
+
+    def test_quarantine_removes_the_empty_aside_file_if_replace_fails(
+        self, store_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """A failed replace must not leave an empty file masquerading as
+        the quarantined data.
+        """
+        store_path.write_text("not valid json", encoding="utf-8")
+
+        def _explode(_src: object, _dst: object) -> None:
+            raise OSError("simulated replace failure")
+
+        monkeypatch.setattr("infrastructure.scheduling.scheduler.store.os.replace", _explode)
+
+        with pytest.raises(OSError):
+            _quarantine_unreadable(store_path)
+
+        assert list(store_path.parent.glob(f"{store_path.name}.corrupt-*")) == []
+        # The original (unreadable) store is untouched -- os.replace never happened.
+        assert store_path.read_text(encoding="utf-8") == "not valid json"

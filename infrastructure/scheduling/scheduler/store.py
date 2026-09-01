@@ -57,6 +57,25 @@ def _load_raw(store_path: Path) -> list[dict[str, object]]:
     return _read_raw(store_path)[0]
 
 
+def _fsync_parent_dir(path: Path) -> None:
+    """Best-effort directory fsync so an ``os.replace`` survives a power loss on Unix.
+
+    ``os.replace`` is atomic, but the directory entry change it makes is only
+    guaranteed durable once the directory itself is fsynced -- without this, a
+    crash immediately after replace can leave the directory pointing at the
+    old inode again, even though the new file's own contents were fsynced.
+    Windows has no equivalent operation, so this is a no-op there.
+    """
+    if os.name == "nt":
+        return
+    with contextlib.suppress(OSError):
+        dir_fd = os.open(str(path.parent), os.O_RDONLY)
+        try:
+            os.fsync(dir_fd)
+        finally:
+            os.close(dir_fd)
+
+
 def _quarantine_unreadable(store_path: Path) -> None:
     """Move an unparseable store aside so a write cannot destroy it.
 
@@ -71,7 +90,16 @@ def _quarantine_unreadable(store_path: Path) -> None:
     )
     os.close(fd)
     aside = Path(aside_str)
-    os.replace(store_path, aside)
+    try:
+        os.replace(store_path, aside)
+    except OSError:
+        # mkstemp already created the (empty) aside file; a failed replace
+        # would otherwise leave it behind as a misleading empty "recovery"
+        # artifact that isn't actually the quarantined data.
+        with contextlib.suppress(OSError):
+            aside.unlink()
+        raise
+    _fsync_parent_dir(aside)
     logger.error(
         "Scheduler store at %s was unreadable and has been preserved at %s. "
         "Scheduled tasks in it are recoverable from that file.",
@@ -99,7 +127,10 @@ def _save_raw(store_path: Path, data: list[dict[str, object]]) -> None:
     window leaves a half-written file that no longer parses. Every other
     local store in the repo writes through a temp file in the destination
     directory, fsyncs, then ``os.replace``; see
-    ``integrations/store.py::_atomic_write``.
+    ``integrations/store.py::_atomic_write``. The directory fsync afterward
+    (``_fsync_parent_dir``) mirrors
+    ``infrastructure/analytics/provider.py::_write_text_atomic``, so the
+    rename itself survives a power loss, not just the file's own contents.
     """
     store_path.parent.mkdir(parents=True, exist_ok=True)
     serialized = json.dumps(data, indent=2, default=str) + "\n"
@@ -111,6 +142,7 @@ def _save_raw(store_path: Path, data: list[dict[str, object]]) -> None:
             handle.flush()
             os.fsync(handle.fileno())
         os.replace(tmp_path, store_path)
+        _fsync_parent_dir(store_path)
     except Exception:
         if tmp_path:
             with contextlib.suppress(OSError):
