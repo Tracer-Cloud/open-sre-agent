@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import hashlib
 import logging
 import threading
 from dataclasses import dataclass, field
@@ -44,6 +45,55 @@ class _BuildGate:
 
 _grafana_build_inflight: dict[str, _BuildGate] = {}
 
+#: Hex chars of the credential/TLS fingerprint folded into the cache key.
+#: 16 hex chars = 64 bits of SHA-256 -- collision-safe for the handful of live
+#: (account, endpoint) configs a process holds, while keeping the key short.
+#: The raw secrets never appear in the key itself (it can leak into logs or
+#: reprs); only this hash does.
+_FINGERPRINT_HEX_LEN = 16
+#: Separates a cache key's ``(account, endpoint)`` identity from its trailing
+#: fingerprint. Two keys sharing the identity but differing in fingerprint are
+#: different credential versions of the same account+endpoint -- the older one
+#: is evicted on rotation.
+_FINGERPRINT_SEP = "#"
+
+
+def _cache_key_identity(*, account_id: str, endpoint: str) -> str:
+    """Identity shared by every credential version of one (account, endpoint).
+
+    Normalizes the endpoint the same way ``GrafanaAccountConfig`` does
+    (``strip().rstrip("/")``) so equivalent-but-differently-typed endpoints
+    map to the same identity.
+    """
+    normalized_endpoint = endpoint.strip().rstrip("/")
+    return f"creds_{account_id}_{normalized_endpoint}"
+
+
+def _cache_key(
+    *,
+    endpoint: str,
+    api_key: str,
+    account_id: str,
+    username: str,
+    password: str,
+    verify_ssl: bool,
+    ca_bundle: str,
+) -> str:
+    """Build a cache key that changes whenever auth or TLS config changes.
+
+    Keying only on (account_id, endpoint) let a rotated token, changed Basic
+    Auth, or a changed verify_ssl/ca_bundle silently reuse the previously
+    cached client until process restart. The credential tuple is hashed, never
+    embedded in plaintext, so a rotation yields a fresh key without leaking the
+    secret into the key string.
+    """
+    fingerprint = hashlib.sha256(
+        repr(
+            (api_key.strip(), username.strip(), password.strip(), verify_ssl, ca_bundle.strip())
+        ).encode()
+    ).hexdigest()[:_FINGERPRINT_HEX_LEN]
+    return f"{_cache_key_identity(account_id=account_id, endpoint=endpoint)}{_FINGERPRINT_SEP}{fingerprint}"
+
 
 class GrafanaClient(LokiMixin, TempoMixin, MimirMixin, GrafanaClientBase):
     """Unified client for querying Grafana Cloud Loki, Tempo, and Mimir."""
@@ -76,7 +126,15 @@ def get_grafana_client_from_credentials(
     ca_bundle: str = "",
 ) -> GrafanaClient:
     """Create a Grafana client from integration credentials."""
-    cache_key = f"creds_{account_id}_{endpoint}"
+    cache_key = _cache_key(
+        endpoint=endpoint,
+        api_key=api_key,
+        account_id=account_id,
+        username=username,
+        password=password,
+        verify_ssl=verify_ssl,
+        ca_bundle=ca_bundle,
+    )
     cached = _grafana_client_cache.get(cache_key)
     if cached is not None:
         return cached
@@ -198,5 +256,17 @@ def _build_and_cache_client(
         )
 
     with _grafana_client_lock:
+        # Evict superseded credential versions of the same (account, endpoint):
+        # on rotation a fresh fingerprint would otherwise leave the old
+        # token/password cached forever.
+        identity_prefix = (
+            f"{_cache_key_identity(account_id=account_id, endpoint=endpoint)}{_FINGERPRINT_SEP}"
+        )
+        for stale_key in [
+            key
+            for key in _grafana_client_cache
+            if key != cache_key and key.startswith(identity_prefix)
+        ]:
+            del _grafana_client_cache[stale_key]
         _grafana_client_cache[cache_key] = client
     return client
