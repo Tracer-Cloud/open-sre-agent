@@ -8,7 +8,7 @@ from collections.abc import Mapping
 from config.constants.investigation import MAX_INVESTIGATION_LOOPS
 from config.constants.llm import LLM_PROVIDER_ENV
 from config.llm_auth.provider_catalog import provider_spec
-from infrastructure.analytics.investigation_tracker import (
+from infrastructure.analytics.investigation_tracker_types import (
     InvestigationTracker,
     _with_investigation_loop_metrics,
 )

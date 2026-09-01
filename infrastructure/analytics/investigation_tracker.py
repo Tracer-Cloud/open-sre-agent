@@ -3,22 +3,17 @@
 from __future__ import annotations
 
 import traceback
-from collections.abc import Generator, Mapping
+from collections.abc import Generator
 from contextlib import contextmanager
 from contextvars import ContextVar
-from dataclasses import dataclass
 from typing import TYPE_CHECKING
 from uuid import uuid4
 
-from config.constants.investigation import MAX_INVESTIGATION_LOOPS
 from infrastructure.analytics.investigation_loop import (
     begin_investigation_loop_metrics_scope,
-    bound_loop_metrics,
-    loop_metrics_from_state,
-    merge_loop_properties,
     reset_investigation_loop_metrics,
 )
-from infrastructure.analytics.provider import Properties
+from infrastructure.analytics.investigation_tracker_types import InvestigationTracker
 from infrastructure.analytics.source import (
     EntrypointSource,
     TriggerMode,
@@ -33,69 +28,6 @@ _INVESTIGATION_TRACKING_DEPTH: ContextVar[int] = ContextVar(
     "investigation_tracking_depth",
     default=0,
 )
-
-
-@dataclass
-class InvestigationTracker:
-    """Holds shared context for investigation lifecycle captures."""
-
-    shared_properties: Properties
-    enabled: bool
-    completed: bool = False
-    failed: bool = False
-    investigation_loop_count: int | None = None
-    investigation_iteration_cap: int = MAX_INVESTIGATION_LOOPS
-
-    def record_loop_metrics_from_state(self, state: Mapping[str, object] | None) -> None:
-        """Capture canonical loop metrics from the investigation final state."""
-        loop_count, iteration_cap = loop_metrics_from_state(state)
-        self.investigation_loop_count = loop_count
-        self.investigation_iteration_cap = iteration_cap
-
-
-def _resolve_investigation_loop_metrics(
-    *,
-    loop_count: int | None = None,
-    iteration_cap: int | None = None,
-    state: Mapping[str, object] | None = None,
-    tracker: InvestigationTracker | None = None,
-) -> tuple[int, int]:
-    if loop_count is not None:
-        resolved_cap = (
-            iteration_cap
-            if iteration_cap is not None
-            else (
-                tracker.investigation_iteration_cap
-                if tracker is not None
-                else MAX_INVESTIGATION_LOOPS
-            )
-        )
-        return max(0, int(loop_count)), max(1, int(resolved_cap))
-    bound = bound_loop_metrics()
-    if bound is not None:
-        return bound
-    if state is not None:
-        return loop_metrics_from_state(state)
-    if tracker is not None and tracker.investigation_loop_count is not None:
-        return tracker.investigation_loop_count, tracker.investigation_iteration_cap
-    return 0, MAX_INVESTIGATION_LOOPS
-
-
-def _with_investigation_loop_metrics(
-    properties: Properties,
-    *,
-    loop_count: int | None = None,
-    iteration_cap: int | None = None,
-    state: Mapping[str, object] | None = None,
-    tracker: InvestigationTracker | None = None,
-) -> Properties:
-    count, cap = _resolve_investigation_loop_metrics(
-        loop_count=loop_count,
-        iteration_cap=iteration_cap,
-        state=state,
-        tracker=tracker,
-    )
-    return merge_loop_properties(properties, loop_count=count, iteration_cap=cap)
 
 
 @contextmanager
@@ -175,3 +107,6 @@ def track_investigation(
             _INVESTIGATION_TRACKING_DEPTH.reset(token)
             if depth == 0 and loop_metrics_token is not None:
                 reset_investigation_loop_metrics(loop_metrics_token)
+
+
+__all__ = ["track_investigation"]
