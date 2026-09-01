@@ -231,8 +231,23 @@ def test_map_list_jenkins_jobs_qualifies_when_truncated() -> None:
 
 def test_map_list_jenkins_jobs_skips_empty() -> None:
     evidence: dict[str, Any] = {}
-    map_list_jenkins_jobs(evidence, {"available": True, "jobs": [], "total": 0}, {})
+    map_list_jenkins_jobs(
+        evidence, {"available": True, "jobs": [], "total": 0, "truncated": False}, {}
+    )
     assert "catalog_entries" not in evidence
+
+
+def test_map_list_jenkins_jobs_cites_empty_result_when_truncated() -> None:
+    """Every matching job beyond the folder-depth boundary still yields an
+    empty list -- but ``truncated`` staying True means jobs do exist and
+    were missed, which is worth citing rather than silently dropping."""
+    evidence: dict[str, Any] = {}
+    map_list_jenkins_jobs(
+        evidence, {"available": True, "jobs": [], "total": 0, "truncated": True}, {}
+    )
+    entries = evidence["catalog_entries"]
+    assert len(entries) == 1
+    assert entries[0]["summary"] == "0+ job(s), 0+ failing"
 
 
 # ---------------------------------------------------------------------------
@@ -271,10 +286,24 @@ def test_map_list_jenkins_running_builds_qualifies_when_truncated() -> None:
 def test_map_list_jenkins_running_builds_skips_empty_and_unavailable() -> None:
     evidence: dict[str, Any] = {}
     map_list_jenkins_running_builds(
-        evidence, {"available": True, "running_builds": [], "total": 0}, {}
+        evidence, {"available": True, "running_builds": [], "total": 0, "truncated": False}, {}
     )
     assert "catalog_entries" not in evidence
 
     evidence2: dict[str, Any] = {}
     map_list_jenkins_running_builds(evidence2, {"available": False, "error": "timeout"}, {})
     assert "catalog_entries" not in evidence2
+
+
+def test_map_list_jenkins_running_builds_cites_empty_result_when_truncated() -> None:
+    """Every running build beyond the folder-depth boundary still yields an
+    empty list -- but ``truncated`` staying True means running builds do
+    exist and were missed, which is worth citing rather than silently
+    dropping."""
+    evidence: dict[str, Any] = {}
+    map_list_jenkins_running_builds(
+        evidence, {"available": True, "running_builds": [], "total": 0, "truncated": True}, {}
+    )
+    entries = evidence["catalog_entries"]
+    assert len(entries) == 1
+    assert entries[0]["summary"] == "0+ build(s) currently running"

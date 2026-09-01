@@ -126,15 +126,19 @@ def map_list_jenkins_jobs(
     """Cite the job count and how many are currently failing.
 
     ``truncated`` is the client's own explicit signal (folder-depth or job
-    cap dropped jobs), not an inferred heuristic.
+    cap dropped jobs), not an inferred heuristic. A depth-limited scan whose
+    only matches lie beyond the boundary returns an empty ``jobs`` list with
+    ``truncated`` still set -- that incompleteness is itself worth citing, so
+    only an empty *and* untruncated result (nothing exists, or nothing was
+    missed) is skipped.
     """
     if not output.get("available"):
         return
     jobs = output.get("jobs") or []
-    if not jobs:
+    truncated = output.get("truncated", False)
+    if not jobs and not truncated:
         return
     total = output.get("total", len(jobs))
-    truncated = output.get("truncated", False)
     total_label = f"{total}+" if truncated else str(total)
     failing = sum(1 for j in jobs if str(j.get("status", "")).upper() in _FAILED_JOB_STATUSES)
     failing_label = f"{failing}+" if truncated else str(failing)
@@ -151,16 +155,20 @@ def map_list_jenkins_running_builds(
 ) -> None:
     """Cite how many builds are currently running.
 
-    ``truncated`` is the client's own explicit signal (job cap dropped some
-    jobs from the scan), not an inferred heuristic.
+    ``truncated`` is the client's own explicit signal (folder-depth or job
+    cap dropped some jobs from the scan), not an inferred heuristic. A
+    depth-limited scan whose only running builds lie beyond the boundary
+    returns an empty ``running_builds`` list with ``truncated`` still set --
+    that incompleteness is itself worth citing, so only an empty *and*
+    untruncated result is skipped.
     """
     if not output.get("available"):
         return
     running = output.get("running_builds") or []
-    if not running:
+    truncated = output.get("truncated", False)
+    if not running and not truncated:
         return
     total = output.get("total", len(running))
-    truncated = output.get("truncated", False)
     total_label = f"{total}+" if truncated else str(total)
     record_evidence_entry(
         evidence,
