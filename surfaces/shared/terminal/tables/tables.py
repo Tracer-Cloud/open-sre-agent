@@ -208,6 +208,10 @@ def render_tools_table(console: Console, entries: list[ToolCatalogEntry]) -> Non
 
 
 _COMMAND_OUTPUT_INDENT = "    "  # aligns wrapped lines under the ``  ↳ `` marker
+# Command output is always capped in the transcript: the reply summary carries
+# the answer, so a full dump (a JSON blob, a long listing) is noise. Keep a short
+# head and fold the rest, the way Claude Code / Droid / Cursor do.
+_MAX_OUTPUT_LINES = 10
 
 _TRACEBACK_HEADER = "Traceback (most recent call last):"
 _TRACEBACK_FRAME_RE = re.compile(r'^\s*File "(?P<file>.+)", line (?P<line>\d+), in (?P<fn>.+)$')
@@ -239,15 +243,20 @@ def print_command_output(console: Console, output: str, *, style: str | None = N
     if not output:
         return
     text = _collapse_traceback(output.rstrip()) or output.rstrip()
+    lines = text.split("\n")
+    # Always cap the transcript to a short head; the remainder is noise once the
+    # agent has read it and summarised in the reply.
+    hidden = len(lines) - _MAX_OUTPUT_LINES
+    shown = lines[:_MAX_OUTPUT_LINES] if hidden > 0 else lines
     # Frame every result under its `$ command` header with a ``↳`` gutter so the
     # output reads as the command's child (parent → child) and stays grouped and
     # set off from the reply prose above — wide output included. A single wide
     # line wraps within the block instead of flushing the whole block (and its
     # narrow siblings) to the left margin.
-    lines = text.split("\n")
-    text = "\n".join(
-        [f"  ↳ {lines[0]}", *(f"{_COMMAND_OUTPUT_INDENT}{line}" for line in lines[1:])]
-    )
+    framed = [f"  ↳ {shown[0]}", *(f"{_COMMAND_OUTPUT_INDENT}{line}" for line in shown[1:])]
+    if hidden > 0:
+        framed.append(f"{_COMMAND_OUTPUT_INDENT}… +{hidden} more line{'s' if hidden != 1 else ''}")
+    text = "\n".join(framed)
     # Parse any ANSI the captured child emitted so its Rich styling (bold, colour)
     # survives being re-printed here instead of showing as raw escape codes.
     rendered = Text.from_ansi(text) if style is None else Text.from_ansi(text, style=style)

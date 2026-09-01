@@ -57,6 +57,14 @@ def test_a_python_traceback_is_collapsed_to_the_exception_and_last_frame() -> No
     assert "run()" not in out  # intermediate source lines are gone
 
 
+def test_long_output_is_capped_to_a_head_with_a_fold() -> None:
+    out = _out("\n".join(f"line {i}" for i in range(30)), width=100)
+    assert "↳ line 0" in out  # head shown
+    assert "line 9" in out  # up to the 10-line cap
+    assert "line 10" not in out  # the rest is folded away
+    assert "+20 more lines" in out  # fold count
+
+
 def test_non_traceback_output_is_left_intact() -> None:
     out = _out("Traceback: a log line that merely mentions the word", width=100)
     assert "a log line that merely mentions the word" in out  # not folded
