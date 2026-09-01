@@ -26,28 +26,37 @@ _HINT = "↑↓ Navigate • Enter/1-9 Select • Esc cancel"
 _HINT_MULTI = "↑↓ Navigate • Space/Enter/1-9 Toggle • Submit to confirm • Esc cancel"
 
 
-def _option_token(index: int, *, letter_keys: bool) -> str:
-    """Row prefix: ``(A)`` in letter mode, else ``1.`` (1-based)."""
-    return f"({chr(ord('A') + index)})" if letter_keys else f"{index + 1}."
+_HINT_NO_KEYS = "↑↓ Navigate • Enter Select • Esc cancel"
 
 
-def _option_index_from_key(action: str, *, letter_keys: bool) -> int | None:
+def _option_token(index: int, *, letter_keys: bool, numbered: bool) -> str:
+    """Row prefix: ``(A)`` in letter mode, ``1.`` when numbered, else empty."""
+    if letter_keys:
+        return f"({chr(ord('A') + index)})"
+    return f"{index + 1}." if numbered else ""
+
+
+def _option_index_from_key(action: str, *, letter_keys: bool, numbered: bool) -> int | None:
     """Zero-based option index a select keystroke names, or ``None``."""
     if len(action) != 1:
         return None
     if letter_keys:
         return ord(action.upper()) - ord("A") if action.isalpha() else None
-    return int(action) - 1 if action.isdigit() else None
+    if numbered:
+        return int(action) - 1 if action.isdigit() else None
+    return None
 
 
-def _select_hint(count: int, *, letter_keys: bool, multi_select: bool) -> str:
-    """Key hint reflecting letter vs numeric selectors and the option count."""
-    if not letter_keys:
-        return _HINT_MULTI if multi_select else _HINT
-    keys = f"A-{chr(ord('A') + count - 1)}" if count > 1 else "A"
-    if multi_select:
-        return f"↑↓ Navigate • Space/Enter/{keys} Toggle • Submit to confirm • Esc cancel"
-    return f"↑↓ Navigate • Enter/{keys} Select • Esc cancel"
+def _select_hint(count: int, *, letter_keys: bool, numbered: bool, multi_select: bool) -> str:
+    """Key hint reflecting letter / numeric / no selectors and the option count."""
+    if letter_keys:
+        keys = f"A-{chr(ord('A') + count - 1)}" if count > 1 else "A"
+        if multi_select:
+            return f"↑↓ Navigate • Space/Enter/{keys} Toggle • Submit to confirm • Esc cancel"
+        return f"↑↓ Navigate • Enter/{keys} Select • Esc cancel"
+    if not numbered:
+        return _HINT_NO_KEYS
+    return _HINT_MULTI if multi_select else _HINT
 
 
 # Airy block indent so the panel is not flush against the left margin.
@@ -265,6 +274,7 @@ def _draw_menu(
     checked: set[int] | None = None,
     header: str = "",
     letter_keys: bool = False,
+    numbered: bool = True,
 ) -> None:
     out = sys.stdout
     w = _cols()
@@ -290,13 +300,14 @@ def _draw_menu(
     write_menu_line()
     for i, label in enumerate(labels):
         here = i == index
-        token = _option_token(i, letter_keys=letter_keys)
+        token = _option_token(i, letter_keys=letter_keys, numbered=numbered)
+        row_label = f"{token} {label}" if token else label
         if multi_select:
             box = _CHECKED if i in checked else _UNCHECKED
-            _write_option_row(prefix=box, label=f"{token} {label}", width=w, selected=here)
+            _write_option_row(prefix=box, label=row_label, width=w, selected=here)
         else:
             sym = "❯" if here else " "
-            _write_option_row(prefix=sym, label=f"{token} {label}", width=w, selected=here)
+            _write_option_row(prefix=sym, label=row_label, width=w, selected=here)
     if multi_select:
         submit_selected = index == len(labels)
         _write_option_row(
@@ -305,7 +316,9 @@ def _draw_menu(
             width=w,
             selected=submit_selected,
         )
-    hint = _select_hint(len(labels), letter_keys=letter_keys, multi_select=multi_select)
+    hint = _select_hint(
+        len(labels), letter_keys=letter_keys, numbered=numbered, multi_select=multi_select
+    )
     write_menu_line()
     write_menu_line(f"{_BLOCK_INDENT}{ui_theme.DIM_COUNTER_ANSI}{hint}{ui_theme.ANSI_RESET}")
     out.flush()
@@ -335,6 +348,7 @@ def _pick(
     values: list[str] | None = None,
     header: str = "",
     letter_keys: bool = False,
+    numbered: bool = True,
 ) -> int | str | None:
     """Draw an inline menu; return index, custom typed string, or None on Esc.
 
@@ -375,6 +389,7 @@ def _pick(
             checked=checked if multi_select else None,
             header=header,
             letter_keys=letter_keys,
+            numbered=numbered,
         )
         first = False
         height = _menu_height(crumb, display, multi_select=multi_select, header=header)
@@ -407,7 +422,7 @@ def _pick(
             if action in (" ", "enter") and idx < len(labels):
                 toggle_index = idx
             else:
-                picked = _option_index_from_key(action, letter_keys=letter_keys)
+                picked = _option_index_from_key(action, letter_keys=letter_keys, numbered=numbered)
                 if picked is not None and 0 <= picked < len(labels):
                     toggle_index = picked
             if toggle_index is not None:
@@ -439,7 +454,9 @@ def _pick(
                 return None
             continue
         select_index = (
-            None if on_custom else _option_index_from_key(action, letter_keys=letter_keys)
+            None
+            if on_custom
+            else _option_index_from_key(action, letter_keys=letter_keys, numbered=numbered)
         )
         if select_index is not None:
             if 0 <= select_index < len(labels):
@@ -475,6 +492,7 @@ def repl_choose_one(
     multi_select: bool = False,
     header: str = "",
     letter_keys: bool = False,
+    numbered: bool = True,
 ) -> str | None:
     """Show an inline erasing arrow-key menu; return selected value or None on Esc.
 
@@ -517,6 +535,7 @@ def repl_choose_one(
             values=values,
             header=header,
             letter_keys=letter_keys,
+            numbered=numbered,
         )
         if picked is None:
             return None

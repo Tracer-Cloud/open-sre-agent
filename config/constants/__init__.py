@@ -298,6 +298,7 @@ from config.constants.posthog_mcp import (
     POSTHOG_MCP_URL_ENV,
 )
 from config.constants.product import (
+    FORCE_SIGN_IN_ENV,
     PRODUCT_NAME,
     RELEASE_STAGE,
     RELEASE_STAGE_BANNER,
@@ -464,6 +465,7 @@ from config.constants.yandex_cloud import (
 )
 
 __all__ = [
+    "FORCE_SIGN_IN_ENV",
     "PRODUCT_NAME",
     "RELEASE_STAGE",
     "RELEASE_STAGE_BANNER",

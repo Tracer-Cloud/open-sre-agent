@@ -6,7 +6,6 @@ from pathlib import Path
 
 from config.runtime_metadata.build_info import (
     GitLayout,
-    read_git_head_branch,
     read_git_head_sha,
     read_latest_release_tag,
     resolve_gitdir,
@@ -55,19 +54,6 @@ def test_head_sha_reads_packed_refs_when_loose_ref_missing(tmp_path: Path) -> No
     )
     layout = GitLayout(gitdir=tmp_path, commondir=tmp_path)
     assert read_git_head_sha(layout) == "abc1234"
-
-
-def test_head_branch_reads_the_symref(tmp_path: Path) -> None:
-    (tmp_path / "HEAD").write_text("ref: refs/heads/feature-x\n", encoding="utf-8")
-    layout = GitLayout(gitdir=tmp_path, commondir=tmp_path)
-    assert read_git_head_branch(layout) == "feature-x"
-
-
-def test_head_branch_is_none_when_detached(tmp_path: Path) -> None:
-    # Detached HEAD holds a raw sha, not a ``ref: refs/heads/…`` symref.
-    (tmp_path / "HEAD").write_text("abc1234abc1234abc1234abc1234abc1234abcd\n", encoding="utf-8")
-    layout = GitLayout(gitdir=tmp_path, commondir=tmp_path)
-    assert read_git_head_branch(layout) is None
 
 
 def test_head_sha_resolves_branch_from_commondir_in_linked_worktree(tmp_path: Path) -> None:

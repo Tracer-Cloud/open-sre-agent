@@ -285,6 +285,12 @@ def test_is_update_available_same_day_main_rebuild_up_to_date() -> None:
     assert not is_update_available(version, version)
 
 
+def test_is_update_available_feature_branch_is_behind_a_dated_main_build() -> None:
+    # A checkout identity must not sort newer than main just because it used to
+    # embed today's calendar in the public version.
+    assert is_update_available("0.1+feat.sign.in.screen.abc1234", "0.1.2026.8.31+main.deadbee")
+
+
 def testextract_main_build_sha() -> None:
     assert extract_main_build_sha("0.1.2026.6.29+main.0c306ad") == "0c306ad"
     assert extract_main_build_sha("1.0.0") is None

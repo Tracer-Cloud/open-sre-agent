@@ -10,6 +10,7 @@ from config.constants import SIGN_IN_PROMPT, WELCOME_DESCRIPTION, WELCOME_TITLE
 from surfaces.interactive_shell.ui import sign_in
 from surfaces.interactive_shell.ui.sign_in import (
     SignInChoice,
+    forced_sign_in_enabled,
     render_sign_in_screen,
     run_sign_in_gate,
 )
@@ -31,6 +32,17 @@ def test_screen_shows_welcome_box_and_sign_in_prompt() -> None:
     assert WELCOME_DESCRIPTION.split(" that ")[0] in out  # description body reached the screen
     assert SIGN_IN_PROMPT in out
     assert "Skills" in out and "Integrations" in out
+
+
+def test_forced_sign_in_enabled_is_opt_in(monkeypatch) -> None:
+    monkeypatch.delenv("OPENSRE_FORCE_SIGNIN", raising=False)
+    assert forced_sign_in_enabled() is False
+    monkeypatch.setenv("OPENSRE_FORCE_SIGNIN", "1")
+    assert forced_sign_in_enabled() is True
+    monkeypatch.setenv("OPENSRE_FORCE_SIGNIN", "true")
+    assert forced_sign_in_enabled() is True
+    monkeypatch.setenv("OPENSRE_FORCE_SIGNIN", "0")
+    assert forced_sign_in_enabled() is False
 
 
 def test_welcome_title_renders_in_the_accent_colour() -> None:

@@ -15,6 +15,10 @@ from infrastructure.logging import install_shell_log_handler, quiet_noisy_third_
 from infrastructure.terminal.theme import set_active_theme
 from surfaces.interactive_shell.controller import InteractiveShellController
 from surfaces.interactive_shell.runtime.context import create_repl_runtime
+from surfaces.interactive_shell.runtime.startup.account_gate import (
+    pass_sign_in_gate,
+    should_paint_launch_banner,
+)
 from surfaces.interactive_shell.runtime.startup.initial_input import run_initial_input
 from surfaces.interactive_shell.runtime.startup.loop_suggestions import offer_loop_suggestions
 from surfaces.interactive_shell.ui.terminal_ui import render_terminal_ui
@@ -59,6 +63,9 @@ async def run_repl_async(
     if initial_input:
         session.warm_resolved_integrations()
         return run_initial_input(initial_input, session, out)
+
+    if not pass_sign_in_gate(out):
+        return 0
 
     # Open the session file now that we know this is an interactive REPL run.
     SessionManager.for_session(session).open_store(session)
@@ -112,7 +119,13 @@ def run_repl(
 
     try:
         if not initial_input:
-            render_terminal_ui(out)
+            # Unsigned TTY: the gate paints the banner as part of the sign-in
+            # screen. Signed-in / non-interactive starts still need the chrome.
+            paint_banner = should_paint_launch_banner()
+            if not pass_sign_in_gate(out):
+                return 0
+            if paint_banner:
+                render_terminal_ui(out)
 
         return asyncio.run(
             run_repl_async(

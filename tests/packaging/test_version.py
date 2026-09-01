@@ -1,7 +1,7 @@
 from __future__ import annotations
 
+import datetime as _dt
 import importlib.metadata
-import re
 
 from config import version as version_module
 from config.runtime_metadata import build_info
@@ -14,6 +14,20 @@ def _raise_package_not_found(_: str) -> str:
 def _no_git(monkeypatch) -> None:
     """Force the git-metadata lookup to find nothing (stripped checkout)."""
     monkeypatch.setattr(build_info, "find_git_layout", lambda: None)
+
+
+class _FixedClock:
+    """A datetime stand-in whose ``now`` is fixed, so the build date is stable."""
+
+    @staticmethod
+    def now(tz: object = None) -> _dt.datetime:
+        return _dt.datetime(2026, 8, 27, tzinfo=tz)  # type: ignore[arg-type]
+
+
+def _git_head_at(monkeypatch, sha: str) -> None:
+    monkeypatch.setattr(build_info, "find_git_layout", lambda: object())
+    monkeypatch.setattr(build_info, "read_git_head_sha", lambda _layout: sha)
+    monkeypatch.setattr(version_module, "datetime", _FixedClock)
 
 
 def test_release_version_string_is_returned_verbatim(monkeypatch) -> None:
@@ -53,41 +67,22 @@ def test_dev_default_when_metadata_pyproject_and_git_all_missing(monkeypatch, tm
     assert version_module.get_opensre_version() == "0.1"
 
 
-def test_dev_checkout_expands_base_to_a_specific_build_from_git(monkeypatch) -> None:
-    # A dev checkout has only the base version, so it expands to the release shape
-    # ``0.1.Y.M.D+<branch>.<sha>`` using git head + branch.
+def test_dev_checkout_expands_to_the_dated_main_build_shape(monkeypatch) -> None:
+    # A dev checkout expands the base to the release shape ``0.1.Y.M.D+main.<sha>``.
     monkeypatch.setattr(version_module.importlib.metadata, "version", _raise_package_not_found)
     monkeypatch.setattr(version_module, "_pyproject_version", lambda: "0.1")
-    monkeypatch.setattr(build_info, "find_git_layout", lambda: object())
-    monkeypatch.setattr(build_info, "read_git_head_sha", lambda _layout: "85fd865")
-    monkeypatch.setattr(build_info, "read_git_head_branch", lambda _layout: "main")
+    _git_head_at(monkeypatch, "85fd865")
 
-    result = version_module.get_opensre_version()
-
-    assert re.fullmatch(r"0\.1\.\d{4}\.\d{1,2}\.\d{1,2}\+main\.85fd865", result), result
+    assert version_module.get_opensre_version() == "0.1.2026.8.27+main.85fd865"
 
 
-def test_dev_branch_name_is_sanitised_into_a_valid_local_segment(monkeypatch) -> None:
-    # Slashes in a branch name become dots so the local segment stays valid.
+def test_dev_build_version_is_deterministic_for_a_fixed_commit_and_clock(monkeypatch) -> None:
+    # A fixed commit + clock yields one stable string across calls — no flake.
     monkeypatch.setattr(version_module.importlib.metadata, "version", _raise_package_not_found)
     monkeypatch.setattr(version_module, "_pyproject_version", lambda: "0.1")
-    monkeypatch.setattr(build_info, "find_git_layout", lambda: object())
-    monkeypatch.setattr(build_info, "read_git_head_sha", lambda _layout: "abc1234")
-    monkeypatch.setattr(build_info, "read_git_head_branch", lambda _layout: "feat/sign-in-screen")
+    _git_head_at(monkeypatch, "85fd865")
 
-    result = version_module.get_opensre_version()
+    first = version_module.get_opensre_version()
+    second = version_module.get_opensre_version()
 
-    assert result.endswith("+feat.sign.in.screen.abc1234"), result
-
-
-def test_detached_head_uses_the_sha_alone_without_a_branch(monkeypatch) -> None:
-    # No branch to invent on a detached HEAD — the local segment is just the sha.
-    monkeypatch.setattr(version_module.importlib.metadata, "version", _raise_package_not_found)
-    monkeypatch.setattr(version_module, "_pyproject_version", lambda: "0.1")
-    monkeypatch.setattr(build_info, "find_git_layout", lambda: object())
-    monkeypatch.setattr(build_info, "read_git_head_sha", lambda _layout: "abc1234")
-    monkeypatch.setattr(build_info, "read_git_head_branch", lambda _layout: None)
-
-    result = version_module.get_opensre_version()
-
-    assert re.fullmatch(r"0\.1\.\d{4}\.\d{1,2}\.\d{1,2}\+abc1234", result), result
+    assert first == second == "0.1.2026.8.27+main.85fd865"
