@@ -74,7 +74,6 @@ def test_registry_preserves_aliases_and_special_case_buckets() -> None:
     assert "slack" not in SKIP_CLASSIFIED_SERVICES
     assert "slack" in DIRECT_CLASSIFIED_EFFECTIVE_SERVICES
     assert "grafana" in DIRECT_CLASSIFIED_EFFECTIVE_SERVICES
-    assert "bitbucket" not in DIRECT_CLASSIFIED_EFFECTIVE_SERVICES
 
 
 def test_railway_is_registered_as_a_configurable_verified_integration() -> None:
@@ -107,6 +106,19 @@ def test_prefect_is_registered_as_a_directly_effective_integration() -> None:
     assert prefect.has_verifier is True
     assert prefect.direct_effective is True
     assert "prefect" not in SKIP_CLASSIFIED_SERVICES
+
+
+def test_bitbucket_and_supabase_are_registered_as_directly_effective() -> None:
+    # Same bug as prefect (#5147/#5216): both classify() correctly, but their
+    # specs were missing direct_effective=True, so a store-saved bitbucket or
+    # supabase integration silently never resolved via
+    # resolve_effective_integrations() -- breaking `opensre integrations
+    # verify bitbucket|supabase` and the tools' is_available() checks.
+    for service in ("bitbucket", "supabase"):
+        spec = next(s for s in INTEGRATION_SPECS if s.service == service)
+        assert spec.has_verifier is True
+        assert spec.direct_effective is True
+        assert service not in SKIP_CLASSIFIED_SERVICES
 
 
 def test_resolve_management_service_keeps_posthog_and_posthog_mcp_distinct() -> None:

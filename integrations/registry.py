@@ -291,7 +291,7 @@ _BUILTIN_SPECS: tuple[IntegrationSpec, ...] = (
         setup_order=21,
         verify_order=14,
     ),
-    IntegrationSpec(service="bitbucket", has_verifier=True, verify_order=24),
+    IntegrationSpec(service="bitbucket", has_verifier=True, direct_effective=True, verify_order=24),
     IntegrationSpec(
         service="snowflake",
         has_verifier=True,
@@ -417,6 +417,7 @@ _BUILTIN_SPECS: tuple[IntegrationSpec, ...] = (
     IntegrationSpec(
         service="supabase",
         has_verifier=True,
+        direct_effective=True,
         verify_order=99,
     ),
     IntegrationSpec(

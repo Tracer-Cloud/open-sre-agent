@@ -143,6 +143,63 @@ class TestResolveSupabaseConfig:
 
 
 # ---------------------------------------------------------------------------
+# verify_supabase — re-resolving the reduced effective config
+# ---------------------------------------------------------------------------
+
+
+class TestVerifySupabase:
+    """Regression: resolve_effective_integrations publishes Supabase as
+    ``{"project_url": ..., "integration_id": ...}`` -- the service key never
+    appears in a resolved config, by design. Feeding that shape straight into
+    build_supabase_config raised a pydantic "Unexpected field" error (the
+    model forbids extras), which verify_with_validation_result reported as
+    "missing" even with valid store credentials.
+    """
+
+    def test_reresolves_credentials_from_env_for_the_reduced_shape(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        from integrations.supabase.verifier import verify_supabase
+
+        monkeypatch.setenv("SUPABASE_URL", "https://proj.supabase.co")
+        monkeypatch.setenv("SUPABASE_SERVICE_KEY", "svc")
+
+        with patch("integrations.supabase._make_request", return_value=(200, {})):
+            result = verify_supabase(
+                "local env", {"project_url": "https://proj.supabase.co", "integration_id": ""}
+            )
+
+        assert result["status"] == "passed"
+
+    def test_reduced_shape_without_matching_credentials_reports_missing(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        monkeypatch.delenv("SUPABASE_URL", raising=False)
+        monkeypatch.delenv("SUPABASE_SERVICE_KEY", raising=False)
+        with patch("integrations.store.load_integrations", return_value=[]):
+            from integrations.supabase.verifier import verify_supabase
+
+            result = verify_supabase(
+                "local store", {"project_url": "https://proj.supabase.co", "integration_id": "x"}
+            )
+
+        assert result["status"] == "missing"
+
+    def test_a_full_config_without_project_url_still_validates_directly(self) -> None:
+        """Not every caller goes through the reduced effective shape -- a full
+        url/service_key dict must still build normally."""
+        from integrations.supabase.verifier import verify_supabase
+
+        with patch("integrations.supabase._make_request", return_value=(200, {})):
+            result = verify_supabase(
+                "local env",
+                {"url": "https://proj.supabase.co", "service_key": "svc"},
+            )
+
+        assert result["status"] == "passed"
+
+
+# ---------------------------------------------------------------------------
 # Availability and param extraction
 # ---------------------------------------------------------------------------
 

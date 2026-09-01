@@ -62,6 +62,7 @@ class EffectiveIntegrations(StrictConfigModel):
     postgresql: EffectiveIntegrationEntry | None = None
     azure_sql: EffectiveIntegrationEntry | None = None
     bitbucket: EffectiveIntegrationEntry | None = None
+    supabase: EffectiveIntegrationEntry | None = None
     trello: EffectiveIntegrationEntry | None = None
     discord: EffectiveIntegrationEntry | None = None
     telegram: EffectiveIntegrationEntry | None = None

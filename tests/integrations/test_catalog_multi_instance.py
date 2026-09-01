@@ -355,3 +355,49 @@ def test_resolve_effective_integrations_publishes_store_configured_prefect() -> 
     assert "prefect" in resolved
     assert resolved["prefect"]["source"] == "local store"
     assert resolved["prefect"]["config"]["api_url"] == "http://localhost:4200/api"
+
+
+def test_resolve_effective_integrations_publishes_store_configured_bitbucket() -> None:
+    """Same bug as prefect (#5147/#5216): bitbucket's spec was missing
+    direct_effective=True, so a store-saved bitbucket integration classified
+    correctly but resolve_effective_integrations() silently dropped it.
+    """
+    from integrations.catalog import resolve_effective_integrations
+
+    store_record = {
+        "id": "bitbucket-1",
+        "service": "bitbucket",
+        "status": "active",
+        "credentials": {
+            "workspace": "acme",
+            "username": "bot",
+            "app_password": "secret",
+        },
+    }
+    resolved = resolve_effective_integrations(store_integrations=[store_record])
+    assert "bitbucket" in resolved
+    assert resolved["bitbucket"]["source"] == "local store"
+    assert resolved["bitbucket"]["config"]["workspace"] == "acme"
+
+
+def test_resolve_effective_integrations_publishes_store_configured_supabase() -> None:
+    """Same bug as prefect (#5147/#5216): supabase's spec was missing
+    direct_effective=True. Unlike bitbucket, supabase's classify() publishes
+    only project_url (the service key never appears in a resolved config) --
+    that reduced shape is the input the supabase verifier must handle.
+    """
+    from integrations.catalog import resolve_effective_integrations
+
+    store_record = {
+        "id": "supabase-1",
+        "service": "supabase",
+        "status": "active",
+        "credentials": {"url": "https://proj.supabase.co", "service_key": "secret"},
+    }
+    resolved = resolve_effective_integrations(store_integrations=[store_record])
+    assert "supabase" in resolved
+    assert resolved["supabase"]["source"] == "local store"
+    assert resolved["supabase"]["config"] == {
+        "project_url": "https://proj.supabase.co",
+        "integration_id": "supabase-1",
+    }
