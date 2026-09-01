@@ -24,13 +24,7 @@ def test_unknown_theme_prints_plain_name() -> None:
 
 
 def test_unknown_theme_with_markup_like_argument_does_not_raise() -> None:
-    """A theme name that looks like Rich markup must not crash the handler.
-
-    ``selected`` is interpolated into a Rich markup string to report the
-    error -- an unescaped ``[/]`` or unmatched ``[bold`` previously raised
-    ``rich.errors.MarkupError`` out of the command instead of printing the
-    intended message.
-    """
+    """A theme name that looks like Rich markup must not crash the handler."""
     session = Session()
     console, buf = _console()
 
