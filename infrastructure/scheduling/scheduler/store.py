@@ -2,8 +2,12 @@
 
 from __future__ import annotations
 
+import contextlib
 import json
 import logging
+import os
+import tempfile
+import time
 from collections.abc import Mapping
 from pathlib import Path
 from typing import Any
@@ -28,24 +32,90 @@ def _lock_path(store_path: Path) -> Path:
     return store_path.with_suffix(".lock")
 
 
-def _load_raw(store_path: Path) -> list[dict[str, object]]:
-    """Load raw task list from disk."""
+def _read_raw(store_path: Path) -> tuple[list[dict[str, object]], bool]:
+    """Load the raw task list; the flag reports whether the file was readable.
+
+    A missing store is readable and empty. A store that will not parse is
+    ``([], False)`` -- callers about to write must not treat that as "no
+    tasks" and silently overwrite it.
+    """
     if not store_path.exists():
-        return []
+        return [], True
     try:
         data = json.loads(store_path.read_text(encoding="utf-8"))
     except (json.JSONDecodeError, OSError) as exc:
         logger.warning("Failed to read scheduler store: %s", exc)
-        return []
+        return [], False
     if not isinstance(data, list):
-        return []
-    return data  # type: ignore[return-value]
+        logger.warning("Scheduler store is not a JSON list; treating it as unreadable")
+        return [], False
+    return data, True  # type: ignore[return-value]
+
+
+def _load_raw(store_path: Path) -> list[dict[str, object]]:
+    """Load the raw task list, treating an unreadable store as empty."""
+    return _read_raw(store_path)[0]
+
+
+def _quarantine_unreadable(store_path: Path) -> None:
+    """Move an unparseable store aside so a write cannot destroy it.
+
+    The name carries a timestamp for the operator and a unique suffix for
+    correctness: ``mkstemp`` reserves the destination atomically, so two
+    corruptions inside the same second cannot land on one name and have the
+    second ``os.replace`` erase the first casualty.
+    """
+    fd, aside_str = tempfile.mkstemp(
+        dir=store_path.parent,
+        prefix=f"{store_path.name}.corrupt-{int(time.time())}-",
+    )
+    os.close(fd)
+    aside = Path(aside_str)
+    os.replace(store_path, aside)
+    logger.error(
+        "Scheduler store at %s was unreadable and has been preserved at %s. "
+        "Scheduled tasks in it are recoverable from that file.",
+        store_path,
+        aside,
+    )
+
+
+def _load_for_write(store_path: Path) -> list[dict[str, object]]:
+    """Load the task list for a call about to write it back.
+
+    An unreadable store is moved aside first, so the write lands on a fresh
+    file and the damaged one stays on disk for recovery.
+    """
+    raw, readable = _read_raw(store_path)
+    if not readable:
+        _quarantine_unreadable(store_path)
+    return raw
 
 
 def _save_raw(store_path: Path, data: list[dict[str, object]]) -> None:
-    """Persist task list to disk."""
+    """Persist the task list by atomic rename.
+
+    ``Path.write_text`` truncates before rewriting, so a crash inside that
+    window leaves a half-written file that no longer parses. Every other
+    local store in the repo writes through a temp file in the destination
+    directory, fsyncs, then ``os.replace``; see
+    ``integrations/store.py::_atomic_write``.
+    """
     store_path.parent.mkdir(parents=True, exist_ok=True)
-    store_path.write_text(json.dumps(data, indent=2, default=str) + "\n", encoding="utf-8")
+    serialized = json.dumps(data, indent=2, default=str) + "\n"
+    tmp_path: str | None = None
+    try:
+        fd, tmp_path = tempfile.mkstemp(dir=store_path.parent, prefix=store_path.name + ".tmp")
+        with os.fdopen(fd, "w", encoding="utf-8") as handle:
+            handle.write(serialized)
+            handle.flush()
+            os.fsync(handle.fileno())
+        os.replace(tmp_path, store_path)
+    except Exception:
+        if tmp_path:
+            with contextlib.suppress(OSError):
+                os.unlink(tmp_path)
+        raise
 
 
 def list_tasks(store_path: Path | None = None) -> list[ScheduledTask]:
@@ -101,7 +171,7 @@ def add_task(task: ScheduledTask, store_path: Path | None = None) -> ScheduledTa
     path = store_path or _default_store_path()
     lock = FileLock(_lock_path(path))
     with lock:
-        raw = _load_raw(path)
+        raw = _load_for_write(path)
         wanted = _schedule_identity(task.model_dump(mode="json"))
         existing = next(
             (entry for entry in raw if _schedule_identity(entry) == wanted),
