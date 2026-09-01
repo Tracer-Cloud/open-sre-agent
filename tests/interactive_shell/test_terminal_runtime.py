@@ -35,6 +35,8 @@ def _rgb(hex_color: str) -> str:
     """``"#RRGGBB"`` → the ``"r;g;b"`` triple as it appears in a truecolor escape."""
     h = hex_color.lstrip("#")
     return f"{int(h[0:2], 16)};{int(h[2:4], 16)};{int(h[4:6], 16)}"
+
+
 from surfaces.interactive_shell.command_registry import SLASH_COMMANDS, dispatch_slash
 from surfaces.interactive_shell.runtime.core import confirmation as controller_runtime
 from surfaces.interactive_shell.runtime.core import state as loop_state
@@ -451,8 +453,14 @@ def test_build_prompt_style_tracks_active_theme() -> None:
     amber_attrs = _build_prompt_style().get_attrs_for_style_str("class:prompt-frame-line")
     set_active_theme("teal")
     teal_attrs = _build_prompt_style().get_attrs_for_style_str("class:prompt-frame-line")
-    assert amber_attrs.color and amber_attrs.color.lower() == THEME_REGISTRY["amber"].HIGHLIGHT.lstrip("#").lower()
-    assert teal_attrs.color and teal_attrs.color.lower() == THEME_REGISTRY["teal"].HIGHLIGHT.lstrip("#").lower()
+    assert (
+        amber_attrs.color
+        and amber_attrs.color.lower() == THEME_REGISTRY["amber"].HIGHLIGHT.lstrip("#").lower()
+    )
+    assert (
+        teal_attrs.color
+        and teal_attrs.color.lower() == THEME_REGISTRY["teal"].HIGHLIGHT.lstrip("#").lower()
+    )
     assert amber_attrs.color != teal_attrs.color
 
 
