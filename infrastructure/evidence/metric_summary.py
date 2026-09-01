@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import math
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from typing import Any
@@ -258,10 +259,12 @@ def _format_bytes(value: float) -> str:
     # Advance while the amount *rendered at its current unit's precision*
     # would still show 1024 -- comparing the raw amount let e.g. 1023.5 stop
     # at the B tier and round up to the four-digit "1024 B" instead of
-    # rolling into "1.00 KiB".
+    # rolling into "1.00 KiB". NaN compares False against everything
+    # (including "< 1024"), so without this guard it would advance through
+    # every unit and render "nan TiB" instead of stopping at "nan B".
     while unit_index < len(units) - 1:
         precision = 0 if unit_index == 0 else 2
-        if round(amount, precision) < 1024:
+        if math.isnan(amount) or round(amount, precision) < 1024:
             break
         amount /= 1024
         unit_index += 1

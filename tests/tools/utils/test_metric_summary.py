@@ -82,3 +82,9 @@ class TestFormatBytes:
     )
     def test_formats_at_boundaries(self, value: float, expected: str) -> None:
         assert _format_bytes(value) == expected
+
+    def test_nan_stays_at_the_byte_tier(self) -> None:
+        """NaN compares False against everything, including "< 1024" -- the
+        boundary check alone would advance it through every unit and render
+        the nonsensical "nan TiB" instead of stopping at "nan B"."""
+        assert _format_bytes(float("nan")) == "nan B"
