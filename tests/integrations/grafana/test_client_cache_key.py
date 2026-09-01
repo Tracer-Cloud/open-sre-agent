@@ -59,6 +59,26 @@ def test_rotated_credential_evicts_the_stale_entry() -> None:
     assert len(grafana_client._grafana_client_cache) == 1
 
 
+def test_whitespace_only_difference_shares_cache_entry() -> None:
+    """The fingerprint strips before hashing to match what the built client
+    ends up with: ``GrafanaAccountConfig`` inherits a wildcard
+    ``StrictConfigModel`` validator that strips every string field, so an
+    api_key differing only by surrounding whitespace produces the identical
+    ``read_token`` on the built client either way -- fingerprinting the raw,
+    unstripped value would treat these as different credentials and build a
+    redundant client for no real difference.
+    """
+    first = grafana_client.get_grafana_client_from_credentials(
+        endpoint=_ENDPOINT, api_key=_OLD_TOKEN, account_id=_ACCOUNT_ID
+    )
+    second = grafana_client.get_grafana_client_from_credentials(
+        endpoint=_ENDPOINT, api_key=f" {_OLD_TOKEN} ", account_id=_ACCOUNT_ID
+    )
+
+    assert first is second
+    assert first.read_token == _OLD_TOKEN
+
+
 def test_identical_config_reuses_cached_client() -> None:
     first = grafana_client.get_grafana_client_from_credentials(
         endpoint=_ENDPOINT, api_key=_OLD_TOKEN, account_id=_ACCOUNT_ID

@@ -86,6 +86,14 @@ def _cache_key(
     cached client until process restart. The credential tuple is hashed, never
     embedded in plaintext, so a rotation yields a fresh key without leaking the
     secret into the key string.
+
+    Every string component is stripped before hashing to match what the built
+    client actually ends up with: ``GrafanaAccountConfig`` (a
+    ``StrictConfigModel``) inherits a wildcard ``field_validator("*")`` that
+    strips every string field, ``read_token``/``username``/``password``/
+    ``ca_bundle`` included -- not stripping here would treat two inputs the
+    client normalizes to the identical value as different credentials,
+    building a redundant client and cache entry for no real difference.
     """
     fingerprint = hashlib.sha256(
         repr(
