@@ -125,16 +125,36 @@ def read_ref_sha(layout: GitLayout, ref_name: str) -> str | None:
     return read_packed_refs(layout.commondir).get(ref_name)
 
 
-def read_git_head_sha(layout: GitLayout) -> str | None:
-    """Short SHA the working tree currently points at, or ``None``."""
+_HEAD_SYMREF_PREFIX = "ref: "
+_BRANCH_REF_PREFIX = "refs/heads/"
+
+
+def _read_head(layout: GitLayout) -> str | None:
+    """Raw ``HEAD`` contents — a ``ref: refs/…`` symref or a detached sha — or ``None``."""
     head_file = layout.gitdir / "HEAD"
     if not head_file.is_file():
         return None
-    head = head_file.read_text(encoding="utf-8").strip()
-    if not head.startswith("ref: "):
-        return head[:7] or None
-    sha = read_ref_sha(layout, head[len("ref: ") :].strip())
+    return head_file.read_text(encoding="utf-8").strip() or None
+
+
+def read_git_head_sha(layout: GitLayout) -> str | None:
+    """Short SHA the working tree currently points at, or ``None``."""
+    head = _read_head(layout)
+    if head is None:
+        return None
+    if not head.startswith(_HEAD_SYMREF_PREFIX):
+        return head[:7]  # detached HEAD: the sha is HEAD itself
+    sha = read_ref_sha(layout, head.removeprefix(_HEAD_SYMREF_PREFIX).strip())
     return sha[:7] if sha else None
+
+
+def read_git_head_branch(layout: GitLayout) -> str | None:
+    """Current branch name from HEAD, or ``None`` on a detached HEAD / no file."""
+    head = _read_head(layout)
+    if head is None or not head.startswith(_HEAD_SYMREF_PREFIX):
+        return None
+    ref = head.removeprefix(_HEAD_SYMREF_PREFIX).strip()
+    return ref.removeprefix(_BRANCH_REF_PREFIX) if ref.startswith(_BRANCH_REF_PREFIX) else None
 
 
 def release_tag_sort_key(name: str) -> tuple[int, ...] | None:
@@ -197,6 +217,7 @@ __all__ = [
     "detect_build_info",
     "find_git_layout",
     "iter_release_tag_names",
+    "read_git_head_branch",
     "read_git_head_sha",
     "read_latest_release_tag",
     "read_packed_refs",
