@@ -207,31 +207,47 @@ def render_tools_table(console: Console, entries: list[ToolCatalogEntry]) -> Non
     )
 
 
-_COMMAND_OUTPUT_ANSI_RE = re.compile(r"\x1b\[[0-9;]*m")
 _COMMAND_OUTPUT_INDENT = "    "  # aligns wrapped lines under the ``  ↳ `` marker
 
+_TRACEBACK_HEADER = "Traceback (most recent call last):"
+_TRACEBACK_FRAME_RE = re.compile(r'^\s*File "(?P<file>.+)", line (?P<line>\d+), in (?P<fn>.+)$')
 
-def _command_output_fits_indented(text: str, width: int) -> bool:
-    """Whether ``text`` still fits after a 4-column indent (visible width)."""
-    longest = max(
-        (len(_COMMAND_OUTPUT_ANSI_RE.sub("", line)) for line in text.split("\n")),
-        default=0,
-    )
-    return longest + len(_COMMAND_OUTPUT_INDENT) <= max(width, 1)
+
+def _collapse_traceback(text: str) -> str | None:
+    """Collapse a Python traceback to ``ExcType: message`` + its innermost frame.
+
+    Returns ``None`` when *text* is not a traceback, so ordinary output is left
+    untouched. A full trace buries the two lines that matter — what failed and
+    where it raised — so keep those and fold the intermediate frames.
+    """
+    if _TRACEBACK_HEADER not in text:
+        return None
+    lines = text.rstrip().split("\n")
+    frames = [m for line in lines if (m := _TRACEBACK_FRAME_RE.match(line))]
+    exception = next((line.strip() for line in reversed(lines) if line.strip()), "")
+    if not frames or not exception:
+        return None
+    innermost = frames[-1]
+    hidden = len(frames) - 1
+    rendered = [exception, f"  at {innermost['file']}:{innermost['line']} in {innermost['fn']}"]
+    if hidden:
+        rendered.append(f"  ({hidden} more frame{'s' if hidden != 1 else ''} hidden)")
+    return "\n".join(rendered)
 
 
 def print_command_output(console: Console, output: str, *, style: str | None = None) -> None:
     if not output:
         return
-    text = output.rstrip()
-    # Indent the result under its `$ command` header with a ``↳`` marker so it
-    # reads as the command's child (parent → child hierarchy) — but only when it
-    # fits, so wide output (tables) stays flush and does not wrap.
-    if _command_output_fits_indented(text, console.width):
-        lines = text.split("\n")
-        text = "\n".join(
-            [f"  ↳ {lines[0]}", *(f"{_COMMAND_OUTPUT_INDENT}{line}" for line in lines[1:])]
-        )
+    text = _collapse_traceback(output.rstrip()) or output.rstrip()
+    # Frame every result under its `$ command` header with a ``↳`` gutter so the
+    # output reads as the command's child (parent → child) and stays grouped and
+    # set off from the reply prose above — wide output included. A single wide
+    # line wraps within the block instead of flushing the whole block (and its
+    # narrow siblings) to the left margin.
+    lines = text.split("\n")
+    text = "\n".join(
+        [f"  ↳ {lines[0]}", *(f"{_COMMAND_OUTPUT_INDENT}{line}" for line in lines[1:])]
+    )
     # Parse any ANSI the captured child emitted so its Rich styling (bold, colour)
     # survives being re-printed here instead of showing as raw escape codes.
     rendered = Text.from_ansi(text) if style is None else Text.from_ansi(text, style=style)
