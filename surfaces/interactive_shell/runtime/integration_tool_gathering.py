@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import contextlib
 import json
+from collections.abc import Mapping
 from typing import TYPE_CHECKING, Any, cast
 
 if TYPE_CHECKING:
@@ -109,8 +110,10 @@ def _truncate(text: str, limit: int) -> str:
     return text[:limit] + f"\n…[truncated, {len(text)} chars total]"
 
 
-def _persist_tool_calls(session: Session, executed: list[tuple[Any, Any]]) -> None:
-    """Record each gathered tool-call result into the session log.
+def _persist_tool_calls(
+    session: Session, executed: list[tuple[str, Mapping[str, object], Any]]
+) -> None:
+    """Record each gathered tool call into the session log.
 
     Arguments and results are redacted and bounded before writing; failures are
     swallowed so logging never breaks the turn.
@@ -119,20 +122,17 @@ def _persist_tool_calls(session: Session, executed: list[tuple[Any, Any]]) -> No
     from infrastructure.observability.trace.redaction import redact_sensitive
 
     store = default_session_store()
-    for tc, output in executed:
+    for tool_name, tool_input, output in executed:
         with contextlib.suppress(Exception):
             body = (
                 output
                 if isinstance(output, str)
                 else json.dumps(redact_sensitive(output), default=str)
             )
-            arguments = (
-                redact_sensitive(tc.input) if isinstance(tc.input, dict) else {"value": tc.input}
-            )
             store.append_tool_call(
                 session.session_id,
-                tool=str(tc.name),
-                arguments=arguments,
+                tool=tool_name,
+                arguments=dict(redact_sensitive(tool_input)),
                 result=_truncate(body, _MAX_PER_TOOL_CHARS),
                 ok=not (isinstance(output, dict) and "error" in output),
             )
@@ -181,7 +181,7 @@ def shell_gather_phase(session: SessionState, console: Console) -> GatherPhase:
     """
     session = cast(Session, session)
 
-    def persist(executed: list[tuple[Any, Any]]) -> None:
+    def persist(executed: list[tuple[str, Mapping[str, object], Any]]) -> None:
         _persist_tool_calls(session, executed)
 
     return GatherPhase(on_progress=ShellGatherProgress(console), persist=persist)

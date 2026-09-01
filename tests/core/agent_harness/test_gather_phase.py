@@ -8,6 +8,7 @@ harder to read the more surfaces it served.
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from typing import Any
 
 import pytest
@@ -70,7 +71,7 @@ class TestAgentForwardsGatherPhase:
         def _on_progress(_kind: str, _data: dict[str, Any]) -> None:
             return None
 
-        def _persist(_executed: list[tuple[Any, Any]]) -> None:
+        def _persist(_executed: list[tuple[str, Mapping[str, object], Any]]) -> None:
             return None
 
         agent = InMemoryHeadlessBuild(session=headless_adapters.InMemorySessionState()).agent(
