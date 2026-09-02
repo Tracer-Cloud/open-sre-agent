@@ -30,12 +30,10 @@ from collections.abc import AsyncIterator, Coroutine, Mapping
 from contextlib import AsyncExitStack, asynccontextmanager
 from dataclasses import dataclass
 from http import HTTPStatus
-from typing import Any, cast
+from typing import TYPE_CHECKING, Any, cast
 
 import httpx
-from mcp import ClientSession, StdioServerParameters, types  # type: ignore[import-not-found]
-from mcp.client.sse import sse_client  # type: ignore[import-not-found]
-from mcp.client.stdio import stdio_client  # type: ignore[import-not-found]
+import mcp_types as types
 from pydantic import Field, field_validator, model_validator
 from typing_extensions import TypedDict
 
@@ -48,6 +46,9 @@ from config.strict_config import StrictConfigModel
 from integrations._validation_helpers import report_classify_failure, report_validation_failure
 from integrations.mcp_streamable_http_compat import streamable_http_client
 from integrations.mcp_transport import McpTransportMode
+
+if TYPE_CHECKING:
+    from mcp.client.session import ClientSession  # type: ignore[import-not-found]
 
 logger = logging.getLogger(__name__)
 
@@ -252,6 +253,13 @@ def sentry_mcp_runtime_unavailable_reason(config: SentryMCPConfig) -> str | None
 @asynccontextmanager
 async def _open_sentry_mcp_session(config: SentryMCPConfig) -> AsyncIterator[ClientSession]:
     """Open an MCP client session for Sentry using the configured transport."""
+    from mcp.client.session import ClientSession  # type: ignore[import-not-found]
+    from mcp.client.sse import sse_client  # type: ignore[import-not-found]
+    from mcp.client.stdio import (  # type: ignore[import-not-found]
+        StdioServerParameters,
+        stdio_client,
+    )
+
     stack = AsyncExitStack()
     try:
         if config.mode == "stdio":

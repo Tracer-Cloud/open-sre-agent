@@ -4,17 +4,21 @@ from __future__ import annotations
 
 from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
+from functools import cache
 from importlib import import_module
 from typing import Any
 
 import httpx
 
-_streamable_http_module = import_module("mcp.client.streamable_http")
-_mcp_streamable_http_client: Any = getattr(_streamable_http_module, "streamable_http_client", None)
-_mcp_streamablehttp_client: Any = getattr(_streamable_http_module, "streamablehttp_client", None)
 
-if _mcp_streamable_http_client is None and _mcp_streamablehttp_client is None:
-    raise ImportError("mcp.client.streamable_http has no streamable HTTP client")
+@cache
+def _load_streamable_http_clients() -> tuple[Any, Any]:
+    module = import_module("mcp.client.streamable_http")
+    modern_client = getattr(module, "streamable_http_client", None)
+    legacy_client = getattr(module, "streamablehttp_client", None)
+    if modern_client is None and legacy_client is None:
+        raise ImportError("mcp.client.streamable_http has no streamable HTTP client")
+    return modern_client, legacy_client
 
 
 @asynccontextmanager
@@ -27,9 +31,10 @@ async def streamable_http_client(
     sse_read_timeout: float = 300.0,
     terminate_on_close: bool = True,
 ) -> AsyncGenerator[tuple[Any, Any, Any]]:
-    if _mcp_streamable_http_client is not None:
+    modern_client, legacy_client = _load_streamable_http_clients()
+    if modern_client is not None:
         del headers, timeout, sse_read_timeout
-        async with _mcp_streamable_http_client(
+        async with modern_client(
             url,
             http_client=http_client,
             terminate_on_close=terminate_on_close,
@@ -38,7 +43,7 @@ async def streamable_http_client(
         return
 
     del http_client
-    async with _mcp_streamablehttp_client(
+    async with legacy_client(
         url,
         headers=headers,
         timeout=timeout,

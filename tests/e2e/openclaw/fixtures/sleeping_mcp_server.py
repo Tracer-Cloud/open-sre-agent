@@ -17,9 +17,16 @@ from __future__ import annotations
 
 import asyncio
 
-from mcp.server import Server
+from mcp.server import Server, ServerRequestContext
 from mcp.server.stdio import stdio_server
-from mcp.types import TextContent, Tool
+from mcp.types import (
+    CallToolRequestParams,
+    CallToolResult,
+    ListToolsResult,
+    PaginatedRequestParams,
+    TextContent,
+    Tool,
+)
 
 _SERVER_NAME = "sleeping-mcp-fixture"
 # 1 hour. Effectively "never returns" for any reasonable test timeout
@@ -29,31 +36,38 @@ _SLEEP_SECONDS = 3600.0
 
 
 def _build_server() -> Server[object]:
-    server: Server[object] = Server(_SERVER_NAME)
-
-    @server.list_tools()
-    async def _list_tools() -> list[Tool]:
-        return [
-            Tool(
-                name="conversations_list",
-                description=(
-                    "Fixture tool that intentionally sleeps instead of returning. "
-                    "Used to exercise OpenSRE's call-timeout behavior."
+    async def _list_tools(
+        _context: ServerRequestContext[object],
+        _params: PaginatedRequestParams | None,
+    ) -> ListToolsResult:
+        return ListToolsResult(
+            tools=[
+                Tool(
+                    name="conversations_list",
+                    description=(
+                        "Fixture tool that intentionally sleeps instead of returning. "
+                        "Used to exercise OpenSRE's call-timeout behavior."
+                    ),
+                    input_schema={
+                        "type": "object",
+                        "properties": {},
+                        "additionalProperties": True,
+                    },
                 ),
-                input_schema={"type": "object", "properties": {}, "additionalProperties": True},
-            ),
-        ]
+            ]
+        )
 
-    @server.call_tool()
-    async def _call_tool(name: str, arguments: dict[str, object]) -> list[TextContent]:
-        # Sleep deliberately past any sensible test timeout. ``arguments``
-        # and ``name`` are intentionally ignored so the test can pass any
+    async def _call_tool(
+        _context: ServerRequestContext[object],
+        _params: CallToolRequestParams,
+    ) -> CallToolResult:
+        # Sleep deliberately past any sensible test timeout. The request is
+        # intentionally ignored so the test can pass any tool name or argument
         # shape without affecting sleep behavior.
-        del name, arguments
         await asyncio.sleep(_SLEEP_SECONDS)
-        return [TextContent(type="text", text="(unreachable)")]
+        return CallToolResult(content=[TextContent(type="text", text="(unreachable)")])
 
-    return server
+    return Server(_SERVER_NAME, on_list_tools=_list_tools, on_call_tool=_call_tool)
 
 
 async def _main() -> None:
