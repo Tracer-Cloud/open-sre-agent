@@ -6,9 +6,11 @@ description: "How OpenSRE redacts secrets from command history and LLM prompt/re
 ## Overview
 
 The interactive shell saves every line you type to a history file so up-arrow
-recall and `/history` work across sessions. Separately, it records each LLM
-prompt/response turn for local debugging and `/resume`. Incident prompts can
-include sensitive identifiers and tokens, so the shell:
+recall and `/history` work across sessions. Each new prompt reloads the file
+when another running shell has changed it, so concurrent sessions share recent
+commands without a restart. Separately, it records each LLM prompt/response turn
+for local debugging and `/resume`. Incident prompts can include sensitive
+identifiers and tokens, so the shell:
 
 - Redacts known token shapes before each entry is written to disk
 - Supports disabling persistence entirely (memory-only mode)

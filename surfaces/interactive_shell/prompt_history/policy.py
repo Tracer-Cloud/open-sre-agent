@@ -11,10 +11,11 @@ from __future__ import annotations
 
 import os
 import re
-from collections.abc import Iterator
+from collections.abc import AsyncGenerator, Iterator
 from pathlib import Path
 from typing import Any, ClassVar
 
+from filelock import BaseFileLock, FileLock
 from prompt_toolkit.history import FileHistory
 from pydantic import ConfigDict
 
@@ -126,7 +127,60 @@ def _parse_int(env_val: str | None, file_val: Any, default: int) -> int:
     return default
 
 
-class RedactingFileHistory(FileHistory):
+def history_file_lock(
+    filename: str | bytes | os.PathLike[str] | os.PathLike[bytes],
+) -> BaseFileLock:
+    """Return the cross-process lock for a prompt-history file."""
+    return FileLock(f"{os.fsdecode(filename)}.lock")
+
+
+class RefreshingFileHistory(FileHistory):
+    """File history that reloads when another shell changes the backing file."""
+
+    def __init__(self, filename: str) -> None:
+        super().__init__(filename)
+        self._loaded_signature: tuple[int, int, int] | None = None
+
+    def _file_signature(self) -> tuple[int, int, int] | None:
+        try:
+            stat = os.stat(self.filename)
+        except OSError:
+            return None
+        return stat.st_ino, stat.st_size, stat.st_mtime_ns
+
+    def _load_history_strings_unlocked(self) -> list[str]:
+        return list(super().load_history_strings())
+
+    def _store_string_unlocked(self, string: str) -> None:
+        super().store_string(string)
+        self._loaded_signature = self._file_signature()
+
+    async def load(self) -> AsyncGenerator[str]:
+        """Yield current entries, reloading after a peer modifies the file."""
+        with history_file_lock(self.filename):
+            signature = self._file_signature()
+            if not self._loaded or signature != self._loaded_signature:
+                self._loaded_strings = self._load_history_strings_unlocked()
+                self._loaded = True
+                self._loaded_signature = self._file_signature()
+            entries = tuple(self._loaded_strings)
+
+        for item in entries:
+            yield item
+
+    def load_history_strings(self) -> Iterator[str]:
+        """Yield a consistent snapshot of entries while writers are excluded."""
+        with history_file_lock(self.filename):
+            entries = self._load_history_strings_unlocked()
+        yield from entries
+
+    def store_string(self, string: str) -> None:
+        """Append one entry while excluding concurrent readers and writers."""
+        with history_file_lock(self.filename):
+            self._store_string_unlocked(string)
+
+
+class RedactingFileHistory(RefreshingFileHistory):
     """``FileHistory`` that redacts known token shapes before persisting.
 
     Also enforces a max-entry retention cap by rewriting the file when
@@ -165,17 +219,22 @@ class RedactingFileHistory(FileHistory):
         if self.paused:
             return
         cleaned = redact_text(string, self._rules) if self._rules else string
-        super().store_string(cleaned)
-        if self._max_entries <= 0:
-            return
-        if self._entry_count is None:
-            self._entry_count = self._count_entries()
-        else:
-            self._entry_count += 1
-        if self._entry_count > self._max_entries:
-            self._prune_to_cap()
+        with history_file_lock(self.filename):
+            self._store_string_unlocked(cleaned)
+            if self._max_entries <= 0:
+                return
+            if self._entry_count is None:
+                self._entry_count = self._count_entries_unlocked()
+            else:
+                self._entry_count += 1
+            if self._entry_count > self._max_entries:
+                self._prune_to_cap_unlocked()
 
     def _prune_to_cap(self) -> None:
+        with history_file_lock(self.filename):
+            self._prune_to_cap_unlocked()
+
+    def _prune_to_cap_unlocked(self) -> None:
         if self._max_entries <= 0:
             return
         path = Path(os.fsdecode(self.filename))
@@ -197,10 +256,11 @@ class RedactingFileHistory(FileHistory):
         try:
             path.write_text("".join(lines[keep_from:]), encoding="utf-8")
             self._entry_count = self._max_entries
+            self._loaded_signature = self._file_signature()
         except OSError:
             return
 
-    def _count_entries(self) -> int:
+    def _count_entries_unlocked(self) -> int:
         path = Path(os.fsdecode(self.filename))
         try:
             text = path.read_text(encoding="utf-8", errors="replace")
@@ -213,7 +273,9 @@ __all__ = [
     "DEFAULT_MAX_ENTRIES",
     "DEFAULT_REDACTION_RULES",
     "HistoryPolicy",
+    "RefreshingFileHistory",
     "RedactingFileHistory",
     "RedactionRule",
+    "history_file_lock",
     "redact_text",
 ]
