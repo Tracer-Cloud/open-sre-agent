@@ -11,9 +11,11 @@ import asyncio
 import json
 import logging
 import os
+import re
 from collections.abc import AsyncIterator, Sequence
 from contextlib import AsyncExitStack, asynccontextmanager
 from dataclasses import dataclass
+from http import HTTPStatus
 from typing import TYPE_CHECKING, Any, Literal, cast
 from urllib.parse import urlparse, urlunparse
 
@@ -618,6 +620,43 @@ def _connectivity_failure_detail(err: BaseException) -> str:
             "- toolsets and MCP base URL path",
         ]
     ).strip()
+
+
+def _required_oauth_scopes(err: BaseException) -> tuple[str, ...]:
+    """Extract GitHub's missing-scope challenge from a wrapped HTTP failure."""
+    pending = [err]
+    seen: set[int] = set()
+    while pending:
+        current = pending.pop()
+        if id(current) in seen:
+            continue
+        seen.add(id(current))
+        if isinstance(current, httpx.HTTPStatusError):
+            response = current.response
+            if response.status_code == HTTPStatus.FORBIDDEN:
+                challenge = response.headers.get("www-authenticate", "")
+                match = re.search(r'\bscope="([^"]+)"', challenge)
+                if match:
+                    return tuple(sorted(set(match.group(1).split())))
+        if isinstance(current, BaseExceptionGroup):
+            pending.extend(current.exceptions)
+        cause = getattr(current, "__cause__", None)
+        if isinstance(cause, BaseException):
+            pending.append(cause)
+        context = getattr(current, "__context__", None)
+        if isinstance(context, BaseException):
+            pending.append(context)
+    return ()
+
+
+def _oauth_scope_failure_detail(scopes: Sequence[str]) -> str:
+    scope_list = ", ".join(scopes)
+    return (
+        "GitHub rejected this integration because it is missing required OAuth "
+        f"access: {scope_list}. Run `opensre account login` again and approve "
+        "the GitHub repository and security permissions, or replace the integration "
+        "token with one that has those scopes."
+    )
 
 
 def _tool_result_to_dict(result: types.CallToolResult) -> dict[str, Any]:
@@ -1261,6 +1300,13 @@ def validate_github_mcp_config(
     try:
         return cast(GitHubMCPValidationResult, _run_async(_run_validation()))
     except Exception as err:
+        required_scopes = _required_oauth_scopes(err)
+        if required_scopes:
+            return GitHubMCPValidationResult(
+                ok=False,
+                detail=_oauth_scope_failure_detail(required_scopes),
+                failure_category="authentication",
+            )
         report_validation_failure(
             err,
             logger=logger,

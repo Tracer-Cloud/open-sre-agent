@@ -13,6 +13,24 @@ from surfaces.interactive_shell.ui import DIM, ERROR, HIGHLIGHT, WARNING, render
 from surfaces.shared.terminal.components.choice_menu import print_valid_choice_list
 
 
+def _account_model_change_is_locked(console: Console) -> bool:
+    """Explain and enforce the hosted model lock for signed-in accounts."""
+    from config.account import account_llm_route
+
+    route = account_llm_route()
+    if route is None:
+        return False
+    console.print(
+        f"[{WARNING}]LLM settings are managed by your OpenSRE account:[/] "
+        f"openai ({escape(route.model)}, hosted by OpenSRE)."
+    )
+    console.print(
+        f"[{DIM}]Run[/] [bold]opensre account logout[/bold] "
+        f"[{DIM}]before configuring a different provider or model.[/]"
+    )
+    return True
+
+
 def _format_supported_models(provider_models: tuple[object, ...]) -> str:
     values = [str(getattr(model, "value", "")) for model in provider_models]
     visible = [value for value in values if value]
@@ -88,6 +106,9 @@ def switch_llm_provider(
     *,
     toolcall_model: str | None = None,
 ) -> bool:
+    if _account_model_change_is_locked(console):
+        return False
+
     from config.llm_auth.credentials import status as credential_status
     from surfaces.shared.llm_setup.catalog import PROVIDER_BY_VALUE
     from surfaces.shared.llm_setup.env_sync import sync_provider_env
@@ -245,6 +266,9 @@ def switch_toolcall_model(
     provider_name: str | None = None,
 ) -> bool:
     """Set the toolcall model for the active (or named) provider."""
+    if _account_model_change_is_locked(console):
+        return False
+
     from config.env_file import sync_env_values
     from surfaces.shared.llm_setup.catalog import PROVIDER_BY_VALUE
 
@@ -291,6 +315,9 @@ def switch_reasoning_model(
     provider_name: str | None = None,
 ) -> bool:
     """Set the reasoning model for the active (or named) provider."""
+    if _account_model_change_is_locked(console):
+        return False
+
     from surfaces.shared.llm_setup.catalog import PROVIDER_BY_VALUE
     from surfaces.shared.llm_setup.env_sync import sync_reasoning_model_env
 

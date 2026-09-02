@@ -12,12 +12,12 @@ GITHUB_MCP_TOOLSETS_ENV = "GITHUB_MCP_TOOLSETS"
 # Distinct ecosystem names: GitHub Actions injects GITHUB_TOKEN; the gh CLI reads GH_TOKEN.
 GITHUB_TOKEN_ENV = "GITHUB_TOKEN"
 GH_TOKEN_ENV = "GH_TOKEN"
-GITHUB_CLI_RECOMMENDED_SCOPES = frozenset({"read:org", "repo", "workflow"})
+GITHUB_CLI_REQUIRED_SCOPES = frozenset({"read:org", "repo", "security_events", "workflow"})
 
 __all__ = [
     "GH_TOKEN_ENV",
     "GITHUB_API_BASE_URL",
-    "GITHUB_CLI_RECOMMENDED_SCOPES",
+    "GITHUB_CLI_REQUIRED_SCOPES",
     "GITHUB_MCP_ARGS_ENV",
     "GITHUB_MCP_AUTH_TOKEN_ENV",
     "GITHUB_MCP_COMMAND_ENV",

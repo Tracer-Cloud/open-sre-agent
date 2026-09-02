@@ -3,9 +3,11 @@
 from __future__ import annotations
 
 from contextlib import asynccontextmanager
+from http import HTTPStatus
 from typing import Any
 from unittest.mock import AsyncMock, MagicMock
 
+import httpx
 import pytest
 from mcp import types as mcp_types
 from rich.console import Console
@@ -838,6 +840,41 @@ def test_connectivity_failure_detail_unwraps_taskgroup_exception_group() -> None
     assert "ConnectionError" in msg
     assert "Connection refused" in msg
     assert "Check: outbound HTTPS" in msg
+
+
+def test_validate_github_mcp_config_reports_scope_challenge_as_authentication(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    request = httpx.Request("POST", "https://api.githubcopilot.com/mcp/x/all/readonly")
+    response = httpx.Response(
+        HTTPStatus.FORBIDDEN,
+        request=request,
+        headers={
+            "WWW-Authenticate": ('Bearer error="insufficient_scope", scope="repo security_events"')
+        },
+    )
+    failure = httpx.HTTPStatusError("scope rejected", request=request, response=response)
+
+    @asynccontextmanager
+    async def _failing_open(_config: Any):  # type: ignore[return]
+        raise ExceptionGroup("MCP transport", [failure])
+        yield  # pragma: no cover
+
+    monkeypatch.setattr("integrations.github.mcp._open_github_mcp_session", _failing_open)
+    cfg = github_mcp_module.build_github_mcp_config(
+        {
+            "url": "https://api.githubcopilot.com/mcp/",
+            "mode": "streamable-http",
+            "auth_token": "gho_test",
+        }
+    )
+
+    result = github_mcp_module.validate_github_mcp_config(cfg)
+
+    assert result.ok is False
+    assert result.failure_category == "authentication"
+    assert "repo, security_events" in result.detail
+    assert "account login" in result.detail
 
 
 def test_validate_github_mcp_config_reports_session_open_failure_as_connectivity(

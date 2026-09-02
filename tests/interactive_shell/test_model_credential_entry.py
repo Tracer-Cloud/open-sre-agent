@@ -5,6 +5,8 @@ from __future__ import annotations
 from types import SimpleNamespace
 from typing import Any
 
+import pytest
+
 import surfaces.interactive_shell.command_registry.model.switching as switching
 from surfaces.shared.llm_setup.catalog import PROVIDER_BY_VALUE
 
@@ -22,6 +24,11 @@ class _Console:
     def input(self, prompt: str = "", *, password: bool = False) -> str:
         _ = (prompt, password)
         return self._key
+
+
+@pytest.fixture(autouse=True)
+def _no_account_model_lock(monkeypatch: Any) -> None:
+    monkeypatch.setattr("config.account.account_llm_route", lambda: None)
 
 
 def _credential_status_sequence(monkeypatch: Any, *, configured_after: bool) -> None:
@@ -68,6 +75,27 @@ def test_pasted_key_is_saved_and_switch_proceeds(monkeypatch: Any) -> None:
     console = _Console(key="sk-test-123")
     assert switching.switch_llm_provider("openai", console) is True  # type: ignore[arg-type]
     assert saves and saves[0]["api_key"] == "sk-test-123"
+
+
+@pytest.mark.parametrize(
+    "change",
+    [
+        lambda console: switching.switch_llm_provider("anthropic", console),
+        lambda console: switching.switch_reasoning_model("gpt-5.5", console),
+        lambda console: switching.switch_toolcall_model("gpt-5.5", console),
+        lambda console: switching.restore_default_model("anthropic", console),
+    ],
+)
+def test_account_login_blocks_every_model_change(monkeypatch: Any, change: Any) -> None:
+    monkeypatch.setattr(
+        "config.account.account_llm_route",
+        lambda: SimpleNamespace(model="gpt-5.4-mini"),
+    )
+    console = _Console()
+
+    assert change(console) is False
+    assert any("managed by your OpenSRE account" in line for line in console.printed)
+    assert any("opensre account logout" in line for line in console.printed)
 
 
 def _configured(monkeypatch: Any) -> None:
