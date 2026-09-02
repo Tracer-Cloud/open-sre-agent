@@ -64,10 +64,9 @@ def render_prompt_region(session: Session, state: ReplState, spinner: SpinnerSta
     compete with Ask User / option menus — free text is itself an option
     (``Or type your own answer...``), not a parallel composer.
 
-    The region always starts with one blank row so the hint/spinner line never
-    sits flush against whatever output scrolled above it. The row is constant
-    across all prompt states (no height delta between redraws) and is erased
-    with the rest of the region on submit (``erase_when_done=True``).
+    No leading blank row — Droid packs the next chrome flush under the last
+    scrollback line. Idle has no empty "Ready" placeholder either; that used
+    to read as a cavernous gap under the banner.
     """
     if typing_box_hidden(session, state):
         # Same newline count as ``_prompt_message`` so confirmation does not
@@ -92,13 +91,14 @@ def render_prompt_region(session: Session, state: ReplState, spinner: SpinnerSta
         plan_overlay = strip_cpr_sequences(
             task_plan_overlay_ansi(plan, expanded=state.plan_expanded)
         )
-    plan_prefix = f"{plan_overlay}\n\n" if plan_overlay else ""
+    # One trailing blank after the plan, not two — keeps the stack dense.
+    plan_prefix = f"{plan_overlay}\n" if plan_overlay else ""
 
     # A pending confirmation renders a stacked, arrow-navigable Yes/No choice
     # (box hidden). Density matches the streaming stack: status → Auto → composer.
     if state.is_awaiting_confirmation():
         choice = _confirmation_block(state)
-        return ANSI(f"\n{plan_prefix}{choice}\n{auto_line}\n{base}")
+        return ANSI(f"{plan_prefix}{choice}\n{auto_line}\n{base}")
 
     if state.is_ctrl_c_exit_hint_visible():
         prefix = prompt_rendering.ctrl_c_exit_hint_ansi()
@@ -111,9 +111,10 @@ def render_prompt_region(session: Session, state: ReplState, spinner: SpinnerSta
         )
     # Tools already paint a ``⏺`` line into scrollback; the live tool name is
     # folded into the spinner status row (same line as ``Invoking tools…``).
-    # Do not reserve a second action row here — that blank slot made the stack
-    # look sparse and filled mid-turn as the old composer-height jump.
-    return ANSI(f"\n{plan_prefix}{prefix}\n{auto_line}\n{base}")
+    # No leading blank — keep status → Auto → composer stacked like Droid.
+    if prefix:
+        return ANSI(f"{plan_prefix}{prefix}\n{auto_line}\n{base}")
+    return ANSI(f"{plan_prefix}{auto_line}\n{base}")
 
 
 _CONFIRM_HINT = "↑↓ Navigate • Enter confirm • Esc cancel"

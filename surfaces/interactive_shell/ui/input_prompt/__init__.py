@@ -12,6 +12,7 @@ from prompt_toolkit.layout.containers import (
     ConditionalContainer,
     FloatContainer,
     HSplit,
+    VerticalAlign,
     Window,
     to_container,
 )
@@ -117,9 +118,13 @@ def _install_prompt_frame(
                 filter=~shown,
             ),
         ]
-    # Keep one empty column so a right border never sits in pending-wrap, but
-    # prefer the widest safe span — Droid keeps chrome near the window edges.
-    chrome = HSplit([before_input, *box_rows], width=prompt_line_width)
+    # Pack status + composer at the top of the live region (no JUSTIFY gap
+    # between Auto and the input box). Last column stays empty for wrap safety.
+    chrome = HSplit(
+        [before_input, *box_rows],
+        width=prompt_line_width,
+        align=VerticalAlign.TOP,
+    )
     framed_input = FloatContainer(
         chrome,
         floats=main_input.floats,

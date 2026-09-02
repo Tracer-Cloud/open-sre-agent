@@ -147,9 +147,7 @@ def stream_to_console_state(
             # Non-TTY: hold the whole response when a closer is present so the
             # gather path can print the canonical rewrite once.
             return StreamRenderResult(text=text, deferred_closer=True)
-        console.print()
         render_reply_block(console, text)
-        console.print()
         return StreamRenderResult(text=text)
 
     chunks_iter = iter(chunks)
@@ -179,8 +177,6 @@ def stream_to_console_state(
                     drained.append(rest)
                 return StreamRenderResult(text="".join(peeked) + "".join(drained))
             break
-
-    console.print()
 
     # Paragraph-level streaming: chunks accumulate in ``para_buffer``
     # until a paragraph boundary (``\n\n`` outside a code block) closes
@@ -412,7 +408,6 @@ def stream_to_console_state(
             footer_elapsed_s=elapsed,
             footer_total_bytes=total_bytes,
         )
-    console.print()
     return StreamRenderResult(text=text, deferred_closer=False)
 
 
@@ -422,6 +417,4 @@ def publish_full_response(console: Console, text: str, *, label: str = "assistan
     body = (text or "").strip()
     if not body:
         return
-    console.print()
     render_reply_block(console, body)
-    console.print()

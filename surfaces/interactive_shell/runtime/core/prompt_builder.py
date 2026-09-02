@@ -254,4 +254,8 @@ class PromptBuilder:
         return prompt_rendering.resolve_prompt_placeholder(self.session)
 
     def render_submitted_prompt(self, console: Console, text: str) -> None:
+        # A blank row above each new user turn: Droid keeps the user row and its
+        # reply tight, with a clear gap between turns. The gap lives here (not in
+        # the row renderer) so the user row itself stays a single full-width plate.
+        console.print()
         prompt_rendering.render_submitted_prompt(console, self.session, text)

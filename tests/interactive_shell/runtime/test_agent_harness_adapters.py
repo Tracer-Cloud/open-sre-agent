@@ -107,13 +107,12 @@ def test_finalize_satisfies_the_host_contract_while_staying_silent() -> None:
     assert isinstance(sink, TurnOutput)
 
 
-def test_response_header_opens_with_a_blank_line() -> None:
-    """The sink owns this spacing: the turn engine no longer emits it.
+def test_response_header_opens_without_a_leading_blank() -> None:
+    """The sink used to print a blank before ``∴``; that padded turns vs Droid.
 
-    ``_show_response`` used to print a blank line before the header. That was
-    terminal layout living in the shared turn engine — chat sinks route
-    ``print`` to a placeholder status and never wanted it. Moving it here kept
-    the REPL looking the same; without a test, deleting it stays green.
+    ``_show_response`` used to own that spacer in the shared turn engine.
+    Chat sinks never wanted it; keeping a blank in the shell sink only was
+    the remaining gap between user row and reply marker.
     """
     # Arrange
     console = _RecordingConsole()
@@ -121,6 +120,7 @@ def test_response_header_opens_with_a_blank_line() -> None:
     # Act
     ShellOutputSink(console).render_response_header("assistant")  # type: ignore[arg-type]
 
-    # Assert: blank line first, then the ∴ marker.
-    assert console.lines[0] == ""
-    assert "∴" in console.lines[1]
+    # Assert: marker on the first painted line — no spacer row above.
+    assert console.lines
+    assert "∴" in console.lines[0]
+    assert console.lines[0] != ""

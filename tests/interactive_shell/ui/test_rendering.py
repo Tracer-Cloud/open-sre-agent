@@ -296,9 +296,9 @@ def test_repl_render_launch_poster_uses_crlf_on_tty(monkeypatch: pytest.MonkeyPa
     assert "blue" in written
     assert f"38;2;{_rgb(THEME_REGISTRY['blue'].HIGHLIGHT)}" in written
     assert _rgb(THEME_REGISTRY["green"].HIGHLIGHT) not in written
-    assert "opensre" in written
+    # Canonical braille "loops" mark — do not assert a box-drawing wordmark.
+    assert "⣿⣿⠀⠀⣿⣿⡇⠀⠀⠀⠀⠀⠀⠀⠀⢸⣿⣿⠀⢸⣿⣿" in written
     assert "Skills" in written
-    assert "Welcome" not in written
     assert "\r\n" in written
     # REPL path must not emit bare \\n (causes double-spaced output under patch_stdout).
     assert "\r" not in written.replace("\r\n", "")

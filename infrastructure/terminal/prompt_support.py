@@ -199,8 +199,8 @@ def print_session_resume_hint(console: Console, session_id: str) -> None:
     """Print REPL and CLI commands that restore ``session_id``."""
     cli_name = cli_invocation_name()
     console.print(f"[{DIM}]Resume this session with:[/]")
-    console.print(f"[{HIGHLIGHT}]/resume {session_id}[/]")
-    console.print(f"[{HIGHLIGHT}]{cli_name} --resume {session_id}[/]")
+    console.print(f"[{DIM}]/resume {session_id}[/]")
+    console.print(f"[{DIM}]{cli_name} --resume {session_id}[/]")
 
 
 def repl_prompt_note_ctrl_c(console: Console, session_id: str | None = None) -> bool:
@@ -208,7 +208,7 @@ def repl_prompt_note_ctrl_c(console: Console, session_id: str | None = None) -> 
         console.print()
         if session_id:
             print_session_resume_hint(console, session_id)
-        console.print(f"[{HIGHLIGHT}]Goodbye![/]")
+        console.print(f"[{DIM}]Goodbye![/]")
         return True
     console.print(f"[{DIM}](Press Ctrl+C again to exit)[/]")
     return False
