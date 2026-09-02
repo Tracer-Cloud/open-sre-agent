@@ -316,7 +316,17 @@ def parse_model_set_args(args: list[str]) -> tuple[str, str | None, str | None]:
 
 def _cmd_model(session: Session, console: Console, args: list[str]) -> bool:
     if not args and repl_tty_interactive():
-        return _interactive_model_menu(session, console)
+        # User-typed bare ``/model`` reserves exclusive stdin and opens the
+        # picker. Agent ``slash_invoke`` runs without that reservation — opening
+        # the picker against the live prompt races CPR into the composer and
+        # stalls SessionGoal turns (shell-load dogfood H3). Show settings
+        # instead; interactive switch stays on typed ``/model`` or ``/model set``.
+        from core.agent_harness.spi.session_state import exclusive_stdin_active
+
+        if exclusive_stdin_active(session):
+            return _interactive_model_menu(session, console)
+        render_models_table(console, repl_data.load_llm_settings())
+        return True
 
     sub = (args[0].lower() if args else "show").strip()
 
@@ -422,7 +432,8 @@ COMMANDS: list[SlashCommand] = [
             "/model toolcall set <model>",
         ),
         notes=(
-            "In a TTY, bare /model opens an interactive menu.",
+            "Typed bare /model opens an interactive menu; "
+            "agent slash_invoke /model shows current settings.",
             "The menu stays open after show actions and closes after set, restore, or toolcall changes.",
         ),
         first_arg_completions=_MODEL_FIRST_ARGS,

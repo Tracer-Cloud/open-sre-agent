@@ -148,7 +148,9 @@ class TestDispatchSlash:
         output = buf.getvalue()
         assert "Show or change active LLM settings." in output
         assert "/model set <provider>" in output
-        assert "In a TTY, bare /model opens an interactive menu." in output
+        assert "Typed bare /model opens an interactive menu" in output
+        assert "slash_invoke" in output
+        assert "shows current settings" in output
 
     def test_help_category_shows_compact_section(self) -> None:
         session = Session()
@@ -1180,7 +1182,9 @@ class TestModelCommand:
         monkeypatch.setenv("ANTHROPIC_API_KEY", "sk-test")
 
         console, buf = _capture()
-        dispatch_slash("/model", Session(), console)
+        session = Session()
+        session.terminal.exclusive_stdin_active = True
+        dispatch_slash("/model", session, console)
 
         output = buf.getvalue()
         assert "switched LLM provider" in output
@@ -1200,7 +1204,31 @@ class TestModelCommand:
         picks = iter(["show", "done"])
         monkeypatch.setattr(model_cmd, "repl_choose_one", lambda **_: next(picks))
         console, buf = _capture()
-        dispatch_slash("/model", Session(), console)
+        session = Session()
+        session.terminal.exclusive_stdin_active = True
+        dispatch_slash("/model", session, console)
+        assert "anthropic" in buf.getvalue()
+
+    def test_bare_model_without_exclusive_stdin_shows_table_not_menu(
+        self,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        """Agent slash_invoke path: TTY but no exclusive stdin → show, not picker."""
+        self._patch_llm(monkeypatch)
+        from surfaces.interactive_shell.command_registry.model import command as model_cmd
+
+        monkeypatch.setattr(model_cmd, "repl_tty_interactive", lambda: True)
+        menu_calls: list[str] = []
+        monkeypatch.setattr(
+            model_cmd,
+            "_interactive_model_menu",
+            lambda *_a, **_k: menu_calls.append("menu") or True,
+        )
+        console, buf = _capture()
+        session = Session()
+        assert session.terminal.exclusive_stdin_active is False
+        dispatch_slash("/model", session, console)
+        assert menu_calls == []
         assert "anthropic" in buf.getvalue()
 
     def test_model_interactive_escape_backs_out_without_changes(
@@ -1223,6 +1251,7 @@ class TestModelCommand:
         )
         monkeypatch.setattr(model_cmd, "repl_choose_one", lambda **_: next(selections))
         session = Session()
+        session.terminal.exclusive_stdin_active = True
         console, buf = _capture()
         dispatch_slash("/model", session, console)
 

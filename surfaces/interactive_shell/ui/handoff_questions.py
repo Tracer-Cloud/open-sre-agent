@@ -73,15 +73,23 @@ def render_handoff_answer_marker() -> Text:
 
 
 def render_choice_selection(console: Console, title: str, answer: str) -> None:
-    """Persist a compact selected-choice result after the transient picker closes."""
+    """Persist a compact selected-choice result after the transient picker closes.
+
+    A multi-select answer arrives as one option per line; each line is indented
+    under the heading so the selected set reads as one aligned block rather than
+    a first row that hangs indented while the rest sit flush-left.
+    """
     heading = Text()
     heading.append("✓ ", style=f"bold {ui_theme.HIGHLIGHT}")
     heading.append(_display_safe(title.strip()), style=str(ui_theme.TEXT))
-    selected = Text("  ", style=str(ui_theme.DIM))
-    selected.append(_display_safe(answer.strip()), style=str(ui_theme.BRAND))
     console.print()
     console.print(heading)
-    console.print(selected)
+    for line in _display_safe(answer.strip()).splitlines():
+        if not line.strip():
+            continue
+        row = Text("  ", style=str(ui_theme.DIM))
+        row.append(line, style=str(ui_theme.BRAND))
+        console.print(row)
     console.print()
 
 
