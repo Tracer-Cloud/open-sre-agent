@@ -157,8 +157,8 @@ def render_note_block(console: Console, text: str) -> None:
 
 
 def _reply_marker_style() -> str:
-    """Warm accent for the ``∴`` reply marker (built per call so theme swaps apply)."""
-    return f"bold {ui_theme.WARNING}"
+    """Warm Factory/Droid-parity accent for the ``∴`` reply marker."""
+    return ui_theme.reply_marker_style()
 
 
 def reply_gutter(body: RenderableType, *, lead: bool) -> Table:
@@ -182,7 +182,12 @@ def render_reply_block(console: Console, text: str, *, lead: bool = True) -> Non
     if not visible.strip():
         return
     with console.use_theme(ui_theme.MARKDOWN_THEME):
-        console.print(reply_gutter(_build_markdown_block(visible), lead=lead))
+        # Explicit TEXT on the row so plain paragraphs never fall through to the
+        # terminal default white (which washed out the warm marker in dogfood).
+        console.print(
+            reply_gutter(_build_markdown_block(visible), lead=lead),
+            style=str(ui_theme.TEXT),
+        )
 
 
 def render_response_header(console: Console, label: str) -> None:

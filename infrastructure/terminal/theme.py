@@ -19,6 +19,8 @@ Token reference
   BG         terminal background, never used as foreground
   INPUT_SURFACE  prompt/menu surface background
   BOLD_SKILL fixed green skill-activation label
+  reply marker  assistant ``∴`` lead-in — Factory/Droid-warm accent via
+                :func:`reply_marker_style` (not WARNING; must stay vivid)
 
 Usage
 -----
@@ -339,6 +341,25 @@ def _parse_hex_color(value: str) -> tuple[int, int, int]:
     return (int(stripped[0:2], 16), int(stripped[2:4], 16), int(stripped[4:6], 16))
 
 
+# Factory droid agent-message marker (`#D78700`). Chromatic OpenSRE themes use
+# this for the ``∴`` reply glyph so it reads as a brand accent next to recessed
+# body text — pale WARNING gold was reading as bold-white in dogfood vs droid.
+_REPLY_MARKER_HEX = "#D78700"
+
+
+def reply_marker_style() -> str:
+    """Bold warm style for the assistant ``∴`` reply marker.
+
+    Matches Factory droid's orange triangle and the Cursor/Claude pattern of a
+    single branded lead-in beside softer reply body text. Mono keeps the theme
+    highlight so the glyph stays visible without introducing chroma.
+    """
+    theme = _ACTIVE_THEME
+    if theme.name == "mono":
+        return f"bold {theme.HIGHLIGHT}"
+    return f"bold {_REPLY_MARKER_HEX}"
+
+
 class _LazyRichStyle(str):
     """Rich markup colour token that tracks :func:`set_active_theme`.
 
@@ -462,6 +483,11 @@ def _apply_theme(theme: CliTheme) -> None:
 
     MARKDOWN_THEME = Theme(
         {
+            # Plain paragraphs must set a color — otherwise the body falls back
+            # to the terminal default (often pure white) and the warm ``∴``
+            # marker stops reading as the accent (Droid/Cursor/Claude pattern:
+            # branded glyph + recessed body).
+            "markdown.paragraph": theme.TEXT,
             "markdown.code": f"bold {theme.HIGHLIGHT}",
             "markdown.code_block": theme.TEXT,
             "markdown.h1": f"bold {theme.HIGHLIGHT}",
@@ -567,6 +593,7 @@ __all__ = [
     "TEXT",
     "TEXT_ANSI",
     "WARNING",
+    "reply_marker_style",
 ]
 
 # ── Semantic glyphs ────────────────────────────────────────────────────────

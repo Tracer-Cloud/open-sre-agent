@@ -131,6 +131,40 @@ def test_shimmer_text_ansi_paints_a_traveling_metallic_wave() -> None:
     assert " tools" in spaced or "tools" in re.sub(r"\x1b\[[0-9;]*m", "", spaced)
 
 
+def test_reply_marker_style_is_vivid_droid_orange_on_chromatic_themes() -> None:
+    """Assistant ``∴`` must use Factory-warm orange, not pale WARNING gold."""
+    from infrastructure.terminal import theme as ui_theme
+
+    ui_theme.set_active_theme("blue")
+    assert ui_theme.reply_marker_style() == "bold #D78700"
+    ui_theme.set_active_theme("mono")
+    assert ui_theme.reply_marker_style() == f"bold {ui_theme.get_theme('mono').HIGHLIGHT}"
+
+
+def test_reply_block_paints_orange_marker_and_themed_body() -> None:
+    """Regression: marker washed out when body fell through to terminal white."""
+    import os
+
+    from surfaces.interactive_shell.ui.streaming.renderer import render_reply_block
+
+    os.environ.pop("NO_COLOR", None)
+    set_active_theme("blue")
+    console = Console(
+        force_terminal=True,
+        color_system="truecolor",
+        legacy_windows=False,
+        no_color=False,
+    )
+    with console.capture() as capture:
+        render_reply_block(console, "Hey! How can I help?")
+    output = capture.get()
+    assert "∴" in output
+    # Factory droid orange #D78700 → 215,135,0
+    assert "38;2;215;135;0m" in output
+    # Body uses theme TEXT (#B6BAC2 on blue), not unstyled default white
+    assert "38;2;182;186;194m" in output
+
+
 def test_palette_registry_keys_match_the_config_vocabulary() -> None:
     """The infra palettes must cover exactly the config-owned theme names.
 
