@@ -7,7 +7,7 @@ import pytest
 from core.agent.run_io import AgentRunResult
 from infrastructure.analytics import capture
 from infrastructure.analytics.events import Event
-from infrastructure.analytics.react_turn import run_react_agent_with_telemetry
+from infrastructure.analytics.react_turn import ReactPhase, run_react_agent_with_telemetry
 
 
 class _StubAnalytics:
@@ -61,7 +61,7 @@ def test_run_react_agent_with_telemetry_emits_one_completed_event(
     result = run_react_agent_with_telemetry(
         agent,  # type: ignore[arg-type]
         [{"role": "user", "content": "hello"}],
-        phase="action",
+        phase=ReactPhase.ACTION,
         iteration_cap=6,
         llm=_StubLLM(),
     )
@@ -87,7 +87,7 @@ def test_run_react_agent_with_telemetry_emits_error_event(
         run_react_agent_with_telemetry(
             agent,  # type: ignore[arg-type]
             [{"role": "user", "content": "hello"}],
-            phase="gather",
+            phase=ReactPhase.GATHER,
             iteration_cap=4,
             llm=_StubLLM(),
         )
@@ -112,7 +112,7 @@ def test_run_react_agent_with_telemetry_reports_partial_iterations_on_error(
         run_react_agent_with_telemetry(
             agent,  # type: ignore[arg-type]
             [{"role": "user", "content": "hello"}],
-            phase="action",
+            phase=ReactPhase.ACTION,
             iteration_cap=6,
             llm=_StubLLM(),
         )

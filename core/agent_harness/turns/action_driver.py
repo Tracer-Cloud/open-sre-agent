@@ -67,7 +67,7 @@ from core.events import runtime_event_callback_from_observer
 from core.llm.types import AgentLLMResponse, SchemaDescribedTool, ToolCall
 from core.tool.execution import ToolExecutionHooks, public_tool_input
 from core.tool_framework.tags import SUMMARIZE_OBSERVATION_TAG
-from infrastructure.analytics.react_turn import run_react_agent_with_telemetry
+from infrastructure.analytics.react_turn import ReactPhase, run_react_agent_with_telemetry
 from infrastructure.observability.trace.prompts import persist_turn_system_prompt
 from infrastructure.observability.trace.spans import component_span
 from infrastructure.text import is_data_blob
@@ -913,7 +913,7 @@ def _run_action_turn(
         result = run_react_agent_with_telemetry(
             built.agent,
             [{"role": "user", "content": built.user_message}],
-            phase="action",
+            phase=ReactPhase.ACTION,
             iteration_cap=built.max_iterations,
             llm=built.llm,
             session=session,

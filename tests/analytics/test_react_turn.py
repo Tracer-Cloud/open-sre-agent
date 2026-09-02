@@ -5,7 +5,12 @@ import pytest
 from core.agent.run_io import AgentRunResult
 from infrastructure.analytics import capture
 from infrastructure.analytics.events import Event
-from infrastructure.analytics.react_turn import emit_react_turn_completed, resolve_react_stop_reason
+from infrastructure.analytics.react_turn import (
+    ReactPhase,
+    ReactStopReason,
+    emit_react_turn_completed,
+    resolve_react_stop_reason,
+)
 
 
 class _StubLLM:
@@ -24,15 +29,30 @@ class _StubAnalytics:
 @pytest.mark.parametrize(
     ("kwargs", "expected"),
     [
-        ({"hit_iteration_cap": False, "tool_calls_executed": 2}, "completed"),
-        ({"hit_iteration_cap": True, "tool_calls_executed": 2}, "iteration_cap"),
-        ({"hit_iteration_cap": False, "tool_calls_executed": 0}, "no_tools_needed"),
-        ({"hit_iteration_cap": False, "tool_calls_executed": 0, "error": RuntimeError()}, "error"),
-        ({"hit_iteration_cap": False, "tool_calls_executed": 0, "cancelled": True}, "cancelled"),
+        ({"hit_iteration_cap": False, "tool_calls_executed": 2}, ReactStopReason.COMPLETED),
+        ({"hit_iteration_cap": True, "tool_calls_executed": 2}, ReactStopReason.ITERATION_CAP),
+        ({"hit_iteration_cap": False, "tool_calls_executed": 0}, ReactStopReason.NO_TOOLS_NEEDED),
+        (
+            {"hit_iteration_cap": False, "tool_calls_executed": 0, "error": RuntimeError()},
+            ReactStopReason.ERROR,
+        ),
+        (
+            {"hit_iteration_cap": False, "tool_calls_executed": 0, "cancelled": True},
+            ReactStopReason.CANCELLED,
+        ),
     ],
 )
-def test_resolve_react_stop_reason(kwargs: dict[str, object], expected: str) -> None:
-    assert resolve_react_stop_reason(**kwargs) == expected  # type: ignore[arg-type]
+def test_resolve_react_stop_reason(kwargs: dict[str, object], expected: ReactStopReason) -> None:
+    result = resolve_react_stop_reason(**kwargs)  # type: ignore[arg-type]
+    assert result is expected
+
+
+def test_react_stop_reason_round_trips_from_analytics_string() -> None:
+    for member in ReactStopReason:
+        assert ReactStopReason(str(member)) is member
+        assert member == member.value
+
+    assert ReactPhase("action") is ReactPhase.ACTION
 
 
 def test_capture_react_turn_completed_emits_required_properties(
@@ -91,7 +111,7 @@ def test_emit_react_turn_completed_sets_hit_iteration_cap_from_stop_reason(
     )
 
     emit_react_turn_completed(
-        phase="gather",
+        phase=ReactPhase.GATHER,
         result=AgentRunResult(
             messages=[],
             final_text="",

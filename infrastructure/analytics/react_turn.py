@@ -13,7 +13,8 @@ from __future__ import annotations
 
 import time
 from collections.abc import Sequence
-from typing import Any, Literal
+from enum import StrEnum
+from typing import Any
 
 from core.agent import Agent
 from core.agent.run_io import AgentRunResult
@@ -28,8 +29,22 @@ from infrastructure.analytics.repl_context import (
     get_prompt_turn_id,
 )
 
-ReactPhase = Literal["action", "gather"]
-ReactStopReason = Literal["completed", "iteration_cap", "error", "cancelled", "no_tools_needed"]
+
+class ReactPhase(StrEnum):
+    """ReAct turn phase. String values are a public analytics vocabulary."""
+
+    ACTION = "action"
+    GATHER = "gather"
+
+
+class ReactStopReason(StrEnum):
+    """Why a ReAct turn ended. String values are a public analytics vocabulary."""
+
+    COMPLETED = "completed"
+    ITERATION_CAP = "iteration_cap"
+    ERROR = "error"
+    CANCELLED = "cancelled"
+    NO_TOOLS_NEEDED = "no_tools_needed"
 
 
 def resolve_react_stop_reason(
@@ -41,14 +56,14 @@ def resolve_react_stop_reason(
 ) -> ReactStopReason:
     """Map a finished or failed Agent.run to the public stop-reason enum."""
     if cancelled:
-        return "cancelled"
+        return ReactStopReason.CANCELLED
     if error is not None:
-        return "error"
+        return ReactStopReason.ERROR
     if hit_iteration_cap:
-        return "iteration_cap"
+        return ReactStopReason.ITERATION_CAP
     if tool_calls_executed == 0:
-        return "no_tools_needed"
-    return "completed"
+        return ReactStopReason.NO_TOOLS_NEEDED
+    return ReactStopReason.COMPLETED
 
 
 def _session_investigation_id(session: SessionState | None) -> str | None:
@@ -120,7 +135,7 @@ def emit_react_turn_completed(
         error=error,
         cancelled=cancelled,
     )
-    hit_iteration_cap = stop_reason == "iteration_cap"
+    hit_iteration_cap = stop_reason == ReactStopReason.ITERATION_CAP
 
     cli_turn_kind = get_cli_turn_kind() or "agent"
     investigation_id = _session_investigation_id(session)
