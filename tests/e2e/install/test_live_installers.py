@@ -22,6 +22,7 @@ from pathlib import Path
 import pytest
 
 from config.constants.paths import REPO_ROOT
+from tests.e2e.install._shared import assert_binary_smoke
 
 pytestmark = [
     pytest.mark.e2e,
@@ -161,22 +162,7 @@ def test_live_install_sh_release_channel(tmp_path: Path) -> None:
     assert binary.is_file(), combined
     assert bool(binary.stat().st_mode & stat.S_IXUSR)
 
-    version = subprocess.run(
-        [str(binary), "--version"], capture_output=True, text=True, timeout=30, check=False
-    )
-    assert version.returncode == 0, version.stderr
-    if requested_tag:
-        assert requested_tag.removeprefix("v") in version.stdout, version.stdout
-
-    help_result = subprocess.run(
-        [str(binary), "--help"], capture_output=True, text=True, timeout=30, check=False
-    )
-    assert help_result.returncode == 0, help_result.stdout + help_result.stderr
-
-    smoke = subprocess.run(
-        [str(binary), "_package-smoke"], capture_output=True, text=True, timeout=60, check=False
-    )
-    assert smoke.returncode == 0, smoke.stdout + smoke.stderr
+    assert_binary_smoke(binary, help_flag="--help", requested_tag=requested_tag)
 
 
 @pytest.mark.skipif(shutil.which("brew") is None, reason="Homebrew not installed")

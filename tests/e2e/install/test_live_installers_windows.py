@@ -17,6 +17,7 @@ from pathlib import Path
 import pytest
 
 from config.constants.paths import REPO_ROOT
+from tests.e2e.install._shared import assert_binary_smoke
 
 pytestmark = [
     pytest.mark.e2e,
@@ -81,19 +82,4 @@ def test_live_install_ps1_release_channel(tmp_path: Path) -> None:
     binary = install_dir / "opensre.exe"
     assert binary.is_file(), combined
 
-    version = subprocess.run(
-        [str(binary), "--version"], capture_output=True, text=True, timeout=30, check=False
-    )
-    assert version.returncode == 0, version.stderr
-    if requested_tag:
-        assert requested_tag.removeprefix("v") in version.stdout, version.stdout
-
-    help_result = subprocess.run(
-        [str(binary), "-h"], capture_output=True, text=True, timeout=30, check=False
-    )
-    assert help_result.returncode == 0, help_result.stdout + help_result.stderr
-
-    smoke = subprocess.run(
-        [str(binary), "_package-smoke"], capture_output=True, text=True, timeout=60, check=False
-    )
-    assert smoke.returncode == 0, smoke.stdout + smoke.stderr
+    assert_binary_smoke(binary, help_flag="-h", requested_tag=requested_tag)

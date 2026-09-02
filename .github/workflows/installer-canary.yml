@@ -46,7 +46,10 @@ jobs:
             target: windows-x64
             test_path: tests/e2e/install/test_live_installers_windows.py
     runs-on: ${{ matrix.os }}
-    timeout-minutes: 20
+    # macOS also runs the Homebrew tests (tap/fetch/install), and every leg is
+    # bound by real network calls (CDN, GitHub, brew) — match the e2e job
+    # budget in ci.yml rather than the tighter default.
+    timeout-minutes: 30
 
     steps:
       - uses: actions/checkout@v5

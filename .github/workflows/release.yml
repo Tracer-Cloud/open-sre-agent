@@ -716,10 +716,16 @@ jobs:
           TAG_NAME: ${{ needs.prepare.outputs.tag_name }}
         shell: bash
         run: |
-          set -euo pipefail
-          gh api "repos/${{ github.repository }}/dispatches" \
+          set -uo pipefail
+          if ! gh api "repos/${{ github.repository }}/dispatches" \
             -f event_type=installer-release-published \
-            -f "client_payload[tag]=${TAG_NAME}"
+            -f "client_payload[tag]=${TAG_NAME}"; then
+            # continue-on-error keeps the release green on a dispatch hiccup;
+            # surface it loudly so it isn't silently missed until the next
+            # scheduled installer-canary run (up to ~24h later).
+            echo "::warning::Failed to dispatch installer-canary for ${TAG_NAME}. It will still run on the next scheduled canary." >&2
+            exit 1
+          fi
 
   publish-main-release:
     if: always() && needs.prepare.outputs.channel == 'main' && needs.build-binaries.result == 'success'
