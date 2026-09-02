@@ -2,6 +2,7 @@
 
 from typing import Any
 
+from core.domain.types.evidence import record_evidence_entry
 from core.domain.types.tools import ToolSurface
 from core.tool_framework import tool
 from integrations.azure_sql import (
@@ -10,6 +11,34 @@ from integrations.azure_sql import (
     get_wait_stats,
     resolve_azure_sql_config,
 )
+
+
+def _map_get_azure_sql_wait_stats(
+    evidence: dict[str, Any], output: dict[str, Any], _tool_input: dict[str, Any]
+) -> None:
+    """Cite the wait-type count and the top wait by total wait time."""
+    if not output.get("available"):
+        return
+    waits = output.get("waits") or []
+    if not isinstance(waits, list) or not waits:
+        return
+    parts = [f"{len(waits)} wait type(s)"]
+    top = max(
+        waits,
+        key=lambda w: (
+            w.get("wait_time_ms") if isinstance(w.get("wait_time_ms"), (int, float)) else -1
+        ),
+    )
+    top_type = top.get("wait_type")
+    top_ms = top.get("wait_time_ms")
+    if top_type and isinstance(top_ms, (int, float)):
+        parts.append(f"top {top_type} {top_ms:.0f}ms")
+    record_evidence_entry(
+        evidence,
+        source="get_azure_sql_wait_stats",
+        label="Azure SQL Wait Stats",
+        summary=", ".join(parts),
+    )
 
 
 @tool(
@@ -25,6 +54,7 @@ from integrations.azure_sql import (
     is_available=azure_sql_is_available,
     injected_params=("server",),
     extract_params=azure_sql_extract_params,
+    evidence_mapper=_map_get_azure_sql_wait_stats,
 )
 def get_azure_sql_wait_stats(
     server: str,

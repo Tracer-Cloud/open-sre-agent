@@ -26,11 +26,6 @@ fetch_failed_run
 find_yc_api
 fix_sentry_issue
 get_airflow_metrics
-get_azure_sql_current_queries
-get_azure_sql_resource_stats
-get_azure_sql_server_status
-get_azure_sql_slow_queries
-get_azure_sql_wait_stats
 get_batch_statistics
 get_cloudwatch_batch_metrics
 get_cloudwatch_logs

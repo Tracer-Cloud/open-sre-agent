@@ -2,6 +2,7 @@
 
 from typing import Any
 
+from core.domain.types.evidence import record_evidence_entry
 from core.domain.types.tools import ToolSurface
 from core.tool_framework import tool
 from core.tool_framework.utils import call_db_tool_with_default_db_warning
@@ -11,6 +12,29 @@ from integrations.azure_sql import (
     get_slow_queries,
     resolve_azure_sql_config,
 )
+
+
+def _map_get_azure_sql_slow_queries(
+    evidence: dict[str, Any], output: dict[str, Any], _tool_input: dict[str, Any]
+) -> None:
+    """Cite the slow-query count and the slowest average elapsed time."""
+    if not output.get("available"):
+        return
+    queries = output.get("queries") or []
+    if not isinstance(queries, list) or not queries:
+        return
+    parts = [f"{len(queries)} slow query/queries"]
+    averages = [
+        q.get("avg_time_ms") for q in queries if isinstance(q.get("avg_time_ms"), (int, float))
+    ]
+    if averages:
+        parts.append(f"slowest avg {max(averages):.0f}ms")
+    record_evidence_entry(
+        evidence,
+        source="get_azure_sql_slow_queries",
+        label="Azure SQL Slow Queries",
+        summary=", ".join(parts),
+    )
 
 
 @tool(
@@ -29,6 +53,7 @@ from integrations.azure_sql import (
     is_available=azure_sql_is_available,
     injected_params=("server",),
     extract_params=azure_sql_extract_params,
+    evidence_mapper=_map_get_azure_sql_slow_queries,
 )
 def get_azure_sql_slow_queries(
     server: str,

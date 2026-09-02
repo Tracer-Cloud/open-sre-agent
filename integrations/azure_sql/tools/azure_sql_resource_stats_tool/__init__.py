@@ -2,6 +2,7 @@
 
 from typing import Any
 
+from core.domain.types.evidence import record_evidence_entry
 from core.domain.types.tools import ToolSurface
 from core.tool_framework import tool
 from integrations.azure_sql import (
@@ -10,6 +11,27 @@ from integrations.azure_sql import (
     get_resource_stats,
     resolve_azure_sql_config,
 )
+
+
+def _map_get_azure_sql_resource_stats(
+    evidence: dict[str, Any], output: dict[str, Any], _tool_input: dict[str, Any]
+) -> None:
+    """Cite the throttling risk and sample count over the rolling window."""
+    if not output.get("available"):
+        return
+    total = output.get("total_samples")
+    if not isinstance(total, int) or total <= 0:
+        return
+    risk = output.get("throttling_risk") or "none"
+    parts = [f"{total} sample(s)"]
+    if risk != "none":
+        parts.append(f"throttling risk {risk}")
+    record_evidence_entry(
+        evidence,
+        source="get_azure_sql_resource_stats",
+        label="Azure SQL Resource Stats",
+        summary=", ".join(parts),
+    )
 
 
 @tool(
@@ -25,6 +47,7 @@ from integrations.azure_sql import (
     is_available=azure_sql_is_available,
     injected_params=("server",),
     extract_params=azure_sql_extract_params,
+    evidence_mapper=_map_get_azure_sql_resource_stats,
 )
 def get_azure_sql_resource_stats(
     server: str,
