@@ -147,7 +147,10 @@ def stream_to_console_state(
             # Non-TTY: hold the whole response when a closer is present so the
             # gather path can print the canonical rewrite once.
             return StreamRenderResult(text=text, deferred_closer=True)
+        # Blank row between the user turn and its reply (matches the TTY rhythm).
+        console.print()
         render_reply_block(console, text)
+        console.print()
         return StreamRenderResult(text=text)
 
     chunks_iter = iter(chunks)
@@ -225,6 +228,10 @@ def stream_to_console_state(
         starts_with_self_spacing_block = bool(
             markdown.parsed and markdown.parsed[0].type in _SELF_SPACING_BLOCK_TOKEN_TYPES
         )
+        if not rendered_paragraphs:
+            # One blank row between the user turn and its reply (Droid rhythm):
+            # the echo row and the ∴ reply must not sit flush against each other.
+            console.print()
         if rendered_paragraphs and source_break and not starts_with_self_spacing_block:
             # ``_flush_paragraphs`` consumes the source ``\n\n`` boundary.
             # Restore it explicitly unless Rich adds equivalent leading space
@@ -408,6 +415,9 @@ def stream_to_console_state(
             footer_elapsed_s=elapsed,
             footer_total_bytes=total_bytes,
         )
+    # One blank after the reply so the next user row / prompt chrome breathes
+    # like Droid — not flush against the last reply line.
+    console.print()
     return StreamRenderResult(text=text, deferred_closer=False)
 
 
@@ -417,4 +427,7 @@ def publish_full_response(console: Console, text: str, *, label: str = "assistan
     body = (text or "").strip()
     if not body:
         return
+    # Blank row between the user turn and its reply (matches the TTY rhythm).
+    console.print()
     render_reply_block(console, body)
+    console.print()

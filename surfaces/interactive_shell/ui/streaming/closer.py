@@ -20,3 +20,4 @@ def finish_deferred_closer(
     closer = closer_tail_from(final_text)
     if closer:
         render_markdown_block(console, closer)
+    console.print()

@@ -48,7 +48,7 @@ def _cmd_exit(session: Session, console: Console, _args: list[str]) -> bool:
         console.print()
         print_session_resume_hint(console, session.session_id)
     _flush_analytics_on_exit(console)
-    console.print(f"[{DIM}]goodbye.[/]")
+    console.print(f"[{HIGHLIGHT}]goodbye.[/]")
     return False
 
 

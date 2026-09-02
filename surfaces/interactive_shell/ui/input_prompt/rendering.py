@@ -149,6 +149,8 @@ def render_submitted_prompt(console: Console, session: Session, text: str) -> No
                 f"{surface}{counter_ansi}{hang}{ui_theme.ANSI_RESET}"
                 f"{surface}{body_ansi}{body}{' ' * pad}{ui_theme.ANSI_RESET}"
             )
+    # Single trailing newline — the reply path owns the blank row under the
+    # user plate so we do not stack two spacers (Droid: one row of margin).
     console.file.write("".join(parts) + "\n")
     console.file.flush()
 

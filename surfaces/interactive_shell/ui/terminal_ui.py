@@ -64,9 +64,9 @@ def render_prompt_region(session: Session, state: ReplState, spinner: SpinnerSta
     compete with Ask User / option menus — free text is itself an option
     (``Or type your own answer...``), not a parallel composer.
 
-    No leading blank row — Droid packs the next chrome flush under the last
-    scrollback line. Idle has no empty "Ready" placeholder either; that used
-    to read as a cavernous gap under the banner.
+    One leading blank row separates scrollback from status → Auto → composer,
+    matching Droid's row margin between transcript and chrome. Idle still has
+    no empty "Ready" placeholder under the banner.
     """
     if typing_box_hidden(session, state):
         # Same newline count as ``_prompt_message`` so confirmation does not
@@ -98,7 +98,7 @@ def render_prompt_region(session: Session, state: ReplState, spinner: SpinnerSta
     # (box hidden). Density matches the streaming stack: status → Auto → composer.
     if state.is_awaiting_confirmation():
         choice = _confirmation_block(state)
-        return ANSI(f"{plan_prefix}{choice}\n{auto_line}\n{base}")
+        return ANSI(f"\n{plan_prefix}{choice}\n{auto_line}\n{base}")
 
     if state.is_ctrl_c_exit_hint_visible():
         prefix = prompt_rendering.ctrl_c_exit_hint_ansi()
@@ -111,10 +111,10 @@ def render_prompt_region(session: Session, state: ReplState, spinner: SpinnerSta
         )
     # Tools already paint a ``⏺`` line into scrollback; the live tool name is
     # folded into the spinner status row (same line as ``Invoking tools…``).
-    # No leading blank — keep status → Auto → composer stacked like Droid.
+    # Leading blank = Droid row margin under the last transcript line.
     if prefix:
-        return ANSI(f"{plan_prefix}{prefix}\n{auto_line}\n{base}")
-    return ANSI(f"{plan_prefix}{auto_line}\n{base}")
+        return ANSI(f"\n{plan_prefix}{prefix}\n{auto_line}\n{base}")
+    return ANSI(f"\n{plan_prefix}{auto_line}\n{base}")
 
 
 _CONFIRM_HINT = "↑↓ Navigate • Enter confirm • Esc cancel"

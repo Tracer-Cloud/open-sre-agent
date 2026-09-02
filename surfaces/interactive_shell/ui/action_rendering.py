@@ -30,7 +30,6 @@ from infrastructure.terminal.theme import (
     DIM,
     SECONDARY,
     TEXT,
-    WARNING,
     reply_marker_style,
 )
 from infrastructure.text import is_data_blob
@@ -534,8 +533,9 @@ class ActionRenderObserver:
         if content:
             separator = " · " if label in _COMMAND_TOOL_LABELS else " "
             line.append(separator, style=str(DIM))
-            # Tan payload like Droid's Execute line — warm, not cold blue/dim.
-            line.append(content, style=str(WARNING))
+            # Quiet payload that tracks the active palette (SECONDARY), so it
+            # never reads as an off-theme amber under a non-warm theme.
+            line.append(content, style=str(SECONDARY))
         self.console.print(line)
 
     def _render_tool_result(self, data: dict[str, Any]) -> None:
