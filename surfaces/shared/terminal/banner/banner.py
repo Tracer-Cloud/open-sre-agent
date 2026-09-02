@@ -81,12 +81,10 @@ _WORDMARK_SPIN_FRAME_INTERVAL_SECONDS = 1 / 60
 _MIN_PROJECTED_SCALE = 0.08
 _BRAILLE_BASE = 0x2800
 _BRAILLE_LIMIT = 0x28FF
-_LOGO_FIRST_ROW = 2
-_SAVE_CURSOR = "\x1b7"
-_RESTORE_CURSOR = "\x1b8"
 _HIDE_CURSOR = "\x1b[?25l"
 _SHOW_CURSOR = "\x1b[?25h"
 _ERASE_LINE = "\x1b[2K"
+_COLUMN_ONE = "\x1b[1G"
 _SYNCED_OUTPUT_START = "\x1b[?2026h"
 _SYNCED_OUTPUT_END = "\x1b[?2026l"
 
@@ -184,26 +182,30 @@ def _frame_style(frame: WordmarkSpinFrame) -> str:
     return ui_theme.HIGHLIGHT_ANSI
 
 
-def _animation_frame(frame: WordmarkSpinFrame, *, width: int) -> str:
-    """Paint one frame on the banner rows while preserving the cursor."""
+def _animation_frame(
+    frame: WordmarkSpinFrame,
+    *,
+    width: int,
+    rewind: bool,
+) -> str:
+    """Paint one frame in the temporary startup region."""
     style = _frame_style(frame)
-    rows = []
-    for offset, row in enumerate(frame.rows):
+    rows = [""]
+    for row in frame.rows:
         left_pad = max((width - cell_len(row)) // 2, 0)
-        rows.append(
-            f"\x1b[{_LOGO_FIRST_ROW + offset};1H"
-            f"{_ERASE_LINE}{' ' * left_pad}{style}\x1b[1m"
-            f"{row}{ui_theme.ANSI_RESET}"
-        )
-    return (
-        f"{_SYNCED_OUTPUT_START}{_SAVE_CURSOR}{''.join(rows)}{_RESTORE_CURSOR}{_SYNCED_OUTPUT_END}"
-    )
+        rows.append(f"{' ' * left_pad}{style}\x1b[1m{row}{ui_theme.ANSI_RESET}")
+    frame_text = f"{_COLUMN_ONE}{_ERASE_LINE}" + (f"\r\n{_COLUMN_ONE}{_ERASE_LINE}".join(rows))
+    move_to_top = f"{_COLUMN_ONE}\x1b[{len(rows) - 1}A" if rewind else ""
+    return f"{_SYNCED_OUTPUT_START}{move_to_top}{frame_text}{_SYNCED_OUTPUT_END}"
 
 
 def _clear_animation(frame: WordmarkSpinFrame) -> str:
-    rows = (f"\x1b[{_LOGO_FIRST_ROW + offset};1H{_ERASE_LINE}" for offset in range(len(frame.rows)))
+    row_count = len(frame.rows) + 1
+    move_to_top = f"{_COLUMN_ONE}\x1b[{row_count - 1}A"
+    clear_rows = _ERASE_LINE + (f"\x1b[1B{_COLUMN_ONE}{_ERASE_LINE}" * (row_count - 1))
     return (
-        f"{_SYNCED_OUTPUT_START}{_SAVE_CURSOR}{''.join(rows)}{_RESTORE_CURSOR}{_SYNCED_OUTPUT_END}"
+        f"{_SYNCED_OUTPUT_START}{move_to_top}{clear_rows}"
+        f"\x1b[{row_count - 1}A{_COLUMN_ONE}{_SYNCED_OUTPUT_END}"
     )
 
 
@@ -221,8 +223,14 @@ def animate_launch_wordmark(console: Console) -> None:
     stream = sys.stdout
     try:
         stream.write(_HIDE_CURSOR)
-        for frame in frames:
-            stream.write(_animation_frame(frame, width=console.width))
+        for index, frame in enumerate(frames):
+            stream.write(
+                _animation_frame(
+                    frame,
+                    width=console.width,
+                    rewind=index > 0,
+                )
+            )
             stream.flush()
             time.sleep(_WORDMARK_SPIN_FRAME_INTERVAL_SECONDS)
     finally:

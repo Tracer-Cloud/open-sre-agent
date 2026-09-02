@@ -519,9 +519,9 @@ async def test_composer_frame_preferred_height_does_not_crash() -> None:
 def test_composer_frame_uses_subtle_rounded_corners() -> None:
     from prompt_toolkit.layout.containers import VSplit, Window
 
-    from surfaces.interactive_shell.ui.input_prompt import _rounded_composer_frame
+    from surfaces.interactive_shell.ui.input_prompt import rounded_composer_frame
 
-    frame = _rounded_composer_frame(Window())
+    frame = rounded_composer_frame(Window())
     top, _middle, bottom = frame.children
 
     assert isinstance(top, VSplit)

@@ -148,9 +148,12 @@ def test_launch_banner_spins_once_in_place_on_tty(monkeypatch: object) -> None:
 
     written = "".join(fake_stdout.writes)
     animation_end = written.index("\x1b[?25h") + len("\x1b[?25h")
-    assert written.count("\x1b[2;1H") > 10
-    assert "\n" not in written[:animation_end]
-    assert written.index("\x1b[?25l") < written.index("\x1b[2;1H")
+    animation = written[:animation_end]
+    assert written.count("\x1b[10A") > 10
+    assert "\x1b[2;1H" not in animation
+    assert "\x1b[H" not in animation
+    assert "\n" not in animation.replace("\r\n", "")
+    assert written.index("\x1b[?25l") < written.index("\x1b[1G")
     assert written.index("\x1b[?25h") < written.index("Welcome to OpenSRE CLI")
 
 
