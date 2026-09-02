@@ -345,6 +345,7 @@ def _generic_tool_results(result: Any) -> list[tuple[ToolCall, Any]]:
 _DISPLAY_OUTPUT_MAX_LINES = 4
 _DISPLAY_OUTPUT_MAX_CHARS = 240
 _OUTPUT_TRUNCATED_MARKER = "… (output truncated)"
+_EXPAND_MARKER_RE = re.compile(r"^… \d+ more lines?$")
 
 
 _PLAN_SNAPSHOT_RE = re.compile(r"Plan\s*[·.]\s*\d+\s*/\s*\d+(?:\s*[✓●○][^✓●○\n]*)*")
@@ -373,10 +374,33 @@ def _looks_like_json(text: str) -> bool:
     return True
 
 
+def _is_output_truncation_marker(line: str) -> bool:
+    return line == _OUTPUT_TRUNCATED_MARKER or bool(_EXPAND_MARKER_RE.fullmatch(line))
+
+
+def _split_output_truncation_markers(text: str) -> tuple[str, str]:
+    """Peel trailing truncation-marker lines from a capped preview.
+
+    Returns ``(body, markers)``. *markers* is the trailing marker block — the
+    character-cap line, the folded-line peek, or both — or empty when nothing
+    was truncated.
+    """
+    lines = text.split("\n")
+    cut = len(lines)
+    while cut and _is_output_truncation_marker(lines[cut - 1]):
+        cut -= 1
+    return "\n".join(lines[:cut]), "\n".join(lines[cut:])
+
+
 def _cap_for_display(text: str) -> str:
     """Cap verbose tool output for the console so a large result cannot flood the
     transcript. The model and persisted history keep the full text; only the
-    user-facing preview is truncated to a short head (Droid-style)."""
+    user-facing preview is truncated to a short head (Droid-style).
+
+    Line-fold and character-cap can both apply to the same preview; each one
+    that fires is reported so a mid-line cut is never silent behind a
+    ``… N more lines`` marker.
+    """
     if not text:
         return text
     peek, hidden = build_output_peek(text, max_lines=_DISPLAY_OUTPUT_MAX_LINES)
@@ -384,10 +408,13 @@ def _cap_for_display(text: str) -> str:
     if len(peek) > _DISPLAY_OUTPUT_MAX_CHARS:
         peek = peek[:_DISPLAY_OUTPUT_MAX_CHARS].rstrip()
         char_truncated = True
-    if hidden:
-        return f"{peek}\n{format_expand_marker(hidden)}"
+    markers: list[str] = []
     if char_truncated:
-        return f"{peek}\n{_OUTPUT_TRUNCATED_MARKER}"
+        markers.append(_OUTPUT_TRUNCATED_MARKER)
+    if hidden:
+        markers.append(format_expand_marker(hidden))
+    if markers:
+        return peek + "\n" + "\n".join(markers)
     return peek
 
 
@@ -402,7 +429,20 @@ def _is_data_blob(text: str) -> bool:
     stripped = text.strip()
     if not stripped:
         return False
-    return stripped[0] in "{[" or stripped.count('":') >= 3
+    if stripped[0] in "{[":
+        return True
+    # Mid-object fragments (and short gh ``summary`` previews of JSON) still
+    # carry ``":`` key separators — two is enough once the text is clearly a
+    # record slice rather than prose.
+    return stripped.count('":') >= 2
+
+
+def _user_facing_tool_text(text: str) -> str:
+    """Return *text* for the transcript, or ``""`` when it is a data blob."""
+    stripped = text.strip()
+    if not stripped or _is_data_blob(stripped):
+        return ""
+    return stripped
 
 
 def _visible_stdout(stdout: str) -> str:
@@ -414,12 +454,7 @@ def _visible_stdout(stdout: str) -> str:
     Claude Code / Droid keep tool results out of the reply prose. Plain-text
     output (logs, a short listing) is still shown, capped later at display time.
     """
-    stripped = stdout.strip()
-    if not stripped:
-        return ""
-    if _is_data_blob(stripped):
-        return ""
-    return stripped
+    return _user_facing_tool_text(stdout)
 
 
 def _format_generic_tool_payload(tool_call: ToolCall, tool_result: Any) -> str:
@@ -428,12 +463,14 @@ def _format_generic_tool_payload(tool_call: ToolCall, tool_result: Any) -> str:
         return ""
     preferred_response = _preferred_tool_response_text(tool_result)
     if preferred_response:
-        return preferred_response
+        return _user_facing_tool_text(preferred_response)
     details = getattr(tool_result, "details", None)
     if isinstance(details, dict):
         summary = details.get("summary")
         if isinstance(summary, str) and summary.strip():
-            return summary.strip()
+            # gh ``summary`` for ``api`` used to be a sliced JSON string — hide
+            # that the same way as raw stdout so the transcript stays prose.
+            return _user_facing_tool_text(summary)
         stdout = details.get("stdout")
         if details.get("ok") and isinstance(stdout, str) and stdout.strip():
             return _visible_stdout(stdout)
@@ -453,10 +490,10 @@ def _format_generic_tool_payload(tool_call: ToolCall, tool_result: Any) -> str:
     if isinstance(parsed, dict):
         response_text = parsed.get("response_text")
         if isinstance(response_text, str) and response_text.strip():
-            return response_text.strip()
+            return _user_facing_tool_text(response_text)
         summary = parsed.get("summary")
         if isinstance(summary, str) and summary.strip():
-            return summary.strip()
+            return _user_facing_tool_text(summary)
         if parsed.get("ok") and isinstance(parsed.get("stdout"), str) and parsed["stdout"].strip():
             return _visible_stdout(str(parsed["stdout"]))
         if parsed.get("error"):
@@ -985,23 +1022,23 @@ def _compose_response(
     # github_cli / other registry tools without double-printing shell output.
     # response_text still includes history for persistence / non-TTY surfaces.
     display_generic = _cap_for_display(generic_text)
+    # Defense: never fence a data blob into the transcript (summary/stdout leaks
+    # used to pretty-print truncated JSON behind a text fence).
+    if _is_data_blob(generic_text):
+        display_generic = ""
     is_json = _looks_like_json(generic_text)
-    truncated = display_generic.endswith(_OUTPUT_TRUNCATED_MARKER) or (
-        "… " in display_generic and " more line" in display_generic
-    )
+    body, markers = _split_output_truncation_markers(display_generic)
+    truncated = bool(markers)
     bulky = display_generic.count("\n") >= 4 or truncated
     if display_generic and (is_json or bulky):
         # Truncated JSON is invalid — fencing it as ``json`` makes Rich/Pygments
         # paint error tokens (red blocks) on the cut. Use a text fence instead
-        # and keep the truncation marker outside the block.
+        # and keep truncation markers outside the block.
         if truncated:
-            # Marker is either the legacy char-cap line or a peek ``… N more``.
-            body, _, marker = display_generic.rpartition("\n")
-            if not body:
-                body, marker = display_generic, ""
-            fence_body = body if body else display_generic
-            suffix = f"\n{marker}" if marker else ""
-            display_generic = f"\n```text\n{fence_body}\n```{suffix}"
+            if body:
+                display_generic = f"\n```text\n{body}\n```\n{markers}"
+            else:
+                display_generic = f"\n```text\n{display_generic}\n```"
         else:
             lang = "json" if is_json else "text"
             display_generic = f"\n```{lang}\n{display_generic}\n```"

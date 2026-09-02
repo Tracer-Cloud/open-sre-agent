@@ -469,6 +469,28 @@ def test_truncated_json_uses_text_fence_not_json_highlight() -> None:
     assert "more lines" in joined[fence_end:]
 
 
+def test_character_and_line_truncation_markers_sit_outside_the_fence() -> None:
+    github = ToolCall(id="1", name="github_cli", input={"command": "run list"})
+    # Four-plus long lines so the display cap cuts the visible head *and* folds
+    # remainder — both markers must stay outside the fence.
+    bulky = "\n".join("y" * 80 for _ in range(10))
+    result = _Result(
+        tool_results=[(github, _ToolResult(_payload(bulky)))],
+        final_text="Here is the run history.",
+    )
+
+    _response_text, display_chunks, _use_final = _compose_response(result, _Session(), _counts(1))
+    joined = "\n".join(display_chunks)
+
+    fence_end = joined.index("```", joined.index("```text") + 1)
+    after = joined[fence_end:]
+    inside = joined[:fence_end]
+    assert "output truncated" in after
+    assert "more lines" in after
+    assert "output truncated" not in inside
+    assert "more lines" not in inside
+
+
 def test_plan_snapshots_are_stripped_from_the_reply() -> None:
     # The model sometimes restates the plan (or every historical snapshot) in its
     # closing text; the overlay already shows it, so display strips the snapshots

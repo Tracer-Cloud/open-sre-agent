@@ -108,6 +108,13 @@ def summarize_gh_result(
     if url:
         return url
     if out:
+        # Raw JSON from ``gh api`` is for the model, not the transcript — a sliced
+        # JSON string still reads as a dump. Keep a short prose acknowledgement.
+        stripped = out.lstrip()
+        if stripped[:1] in "{[" or out.count('":') >= 2:
+            if command == "api":
+                return "GitHub API call succeeded."
+            return "GitHub command succeeded."
         lines = [line for line in out.splitlines() if line.strip()]
         if not lines:
             return "GitHub command succeeded."

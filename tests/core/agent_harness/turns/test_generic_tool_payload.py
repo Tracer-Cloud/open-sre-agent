@@ -100,3 +100,44 @@ def test_short_output_is_not_truncated() -> None:
 
     text = "total 56\ndrwxr-xr-x  15 user"
     assert _cap_for_display(text) == text
+
+
+def test_character_cap_reports_truncation_when_lines_fit() -> None:
+    from core.agent_harness.turns.action_driver import (
+        _DISPLAY_OUTPUT_MAX_CHARS,
+        _OUTPUT_TRUNCATED_MARKER,
+        _cap_for_display,
+    )
+
+    text = "x" * (_DISPLAY_OUTPUT_MAX_CHARS + 40)
+    capped = _cap_for_display(text)
+    assert capped.endswith(_OUTPUT_TRUNCATED_MARKER)
+    body, _, marker = capped.rpartition("\n")
+    assert marker == _OUTPUT_TRUNCATED_MARKER
+    assert len(body) <= _DISPLAY_OUTPUT_MAX_CHARS
+    assert "more line" not in capped
+
+
+def test_character_and_line_caps_both_report_truncation() -> None:
+    from core.agent_harness.turns.action_driver import (
+        _DISPLAY_OUTPUT_MAX_CHARS,
+        _DISPLAY_OUTPUT_MAX_LINES,
+        _OUTPUT_TRUNCATED_MARKER,
+        _cap_for_display,
+    )
+
+    # First N lines together exceed the character cap, and extra lines remain.
+    line = "y" * ((_DISPLAY_OUTPUT_MAX_CHARS // 2) + 1)
+    extra_lines = 3
+    text = "\n".join([line] * (_DISPLAY_OUTPUT_MAX_LINES + extra_lines))
+    capped = _cap_for_display(text)
+
+    assert _OUTPUT_TRUNCATED_MARKER in capped
+    assert f"… {extra_lines} more lines" in capped
+    body, _, _ = capped.partition(f"\n{_OUTPUT_TRUNCATED_MARKER}")
+    assert len(body) <= _DISPLAY_OUTPUT_MAX_CHARS
+    # Character-cap is reported first (the visible head was cut); folded
+    # remainder follows so neither truncation is silent.
+    char_at = capped.index(_OUTPUT_TRUNCATED_MARKER)
+    fold_at = capped.index(" more lines")
+    assert char_at < fold_at

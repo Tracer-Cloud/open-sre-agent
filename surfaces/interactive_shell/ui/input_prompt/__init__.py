@@ -46,11 +46,11 @@ def _limit_editable_height(main_input: HSplit) -> HSplit:
         default_buffer_slot.content, Window
     ):
         raise RuntimeError("prompt-toolkit input container is missing its editable window")
-    default_buffer_slot.content.height = Dimension(
-        min=1,
-        preferred=1,
-        max=_COMPOSER_MAX_EDIT_ROWS,
-    )
+    # No fixed ``preferred``: it pins the box to one row so it never grows with
+    # wrapped/multiline input. Let the buffer's own content height drive it,
+    # clamped to [1, max]; ``dont_extend_height`` below keeps it from eating
+    # leftover terminal rows.
+    default_buffer_slot.content.height = Dimension(min=1, max=_COMPOSER_MAX_EDIT_ROWS)
     # Grow with wrapped/multiline input only — never eat leftover terminal rows
     # (that made the bordered box jump as the status region above it changed).
     # Window stores a Filter, not a raw bool — assign via to_filter.
