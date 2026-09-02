@@ -34,9 +34,9 @@ jobs:
             const EXCLUDED_FILES = new Set(["uv.lock"]);
 
             const SIZES = [
-              { name: "size:small", color: "0E8A16", max: 49 },
-              { name: "size:medium", color: "FBCA04", max: 249 },
-              { name: "size:large", color: "D93F0B", max: 999 },
+              { name: "size:small", color: "0E8A16", max: 99 },
+              { name: "size:medium", color: "FBCA04", max: 499 },
+              { name: "size:large", color: "D93F0B", max: 1999 },
               { name: "size:extra-large", color: "B60205", max: Infinity },
             ];
 
