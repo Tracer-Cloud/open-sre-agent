@@ -404,16 +404,16 @@ def _tool_result_to_dict(result: types.CallToolResult) -> SentryMCPToolCallResul
                     {
                         "type": "resource_blob",
                         "uri": str(resource.uri),
-                        "mime_type": resource.mimeType or "",
+                        "mime_type": resource.mime_type or "",
                     }
                 )
         else:
             content_items.append({"type": getattr(item, "type", "unknown")})
 
-    structured = getattr(result, "structuredContent", None)
+    structured = result.structured_content
     text_output = "\n".join(part.strip() for part in text_parts if part.strip()).strip()
     return {
-        "is_error": bool(result.isError),
+        "is_error": bool(result.is_error),
         "text": text_output,
         "content": content_items,
         "structured_content": structured,
@@ -437,7 +437,7 @@ def list_sentry_mcp_tools(config: SentryMCPConfig) -> list[SentryMCPToolDescript
         {
             "name": tool.name,
             "description": tool.description or "",
-            "input_schema": getattr(tool, "inputSchema", None),
+            "input_schema": tool.input_schema,
         }
         for tool in tools
     ]

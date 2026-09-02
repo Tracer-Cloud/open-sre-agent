@@ -40,7 +40,7 @@ def _build_server() -> Server[object]:
                     "Fixture tool that intentionally sleeps instead of returning. "
                     "Used to exercise OpenSRE's call-timeout behavior."
                 ),
-                inputSchema={"type": "object", "properties": {}, "additionalProperties": True},
+                input_schema={"type": "object", "properties": {}, "additionalProperties": True},
             ),
         ]
 

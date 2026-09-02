@@ -38,7 +38,7 @@ def _patch_fake_session(
         list_result.tools = [
             mcp_types.Tool(
                 name=str(t["name"]),
-                inputSchema=t.get("input_schema") or {},
+                input_schema=t.get("input_schema") or {},
             )
             for t in tools_dicts
         ]
@@ -48,11 +48,11 @@ def _patch_fake_session(
             if call_fn is None:
                 raise AssertionError(f"Unexpected call_tool({name!r}) - no call_fn provided")
             payload: dict[str, Any] = call_fn(config, name, args or {})
-            raw = MagicMock()
-            raw.isError = payload.get("is_error", False)
-            raw.content = [mcp_types.TextContent(type="text", text=payload.get("text", ""))]
-            raw.structuredContent = payload.get("structured_content")
-            return raw
+            return mcp_types.CallToolResult(
+                is_error=payload.get("is_error", False),
+                content=[mcp_types.TextContent(type="text", text=payload.get("text", ""))],
+                structured_content=payload.get("structured_content"),
+            )
 
         session.call_tool = _call_tool
         yield session

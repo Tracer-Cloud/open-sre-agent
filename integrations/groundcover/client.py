@@ -114,7 +114,7 @@ def _tool_result_to_payload(result: types.CallToolResult) -> tuple[str, Any]:
             resource = item.resource
             if isinstance(resource, types.TextResourceContents):
                 text_parts.append(resource.text)
-    structured = getattr(result, "structuredContent", None)
+    structured = result.structured_content
     text_output = "\n".join(part for part in text_parts if part).strip()
     return text_output, structured
 
@@ -222,7 +222,7 @@ class GroundcoverClient:
             data = parsed
             if remainder:
                 notes.append(self._redact(remainder))
-        if result.isError:
+        if result.is_error:
             return GroundcoverToolResult(
                 success=False,
                 tool=tool_name,
