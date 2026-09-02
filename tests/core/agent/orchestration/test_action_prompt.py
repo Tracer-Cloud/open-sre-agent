@@ -264,6 +264,25 @@ def test_skills_loader_bundles_github_ci_fix_skill() -> None:
     cached_load_skills_block.cache_clear()
 
 
+def test_skills_loader_bundles_github_ci_durability_demo_skill() -> None:
+    cached_load_skills_block.cache_clear()
+    skill = skills_dir() / "github_ci_durability_demo" / "SKILL.md"
+    helper = skill.with_name("demo_fixture.py")
+    assert skill.is_file()
+    assert helper.is_file()
+
+    assert "github-ci-durability-demo" in load_skills_index()
+    body = load_skill_body("github-ci-durability-demo")
+    assert "GITHUB CI DURABILITY DEMO SKILL" in body
+    assert "fix_github_pr_ci" in body
+    assert "exactly once" in body
+    assert "LIMITATION REPRODUCED" in body
+    assert "LIMITATION NOT REPRODUCED" in body
+    assert "INCONCLUSIVE" in body
+    assert "Cleanup is mandatory" in body
+    cached_load_skills_block.cache_clear()
+
+
 def test_skill_matches_take_priority_over_generic_docs_answer() -> None:
     cached_load_skills_block.cache_clear()
 
