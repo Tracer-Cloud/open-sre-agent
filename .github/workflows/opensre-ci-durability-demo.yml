@@ -1,0 +1,26 @@
+name: OpenSRE CI Durability Demo
+
+on:
+  pull_request:
+    paths:
+      - ".github/workflows/opensre-ci-durability-demo.yml"
+      - ".opensre-ci-durability-demo/**"
+
+permissions:
+  contents: read
+
+jobs:
+  durability-stage-one:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Exercise the first defect
+        run: python .opensre-ci-durability-demo/retry_delay.py
+
+  durability-stage-two:
+    needs: durability-stage-one
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Exercise the dependent defect
+        run: python .opensre-ci-durability-demo/service_slug.py
