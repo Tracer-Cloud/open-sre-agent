@@ -8,6 +8,7 @@ from typing import TYPE_CHECKING
 
 from core.agent_harness.prompts.action.text import _SYSTEM_PROMPT_BASE
 from core.agent_harness.prompts.action.turn_interaction import turn_interaction_facts_block
+from core.agent_harness.prompts.getting_started import load_getting_started_block
 from core.agent_harness.prompts.kernel.envelope import (
     PromptBlock,
     PromptBlockId,
@@ -20,7 +21,7 @@ from core.agent_harness.prompts.memory.conversation import (
     format_recent_conversation,
 )
 from core.agent_harness.prompts.runtime_facts import render_static_runtime_facts
-from core.agent_harness.prompts.skills.loader import load_skills_demo_block, load_skills_index
+from core.agent_harness.prompts.skills.loader import load_skills_index
 from core.agent_harness.task_plan.prompt import (
     ask_user_answered_block,
     current_task_plan_block,
@@ -118,7 +119,7 @@ def build_action_system_prompt_envelope(turn_snapshot: TurnSnapshot) -> PromptEn
             suffix="\n\n",
         )
     )
-    skills_index = "\n\n".join(filter(None, (load_skills_index(), load_skills_demo_block())))
+    skills_index = "\n\n".join(filter(None, (load_skills_index(), load_getting_started_block())))
     blocks.extend(
         _optional_block(
             id=PromptBlockId.ACTION_SKILLS,

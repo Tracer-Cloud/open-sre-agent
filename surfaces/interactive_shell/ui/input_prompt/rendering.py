@@ -21,7 +21,7 @@ from surfaces.interactive_shell.ui.input_prompt.layout import (
     prompt_line_width,
 )
 
-DEFAULT_PLACEHOLDER_TEXT = 'Try "Investigate this alert"'
+DEFAULT_PLACEHOLDER_TEXT = "see what you can do"
 _PLAN_CONTINUE_PLACEHOLDER = "continue the plan, or type a message"
 
 
@@ -158,7 +158,7 @@ def resolve_prompt_placeholder(session: Session) -> ANSI:
     """Contextual ghost text when the input buffer is empty.
 
     Built per redraw (not at import) so theme ANSI cannot freeze stale, and so
-    an unfinished live plan can replace the default Investigate hint.
+    an unfinished live plan can replace the default exploratory hint.
     """
     parts: list[str] = []
     if session.terminal.trust_mode:

@@ -93,10 +93,8 @@ def test_decide_strips_pasted_shell_prompt_chrome() -> None:
     )
 
 
-def test_decide_ignores_placeholder_text_stuck_in_buffer() -> None:
-    from surfaces.interactive_shell.ui.input_prompt.rendering import DEFAULT_PLACEHOLDER_TEXT
-
-    assert _decide(InputSubmitted(DEFAULT_PLACEHOLDER_TEXT)) == IgnoreInput()
+def test_decide_submits_text_matching_the_placeholder() -> None:
+    assert _decide(InputSubmitted("see what you can do")) == SubmitTurn(text="see what you can do")
 
 
 def test_decide_submits_normal_turn_with_exclusive_stdin_wait() -> None:
