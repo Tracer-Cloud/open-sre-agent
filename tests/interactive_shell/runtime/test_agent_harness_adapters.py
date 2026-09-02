@@ -76,7 +76,7 @@ def test_finalize_satisfies_the_host_contract_while_staying_silent() -> None:
 
 
 def test_response_header_opens_without_a_leading_blank() -> None:
-    """The sink used to print a blank before ``∴``; that padded turns vs Droid.
+    """The sink used to print a blank before ``Ω``; that padded turns vs Droid.
 
     ``_show_response`` used to own that spacer in the shared turn engine.
     Chat sinks never wanted it; keeping a blank in the shell sink only was
@@ -90,5 +90,5 @@ def test_response_header_opens_without_a_leading_blank() -> None:
 
     # Assert: marker on the first painted line — no spacer row above.
     assert console.lines
-    assert "∴" in console.lines[0]
+    assert "Ω" in console.lines[0]
     assert console.lines[0] != ""

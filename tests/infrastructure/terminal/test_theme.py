@@ -131,9 +131,8 @@ def test_shimmer_text_ansi_paints_a_traveling_metallic_wave() -> None:
     assert " tools" in spaced or "tools" in re.sub(r"\x1b\[[0-9;]*m", "", spaced)
 
 
-def test_reply_marker_follows_the_active_theme_highlight() -> None:
-    """Assistant ``∴`` uses the active theme's HIGHLIGHT so every component
-    follows the selected palette (not a fixed colour that copies another tool)."""
+def test_tool_marker_follows_the_active_theme_highlight() -> None:
+    """The bold tool marker follows each palette's highlight colour."""
     from infrastructure.terminal import theme as ui_theme
 
     for name in ("blue", "purple", "green", "mono"):
@@ -145,7 +144,10 @@ def test_reply_block_paints_orange_marker_and_themed_body() -> None:
     """Regression: marker washed out when body fell through to terminal white."""
     import os
 
-    from surfaces.interactive_shell.ui.streaming.renderer import render_reply_block
+    from surfaces.interactive_shell.ui.streaming.renderer import (
+        _reply_marker_style,
+        render_reply_block,
+    )
 
     os.environ.pop("NO_COLOR", None)
     set_active_theme("blue")
@@ -158,7 +160,8 @@ def test_reply_block_paints_orange_marker_and_themed_body() -> None:
     with console.capture() as capture:
         render_reply_block(console, "Hey! How can I help?")
     output = capture.get()
-    assert "∴" in output
+    assert "Ω" in output
+    assert _reply_marker_style() == get_theme("blue").HIGHLIGHT
     # Marker follows the active theme's HIGHLIGHT (whatever the palette sets).
     highlight = get_theme("blue").HIGHLIGHT.lstrip("#")
     r, g, b = (int(highlight[i : i + 2], 16) for i in (0, 2, 4))

@@ -103,6 +103,57 @@ def test_launch_banner_draws_ring_logo_on_wide_terminals(monkeypatch: object) ->
     assert "⣿⣿⠀⠀⣿⣿⡇⠀⠀⠀⠀⠀⠀⠀⠀⢸⣿⣿⠀⢸⣿⣿" in output
 
 
+def test_wordmark_spin_frames_complete_a_full_revolution() -> None:
+    frames = banner_module.build_wordmark_spin_frames()
+    blank = "\u2800"
+
+    assert len(frames) > 10
+    assert frames[0].rows == frames[-1].rows
+    assert any(frame.back_facing for frame in frames)
+    assert all(tuple(map(len, frame.rows)) == tuple(map(len, frames[0].rows)) for frame in frames)
+    edge = min(frames, key=lambda frame: frame.scale)
+    assert max(len(row.strip(blank)) for row in edge.rows) < max(
+        len(row.strip(blank)) for row in frames[0].rows
+    )
+
+
+def test_launch_banner_spins_once_in_place_on_tty(monkeypatch: object) -> None:
+    class _FakeStdout:
+        def __init__(self) -> None:
+            self.writes: list[str] = []
+
+        def write(self, text: str) -> int:
+            self.writes.append(text)
+            return len(text)
+
+        def flush(self) -> None:
+            return None
+
+        def isatty(self) -> bool:
+            return True
+
+    fake_stdout = _FakeStdout()
+    monkeypatch.setattr("sys.stdout", fake_stdout)
+    monkeypatch.setattr(banner_module.time, "sleep", lambda _delay: None)
+    monkeypatch.setattr(banner_module, "load_launch_status", _fixed_status)
+    console = Console(
+        file=fake_stdout,
+        force_terminal=True,
+        highlight=False,
+        color_system="truecolor",
+        width=120,
+    )
+
+    banner_module.render_launch_banner(console)
+
+    written = "".join(fake_stdout.writes)
+    animation_end = written.index("\x1b[?25h") + len("\x1b[?25h")
+    assert written.count("\x1b[2;1H") > 10
+    assert "\n" not in written[:animation_end]
+    assert written.index("\x1b[?25l") < written.index("\x1b[2;1H")
+    assert written.index("\x1b[?25h") < written.index("Welcome to OpenSRE CLI")
+
+
 def test_launch_banner_falls_back_to_title_on_narrow_terminals(monkeypatch: object) -> None:
     monkeypatch.setattr(banner_module, "load_launch_status", _fixed_status)
     console = Console(record=True, force_terminal=False, highlight=False, width=20)

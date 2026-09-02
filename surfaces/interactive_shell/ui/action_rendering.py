@@ -517,7 +517,7 @@ class ActionRenderObserver:
         args = data.get("input")
         label, content = tool_call_display(name, args if isinstance(args, dict) else {})
         self.console.print()
-        # One warm accent (same as ``∴``) on the glyph; recessed label + dim
+        # One warm accent (same as ``Ω``) on the glyph; recessed label + dim
         # payload — Droid-style quiet tool chrome, not a second blue brand strip.
         line = Text()
         line.append(f"{_TOOL_CALL_MARKER} ", style=reply_marker_style())

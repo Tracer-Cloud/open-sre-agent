@@ -57,7 +57,7 @@ def test_render_note_block_is_recessed_and_indented_but_keeps_bold() -> None:
 
 def test_table_reply_renders_as_a_table_not_flattened_pipes() -> None:
     # A reply that leads with a Markdown table must render as an aligned table. The
-    # inline ``∴ `` marker fused onto the header row breaks CommonMark block parsing
+    # inline ``Ω `` marker fused onto the header row breaks CommonMark block parsing
     # and flattens the table to one line of raw pipes, so the marker goes on its own
     # line before a leading block.
     buf = io.StringIO()
@@ -80,7 +80,7 @@ def test_prose_reply_keeps_the_inline_marker() -> None:
 
     publish_full_response(console, "Root disk is 44% full.")
 
-    assert "∴ Root disk is 44% full." in buf.getvalue()
+    assert "Ω  Root disk is 44% full." in buf.getvalue()
 
 
 def _tty_console() -> tuple[Console, io.StringIO]:
@@ -114,9 +114,9 @@ class TestNonTtyFallback:
 
         output = buf.getvalue()
         assert result == "Hello, world"
-        # The inline ``∴`` marker + text reach piped output so captured logs
+        # The inline ``Ω`` marker + text reach piped output so captured logs
         # are useful (the standalone label header was removed).
-        assert "∴" in output
+        assert "Ω" in output
         assert "Hello, world" in output
         # No spinner / Live cursor-movement artifacts in non-TTY captures.
         assert "thinking" not in output
@@ -147,7 +147,7 @@ class TestNonTtyFallback:
         assert result == '{"actions":[]}'
         output = buf.getvalue()
         # No bullet header for suppressed responses.
-        assert "∴" not in output
+        assert "Ω" not in output
         assert '{"actions"' not in output
 
 
@@ -189,7 +189,7 @@ class TestTtyParagraphRender:
         output = _strip_ansi(buf.getvalue())
         assert result == "Run **opensre setup** to start."
         # Bullet row marker pinned above the rendered paragraph.
-        assert "∴" in output
+        assert "Ω" in output
         # End-of-stream force-flush rendered Markdown — ``**`` stripped.
         assert "**opensre" not in output
         assert "opensre setup" in output
@@ -222,7 +222,7 @@ class TestTtyParagraphRender:
     def test_preserves_blank_line_between_list_and_following_paragraph(self) -> None:
         """One blank line between a list and the next paragraph — no double gap.
 
-        The whole reply hangs in the ``∴`` gutter, so the list and the following
+        The whole reply hangs in the ``Ω`` gutter, so the list and the following
         paragraph sit in the indented body column.
         """
         console, buf = _tty_console()
@@ -231,10 +231,10 @@ class TestTtyParagraphRender:
         stream_to_console(console, label="OpenSRE", chunks=_yield_chunks([text]))
 
         visible = "\n".join(line.rstrip() for line in _strip_ansi(buf.getvalue()).splitlines())
-        assert "∴ Ready:\n\n   • first\n   • second\n\n  Blocked pending a choice." in visible
+        assert "Ω  Ready:\n\n    • first\n    • second\n\n   Blocked pending a choice." in visible
 
     def test_reply_hangs_indented_under_the_marker(self) -> None:
-        """A wrapped reply hangs in the ∴ gutter: line one carries the marker,
+        """A wrapped reply hangs in the Ω gutter: line one carries the marker,
         every continuation line aligns in the indented body column."""
         console, buf = _tty_console()
         text = "A fairly long assistant reply that has to wrap across several lines. " * 3
@@ -242,7 +242,7 @@ class TestTtyParagraphRender:
         stream_to_console(console, label="assistant", chunks=_yield_chunks([text]))
 
         lines = [line for line in _strip_ansi(buf.getvalue()).splitlines() if line.strip()]
-        assert lines[0].startswith("∴ ")  # marker leads the first line
+        assert lines[0].startswith("Ω  ")  # marker leads the first line
         assert len(lines) > 1  # the reply actually wrapped
         assert all(line.startswith("  ") for line in lines[1:])  # hang-indent at col 2
 
@@ -645,7 +645,7 @@ class TestTtyParagraphRender:
         assert result == ""
         # The marker is inline on the first paragraph, so an empty stream prints
         # no marker at all — and no spinner residue at finalize.
-        assert "∴" not in _strip_ansi(buf.getvalue())
+        assert "Ω" not in _strip_ansi(buf.getvalue())
 
 
 class TestMidStreamError:
@@ -764,7 +764,7 @@ class TestRenderResponseHeader:
         console, buf = _tty_console()
         render_response_header(console, "assistant")
         output = _strip_ansi(buf.getvalue())
-        assert "∴" in output
+        assert "Ω" in output
         assert "assistant" not in output
 
     def test_role_label_is_accepted_but_not_painted(self) -> None:
@@ -773,7 +773,7 @@ class TestRenderResponseHeader:
         console, buf = _tty_console()
         render_response_header(console, "answer")
         assert "answer" not in _strip_ansi(buf.getvalue())
-        assert "∴" in _strip_ansi(buf.getvalue())
+        assert "Ω" in _strip_ansi(buf.getvalue())
 
 
 class TestFormatTokenCountShort:
@@ -1076,7 +1076,7 @@ class TestSuppressionPeek:
         assert result == '{"actions":[]}'
         # No bullet header, no markdown, no live-region artifacts.
         output = _strip_ansi(buf.getvalue())
-        assert "∴" not in output
+        assert "Ω" not in output
         assert '{"actions"' not in output
 
     def test_renders_normally_when_first_char_does_not_match(self) -> None:
@@ -1090,7 +1090,7 @@ class TestSuppressionPeek:
 
         assert result == "Hello, world"
         output = _strip_ansi(buf.getvalue())
-        assert "∴" in output
+        assert "Ω" in output
         assert "Hello, world" in output
 
     def test_skips_leading_whitespace_before_deciding(self) -> None:
@@ -1105,7 +1105,7 @@ class TestSuppressionPeek:
 
         assert result == '  \n{"action":"slash"}'
         output = _strip_ansi(buf.getvalue())
-        assert "∴" not in output
+        assert "Ω" not in output
 
 
 class TestRenderMarkdownBlock:

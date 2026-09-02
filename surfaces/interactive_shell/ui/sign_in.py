@@ -25,7 +25,7 @@ from config.constants import (
     WELCOME_TITLE,
 )
 from infrastructure.terminal.theme import DIM, HIGHLIGHT, SECONDARY, TEXT
-from surfaces.shared.terminal.banner.banner import build_launch_banner
+from surfaces.shared.terminal.banner import animate_launch_wordmark, build_launch_banner
 from surfaces.shared.terminal.components.choice_menu import repl_choose_one, repl_tty_interactive
 
 _TRUTHY = {"1", "true", "yes", "on"}
@@ -55,14 +55,14 @@ def build_welcome_box() -> RenderableType:
 
 def render_sign_in_screen(console: Console) -> None:
     """Paint the launch banner, the welcome box, and the sign-in prompt line."""
-    console.print(
-        Group(
-            build_launch_banner(console),
-            build_welcome_box(),
-            Text(),
-            Text(SIGN_IN_PROMPT, style=str(SECONDARY)),
-        )
+    screen = Group(
+        build_launch_banner(console),
+        build_welcome_box(),
+        Text(),
+        Text(SIGN_IN_PROMPT, style=str(SECONDARY)),
     )
+    animate_launch_wordmark(console)
+    console.print(screen)
 
 
 def prompt_login_or_exit() -> SignInChoice | None:

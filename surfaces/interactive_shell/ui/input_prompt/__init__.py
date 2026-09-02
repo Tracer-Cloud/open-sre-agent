@@ -13,12 +13,12 @@ from prompt_toolkit.layout.containers import (
     FloatContainer,
     HSplit,
     VerticalAlign,
+    VSplit,
     Window,
     to_container,
 )
 from prompt_toolkit.layout.controls import FormattedTextControl
 from prompt_toolkit.layout.dimension import Dimension
-from prompt_toolkit.widgets import Frame
 
 from surfaces.interactive_shell.prompt_history import load_prompt_history
 from surfaces.interactive_shell.runtime import Session
@@ -36,6 +36,44 @@ from surfaces.interactive_shell.ui.input_prompt.style import _build_prompt_style
 _COMPOSER_MAX_EDIT_ROWS = 8
 _COMPOSER_MIN_FRAME_ROWS = 3
 _COMPOSER_MAX_FRAME_ROWS = _COMPOSER_MAX_EDIT_ROWS + 2
+
+
+def _rounded_composer_frame(body: AnyContainer) -> HSplit:
+    """Wrap the composer in the terminal's smallest rounded border."""
+
+    def _border(*, char: str, width: int | None = None) -> Window:
+        return Window(
+            width=width,
+            height=1 if width == 1 else None,
+            char=char,
+            style="class:frame.border",
+        )
+
+    top = VSplit(
+        [
+            _border(char="╭", width=1),
+            _border(char="─"),
+            _border(char="╮", width=1),
+        ],
+        height=1,
+    )
+    middle = VSplit(
+        [
+            Window(width=1, char="│", style="class:frame.border"),
+            body,
+            Window(width=1, char="│", style="class:frame.border"),
+        ],
+        padding=0,
+    )
+    bottom = VSplit(
+        [
+            _border(char="╰", width=1),
+            _border(char="─"),
+            _border(char="╯", width=1),
+        ],
+        height=1,
+    )
+    return HSplit([top, middle, bottom], style="class:frame class:composer")
 
 
 def _limit_editable_height(main_input: HSplit) -> HSplit:
@@ -84,7 +122,7 @@ def _install_prompt_frame(
     # Inner surface so the editable rows share INPUT_SURFACE with the border
     # (otherwise the frame looks hollow against the terminal bg).
     surface_body: AnyContainer = HSplit([editable_body], style="class:composer-body")
-    composer: AnyContainer = Frame(surface_body, style="class:composer")
+    composer: AnyContainer = _rounded_composer_frame(surface_body)
     footer: AnyContainer = Window(
         FormattedTextControl(lambda: ANSI(composer_footer_ansi())),
         height=1,

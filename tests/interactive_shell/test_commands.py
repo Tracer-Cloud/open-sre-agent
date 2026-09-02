@@ -1478,7 +1478,7 @@ class TestResumeCommand:
 
         output = buf.getvalue()
         assert "❯" in output
-        assert "∴" in output
+        assert "Ω" in output
         assert "$ /status" in output
         assert "you  " not in output
         assert "sre  " not in output
@@ -1512,7 +1512,7 @@ class TestResumeCommand:
 
         output = buf.getvalue()
         assert output.count("❯ repeat") == 2
-        assert output.count("∴") == 2
+        assert output.count("Ω") == 2
         assert "first answer" in output
         assert "second answer" in output
 
