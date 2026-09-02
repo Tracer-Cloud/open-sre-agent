@@ -75,7 +75,13 @@ def test_ask_user_qa_highlights_answer_differently_from_question() -> None:
     from infrastructure.terminal import theme as ui_theme
 
     buffer = io.StringIO()
-    console = Console(file=buffer, force_terminal=True, color_system="truecolor", highlight=False)
+    console = Console(
+        file=buffer,
+        force_terminal=True,
+        color_system="truecolor",
+        highlight=False,
+        no_color=False,
+    )
     render_ask_user_qa(console, [("Which product should I demo?", "OpenSRE itself")])
     raw = buffer.getvalue()
 

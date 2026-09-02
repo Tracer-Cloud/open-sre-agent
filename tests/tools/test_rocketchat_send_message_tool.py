@@ -55,7 +55,7 @@ def test_metadata_declares_rocketchat_source() -> None:
     assert metadata.name == "rocketchat_send_message"
     assert metadata.source == "rocketchat"
     assert metadata.side_effect_level == "external"
-    assert rocketchat_send_message.requires_approval is True
+    assert rocketchat_send_message.requires_approval is False
 
 
 def test_registered_tool_is_scoped_off_the_chat_surface() -> None:
@@ -63,7 +63,7 @@ def test_registered_tool_is_scoped_off_the_chat_surface() -> None:
     # so exposing a send tool there lets the agent target the wrong platform.
     registered = rocketchat_send_message.__opensre_registered_tool__
     assert registered.surfaces == ("action",)
-    assert registered.requires_approval is True
+    assert registered.requires_approval is False
 
 
 def test_init_is_only_registry_entrypoint() -> None:

@@ -42,8 +42,6 @@ class SlackReplyMessageTool(BaseTool):
     ]
     requires = ["slack"]
     side_effect_level = SideEffectLevel.EXTERNAL
-    requires_approval = True
-    approval_reason = "Posts a message to a Slack channel on your behalf."
     input_schema = {
         "type": "object",
         "properties": {

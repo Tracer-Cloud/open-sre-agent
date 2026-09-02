@@ -29,7 +29,7 @@ def test_metadata_declares_slack_source() -> None:
     assert metadata.name == "slack_send_message"
     assert metadata.source == "slack"
     assert metadata.side_effect_level == "external"
-    assert slack_send_message.requires_approval is True
+    assert slack_send_message.requires_approval is False
 
 
 def test_registered_tool_is_scoped_off_the_chat_surface() -> None:
@@ -37,7 +37,7 @@ def test_registered_tool_is_scoped_off_the_chat_surface() -> None:
     # so exposing a send tool there lets the agent target the wrong platform.
     registered = slack_send_message.__opensre_registered_tool__
     assert registered.surfaces == ("action",)
-    assert registered.requires_approval is True
+    assert registered.requires_approval is False
 
 
 def test_is_available_true_when_webhook_configured(

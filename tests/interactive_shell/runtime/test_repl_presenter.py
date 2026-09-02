@@ -49,7 +49,13 @@ def test_plain_command_output_is_recessed_but_keeps_command_colours() -> None:
     from infrastructure.terminal import theme as ui_theme
 
     buffer = io.StringIO()
-    console = Console(file=buffer, force_terminal=True, color_system="truecolor", width=80)
+    console = Console(
+        file=buffer,
+        force_terminal=True,
+        color_system="truecolor",
+        width=80,
+        no_color=False,
+    )
     presenter = ReplSubprocessPresenter(Session(), console)
 
     presenter.print_command_output("plain line of output")
@@ -64,9 +70,13 @@ def test_plain_command_output_is_recessed_but_keeps_command_colours() -> None:
     # a stale ``\x1b[37m``. Both sides here share that cache, so the check holds
     # at any colour depth.
     reference = io.StringIO()
-    Console(file=reference, force_terminal=True, color_system="truecolor", width=80).print(
-        "x", style=str(ui_theme.SECONDARY)
-    )
+    Console(
+        file=reference,
+        force_terminal=True,
+        color_system="truecolor",
+        width=80,
+        no_color=False,
+    ).print("x", style=str(ui_theme.SECONDARY))
     secondary_sgr = reference.getvalue().split("x")[0]
     assert secondary_sgr and secondary_sgr in raw  # plain output recessed to SECONDARY
     assert re.search(r"\x1b\[[0-9;]*32m", raw)  # command's own green survives the base

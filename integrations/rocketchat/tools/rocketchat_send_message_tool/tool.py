@@ -40,8 +40,6 @@ class RocketChatSendMessageTool(BaseTool):
     ]
     requires = ["rocketchat"]
     side_effect_level = SideEffectLevel.EXTERNAL
-    requires_approval = True
-    approval_reason = "Sends a message via Rocket.Chat on your behalf."
     input_schema = {
         "type": "object",
         "properties": {

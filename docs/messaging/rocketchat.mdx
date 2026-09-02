@@ -170,7 +170,7 @@ SERVICE    │ SOURCE    │ STATUS   │ DETAIL
 rocketchat │ local env │ ✓ passed │ Connected to Rocket.Chat as @verifyadmin.
 ```
 
-Send a real message through the supported watchdog delivery path (see [Watchdog alarms](#watchdog-alarms) below) rather than calling the tool class directly — this exercises the same threshold-detection, cooldown, and provider-routing code a production alarm uses. Rocket.Chat's one registered tool, `rocketchat_send_message`, is a delivery action (`side_effect_level: EXTERNAL`) that needs interactive approval when the agent calls it, which doesn't complete in one non-interactive demo run; `watchdog` triggers a real delivery autonomously by design.
+Send a real message through the supported watchdog delivery path (see [Watchdog alarms](#watchdog-alarms) below) rather than calling the tool class directly — this exercises the same threshold-detection, cooldown, and provider-routing code a production alarm uses.
 
 ```bash
 sleep 30 &

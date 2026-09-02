@@ -37,8 +37,6 @@ class BuzzSendMessageTool(BaseTool):
     ]
     requires = ["buzz"]
     side_effect_level = SideEffectLevel.EXTERNAL
-    requires_approval = True
-    approval_reason = "Sends a message via Buzz on your behalf."
     input_schema = {
         "type": "object",
         "properties": {

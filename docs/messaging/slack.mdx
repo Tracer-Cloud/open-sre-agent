@@ -146,8 +146,8 @@ Teammate tools (bot token) plus webhook blast. Credentials resolve inside the to
 
 | Tool | What it does | Needs | Approval |
 | --- | --- | --- | --- |
-| `slack_send_message` | Post to the webhook's fixed channel | `SLACK_WEBHOOK_URL` | Yes |
-| `slack_reply_message` | Post to any channel/thread (`C…` or `#name`) | bot token, `chat:write` | Yes |
+| `slack_send_message` | Post to the webhook's fixed channel | `SLACK_WEBHOOK_URL` | No |
+| `slack_reply_message` | Post to any channel/thread (`C…` or `#name`) | bot token, `chat:write` | No |
 | `slack_read_messages` | Read channel history or a thread (`thread_ts`) | bot token, history + list scopes | No |
 | `slack_search_messages` | Workspace message search | **user** token (`SLACK_ACCESS_TOKEN`), `search:read` | No |
 | `slack_list_team_members` | List workspace members | bot token, `users:read` | No |
@@ -173,8 +173,8 @@ Example prompts:
 The last two need [GitHub configured](/github) and name the repository explicitly
 (`your-org/your-repo`) so the GitHub tools can resolve it — see
 [GitHub workflow tools](/github-workflow-tools) for what they can report on.
-`slack_send_message` requires approval before it posts; confirm the prompt when
-it appears, then check the channel for the message.
+Message tools post without a separate approval prompt; check the target channel
+for the delivered message.
 
 ### Production Engineer schedules (Slack)
 
