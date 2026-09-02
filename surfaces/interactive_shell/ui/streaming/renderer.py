@@ -8,6 +8,8 @@ from typing import TYPE_CHECKING
 
 from rich.console import Console
 from rich.padding import Padding
+from rich.table import Table
+from rich.text import Text
 
 import infrastructure.terminal.theme as ui_theme
 from core.agent_harness.spi.prompt_chrome import normalize_three_tier_spacing
@@ -16,6 +18,7 @@ from infrastructure.safety.terminal_output import strip_terminal_controls
 from infrastructure.text import looks_like_data_blob
 
 if TYPE_CHECKING:
+    from rich.console import RenderableType
     from rich.markdown import Markdown
 
 STREAM_LABEL_ASSISTANT = "assistant"
@@ -153,6 +156,35 @@ def render_note_block(console: Console, text: str) -> None:
         )
 
 
+def _reply_marker_style() -> str:
+    """Warm accent for the ``∴`` reply marker (built per call so theme swaps apply)."""
+    return f"bold {ui_theme.WARNING}"
+
+
+def reply_gutter(body: RenderableType, *, lead: bool) -> Table:
+    """Lay a reply renderable in a two-column gutter.
+
+    The first paragraph carries the ``∴`` marker in the gutter; every other row
+    (wrapped lines and following paragraphs) sits in the same indented body
+    column, so the whole reply reads as one block hanging under the marker.
+    """
+    grid = Table.grid(padding=0)
+    grid.add_column(width=2, no_wrap=True)
+    grid.add_column(overflow="fold")
+    marker = Text("∴ ", style=_reply_marker_style()) if lead else Text("  ")
+    grid.add_row(marker, body)
+    return grid
+
+
+def render_reply_block(console: Console, text: str, *, lead: bool = True) -> None:
+    """Render a whole assistant reply inside the ``∴`` hanging-indent gutter."""
+    visible = strip_session_goal_progress_tags(text)
+    if not visible.strip():
+        return
+    with console.use_theme(ui_theme.MARKDOWN_THEME):
+        console.print(reply_gutter(_build_markdown_block(visible), lead=lead))
+
+
 def render_response_header(console: Console, label: str) -> None:
     """Print the ``∴`` triangle row marker that opens every assistant response.
 
@@ -160,4 +192,4 @@ def render_response_header(console: Console, label: str) -> None:
     with ``action_turn.run_action_tool_turn`` so the planned-actions path and the
     streaming response path use the exact same prefix.
     """
-    console.print(f"[{ui_theme.BOLD_BRAND}]∴[/] [{ui_theme.DIM}]{label}[/]")
+    console.print(f"[{_reply_marker_style()}]∴[/] [{ui_theme.DIM}]{label}[/]")

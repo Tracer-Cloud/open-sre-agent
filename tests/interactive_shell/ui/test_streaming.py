@@ -217,14 +217,31 @@ class TestTtyParagraphRender:
         assert "**para**" not in output
 
     def test_preserves_blank_line_between_list_and_following_paragraph(self) -> None:
-        """Standalone Rich list renders have no trailing vertical space."""
+        """One blank line between a list and the next paragraph — no double gap.
+
+        The whole reply hangs in the ``∴`` gutter, so the list and the following
+        paragraph sit in the indented body column.
+        """
         console, buf = _tty_console()
         text = "Ready:\n\n- first\n- second\n\nBlocked pending a choice."
 
         stream_to_console(console, label="OpenSRE", chunks=_yield_chunks([text]))
 
         visible = "\n".join(line.rstrip() for line in _strip_ansi(buf.getvalue()).splitlines())
-        assert "Ready:\n\n • first\n • second\n\nBlocked pending a choice." in visible
+        assert "∴ Ready:\n\n   • first\n   • second\n\n  Blocked pending a choice." in visible
+
+    def test_reply_hangs_indented_under_the_marker(self) -> None:
+        """A wrapped reply hangs in the ∴ gutter: line one carries the marker,
+        every continuation line aligns in the indented body column."""
+        console, buf = _tty_console()
+        text = "A fairly long assistant reply that has to wrap across several lines. " * 3
+
+        stream_to_console(console, label="assistant", chunks=_yield_chunks([text]))
+
+        lines = [line for line in _strip_ansi(buf.getvalue()).splitlines() if line.strip()]
+        assert lines[0].startswith("∴ ")  # marker leads the first line
+        assert len(lines) > 1  # the reply actually wrapped
+        assert all(line.startswith("  ") for line in lines[1:])  # hang-indent at col 2
 
     def test_paragraph_break_across_chunk_boundary_flushes(self) -> None:
         """The cross-chunk seam — chunk N ends with ``\\n``, chunk N+1
