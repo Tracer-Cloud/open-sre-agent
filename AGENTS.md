@@ -255,7 +255,7 @@ The tool registry auto-discovers modules under `tools/`, so the normal path is t
 
 Steps:
 
-1. Pick the simplest shape that fits the tool. Use a `BaseTool` subclass (from `core.tool`) for richer behavior; use `@tool(...)` from `core.tool_framework` for a lightweight function tool. Import through those tier doors, not their internal submodules — the border test in `tests/shared/test_tool_api_border.py` enforces it.
+1. Pick the simplest shape that fits the tool. Use a `BaseTool` subclass (from `core.tool`) for richer behavior; use `@tool(...)` from `core.tool_framework` for a lightweight function tool. Import through those tier public APIs, not their internal submodules — the border test in `tests/shared/test_tool_api_border.py` enforces it.
 2. Declare clear metadata: `name`, `description`, `source`, `input_schema`, and any `use_cases`, `requires`, `outputs`, or `retrieval_controls` you need.
 3. Before opening or approving the PR, follow [docs/adding-tools-and-integrations.md](docs/adding-tools-and-integrations.md).
 
