@@ -159,8 +159,10 @@ def test_reply_block_paints_orange_marker_and_themed_body() -> None:
         render_reply_block(console, "Hey! How can I help?")
     output = capture.get()
     assert "∴" in output
-    # Marker follows the active theme's HIGHLIGHT (blue #B7D4F0 → 183,212,240).
-    assert "38;2;183;212;240m" in output
+    # Marker follows the active theme's HIGHLIGHT (whatever the palette sets).
+    highlight = get_theme("blue").HIGHLIGHT.lstrip("#")
+    r, g, b = (int(highlight[i : i + 2], 16) for i in (0, 2, 4))
+    assert f"38;2;{r};{g};{b}m" in output
     # Body uses the sunny Droid-like agent grey (#D0D0D0).
     assert "38;2;208;208;208m" in output
 

@@ -20,9 +20,12 @@ from surfaces.interactive_shell.ui.input_prompt.layout import (
     clip_prompt_text,
     prompt_line_width,
 )
+from surfaces.shared.terminal.prompt_layout import prompt_text_width, terminal_columns
 
 DEFAULT_PLACEHOLDER_TEXT = "see what you can do"
 _PLAN_CONTINUE_PLACEHOLDER = "continue the plan, or type a message"
+#: Warm vertical bar — same role as Droid's orange user-turn lead-in.
+_USER_TURN_ACCENT = "▌"
 
 
 def _placeholder_formatted(text: str) -> FormattedText:
@@ -111,21 +114,41 @@ def render_submitted_prompt(console: Console, session: Session, text: str) -> No
         )
     counter = _counter_text(session.terminal.claim_turn_number())
     lines = text.splitlines() or [""]
-    # Write palette ANSI directly. Rich Text/Style.parse on a _LazyRichStyle
-    # (empty underlying str) emits default white instead of SECONDARY grey
-    # under CI coverage / shared Style.parse cache.
-    body_ansi = ui_theme.BRAND_ANSI if is_handoff_answer else ui_theme.SECONDARY_ANSI
-    prefix_ansi = ui_theme.DIM_ANSI
-    continuation_prefix = " " * (len(counter) + len("❯ "))
+    # Full-width surface plate + warm left bar (Droid paints the user row
+    # edge-to-edge). Write palette ANSI directly — Rich Text/Style.parse on a
+    # _LazyRichStyle can fall through to default white under coverage.
+    # Full terminal width plate (Droid edge-to-edge). Trailing pad spaces stay
+    # inside the surface so the last column is never a glyph (soft-wrap safe).
+    row_width = max(terminal_columns(), 1)
+    accent_ansi = ui_theme.BOLD_REPLY_MARKER_ANSI
+    body_ansi = ui_theme.BRAND_ANSI if is_handoff_answer else ui_theme.TEXT_ANSI
+    counter_ansi = ui_theme.DIM_ANSI
+    surface = ui_theme.INPUT_SURFACE_BG_ANSI
     parts: list[str] = []
     for index, line in enumerate(lines):
         if index:
             parts.append("\n")
         if index == 0:
-            parts.append(f"{prefix_ansi}{counter}❯ {ui_theme.ANSI_RESET}")
+            # ``▌ [N] `` then body — bar sits on the left edge of the plate.
+            prefix = f"{_USER_TURN_ACCENT} {counter}"
+            prefix_cols = prompt_text_width(prefix)
+            body = clip_prompt_text(line, max(1, row_width - prefix_cols))
+            pad = max(0, row_width - prefix_cols - prompt_text_width(body))
+            parts.append(
+                f"{surface}{accent_ansi}{_USER_TURN_ACCENT}{ui_theme.ANSI_RESET}"
+                f"{surface} {counter_ansi}{counter}{ui_theme.ANSI_RESET}"
+                f"{surface}{body_ansi}{body}{' ' * pad}{ui_theme.ANSI_RESET}"
+            )
         else:
-            parts.append(f"{prefix_ansi}{continuation_prefix}{ui_theme.ANSI_RESET}")
-        parts.append(f"{body_ansi}{line}{ui_theme.ANSI_RESET}")
+            # Hang under the accent + space so wrapped lines stay in the plate.
+            hang = "  " + (" " * len(counter))
+            hang_cols = prompt_text_width(hang)
+            body = clip_prompt_text(line, max(1, row_width - hang_cols))
+            pad = max(0, row_width - hang_cols - prompt_text_width(body))
+            parts.append(
+                f"{surface}{counter_ansi}{hang}{ui_theme.ANSI_RESET}"
+                f"{surface}{body_ansi}{body}{' ' * pad}{ui_theme.ANSI_RESET}"
+            )
     console.file.write("".join(parts) + "\n")
     console.file.flush()
 

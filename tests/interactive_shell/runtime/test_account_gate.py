@@ -146,6 +146,34 @@ def test_run_repl_invokes_the_sign_in_gate_before_the_controller(monkeypatch: An
     assert started == []
 
 
+def test_run_repl_clears_screen_before_painting_banner(monkeypatch: Any) -> None:
+    """Launch wipes the calling shell so the REPL owns the viewport like Droid."""
+    cleared: list[bool] = []
+    painted: list[bool] = []
+    monkeypatch.setattr(main_entrypoint.sys.stdin, "isatty", lambda: True)
+    monkeypatch.setattr(main_entrypoint, "should_paint_launch_banner", lambda: True)
+    monkeypatch.setattr(main_entrypoint, "pass_sign_in_gate", lambda _c: True)
+    monkeypatch.setattr(
+        main_entrypoint,
+        "repl_clear_screen",
+        lambda: cleared.append(True),
+    )
+    monkeypatch.setattr(
+        main_entrypoint,
+        "render_terminal_ui",
+        lambda *_a, **_k: painted.append(True),
+    )
+
+    async def _skip_async(**_kwargs: Any) -> int:
+        return 0
+
+    monkeypatch.setattr(main_entrypoint, "run_repl_async", _skip_async)
+    main_entrypoint.run_repl(config=ReplConfig(enabled=True, layout="classic"))
+
+    assert cleared == [True]
+    assert painted == [True]
+
+
 def test_run_repl_skips_the_launch_banner_when_the_gate_paints_it(monkeypatch: Any) -> None:
     painted: list[bool] = []
     monkeypatch.setattr(main_entrypoint.sys.stdin, "isatty", lambda: True)

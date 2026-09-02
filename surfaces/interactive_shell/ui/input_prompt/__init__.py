@@ -117,9 +117,8 @@ def _install_prompt_frame(
                 filter=~shown,
             ),
         ]
-    # Keep the final terminal column empty. Painting a frame border there puts
-    # the cursor in pending-wrap, which makes patch_stdout redraws jump and
-    # leaves stale composer fragments after output or a terminal resize.
+    # Keep one empty column so a right border never sits in pending-wrap, but
+    # prefer the widest safe span — Droid keeps chrome near the window edges.
     chrome = HSplit([before_input, *box_rows], width=prompt_line_width)
     framed_input = FloatContainer(
         chrome,

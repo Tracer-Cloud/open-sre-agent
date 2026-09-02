@@ -92,25 +92,26 @@ def test_launch_banner_centers_each_row_independently(monkeypatch: object) -> No
         assert abs(center - mid) <= 2.0, (body, center, mid)
 
 
-def test_launch_banner_draws_block_wordmark_on_wide_terminals(monkeypatch: object) -> None:
+def test_launch_banner_draws_ring_logo_on_wide_terminals(monkeypatch: object) -> None:
     monkeypatch.setattr(banner_module, "load_launch_status", _fixed_status)
     console = Console(record=True, force_terminal=False, highlight=False, width=120)
 
     console.print(banner_module.build_launch_banner(console))
 
     output = console.export_text(styles=False)
-    assert "██████╗ ██████╗ ███████╗" in output
+    # A ring-wall row of the braille "loops" mark.
+    assert "⣿⣿⠀⠀⣿⣿⡇⠀⠀⠀⠀⠀⠀⠀⠀⢸⣿⣿⠀⢸⣿⣿" in output
 
 
 def test_launch_banner_falls_back_to_title_on_narrow_terminals(monkeypatch: object) -> None:
     monkeypatch.setattr(banner_module, "load_launch_status", _fixed_status)
-    console = Console(record=True, force_terminal=False, highlight=False, width=40)
+    console = Console(record=True, force_terminal=False, highlight=False, width=20)
 
     console.print(banner_module.build_launch_banner(console))
 
     output = console.export_text(styles=False)
     assert "OpenSRE" in output
-    assert "██████╗ ██████╗" not in output
+    assert "⣿⣿" not in output  # braille ring omitted below its min width
 
 
 def test_launch_banner_uses_active_theme_palette(monkeypatch: object) -> None:

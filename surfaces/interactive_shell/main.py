@@ -22,6 +22,7 @@ from surfaces.interactive_shell.runtime.startup.account_gate import (
 from surfaces.interactive_shell.runtime.startup.initial_input import run_initial_input
 from surfaces.interactive_shell.runtime.startup.loop_suggestions import offer_loop_suggestions
 from surfaces.interactive_shell.ui.terminal_ui import render_terminal_ui
+from surfaces.shared.terminal.components.rendering import repl_clear_screen
 
 # Fallback when a caller does not supply one. Forces a terminal because the
 # shell owns the screen; an embedding caller passes its own instead.
@@ -126,6 +127,9 @@ def run_repl(
             if not pass_sign_in_gate(out):
                 return 0
             if paint_banner:
+                # Wipe the calling shell prompt so the REPL reads as its own
+                # screen (Droid/Claude Code), not a banner under ``uv run …``.
+                repl_clear_screen()
                 render_terminal_ui(out)
 
         return asyncio.run(
