@@ -13,12 +13,15 @@ from surfaces.interactive_shell.runtime import Session
 def _build_prompt_style() -> Style:
     theme = ui_theme.get_active_theme()
     text_fg = f"fg:{theme.TEXT}"
+    # Distinct composer plate — same role as Claude/Cursor/Droid's input surface.
+    surface = f"bg:{theme.INPUT_SURFACE}"
     return Style.from_dict(
         {
             "prompt-frame-line": f"bold {theme.HIGHLIGHT}",
             "": text_fg,
             "default": text_fg,
-            "repl-slash-command": f"bold {theme.HIGHLIGHT} bg:{theme.BG}",
+            "placeholder": f"{theme.DIM} {surface}",
+            "repl-slash-command": f"bold {theme.HIGHLIGHT} {surface}",
             "completion-menu": f"bg:{theme.BG}",
             "completion-menu.completion": f"{theme.TEXT} bg:{theme.BG}",
             "completion-menu.completion.current": f"bold {theme.HIGHLIGHT} bg:{theme.BG}",
@@ -27,9 +30,11 @@ def _build_prompt_style() -> Style:
             "completion-menu.border": theme.DIM,
             "scrollbar.background": f"bg:{theme.BG}",
             "scrollbar.button": f"bg:{theme.DIM}",
-            "frame": "",
-            "frame.border": theme.DIM,
-            "composer": theme.TEXT,
+            "frame": surface,
+            "frame.border": f"{theme.SECONDARY} {surface}",
+            "composer": f"{theme.TEXT} {surface}",
+            "composer-body": f"{theme.TEXT} {surface}",
+            # Footer sits under the plate on terminal bg (hint chrome, not input).
             "composer-footer": theme.DIM,
             # prompt_toolkit defaults the ``bottom-toolbar`` style to
             # ``reverse:noinherit``, which paints the toolbar as a dark

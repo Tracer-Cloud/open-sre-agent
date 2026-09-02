@@ -112,11 +112,11 @@ def test_confirmation_region_height_is_stable_across_selection_changes() -> None
 
 
 def test_streaming_prompt_height_matches_idle_with_live_tool_on_status_row() -> None:
-    """Prompt stack is Plan → status → Auto (Droid); no reserved action gap.
+    """Prompt stack is status → Auto (Droid); no reserved empty action gap.
 
-    Live tool awareness folds into the spinner row
-    (``Invoking tools… · GitHub CLI · …``). Height must match idle whether or
-    not a tool is in flight — never a second reserved prompt row.
+    Idle omits the empty status placeholder (that was the big gap under the
+    banner). Thinking/Invoking add one status line — height may grow by one,
+    but never by a second reserved blank row.
     """
     session = Session()
     idle = SpinnerState()
@@ -126,23 +126,24 @@ def test_streaming_prompt_height_matches_idle_with_live_tool_on_status_row() -> 
     spinner.start()
     spinner.set_phase(SpinnerState.THINKING_PHASE)
     thinking_rows = render_prompt_region(session, ReplState(), spinner).value.count("\n")
-    assert thinking_rows == idle_rows
+    assert thinking_rows in {idle_rows, idle_rows + 1}
 
     spinner.set_phase(SpinnerState.INVOKING_TOOLS_PHASE)
     spinner.set_active_action("GitHub CLI · gh api repos/x", action_id="t1")
     filled = render_prompt_region(session, ReplState(), spinner).value
-    assert filled.count("\n") == idle_rows
+    assert filled.count("\n") == thinking_rows
     plain = _plain(filled)
     assert "GitHub CLI" in plain
     assert "Invoking tools" in plain
-    assert plain.count("\n") == idle_rows or filled.count("\n") == idle_rows
 
 
-def test_idle_status_row_shows_ready_hint() -> None:
+def test_idle_prompt_has_no_recurring_ready_hint() -> None:
+    # Command hints live once in the launch banner and the composer footer, not
+    # a per-turn "Ready · …" line (which also stacked into copies on resize).
     session = Session()
     rendered = _plain(render_prompt_region(session, ReplState(), SpinnerState()).value)
-    assert "Ready" in rendered
-    assert "/ for commands" in rendered
+    assert "Ready" not in rendered
+    assert "/ for commands" not in rendered
 
 
 def test_confirmation_region_shows_stacked_yes_no_choice() -> None:

@@ -8,22 +8,12 @@ from rich.console import Console
 
 from surfaces.interactive_shell.session import Session
 from surfaces.interactive_shell.ui.handoff_questions import (
-    is_handoff_question,
-    last_assistant_asked_handoff,
     render_ask_user_qa,
     render_choice_selection,
-    render_handoff_question,
     try_render_ask_user_submission,
 )
 from surfaces.interactive_shell.ui.input_prompt.rendering import render_submitted_prompt
 from surfaces.interactive_shell.ui.streaming.renderer import render_markdown_block
-
-
-def test_short_closing_question_is_a_handoff() -> None:
-    assert is_handoff_question("Which environment should I investigate first?")
-    assert is_handoff_question("**Want me to:** run a full investigation?")
-    assert not is_handoff_question("checkout is returning 502s")
-    assert not is_handoff_question("### [1/8] Prerequisite checks")
 
 
 def test_render_markdown_block_highlights_a_question() -> None:
@@ -37,17 +27,23 @@ def test_render_markdown_block_highlights_a_question() -> None:
 
 def test_submitted_answer_to_a_handoff_is_marked() -> None:
     session = Session()
-    session.cli_agent_messages = [
-        ("user", "checkout is 502ing"),
-        ("assistant", "Which environment should I investigate first?"),
-    ]
+    # Only a structured picker / Ask-User handoff sets this flag; a plain
+    # assistant question in prose must not trigger the answer treatment.
+    session.terminal.awaiting_handoff_answer = True
     buffer = io.StringIO()
     console = Console(file=buffer, force_terminal=False, highlight=False, width=80)
-    assert last_assistant_asked_handoff(list(session.cli_agent_messages))
     render_submitted_prompt(console, session, "staging")
     output = buffer.getvalue()
     assert "↗ answer" in output
     assert "staging" in output
+    # The marker hugs the assistant answer it responds to (no blank row above it),
+    # and the between-turns gap falls after the marker, before the input row.
+    assert not output.startswith("\n")
+    lines = output.splitlines()
+    marker_index = next(i for i, line in enumerate(lines) if "↗ answer" in line)
+    input_index = next(i for i, line in enumerate(lines) if "staging" in line)
+    assert lines[marker_index + 1].strip() == ""
+    assert marker_index < input_index
 
 
 def test_ask_user_answers_render_as_numbered_qa() -> None:
@@ -158,6 +154,23 @@ def test_choice_selection_strips_terminal_controls() -> None:
     assert "Canary" in output
 
 
+def test_multi_select_choice_indents_every_selected_line() -> None:
+    # Arrange: a multi-select answer arrives as one option per line.
+    buffer = io.StringIO()
+    console = Console(file=buffer, force_terminal=False, highlight=False, width=100)
+    answer = "Audit the architecture\nFind failing PRs\nRemediate alerts"
+
+    # Act
+    render_choice_selection(console, "Select Complex Demos", answer)
+
+    # Assert: heading, then every option indented under it — never flush-left.
+    lines = [line.rstrip() for line in buffer.getvalue().splitlines() if line.strip()]
+    assert "✓ Select Complex Demos" in lines
+    for label in ("Audit the architecture", "Find failing PRs", "Remediate alerts"):
+        assert f"  {label}" in lines
+        assert label not in lines
+
+
 def test_try_render_rejects_a_single_choice_label() -> None:
     buffer = io.StringIO()
     console = Console(file=buffer, force_terminal=False, highlight=False, width=80)
@@ -165,12 +178,20 @@ def test_try_render_rejects_a_single_choice_label() -> None:
     assert buffer.getvalue() == ""
 
 
-def test_render_handoff_question_strips_terminal_controls() -> None:
+def test_plain_assistant_question_does_not_tag_the_next_turn() -> None:
+    """A conversational opener ending in ``?`` must not paint the follow-up.
+
+    Without the ``awaiting_handoff_answer`` flag the turn is an ordinary user
+    turn: no ``↗ answer`` marker and the input keeps the neutral row treatment.
+    """
+    session = Session()
+    session.cli_agent_messages = [
+        ("user", "good evening"),
+        ("assistant", "Good evening! How can I help?"),
+    ]
     buffer = io.StringIO()
     console = Console(file=buffer, force_terminal=False, highlight=False, width=80)
-    render_handoff_question(console, "Which env?\x1b]0;pwn\x07\x1b[2K staging")
+    render_submitted_prompt(console, session, "how many open PRs in opensre?")
     output = buffer.getvalue()
-    assert "\x1b" not in output
-    assert "\x07" not in output
-    assert "Which env?" in output
-    assert "staging" in output
+    assert "↗ answer" not in output
+    assert "how many open PRs in opensre?" in output

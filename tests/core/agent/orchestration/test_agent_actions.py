@@ -1031,6 +1031,29 @@ def test_execute_cli_actions_persists_action_agent_llm_unavailable(
     assert "action agent unavailable" in output
 
 
+def test_execute_cli_actions_propagates_credit_exhaustion(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from core.llm.shared.llm_retry import OpenSRECreditsExhaustedError
+
+    exhausted = OpenSRECreditsExhaustedError(
+        "OpenSRE hosted credits are exhausted.",
+        upgrade_url="https://app.opensre.test/usage",
+    )
+
+    def _raise() -> object:
+        raise exhausted
+
+    _patch_action_llm_factory(monkeypatch, _raise)
+
+    session = Session()
+    console, _ = _capture()
+    with pytest.raises(OpenSRECreditsExhaustedError) as exc_info:
+        action_turn.run_action_tool_turn("check health", session, console)
+
+    assert exc_info.value is exhausted
+
+
 def test_execute_cli_actions_executes_matched_clause_ignoring_unhandled(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

@@ -23,7 +23,7 @@ async def _wait_until_running(builder: PromptBuilder) -> asyncio.Task[str]:
         if task is not None and builder.pt_app is not None and builder.pt_app.is_running:
             return task
         await asyncio.sleep(0.01)
-    pytest.fail("prompt application did not start")
+    raise AssertionError("prompt application did not start")
 
 
 def _terminal_output() -> Vt100_Output:

@@ -57,11 +57,10 @@ def _metering_makes_no_real_calls(monkeypatch: pytest.MonkeyPatch) -> None:
 
     Transport turns now consume credits, so a developer whose shell exports the
     metering env would have the test suite POST charges to a live ledger.
-    Clearing these leaves every outcome ``UNCONFIGURED`` (fail-open, no HTTP),
+    Clearing these leaves every outcome ``DISABLED`` (self-hosted, no HTTP),
     and a test wanting another outcome still sets its own env or patches
-    ``consume_credits``. The machine secret goes too: the bearer token is
-    minted from Clerk *before* the URL is checked, so leaving it set would call
-    out even with the webapp URL cleared.
+    ``consume_credits``. The machine secret is cleared too so credential tests
+    cannot accidentally reach Clerk through another code path.
     """
     for name in (WEBAPP_URL_ENV, USAGE_SECRET_ENV, MACHINE_SECRET_ENV):
         monkeypatch.delenv(name, raising=False)

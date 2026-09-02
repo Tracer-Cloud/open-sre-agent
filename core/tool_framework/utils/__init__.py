@@ -1,4 +1,4 @@
-"""Tool utilities — the one door consumers import these helpers through.
+"""Tool utilities — the one public API consumers use to import these helpers.
 
 Schema builders, MCP payload readers, code-host and availability envelopes, and
 database-warning wrappers. Importing the submodules directly still works inside

@@ -198,6 +198,21 @@ def _successful_turn(result: TurnResult) -> bool:
     )
 
 
+def _approval_denied_message(denied_tools: tuple[str, ...]) -> str:
+    """Name the denied tools and the exact flags that authorize them.
+
+    A one-shot ``ask`` has no prompt to approve at, so a bare "denied" is a
+    dead end; point the user straight at the flags that unblock the run.
+    """
+    tools = ", ".join(denied_tools)
+    allow = " ".join(f"--allowed-tool {tool}" for tool in denied_tools)
+    return (
+        f"Approval denied for: {tools}\n"
+        f"Re-run with {allow} to authorize these, "
+        "or --dangerously-bypass-approvals to allow all."
+    )
+
+
 def _approval_denied_outcome(
     tracker: ApprovalTracker,
     *,
@@ -208,7 +223,7 @@ def _approval_denied_outcome(
         return None
     return AskOutcome(
         status=AskStatus.APPROVAL_DENIED,
-        response=response or "Approval denied for: " + ", ".join(denied_tools),
+        response=response or _approval_denied_message(denied_tools),
         denied_tools=denied_tools,
         exit_code=AskExitCode.APPROVAL_DENIED,
     )
@@ -255,6 +270,22 @@ def run_ask(
         denied = _approval_denied_outcome(tracker)
         if denied is not None:
             return denied
+        from surfaces.cli.error_mapping import reraise_cli_runtime_error
+
+        try:
+            reraise_cli_runtime_error(exc)
+        except OpenSREError as mapped:
+            return AskOutcome(
+                status=AskStatus.ERROR,
+                response="",
+                error=AskError(
+                    message=mapped.message,
+                    suggestion=mapped.suggestion,
+                ),
+                exit_code=AskExitCode.ERROR,
+            )
+        except Exception as unmapped:
+            exc = unmapped
         from surfaces.cli.telemetry import report_exception
 
         report_exception(exc, context="surfaces.cli.ask")

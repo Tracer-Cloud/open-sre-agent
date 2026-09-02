@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from prompt_toolkit.formatted_text import ANSI
+from prompt_toolkit.formatted_text import ANSI, FormattedText
 from rich.console import Console
 from rich.text import Text
 
@@ -10,7 +10,6 @@ from core.agent_harness.spi.handoff import parse_ask_user_answers
 from infrastructure.terminal import theme as ui_theme
 from surfaces.interactive_shell.runtime import Session
 from surfaces.interactive_shell.ui.handoff_questions import (
-    last_assistant_asked_handoff,
     render_ask_user_qa,
     render_handoff_answer_marker,
 )
@@ -20,9 +19,17 @@ from surfaces.interactive_shell.ui.input_prompt.layout import (
     clip_prompt_text,
     prompt_line_width,
 )
+from surfaces.shared.terminal.prompt_layout import prompt_text_width, terminal_columns
 
 DEFAULT_PLACEHOLDER_TEXT = "see what you can do"
 _PLAN_CONTINUE_PLACEHOLDER = "continue the plan, or type a message"
+#: Warm vertical bar — same role as Droid's orange user-turn lead-in.
+_USER_TURN_ACCENT = "▌"
+
+
+def _placeholder_formatted(text: str) -> FormattedText:
+    """Ghost text on the composer plate (style carries INPUT_SURFACE bg)."""
+    return FormattedText([("class:placeholder", text)])
 
 
 def _prompt_turn_number(session: Session) -> int:
@@ -71,17 +78,18 @@ def render_submitted_prompt(console: Console, session: Session, text: str) -> No
     if stripped == "/choose" or stripped.startswith("/choose "):
         session.terminal.last_input_autosubmitted = False
         return
+    # A turn is an answer to a hand-off only when a structured picker/Ask-User
+    # actually issued one (the harness sets this flag). Do not infer it from the
+    # assistant's prose ending in ``?`` — a plain opener like "How can I help?"
+    # would then paint every ordinary follow-up as a brand-coloured answer.
     is_handoff_answer = bool(session.terminal.awaiting_handoff_answer)
-    if not is_handoff_answer:
-        is_handoff_answer = last_assistant_asked_handoff(
-            list(getattr(session, "cli_agent_messages", []) or [])
-        )
     session.terminal.awaiting_handoff_answer = False
     ask_user_pairs = parse_ask_user_answers(stripped) if is_handoff_answer else []
     if len(ask_user_pairs) >= 2:
         # Keep the Ask User block in the transcript (Q white, A brand). Claim the
         # turn number so the next prompt still advances; do not paint a fake
         # ``[N] ❯`` — leave this as the Ask User card.
+        console.print()
         session.terminal.claim_turn_number()
         render_ask_user_qa(console, ask_user_pairs)
         return
@@ -94,33 +102,62 @@ def render_submitted_prompt(console: Console, session: Session, text: str) -> No
         session.terminal.pending_choice_response = stripped
         return
     if is_handoff_answer:
+        # The marker hugs the assistant answer it responds to (no gap above);
+        # the between-turns gap falls below it, before the user's input row.
         console.print(render_handoff_answer_marker())
+        console.print()
     elif autosubmitted:
         # Keep this shorter than the condition — the ``[N] ❯`` line carries the
         # full text; this only answers "is this still /goal set or real work?".
+        console.print()
         console.print(
             Text(
                 "↗ /goal — work turn (condition auto-submitted)",
                 style=str(ui_theme.DIM),
             )
         )
+    else:
+        # Blank row between the previous turn and this one (Droid rhythm).
+        console.print()
     counter = _counter_text(session.terminal.claim_turn_number())
     lines = text.splitlines() or [""]
-    # Write palette ANSI directly. Rich Text/Style.parse on a _LazyRichStyle
-    # (empty underlying str) emits default white instead of SECONDARY grey
-    # under CI coverage / shared Style.parse cache.
-    body_ansi = ui_theme.BRAND_ANSI if is_handoff_answer else ui_theme.SECONDARY_ANSI
-    prefix_ansi = ui_theme.DIM_ANSI
-    continuation_prefix = " " * (len(counter) + len("❯ "))
+    # Full-width surface plate + warm left bar (Droid paints the user row
+    # edge-to-edge). Write palette ANSI directly — Rich Text/Style.parse on a
+    # _LazyRichStyle can fall through to default white under coverage.
+    # Full terminal width plate (Droid edge-to-edge). Trailing pad spaces stay
+    # inside the surface so the last column is never a glyph (soft-wrap safe).
+    row_width = max(terminal_columns(), 1)
+    accent_ansi = ui_theme.BOLD_REPLY_MARKER_ANSI
+    body_ansi = ui_theme.BRAND_ANSI if is_handoff_answer else ui_theme.TEXT_ANSI
+    counter_ansi = ui_theme.DIM_ANSI
+    surface = ui_theme.INPUT_SURFACE_BG_ANSI
     parts: list[str] = []
     for index, line in enumerate(lines):
         if index:
             parts.append("\n")
         if index == 0:
-            parts.append(f"{prefix_ansi}{counter}❯ {ui_theme.ANSI_RESET}")
+            # ``▌ [N] `` then body — bar sits on the left edge of the plate.
+            prefix = f"{_USER_TURN_ACCENT} {counter}"
+            prefix_cols = prompt_text_width(prefix)
+            body = clip_prompt_text(line, max(1, row_width - prefix_cols))
+            pad = max(0, row_width - prefix_cols - prompt_text_width(body))
+            parts.append(
+                f"{surface}{accent_ansi}{_USER_TURN_ACCENT}{ui_theme.ANSI_RESET}"
+                f"{surface} {counter_ansi}{counter}{ui_theme.ANSI_RESET}"
+                f"{surface}{body_ansi}{body}{' ' * pad}{ui_theme.ANSI_RESET}"
+            )
         else:
-            parts.append(f"{prefix_ansi}{continuation_prefix}{ui_theme.ANSI_RESET}")
-        parts.append(f"{body_ansi}{line}{ui_theme.ANSI_RESET}")
+            # Hang under the accent + space so wrapped lines stay in the plate.
+            hang = "  " + (" " * len(counter))
+            hang_cols = prompt_text_width(hang)
+            body = clip_prompt_text(line, max(1, row_width - hang_cols))
+            pad = max(0, row_width - hang_cols - prompt_text_width(body))
+            parts.append(
+                f"{surface}{counter_ansi}{hang}{ui_theme.ANSI_RESET}"
+                f"{surface}{body_ansi}{body}{' ' * pad}{ui_theme.ANSI_RESET}"
+            )
+    # Single trailing newline — the reply path owns the blank row under the
+    # user plate so we do not stack two spacers (Droid: one row of margin).
     console.file.write("".join(parts) + "\n")
     console.file.flush()
 
@@ -134,11 +171,15 @@ def resolve_prompt_prefix_ansi(*, inline_spinner: str, idle_hint: str) -> str:
 
 
 def resolve_idle_hint_ansi(session: Session) -> str:
-    """Return the one-line Ready/commands hint for the fixed-height status row."""
-    from surfaces.interactive_shell.runtime.core.state import ready_hint_ansi
+    """No idle chrome above the composer.
 
+    The command/shortcut hints live once in the launch banner and the composer
+    footer, so the prompt does not repeat a "Ready · …" line on every turn. That
+    recurring line also stacked into duplicate copies on terminal resize; with
+    nothing rendered here, there is nothing to leave behind.
+    """
     del session
-    return ready_hint_ansi()
+    return ""
 
 
 def ctrl_c_exit_hint_ansi() -> str:
@@ -154,11 +195,12 @@ def composer_footer_ansi() -> str:
     return f"{ui_theme.DIM_ANSI}{clipped}{ui_theme.ANSI_RESET}"
 
 
-def resolve_prompt_placeholder(session: Session) -> ANSI:
+def resolve_prompt_placeholder(session: Session) -> FormattedText:
     """Contextual ghost text when the input buffer is empty.
 
-    Built per redraw (not at import) so theme ANSI cannot freeze stale, and so
-    an unfinished live plan can replace the default exploratory hint.
+    Built per redraw (not at import) so theme styles cannot freeze stale, and so
+    an unfinished live plan can replace the default exploratory hint. Uses a
+    style class (not raw ANSI) so the composer INPUT_SURFACE fill is preserved.
     """
     parts: list[str] = []
     if session.terminal.trust_mode:
@@ -169,15 +211,13 @@ def resolve_prompt_placeholder(session: Session) -> ANSI:
     if session.resumed_from_name:
         parts.append(f"resumed: {_short_meta(session.resumed_from_name, max_len=32)}")
     if parts:
-        return ANSI(f"{ui_theme.DIM_ANSI}{' · '.join(parts)}{ui_theme.ANSI_RESET}")
+        return _placeholder_formatted(" · ".join(parts))
     if (
         session.task_plan is not None
         and session.task_plan.all_pending
         and session.plan_only_until_authorized
     ):
-        return ANSI(
-            f"{ui_theme.DIM_ANSI}say go to start the plan, or type a message{ui_theme.ANSI_RESET}"
-        )
+        return _placeholder_formatted("say go to start the plan, or type a message")
     plan = session.task_plan
     if (
         plan is not None
@@ -185,5 +225,5 @@ def resolve_prompt_placeholder(session: Session) -> ANSI:
         and not plan.all_completed
         and not session.plan_only_until_authorized
     ):
-        return ANSI(f"{ui_theme.DIM_ANSI}{_PLAN_CONTINUE_PLACEHOLDER}{ui_theme.ANSI_RESET}")
-    return ANSI(f"{ui_theme.DIM_ANSI}{DEFAULT_PLACEHOLDER_TEXT}{ui_theme.ANSI_RESET}")
+        return _placeholder_formatted(_PLAN_CONTINUE_PLACEHOLDER)
+    return _placeholder_formatted(DEFAULT_PLACEHOLDER_TEXT)

@@ -19,7 +19,7 @@ from surfaces.interactive_shell.runtime.input.events import (
     InputSubmitted,
 )
 from surfaces.interactive_shell.session import Session
-from surfaces.interactive_shell.ui import DIM
+from surfaces.interactive_shell.ui import HIGHLIGHT
 from surfaces.shared.terminal.components.cpr_stdin import (
     contains_cpr_sequence,
     strip_cpr_sequences,
@@ -90,7 +90,7 @@ class PromptInputReader:
             return
         self.console.print()
         print_session_resume_hint(self.console, self.session.session_id)
-        self.console.print(f"[{DIM}]Goodbye![/]")
+        self.console.print(f"[{HIGHLIGHT}]Goodbye![/]")
 
 
 __all__ = ["PromptInputReader"]

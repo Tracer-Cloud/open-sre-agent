@@ -131,6 +131,42 @@ def test_shimmer_text_ansi_paints_a_traveling_metallic_wave() -> None:
     assert " tools" in spaced or "tools" in re.sub(r"\x1b\[[0-9;]*m", "", spaced)
 
 
+def test_reply_marker_follows_the_active_theme_highlight() -> None:
+    """Assistant ``∴`` uses the active theme's HIGHLIGHT so every component
+    follows the selected palette (not a fixed colour that copies another tool)."""
+    from infrastructure.terminal import theme as ui_theme
+
+    for name in ("blue", "purple", "green", "mono"):
+        ui_theme.set_active_theme(name)
+        assert ui_theme.reply_marker_style() == f"bold {ui_theme.get_theme(name).HIGHLIGHT}"
+
+
+def test_reply_block_paints_orange_marker_and_themed_body() -> None:
+    """Regression: marker washed out when body fell through to terminal white."""
+    import os
+
+    from surfaces.interactive_shell.ui.streaming.renderer import render_reply_block
+
+    os.environ.pop("NO_COLOR", None)
+    set_active_theme("blue")
+    console = Console(
+        force_terminal=True,
+        color_system="truecolor",
+        legacy_windows=False,
+        no_color=False,
+    )
+    with console.capture() as capture:
+        render_reply_block(console, "Hey! How can I help?")
+    output = capture.get()
+    assert "∴" in output
+    # Marker follows the active theme's HIGHLIGHT (whatever the palette sets).
+    highlight = get_theme("blue").HIGHLIGHT.lstrip("#")
+    r, g, b = (int(highlight[i : i + 2], 16) for i in (0, 2, 4))
+    assert f"38;2;{r};{g};{b}m" in output
+    # Body uses the sunny Droid-like agent grey (#D0D0D0).
+    assert "38;2;208;208;208m" in output
+
+
 def test_palette_registry_keys_match_the_config_vocabulary() -> None:
     """The infra palettes must cover exactly the config-owned theme names.
 

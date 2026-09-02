@@ -405,6 +405,42 @@ def test_openai_insufficient_quota_raises_LLMCreditExhaustedError(
     assert call_count == 1
 
 
+def test_opensre_payment_required_raises_upgrade_error_without_retry(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The hosted proxy returns HTTP 402 as a generic SDK status error."""
+    from core.llm.shared.llm_retry import OpenSRECreditsExhaustedError
+
+    _install_fake_openai(monkeypatch)
+    call_count = 0
+    upgrade_url = "https://app.opensre.dev/usage"
+
+    class HostedPaymentRequired(Exception):
+        code = "opensre_credits_exhausted"
+        body = {
+            "code": "opensre_credits_exhausted",
+            "upgrade_url": "https://app.opensre.dev/usage",
+        }
+
+    def raise_payment_required(**_: object) -> object:
+        nonlocal call_count
+        call_count += 1
+        raise HostedPaymentRequired("Payment required")
+
+    client = OpenAIAgentClient.__new__(OpenAIAgentClient)
+    client._client = types.SimpleNamespace(
+        chat=types.SimpleNamespace(completions=types.SimpleNamespace(create=raise_payment_required))
+    )
+    client._model = "gpt-4o"
+    client._max_tokens = 512
+
+    with pytest.raises(OpenSRECreditsExhaustedError) as excinfo:
+        client.invoke(messages=[{"role": "user", "content": "hi"}])
+
+    assert call_count == 1
+    assert excinfo.value.upgrade_url == upgrade_url
+
+
 def test_anthropic_rate_limit_honors_retry_after_header(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

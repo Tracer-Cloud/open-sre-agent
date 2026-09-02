@@ -5,7 +5,10 @@ from __future__ import annotations
 import asyncio
 from unittest.mock import MagicMock
 
-from core.llm.shared.llm_retry import LLMCreditExhaustedError
+from core.llm.shared.llm_retry import (
+    LLMCreditExhaustedError,
+    OpenSRECreditsExhaustedError,
+)
 from surfaces.interactive_shell.runtime import agent_presentation as ap
 from surfaces.interactive_shell.runtime.agent_presentation import (
     AgentEvent,
@@ -65,6 +68,19 @@ def test_credit_exhausted_turn_error_shows_model_hint() -> None:
 def test_credit_exhausted_turn_error_shows_auth_login_hint() -> None:
     output = _render_turn_error(LLMCreditExhaustedError("Anthropic credit exhausted"))
     assert "/auth login" in output
+
+
+def test_opensre_credit_exhaustion_shows_checkout_instead_of_provider_hints() -> None:
+    upgrade_url = "https://app.opensre.dev/usage"
+    output = _render_turn_error(
+        OpenSRECreditsExhaustedError(
+            "OpenSRE credits exhausted",
+            upgrade_url=upgrade_url,
+        )
+    )
+    assert upgrade_url in output
+    assert "/model" not in output
+    assert "/auth login" not in output
 
 
 def test_other_turn_error_has_no_model_hint() -> None:

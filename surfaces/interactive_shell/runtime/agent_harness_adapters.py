@@ -63,7 +63,7 @@ class ShellOutputSink:
         self._console.print(message, markup=False)
 
     def render_response_header(self, label: str) -> None:
-        self._console.print()
+        # No leading blank — Droid-dense turn stacking (user row → ∴ reply).
         render_response_header(self._console, label)
 
     def render_error(self, message: str) -> None:

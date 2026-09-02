@@ -195,7 +195,9 @@ def test_build_prompt_session_installs_growing_bordered_composer() -> None:
     assert isinstance(composer, HSplit)
     assert composer.height is None
     editable_row = composer.children[1]
-    editable_body = editable_row.children[1].get_container()
+    surface_body = editable_row.children[1].get_container()
+    assert isinstance(surface_body, HSplit)
+    editable_body = surface_body.children[0]
     default_buffer_slot = editable_body.children[0]
     assert default_buffer_slot.content.height.min == 1
     assert default_buffer_slot.content.height.max == 8
@@ -462,14 +464,15 @@ def test_build_prompt_style_tracks_active_theme() -> None:
 
 
 def test_completion_menu_current_item_uses_highlight_style() -> None:
-    from infrastructure.terminal.theme import BG, HIGHLIGHT
+    from infrastructure.terminal.theme import BG, HIGHLIGHT, INPUT_SURFACE
 
     set_active_theme("green")
     style = _build_prompt_style()
     attrs = style.get_attrs_for_style_str("class:repl-slash-command")
 
     assert attrs.color == HIGHLIGHT.lstrip("#")
-    assert attrs.bgcolor == BG.lstrip("#")
+    # Slash tokens sit on the composer plate, not the terminal bg.
+    assert attrs.bgcolor == str(INPUT_SURFACE).lstrip("#")
     assert attrs.bold is True
 
     attrs_menu = style.get_attrs_for_style_str("class:completion-menu.completion.current")
@@ -480,12 +483,25 @@ def test_completion_menu_current_item_uses_highlight_style() -> None:
     assert attrs_menu.bold is True
 
 
-def test_composer_uses_terminal_background_without_a_highlight_fill() -> None:
+def test_composer_uses_input_surface_fill() -> None:
+    """Composer plate uses INPUT_SURFACE — same role as Droid/Claude/Cursor input bg."""
+    from infrastructure.terminal.theme import INPUT_SURFACE
+
     set_active_theme("green")
     style = _build_prompt_style()
+    surface = str(INPUT_SURFACE).lstrip("#")
 
-    for style_name in ("class:frame", "class:composer", "class:composer-footer"):
-        assert not style.get_attrs_for_style_str(style_name).bgcolor
+    for style_name in (
+        "class:frame",
+        "class:frame.border",
+        "class:composer",
+        "class:composer-body",
+        "class:placeholder",
+    ):
+        assert style.get_attrs_for_style_str(style_name).bgcolor == surface
+
+    # Help line under the plate stays on terminal bg.
+    assert not style.get_attrs_for_style_str("class:composer-footer").bgcolor
 
 
 def test_lazy_rich_style_split_tracks_active_theme() -> None:
@@ -690,27 +706,28 @@ class TestSpinnerState:
         assert spinner.streaming is False
         assert spinner.inline_spinner_ansi() == ""
 
-    def test_inline_spinner_thinking_uses_active_theme_highlight(self) -> None:
-        from infrastructure.terminal.theme import set_active_theme
+    def test_inline_spinner_thinking_uses_warm_reply_marker(self) -> None:
+        from infrastructure.terminal.theme import reply_marker_hex, set_active_theme
 
         set_active_theme("blue")
         spinner = loop_state.SpinnerState()
         spinner.start()
         spinner.set_phase(loop_state.SpinnerState.THINKING_PHASE)
         raw = spinner.inline_spinner_ansi()
-        assert _rgb(THEME_REGISTRY["blue"].HIGHLIGHT) in raw  # highlight — the Thinking accent
+        assert _rgb(reply_marker_hex()) in raw  # Factory-warm glyph accent
         assert _rgb(THEME_REGISTRY["green"].HIGHLIGHT) not in raw
 
-    def test_inline_spinner_invoking_tools_uses_brand(self) -> None:
-        from infrastructure.terminal.theme import set_active_theme
+    def test_inline_spinner_invoking_tools_uses_same_warm_accent(self) -> None:
+        from infrastructure.terminal.theme import reply_marker_hex, set_active_theme
 
         set_active_theme("blue")
         spinner = loop_state.SpinnerState()
         spinner.start()
         spinner.set_phase(loop_state.SpinnerState.INVOKING_TOOLS_PHASE)
         raw = spinner.inline_spinner_ansi()
-        assert _rgb(THEME_REGISTRY["blue"].BRAND) in raw  # blue BRAND
-        assert _rgb(THEME_REGISTRY["blue"].HIGHLIGHT) not in raw.split("(Press ESC")[0]
+        # One sunny accent for every phase — not a second cold brand strip.
+        assert _rgb(reply_marker_hex()) in raw
+        assert _rgb(THEME_REGISTRY["blue"].BRAND) not in raw.split("(Press ESC")[0]
 
     def test_streaming_inline_spinner_includes_glyph_and_token_count(self) -> None:
         spinner = loop_state.SpinnerState()

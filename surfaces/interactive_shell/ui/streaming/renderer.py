@@ -8,6 +8,8 @@ from typing import TYPE_CHECKING
 
 from rich.console import Console
 from rich.padding import Padding
+from rich.table import Table
+from rich.text import Text
 
 import infrastructure.terminal.theme as ui_theme
 from core.agent_harness.spi.prompt_chrome import normalize_three_tier_spacing
@@ -16,6 +18,7 @@ from infrastructure.safety.terminal_output import strip_terminal_controls
 from infrastructure.text import looks_like_data_blob
 
 if TYPE_CHECKING:
+    from rich.console import RenderableType
     from rich.markdown import Markdown
 
 STREAM_LABEL_ASSISTANT = "assistant"
@@ -139,7 +142,7 @@ def render_markdown_block(console: Console, text: str) -> None:
 def render_note_block(console: Console, text: str) -> None:
     """Render intermediate agent narration as a dim, indented note.
 
-    Distinct from the bright ``Ω`` reply and the recessed grey ``[n] ❯`` user
+    Distinct from the bright ``∴`` reply and the recessed grey ``[n] ❯`` user
     row: a note carries no glyph, only a dim left indent, so the three turn
     roles — your ask, opensre's working notes, and its final reply — read apart.
     Bold spans (the action words) stay bold within the dim base.
@@ -149,15 +152,55 @@ def render_note_block(console: Console, text: str) -> None:
         return
     with console.use_theme(ui_theme.MARKDOWN_THEME):
         console.print(
-            Padding(_build_markdown_block(visible), (0, 0, 0, 3)), style=str(ui_theme.DIM)
+            Padding(_build_markdown_block(visible), (0, 0, 0, 3)),
+            style=str(ui_theme.SECONDARY),
+        )
+
+
+def _reply_marker_style() -> str:
+    """Warm Factory/Droid-parity accent for the ``∴`` reply marker."""
+    return ui_theme.reply_marker_style()
+
+
+def reply_gutter(body: RenderableType, *, lead: bool) -> Table:
+    """Lay a reply renderable in a two-column gutter.
+
+    The first paragraph carries the ``∴`` marker in the gutter; every other row
+    (wrapped lines and following paragraphs) sits in the same indented body
+    column, so the whole reply reads as one block hanging under the marker.
+    """
+    grid = Table.grid(padding=0)
+    grid.add_column(width=2, no_wrap=True)
+    grid.add_column(overflow="fold")
+    marker = Text("∴ ", style=_reply_marker_style()) if lead else Text("  ")
+    grid.add_row(marker, body)
+    return grid
+
+
+def render_reply_block(console: Console, text: str, *, lead: bool = True) -> None:
+    """Render a whole assistant reply inside the ``∴`` hanging-indent gutter."""
+    visible = strip_session_goal_progress_tags(text)
+    if not visible.strip():
+        return
+    with console.use_theme(ui_theme.MARKDOWN_THEME):
+        # Explicit TEXT on the row so plain paragraphs never fall through to the
+        # terminal default white (which washed out the warm marker in dogfood).
+        console.print(
+            reply_gutter(_build_markdown_block(visible), lead=lead),
+            style=str(ui_theme.TEXT),
         )
 
 
 def render_response_header(console: Console, label: str) -> None:
-    """Print the theme-colored ``Ω`` row marker that opens an assistant response.
+    """Print the ``∴`` triangle row marker that opens every assistant response.
 
-    Omega is opensre's uniquely identifiable agent marker. Shared
+    A single triangle is opensre's uniquely identifiable agent marker. Shared
     with ``action_turn.run_action_tool_turn`` so the planned-actions path and the
     streaming response path use the exact same prefix.
+
+    ``label`` is accepted for port compatibility (callers still pass
+    ``answer`` / ``assistant``) but is not painted — a dim role word under the
+    marker read as school-project chrome next to Droid's silent replies.
     """
-    console.print(f"[{ui_theme.BOLD_BRAND}]Ω[/] [{ui_theme.DIM}]{label}[/]")
+    del label
+    console.print(f"[{_reply_marker_style()}]∴[/]")

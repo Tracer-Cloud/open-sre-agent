@@ -2,9 +2,8 @@
 
 Buzz shipped as a copy of Telegram and inherited its missing credit gate, so
 every turn ran for free. The charge is billed to the silo organization, not the
-sender's pubkey: only an explicit 402 blocks a turn, so a charge posted against
-the wrong account would fail open and never surface. Fail-open on the other
-outcomes is pinned once, centrally, in ``gateway/tests/billing``.
+sender's pubkey: a charge posted against the wrong account must not admit work.
+Hosted admission also fails closed whenever the ledger cannot be trusted.
 
 The charge must also never be stranded. Buzz acknowledges a mention only once
 its turn body has run, and shutdown cancels turns that outlast the drain

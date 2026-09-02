@@ -23,13 +23,60 @@ def test_print_session_resume_hint_includes_repl_and_cli_commands(
 
     from rich.console import Console
 
+    import infrastructure.terminal.theme as ui_theme
+
+    ui_theme.set_active_theme("amber")
     monkeypatch.setattr("infrastructure.terminal.prompt_support.sys.argv", ["o"])
-    console = Console(file=StringIO(), force_terminal=False, color_system=None)
+    console = Console(
+        file=StringIO(),
+        force_terminal=True,
+        color_system="truecolor",
+        highlight=False,
+        no_color=False,
+    )
     print_session_resume_hint(console, "8988e743-87ae-4c4c-a37b-0351e62a4855")
     output = console.file.getvalue()
     assert "Resume this session with:" in output
     assert "/resume 8988e743-87ae-4c4c-a37b-0351e62a4855" in output
     assert "o --resume 8988e743-87ae-4c4c-a37b-0351e62a4855" in output
+    # Accent theme on the copy-pasteable commands — not flat DIM (looks unthemed).
+    assert ui_theme.HIGHLIGHT_ANSI in output
+
+
+def test_exit_farewell_keeps_theme_accent(monkeypatch: pytest.MonkeyPatch) -> None:
+    """``/exit`` goodbye and resume cmds must use HIGHLIGHT, not plain DIM."""
+    from io import StringIO
+
+    from rich.console import Console
+
+    import infrastructure.terminal.theme as ui_theme
+    from surfaces.interactive_shell.command_registry.system import _cmd_exit
+    from surfaces.interactive_shell.runtime import Session
+
+    ui_theme.set_active_theme("amber")
+    monkeypatch.setattr(
+        "surfaces.interactive_shell.command_registry.system._flush_analytics_on_exit",
+        lambda _console: None,
+    )
+    monkeypatch.setattr(
+        "surfaces.shared.terminal.components.choice_menu.prepare_repl_output_line",
+        lambda: None,
+    )
+    session = Session()
+    session.session_id = "0dc1aa80-efdf-4245-a42a-36ea06d14964"
+    buf = StringIO()
+    console = Console(
+        file=buf,
+        force_terminal=True,
+        color_system="truecolor",
+        highlight=False,
+        no_color=False,
+    )
+    assert _cmd_exit(session, console, []) is False
+    out = buf.getvalue()
+    assert "goodbye." in out
+    assert "/resume 0dc1aa80-efdf-4245-a42a-36ea06d14964" in out
+    assert ui_theme.HIGHLIGHT_ANSI in out
 
 
 def test_install_questionary_escape_cancel_is_idempotent() -> None:

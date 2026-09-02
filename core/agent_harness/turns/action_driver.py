@@ -917,6 +917,13 @@ def _run_action_turn(
             system_prompt=result.final_system_prompt,
         )
     except Exception as exc:
+        from core.llm.shared.llm_retry import LLMCreditExhaustedError
+
+        # Billing exhaustion is a terminal control-flow condition. Rendering it
+        # as an ordinary assistant response makes one-shot callers report a
+        # successful turn and exit zero even though no model work completed.
+        if isinstance(exc, LLMCreditExhaustedError):
+            raise
         error_text = str(exc)
         if args.error_reporter is not None:
             args.error_reporter.report(

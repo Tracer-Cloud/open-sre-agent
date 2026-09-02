@@ -12,7 +12,7 @@ from rich.text import Text
 
 import surfaces.interactive_shell.runtime.slash_adapter as slash_adapter
 from core.agent_harness.turns.turn_results import ToolCallingTurnResult
-from infrastructure.terminal.theme import BOLD_SKILL, HIGHLIGHT
+from infrastructure.terminal.theme import BOLD_SKILL, TEXT
 from surfaces.interactive_shell.runtime.action_turn import run_action_tool_turn
 from surfaces.interactive_shell.session import Session
 from surfaces.interactive_shell.ui.action_rendering import (
@@ -172,7 +172,7 @@ def test_skill_view_renders_bold_green_skill_label() -> None:
     assert heading.plain == "Skill install-code-review"
     assert len(heading.spans) == 2
     assert str(heading.spans[0].style) == BOLD_SKILL
-    assert str(heading.spans[1].style) == str(HIGHLIGHT)
+    assert str(heading.spans[1].style) == str(TEXT)
 
 
 def test_skill_view_strips_terminal_controls_from_model_name() -> None:

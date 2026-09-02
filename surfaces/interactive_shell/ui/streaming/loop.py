@@ -41,7 +41,8 @@ from core.agent_harness.spi.prompt_chrome import WANT_ME_TO_MARKER
 from core.agent_harness.spi.session_goal import strip_session_goal_progress_tags
 from surfaces.interactive_shell.ui.streaming.renderer import (
     _build_markdown_block,
-    render_markdown_block,
+    render_reply_block,
+    reply_gutter,
 )
 
 # Throttle for the optional ``update_streaming_progress`` hook on the
@@ -53,9 +54,6 @@ _PROGRESS_INTERVAL_SECONDS = 0.1
 # external caller (e.g. agent_actions.py for the planned-actions
 # bullet header) stay in lock-step.
 _PARAGRAPH_BREAK = "\n\n"
-# Inline agent marker: a single ``Ω`` leads the response's first line (no
-# separate ``Ω OpenSRE`` header row) so the turn carries one compact marker.
-_RESPONSE_MARKER = "Ω"
 _CODE_FENCE = "```"
 # Match a triple-backtick only when it opens a line. An inline mention
 # inside flowing text (e.g. "The ``` marker opens a code block") would
@@ -78,35 +76,6 @@ _SELF_SPACING_BLOCK_TOKEN_TYPES = frozenset(
         "table_open",
     }
 )
-
-
-# A leading Markdown block: table row, heading, bullet/ordered list, code fence,
-# or blockquote. Detected by first-line shape (no Markdown parse) so attaching the
-# response marker stays allocation-free on the hot streaming path.
-_BLOCK_LEAD_RE = re.compile(r"^\s*(?:\||#{1,6}\s|[-*+]\s|\d+[.)]\s|```|~~~|>)")
-
-
-def _body_leads_with_block(stripped: str) -> bool:
-    lines = stripped.split("\n", 2)
-    if _BLOCK_LEAD_RE.match(lines[0]):
-        return True
-    # A pipe-less GFM table: a header line followed by a ``---|---`` delimiter row.
-    if len(lines) > 1 and "|" in lines[0]:
-        delim = lines[1].strip()
-        return bool(delim) and set(delim) <= set("|:- ") and "-" in delim
-    return False
-
-
-def _render_response_marker(console: Console, body: str) -> None:
-    """Render the theme-colored ``Ω`` inline or above a leading block.
-
-    An ``Ω `` fused onto the first line of a Markdown block — a table row, heading,
-    list item, or code fence — breaks CommonMark block parsing, so the block then
-    renders as flattened raw text. Only a paragraph can carry the marker inline;
-    any other leading block takes the marker on the line above it.
-    """
-    end = "\n\n" if _body_leads_with_block(body.lstrip()) else " "
-    console.print(f"[{ui_theme.BOLD_BRAND}]{_RESPONSE_MARKER}[/]", end=end)
 
 
 def _paragraph_has_want_me_to(text: str) -> bool:
@@ -165,7 +134,7 @@ def stream_to_console_state(
     defer_want_me_to_closer: bool = False,
 ) -> StreamRenderResult:
     """Like :func:`stream_to_console` but returns render/defer metadata."""
-    del label  # the inline Ω marker replaced the ``Ω OpenSRE`` header
+    del label  # the inline ∴ marker replaced the ``∴ OpenSRE`` header
     if not console.is_terminal:
         text = "".join(chunks)
         if suppress_if_starts_with is not None and text.lstrip().startswith(
@@ -178,10 +147,9 @@ def stream_to_console_state(
             # Non-TTY: hold the whole response when a closer is present so the
             # gather path can print the canonical rewrite once.
             return StreamRenderResult(text=text, deferred_closer=True)
+        # Blank row between the user turn and its reply (matches the TTY rhythm).
         console.print()
-        body = text.lstrip()
-        _render_response_marker(console, body)
-        render_markdown_block(console, body)
+        render_reply_block(console, text)
         console.print()
         return StreamRenderResult(text=text)
 
@@ -212,8 +180,6 @@ def stream_to_console_state(
                     drained.append(rest)
                 return StreamRenderResult(text="".join(peeked) + "".join(drained))
             break
-
-    console.print()
 
     # Paragraph-level streaming: chunks accumulate in ``para_buffer``
     # until a paragraph boundary (``\n\n`` outside a code block) closes
@@ -258,23 +224,24 @@ def stream_to_console_state(
         visible = strip_session_goal_progress_tags(text)
         if not visible.strip():
             return
-        if rendered_paragraphs == 0:
-            # The first paragraph carries the ``Ω`` marker — inline for prose, on
-            # its own line when it leads with a block (table/heading/list/fence).
-            visible = visible.lstrip()
-            _render_response_marker(console, visible)
         markdown = _build_markdown_block(visible)
         starts_with_self_spacing_block = bool(
             markdown.parsed and markdown.parsed[0].type in _SELF_SPACING_BLOCK_TOKEN_TYPES
         )
+        if not rendered_paragraphs:
+            # One blank row between the user turn and its reply (Droid rhythm):
+            # the echo row and the ∴ reply must not sit flush against each other.
+            console.print()
         if rendered_paragraphs and source_break and not starts_with_self_spacing_block:
             # ``_flush_paragraphs`` consumes the source ``\n\n`` boundary.
             # Restore it explicitly unless Rich adds equivalent leading space
             # for the next standalone block. This matters most after lists,
             # whose renderer adds no trailing blank line.
             console.print()
+        # The first paragraph carries the ``∴`` marker in the gutter; every
+        # paragraph hangs in the same indented body column.
         with console.use_theme(ui_theme.MARKDOWN_THEME):
-            console.print(markdown)
+            console.print(reply_gutter(markdown, lead=rendered_paragraphs == 0))
         rendered_paragraphs += 1
 
     def _render_paragraph(text: str, *, source_break: bool = True) -> None:
@@ -448,17 +415,19 @@ def stream_to_console_state(
             footer_elapsed_s=elapsed,
             footer_total_bytes=total_bytes,
         )
+    # One blank after the reply so the next user row / prompt chrome breathes
+    # like Droid — not flush against the last reply line.
     console.print()
     return StreamRenderResult(text=text, deferred_closer=False)
 
 
 def publish_full_response(console: Console, text: str, *, label: str = "assistant") -> None:
     """Render a complete assistant answer (non-TTY deferred gather path)."""
-    del label  # the inline Ω marker replaced the ``Ω OpenSRE`` header
+    del label  # the inline ∴ marker replaced the ``∴ OpenSRE`` header
     body = (text or "").strip()
     if not body:
         return
+    # Blank row between the user turn and its reply (matches the TTY rhythm).
     console.print()
-    _render_response_marker(console, body)
-    render_markdown_block(console, body)
+    render_reply_block(console, body)
     console.print()

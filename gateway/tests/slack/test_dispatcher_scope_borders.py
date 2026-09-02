@@ -213,7 +213,7 @@ def test_consume_credits_uses_org_principal_not_slack_user(
     def _consume(organization_id: str, *args: object, **kwargs: object) -> CreditsOutcome:
         _ = args, kwargs
         billed.append(organization_id)
-        return CreditsOutcome.UNCONFIGURED
+        return CreditsOutcome.ALLOWED
 
     monkeypatch.setattr(turn_metering, "consume_credits", _consume)
     _dispatcher(

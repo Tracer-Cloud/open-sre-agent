@@ -5,6 +5,7 @@ from pathlib import Path
 import pytest
 
 import config.llm_auth
+from config.account import AccountLLMRoute
 from config.llm_auth.credentials import resolve_for_request
 from config.llm_auth.records import resolve_provider_auth_record, save_provider_auth_record
 from config.llm_credentials import resolve_env_credential
@@ -114,6 +115,25 @@ def test_configure_api_key_does_not_store_when_validation_fails(
             api_key="bad-key",
         )
     assert resolve_env_credential("DEEPSEEK_API_KEY") == ""
+
+
+def test_account_login_locks_other_llm_provider_credentials(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(
+        "config.account.account_llm_route",
+        lambda: AccountLLMRoute(
+            base_url="https://app.opensre.com/api/llm/v1",
+            model="gpt-5.4-mini",
+        ),
+    )
+
+    with pytest.raises(AuthSetupError, match="managed by your OpenSRE account"):
+        configure_api_key_provider(
+            profile=resolve_auth_profile("deepseek"),
+            api_key="must-not-be-saved",
+            validate=False,
+        )
 
 
 def test_resolve_for_request_stales_when_credential_is_genuinely_absent(

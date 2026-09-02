@@ -9,7 +9,7 @@ from prompt_toolkit import PromptSession
 from prompt_toolkit.application import Application, run_in_terminal
 from prompt_toolkit.buffer import Buffer
 from prompt_toolkit.filters import Condition
-from prompt_toolkit.formatted_text import ANSI
+from prompt_toolkit.formatted_text import ANSI, FormattedText
 from rich.console import Console
 
 from surfaces.interactive_shell.runtime.core.state import (
@@ -31,6 +31,7 @@ from surfaces.interactive_shell.ui.input_prompt.key_bindings import (
     install_session_key_bindings,
 )
 from surfaces.interactive_shell.ui.input_prompt.refresh import wire_prompt_refresh
+from surfaces.interactive_shell.ui.input_prompt.resize import install_shrink_resize_guard
 from surfaces.interactive_shell.ui.input_prompt.style import refresh_prompt_theme
 from surfaces.interactive_shell.ui.prompt_visibility import typing_box_hidden
 from surfaces.interactive_shell.ui.terminal_ui import render_prompt_region
@@ -82,6 +83,7 @@ class PromptBuilder:
         install_session_key_bindings(self.pt_session, cancel_kb)
 
         self.pt_app = self.pt_session.app
+        install_shrink_resize_guard(self.pt_app)
         self.pt_session.default_buffer.accept_handler = self._accept_prompt_buffer
         # While the Yes/No gate owns the keyboard the composer is hidden but its
         # buffer still receives unbound keys unless it is read-only. Lock it so
@@ -245,11 +247,14 @@ class PromptBuilder:
             await asyncio.gather(submitted, return_exceptions=True)
             raise
 
-    def _prompt_placeholder(self) -> ANSI:
+    def _prompt_placeholder(self) -> FormattedText:
         # Options menus / confirmation own the keyboard — suppress free-text ghost.
         if typing_box_hidden(self.session, self.state):
-            return ANSI("")
+            return FormattedText()
         return prompt_rendering.resolve_prompt_placeholder(self.session)
 
     def render_submitted_prompt(self, console: Console, text: str) -> None:
+        # The between-turns blank row is placed inside ``render_submitted_prompt``
+        # itself: the handoff-answer marker must hug the reply it answers, so the
+        # gap falls after the marker rather than blanket-above the whole turn.
         prompt_rendering.render_submitted_prompt(console, self.session, text)

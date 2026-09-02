@@ -17,8 +17,10 @@ Token reference
   WARNING    warnings only — no auth, fallback store, config issues
   ERROR      errors only — missing required config, failures
   BG         terminal background, never used as foreground
-  INPUT_SURFACE  prompt/menu surface background
+  INPUT_SURFACE  composer/menu plate — visibly lifted vs BG (input box fill)
   BOLD_SKILL fixed green skill-activation label
+  reply marker  assistant ``∴`` lead-in — Factory/Droid-warm accent via
+                :func:`reply_marker_style` (not WARNING; must stay vivid)
 
 Usage
 -----
@@ -64,31 +66,37 @@ THEME_REGISTRY: dict[str, CliTheme] = {
         WARNING="#CEA25C",
         ERROR="#C45B52",
         BG="#15161A",
-        INPUT_SURFACE="#1C1D22",
+        # Lifted plate for the composer (Droid/Claude/Cursor-style). Must read
+        # clearly against BG — the old #1C1D22 was nearly invisible.
+        INPUT_SURFACE="#252830",
     ),
     "blue": CliTheme(
         name="blue",
-        HIGHLIGHT="#B7D4F0",
-        BRAND="#81A4C6",
-        TEXT="#B6BAC2",
-        SECONDARY="#A6A6A6",
+        HIGHLIGHT="#E0CC9C",
+        BRAND="#B2935B",
+        TEXT="#D0D0D0",
+        SECONDARY="#B0A898",
         DIM="#6E6E6E",
-        WARNING="#D8B06F",
+        WARNING="#E0B466",
         ERROR="#CF6B63",
         BG="#15161A",
-        INPUT_SURFACE="#1C1D22",
+        # Lifted plate for the composer (Droid/Claude/Cursor-style). Must read
+        # clearly against BG — the old #1C1D22 was nearly invisible.
+        INPUT_SURFACE="#252830",
     ),
     "amber": CliTheme(
         name="amber",
         HIGHLIGHT="#E0CC9C",
         BRAND="#B2935B",
-        TEXT="#B6BAC2",
-        SECONDARY="#A6A6A6",
+        TEXT="#D0D0D0",
+        SECONDARY="#B0A898",
         DIM="#6E6E6E",
         WARNING="#E0B466",
         ERROR="#CF6B63",
         BG="#15161A",
-        INPUT_SURFACE="#1C1D22",
+        # Lifted plate for the composer (Droid/Claude/Cursor-style). Must read
+        # clearly against BG — the old #1C1D22 was nearly invisible.
+        INPUT_SURFACE="#252830",
     ),
     "mono": CliTheme(
         name="mono",
@@ -100,7 +108,9 @@ THEME_REGISTRY: dict[str, CliTheme] = {
         WARNING="#B0B0B0",
         ERROR="#8E8E8E",
         BG="#15161A",
-        INPUT_SURFACE="#1C1D22",
+        # Lifted plate for the composer (Droid/Claude/Cursor-style). Must read
+        # clearly against BG — the old #1C1D22 was nearly invisible.
+        INPUT_SURFACE="#252830",
     ),
     "red": CliTheme(
         name="red",
@@ -112,7 +122,9 @@ THEME_REGISTRY: dict[str, CliTheme] = {
         WARNING="#E0B466",
         ERROR="#CF6B63",
         BG="#15161A",
-        INPUT_SURFACE="#1C1D22",
+        # Lifted plate for the composer (Droid/Claude/Cursor-style). Must read
+        # clearly against BG — the old #1C1D22 was nearly invisible.
+        INPUT_SURFACE="#252830",
     ),
     "pink": CliTheme(
         name="pink",
@@ -124,7 +136,9 @@ THEME_REGISTRY: dict[str, CliTheme] = {
         WARNING="#E0B466",
         ERROR="#CF6B63",
         BG="#15161A",
-        INPUT_SURFACE="#1C1D22",
+        # Lifted plate for the composer (Droid/Claude/Cursor-style). Must read
+        # clearly against BG — the old #1C1D22 was nearly invisible.
+        INPUT_SURFACE="#252830",
     ),
     "purple": CliTheme(
         name="purple",
@@ -136,7 +150,9 @@ THEME_REGISTRY: dict[str, CliTheme] = {
         WARNING="#D8B06F",
         ERROR="#CF6B63",
         BG="#15161A",
-        INPUT_SURFACE="#1C1D22",
+        # Lifted plate for the composer (Droid/Claude/Cursor-style). Must read
+        # clearly against BG — the old #1C1D22 was nearly invisible.
+        INPUT_SURFACE="#252830",
     ),
     "orange": CliTheme(
         name="orange",
@@ -148,7 +164,9 @@ THEME_REGISTRY: dict[str, CliTheme] = {
         WARNING="#E0B466",
         ERROR="#CF6B63",
         BG="#15161A",
-        INPUT_SURFACE="#1C1D22",
+        # Lifted plate for the composer (Droid/Claude/Cursor-style). Must read
+        # clearly against BG — the old #1C1D22 was nearly invisible.
+        INPUT_SURFACE="#252830",
     ),
     "teal": CliTheme(
         name="teal",
@@ -160,7 +178,9 @@ THEME_REGISTRY: dict[str, CliTheme] = {
         WARNING="#CEA25C",
         ERROR="#C45B52",
         BG="#15161A",
-        INPUT_SURFACE="#1C1D22",
+        # Lifted plate for the composer (Droid/Claude/Cursor-style). Must read
+        # clearly against BG — the old #1C1D22 was nearly invisible.
+        INPUT_SURFACE="#252830",
     ),
     "lime": CliTheme(
         name="lime",
@@ -172,7 +192,9 @@ THEME_REGISTRY: dict[str, CliTheme] = {
         WARNING="#CEA25C",
         ERROR="#C45B52",
         BG="#15161A",
-        INPUT_SURFACE="#1C1D22",
+        # Lifted plate for the composer (Droid/Claude/Cursor-style). Must read
+        # clearly against BG — the old #1C1D22 was nearly invisible.
+        INPUT_SURFACE="#252830",
     ),
     "nord": CliTheme(
         name="nord",
@@ -339,6 +361,19 @@ def _parse_hex_color(value: str) -> tuple[int, int, int]:
     return (int(stripped[0:2], 16), int(stripped[2:4], 16), int(stripped[4:6], 16))
 
 
+def reply_marker_hex() -> str:
+    """Hex for the assistant ``∴`` / tool ``⏺`` accent — the active theme's
+    ``HIGHLIGHT``, so every component follows the selected palette rather than a
+    fixed colour that would read as a copy of another tool."""
+    return _ACTIVE_THEME.HIGHLIGHT
+
+
+def reply_marker_style() -> str:
+    """Bold accent for the assistant ``∴`` reply marker and ``⏺`` tool lead-in,
+    in the active theme's highlight colour (one branded lead beside softer body)."""
+    return f"bold {reply_marker_hex()}"
+
+
 class _LazyRichStyle(str):
     """Rich markup colour token that tracks :func:`set_active_theme`.
 
@@ -433,7 +468,7 @@ def _apply_theme(theme: CliTheme) -> None:
     global HIGHLIGHT_ANSI, BRAND_ANSI, TEXT_ANSI, SECONDARY_ANSI, DIM_ANSI, BOLD_BRAND_ANSI
     global PROMPT_ACCENT_ANSI, PROMPT_FRAME_ANSI, DIM_COUNTER_ANSI, SURFACE_BG_ANSI
     global INPUT_SURFACE_BG_ANSI, MENU_SELECTION_ROW_ANSI, MARKDOWN_THEME
-    global DEVICE_CODE_ANSI
+    global DEVICE_CODE_ANSI, REPLY_MARKER_ANSI, BOLD_REPLY_MARKER_ANSI
 
     _highlight_rgb = _parse_hex_color(theme.HIGHLIGHT)
     _brand_rgb = _parse_hex_color(theme.BRAND)
@@ -442,6 +477,7 @@ def _apply_theme(theme: CliTheme) -> None:
     _dim_rgb = _parse_hex_color(theme.DIM)
     _bg_rgb = _parse_hex_color(theme.BG)
     _input_surface_rgb = _parse_hex_color(theme.INPUT_SURFACE)
+    _reply_rgb = _parse_hex_color(theme.HIGHLIGHT)
 
     HIGHLIGHT_ANSI = _fg(_highlight_rgb)
     BRAND_ANSI = _fg(_brand_rgb)
@@ -449,6 +485,8 @@ def _apply_theme(theme: CliTheme) -> None:
     SECONDARY_ANSI = _fg(_secondary_rgb)
     DIM_ANSI = _fg(_dim_rgb)
     BOLD_BRAND_ANSI = f"\x1b[1m{BRAND_ANSI}"
+    REPLY_MARKER_ANSI = _fg(_reply_rgb)
+    BOLD_REPLY_MARKER_ANSI = f"\x1b[1m{REPLY_MARKER_ANSI}"
 
     PROMPT_ACCENT_ANSI = f"\x1b[1;38;2;{_highlight_rgb[0]};{_highlight_rgb[1]};{_highlight_rgb[2]}m"
     PROMPT_FRAME_ANSI = PROMPT_ACCENT_ANSI
@@ -462,18 +500,21 @@ def _apply_theme(theme: CliTheme) -> None:
 
     MARKDOWN_THEME = Theme(
         {
+            # Sunny Droid-like reply: bright warm-grey body (#D0D0D0 TEXT), warm
+            # ``∴`` accent. Strong stays bold TEXT; avoid icy blue chrome.
+            "markdown.paragraph": theme.TEXT,
             "markdown.code": f"bold {theme.HIGHLIGHT}",
             "markdown.code_block": theme.TEXT,
             "markdown.h1": f"bold {theme.HIGHLIGHT}",
-            "markdown.h2": f"bold {theme.BRAND}",
-            "markdown.h3": f"bold {theme.BRAND}",
+            "markdown.h2": f"bold {theme.WARNING}",
+            "markdown.h3": f"bold {theme.TEXT}",
             "markdown.h4": f"bold {theme.SECONDARY}",
             "markdown.strong": f"bold {theme.TEXT}",
             "markdown.em": f"italic {theme.SECONDARY}",
-            "markdown.item.bullet": f"bold {theme.BRAND}",
-            "markdown.item.number": f"bold {theme.BRAND}",
+            "markdown.item.bullet": f"bold {theme.WARNING}",
+            "markdown.item.number": f"bold {theme.WARNING}",
             "markdown.block_quote": theme.SECONDARY,
-            "markdown.link": f"underline {theme.BRAND}",
+            "markdown.link": f"underline {theme.HIGHLIGHT}",
             "markdown.link_url": theme.DIM,
             "markdown.hr": theme.DIM,
         }
@@ -561,12 +602,16 @@ __all__ = [
     "MENU_SELECTION_ROW_ANSI",
     "PROMPT_ACCENT_ANSI",
     "PROMPT_FRAME_ANSI",
+    "REPLY_MARKER_ANSI",
+    "BOLD_REPLY_MARKER_ANSI",
     "SECONDARY",
     "SECONDARY_ANSI",
     "SURFACE_BG_ANSI",
     "TEXT",
     "TEXT_ANSI",
     "WARNING",
+    "reply_marker_hex",
+    "reply_marker_style",
 ]
 
 # ── Semantic glyphs ────────────────────────────────────────────────────────
@@ -590,6 +635,8 @@ TEXT_ANSI = ""
 SECONDARY_ANSI = ""
 DIM_ANSI = ""
 BOLD_BRAND_ANSI = ""
+REPLY_MARKER_ANSI = ""
+BOLD_REPLY_MARKER_ANSI = ""
 DEVICE_CODE_ANSI = ""
 
 ANSI_RESET = "\x1b[0m"

@@ -25,7 +25,13 @@ from core.agent_harness.spi.accounting import SELF_RECORDING_ACTION_TOOL_NAMES
 from core.agent_harness.spi.task_plan import is_plan_diagnosis_prose
 from infrastructure.observability.trace.redaction import redact_sensitive
 from infrastructure.safety.terminal_output import strip_terminal_controls
-from infrastructure.terminal.theme import BOLD_SKILL, BRAND, DIM, HIGHLIGHT, SECONDARY
+from infrastructure.terminal.theme import (
+    BOLD_SKILL,
+    DIM,
+    SECONDARY,
+    TEXT,
+    reply_marker_style,
+)
 from infrastructure.text import is_data_blob
 from surfaces.interactive_shell.runtime import Session
 from surfaces.interactive_shell.runtime.core.state import SpinnerState
@@ -502,7 +508,7 @@ class ActionRenderObserver:
         # through Rich markup.
         line = Text()
         line.append("Skill ", style=BOLD_SKILL)
-        line.append(slug, style=HIGHLIGHT)
+        line.append(slug, style=str(TEXT))
         self.console.print()
         self.console.print(line)
 
@@ -511,16 +517,17 @@ class ActionRenderObserver:
         args = data.get("input")
         label, content = tool_call_display(name, args if isinstance(args, dict) else {})
         self.console.print()
-        # One line per call, led by ``⏺``: the label reads as the action and the
-        # payload (command / args) as its detail. A command tool separates the two
-        # with ``·`` so ``⏺ GitHub CLI · gh api …`` reads as a single unit.
+        # One warm accent (same as ``∴``) on the glyph; recessed label + dim
+        # payload — Droid-style quiet tool chrome, not a second blue brand strip.
         line = Text()
-        line.append(f"{_TOOL_CALL_MARKER} ", style=str(HIGHLIGHT))
-        line.append(label, style=f"bold {HIGHLIGHT}")
+        line.append(f"{_TOOL_CALL_MARKER} ", style=reply_marker_style())
+        line.append(label, style=f"bold {TEXT}")
         if content:
             separator = " · " if label in _COMMAND_TOOL_LABELS else " "
             line.append(separator, style=str(DIM))
-            line.append(content, style=str(BRAND))
+            # Quiet payload that tracks the active palette (SECONDARY), so it
+            # never reads as an off-theme amber under a non-warm theme.
+            line.append(content, style=str(SECONDARY))
         self.console.print(line)
 
     def _render_tool_result(self, data: dict[str, Any]) -> None:

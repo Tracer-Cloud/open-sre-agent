@@ -36,17 +36,17 @@ def ready_hint_ansi() -> str:
     reserved = prompt_text_width(lead)
     if reserved >= width:
         visible = clip_prompt_text(f"{lead}{hint}", width)
-        # Keep accent on "Ready" when the clipped form still starts with it.
+        # Soft grey lead — warm accent is reserved for ∴ / ⏺ / spinner glyph.
         if visible.startswith("Ready"):
             rest = visible[len("Ready") :]
             return (
-                f"{ui_theme.PROMPT_ACCENT_ANSI}Ready{ui_theme.ANSI_RESET}"
+                f"{ui_theme.BOLD_REPLY_MARKER_ANSI}Ready{ui_theme.ANSI_RESET}"
                 f"{ui_theme.DIM_ANSI}{rest}{ui_theme.ANSI_RESET}"
             )
         return f"{ui_theme.DIM_ANSI}{visible}{ui_theme.ANSI_RESET}"
     clipped_hint = clip_prompt_text(hint, width - reserved)
     return (
-        f"{ui_theme.PROMPT_ACCENT_ANSI}Ready{ui_theme.ANSI_RESET}"
+        f"{ui_theme.BOLD_REPLY_MARKER_ANSI}Ready{ui_theme.ANSI_RESET}"
         f"{ui_theme.DIM_ANSI} · {clipped_hint}{ui_theme.ANSI_RESET}"
     )
 
@@ -342,33 +342,20 @@ class SpinnerState:
         return ready_hint_ansi()
 
     def _phase_shimmer_high_hex(self) -> str:
-        """Peak color for the status-sentence light wave (matches phase accent)."""
-        theme = ui_theme.get_active_theme()
-        if self.phase in (self.INVOKING_TOOLS_PHASE, self.EXECUTING_PHASE):
-            return theme.BRAND
-        return theme.HIGHLIGHT
+        """Warm peak for the status wave (sunny gold, not icy blue)."""
+        return ui_theme.reply_marker_hex()
 
     def _phase_accent_ansi(self) -> str:
-        """Accent for the spinner glyph, distinct per load-state phase.
-
-        ``Thinking…`` (and pipeline stage labels) stay on the prompt accent (bold
-        highlight); ``Executing…`` uses brand; ``Invoking tools…`` uses bold
-        brand — the same hue as executing but heavier, so tool work reads as the
-        hottest state while staying different from thinking.
-        """
-        if self.phase == self.INVOKING_TOOLS_PHASE:
-            return ui_theme.BOLD_BRAND_ANSI
-        if self.phase == self.EXECUTING_PHASE:
-            return ui_theme.BRAND_ANSI
-        return ui_theme.PROMPT_ACCENT_ANSI
+        """Spinner glyph: Factory-warm orange (same family as ``∴`` / ``⏺``)."""
+        return ui_theme.BOLD_REPLY_MARKER_ANSI
 
     def inline_spinner_ansi(self) -> str:
-        """One status row: shimmering phase (+ live tool) · stop hint · elapsed.
+        """One status row: quiet phase (+ live tool) · stop hint · elapsed.
 
         When a tool is in flight the label becomes
         ``Invoking tools… · GitHub CLI · gh api …`` so awareness stays on the
-        same row as the spinner — never a second reserved prompt row. A traveling
-        light wave runs across that sentence while work is in flight.
+        same row as the spinner — never a second reserved prompt row. A soft
+        silver wave runs across the sentence; the glyph alone carries warmth.
         """
         if not self.streaming:
             return ""

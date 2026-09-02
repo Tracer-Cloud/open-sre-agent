@@ -1,7 +1,7 @@
 """Tool authoring helpers: the ``@tool`` decorator, planning tags, skill guidance.
 
-The tier's door for consumers above it. Schema and payload utilities live behind
-the sibling ``core.tool_framework.utils`` door; the tool contract itself (what a
+The tier's public API for consumers above it. Schema and payload utilities live behind
+the sibling ``core.tool_framework.utils`` package entry; the tool contract itself (what a
 tool is, how it runs, where it is registered) is ``core.tool``.
 """
 

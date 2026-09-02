@@ -1,4 +1,4 @@
-"""Tests for the compact interactive-shell launch banner."""
+"""Tests for the interactive-shell launch banner."""
 
 from __future__ import annotations
 
@@ -6,7 +6,7 @@ import io
 
 from rich.console import Console
 
-from config.version import get_opensre_version
+from config.constants import PRODUCT_DISPLAY_NAME
 from surfaces.interactive_shell.ui import poster as poster_module
 from surfaces.shared.terminal.banner import banner as banner_module
 from surfaces.shared.terminal.banner import banner_state as banner_state_module
@@ -26,36 +26,92 @@ def _fixed_status() -> LaunchStatus:
     )
 
 
-def test_launch_banner_is_borderless_and_shows_only_compact_identity(
-    monkeypatch: object,
-) -> None:
+def _line_centers(plain: str, *, width: int) -> list[tuple[str, int, int]]:
+    """Return (stripped, leading_spaces, trailing_pad) for non-empty lines."""
+    rows: list[tuple[str, int, int]] = []
+    for raw in plain.splitlines():
+        if not raw.strip():
+            continue
+        stripped = raw.rstrip("\n")
+        # Console may pad to width with trailing spaces.
+        content = stripped.rstrip()
+        lead = len(content) - len(content.lstrip())
+        body = content.strip()
+        trail = width - lead - len(body) if width >= lead + len(body) else 0
+        rows.append((body, lead, trail))
+    return rows
+
+
+def test_launch_banner_is_borderless_centered_hero(monkeypatch: object) -> None:
     monkeypatch.setattr(banner_module, "load_launch_status", _fixed_status)
-    monkeypatch.setattr(banner_module, "get_opensre_version", lambda: "2026.8.27+main.85fd865")
+    monkeypatch.setattr(banner_module, "get_opensre_version", lambda: "0.1.2026.9.2+main.abc1234")
     console_file = io.StringIO()
     console = Console(file=console_file, force_terminal=False, highlight=False, width=120)
 
     banner_module.render_launch_banner(console)
 
     output = console_file.getvalue()
-    assert "opensre  ·  v2026.8.27+main.85fd865" in output
+    assert PRODUCT_DISPLAY_NAME == "OpenSRE"
+    assert "OpenSRE" in output or "██████" in output  # wordmark or compact title
+    assert "v0.1.2026.9.2+main.abc1234" in output  # full build version
     assert "Skills (21) ✓" in output
     assert "Integrations (2) ✓" in output
+    # Welcome title + product description (same copy as the sign-in screen),
+    # in place of the old TIP line.
+    assert "Welcome to OpenSRE CLI" in output
+    assert "AI-powered DevOps agent" in output
+    assert "/ commands" in output
     # Only the two capability items — no MCPs or AGENTS.md line.
     assert "MCPs" not in output
     assert "AGENTS.md" not in output
-    assert "Welcome" not in output  # welcome copy lives on the sign-in screen, not the banner
     assert not any(char in output for char in "╭╮╰╯│")
 
 
-def test_launch_banner_draws_two_overlapping_equal_rings(monkeypatch: object) -> None:
+def test_launch_banner_centers_each_row_independently(monkeypatch: object) -> None:
+    """Short rows (version) must share the same center axis as the wordmark.
+
+    Bundling unequal lines into one ``Align.center`` left-aligns shorts inside
+    the widest line — the school-project look vs Droid.
+    """
+    monkeypatch.setattr(banner_module, "load_launch_status", _fixed_status)
+    monkeypatch.setattr(banner_module, "get_opensre_version", lambda: "0.1.2026.9.2+main.abc1234")
+    width = 120
+    console = Console(record=True, force_terminal=False, highlight=False, width=width)
+    console.print(banner_module.build_launch_banner(console))
+    plain = console.export_text(styles=False)
+    rows = _line_centers(plain, width=width)
+    assert rows, "banner must paint at least one row"
+
+    def _center_col(body: str, lead: int) -> float:
+        return lead + (len(body) / 2)
+
+    centers = [_center_col(body, lead) for body, lead, _trail in rows]
+    mid = width / 2
+    # Every content row's midpoint should sit near the terminal midline.
+    for body, center in zip([r[0] for r in rows], centers, strict=True):
+        assert abs(center - mid) <= 2.0, (body, center, mid)
+
+
+def test_launch_banner_draws_ring_logo_on_wide_terminals(monkeypatch: object) -> None:
     monkeypatch.setattr(banner_module, "load_launch_status", _fixed_status)
     console = Console(record=True, force_terminal=False, highlight=False, width=120)
 
     console.print(banner_module.build_launch_banner(console))
 
     output = console.export_text(styles=False)
-    # Braille rendering of the canonical OpenSRE "O" mark: the two ring-wall rows.
+    # A ring-wall row of the braille "loops" mark.
     assert "⣿⣿⠀⠀⣿⣿⡇⠀⠀⠀⠀⠀⠀⠀⠀⢸⣿⣿⠀⢸⣿⣿" in output
+
+
+def test_launch_banner_falls_back_to_title_on_narrow_terminals(monkeypatch: object) -> None:
+    monkeypatch.setattr(banner_module, "load_launch_status", _fixed_status)
+    console = Console(record=True, force_terminal=False, highlight=False, width=20)
+
+    console.print(banner_module.build_launch_banner(console))
+
+    output = console.export_text(styles=False)
+    assert "OpenSRE" in output
+    assert "⣿⣿" not in output  # braille ring omitted below its min width
 
 
 def test_launch_banner_uses_active_theme_palette(monkeypatch: object) -> None:
@@ -134,10 +190,16 @@ def test_status_probes_survive_loader_failures(monkeypatch: object) -> None:
     assert banner_state_module._count_configured_integrations() == 0
 
 
-def test_banner_uses_runtime_version(monkeypatch: object) -> None:
+def test_banner_shows_the_full_build_version(monkeypatch: object) -> None:
     monkeypatch.setattr(banner_module, "load_launch_status", _fixed_status)
-    details = banner_module._build_details(_fixed_status()).plain
-    assert f"v{get_opensre_version()}" in details
+    monkeypatch.setattr(
+        banner_module,
+        "get_opensre_version",
+        lambda: "0.1.2026.9.2+main.abc1234",
+    )
+    # Full build version (identity for support / bug reports), not a trimmed one.
+    version = banner_module._build_version_line().plain
+    assert version == "v0.1.2026.9.2+main.abc1234"
 
 
 def test_refresh_welcome_poster_uses_repl_safe_render(monkeypatch: object) -> None:

@@ -85,6 +85,16 @@ def configure_api_key_provider(
     env_path: Path | None = None,
 ) -> AuthSetupResult:
     """Validate and persist an API-key provider credential."""
+    from config.account import account_llm_route
+
+    account_route = account_llm_route()
+    if account_route is not None:
+        raise AuthSetupError(
+            "LLM provider authentication is managed by your OpenSRE account: "
+            f"openai ({account_route.model}, hosted by OpenSRE). "
+            "Run `opensre account logout` before configuring another provider."
+        )
+
     provider = provider_for_profile(profile)
     if provider.credential_kind != WizardCredentialKind.API_KEY or not provider.api_key_env:
         raise AuthSetupError(f"{provider.label} does not use an OpenSRE-managed API key.")
