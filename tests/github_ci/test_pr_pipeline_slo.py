@@ -149,6 +149,9 @@ def test_session_store_locked_job_contracts() -> None:
     change_step = next(step for step in locked_job["steps"] if step.get("id") == "changes")
     filters = yaml.safe_load(change_step["with"]["filters"])
     assert filters["session_persistence"] == ["core/agent_harness/session/persistence/**"]
+    # Without every, the bare "**" in `source` always matches and the
+    # negations (!*.md etc.) never take effect — see detect-source/action.yml.
+    assert change_step["with"]["predicate-quantifier"] == "every"
 
     gate_run = next(
         step["run"]

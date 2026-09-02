@@ -853,6 +853,11 @@ jobs:
         id: changes
         uses: dorny/paths-filter@7b450fff21473bca461d4b92ce414b9d0420d706 # v4.0.2
         with:
+          # predicate-quantifier: every is required so the "!*.md"-style
+          # negations actually exclude docs-only paths — with the default
+          # "some" quantifier the bare "**" pattern alone always matches,
+          # so `source` is always true. See detect-source/action.yml.
+          predicate-quantifier: every
           filters: |
             source:
               - "**"
