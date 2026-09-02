@@ -100,15 +100,20 @@ def test_run_once_credit_denial_skips_pipeline_and_marks_failed(
     assert record.error == "insufficient_credits"
 
 
-def test_run_once_proceeds_when_credits_unavailable(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+@pytest.mark.parametrize(
+    "outcome",
+    [CreditsOutcome.UNCONFIGURED, CreditsOutcome.UNAVAILABLE],
+)
+def test_run_once_fails_closed_when_credit_admission_is_untrustworthy(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    outcome: CreditsOutcome,
 ) -> None:
-    """Fail-open: a webapp outage must not stall queued investigations."""
     store = InMemoryInvestigationRepository()
     investigation_id = _queued(store)
     monkeypatch.setattr(
         "gateway.web.worker.consume_credits",
-        lambda *_a, **_k: CreditsOutcome.UNAVAILABLE,
+        lambda *_a, **_k: outcome,
     )
     worker = InvestigationWorker(store, runner=lambda _t: {"report": "ok"}, artifacts_dir=tmp_path)
 
@@ -116,7 +121,8 @@ def test_run_once_proceeds_when_credits_unavailable(
 
     record = store.get(investigation_id)
     assert record is not None
-    assert record.status is InvestigationStatus.COMPLETED
+    assert record.status is InvestigationStatus.FAILED
+    assert record.error == "credit_metering_unavailable"
 
 
 def test_run_once_returns_false_when_queue_empty(tmp_path: Path) -> None:

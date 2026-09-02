@@ -16,7 +16,7 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from config.constants.gateway import CREDITS_DENIED_MESSAGE
+from config.constants.gateway import CREDITS_DENIED_MESSAGE, TURN_ERROR_MESSAGE
 from core.agent_harness.session import SessionCore
 from core.agent_harness.session.persistence.memory import InMemorySessionStore
 from gateway.core.billing import turn_metering
@@ -28,6 +28,7 @@ from gateway.transports.telegram import inbound_handler
 from gateway.transports.telegram.inbound_handler import handle_polled_inbound_telegram_message
 from gateway.transports.telegram.inbound_security import InboundDecision
 from gateway.transports.telegram.settings import GatewaySettings, TelegramInboundMessage
+from infrastructure.turn_host.status_messages import user_facing_error_message
 
 TEST_ORG_ID = "org_tg_credits"
 
@@ -127,15 +128,23 @@ def test_denied_credits_stop_the_turn_and_bill_the_owning_org(
     assert client.shown[-1] == CREDITS_DENIED_MESSAGE
 
 
-def test_unconfigured_metering_still_runs_the_turn(monkeypatch: pytest.MonkeyPatch) -> None:
-    """Fail-open: a dev box without metering env is not a billing denial."""
+@pytest.mark.parametrize("outcome", [CreditsOutcome.UNCONFIGURED, CreditsOutcome.UNAVAILABLE])
+def test_untrustworthy_metering_fails_closed(
+    monkeypatch: pytest.MonkeyPatch, outcome: CreditsOutcome
+) -> None:
     monkeypatch.setattr(
         turn_metering,
         "consume_credits",
-        lambda *_a, **_kw: CreditsOutcome.UNCONFIGURED,
+        lambda *_a, **_kw: outcome,
     )
+    client = _FakeClient()
     callback = MagicMock()
 
-    _run_turn(_FakeClient(), callback)
+    with pytest.raises(
+        turn_metering.CreditMeteringUnavailableError,
+        match="refusing unmetered work",
+    ):
+        _run_turn(client, callback)
 
-    callback.assert_called_once()
+    callback.assert_not_called()
+    assert client.shown[-1] == user_facing_error_message(TURN_ERROR_MESSAGE)

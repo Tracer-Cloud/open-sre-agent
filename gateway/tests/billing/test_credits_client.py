@@ -22,7 +22,7 @@ def metering_on(monkeypatch: pytest.MonkeyPatch) -> None:
 
 
 def test_unconfigured_when_secret_unset(monkeypatch: pytest.MonkeyPatch) -> None:
-    # Arrange: URL + org present but no shared secret → metering is off.
+    # Arrange: URL + org present but no credential → hosted misconfiguration.
     monkeypatch.setenv(_URL_ENV, "https://app.opensre.test")
     monkeypatch.delenv(_SECRET_ENV, raising=False)
 
@@ -93,7 +93,7 @@ def test_transport_error_is_unavailable(monkeypatch: pytest.MonkeyPatch) -> None
     # Act
     outcome = consume_credits(organization_id="org_x", reason="slack_turn")
 
-    # Assert: UNAVAILABLE so the gateway can fail open instead of blocking the user.
+    # Assert: callers receive a non-admitting outcome and fail closed.
     assert outcome is CreditsOutcome.UNAVAILABLE
 
 
@@ -137,7 +137,7 @@ def test_5xx_is_unavailable(monkeypatch: pytest.MonkeyPatch) -> None:
     # Act
     outcome = consume_credits(organization_id="org_x", reason="slack_turn")
 
-    # Assert: only 402 denies; every other error status is UNAVAILABLE (fail-open).
+    # Assert: only 402 means exhausted; other error statuses cannot admit work.
     assert outcome is CreditsOutcome.UNAVAILABLE
 
 
@@ -209,6 +209,7 @@ def test_creditsoutcome_is_strenum_with_identical_values() -> None:
     expected_values = {
         CreditsOutcome.ALLOWED: "allowed",
         CreditsOutcome.DENIED: "denied",
+        CreditsOutcome.DISABLED: "disabled",
         CreditsOutcome.UNCONFIGURED: "unconfigured",
         CreditsOutcome.UNAVAILABLE: "unavailable",
     }

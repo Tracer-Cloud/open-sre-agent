@@ -83,10 +83,9 @@ class InvestigationWorker:
         record = self._store.claim_next_queued()
         if record is None:
             return False
-        # Metering: only an explicit webapp denial (402) skips the run.
-        # UNCONFIGURED (dev setups without metering env) and UNAVAILABLE
-        # (webapp outage) proceed — fail-open is the intended policy so a
-        # billing outage never stalls queued investigations.
+        # A self-hosted runtime with no webapp URL deliberately disables
+        # metering. Once a webapp is configured, any inability to obtain a
+        # trustworthy admission decision must fail closed before model work.
         outcome = consume_credits(record.clerk_org_id, reason="investigation")
         if outcome is CreditsOutcome.DENIED:
             logger.info("[investigations] denied %s: insufficient credits", record.id)
@@ -94,6 +93,14 @@ class InvestigationWorker:
                 record.id,
                 status=InvestigationStatus.FAILED,
                 error="insufficient_credits",
+            )
+            return True
+        if outcome not in (CreditsOutcome.ALLOWED, CreditsOutcome.DISABLED):
+            logger.error("[investigations] metering unavailable for %s", record.id)
+            self._store.finish(
+                record.id,
+                status=InvestigationStatus.FAILED,
+                error="credit_metering_unavailable",
             )
             return True
         from infrastructure.process.turn_capacity import queued_turn_slot

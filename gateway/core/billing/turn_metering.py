@@ -10,6 +10,10 @@ from dataclasses import dataclass
 from gateway.core.billing.credits_client import CreditsOutcome, consume_credits
 
 
+class CreditMeteringUnavailableError(RuntimeError):
+    """Hosted credit admission could not reach a trustworthy decision."""
+
+
 @dataclass(frozen=True, slots=True)
 class TurnMeteringRequest:
     """Credit request attached to the current transport turn."""
@@ -51,14 +55,19 @@ def admit_metered_turn() -> bool:
     if request is None:
         raise RuntimeError("gateway turn has no bound metering request")
     outcome = consume_credits(request.organization_id, reason=request.reason)
-    if outcome is not CreditsOutcome.DENIED:
+    if outcome in (CreditsOutcome.ALLOWED, CreditsOutcome.DISABLED):
         return True
-    request.on_denied()
-    return False
+    if outcome is CreditsOutcome.DENIED:
+        request.on_denied()
+        return False
+    raise CreditMeteringUnavailableError(
+        f"hosted credit metering is {outcome.value}; refusing unmetered work"
+    )
 
 
 __all__ = [
     "TurnMeteringRequest",
+    "CreditMeteringUnavailableError",
     "admit_metered_turn",
     "bound_turn_metering",
 ]
