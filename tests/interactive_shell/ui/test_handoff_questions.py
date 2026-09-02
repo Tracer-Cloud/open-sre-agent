@@ -48,6 +48,14 @@ def test_submitted_answer_to_a_handoff_is_marked() -> None:
     output = buffer.getvalue()
     assert "↗ answer" in output
     assert "staging" in output
+    # The marker hugs the assistant answer it responds to (no blank row above it),
+    # and the between-turns gap falls after the marker, before the input row.
+    assert not output.startswith("\n")
+    lines = output.splitlines()
+    marker_index = next(i for i, line in enumerate(lines) if "↗ answer" in line)
+    input_index = next(i for i, line in enumerate(lines) if "staging" in line)
+    assert lines[marker_index + 1].strip() == ""
+    assert marker_index < input_index
 
 
 def test_ask_user_answers_render_as_numbered_qa() -> None:
