@@ -68,7 +68,6 @@ get_redis_server_info
 get_redis_slowlog
 get_s3_object
 get_tracer_run
-get_tracer_tasks
 get_yc_instance_diagnostics
 get_yc_lb_health
 helm_get_release_manifest

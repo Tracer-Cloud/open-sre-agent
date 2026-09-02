@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from unittest.mock import MagicMock, patch
 
+from integrations.tracer import TracerTaskResult
 from integrations.tracer.tools.tracer_tasks_tool import get_tracer_tasks
 from tests.tools.conftest import BaseToolContract
 
@@ -25,13 +26,26 @@ def test_metadata() -> None:
     assert rt.source == "tracer_web"
 
 
-def test_run_returns_task_result() -> None:
+def test_run_returns_task_result_dict() -> None:
     mock_client = MagicMock()
-    mock_result = MagicMock()
-    mock_client.get_run_tasks.return_value = mock_result
+    mock_client.get_run_tasks.return_value = TracerTaskResult(
+        found=True,
+        total_tasks=5,
+        failed_tasks=2,
+        completed_tasks=3,
+        tasks=[{"tool_name": "run_scrape"}],
+        failed_task_details=[{"tool_name": "run_scrape", "exit_code": 1}],
+    )
     with patch(
         "integrations.tracer.tools.tracer_tasks_tool.get_tracer_client", return_value=mock_client
     ):
         result = get_tracer_tasks(run_id="run-123")
-    assert result is mock_result
+    assert result == {
+        "found": True,
+        "total_tasks": 5,
+        "failed_tasks": 2,
+        "completed_tasks": 3,
+        "tasks": [{"tool_name": "run_scrape"}],
+        "failed_task_details": [{"tool_name": "run_scrape", "exit_code": 1}],
+    }
     mock_client.get_run_tasks.assert_called_once_with("run-123")
