@@ -56,7 +56,9 @@ jobs:
       - name: Perform CodeQL Analysis
         uses: github/codeql-action/analyze@v4
         with:
-          category: /language:${{ matrix.language }}/full
+          # Preserve the canonical category so each full scan supersedes the
+          # repository's historical results instead of leaving stale alerts open.
+          category: /language:${{ matrix.language }}
 
   analyze-pr-benchmark:
     if: >-

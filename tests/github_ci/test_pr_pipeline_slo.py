@@ -35,6 +35,10 @@ def test_full_codeql_is_post_merge_and_pr_profile_is_manual() -> None:
     ]
     full_init = next(step for step in full["steps"] if step.get("name") == "Initialize CodeQL")
     assert full_init["with"]["queries"] == "security-and-quality"
+    full_analyze = next(
+        step for step in full["steps"] if step.get("name") == "Perform CodeQL Analysis"
+    )
+    assert full_analyze["with"]["category"] == "/language:${{ matrix.language }}"
 
     benchmark = jobs["analyze-pr-benchmark"]
     benchmark_init = next(
