@@ -8,8 +8,6 @@ from typing import Any
 
 from core.agent_harness.session.persistence.contracts import SessionPersistenceSource
 
-_TRIGGER_MAX_CHARS = 200
-
 
 def _now() -> str:
     return datetime.now(UTC).isoformat()

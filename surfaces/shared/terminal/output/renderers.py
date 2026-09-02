@@ -12,7 +12,6 @@ from infrastructure.terminal.theme import (
     HIGHLIGHT,
     SECONDARY,
     TEXT,
-    WARNING,
 )
 from surfaces.shared.terminal.components.time_format import _elapsed_hms
 from surfaces.shared.terminal.output.console_state import _get_console

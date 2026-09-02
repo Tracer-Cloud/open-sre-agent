@@ -9,7 +9,6 @@ standalone via ``uvicorn gateway.web.webapp:app``.
 
 from __future__ import annotations
 
-import logging
 from http import HTTPStatus
 
 from fastapi import FastAPI, Response
@@ -25,8 +24,6 @@ from infrastructure.alert_intake import router as alert_router
 from infrastructure.request_body_limit import RequestBodyLimitMiddleware
 
 configure_process(WEB_PROFILE)  # env → sentry → adapters
-
-logger = logging.getLogger(__name__)
 
 __all__ = ["app"]
 

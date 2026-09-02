@@ -40,7 +40,6 @@ def _session_file_lock_enabled() -> bool:
     }
 
 
-_TRIGGER_MAX_CHARS = 200
 # Cold tip scan keeps at most this many trailing bytes resident (then grows by the
 # same step only while the window still contains nothing but skippable rows).
 _TAIL_SCAN_CHUNK_BYTES = 64 * 1024
