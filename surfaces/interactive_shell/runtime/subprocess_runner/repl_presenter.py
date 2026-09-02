@@ -219,7 +219,12 @@ class ReplSubprocessPresenter:
             resolved = str(SECONDARY)
         else:
             resolved = style
-        print_command_output(self._console, text, style=resolved)
+        print_command_output(
+            self._console,
+            text,
+            style=resolved,
+            on_collapse=lambda body: setattr(self._session.terminal, "collapsed_tool_output", body),
+        )
 
     def print_plain(self, text: str) -> None:
         self._console.print(Text(text))

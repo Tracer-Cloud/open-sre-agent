@@ -111,6 +111,12 @@ class TerminalSession:
     The response composer consumes the label to hide a pure acknowledgement
     while preserving meaningful follow-up the selected option unlocks."""
 
+    collapsed_tool_output: str | None = None
+    """Full text of the last display-capped tool result, for Ctrl+O paging.
+
+    Set by the action turn when the console preview is folded; cleared when
+    the next turn's preview fits. None when nothing is collapsed."""
+
     pending_confirm_options: tuple[tuple[str, str], ...] | None = None
     """Rows the next execution confirmation should offer, or None for Yes/No.
 

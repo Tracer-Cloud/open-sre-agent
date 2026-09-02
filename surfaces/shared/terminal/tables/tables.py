@@ -7,6 +7,7 @@ All rendering is delegated to the REPL TTY helpers in :mod:`rendering`.
 from __future__ import annotations
 
 import re
+from collections.abc import Callable
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
@@ -14,6 +15,7 @@ from rich.console import Console
 from rich.markup import escape
 from rich.text import Text
 
+from infrastructure.terminal.peek import cap_output_for_display
 from infrastructure.terminal.theme import (
     BOLD_BRAND,
     DIM,
@@ -235,18 +237,26 @@ def _collapse_traceback(text: str) -> str | None:
     return "\n".join(rendered)
 
 
-def print_command_output(console: Console, output: str, *, style: str | None = None) -> None:
+def print_command_output(
+    console: Console,
+    output: str,
+    *,
+    style: str | None = None,
+    on_collapse: Callable[[str], None] | None = None,
+) -> None:
     if not output:
         return
     text = _collapse_traceback(output.rstrip()) or output.rstrip()
-    lines = text.split("\n")
+    preview, folded = cap_output_for_display(text)
+    if folded is not None and on_collapse is not None:
+        on_collapse(folded)
+    lines = preview.split("\n")
     # Frame every result under its `$ command` header with a ``↳`` gutter so the
     # output reads as the command's child (parent → child) and stays grouped and
     # set off from the reply prose above — wide output included. A single wide
     # line wraps within the block instead of flushing the whole block (and its
-    # narrow siblings) to the left margin. Do not fold the body: this is the
-    # sole dump for captured slash, foreground CLI, and Claude Code output —
-    # there is no later reply summary or expansion path for the hidden rows.
+    # narrow siblings) to the left margin. Long bodies collapse to a Droid-style
+    # peek plus ``Ctrl+O to view``; the caller stashes *folded* for paging.
     framed = [f"  ↳ {lines[0]}", *(f"{_COMMAND_OUTPUT_INDENT}{line}" for line in lines[1:])]
     text = "\n".join(framed)
     # Parse any ANSI the captured child emitted so its Rich styling (bold, colour)

@@ -57,14 +57,13 @@ def test_a_python_traceback_is_collapsed_to_the_exception_and_last_frame() -> No
     assert "run()" not in out  # intermediate source lines are gone
 
 
-def test_long_output_keeps_every_line() -> None:
-    """Slash / CLI / Claude Code dumps have no later summary — do not fold them."""
+def test_long_output_collapses_to_a_peek_with_an_expand_marker() -> None:
+    """Droid-style: a short head plus ``Ctrl+O to view``; full text is stashed."""
     out = _out("\n".join(f"line {i}" for i in range(30)), width=100)
     assert "↳ line 0" in out
-    assert "line 9" in out
-    assert "line 10" in out
-    assert "line 29" in out
-    assert "more line" not in out
+    assert "line 3" in out
+    assert "line 29" not in out
+    assert "Ctrl+O to view" in out
 
 
 def test_non_traceback_output_is_left_intact() -> None:

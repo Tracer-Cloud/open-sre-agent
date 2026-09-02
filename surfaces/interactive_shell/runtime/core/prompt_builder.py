@@ -6,7 +6,7 @@ import asyncio
 from collections.abc import Callable
 
 from prompt_toolkit import PromptSession
-from prompt_toolkit.application import Application
+from prompt_toolkit.application import Application, run_in_terminal
 from prompt_toolkit.buffer import Buffer
 from prompt_toolkit.filters import Condition
 from prompt_toolkit.formatted_text import ANSI
@@ -21,8 +21,10 @@ from surfaces.interactive_shell.session import Session
 from surfaces.interactive_shell.ui import input_prompt
 from surfaces.interactive_shell.ui.hooks import (
     install_confirmation_key_bindings,
+    install_output_expand_key_bindings,
     install_plan_expand_key_bindings,
 )
+from surfaces.interactive_shell.ui.hooks.output_expand import page_collapsed_output
 from surfaces.interactive_shell.ui.input_prompt import rendering as prompt_rendering
 from surfaces.interactive_shell.ui.input_prompt.key_bindings import (
     build_cancel_key_bindings,
@@ -102,6 +104,23 @@ class PromptBuilder:
             self._invalidate_prompt,
         )
         install_session_key_bindings(self.pt_session, plan_kb)
+        output_kb = install_output_expand_key_bindings(
+            lambda: bool(self.session.terminal.collapsed_tool_output),
+            lambda: str(self.session.terminal.collapsed_tool_output or ""),
+            self._page_collapsed_output,
+        )
+        install_session_key_bindings(self.pt_session, output_kb)
+
+    def _page_collapsed_output(self, text: str) -> None:
+        """Suspend the prompt and page the last folded tool result (Ctrl+O)."""
+
+        async def _run() -> None:
+            await run_in_terminal(lambda: page_collapsed_output(text), in_executor=False)
+
+        if self.pt_app is not None and self.pt_app.is_running:
+            self.pt_app.create_background_task(_run())
+            return
+        page_collapsed_output(text)
 
     @property
     def invalidate_prompt(self) -> Callable[[], None]:

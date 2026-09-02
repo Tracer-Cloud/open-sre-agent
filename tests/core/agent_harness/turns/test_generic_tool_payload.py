@@ -36,6 +36,29 @@ def test_opaque_json_object_is_hidden() -> None:
     assert _format_generic_tool_payload(_call("get_github_repository"), _result(payload)) == ""
 
 
+def test_json_summary_preview_is_hidden() -> None:
+    """gh used to put a sliced JSON string in ``summary`` — that must not paint."""
+    sliced = (
+        '{"login": "Tracer-Cloud", "followers_url": '
+        '"https://api.github.com/users/Tracer-Cloud/followers", '
+        '"gists_url": "https://api.github.com/users/Tr...'
+    )
+    payload = {"ok": True, "stdout": sliced, "summary": sliced}
+    assert _format_generic_tool_payload(_call("github_cli"), _result(payload)) == ""
+
+
+def test_prose_summary_is_still_shown() -> None:
+    payload = {
+        "ok": True,
+        "stdout": '{"id": 1}',
+        "summary": "GitHub API call succeeded.",
+    }
+    assert (
+        _format_generic_tool_payload(_call("github_cli"), _result(payload))
+        == "GitHub API call succeeded."
+    )
+
+
 def test_opaque_json_list_is_hidden() -> None:
     assert _format_generic_tool_payload(_call("list_runs"), _result([{"id": 1}, {"id": 2}])) == ""
 
@@ -89,9 +112,10 @@ def test_verbose_output_is_capped_for_display_only() -> None:
     big = "\n".join(f"run {i} failure 2026-08-01T09:11:00Z" for i in range(50))
     capped = _cap_for_display(big)
 
-    # Display is a short head + peek marker; the full text is untouched.
+    # Display is a short head + one Droid-style peek marker; the full text is untouched.
     assert capped.count("\n") + 1 <= 6
-    assert "… 46 more lines" in capped
+    assert "… 46 more, Ctrl+O to view" in capped
+    assert "output truncated" not in capped
     assert big.count("\n") + 1 == 50  # source unchanged
 
 
@@ -105,26 +129,27 @@ def test_short_output_is_not_truncated() -> None:
 def test_character_cap_reports_truncation_when_lines_fit() -> None:
     from core.agent_harness.turns.action_driver import (
         _DISPLAY_OUTPUT_MAX_CHARS,
-        _OUTPUT_TRUNCATED_MARKER,
         _cap_for_display,
     )
+    from infrastructure.terminal.peek import format_view_all_marker
 
     text = "x" * (_DISPLAY_OUTPUT_MAX_CHARS + 40)
     capped = _cap_for_display(text)
-    assert capped.endswith(_OUTPUT_TRUNCATED_MARKER)
+    assert capped.endswith(format_view_all_marker())
     body, _, marker = capped.rpartition("\n")
-    assert marker == _OUTPUT_TRUNCATED_MARKER
-    assert len(body) <= _DISPLAY_OUTPUT_MAX_CHARS
-    assert "more line" not in capped
+    assert marker == format_view_all_marker()
+    assert body.endswith("…")
+    assert len(body) <= _DISPLAY_OUTPUT_MAX_CHARS + 1
+    assert "more, Ctrl+O" not in capped
 
 
-def test_character_and_line_caps_both_report_truncation() -> None:
+def test_character_and_line_caps_share_one_marker() -> None:
     from core.agent_harness.turns.action_driver import (
         _DISPLAY_OUTPUT_MAX_CHARS,
         _DISPLAY_OUTPUT_MAX_LINES,
-        _OUTPUT_TRUNCATED_MARKER,
         _cap_for_display,
     )
+    from infrastructure.terminal.peek import format_expand_marker, format_view_all_marker
 
     # First N lines together exceed the character cap, and extra lines remain.
     line = "y" * ((_DISPLAY_OUTPUT_MAX_CHARS // 2) + 1)
@@ -132,12 +157,10 @@ def test_character_and_line_caps_both_report_truncation() -> None:
     text = "\n".join([line] * (_DISPLAY_OUTPUT_MAX_LINES + extra_lines))
     capped = _cap_for_display(text)
 
-    assert _OUTPUT_TRUNCATED_MARKER in capped
-    assert f"… {extra_lines} more lines" in capped
-    body, _, _ = capped.partition(f"\n{_OUTPUT_TRUNCATED_MARKER}")
-    assert len(body) <= _DISPLAY_OUTPUT_MAX_CHARS
-    # Character-cap is reported first (the visible head was cut); folded
-    # remainder follows so neither truncation is silent.
-    char_at = capped.index(_OUTPUT_TRUNCATED_MARKER)
-    fold_at = capped.index(" more lines")
-    assert char_at < fold_at
+    assert format_expand_marker(extra_lines) in capped
+    assert format_view_all_marker() not in capped
+    assert "output truncated" not in capped
+    body, _, marker = capped.rpartition("\n")
+    assert marker == format_expand_marker(extra_lines)
+    assert body.endswith("…")
+    assert len(body) <= _DISPLAY_OUTPUT_MAX_CHARS + 1

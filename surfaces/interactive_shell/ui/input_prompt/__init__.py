@@ -39,7 +39,7 @@ _COMPOSER_MAX_FRAME_ROWS = _COMPOSER_MAX_EDIT_ROWS + 2
 
 
 def _limit_editable_height(main_input: HSplit) -> HSplit:
-    """Return the editable prompt body capped to a chat-composer-sized viewport."""
+    """Return the editable prompt body sized to its text, capped to a chat viewport."""
     editable_children = main_input.children[1:]
     default_buffer_slot = editable_children[0]
     if not isinstance(default_buffer_slot, ConditionalContainer) or not isinstance(
@@ -47,13 +47,11 @@ def _limit_editable_height(main_input: HSplit) -> HSplit:
     ):
         raise RuntimeError("prompt-toolkit input container is missing its editable window")
     # No fixed ``preferred``: it pins the box to one row so it never grows with
-    # wrapped/multiline input. Let the buffer's own content height drive it,
-    # clamped to [1, max]; ``dont_extend_height`` below keeps it from eating
-    # leftover terminal rows.
+    # wrapped/multiline input. The buffer's own content height drives it,
+    # clamped to [1, max]; ``dont_extend_height`` keeps it from eating leftover
+    # terminal rows (that made the bordered box jump as the status region above
+    # it changed). Window stores a Filter, not a raw bool — assign via to_filter.
     default_buffer_slot.content.height = Dimension(min=1, max=_COMPOSER_MAX_EDIT_ROWS)
-    # Grow with wrapped/multiline input only — never eat leftover terminal rows
-    # (that made the bordered box jump as the status region above it changed).
-    # Window stores a Filter, not a raw bool — assign via to_filter.
     default_buffer_slot.content.dont_extend_height = to_filter(True)
     return HSplit(editable_children)
 

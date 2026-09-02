@@ -65,7 +65,12 @@ from core.tool_framework.tags import SUMMARIZE_OBSERVATION_TAG
 from infrastructure.analytics.react_turn import run_react_agent_with_telemetry
 from infrastructure.observability.trace.prompts import persist_turn_system_prompt
 from infrastructure.observability.trace.spans import component_span
-from infrastructure.terminal.peek import build_output_peek, format_expand_marker
+from infrastructure.terminal.peek import (
+    DISPLAY_OUTPUT_MAX_CHARS,
+    DISPLAY_OUTPUT_MAX_LINES,
+    cap_output_for_display,
+    format_view_all_marker,
+)
 
 log = logging.getLogger(__name__)
 
@@ -342,10 +347,9 @@ def _generic_tool_results(result: Any) -> list[tuple[ToolCall, Any]]:
     ]
 
 
-_DISPLAY_OUTPUT_MAX_LINES = 4
-_DISPLAY_OUTPUT_MAX_CHARS = 240
-_OUTPUT_TRUNCATED_MARKER = "… (output truncated)"
-_EXPAND_MARKER_RE = re.compile(r"^… \d+ more lines?$")
+_DISPLAY_OUTPUT_MAX_LINES = DISPLAY_OUTPUT_MAX_LINES
+_DISPLAY_OUTPUT_MAX_CHARS = DISPLAY_OUTPUT_MAX_CHARS
+_EXPAND_MARKER_RE = re.compile(r"^… \d+ more, Ctrl\+O to view$")
 
 
 _PLAN_SNAPSHOT_RE = re.compile(r"Plan\s*[·.]\s*\d+\s*/\s*\d+(?:\s*[✓●○][^✓●○\n]*)*")
@@ -375,15 +379,14 @@ def _looks_like_json(text: str) -> bool:
 
 
 def _is_output_truncation_marker(line: str) -> bool:
-    return line == _OUTPUT_TRUNCATED_MARKER or bool(_EXPAND_MARKER_RE.fullmatch(line))
+    return line == format_view_all_marker() or bool(_EXPAND_MARKER_RE.fullmatch(line))
 
 
 def _split_output_truncation_markers(text: str) -> tuple[str, str]:
-    """Peel trailing truncation-marker lines from a capped preview.
+    """Peel the trailing expand marker from a capped preview.
 
-    Returns ``(body, markers)``. *markers* is the trailing marker block — the
-    character-cap line, the folded-line peek, or both — or empty when nothing
-    was truncated.
+    Returns ``(body, marker)``. *marker* is the single Droid-style line
+    (``… N more, Ctrl+O to view`` or ``Ctrl+O to view all``), or empty.
     """
     lines = text.split("\n")
     cut = len(lines)
@@ -396,26 +399,17 @@ def _cap_for_display(text: str) -> str:
     """Cap verbose tool output for the console so a large result cannot flood the
     transcript. The model and persisted history keep the full text; only the
     user-facing preview is truncated to a short head (Droid-style).
-
-    Line-fold and character-cap can both apply to the same preview; each one
-    that fires is reported so a mid-line cut is never silent behind a
-    ``… N more lines`` marker.
     """
-    if not text:
-        return text
-    peek, hidden = build_output_peek(text, max_lines=_DISPLAY_OUTPUT_MAX_LINES)
-    char_truncated = False
-    if len(peek) > _DISPLAY_OUTPUT_MAX_CHARS:
-        peek = peek[:_DISPLAY_OUTPUT_MAX_CHARS].rstrip()
-        char_truncated = True
-    markers: list[str] = []
-    if char_truncated:
-        markers.append(_OUTPUT_TRUNCATED_MARKER)
-    if hidden:
-        markers.append(format_expand_marker(hidden))
-    if markers:
-        return peek + "\n" + "\n".join(markers)
-    return peek
+    preview, _full = cap_output_for_display(text)
+    return preview
+
+
+def _stash_collapsed_tool_output(session: SessionState, text: str | None) -> None:
+    """Remember the full body so Ctrl+O can page it; no-op without a terminal."""
+    terminal = getattr(session, "terminal", None)
+    if terminal is None:
+        return
+    terminal.collapsed_tool_output = text
 
 
 def _is_data_blob(text: str) -> bool:
@@ -516,7 +510,7 @@ def _preferred_tool_response_text(tool_result: Any) -> str:
     if isinstance(details, dict):
         response_text = details.get("response_text")
         if isinstance(response_text, str) and response_text.strip():
-            return response_text.strip()
+            return _user_facing_tool_text(response_text)
     content = _content_to_text(getattr(tool_result, "content", "")).strip()
     if not content:
         return ""
@@ -527,7 +521,9 @@ def _preferred_tool_response_text(tool_result: Any) -> str:
     if not isinstance(parsed, dict):
         return ""
     response_text = parsed.get("response_text")
-    return response_text.strip() if isinstance(response_text, str) else ""
+    if not isinstance(response_text, str):
+        return ""
+    return _user_facing_tool_text(response_text)
 
 
 def _has_preferred_tool_response_text(result: Any) -> bool:
@@ -1029,6 +1025,7 @@ def _compose_response(
     is_json = _looks_like_json(generic_text)
     body, markers = _split_output_truncation_markers(display_generic)
     truncated = bool(markers)
+    _stash_collapsed_tool_output(session, generic_text if truncated else None)
     bulky = display_generic.count("\n") >= 4 or truncated
     if display_generic and (is_json or bulky):
         # Truncated JSON is invalid — fencing it as ``json`` makes Rich/Pygments

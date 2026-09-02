@@ -57,6 +57,12 @@ def _decode_subprocess_stream(value: str | bytes | None) -> str:
     return value
 
 
+def _stash_collapsed_output(session: Session | None, body: str) -> None:
+    terminal = session_terminal(session) if session is not None else None
+    if terminal is not None:
+        terminal.collapsed_tool_output = body
+
+
 def _cli_command_succeeded(exit_code: int | None) -> bool:
     return exit_code == 0
 
@@ -136,8 +142,17 @@ def run_cli_command(
                 env=child_env,
             )
             exit_code = captured_result.returncode
-            print_command_output(console, captured_result.stdout or "")
-            print_command_output(console, captured_result.stderr or "", style=ERROR)
+            print_command_output(
+                console,
+                captured_result.stdout or "",
+                on_collapse=lambda body: _stash_collapsed_output(session, body),
+            )
+            print_command_output(
+                console,
+                captured_result.stderr or "",
+                style=ERROR,
+                on_collapse=lambda body: _stash_collapsed_output(session, body),
+            )
             if captured_result.returncode != 0:
                 console.print(
                     f"[{ERROR}]CLI command exited with non-zero code {captured_result.returncode}[/]"
@@ -166,8 +181,17 @@ def run_cli_command(
         # kill a hung install script, i.e. a streamed child mid-redraw of its own
         # progress bar.
         prepare_repl_output_line()
-        print_command_output(console, _decode_subprocess_stream(exc.stdout))
-        print_command_output(console, _decode_subprocess_stream(exc.stderr), style=ERROR)
+        print_command_output(
+            console,
+            _decode_subprocess_stream(exc.stdout),
+            on_collapse=lambda body: _stash_collapsed_output(session, body),
+        )
+        print_command_output(
+            console,
+            _decode_subprocess_stream(exc.stderr),
+            style=ERROR,
+            on_collapse=lambda body: _stash_collapsed_output(session, body),
+        )
         console.print(f"[{ERROR}]error:[/] CLI command timed out")
     except KeyboardInterrupt:
         exit_code = None

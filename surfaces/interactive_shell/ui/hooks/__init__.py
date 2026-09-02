@@ -9,6 +9,9 @@ from surfaces.interactive_shell.ui.hooks.confirmation_choice import (
     confirmation_choice_overlay_ansi,
     install_confirmation_key_bindings,
 )
+from surfaces.interactive_shell.ui.hooks.output_expand import (
+    install_output_expand_key_bindings,
+)
 from surfaces.interactive_shell.ui.hooks.plan_expand import (
     install_plan_expand_key_bindings,
 )
@@ -16,5 +19,6 @@ from surfaces.interactive_shell.ui.hooks.plan_expand import (
 __all__ = [
     "confirmation_choice_overlay_ansi",
     "install_confirmation_key_bindings",
+    "install_output_expand_key_bindings",
     "install_plan_expand_key_bindings",
 ]

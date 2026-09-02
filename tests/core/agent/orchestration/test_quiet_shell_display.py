@@ -436,21 +436,23 @@ def test_bulky_tool_output_is_capped_and_fenced_for_display() -> None:
         final_text="Here is the run history.",
     )
 
-    response_text, display_chunks, _use_final = _compose_response(result, _Session(), _counts(1))
+    session = _Session()
+    response_text, display_chunks, _use_final = _compose_response(result, session, _counts(1))
     joined = "\n".join(display_chunks)
 
     # Display: capped + text-fenced (truncated content is not valid code to highlight).
     assert "```text" in joined
-    assert "more lines" in joined
+    assert "Ctrl+O to view" in joined
     assert joined.count("run ") <= 12
     assert "```text" not in response_text
     assert response_text.count("run ") == 30
+    assert session.terminal.collapsed_tool_output == bulky
 
 
 def test_truncated_json_uses_text_fence_not_json_highlight() -> None:
-    """Broken mid-JSON must not use a ``json`` fence (Rich paints red error tokens)."""
+    """Broken mid-JSON must not paint as a dumped fence — hide the blob."""
     github = ToolCall(id="1", name="posthog_mcp", input={"tool_name": "list"})
-    # Valid JSON over the line/char caps so _cap_for_display truncates it.
+    # Valid JSON over the line/char caps so _cap_for_display would truncate it.
     bulky_obj = {"tools": [{"name": f"tool_{i}", "description": "x" * 40} for i in range(40)]}
     bulky = json.dumps(bulky_obj, indent=2)
     result = _Result(
@@ -462,17 +464,15 @@ def test_truncated_json_uses_text_fence_not_json_highlight() -> None:
     joined = "\n".join(display_chunks)
 
     assert "```json" not in joined
-    assert "```text" in joined
-    assert "more lines" in joined
-    # Marker sits outside the fence so it is not syntax-highlighted as an error.
-    fence_end = joined.index("```", joined.index("```text") + 1)
-    assert "more lines" in joined[fence_end:]
+    assert "followers_url" not in joined
+    assert '"tools"' not in joined
+    assert "Listed tools." in joined
 
 
 def test_character_and_line_truncation_markers_sit_outside_the_fence() -> None:
     github = ToolCall(id="1", name="github_cli", input={"command": "run list"})
     # Four-plus long lines so the display cap cuts the visible head *and* folds
-    # remainder — both markers must stay outside the fence.
+    # remainder — the single expand marker must stay outside the fence.
     bulky = "\n".join("y" * 80 for _ in range(10))
     result = _Result(
         tool_results=[(github, _ToolResult(_payload(bulky)))],
@@ -485,10 +485,10 @@ def test_character_and_line_truncation_markers_sit_outside_the_fence() -> None:
     fence_end = joined.index("```", joined.index("```text") + 1)
     after = joined[fence_end:]
     inside = joined[:fence_end]
-    assert "output truncated" in after
-    assert "more lines" in after
-    assert "output truncated" not in inside
-    assert "more lines" not in inside
+    assert "Ctrl+O to view" in after
+    assert "output truncated" not in joined
+    assert after.count("Ctrl+O to view") == 1
+    assert "Ctrl+O to view" not in inside
 
 
 def test_plan_snapshots_are_stripped_from_the_reply() -> None:

@@ -25,6 +25,21 @@ from surfaces.shared.terminal.components.cpr_stdin import (
     strip_cpr_sequences,
 )
 
+# Stuck-key / paste-corruption spam (seen after CPR redraw glitches) — a long
+# run dominated by one character is never a real ask. Re-prompt instead of
+# sending it to the model.
+_SPAM_MIN_LEN = 40
+_SPAM_DOMINANT_RATIO = 0.9
+
+
+def _looks_like_key_spam(text: str) -> bool:
+    """True when *text* is almost entirely one repeated character."""
+    body = "".join(text.split())
+    if len(body) < _SPAM_MIN_LEN:
+        return False
+    dominant = max(body.count(ch) for ch in set(body))
+    return dominant / len(body) >= _SPAM_DOMINANT_RATIO
+
 
 class PromptInputReader:
     """Read prompt text and hide terminal-specific control flow from the loop."""
@@ -64,6 +79,9 @@ class PromptInputReader:
             raw_text = text
             text = strip_cpr_sequences(text)
             if not text.strip() and contains_cpr_sequence(raw_text):
+                continue
+            if _looks_like_key_spam(text):
+                # Accidental held-key / redraw garbage — do not spend a turn.
                 continue
             return InputSubmitted(text)
 

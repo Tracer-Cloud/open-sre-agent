@@ -167,3 +167,10 @@ async def test_prompt_input_reader_ignores_cpr_only_input() -> None:
     ).read()
 
     assert event == InputSubmitted("show status")
+
+
+@pytest.mark.asyncio
+async def test_prompt_input_reader_ignores_held_key_spam() -> None:
+    spam = "d" * 80 + "cs"
+    event = await _reader(SequencePrompt([spam, "real ask"])).read()
+    assert event == InputSubmitted("real ask")

@@ -469,10 +469,31 @@ class TestResolvePromptPrefix:
         assert _strip_ansi(prefix) == ""
 
 
-def test_composer_frame_preferred_height_does_not_crash() -> None:
-    """dont_extend_height must be a Filter — a raw bool crashes on first redraw."""
+@pytest.mark.asyncio
+async def test_composer_frame_preferred_height_does_not_crash() -> None:
+    """dont_extend_height must be a Filter — a raw bool crashes on first redraw.
+
+    Measures under a running app: the composer height is content-driven, so
+    prompt-toolkit loads the buffer's history to size it, which needs a live
+    app loop — the only context a real redraw ever has.
+    """
+    import asyncio
+
+    from prompt_toolkit.application import create_app_session
+    from prompt_toolkit.input.defaults import create_pipe_input
+    from prompt_toolkit.output import DummyOutput
+
     from surfaces.interactive_shell.ui.input_prompt import build_prompt_session
 
-    prompt = build_prompt_session()
-    dim = prompt.layout.container.preferred_height(80, 40)
+    with (
+        create_pipe_input() as pipe_input,
+        create_app_session(input=pipe_input, output=DummyOutput()),
+    ):
+        prompt = build_prompt_session()
+        task = asyncio.create_task(prompt.prompt_async(""))
+        await asyncio.sleep(0)
+        dim = prompt.layout.container.preferred_height(80, 40)
+        pipe_input.send_text("\r")
+        await asyncio.wait_for(task, timeout=5.0)
+
     assert dim.preferred >= 1

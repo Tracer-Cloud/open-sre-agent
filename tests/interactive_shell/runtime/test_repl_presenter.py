@@ -26,6 +26,20 @@ def _presenter() -> tuple[ReplSubprocessPresenter, StringIO]:
     return ReplSubprocessPresenter(session, console), buffer
 
 
+def test_long_command_output_is_stashed_for_ctrl_o() -> None:
+    presenter, buffer = _presenter()
+    body = "\n".join(f"line {i}" for i in range(30))
+    presenter.print_command_output(body)
+    assert presenter.session.terminal.collapsed_tool_output == body
+    assert "Ctrl+O to view" in buffer.getvalue()
+
+
+def test_short_command_output_is_not_stashed() -> None:
+    presenter, _buffer = _presenter()
+    presenter.print_command_output("ok")
+    assert presenter.session.terminal.collapsed_tool_output is None
+
+
 def test_plain_command_output_is_recessed_but_keeps_command_colours() -> None:
     # Raw stdout reads as supporting detail beneath the bright reply: plain output
     # is recessed to SECONDARY, while colour the command emitted itself survives.

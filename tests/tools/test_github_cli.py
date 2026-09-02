@@ -339,6 +339,21 @@ def test_summarize_gh_result_auto_merge() -> None:
     assert summary == "Enabled auto-merge for PR #3996."
 
 
+def test_summarize_gh_api_json_is_prose_not_a_json_slice() -> None:
+    stdout = (
+        '{"login":"Tracer-Cloud","followers_url":'
+        '"https://api.github.com/users/Tracer-Cloud/followers",'
+        '"type":"Organization"}'
+    )
+    summary = summarize_gh_result(
+        args=["api", "repos/tracer-cloud/opensre"],
+        ok=True,
+        stdout=stdout,
+    )
+    assert summary == "GitHub API call succeeded."
+    assert "followers_url" not in summary
+
+
 def test_summarize_gh_result_auto_merge_flags_before_number() -> None:
     summary = summarize_gh_result(
         args=["pr", "merge", "--squash", "--auto", "3996"],
