@@ -309,6 +309,7 @@ from config.constants.posthog_mcp import (
 )
 from config.constants.product import (
     FORCE_SIGN_IN_ENV,
+    PRODUCT_DISPLAY_NAME,
     PRODUCT_NAME,
     RELEASE_STAGE,
     RELEASE_STAGE_BANNER,
@@ -483,6 +484,7 @@ __all__ = [
     "OPENSRE_APP_URL_DEV",
     "OPENSRE_APP_URL_ENV",
     "FORCE_SIGN_IN_ENV",
+    "PRODUCT_DISPLAY_NAME",
     "PRODUCT_NAME",
     "RELEASE_STAGE",
     "RELEASE_STAGE_BANNER",

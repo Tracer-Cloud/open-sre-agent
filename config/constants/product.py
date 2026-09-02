@@ -9,8 +9,11 @@ from __future__ import annotations
 
 from typing import Final
 
-#: The CLI identity shown on the launch banner and sign-in screen.
+#: The CLI command identity (lowercase, matches the ``opensre`` executable).
 PRODUCT_NAME: Final[str] = "opensre"
+
+#: The brand name for display headers (launch banner, sign-in screen).
+PRODUCT_DISPLAY_NAME: Final[str] = "OpenSRE"
 
 #: Sign-in / welcome screen copy, shown when the shell requires login.
 WELCOME_TITLE: Final[str] = "Welcome to OpenSRE CLI"
@@ -41,6 +44,7 @@ UV_RUN_RECURSION_DEPTH_ENV: Final[str] = "UV_RUN_RECURSION_DEPTH"
 
 __all__ = [
     "FORCE_SIGN_IN_ENV",
+    "PRODUCT_DISPLAY_NAME",
     "PRODUCT_NAME",
     "RELEASES_API_URL_ENV",
     "RELEASE_STAGE",

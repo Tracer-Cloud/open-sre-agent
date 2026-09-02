@@ -131,14 +131,14 @@ def test_shimmer_text_ansi_paints_a_traveling_metallic_wave() -> None:
     assert " tools" in spaced or "tools" in re.sub(r"\x1b\[[0-9;]*m", "", spaced)
 
 
-def test_reply_marker_style_is_vivid_droid_orange_on_chromatic_themes() -> None:
-    """Assistant ``∴`` must use Factory-warm orange, not pale WARNING gold."""
+def test_reply_marker_follows_the_active_theme_highlight() -> None:
+    """Assistant ``∴`` uses the active theme's HIGHLIGHT so every component
+    follows the selected palette (not a fixed colour that copies another tool)."""
     from infrastructure.terminal import theme as ui_theme
 
-    ui_theme.set_active_theme("blue")
-    assert ui_theme.reply_marker_style() == "bold #D78700"
-    ui_theme.set_active_theme("mono")
-    assert ui_theme.reply_marker_style() == f"bold {ui_theme.get_theme('mono').HIGHLIGHT}"
+    for name in ("blue", "purple", "green", "mono"):
+        ui_theme.set_active_theme(name)
+        assert ui_theme.reply_marker_style() == f"bold {ui_theme.get_theme(name).HIGHLIGHT}"
 
 
 def test_reply_block_paints_orange_marker_and_themed_body() -> None:
@@ -159,9 +159,9 @@ def test_reply_block_paints_orange_marker_and_themed_body() -> None:
         render_reply_block(console, "Hey! How can I help?")
     output = capture.get()
     assert "∴" in output
-    # Factory droid orange #D78700 → 215,135,0
-    assert "38;2;215;135;0m" in output
-    # Body uses sunny Droid-like agent grey TEXT (#D0D0D0)
+    # Marker follows the active theme's HIGHLIGHT (blue #B7D4F0 → 183,212,240).
+    assert "38;2;183;212;240m" in output
+    # Body uses the sunny Droid-like agent grey (#D0D0D0).
     assert "38;2;208;208;208m" in output
 
 

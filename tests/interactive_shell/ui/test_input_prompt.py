@@ -178,13 +178,13 @@ class TestPromptTurnCounter:
 
 
 class TestResolveIdleHint:
-    def test_idle_hint_shows_ready_and_commands(self) -> None:
+    def test_idle_hint_is_empty_no_recurring_ready_line(self) -> None:
+        # Hints live once in the banner + footer; the prompt shows no per-turn
+        # "Ready · …" line (it also stacked into copies on terminal resize).
         session = Session()
         session.configured_integrations_known = True
         session.configured_integrations = ("datadog", "github", "grafana")
-        rendered = _strip_ansi(resolve_idle_hint_ansi(session))
-        assert "Ready" in rendered
-        assert "/ for commands" in rendered
+        assert resolve_idle_hint_ansi(session) == ""
 
 
 class TestComposerFooter:
@@ -461,15 +461,14 @@ class TestResolvePromptPrefix:
         assert prefix == "preview line"
         assert "/ for commands" not in prefix
 
-    def test_falls_back_to_idle_hint_when_no_preview(self) -> None:
+    def test_idle_prompt_prefix_is_empty_when_no_preview(self) -> None:
         spinner = loop_state.SpinnerState()
         prefix = resolve_prompt_prefix_ansi(
             inline_spinner=spinner.inline_spinner_ansi(),
             idle_hint=resolve_idle_hint_ansi(Session()),
         )
-        rendered = _strip_ansi(prefix)
-        assert "Ready" in rendered
-        assert "/ for commands" in rendered
+        # Nothing streaming or previewing → no idle chrome above the composer.
+        assert _strip_ansi(prefix) == ""
 
 
 @pytest.mark.asyncio

@@ -36,8 +36,10 @@ class Theme(StrEnum):
 
 
 #: Theme applied when none is configured or an unknown name is requested.
-# Amber matches Factory droid's warm gold chrome (sunny); blue reads cold/rainy.
-DEFAULT_THEME_NAME = Theme.AMBER
+# Purple is OpenSRE's own identity — deliberately not the warm gold/orange chrome
+# that reads as a Factory-droid copycat. The ``amber`` and ``orange`` palettes
+# stay available (``/theme``) for side-by-side visual comparison.
+DEFAULT_THEME_NAME = Theme.PURPLE
 
 #: Theme names in display order (a plain tuple for callers that iterate names).
 THEME_NAMES: tuple[Theme, ...] = tuple(Theme)

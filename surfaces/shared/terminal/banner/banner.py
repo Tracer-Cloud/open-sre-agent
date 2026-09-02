@@ -1,7 +1,8 @@
 """Launch banner shared by the CLI landing page and REPL.
 
-Centered hero (mark + identity + tip + shortcuts + capability chips) so the
-first viewport reads like a shipped product, not a left-aligned school demo.
+Droid-style centered hero: each row is centered independently (a single
+``Align.center`` on a multi-line block left-aligns short lines inside the
+widest line). Bold block wordmark + clean version + tip + capability chips.
 """
 
 from __future__ import annotations
@@ -9,11 +10,12 @@ from __future__ import annotations
 import enum
 
 from rich.align import Align
+from rich.cells import cell_len
 from rich.console import Console, Group, RenderableType
 from rich.padding import Padding
 from rich.text import Text
 
-from config.constants import PRODUCT_NAME
+from config.constants import PRODUCT_DISPLAY_NAME, WELCOME_DESCRIPTION, WELCOME_TITLE
 from config.version import get_opensre_version
 from infrastructure.terminal.theme import (
     BOLD_SKILL,
@@ -25,10 +27,11 @@ from infrastructure.terminal.theme import (
     TEXT,
 )
 from surfaces.shared.terminal.banner.banner_state import LaunchStatus, load_launch_status
+from surfaces.shared.terminal.prompt_layout import clip_prompt_text
 
 _BANNER_VERTICAL_PADDING = 1
 
-#: Version prefix under the product name.
+#: Version prefix under the wordmark.
 _VERSION_PREFIX = "v"
 #: Capability-status glyphs: present/usable vs. absent.
 _STATUS_OK_GLYPH = "✓"
@@ -36,10 +39,12 @@ _STATUS_MISSING_GLYPH = "✗"
 #: Spacing between status items.
 _STATUS_ITEM_GAP = "     "
 
-#: One tip under the identity — mirrors Droid's launch tip, OpenSRE-specific.
-_TIP_BODY = "try /theme for a new look · Ctrl+O expands long tool output"
 #: Keyboard hints (real bindings, not aspirational shortcuts).
 _SHORTCUTS_LINE = "/ commands · tab tool details · ? help · Enter send"
+
+#: Minimum console width to paint the ring mark (its cell width + margin);
+#: narrower terminals get the compact text title instead.
+_WORDMARK_MIN_WIDTH = 24
 
 
 class LaunchStatusLabel(enum.StrEnum):
@@ -49,8 +54,9 @@ class LaunchStatusLabel(enum.StrEnum):
     INTEGRATIONS = "Integrations"
 
 
-#: Braille rendering of the canonical OpenSRE mark (docs/images/opensre-mark.svg).
-_LOGO_ROWS: tuple[str, ...] = (
+#: The canonical overlapping-ring OpenSRE mark (docs/images/opensre-mark.svg),
+#: rendered in braille — the "loops" logo.
+_WORDMARK_ROWS: tuple[str, ...] = (
     "⠀⠀⠀⢀⣤⣶⣾⣿⣿⣿⣿⣶⣦⣄⡈⠒⢦⣄⡀⠀⠀⠀",
     "⠀⢀⣴⣿⠿⠋⢁⣤⣶⠖⠂⠉⠙⢿⣿⣦⠀⠙⣿⣦⡀⠀",
     "⢀⣾⣿⠋⠀⣴⣿⡟⠁⠀⠀⠀⠀⠀⠹⣿⣷⠀⠘⣿⣷⡀",
@@ -64,13 +70,16 @@ _LOGO_ROWS: tuple[str, ...] = (
 )
 
 
-def _build_logo_mark() -> Text:
-    """Return the overlapping-ring OpenSRE mark in a bright, confident accent.
+def _center(renderable: RenderableType) -> Align:
+    """Center one row/block on its own — do not bundle unequal-width lines."""
+    return Align.center(renderable)
 
-    Bold ``HIGHLIGHT`` (not dim grey) so the hero reads crisp and high-contrast
-    like a landing screen, rather than washed-out.
-    """
-    return Text("\n".join(_LOGO_ROWS), style=f"bold {HIGHLIGHT}", no_wrap=True)
+
+def _build_wordmark(*, console_width: int) -> Text:
+    """Return the bold ring "loops" mark, or a compact title on narrow terminals."""
+    if console_width < _WORDMARK_MIN_WIDTH:
+        return Text(PRODUCT_DISPLAY_NAME, style=f"bold {HIGHLIGHT}", no_wrap=True)
+    return Text("\n".join(_WORDMARK_ROWS), style=f"bold {HIGHLIGHT}", no_wrap=True)
 
 
 def _append_status_item(
@@ -90,28 +99,34 @@ def _append_status_item(
     line.append(f" {glyph}", style=BOLD_SKILL if available else ERROR)
 
 
-def _build_identity() -> Text:
-    """Centered product name + clean marketing version (no build tail)."""
-    name = Text(PRODUCT_NAME, style=f"bold {TEXT}", justify="center")
-    version = Text(
+def _build_version_line() -> Text:
+    return Text(
         f"{_VERSION_PREFIX}{get_opensre_version()}",
-        style=str(BRAND),
-        justify="center",
+        style=f"bold {BRAND}",
+        no_wrap=True,
     )
-    return Text("\n").join([name, version])
 
 
-def _build_tip_block() -> Text:
-    tip = Text(no_wrap=False)
-    tip.append("TIP", style=f"bold {HIGHLIGHT}")
-    tip.append("  ", style=DIM)
-    tip.append(_TIP_BODY, style=str(SECONDARY))
-    shortcuts = Text(_SHORTCUTS_LINE, style=str(DIM))
-    return Text("\n").join([tip, shortcuts])
+def _build_welcome_title() -> Text:
+    """Accent title — same copy and style as the sign-in screen."""
+    return Text(WELCOME_TITLE, style=f"bold {HIGHLIGHT}", no_wrap=True)
 
 
-def _build_capabilities(status: LaunchStatus) -> Text:
-    capabilities = Text(overflow="fold", justify="center")
+def _build_welcome_paragraph() -> Text:
+    """One-sentence product description, wrapped and centered (not clipped)."""
+    return Text(WELCOME_DESCRIPTION, style=str(TEXT), justify="center")
+
+
+def _build_shortcuts_line(*, max_width: int) -> Text:
+    return Text(
+        clip_prompt_text(_SHORTCUTS_LINE, max(8, max_width)),
+        style=str(DIM),
+        no_wrap=True,
+    )
+
+
+def _build_capabilities(status: LaunchStatus, *, max_width: int) -> Text:
+    capabilities = Text(overflow="fold", no_wrap=True)
     _append_status_item(
         capabilities,
         LaunchStatusLabel.SKILLS,
@@ -124,20 +139,15 @@ def _build_capabilities(status: LaunchStatus) -> Text:
         status.integration_count,
         available=status.integration_count > 0,
     )
+    # Clip rather than soft-wrap — a wrapped chip row looks left-ragged.
+    plain = capabilities.plain
+    if cell_len(plain) > max_width:
+        return Text(
+            clip_prompt_text(plain, max_width),
+            style=str(TEXT),
+            no_wrap=True,
+        )
     return capabilities
-
-
-def _build_details(status: LaunchStatus) -> Text:
-    """Return identity + tip + capability summary (tests assert version here)."""
-    return Text("\n").join(
-        [
-            _build_identity(),
-            Text(),
-            _build_tip_block(),
-            Text(),
-            _build_capabilities(status),
-        ]
-    )
 
 
 def build_launch_banner(
@@ -147,14 +157,32 @@ def build_launch_banner(
 ) -> RenderableType:
     """Build the centered, borderless OpenSRE launch banner."""
     del session  # Reserved for future session-scoped launch indicators.
-    del console  # Width no longer switches layout; always stack/center.
-    logo = _build_logo_mark()
-    details = _build_details(load_launch_status())
-    body: RenderableType = Group(
-        Align.center(logo),
-        Text(),
-        Align.center(details),
+    console = console or Console(
+        highlight=False,
+        force_terminal=True,
+        color_system="truecolor",
+        legacy_windows=False,
     )
+    status = load_launch_status()
+    width = console.width
+    # Leave one column empty so the banner never soft-wraps on the last cell.
+    line_width = max(width - 1, 1)
+    # Rows top-to-bottom (``None`` is a blank spacer). Each is centered on its
+    # own axis in the loop below — one Align.center over a multi-line block
+    # would left-align the short lines inside the widest one.
+    rows: list[RenderableType | None] = [
+        _build_wordmark(console_width=width),
+        None,
+        _build_version_line(),
+        None,
+        _build_welcome_title(),
+        _build_welcome_paragraph(),
+        None,
+        _build_shortcuts_line(max_width=line_width),
+        None,
+        _build_capabilities(status, max_width=line_width),
+    ]
+    body: RenderableType = Group(*(Text() if row is None else _center(row) for row in rows))
     return Padding(body, (_BANNER_VERTICAL_PADDING, 0))
 
 
@@ -171,6 +199,11 @@ def render_launch_banner(
         legacy_windows=False,
     )
     console.print(build_launch_banner(console, session=session))
+
+
+def _wordmark_cell_width() -> int:
+    """Widest wordmark row in terminal cells (for tests / narrow fallback)."""
+    return max(cell_len(row) for row in _WORDMARK_ROWS)
 
 
 __all__ = ["build_launch_banner", "render_launch_banner"]

@@ -138,11 +138,13 @@ def test_streaming_prompt_height_matches_idle_with_live_tool_on_status_row() -> 
     assert plain.count("\n") == idle_rows or filled.count("\n") == idle_rows
 
 
-def test_idle_status_row_shows_ready_hint() -> None:
+def test_idle_prompt_has_no_recurring_ready_hint() -> None:
+    # Command hints live once in the launch banner and the composer footer, not
+    # a per-turn "Ready · …" line (which also stacked into copies on resize).
     session = Session()
     rendered = _plain(render_prompt_region(session, ReplState(), SpinnerState()).value)
-    assert "Ready" in rendered
-    assert "/ for commands" in rendered
+    assert "Ready" not in rendered
+    assert "/ for commands" not in rendered
 
 
 def test_confirmation_region_shows_stacked_yes_no_choice() -> None:

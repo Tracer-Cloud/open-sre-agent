@@ -361,27 +361,16 @@ def _parse_hex_color(value: str) -> tuple[int, int, int]:
     return (int(stripped[0:2], 16), int(stripped[2:4], 16), int(stripped[4:6], 16))
 
 
-# Factory droid agent-message marker (`#D78700`). Chromatic OpenSRE themes use
-# this for the ``∴`` reply glyph and the matching ``⏺`` tool lead-in so the
-# transcript has one warm accent on recessed grey chrome — pale WARNING gold
-# was reading as bold-white in dogfood vs droid.
-_REPLY_MARKER_HEX = "#D78700"
-
-
 def reply_marker_hex() -> str:
-    """Hex for the assistant/tool warm accent (mono uses theme highlight)."""
-    theme = _ACTIVE_THEME
-    if theme.name == "mono":
-        return theme.HIGHLIGHT
-    return _REPLY_MARKER_HEX
+    """Hex for the assistant ``∴`` / tool ``⏺`` accent — the active theme's
+    ``HIGHLIGHT``, so every component follows the selected palette rather than a
+    fixed colour that would read as a copy of another tool."""
+    return _ACTIVE_THEME.HIGHLIGHT
 
 
 def reply_marker_style() -> str:
-    """Bold warm style for the assistant ``∴`` reply marker and ``⏺`` tool lead.
-
-    Matches Factory droid's orange triangle and the Cursor/Claude pattern of a
-    single branded lead-in beside softer body text.
-    """
+    """Bold accent for the assistant ``∴`` reply marker and ``⏺`` tool lead-in,
+    in the active theme's highlight colour (one branded lead beside softer body)."""
     return f"bold {reply_marker_hex()}"
 
 
@@ -488,7 +477,7 @@ def _apply_theme(theme: CliTheme) -> None:
     _dim_rgb = _parse_hex_color(theme.DIM)
     _bg_rgb = _parse_hex_color(theme.BG)
     _input_surface_rgb = _parse_hex_color(theme.INPUT_SURFACE)
-    _reply_rgb = _parse_hex_color(theme.HIGHLIGHT if theme.name == "mono" else _REPLY_MARKER_HEX)
+    _reply_rgb = _parse_hex_color(theme.HIGHLIGHT)
 
     HIGHLIGHT_ANSI = _fg(_highlight_rgb)
     BRAND_ANSI = _fg(_brand_rgb)
