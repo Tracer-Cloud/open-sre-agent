@@ -7,6 +7,7 @@ import subprocess
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
+from mcp import types  # type: ignore[import-not-found]
 from pydantic import ValidationError
 
 from integrations.catalog import classify_integrations as _classify_integrations
@@ -349,12 +350,12 @@ class TestToolResultToDict:
         *,
         is_error: bool = False,
         content_items: list | None = None,
-    ) -> MagicMock:
-        result = MagicMock()
-        result.isError = is_error
-        result.content = content_items or []
-        result.structuredContent = None
-        return result
+    ) -> types.CallToolResult:
+        return types.CallToolResult(
+            is_error=is_error,
+            content=content_items or [],
+            structured_content=None,
+        )
 
     def test_empty_content(self) -> None:
         result = self._make_result()
@@ -364,10 +365,7 @@ class TestToolResultToDict:
         assert parsed["content"] == []
 
     def test_text_content_extracted(self) -> None:
-        from mcp import types  # type: ignore[import-not-found]
-
-        text_item = MagicMock(spec=types.TextContent)
-        text_item.text = "Hello from OpenClaw"
+        text_item = types.TextContent(type="text", text="Hello from OpenClaw")
         result = self._make_result(content_items=[text_item])
         parsed = _tool_result_to_dict(result)
         assert "Hello from OpenClaw" in parsed["text"]
@@ -453,7 +451,7 @@ class TestListOpenClawTools:
         mock_tool = MagicMock()
         mock_tool.name = "conversations_list"
         mock_tool.description = "List conversations"
-        mock_tool.inputSchema = {"type": "object"}
+        mock_tool.input_schema = {"type": "object"}
 
         with patch(
             "integrations.openclaw._list_tools_async",

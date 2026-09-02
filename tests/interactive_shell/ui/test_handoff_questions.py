@@ -158,6 +158,23 @@ def test_choice_selection_strips_terminal_controls() -> None:
     assert "Canary" in output
 
 
+def test_multi_select_choice_indents_every_selected_line() -> None:
+    # Arrange: a multi-select answer arrives as one option per line.
+    buffer = io.StringIO()
+    console = Console(file=buffer, force_terminal=False, highlight=False, width=100)
+    answer = "Audit the architecture\nFind failing PRs\nRemediate alerts"
+
+    # Act
+    render_choice_selection(console, "Select Complex Demos", answer)
+
+    # Assert: heading, then every option indented under it — never flush-left.
+    lines = [line.rstrip() for line in buffer.getvalue().splitlines() if line.strip()]
+    assert "✓ Select Complex Demos" in lines
+    for label in ("Audit the architecture", "Find failing PRs", "Remediate alerts"):
+        assert f"  {label}" in lines
+        assert label not in lines
+
+
 def test_try_render_rejects_a_single_choice_label() -> None:
     buffer = io.StringIO()
     console = Console(file=buffer, force_terminal=False, highlight=False, width=80)

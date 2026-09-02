@@ -174,6 +174,9 @@ def test_run_ask_reports_denial_before_agent_failure(monkeypatch) -> None:
     assert outcome.denied_tools == ("shell_run",)
     assert outcome.exit_code is AskExitCode.APPROVAL_DENIED
     assert "downstream detail" not in outcome.response
+    # The denial is actionable: it names the exact flags that unblock the run.
+    assert "--allowed-tool shell_run" in outcome.response
+    assert "--dangerously-bypass-approvals" in outcome.response
 
 
 def test_run_ask_maps_incomplete_and_cancelled_turns(monkeypatch) -> None:

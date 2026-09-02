@@ -14,13 +14,11 @@ import os
 from collections.abc import AsyncIterator, Sequence
 from contextlib import AsyncExitStack, asynccontextmanager
 from dataclasses import dataclass
-from typing import Any, Literal, cast
+from typing import TYPE_CHECKING, Any, Literal, cast
 from urllib.parse import urlparse, urlunparse
 
 import httpx
-from mcp import ClientSession, StdioServerParameters, types  # type: ignore[import-not-found]
-from mcp.client.sse import sse_client  # type: ignore[import-not-found]
-from mcp.client.stdio import stdio_client  # type: ignore[import-not-found]
+import mcp_types as types
 from pydantic import Field, field_validator, model_validator
 from rich.console import Console, Group
 from rich.panel import Panel
@@ -31,6 +29,9 @@ from infrastructure.terminal.theme import BRAND, DIM, ERROR, HIGHLIGHT
 from integrations._validation_helpers import report_classify_failure, report_validation_failure
 from integrations.mcp_streamable_http_compat import streamable_http_client
 from integrations.mcp_transport import McpTransportMode
+
+if TYPE_CHECKING:
+    from mcp.client.session import ClientSession  # type: ignore[import-not-found]
 
 logger = logging.getLogger(__name__)
 
@@ -493,6 +494,13 @@ def github_integration_is_configured() -> bool:
 
 @asynccontextmanager
 async def _open_github_mcp_session(config: GitHubMCPConfig) -> AsyncIterator[ClientSession]:
+    from mcp.client.session import ClientSession  # type: ignore[import-not-found]
+    from mcp.client.sse import sse_client  # type: ignore[import-not-found]
+    from mcp.client.stdio import (  # type: ignore[import-not-found]
+        StdioServerParameters,
+        stdio_client,
+    )
+
     stack = AsyncExitStack()
     try:
         if config.mode == "stdio":
@@ -636,16 +644,16 @@ def _tool_result_to_dict(result: types.CallToolResult) -> dict[str, Any]:
                     {
                         "type": "resource_blob",
                         "uri": str(resource.uri),
-                        "mime_type": resource.mimeType,
+                        "mime_type": resource.mime_type,
                     }
                 )
         else:
             content_items.append({"type": getattr(item, "type", "unknown")})
 
-    structured = getattr(result, "structuredContent", None)
+    structured = result.structured_content
     text_output = "\n".join(part.strip() for part in text_parts if part.strip()).strip()
     return {
-        "is_error": bool(result.isError),
+        "is_error": bool(result.is_error),
         "text": text_output,
         "content": content_items,
         "structured_content": structured,
@@ -659,7 +667,7 @@ def _tool_defs(tools: Sequence[types.Tool]) -> list[dict[str, Any]]:
         {
             "name": tool.name,
             "description": tool.description or "",
-            "input_schema": getattr(tool, "inputSchema", None),
+            "input_schema": tool.input_schema,
         }
         for tool in tools
     ]

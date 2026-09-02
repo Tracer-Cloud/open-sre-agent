@@ -27,12 +27,34 @@ def _resolve_prompt(value: str) -> str:
     return prompt
 
 
+def _echo_answer(text: str) -> None:
+    """Print the answer as Markdown on a TTY, plain when piped or redirected.
+
+    A terminal reader gets the same rendered prose as the interactive shell
+    (bold, lists, fenced code); a script consuming ``opensre ask`` still gets
+    clean, ANSI-free text it can parse.
+    """
+    if not sys.stdout.isatty():
+        click.echo(text)
+        return
+    from rich.console import Console
+    from rich.markdown import Markdown
+
+    from infrastructure.safety.terminal_output import strip_terminal_controls
+    from infrastructure.terminal.theme import MARKDOWN_CODE_THEME, MARKDOWN_THEME
+
+    console = Console()
+    safe = strip_terminal_controls(text, keep_whitespace=True)
+    with console.use_theme(MARKDOWN_THEME):
+        console.print(Markdown(safe, code_theme=MARKDOWN_CODE_THEME))
+
+
 def _render_outcome(outcome: AskOutcome) -> None:
     if is_json_output():
         click.echo(json.dumps(outcome.as_dict(), ensure_ascii=False))
         return
     if outcome.status is AskStatus.SUCCESS:
-        click.echo(outcome.response)
+        _echo_answer(outcome.response)
         return
     if outcome.response:
         click.echo(outcome.response, err=True)
