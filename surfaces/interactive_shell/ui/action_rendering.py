@@ -23,6 +23,7 @@ from rich.text import Text
 
 from core.agent_harness.spi.accounting import SELF_RECORDING_ACTION_TOOL_NAMES
 from core.agent_harness.spi.task_plan import is_plan_diagnosis_prose
+from core.agent_harness.turns.display_text import is_data_blob
 from infrastructure.observability.trace.redaction import redact_sensitive
 from infrastructure.safety.terminal_output import strip_terminal_controls
 from infrastructure.terminal.theme import BOLD_SKILL, BRAND, DIM, HIGHLIGHT, SECONDARY
@@ -127,32 +128,18 @@ def _bounded_preview(value: str, *, limit: int = _TOOL_PREVIEW_MAX_CHARS) -> str
     return collapsed[: limit - 1].rstrip() + "…"
 
 
-def _is_result_data_blob(text: str) -> bool:
-    """True when *text* is a JSON/record blob the reply will summarize.
-
-    Same shape test the action driver uses to hide ``gh api`` payloads: opens
-    an object/array, or is dense with ``":`` key separators.
-    """
-    stripped = text.strip()
-    if not stripped:
-        return False
-    if stripped[0] in "{[":
-        return True
-    return stripped.count('":') >= 2
-
-
 def _preview_from_result_fields(payload: dict[str, Any]) -> str:
     """Pull the one user-facing field from a tool-result dict, or empty."""
     for key in ("response_text", "summary"):
         value = payload.get(key)
-        if isinstance(value, str) and value.strip() and not _is_result_data_blob(value):
+        if isinstance(value, str) and value.strip() and not is_data_blob(value):
             return value.strip()
     stdout = payload.get("stdout")
     if (
         payload.get("ok")
         and isinstance(stdout, str)
         and stdout.strip()
-        and not _is_result_data_blob(stdout)
+        and not is_data_blob(stdout)
     ):
         return stdout.strip()
     error = payload.get("error")
@@ -172,9 +159,9 @@ def _tool_result_preview(output: object) -> str:
             return preview
     if isinstance(output, str):
         stripped = output.strip()
-        return "" if not stripped or _is_result_data_blob(stripped) else stripped
+        return "" if not stripped or is_data_blob(stripped) else stripped
     content = getattr(output, "content", None)
-    if isinstance(content, str) and content.strip() and not _is_result_data_blob(content):
+    if isinstance(content, str) and content.strip() and not is_data_blob(content):
         return content.strip()
     return ""
 

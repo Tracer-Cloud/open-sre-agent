@@ -1,9 +1,10 @@
 """Shared data-blob detection under the two caller policies.
 
-The tool-result hider (``display_text.is_data_blob``) and the reply-prose
-collapse (streaming renderer ``_looks_like_raw_dump``) run this one mechanism
-with different thresholds. These tests pin each policy and lock in that they
-differ on purpose, so the two sites can never silently drift apart again.
+The tool-result hider (``display_text.is_data_blob``, also used by action
+rendering for ``↳`` child previews) and the reply-prose collapse (streaming
+renderer ``_looks_like_raw_dump``) run this one mechanism with different
+thresholds. These tests pin each policy and lock in that they differ on
+purpose, so the two sites can never silently drift apart again.
 """
 
 from __future__ import annotations

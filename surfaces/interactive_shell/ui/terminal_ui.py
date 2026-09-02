@@ -109,18 +109,11 @@ def render_prompt_region(session: Session, state: ReplState, spinner: SpinnerSta
                 idle_hint=prompt_rendering.resolve_idle_hint_ansi(session),
             )
         )
-    # The running action shimmers on its own row between the status line and the
-    # autonomy line; scrollback keeps the settled solid copy. Reserve that row
-    # for the whole streaming turn — appearing/clearing mid-turn used to grow
-    # and shrink the prompt region, which made the composer box jump.
-    if spinner.streaming:
-        action = strip_cpr_sequences(spinner.active_action_ansi())
-        action_line = f"{action}\n"
-    else:
-        action_line = ""
-    # A blank row separates the plan block from the status line so the checklist
-    # reads as its own element, not flush against the prompt.
-    return ANSI(f"\n{plan_prefix}{prefix}\n{action_line}{auto_line}\n{base}")
+    # Tools already paint a ``⏺`` line into scrollback; do not reserve a second
+    # shimmer row here. A blank reserved slot made the stack look sparse (Droid
+    # is Plan → Thinking → Auto with no empty gap), and filling it mid-turn was
+    # the old composer-height jump. Spinner phase alone carries "Invoking tools…".
+    return ANSI(f"\n{plan_prefix}{prefix}\n{auto_line}\n{base}")
 
 
 _CONFIRM_HINT = "↑↓ Navigate • Enter confirm • Esc cancel"

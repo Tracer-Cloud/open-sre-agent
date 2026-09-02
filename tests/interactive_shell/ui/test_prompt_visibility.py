@@ -111,29 +111,29 @@ def test_confirmation_region_height_is_stable_across_selection_changes() -> None
     assert yes_rows == no_rows
 
 
-def test_streaming_prompt_height_stable_when_action_row_fills_and_clears() -> None:
-    """Tool start/end must not resize the composer region mid-turn.
+def test_streaming_prompt_height_matches_idle_and_ignores_action_shimmer() -> None:
+    """Prompt stack is Plan → status → Auto (Droid); no reserved action gap.
 
-    The shimmer action row is reserved for the whole streaming turn so filling
-    or clearing it cannot push the bordered input box up and down.
+    Tools paint ``⏺`` into scrollback. Keeping a blank/shimmer row in the prompt
+    region made Thinking→Auto look sparse and used to resize the composer when
+    the row filled. Height must match idle, with or without an in-flight action.
     """
     session = Session()
+    idle = SpinnerState()
+    idle_rows = render_prompt_region(session, ReplState(), idle).value.count("\n")
+
     spinner = SpinnerState()
     spinner.start()
     spinner.set_phase(SpinnerState.THINKING_PHASE)
-
-    empty_rows = render_prompt_region(session, ReplState(), spinner).value.count("\n")
+    thinking_rows = render_prompt_region(session, ReplState(), spinner).value.count("\n")
+    assert thinking_rows == idle_rows
 
     spinner.set_active_action("GitHub CLI · gh api repos/x", action_id="t1")
-    filled_rows = render_prompt_region(session, ReplState(), spinner).value.count("\n")
-    assert filled_rows == empty_rows
-
-    spinner.clear_active_action("t1")
-    cleared_rows = render_prompt_region(session, ReplState(), spinner).value.count("\n")
-    assert cleared_rows == empty_rows
-
-    rendered = _plain(render_prompt_region(session, ReplState(), spinner).value)
-    assert "Thinking" in rendered or "…" in rendered
+    filled = render_prompt_region(session, ReplState(), spinner).value
+    assert filled.count("\n") == idle_rows
+    plain = _plain(filled)
+    assert "GitHub CLI" not in plain  # action stays out of the prompt region
+    assert "Thinking" in plain or "…" in plain
 
 
 def test_confirmation_region_shows_stacked_yes_no_choice() -> None:
