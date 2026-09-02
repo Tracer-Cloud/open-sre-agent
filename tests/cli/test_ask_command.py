@@ -13,11 +13,35 @@ from surfaces.cli.ask.service import (
     AskSignal,
     AskStatus,
 )
-from surfaces.cli.commands.ask import ask_command
+from surfaces.cli.commands.ask import _echo_answer, ask_command
 
 
 def _success(response: str = "done") -> AskOutcome:
     return AskOutcome(status=AskStatus.SUCCESS, response=response)
+
+
+def test_ask_answer_stays_plain_when_piped(monkeypatch, capsys) -> None:
+    # Arrange: stdout is not a terminal (piped into a script / another command).
+    monkeypatch.setattr("sys.stdout.isatty", lambda: False)
+
+    # Act
+    _echo_answer("Branch is **main**.")
+
+    # Assert: raw Markdown is preserved so a consuming script can parse it.
+    assert "**main**" in capsys.readouterr().out
+
+
+def test_ask_answer_renders_markdown_on_a_tty(monkeypatch, capsys) -> None:
+    # Arrange: stdout is an interactive terminal.
+    monkeypatch.setattr("sys.stdout.isatty", lambda: True)
+
+    # Act
+    _echo_answer("Branch is **main**.")
+
+    # Assert: the emphasis is rendered, not echoed as literal ``**`` syntax.
+    out = capsys.readouterr().out
+    assert "**main**" not in out
+    assert "main" in out
 
 
 def test_ask_passes_prompt_and_invocation_authority(monkeypatch) -> None:
