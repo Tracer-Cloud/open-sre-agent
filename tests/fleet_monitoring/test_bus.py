@@ -14,14 +14,20 @@ from pathlib import Path
 
 import pytest
 
+from config.constants import OPENSRE_HOME_DIR
+
 _POSIX_FCNTL_AVAILABLE = importlib.util.find_spec("fcntl") is not None
 
 from tools.system.fleet_monitoring.bus import (
     BUS_SCHEMA_VERSION,
+    DEFAULT_BUS_SOCKET_PATH,
     BusMessage,
     BusServer,
     publish,
     subscribe,
+)
+from tools.system.fleet_monitoring.bus import (
+    api as api_module,
 )
 from tools.system.fleet_monitoring.bus import (
     election as election_module,
@@ -912,3 +918,13 @@ class TestSlashCommandFormatter:
         msg = BusMessage(agent="a:1", topic="finding", summary="x")
         out = _format_bus_message(msg)
         assert "—" not in out
+
+
+class TestBusPackageFacade:
+    def test_default_socket_path_points_to_home_dir(self) -> None:
+        assert DEFAULT_BUS_SOCKET_PATH == OPENSRE_HOME_DIR / "agents-bus.sock"
+        assert api_module.DEFAULT_BUS_SOCKET_PATH == OPENSRE_HOME_DIR / "agents-bus.sock"
+
+    def test_facade_reexports_match_submodules(self) -> None:
+        assert publish is api_module.publish
+        assert subscribe is api_module.subscribe
