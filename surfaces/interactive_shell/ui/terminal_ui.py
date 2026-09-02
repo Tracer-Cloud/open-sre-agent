@@ -110,9 +110,14 @@ def render_prompt_region(session: Session, state: ReplState, spinner: SpinnerSta
             )
         )
     # The running action shimmers on its own row between the status line and the
-    # autonomy line; scrollback keeps the settled solid copy.
-    action = strip_cpr_sequences(spinner.active_action_ansi())
-    action_line = f"{action}\n" if action else ""
+    # autonomy line; scrollback keeps the settled solid copy. Reserve that row
+    # for the whole streaming turn — appearing/clearing mid-turn used to grow
+    # and shrink the prompt region, which made the composer box jump.
+    if spinner.streaming:
+        action = strip_cpr_sequences(spinner.active_action_ansi())
+        action_line = f"{action}\n"
+    else:
+        action_line = ""
     # A blank row separates the plan block from the status line so the checklist
     # reads as its own element, not flush against the prompt.
     return ANSI(f"\n{plan_prefix}{prefix}\n{action_line}{auto_line}\n{base}")

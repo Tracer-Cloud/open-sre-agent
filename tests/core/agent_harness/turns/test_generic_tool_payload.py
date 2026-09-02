@@ -44,7 +44,10 @@ def test_truncated_json_blob_is_hidden_not_dumped_raw() -> None:
     # A capped gh-api response arrives as invalid (cut-off) JSON — it must not
     # slip past the JSON check and dump raw. Detection is by shape, not parse.
     trunc = '{"full_name":"Tracer-Cloud/opensre","followers_url":"https://api.github.com/users/Tr'
-    assert _format_generic_tool_payload(_call("github_cli"), _result({"ok": True, "stdout": trunc})) == ""
+    assert (
+        _format_generic_tool_payload(_call("github_cli"), _result({"ok": True, "stdout": trunc}))
+        == ""
+    )
     assert _format_generic_tool_payload(_call("github_cli"), _result(trunc)) == ""
     # A mid-object fragment (starts on a value, not ``{``) is still a data blob:
     # key-density detection catches it where a first-char check would not.
@@ -52,7 +55,10 @@ def test_truncated_json_blob_is_hidden_not_dumped_raw() -> None:
         'https://github.com/x","followers_url":"https://api.github.com/u",'
         '"following_url":"https://api.github.com/f","gists_url":"https://api.github.com/g"'
     )
-    assert _format_generic_tool_payload(_call("github_cli"), _result({"ok": True, "stdout": frag})) == ""
+    assert (
+        _format_generic_tool_payload(_call("github_cli"), _result({"ok": True, "stdout": frag}))
+        == ""
+    )
 
 
 def test_a_real_summary_is_still_shown() -> None:

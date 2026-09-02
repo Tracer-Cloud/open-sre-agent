@@ -5,7 +5,7 @@ from __future__ import annotations
 from collections.abc import Callable
 
 from prompt_toolkit import PromptSession
-from prompt_toolkit.filters import Condition
+from prompt_toolkit.filters import Condition, to_filter
 from prompt_toolkit.formatted_text import ANSI
 from prompt_toolkit.layout.containers import (
     AnyContainer,
@@ -46,7 +46,15 @@ def _limit_editable_height(main_input: HSplit) -> HSplit:
         default_buffer_slot.content, Window
     ):
         raise RuntimeError("prompt-toolkit input container is missing its editable window")
-    default_buffer_slot.content.height = Dimension(min=1, max=_COMPOSER_MAX_EDIT_ROWS)
+    default_buffer_slot.content.height = Dimension(
+        min=1,
+        preferred=1,
+        max=_COMPOSER_MAX_EDIT_ROWS,
+    )
+    # Grow with wrapped/multiline input only — never eat leftover terminal rows
+    # (that made the bordered box jump as the status region above it changed).
+    # Window stores a Filter, not a raw bool — assign via to_filter.
+    default_buffer_slot.content.dont_extend_height = to_filter(True)
     return HSplit(editable_children)
 
 

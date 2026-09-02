@@ -38,7 +38,6 @@ from core.agent_harness.prompts import (
     build_action_user_message,
 )
 from core.agent_harness.session.integration_resolution import resolve_and_cache_integrations
-from infrastructure.terminal.peek import build_output_peek, format_expand_marker
 from core.agent_harness.session.pending_choice import parse_ask_user_answers
 from core.agent_harness.session.terminal_access import execute_cli_onboard_on_missing_key
 from core.agent_harness.session_goal.goal import strip_session_goal_progress_tags
@@ -66,6 +65,7 @@ from core.tool_framework.tags import SUMMARIZE_OBSERVATION_TAG
 from infrastructure.analytics.react_turn import run_react_agent_with_telemetry
 from infrastructure.observability.trace.prompts import persist_turn_system_prompt
 from infrastructure.observability.trace.spans import component_span
+from infrastructure.terminal.peek import build_output_peek, format_expand_marker
 
 log = logging.getLogger(__name__)
 

@@ -467,3 +467,12 @@ class TestResolvePromptPrefix:
             idle_hint=resolve_idle_hint_ansi(Session()),
         )
         assert _strip_ansi(prefix) == ""
+
+
+def test_composer_frame_preferred_height_does_not_crash() -> None:
+    """dont_extend_height must be a Filter — a raw bool crashes on first redraw."""
+    from surfaces.interactive_shell.ui.input_prompt import build_prompt_session
+
+    prompt = build_prompt_session()
+    dim = prompt.layout.container.preferred_height(80, 40)
+    assert dim.preferred >= 1
