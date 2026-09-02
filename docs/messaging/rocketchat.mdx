@@ -215,7 +215,7 @@ unset ROCKETCHAT_USER_ID ROCKETCHAT_DEFAULT_CHANNEL
 
 The tool resolves credentials internally from the integration store, then the same env/keyring rules as setup (PAT via `resolve_env_credential`; webhook URL via plain env) — the agent never sees them. In token mode an explicit `channel` (or the configured `default_channel`) is targeted via `chat.postMessage`; in webhook-only mode messages go to the webhook's fixed destination, and an explicit `channel` returns a configuration error instead of being silently ignored.
 
-Delivery is an external side effect and requires approval. The result includes a stable `status`, `sent`, `error_type`, `channel`, and `message_length` shape so follow-up tool calls can tell configuration failures from Rocket.Chat delivery failures.
+Delivery is an external side effect but does not require a separate approval. The result includes a stable `status`, `sent`, `error_type`, `channel`, and `message_length` shape so follow-up tool calls can tell configuration failures from Rocket.Chat delivery failures.
 
 ### Watchdog alarms
 
