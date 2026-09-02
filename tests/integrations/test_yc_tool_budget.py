@@ -26,7 +26,7 @@ class TestRegistration:
         ],
     )
     def test_the_tool_is_discoverable(self, name: str) -> None:
-        assert name in get_registered_tool_map("investigation")
+        assert name in get_registered_tool_map()
 
     def test_the_family_stays_inside_the_schema_budget(self) -> None:
         """Thirty-two schemas reach the model per turn, shared with everything else.
@@ -53,7 +53,7 @@ class TestRegistration:
             "get_yc_db_cluster",
             "read_yc_db_logs",
         }
-        registered = get_registered_tool_map("investigation")
+        registered = get_registered_tool_map()
         yc_tools = [name for name in registered if name in family]
 
         assert set(yc_tools) == family

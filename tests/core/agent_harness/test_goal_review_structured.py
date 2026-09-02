@@ -136,8 +136,6 @@ def test_structured_answer_goal_review_recovers_latest_non_qa_user_request() -> 
         ),
         configured_integrations=(),
         configured_integrations_known=True,
-        last_state=None,
-        last_synthetic_observation_path=None,
         reasoning_effort=None,
     )
 
@@ -150,8 +148,6 @@ def test_ordinary_turn_goal_review_uses_current_message() -> None:
         conversation_messages=(("user", "Analyze facebook/react"),),
         configured_integrations=(),
         configured_integrations_known=True,
-        last_state=None,
-        last_synthetic_observation_path=None,
         reasoning_effort=None,
     )
 

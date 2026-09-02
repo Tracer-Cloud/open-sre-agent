@@ -17,7 +17,7 @@ from integrations.postgresql import (
     name="get_postgresql_table_stats",
     description="Retrieve PostgreSQL table statistics including size, row counts, index usage, and maintenance info.",
     source="postgresql",
-    surfaces=(ToolSurface.INVESTIGATION, ToolSurface.CHAT),
+    surfaces=(ToolSurface.CHAT,),
     use_cases=[
         "Identifying large tables or rapid table growth during storage incidents",
         "Analyzing table scan patterns and index usage efficiency",

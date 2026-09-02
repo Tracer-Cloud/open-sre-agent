@@ -127,5 +127,5 @@ class RocketChatSendMessageTool(BaseTool):
 
 rocketchat_send_message = tool(
     RocketChatSendMessageTool(),
-    surfaces=(ToolSurface.INVESTIGATION, ToolSurface.ACTION),
+    surfaces=(ToolSurface.ACTION,),
 )

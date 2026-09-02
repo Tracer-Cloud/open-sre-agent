@@ -19,7 +19,7 @@ from integrations.redis import (
         "connected replicas, and per-replica offset lag."
     ),
     source="redis",
-    surfaces=(ToolSurface.INVESTIGATION, ToolSurface.CHAT),
+    surfaces=(ToolSurface.CHAT,),
     use_cases=[
         "Check replication health when investigating stale reads or a failover event.",
         "Measure replica offset lag and master link status across connected replicas.",

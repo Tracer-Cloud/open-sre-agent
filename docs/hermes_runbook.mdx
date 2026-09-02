@@ -13,8 +13,6 @@ Hermes deployments often contain multiple subsystem families operating together:
 
 When an incident occurs, investigators must first determine **which subsystem family owns the failure** before deeper root-cause analysis can begin.
 
-The Surface Attribution evaluation track exists to validate that behavior.
-
 ---
 
 ## Attribution Workflow
@@ -40,9 +38,7 @@ Examples:
 
 ### Step 2: Compare against historical analogs
 
-Once a surface family is identified, compare the incident against previously validated Hermes RCA scenarios.
-
-The analog registry contains curated mappings across all Hermes RCA evaluation tracks.
+Once a surface family is identified, compare the incident against previously diagnosed Hermes incidents.
 
 Goals:
 
@@ -74,113 +70,11 @@ Diagnostic questions should be:
 
 ---
 
-## Scenario 050: Surface Sprawl / Unknown Adapter
-
-### Goal
-
-Validate attribution behavior when an adapter is not directly recognized.
-
-### Evaluation Criteria
-
-An investigation is expected to:
-
-1. Identify the correct subsystem family
-2. Select the closest historical analog
-3. Produce a useful diagnostic follow-up
-
-### Failure Modes
+## Failure Modes
 
 Common attribution failures include:
 
 * assigning ownership to the wrong subsystem
-* selecting an unrelated analog scenario
+* selecting an unrelated historical analog
 * generating generic follow-up questions
 * requesting evidence unrelated to the suspected surface
-
----
-
-## Adapter Tuple Corpus
-
-The attribution corpus contains deterministic adapter combinations spanning:
-
-* messaging
-* provider
-* runtime
-* orchestration
-* memory
-* control
-
-The corpus is used to validate attribution consistency across a broad set of Hermes deployment configurations.
-
-Current coverage:
-
-* 23 attribution tuples
-
----
-
-## Analog Registry
-
-The analog registry provides curated mappings across Hermes RCA Parts 1–4.
-
-Each analog contains:
-
-* scenario identifier
-* subsystem family
-* expected attribution target
-* diagnostic guidance
-
-The registry is intentionally deterministic and offline-runnable.
-
----
-
-## Benchmarking
-
-### Run offline validation
-
-```bash
-uv run python -m tests.synthetic.hermes_rca.run_suite --offline-only
-```
-
-### Generate benchmark snapshots
-
-```bash
-uv run python -m tests.synthetic.hermes_rca.run_suite --offline-only --write-history
-```
-
-### Generate benchmark reports
-
-```bash
-uv run python -m tests.synthetic.hermes_rca.benchmark_report
-```
-
----
-
-## Meta Evaluation
-
-The surface attribution meta-suite validates attribution behavior across the adapter corpus.
-
-Run:
-
-```bash
-uv run pytest tests/e2e/hermes/meta/test_surface_sprawl.py -q
-```
-
-Current corpus coverage:
-
-* 23 adapter tuples
-
-The expected pass threshold is at least 80% of registered tuples.
-
----
-
-## Design Principles
-
-Surface attribution evaluation is designed to be:
-
-* deterministic
-* provider-independent
-* offline-runnable
-* CI-friendly
-* extensible as new Hermes surfaces are added
-
-The evaluation framework intentionally separates attribution quality from root-cause quality so that ownership classification can be measured independently from deeper RCA reasoning.

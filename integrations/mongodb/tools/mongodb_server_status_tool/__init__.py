@@ -36,7 +36,7 @@ def _map_get_mongodb_server_status(
     name="get_mongodb_server_status",
     description="Retrieve high-level MongoDB server status including connections, memory usage, and operation counters.",
     source="mongodb",
-    surfaces=(ToolSurface.INVESTIGATION, ToolSurface.CHAT),
+    surfaces=(ToolSurface.CHAT,),
     is_available=mongodb_is_available,
     injected_params=("connection_string",),
     extract_params=mongodb_extract_params,

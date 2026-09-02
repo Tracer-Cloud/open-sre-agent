@@ -8,7 +8,7 @@ from typing import Literal
 from tools.interactive_shell.action_names import ToolKind
 
 ActionSource = Literal["deterministic", "llm"]
-TargetSurface = Literal["slash", "terminal", "investigation", "implementation"]
+TargetSurface = Literal["slash", "terminal", "implementation"]
 
 
 def default_target_surface(kind: ToolKind) -> TargetSurface | None:
@@ -21,7 +21,7 @@ def default_target_surface(kind: ToolKind) -> TargetSurface | None:
         return "terminal"
     if kind == "implementation":
         return "implementation"
-    return "investigation"
+    return None
 
 
 @dataclass(frozen=True)

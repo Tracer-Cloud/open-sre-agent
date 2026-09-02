@@ -56,13 +56,6 @@ _OUTSIDE_HOST_LAYER: frozenset[str] = frozenset(
         # Session lifecycle is the harness's; the resolver adds the gateway's
         # chat-id binding on top and must flush through SessionManager.
         "gateway/core/storage/session/resolver.py",
-        # The HTTP investigate path embeds the agent (``AgentSession``) instead
-        # of going through the host layer, so it gets none of the host's
-        # guarantees: agent reuse, approvals hooks, cancel console, capability
-        # policy. Listed so the second path stays visible; remove when
-        # POST /investigate runs through the turn runner.
-        "gateway/web/webapp.py",
-        "gateway/web/worker.py",
     }
 )
 

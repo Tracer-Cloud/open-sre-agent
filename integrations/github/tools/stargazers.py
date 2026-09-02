@@ -141,7 +141,7 @@ def _map_get_github_star_history(
         "stars_in_window": "Total stars gained during the returned window",
         "complete": "Whether the requested window was fully scanned before the page cap",
     },
-    surfaces=(ToolSurface.INVESTIGATION, ToolSurface.CHAT),
+    surfaces=(ToolSurface.CHAT,),
     side_effect_level=SideEffectLevel.READ_ONLY,
     input_schema={
         "type": "object",

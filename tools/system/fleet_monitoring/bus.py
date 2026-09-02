@@ -65,7 +65,7 @@ class BusMessage:
     """A single finding published on the agent bus.
 
     Field shape mirrors ``AgentState.evidence`` entries so a message can be
-    folded into investigation state without renaming. ``agent`` follows the
+    folded into agent state without renaming. ``agent`` follows the
     ``"<name>:<pid>"`` convention used by ``tools.system.fleet_monitoring.conflicts.WriteEvent``.
 
     ``data`` is wrapped in ``types.MappingProxyType`` at construction so the

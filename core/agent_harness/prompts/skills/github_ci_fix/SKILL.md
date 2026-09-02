@@ -29,7 +29,6 @@ DO NOT USE THIS SKILL FOR:
 - Ordinary PR reads, comments, closes, merges, labels, or issue work. Use
   `github_cli`.
 - Security alert remediation. Use `fix_github_security_alert`.
-- Live incident RCA. Use `investigation_start`.
 
 HARD RULES:
 - For a GitHub PR URL, call:

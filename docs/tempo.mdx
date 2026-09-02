@@ -1,6 +1,6 @@
 ---
 title: "Grafana Tempo"
-description: "Connect Grafana Tempo so OpenSRE can query distributed traces during investigations"
+description: "Connect Grafana Tempo so OpenSRE can query distributed traces during incidents"
 ---
 
 ## Overview
@@ -85,7 +85,7 @@ When auth is required, supply one of:
 Create tokens or accounts in your Tempo / gateway identity provider according to your
 deployment. Leave auth fields blank in setup if Tempo runs without authentication.
 
-## Investigation tools
+## Tools
 
 OpenSRE exposes a single `query_tempo` tool with an `action` parameter:
 

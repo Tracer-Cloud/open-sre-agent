@@ -139,7 +139,7 @@ def render_markdown_block(console: Console, text: str) -> None:
 def render_note_block(console: Console, text: str) -> None:
     """Render intermediate agent narration as a dim, indented note.
 
-    Distinct from the bright ``∴`` reply and the recessed grey ``[n] ❯`` user
+    Distinct from the bright ``Ω`` reply and the recessed grey ``[n] ❯`` user
     row: a note carries no glyph, only a dim left indent, so the three turn
     roles — your ask, opensre's working notes, and its final reply — read apart.
     Bold spans (the action words) stay bold within the dim base.
@@ -154,10 +154,10 @@ def render_note_block(console: Console, text: str) -> None:
 
 
 def render_response_header(console: Console, label: str) -> None:
-    """Print the ``∴`` triangle row marker that opens every assistant response.
+    """Print the theme-colored ``Ω`` row marker that opens an assistant response.
 
-    A single triangle is opensre's uniquely identifiable agent marker. Shared
+    Omega is opensre's uniquely identifiable agent marker. Shared
     with ``action_turn.run_action_tool_turn`` so the planned-actions path and the
     streaming response path use the exact same prefix.
     """
-    console.print(f"[{ui_theme.BOLD_BRAND}]∴[/] [{ui_theme.DIM}]{label}[/]")
+    console.print(f"[{ui_theme.BOLD_BRAND}]Ω[/] [{ui_theme.DIM}]{label}[/]")

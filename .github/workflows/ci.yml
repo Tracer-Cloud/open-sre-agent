@@ -263,7 +263,6 @@ jobs:
             # restructure (#3299) added.
             llm_provider: openai
             extra_pytest_args: >-
-              --ignore=tests/core/agent/test_turn_scenarios.py
               --ignore=tests/cli/test_smoke.py
             split_args: >-
               --ci-splits=6 --ci-group=1
@@ -272,19 +271,15 @@ jobs:
               tests/cli
               tests/interactive_shell
               tests/surfaces
-              tests/agent
               tests/core/agent
               tests/fleet_monitoring
               tests/analytics
-              tests/tools/investigation
-              tests/delivery
               tests/sandbox
               tests/hermes
           - os: ubuntu-latest
             shard: cli-runtime-2
             llm_provider: openai
             extra_pytest_args: >-
-              --ignore=tests/core/agent/test_turn_scenarios.py
               --ignore=tests/cli/test_smoke.py
             split_args: >-
               --ci-splits=6 --ci-group=2
@@ -293,19 +288,15 @@ jobs:
               tests/cli
               tests/interactive_shell
               tests/surfaces
-              tests/agent
               tests/core/agent
               tests/fleet_monitoring
               tests/analytics
-              tests/tools/investigation
-              tests/delivery
               tests/sandbox
               tests/hermes
           - os: ubuntu-latest
             shard: cli-runtime-3
             llm_provider: openai
             extra_pytest_args: >-
-              --ignore=tests/core/agent/test_turn_scenarios.py
               --ignore=tests/cli/test_smoke.py
             split_args: >-
               --ci-splits=6 --ci-group=3
@@ -314,19 +305,15 @@ jobs:
               tests/cli
               tests/interactive_shell
               tests/surfaces
-              tests/agent
               tests/core/agent
               tests/fleet_monitoring
               tests/analytics
-              tests/tools/investigation
-              tests/delivery
               tests/sandbox
               tests/hermes
           - os: ubuntu-latest
             shard: cli-runtime-4
             llm_provider: openai
             extra_pytest_args: >-
-              --ignore=tests/core/agent/test_turn_scenarios.py
               --ignore=tests/cli/test_smoke.py
             split_args: >-
               --ci-splits=6 --ci-group=4
@@ -335,19 +322,15 @@ jobs:
               tests/cli
               tests/interactive_shell
               tests/surfaces
-              tests/agent
               tests/core/agent
               tests/fleet_monitoring
               tests/analytics
-              tests/tools/investigation
-              tests/delivery
               tests/sandbox
               tests/hermes
           - os: ubuntu-latest
             shard: cli-runtime-5
             llm_provider: openai
             extra_pytest_args: >-
-              --ignore=tests/core/agent/test_turn_scenarios.py
               --ignore=tests/cli/test_smoke.py
             split_args: >-
               --ci-splits=6 --ci-group=5
@@ -356,19 +339,15 @@ jobs:
               tests/cli
               tests/interactive_shell
               tests/surfaces
-              tests/agent
               tests/core/agent
               tests/fleet_monitoring
               tests/analytics
-              tests/tools/investigation
-              tests/delivery
               tests/sandbox
               tests/hermes
           - os: ubuntu-latest
             shard: cli-runtime-6
             llm_provider: openai
             extra_pytest_args: >-
-              --ignore=tests/core/agent/test_turn_scenarios.py
               --ignore=tests/cli/test_smoke.py
             split_args: >-
               --ci-splits=6 --ci-group=6
@@ -377,12 +356,9 @@ jobs:
               tests/cli
               tests/interactive_shell
               tests/surfaces
-              tests/agent
               tests/core/agent
               tests/fleet_monitoring
               tests/analytics
-              tests/tools/investigation
-              tests/delivery
               tests/sandbox
               tests/hermes
           - os: ubuntu-latest
@@ -391,7 +367,6 @@ jobs:
             # credentialed provider already used by this gate.
             llm_provider: openai
             pytest_paths: >-
-              tests/core/agent/test_turn_scenarios.py
               tests/tools/selection
           # This subprocess-heavy file dominated a whole duration-balanced
           # shard. Run complementary selections independently so its tests can
@@ -403,7 +378,6 @@ jobs:
             extra_pytest_args: >-
               -k 'test_opensre_landing_page_smoke or
               test_opensre_help_smoke or
-              test_investigate_print_template_new_relic_smoke or
               test_integrations_list_and_show_smoke or
               test_tests_inventory_commands_smoke or
               (test_onboard_interactive_smoke and not
@@ -415,7 +389,6 @@ jobs:
             extra_pytest_args: >-
               -k 'not (test_opensre_landing_page_smoke or
               test_opensre_help_smoke or
-              test_investigate_print_template_new_relic_smoke or
               test_integrations_list_and_show_smoke or
               test_tests_inventory_commands_smoke or
               (test_onboard_interactive_smoke and not
@@ -429,7 +402,6 @@ jobs:
               tests/integrations
               tests/bootstrap
               tests/benchmarks
-              tests/chaos_engineering
               tests/shared
               tests/config
               tests/github_ci
@@ -446,7 +418,6 @@ jobs:
               tests/integrations
               tests/bootstrap
               tests/benchmarks
-              tests/chaos_engineering
               tests/shared
               tests/config
               tests/github_ci
@@ -463,7 +434,6 @@ jobs:
               tests/integrations
               tests/bootstrap
               tests/benchmarks
-              tests/chaos_engineering
               tests/shared
               tests/config
               tests/github_ci
@@ -480,7 +450,6 @@ jobs:
               tests/integrations
               tests/bootstrap
               tests/benchmarks
-              tests/chaos_engineering
               tests/shared
               tests/config
               tests/github_ci
@@ -497,7 +466,6 @@ jobs:
               tests/integrations
               tests/bootstrap
               tests/benchmarks
-              tests/chaos_engineering
               tests/shared
               tests/config
               tests/github_ci
@@ -514,7 +482,6 @@ jobs:
               tests/integrations
               tests/bootstrap
               tests/benchmarks
-              tests/chaos_engineering
               tests/shared
               tests/config
               tests/github_ci
@@ -528,20 +495,8 @@ jobs:
             pytest_paths: >-
               tests/e2e
             extra_pytest_args: >-
-              --ignore=tests/e2e/kubernetes
-              --ignore=tests/e2e/openclaw
-              --ignore=tests/e2e/upstream_lambda
-              --ignore=tests/e2e/upstream_prefect_ecs_fargate
-              --ignore=tests/e2e/upstream_apache_flink_ecs
               --ignore=tests/e2e/install
               --ignore=tests/e2e/quickstart
-          - os: ubuntu-latest
-            shard: e2e-provider-and-openclaw
-            pytest_paths: >-
-              tests/e2e/openclaw
-              tests/e2e/upstream_lambda
-              tests/e2e/upstream_apache_flink_ecs
-              tests/e2e/kubernetes
 
     runs-on: ${{ matrix.os }}
     timeout-minutes: 30
@@ -596,12 +551,13 @@ jobs:
           # (see interactive-shell-live.yml). Index a JSON string array so the
           # value is always a marker string — never a bare boolean from
           # ``a && 'x' || 'y'`` (boolean false → ``-m false`` → xdist
-          # ``N workers [0 items]``, which can still exit 0).
-          PYTEST_MARKER_EXPR: ${{ fromJSON('["not synthetic", "not (synthetic or live_llm)"]')[github.event_name == 'pull_request' && github.event.pull_request.head.repo.fork == true] }}
+          # ``N workers [0 items]``, which can still exit 0). An empty
+          # expression makes pytest skip mark filtering entirely (run all).
+          PYTEST_MARKER_EXPR: ${{ fromJSON('["", "not live_llm"]')[github.event_name == 'pull_request' && github.event.pull_request.head.repo.fork == true] }}
         run: |
           echo "PYTEST_MARKER_EXPR=${PYTEST_MARKER_EXPR}"
           case "${PYTEST_MARKER_EXPR}" in
-            "not synthetic"|"not (synthetic or live_llm)") ;;
+            ""|"not live_llm") ;;
             *)
               echo "Refusing unexpected PYTEST_MARKER_EXPR: '${PYTEST_MARKER_EXPR}'" >&2
               exit 1
@@ -619,7 +575,7 @@ jobs:
             '--cov=config --cov=core --cov=infrastructure.deployment.ec2
             --cov=integrations --cov=infrastructure --cov=surfaces --cov=tools
             --cov=gateway --cov-report=' || '' }}
-          PYTEST_MARKER_EXPR: ${{ fromJSON('["not synthetic", "not (synthetic or live_llm)"]')[github.event_name == 'pull_request' && github.event.pull_request.head.repo.fork == true] }}
+          PYTEST_MARKER_EXPR: ${{ fromJSON('["", "not live_llm"]')[github.event_name == 'pull_request' && github.event.pull_request.head.repo.fork == true] }}
         # Keep ``run: >`` (folded) so ``matrix.pytest_paths`` stays one argv list.
         # A ``run: |`` + ``\`` rewrite can drop/split those paths and yield
         # ``N workers [0 items]`` even when the marker is correct.
@@ -627,8 +583,6 @@ jobs:
           uv run python -m pytest -p tests.ci_sharding -n auto -v
           ${{ matrix.pytest_paths }}
           ${PYTEST_COVERAGE_ARGS}
-          --ignore=tests/e2e/kubernetes_local_alert_simulation
-          --ignore=tests/synthetic
           ${{ matrix.extra_pytest_args }}
           ${{ matrix.split_args }}
           -m "${PYTEST_MARKER_EXPR}"
@@ -699,151 +653,6 @@ jobs:
             htmlcov/
             .coverage
           retention-days: 7
-
-  test-kubernetes:
-    runs-on: ubuntu-latest
-    continue-on-error: true
-    timeout-minutes: 15
-
-    if: >-
-      github.repository == 'Tracer-Cloud/opensre' &&
-      (github.event_name == 'push' ||
-      (
-        github.event_name == 'pull_request' &&
-        (
-          contains(github.event.pull_request.title, 'k8s') ||
-          contains(github.event.pull_request.title, 'kubernetes')
-        )
-      ))
-
-    steps:
-      - uses: actions/checkout@v5
-
-      - name: Install uv
-        uses: astral-sh/setup-uv@v10.0.1
-        with:
-          version: "latest-known"  # avoid live ndjson "latest" fetch flakes
-          enable-cache: true
-          cache-dependency-glob: |
-            pyproject.toml
-            uv.lock
-
-      - name: Set up Python
-        uses: actions/setup-python@v6
-        with:
-          python-version: "3.13"
-
-      - name: Install dependencies
-        run: uv sync --frozen --extra dev
-
-      - name: Run Kubernetes tests
-        env:
-          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          AWS_DEFAULT_REGION: us-east-1
-        run: uv run python -m tests.e2e.kubernetes.test_local
-
-  should-run-thorough:
-    runs-on: ubuntu-latest
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main' && github.repository == 'Tracer-Cloud/opensre'
-    outputs:
-      thorough: ${{ steps.filter.outputs.thorough }}
-    steps:
-      - uses: actions/checkout@v5
-      # Same pin as Detect relevant changes — see comment there.
-      - uses: dorny/paths-filter@7b450fff21473bca461d4b92ce414b9d0420d706 # v4.0.2
-        id: filter
-        with:
-          filters: |
-            thorough:
-              - ".github/workflows/ci.yml"
-              - "pyproject.toml"
-              - "uv.lock"
-              - "integrations/**"
-              - "tools/investigation/**"
-              - "tools/**"
-              - "tests/e2e/cloudwatch_demo/**"
-              - "tests/e2e/upstream_lambda/**"
-              - "tests/e2e/upstream_apache_flink_ecs/**"
-
-  test-thorough:
-    runs-on: ubuntu-latest
-    needs: [test, should-run-thorough]
-    if: >-
-      github.event_name == 'push' &&
-      github.ref == 'refs/heads/main' &&
-      github.repository == 'Tracer-Cloud/opensre' &&
-      needs.should-run-thorough.outputs.thorough == 'true'
-    timeout-minutes: 30
-
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - name: cloudwatch-demo
-            command: python3 -m tests.e2e.cloudwatch_demo.test_aws
-          - name: upstream-lambda
-            command: python3 -m tests.e2e.upstream_lambda.test_agent_e2e
-          - name: flink-ecs
-            command: python3 -m tests.e2e.upstream_apache_flink_ecs.test_agent_e2e
-
-    name: test-thorough (${{ matrix.name }})
-
-    env:
-      # Thorough e2e suites make live LLM calls; run them on openai because the
-      # default anthropic account is credit-exhausted. Requires a valid, funded
-      # OPENAI_API_KEY secret.
-      LLM_PROVIDER: openai
-      OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
-      ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
-      JWT_TOKEN: ${{ secrets.JWT_TOKEN }}
-      TRACER_API_URL: ${{ secrets.TRACER_API_URL }}
-      TRACER_INGEST_TOKEN: ${{ secrets.TRACER_INGEST_TOKEN }}
-      AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
-      AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-      AWS_REGION: us-east-1
-      AWS_DEFAULT_REGION: us-east-1
-      GRAFANA_READ_TOKEN: ${{ secrets.GRAFANA_READ_TOKEN }}
-      GCLOUD_HOSTED_METRICS_ID: ${{ secrets.GCLOUD_HOSTED_METRICS_ID }}
-      GCLOUD_HOSTED_METRICS_URL: ${{ secrets.GCLOUD_HOSTED_METRICS_URL }}
-      GCLOUD_HOSTED_LOGS_ID: ${{ secrets.GCLOUD_HOSTED_LOGS_ID }}
-      GCLOUD_HOSTED_LOGS_URL: ${{ secrets.GCLOUD_HOSTED_LOGS_URL }}
-      GCLOUD_RW_API_KEY: ${{ secrets.GCLOUD_RW_API_KEY }}
-      CLOUDWATCH_VERIFY_LOGS: ${{ matrix.name == 'cloudwatch-demo' && '0' || '1' }}
-
-    steps:
-      - uses: actions/checkout@v5
-
-      - name: Install uv
-        uses: astral-sh/setup-uv@v10.0.1
-        with:
-          version: "latest-known"  # avoid live ndjson "latest" fetch flakes
-          enable-cache: true
-          cache-dependency-glob: |
-            pyproject.toml
-            uv.lock
-
-      - name: Set up Python
-        uses: actions/setup-python@v6
-        with:
-          python-version: "3.13"
-
-      - name: Install dependencies
-        run: uv sync --frozen --extra dev
-
-      - name: Install tracer CLI
-        run: |
-          curl -sSL https://install.tracer.cloud | sh -s user_36fbN6K6FwEgJFHsQv1pUByo8K6
-
-      - name: Initialize tracer (optional)
-        run: |
-          sudo tracer init --token ${{ secrets.JWT_TOKEN }}
-        continue-on-error: true
-        timeout-minutes: 2
-
-      - name: Run test
-        run: uv run ${{ matrix.command }}
-        timeout-minutes: 30
 
   session-store-locked:
     name: session-store-locked

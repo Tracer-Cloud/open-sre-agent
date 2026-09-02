@@ -5,9 +5,9 @@ description: "Connect PostHog REST credentials so OpenSRE can verify access to y
 
 ## Overview
 
-OpenSRE stores **your** PostHog project credentials for REST API access (project metadata and correlation during investigations). Configure with `opensre integrations setup posthog` or `POSTHOG_*` environment variables.
+OpenSRE stores **your** PostHog project credentials for REST API access (project metadata and correlation). Configure with `opensre integrations setup posthog` or `POSTHOG_*` environment variables.
 
-This REST integration does **not** register investigation tools. For agent tools during investigations (analytics, feature flags, HogQL), use [PostHog (MCP)](/posthog-mcp).
+This REST integration does **not** register agent tools. For agent tools (analytics, feature flags, HogQL), use [PostHog (MCP)](/posthog-mcp).
 
 | What you want | Use | Setup |
 | --- | --- | --- |
@@ -57,9 +57,9 @@ POSTHOG_TIMEOUT_SECONDS=15.0                        # optional
 
 Get the **project ID** from PostHog project settings. Create a **personal API key** (`phx_...`) with read access — see [PostHog personal API keys](https://posthog.com/docs/api/personal-api-keys).
 
-## Investigation tools
+## Tools
 
-This REST integration does **not** register investigation tools. For agent tools during investigations (analytics, feature flags, HogQL), use [PostHog (MCP)](/posthog-mcp).
+This REST integration does **not** register agent tools. For agent tools (analytics, feature flags, HogQL), use [PostHog (MCP)](/posthog-mcp).
 
 ## Verify
 

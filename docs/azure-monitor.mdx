@@ -1,11 +1,11 @@
 ---
 title: "Azure Monitor"
-description: "Connect Azure Monitor Log Analytics so OpenSRE can pull KQL log evidence during investigations"
+description: "Connect Azure Monitor Log Analytics so OpenSRE can pull KQL log evidence"
 ---
 
 ## Overview
 
-OpenSRE queries Azure Monitor Log Analytics through the public Query REST API during alert investigations. Each query is bounded by a `take` clause so result sets stay within a safe row limit.
+OpenSRE queries Azure Monitor Log Analytics through the public Query REST API. Each query is bounded by a `take` clause so result sets stay within a safe row limit.
 
 ## Prerequisites
 
@@ -103,7 +103,7 @@ curl -s -X POST \
 
 Set the resulting token as `AZURE_LOG_ANALYTICS_TOKEN`. Tokens expire (usually after 60 minutes) — see the **Token rotation** note in [Security](#security).
 
-## Investigation tools
+## Tools
 
 OpenSRE exposes one tool against an Azure Monitor workspace:
 

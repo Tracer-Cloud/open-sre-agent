@@ -270,7 +270,7 @@ shown. The reader seeks the file to EOF on attach.
 A single **Ctrl+C** returns to the REPL prompt. The session is closed,
 the reader thread joins, and the file descriptor is released.
 This is deliberately different from the LLM-streaming surface
-(`/fleet`, `/investigate` and friends), where a Ctrl+C double-press
+(`/fleet` and friends), where a Ctrl+C double-press
 is required so a stray keypress does not abort an in-flight response.
 
 ### Trace limitations
@@ -345,9 +345,8 @@ global FIFO ordering.
 
 ### Message schema
 
-The wire payload mirrors the shape of `evidence` records in
-`core/state/models.py` so a finding can later be lifted into an
-investigation without renaming fields.
+The wire payload mirrors the shape of the agent's evidence records so a
+finding can later be handed to the agent without renaming fields.
 
 | Field | Type | Required | Notes |
 | --- | --- | --- | --- |
@@ -423,7 +422,7 @@ EOF
   no authentication beyond filesystem permissions: any process running as your
   user can publish arbitrary findings. This is intentional — the bus is
   designed for cooperative agents, not adversarial ones. Downstream consumers
-  (agents, the REPL, investigation state) **must not act on a bus finding
+  (agents, the REPL, session state) **must not act on a bus finding
   without independent confirmation**; treat it as a hint or lead, not a
   verified fact. A compromised or misbehaving agent on the same user account
   can inject any payload it likes.

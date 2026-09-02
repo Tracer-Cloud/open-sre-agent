@@ -61,8 +61,6 @@ def _turn_snapshot(**overrides: Any) -> TurnSnapshot:
         "conversation_messages": (),
         "configured_integrations": (),
         "configured_integrations_known": True,
-        "last_state": None,
-        "last_synthetic_observation_path": None,
         "reasoning_effort": None,
     }
     values.update(overrides)
@@ -148,8 +146,6 @@ class _Session:
         ]
         self.configured_integrations = ("github",)
         self.configured_integrations_known = True
-        self.last_state = {"root_cause": "db saturation"}
-        self.last_synthetic_observation_path = "/tmp/observation.json"
         self.reasoning_effort = None
         self.agent = _AgentState(tool)
 
@@ -159,8 +155,6 @@ def test_turn_snapshot_from_session_reads_last_command_observation_from_session(
         cli_agent_messages: list[tuple[str, str]] = []
         configured_integrations = ()
         configured_integrations_known = True
-        last_state = None
-        last_synthetic_observation_path = None
         reasoning_effort = None
         last_command_observation = "tool output from shell"
 
@@ -182,8 +176,6 @@ def test_turn_snapshot_from_session_snapshots_shell_and_runtime_request_fields()
     assert "0" in ctx.conversation_messages[0][1]
     assert ctx.conversation_messages[-1] == ("user", str(MAX_CONVERSATION_MESSAGES + 1))
     assert ctx.configured_integrations == ("github",)
-    assert ctx.last_state == {"root_cause": "db saturation"}
-    assert ctx.last_synthetic_observation_path == "/tmp/observation.json"
     assert ctx.render_system_prompt() == "selected system"
     assert ctx.available_tools == (tool,)
     assert ctx.active_tools == (tool,)

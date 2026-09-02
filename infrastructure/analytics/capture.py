@@ -9,16 +9,9 @@ from infrastructure.analytics.event_properties import (
     _bucket_duration_ms,
     _bucket_percentage,
     _integration_lifecycle_properties,
-    _investigation_completed_properties,
-    _investigation_failed_properties,
-    _investigation_outcome_properties,
     _onboard_completed_properties,
 )
 from infrastructure.analytics.events import Event
-from infrastructure.analytics.investigation_tracker_types import (
-    InvestigationTracker,
-    _with_investigation_loop_metrics,
-)
 from infrastructure.analytics.provider import Properties, get_analytics
 from infrastructure.observability.errors.sentry import capture_exception
 
@@ -73,28 +66,6 @@ def _capture(event: Event, properties: Properties | None = None) -> None:
         get_analytics().capture(event, properties)
     except Exception as exc:
         capture_exception(exc)
-
-
-def capture_investigation_lifecycle_event(
-    event: Event,
-    properties: Properties,
-    *,
-    state: Mapping[str, object] | None = None,
-    tracker: InvestigationTracker | None = None,
-    loop_count: int | None = None,
-    iteration_cap: int | None = None,
-) -> None:
-    """Capture an investigation lifecycle event with canonical loop metrics."""
-    _capture(
-        event,
-        _with_investigation_loop_metrics(
-            properties,
-            loop_count=loop_count,
-            iteration_cap=iteration_cap,
-            state=state,
-            tracker=tracker,
-        ),
-    )
 
 
 def capture_cli_invoked(properties: Properties | None = None) -> None:
@@ -172,129 +143,6 @@ def capture_onboard_failed() -> None:
     _capture(Event.ONBOARD_FAILED)
 
 
-def capture_diagnosis_category_mismatch(
-    *,
-    root_cause_category: str,
-    mismatch_reason: str | None = None,
-) -> None:
-    properties: Properties = {
-        "category_text_mismatch": True,
-        "root_cause_category": root_cause_category,
-    }
-    if mismatch_reason:
-        properties["mismatch_reason"] = mismatch_reason
-    _capture(Event.DIAGNOSIS_CATEGORY_MISMATCH, properties)
-
-
-def capture_investigation_completed(*, tracker: InvestigationTracker | None = None) -> None:
-    if tracker is None:
-        _capture(Event.INVESTIGATION_COMPLETED)
-        return
-    if tracker.completed:
-        return
-    if tracker.failed or not tracker.enabled:
-        return
-    _capture(
-        Event.INVESTIGATION_COMPLETED,
-        _investigation_completed_properties(
-            shared_properties=tracker.shared_properties,
-            tracker=tracker,
-        ),
-    )
-    tracker.completed = True
-
-
-def capture_investigation_failed(
-    *,
-    tracker: InvestigationTracker | None = None,
-    failure_type: str | None = None,
-    failure_message: str | None = None,
-    failure_detail: str | None = None,
-    failure_category: str | None = None,
-    integration_involved: str | None = None,
-    integration_failure_message: str | None = None,
-    investigation_target: str | None = None,
-    shared_properties: Properties | None = None,
-    state: Mapping[str, object] | None = None,
-) -> None:
-    props = _investigation_failed_properties(
-        shared_properties=shared_properties or (tracker.shared_properties if tracker else {}),
-        failure_type=failure_type,
-        failure_message=failure_message,
-        failure_detail=failure_detail,
-        failure_category=failure_category,
-        integration_involved=integration_involved,
-        integration_failure_message=integration_failure_message,
-        investigation_target=investigation_target,
-        state=state,
-        tracker=tracker,
-    )
-    if tracker is None:
-        _capture(Event.INVESTIGATION_FAILED, props)
-        return
-    if tracker.failed or not tracker.enabled:
-        tracker.failed = True
-        return
-    _capture(Event.INVESTIGATION_FAILED, props)
-    tracker.failed = True
-
-
-def capture_investigation_cancelled(
-    *,
-    investigation_id: str,
-    investigation_target: str = "",
-    tracker: InvestigationTracker | None = None,
-    state: Mapping[str, object] | None = None,
-) -> None:
-    shared = tracker.shared_properties if tracker is not None and tracker.enabled else {}
-    if investigation_id and not shared.get("investigation_id"):
-        shared = {**shared, "investigation_id": investigation_id}
-    properties: Properties = {
-        **shared,
-        "failure_category": "user_cancelled",
-    }
-    if investigation_target:
-        properties["investigation_target"] = investigation_target
-    capture_investigation_lifecycle_event(
-        Event.INVESTIGATION_CANCELLED,
-        properties,
-        state=state,
-        tracker=tracker,
-    )
-
-
-def capture_investigation_outcome(
-    *,
-    investigation_id: str,
-    status: str,
-    investigation_target: str,
-    root_cause_excerpt: str = "",
-    error_excerpt: str = "",
-    failure_category: str | None = None,
-    integration_involved: str | None = None,
-    integration_failure_message: str | None = None,
-    failure_detail: str | None = None,
-    state: Mapping[str, object] | None = None,
-) -> None:
-    if not investigation_id:
-        return
-    _capture(
-        Event.INVESTIGATION_OUTCOME,
-        _investigation_outcome_properties(
-            investigation_id=investigation_id,
-            status=status,
-            investigation_target=investigation_target,
-            root_cause_excerpt=root_cause_excerpt,
-            error_excerpt=error_excerpt,
-            failure_category=failure_category,
-            integration_involved=integration_involved,
-            integration_failure_message=integration_failure_message,
-            failure_detail=failure_detail,
-            state=state,
-        ),
-    )
-
-
 def capture_integration_setup_started(service: str) -> None:
     _capture(Event.INTEGRATION_SETUP_STARTED, _integration_lifecycle_properties(service))
 
@@ -328,55 +176,6 @@ def capture_loop_suggestion_selected(*, option: str) -> None:
 def capture_loop_suggestion_skipped() -> None:
     """User dismissed the suggested-loops picker (Escape) without choosing."""
     _capture(Event.LOOP_SUGGESTION_SKIPPED)
-
-
-def capture_tests_picker_opened() -> None:
-    _capture(Event.TESTS_PICKER_OPENED)
-
-
-def capture_test_synthetic_started(scenario: str, *, mock_grafana: bool) -> None:
-    _capture(
-        Event.TEST_SYNTHETIC_STARTED,
-        {"scenario": scenario, "mock_grafana": mock_grafana},
-    )
-
-
-def capture_test_synthetic_completed(scenario: str, *, exit_code: int) -> None:
-    _capture(Event.TEST_SYNTHETIC_COMPLETED, {"scenario": scenario, "exit_code": exit_code})
-
-
-def capture_test_synthetic_failed(scenario: str, *, reason: str) -> None:
-    _capture(Event.TEST_SYNTHETIC_FAILED, {"scenario": scenario, "reason": reason})
-
-
-def capture_tests_listed(category: str, *, search: bool) -> None:
-    _capture(Event.TESTS_LISTED, {"category": category, "search": search})
-
-
-def capture_test_run_started(test_id: str, *, dry_run: bool) -> None:
-    _capture(Event.TEST_RUN_STARTED, {"test_id": test_id, "dry_run": dry_run})
-
-
-def capture_test_run_completed(test_id: str, *, dry_run: bool, exit_code: int) -> None:
-    _capture(
-        Event.TEST_RUN_COMPLETED,
-        {
-            "test_id": test_id,
-            "dry_run": dry_run,
-            "exit_code": exit_code,
-        },
-    )
-
-
-def capture_test_run_failed(test_id: str, *, dry_run: bool, reason: str) -> None:
-    _capture(
-        Event.TEST_RUN_FAILED,
-        {
-            "test_id": test_id,
-            "dry_run": dry_run,
-            "reason": reason,
-        },
-    )
 
 
 def capture_terminal_actions_planned(*, planned_count: int, has_unhandled_clause: bool) -> None:
@@ -420,8 +219,6 @@ def capture_react_turn_completed(
     cli_turn_kind: str,
     llm_provider: str,
     llm_model: str,
-    investigation_id: str | None = None,
-    investigation_loop_count: int | None = None,
     prompt_turn_id: str | None = None,
 ) -> None:
     properties: Properties = {
@@ -437,10 +234,6 @@ def capture_react_turn_completed(
         "llm_provider": llm_provider,
         "llm_model": llm_model,
     }
-    if investigation_id:
-        properties["investigation_id"] = investigation_id
-    if investigation_loop_count is not None:
-        properties["investigation_loop_count"] = investigation_loop_count
     if prompt_turn_id:
         properties["prompt_turn_id"] = prompt_turn_id
     _capture(Event.REACT_TURN_COMPLETED, properties)

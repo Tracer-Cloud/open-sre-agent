@@ -44,7 +44,7 @@ def _map_get_kafka_topic_health(
     name="get_kafka_topic_health",
     description="Retrieve topic partition health from a Kafka cluster, including replica status, ISR counts, and under-replicated partitions.",
     source="kafka",
-    surfaces=(ToolSurface.INVESTIGATION, ToolSurface.CHAT),
+    surfaces=(ToolSurface.CHAT,),
     use_cases=[
         "Checking partition health during a consumer lag incident",
         "Identifying under-replicated partitions after a broker failure",

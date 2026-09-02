@@ -6,7 +6,6 @@ from typing import Any
 
 from core.domain.types.evidence import CATALOG_ENTRIES_KEY
 from integrations.victoria_logs.tools._evidence import map_victoria_logs_query
-from tools.investigation.stages.gather_evidence.tools import merge_tool_evidence
 from tools.registry import get_registered_tool
 
 
@@ -41,22 +40,3 @@ def test_registered_tool_carries_evidence_mapper() -> None:
 
     assert tool is not None
     assert tool.evidence_mapper is not None
-
-
-def test_merge_tool_evidence_uses_victoria_logs_mapper() -> None:
-    evidence: dict[str, Any] = {}
-    output = {"rows": [{"_msg": "boom"}], "query": "level:error"}
-
-    merge_tool_evidence(
-        evidence,
-        "victoria_logs_query",
-        output,
-        {"query": "level:error"},
-    )
-
-    assert evidence["victoria_logs_query"] == output
-    entries = evidence[CATALOG_ENTRIES_KEY]
-    assert len(entries) == 1
-    assert entries[0]["source"] == "victoria_logs_query"
-    assert entries[0]["summary"] == "1 log entry"
-    assert entries[0]["snippet"] == "level:error"

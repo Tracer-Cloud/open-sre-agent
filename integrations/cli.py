@@ -684,8 +684,8 @@ def _setup_openclaw() -> None:
     from integrations.openclaw.setup import OPENCLAW_SETUP
 
     _run_spec_setup(OPENCLAW_SETUP)
-    print("    - uv run opensre investigate -i tests/fixtures/openclaw_test_alert.json")
-    print("    - for accurate RCA, also configure Grafana/Datadog and GitHub")
+    print('    - uv run opensre ask "check the OpenClaw gateway status"')
+    print("    - for richer answers, also configure Grafana/Datadog and GitHub")
 
 
 def _setup_posthog_mcp() -> None:

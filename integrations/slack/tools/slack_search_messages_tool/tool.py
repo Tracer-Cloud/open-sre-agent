@@ -129,5 +129,5 @@ class SlackSearchMessagesTool(BaseTool):
 
 slack_search_messages = tool(
     SlackSearchMessagesTool(),
-    surfaces=(ToolSurface.INVESTIGATION, ToolSurface.CHAT, ToolSurface.ACTION),
+    surfaces=(ToolSurface.CHAT, ToolSurface.ACTION),
 )

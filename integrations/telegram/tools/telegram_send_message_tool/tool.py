@@ -125,5 +125,5 @@ class TelegramSendMessageTool(BaseTool):
 
 telegram_send_message = tool(
     TelegramSendMessageTool(),
-    surfaces=(ToolSurface.INVESTIGATION, ToolSurface.ACTION),
+    surfaces=(ToolSurface.ACTION,),
 )

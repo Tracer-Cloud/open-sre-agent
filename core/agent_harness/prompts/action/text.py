@@ -2,7 +2,7 @@
 
 The stable base lives in ``opensre_system_prompt.md`` (loaded at import time)
 so the long planner prompt is editable as data and packaged with the wheel.
-That file is the OpenSRE action-planner contract (handoff vs investigation,
+That file is the OpenSRE action-planner contract (handoff vs direct answer,
 compound turns, slash mapping) — not a coding-agent / Codex clone.
 """
 

@@ -149,7 +149,7 @@ ONBOARD_INTEGRATION_CHOICES: tuple[Choice, ...] = (
         value="discord",
         label="Discord",
         group="Incident & Comms",
-        hint="Trigger investigations via slash commands and post findings to threads",
+        hint="Chat with the agent from Slack threads",
     ),
     Choice(
         value="telegram",
@@ -174,12 +174,6 @@ ONBOARD_INTEGRATION_CHOICES: tuple[Choice, ...] = (
         label="Google Docs",
         group="Incident & Comms",
         hint="Create shareable incident postmortem reports",
-    ),
-    Choice(
-        value="notion",
-        label="Notion",
-        group="Incident & Comms",
-        hint="Post investigation reports to a Notion database",
     ),
     Choice(
         value="gitlab",

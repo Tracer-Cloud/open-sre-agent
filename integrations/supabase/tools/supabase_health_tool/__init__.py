@@ -38,7 +38,7 @@ def _map_get_supabase_service_health(
     name="get_supabase_service_health",
     description="Check the health of all Supabase services (PostgREST, Auth, Storage) for a given project.",
     source="supabase",
-    surfaces=(ToolSurface.INVESTIGATION, ToolSurface.CHAT),
+    surfaces=(ToolSurface.CHAT,),
     use_cases=[
         "Checking Supabase project health during an incident",
         "Identifying which Supabase service (Auth, Storage, PostgREST) is degraded",

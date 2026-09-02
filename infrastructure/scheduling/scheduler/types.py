@@ -12,11 +12,7 @@ from pydantic import BaseModel, Field
 class TaskKind(StrEnum):
     """Supported scheduled task kinds."""
 
-    DAILY_SUMMARY = "daily_summary"
-    WEEKLY_AUDIT = "weekly_audit"
-    INCIDENT_WINDOW_REPLAY = "incident_window_replay"
-    SYNTHETIC_RUN = "synthetic_run"
-    CUSTOM_INVESTIGATION = "custom_investigation"
+    MANUAL_LOOP = "manual_loop"
     SENTRY_MORNING_DIGEST = "sentry_morning_digest"
     SENTRY_UPTIME_WATCH = "sentry_uptime_watch"
     GITHUB_PR_SWEEP = "github_pr_sweep"

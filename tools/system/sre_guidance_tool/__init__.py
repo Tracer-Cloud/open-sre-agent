@@ -1,4 +1,4 @@
-"""SRE knowledge retrieval tool for pipeline incident investigation."""
+"""SRE knowledge retrieval tool for incident triage guidance."""
 
 from __future__ import annotations
 

@@ -1,6 +1,6 @@
 ---
 title: "Sentry (MCP)"
-description: "Connect Sentry's hosted MCP server so OpenSRE can query issues, events, traces, releases, and Seer root-cause analysis during investigations"
+description: "Connect Sentry's hosted MCP server so OpenSRE can query issues, events, traces, releases, and Seer root-cause analysis"
 ---
 
 ## Overview
@@ -8,7 +8,7 @@ description: "Connect Sentry's hosted MCP server so OpenSRE can query issues, ev
 OpenSRE connects to Sentry's hosted
 [Model Context Protocol (MCP)](https://mcp.sentry.dev) server. That exposes
 Sentry products — issues, events, traces, replays, releases, monitors, and Seer
-AI root-cause analysis — as tools the agent can call during an investigation.
+AI root-cause analysis — as tools the agent can call.
 
 This is distinct from the [Sentry issue integration](/sentry), which is a
 narrower REST client for issue and event lookup. Use MCP when you want the agent
@@ -102,7 +102,7 @@ Create a Sentry **user auth token** in account settings with at least `org:read`
 for read-only investigation. Add write scopes only if you enable triage or
 project-management skills.
 
-## Investigation tools
+## Tools
 
 | Tool | What it does |
 | --- | --- |

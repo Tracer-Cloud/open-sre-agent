@@ -100,10 +100,7 @@ uv run mypy config core gateway integrations infrastructure surfaces tools
 
 uv run pytest -n auto -v \
   --cov=config --cov=core --cov=gateway --cov=integrations \
-  --cov=infrastructure --cov=surfaces --cov=tools --cov-report=term-missing \
-  --ignore=tests/e2e/kubernetes_local_alert_simulation \
-  --ignore=tests/synthetic \
-  -m "not synthetic"
+  --cov=infrastructure --cov=surfaces --cov=tools --cov-report=term-missing
 ```
 
 ---
@@ -209,10 +206,10 @@ OPENCLAW_MCP_ARGS="mcp serve"
 ### 3. Run a test
 
 ```bash
-uv run opensre investigate -i tests/fixtures/openclaw_test_alert.json
+uv run opensre ask "check the OpenClaw gateway status"
 ```
 
-### 4. Optional: OpenSRE calls OpenClaw during RCA
+### 4. Optional: OpenSRE calls OpenClaw during a turn
 
 ```bash
 export OPENCLAW_MCP_MODE=stdio
@@ -220,7 +217,7 @@ export OPENCLAW_MCP_COMMAND=openclaw
 export OPENCLAW_MCP_ARGS="mcp serve"
 ```
 
-Keep the OpenClaw gateway running while you investigate, then verify:
+Keep the OpenClaw gateway running while the agent works, then verify:
 
 ```bash
 opensre integrations verify openclaw

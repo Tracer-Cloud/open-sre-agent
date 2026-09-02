@@ -9,10 +9,6 @@ def test_tool_kind_members_are_stable() -> None:
     assert [kind.value for kind in ToolKind] == [
         "slash",
         "shell",
-        "investigation",
-        "alert",
-        "sample_alert",
-        "synthetic_test",
         "task_cancel",
         "cli_command",
         "implementation",
@@ -35,10 +31,6 @@ def test_tool_kind_to_name_mapping_values() -> None:
     assert TOOL_KIND_TO_NAME == {
         ToolKind.SLASH: "slash_invoke",
         ToolKind.SHELL: "shell_run",
-        ToolKind.INVESTIGATION: "investigation_start",
-        ToolKind.ALERT: "alert_sample",
-        ToolKind.SAMPLE_ALERT: "alert_sample",
-        ToolKind.SYNTHETIC_TEST: "synthetic_run",
         ToolKind.TASK_CANCEL: "task_cancel",
         ToolKind.CLI_COMMAND: "cli_exec",
         ToolKind.IMPLEMENTATION: "code_implement",
@@ -56,19 +48,16 @@ def test_tool_kind_to_name_lookup_by_plain_string_key() -> None:
 
 def test_action_tool_name_members_are_stable() -> None:
     assert [name.value for name in ActionToolName] == [
-        "alert_sample",
         "ask_user_choice",
         "cli_exec",
         "code_implement",
         "fix_sentry_issue_start",
-        "investigation_start",
         "llm_set_provider",
         "propose_scheduled_delivery",
         "session_goal_set",
         "shell_run",
         "skill_view",
         "slash_invoke",
-        "synthetic_run",
         "task_cancel",
         "update_plan",
     ]

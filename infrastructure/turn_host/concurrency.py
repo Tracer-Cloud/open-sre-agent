@@ -1,8 +1,8 @@
 """Process-wide turn concurrency shared by every Gateway ingress.
 
 Production chat turns take the gate via :class:`TurnRunner` (``gate=``).
-``POST /investigate`` and :class:`InvestigationWorker` use the same process
-gate (:func:`process_turn_gate`) so HTTP investigate cannot starve chat or
+All turn hosts use the same process
+gate (:func:`process_turn_gate`) so one surface cannot starve chat or
 the reverse. Scheduled runs take the same instance: the controller builds
 ``SchedulerRunners`` and calls ``.gated(turn_gate)`` before installing them.
 
@@ -70,7 +70,7 @@ def configured_turn_limit() -> int:
 
 
 class TurnConcurrencyGate:
-    """A process-wide capacity gate for chat, investigate, and scheduled turns."""
+    """A process-wide capacity gate for chat and scheduled turns."""
 
     def __init__(self, limit: int) -> None:
         if limit < 1:
@@ -84,11 +84,11 @@ class TurnConcurrencyGate:
         return cls(turn_limit_for_profile(profile))
 
     def try_acquire(self) -> bool:
-        """Take one slot without waiting (chat / sync HTTP investigate)."""
+        """Take one slot without waiting (chat / sync HTTP)."""
         return self._semaphore.acquire(blocking=False)
 
     def acquire(self, *, timeout: float | None = None) -> bool:
-        """Wait for capacity (scheduler / InvestigationWorker — already claimed)."""
+        """Wait for capacity (scheduler — already claimed)."""
         if timeout is None:
             return self._semaphore.acquire()
         return self._semaphore.acquire(timeout=timeout)
@@ -109,9 +109,9 @@ def process_turn_gate() -> TurnConcurrencyGate:
 
     The limit is :func:`configured_turn_limit` — an ``OPENSRE_MAX_CONCURRENT_TURNS``
     override if set, else the ``OPENSRE_SIZE_PROFILE`` default.
-    :class:`GatewayController` installs its gate here so chat and investigate share one
+    :class:`GatewayController` installs its gate here so all turn hosts share one
     semaphore in a full gateway process. Standalone ``WEB_PROFILE`` web creates
-    the gate on first investigate/worker use.
+    the gate on first use.
     """
     global _process_gate
     with _process_gate_lock:

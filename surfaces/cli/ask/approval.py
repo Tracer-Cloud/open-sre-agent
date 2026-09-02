@@ -50,7 +50,7 @@ def approval_required(tool: RuntimeTool) -> bool:
 def registered_ask_tool_names() -> frozenset[str]:
     """Return every registered tool name the ask action or gather phases can reach."""
     names: set[str] = set()
-    for surface in (ToolSurface.ACTION, ToolSurface.INVESTIGATION):
+    for surface in (ToolSurface.ACTION,):
         names.update(resolve_surface_tool_map(surface))
     return frozenset(names)
 

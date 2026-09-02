@@ -1,11 +1,11 @@
 ---
 title: "X (Twitter) MCP"
-description: "Connect X's official MCP server so OpenSRE can search, read, and post on X during investigations"
+description: "Connect X's official MCP server so OpenSRE can search, read, and post on X"
 ---
 
 ## Overview
 
-OpenSRE connects to X’s official [Model Context Protocol (MCP)](https://github.com/xdevplatform/xmcp) server. During investigations the agent can call X API capabilities — tweet search, timelines, user profiles, likes, retweets, bookmarks, and posting — through MCP tools.
+OpenSRE connects to X’s official [Model Context Protocol (MCP)](https://github.com/xdevplatform/xmcp) server. The agent can call X API capabilities — tweet search, timelines, user profiles, likes, retweets, bookmarks, and posting — through MCP tools.
 
 Unlike PostHog or Sentry’s always-on hosted MCP servers, [xmcp](https://github.com/xdevplatform/xmcp) is designed to run **locally**: you clone the repo, supply your own X API credentials, and run the server yourself. OpenSRE connects to that local endpoint (or a tunneled URL if you need remote access, for example via ngrok).
 
@@ -74,7 +74,7 @@ X_BEARER_TOKEN=your_x_api_bearer_token
 
 XMCP authenticates to the X API using its own environment (`X_BEARER_TOKEN`, OAuth credentials) at startup. For `streamable-http` / `sse` connections to an already-running server, OpenSRE does **not** need your X API credentials — only the server URL. Set an optional auth token only if the endpoint sits behind an authenticating tunnel or proxy. `X_BEARER_TOKEN` in OpenSRE’s environment is used when OpenSRE launches xmcp itself via `stdio`.
 
-## Investigation tools
+## Tools
 
 | Tool | What it does |
 | --- | --- |
@@ -103,5 +103,5 @@ A successful check connects to the MCP server and reports how many tools it disc
 ## Security
 
 - Keep X API credentials on the xmcp server process, not in OpenSRE config, when using `streamable-http` / `sse` to an already-running server.
-- Prefer read-only X tokens when investigations only need search and timeline access.
+- Prefer read-only X tokens when the agent only needs search and timeline access.
 - Do not commit `X_BEARER_TOKEN` or OAuth secrets to source control.

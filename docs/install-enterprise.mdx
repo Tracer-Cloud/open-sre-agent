@@ -25,7 +25,7 @@ Enterprise integrations are configured in the web app and shared across your org
 - [Datadog](/datadog) — API key + application key (hosted flow in Option 3)
 - [Grafana](/grafana) — service account token + endpoint URL
 - [AWS](/aws) — cross-cloud infrastructure mapping
-- [Slack](/messaging/slack) — deliver investigation reports to channels
+- [Slack](/messaging/slack) — chat with OpenSRE from your channels
 
 <Frame>
   ![Integrations](/images/integrations.png)
@@ -36,18 +36,18 @@ Enterprise integrations are configured in the web app and shared across your org
 After connecting each integration in the web app:
 
 1. Confirm the connector shows **connected** in **Integrations**
-2. Run a test investigation from the app or ask an org admin to trigger a sample alert
-3. Confirm the report arrives in your configured Slack channel (see [Slack setup](/messaging/slack))
+2. Ask OpenSRE a test question that uses the connector (e.g. *what alerts fired in the last hour?*)
+3. Confirm the answer arrives in your configured Slack channel (see [Slack setup](/messaging/slack))
 
 For Slack-specific help, use **Support** in the app or follow the self-serve steps in [Slack integration](/messaging/slack).
 
-## 4) Run investigations with shared context
+## 4) Chat with shared context
 
-After integrations are connected, OpenSRE investigations use the same organization-level connectors and policies. Engineers can also run local CLI investigations that reference the same integration catalog.
+After integrations are connected, every OpenSRE conversation uses the same organization-level connectors and policies. Engineers can also use the local CLI, which references the same integration catalog.
 
 ## Local CLI users in enterprise teams
 
-If your engineers also run local investigations:
+If your engineers also use OpenSRE locally:
 
 ```bash
 opensre

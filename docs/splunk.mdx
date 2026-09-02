@@ -1,12 +1,12 @@
 ---
 title: "Splunk"
-description: "Connect Splunk so OpenSRE can search logs using SPL during investigations"
+description: "Connect Splunk so OpenSRE can search logs using SPL"
 ---
 
 ## Overview
 
-OpenSRE queries Splunk over the REST API during investigations. The agent calls
-`query_splunk_logs` with a planner-supplied SPL `query`.
+OpenSRE queries Splunk over the REST API. When you ask about logs, the agent
+writes an SPL `query` and calls `query_splunk_logs`.
 
 There is **no** `opensre integrations setup splunk` handler today. Configure
 Splunk via environment variables or the integration store, then verify with
@@ -181,9 +181,9 @@ Do this **before** verifying, and keep it for the rest of the recipe. A saved Sp
 record wins over `SPLUNK_URL` / `SPLUNK_TOKEN` for `opensre integrations verify`, so
 with your real store in play the check can pass against production while appearing to
 test localhost — the `SOURCE` column reads `local store` instead of `local env`.
-`opensre investigate` fails the other way: it only falls through to env vars when the
+Chat sessions fail the other way: they only fall through to env vars when the
 store has **no records at all**, so a single record for any unrelated service blocks
-env resolution entirely. An empty store is the one state both commands agree on.
+env resolution entirely. An empty store is the one state both surfaces agree on.
 `SPLUNK_INSTANCES` overrides `SPLUNK_URL` / `SPLUNK_TOKEN` outright, which is why the
 block above clears it.
 </Warning>
@@ -199,39 +199,16 @@ SERVICE │ SOURCE    │ STATUS   │ DETAIL
 splunk  │ local env │ ✓ passed │ Connected to Splunk 10.4.2
 ```
 
-Trigger a real investigation against the seeded event. `opensre investigate
---print-template splunk` prints this payload shape if you want to start from it:
+Now ask the agent about the seeded event:
 
 ```bash
-opensre investigate --input-json '{
-  "alert_source": "splunk",
-  "alert_name": "PaymentServiceErrors",
-  "severity": "critical",
-  "commonAnnotations": {
-    "summary": "payment-service errors detected",
-    "splunk_query": "index=main sourcetype=opensre_verify | head 50"
-  }
-}'
+opensre
 ```
 
-Real output from a run against this exact local instance (edited for length). Other
-integrations still resolved from your own environment ride along harmlessly:
+Ask: *Search Splunk for payment-service errors in the last hour.*
 
-```
-Loading integrations: telegram, splunk
-↳ Splunk · query splunk logs
-
-Triage complete: payment-service checkout failed with connection refused
-to billing-api at 21:40:00 UTC; no billing-api logs are present in Splunk
-during a 4-hour window across all indexes.
-
-root_cause: payment-service is receiving TCP connection refused when
-calling billing-api during checkout, and billing-api has emitted zero log
-lines across all Splunk indexes for the last 4 hours. The most likely
-explanation is that billing-api pods are not running or not listening,
-though without cluster/deploy visibility the exact narrow cause cannot be
-confirmed.
-```
+The agent writes the SPL, calls `query_splunk_logs`, and surfaces the seeded
+`connection refused to billing-api` event from this exact local instance.
 
 Teardown:
 
@@ -242,7 +219,7 @@ unset OPENSRE_DEMO_STORE_DIR OPENSRE_INTEGRATIONS_STORE_PATH \
   SPLUNK_URL SPLUNK_TOKEN SPLUNK_VERIFY_SSL SPLUNK_INDEX
 ```
 
-## Investigation tools
+## Tools
 
 ### `query_splunk_logs`
 
@@ -253,12 +230,8 @@ unset OPENSRE_DEMO_STORE_DIR OPENSRE_INTEGRATIONS_STORE_PATH \
 | `limit` | No | Max events to return (default `50`) |
 | `index` | No | Overrides the integration default index |
 
-The investigation planner writes the SPL `query` and calls the tool. OpenSRE
-does **not** build SPL from a fixed priority table.
-
-When `alert_source` is `splunk`, OpenSRE auto-seeds the Splunk tool source
-before the ReAct loop. Seed calls use integration defaults if the planner has
-not supplied a query yet.
+The agent writes the SPL `query` and calls the tool. OpenSRE does **not**
+build SPL from a fixed priority table.
 
 ## Verify
 
@@ -294,35 +267,3 @@ Detail: Connected to Splunk 9.x.x
 - For enterprise self-signed certificates, set `SPLUNK_CA_BUNDLE` rather than disabling verification entirely.
 - Set `SPLUNK_VERIFY_SSL=false` only in local or dev environments when you cannot supply a CA bundle.
 - Rotate tokens on a schedule and revoke them when no longer needed.
-
-## Extras
-
-### Alert annotations as planner context
-
-Putting a ready-made SPL string in the alert helps the planner. The built-in
-Splunk alert template includes `commonAnnotations.splunk_query`. The annotation
-is **agent context** (visible in the alert payload) — it is not executed by a
-separate deterministic builder.
-
-```json
-{
-  "alert_name": "Payment service errors",
-  "alert_source": "splunk",
-  "commonAnnotations": {
-    "splunk_query": "index=prod sourcetype=app_logs \"NullPointerException\" | head 50"
-  }
-}
-```
-
-### Sample alert template
-
-There is no `opensre investigate --template splunk`. Use one of:
-
-| Action | Command |
-| --- | --- |
-| Print starter JSON (CLI) | `opensre investigate --print-template splunk` |
-| Print starter JSON (REPL) | `/template splunk` |
-| Run the sample alert (REPL) | `/investigate splunk` |
-
-Then edit the printed JSON and pass it with `opensre investigate --input-json '…'`
-or `/investigate path/to/alert.json` if you want a file-based run.

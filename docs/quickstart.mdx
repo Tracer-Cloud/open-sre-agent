@@ -42,7 +42,7 @@ slug: "quickstart"
     opensre setup
     ```
 
-    After GitHub authorization, you pick a provider and a model. The wizard sends one tiny request to that provider with the credential you just entered — so a typo, an expired key, or an Ollama model you have not pulled yet is caught here, not on your first investigation. When setup finishes, OpenSRE opens the interactive shell. Add integrations later with `opensre integrations setup <service>` when you want OpenSRE to query a specific tool.
+    After GitHub authorization, you pick a provider and a model. The wizard sends one tiny request to that provider with the credential you just entered — so a typo, an expired key, or an Ollama model you have not pulled yet is caught here, not on your first question. When setup finishes, OpenSRE opens the interactive shell. Add integrations later with `opensre integrations setup <service>` when you want OpenSRE to query a specific tool.
 
     <Tabs>
       <Tab title="macOS / Linux">
@@ -59,7 +59,7 @@ slug: "quickstart"
 
   </Step>
 
-  <Step title="Run an investigation">
+  <Step title="Ask your first question">
     Choose either path — both use the same local `opensre` binary:
 
     **Interactive prompt shell** — start OpenSRE with no arguments (TTY) to type incidents in plain language and use slash commands (`/help`, `/status`, `/effort`, `/exit`, …):
@@ -68,23 +68,23 @@ slug: "quickstart"
     opensre
     ```
 
-    **Direct investigation** — one-shot run from your shell with an alert file:
+    **One-shot headless run** — a single agent turn from your shell or a CI job:
 
     ```bash
-    opensre investigate -i tests/e2e/kubernetes/fixtures/datadog_k8s_alert.json
+    opensre ask "why did checkout latency increase today?"
     ```
 
-    For file-based runs, OpenSRE fetches alert context, reasons across connected systems, and generates a structured root-cause report.
+    OpenSRE reasons across your connected systems, calling the tools it needs, and prints the answer. See [Headless CLI](/headless-cli) for tool approvals, `--json` output, and exit codes.
 
     <Tabs>
       <Tab title="macOS / Linux">
         <Frame>
-          ![Running an OpenSRE investigation on a sample alert through to a structured root-cause report](/images/quickstart-investigate.gif)
+          ![Running an OpenSRE turn on a sample incident](/images/quickstart-investigate.gif)
         </Frame>
       </Tab>
       <Tab title="Windows">
         <Frame>
-          ![Running an OpenSRE investigation on Windows through to a structured root-cause report](/images/quickstart-investigate-windows.gif)
+          ![Running an OpenSRE turn on Windows](/images/quickstart-investigate-windows.gif)
         </Frame>
       </Tab>
     </Tabs>

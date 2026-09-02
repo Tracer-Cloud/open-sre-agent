@@ -12,9 +12,6 @@ from core.agent_harness.session.persistence.contracts import CHAT_KINDS, Restore
 from core.agent_harness.session.persistence.wal_recovery import dangling_tool_intents
 from core.state.transcript_window import SESSION_SUMMARY_PREFIX
 
-_ROOT_CAUSE_PREVIEW_CHARS = 80
-_DEFAULT_RCA_HISTORY_LIMIT = 50
-
 
 class JsonlSessionRepo:
     """Read-only queries over v2 session files."""
@@ -103,95 +100,6 @@ class JsonlSessionRepo:
         return None
 
     @staticmethod
-    def _collect_investigation_records(
-        path: Path,
-        *,
-        lines: list[str] | None = None,
-    ) -> list[dict[str, Any]]:
-        with contextlib.suppress(Exception):
-            loaded = _load_v2_lines(lines) if lines is not None else _load_v2_file(path)
-            if loaded is None:
-                return []
-            header, entries = loaded
-            session_id = str(header.get("id") or path.stem)
-            session_name = storage_paths.derive_name(_records_to_lines([header, *entries]))
-            started_at = header.get("created_at")
-            records: list[dict[str, Any]] = []
-            for rec in entries:
-                if rec.get("type") != "investigation_result":
-                    continue
-                root_cause = str(rec.get("root_cause") or "")
-                preview = root_cause.replace("\n", " ").strip()
-                if len(preview) > _ROOT_CAUSE_PREVIEW_CHARS:
-                    preview = preview[: _ROOT_CAUSE_PREVIEW_CHARS - 1] + "…"
-                records.append(
-                    {
-                        "investigation_id": str(rec.get("investigation_id") or ""),
-                        "session_id": session_id,
-                        "session_name": session_name,
-                        "session_started_at": started_at,
-                        "completed_at": rec.get("completed_at") or rec.get("timestamp"),
-                        "trigger": rec.get("trigger") or "",
-                        "root_cause_preview": preview,
-                        "root_cause": root_cause,
-                        "report": str(rec.get("report") or ""),
-                        "root_cause_category": rec.get("root_cause_category") or "",
-                        "alert_name": rec.get("alert_name") or "",
-                        "run_id": rec.get("run_id") or "",
-                    }
-                )
-            return records
-        return []
-
-    def load_investigation_history(
-        self, n: int = _DEFAULT_RCA_HISTORY_LIMIT
-    ) -> list[dict[str, Any]]:
-        root = storage_paths.sessions_dir()
-        if not root.exists():
-            return []
-
-        results: list[dict[str, Any]] = []
-        for path in sorted(root.glob("*.jsonl"), key=_mtime, reverse=True):
-            with contextlib.suppress(Exception):
-                lines = path.read_text(encoding="utf-8").splitlines()
-                results.extend(self._collect_investigation_records(path, lines=lines))
-            if len(results) >= n * 3:
-                break
-        results.sort(key=lambda item: item.get("completed_at") or "", reverse=True)
-        return results[:n]
-
-    @staticmethod
-    def _scan_investigation_prefix(normalized: str) -> tuple[dict[str, Any] | None, int]:
-        root = storage_paths.sessions_dir()
-        if not root.exists():
-            return None, 0
-
-        match: dict[str, Any] | None = None
-        count = 0
-        for path in root.glob("*.jsonl"):
-            with contextlib.suppress(Exception):
-                lines = path.read_text(encoding="utf-8").splitlines()
-                for rec in JsonlSessionRepo._collect_investigation_records(path, lines=lines):
-                    inv_id = str(rec.get("investigation_id") or "").lower()
-                    if not inv_id.startswith(normalized):
-                        continue
-                    count += 1
-                    match = rec if count == 1 else None
-        return match, count
-
-    def lookup_investigation(
-        self, investigation_id_prefix: str
-    ) -> tuple[dict[str, Any] | None, int]:
-        normalized = investigation_id_prefix.strip().lower()
-        if not normalized:
-            return None, 0
-        return self._scan_investigation_prefix(normalized)
-
-    def load_investigation(self, investigation_id_prefix: str) -> dict[str, Any] | None:
-        record, count = self.lookup_investigation(investigation_id_prefix)
-        return record if count == 1 else None
-
-    @staticmethod
     def _summary(
         path: Path, header: dict[str, Any], entries: list[dict[str, Any]]
     ) -> dict[str, Any]:
@@ -205,9 +113,6 @@ class JsonlSessionRepo:
             "duration_secs": leaf.get("duration_secs") if leaf else None,
             "total_turns": leaf.get("total_turns") if leaf else total_turns,
             "chat_turns": leaf.get("chat_turns") if leaf else _count_chat_turns(entries),
-            "investigation_turns": (
-                leaf.get("investigation_turns") if leaf else _count_investigation_turns(entries)
-            ),
             "is_ended": leaf is not None,
             "has_snapshot": any(
                 rec.get("type") == "message"
@@ -413,16 +318,6 @@ def _count_chat_turns(entries: list[dict[str, Any]]) -> int:
         if rec.get("type") == "custom_message"
         and rec.get("custom_type") == "turn_stub"
         and rec.get("kind") in CHAT_KINDS
-    )
-
-
-def _count_investigation_turns(entries: list[dict[str, Any]]) -> int:
-    return sum(
-        1
-        for rec in entries
-        if rec.get("type") == "custom_message"
-        and rec.get("custom_type") == "turn_stub"
-        and rec.get("kind") in {"alert", "incoming_alert"}
     )
 
 

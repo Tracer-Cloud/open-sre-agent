@@ -34,7 +34,6 @@ def register_harness_adapters() -> None:
     _register_alert_source_routing()
     _register_incident_anchor_parsers()
     _register_prompt_fragments()
-    _register_taxonomy_profiles()
     _register_message_context_strippers()
     _register_alert_detail_fields()
     _register_secondary_tool_sources()
@@ -100,29 +99,17 @@ def _register_prompt_fragments() -> None:
     from infrastructure.harness_providers import (
         clear_action_prompt_fragments,
         clear_assistant_prompt_fragments,
-        clear_gather_prompt_fragments,
         register_action_prompt_fragment,
         register_assistant_prompt_fragment,
-        register_gather_prompt_fragment,
     )
     from integrations.buzz.action_prompt import buzz_action_prompt_fragment
     from integrations.github.action_prompt import github_action_prompt_fragment
-    from integrations.github.gather_prompt import github_gather_prompt_fragment
     from integrations.posthog.assistant_prompt import posthog_assistant_prompt_fragment
-    from integrations.posthog.gather_prompt import posthog_gather_prompt_fragment
     from integrations.rocketchat.action_prompt import rocketchat_action_prompt_fragment
     from integrations.sentry.assistant_prompt import sentry_assistant_prompt_fragment
-    from integrations.sentry.gather_prompt import sentry_gather_prompt_fragment
     from integrations.slack.action_prompt import slack_action_prompt_fragment
     from integrations.slack.assistant_prompt import slack_assistant_prompt_fragment
-    from integrations.slack.gather_prompt import slack_gather_prompt_fragment
     from integrations.telegram.action_prompt import telegram_action_prompt_fragment
-
-    clear_gather_prompt_fragments()
-    register_gather_prompt_fragment(github_gather_prompt_fragment)
-    register_gather_prompt_fragment(posthog_gather_prompt_fragment)
-    register_gather_prompt_fragment(sentry_gather_prompt_fragment)
-    register_gather_prompt_fragment(slack_gather_prompt_fragment)
 
     clear_action_prompt_fragments()
     register_action_prompt_fragment(slack_action_prompt_fragment)
@@ -135,17 +122,6 @@ def _register_prompt_fragments() -> None:
     register_assistant_prompt_fragment(sentry_assistant_prompt_fragment)
     register_assistant_prompt_fragment(posthog_assistant_prompt_fragment)
     register_assistant_prompt_fragment(slack_assistant_prompt_fragment)
-
-
-def _register_taxonomy_profiles() -> None:
-    from core.domain.diagnosis.taxonomy_registry import (
-        clear_taxonomy_profiles,
-        register_taxonomy_profile,
-    )
-    from integrations.hermes.taxonomy import HERMES_TAXONOMY_PROFILE
-
-    clear_taxonomy_profiles()
-    register_taxonomy_profile(HERMES_TAXONOMY_PROFILE)
 
 
 def _register_message_context_strippers() -> None:

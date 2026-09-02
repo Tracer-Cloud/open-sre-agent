@@ -119,7 +119,7 @@ def test_agent_turn_binds_hooks_and_restricts_capabilities_via_start(monkeypatch
     # prepare_session run against a session carrying a forbidden capability.
     manager = _FakeSessionManager()
     session = _FakeSession()
-    session.available_capabilities = {"investigation": ("live",), "shell": ("keep",)}
+    session.available_capabilities = {"slash_commands": ("live",), "shell": ("keep",)}
     recorded: dict[str, object] = {}
     hooks = ToolExecutionHooks()
 
@@ -152,7 +152,7 @@ def test_agent_turn_binds_hooks_and_restricts_capabilities_via_start(monkeypatch
     # dispatched, ephemeral session closed without memory extraction.
     assert recorded["tool_hooks"] is hooks
     assert recorded["is_tty"] is False
-    assert session.available_capabilities["investigation"] == ()
+    assert session.available_capabilities["slash_commands"] == ()
     assert session.available_capabilities["shell"] == ("keep",)
     assert recorded["prompt"] == "hello"
     assert result.primary_response_text == "answer"

@@ -67,7 +67,7 @@ rules:
     verbs: ["get", "list"]
 ```
 
-## Investigation tools
+## Tools
 
 | Tool | What it does |
 | --- | --- |
@@ -238,11 +238,11 @@ export KUBECONFIG_NAMESPACE="demo"
 ```
 
 `opensre integrations verify` checks a saved store record before env vars, and
-`opensre investigate` only falls through to env vars when the store has no records at
+chat sessions only fall through to env vars when the store has no records at
 all -- any existing record, for any service, blocks env-var resolution entirely. Point
 `OPENSRE_INTEGRATIONS_STORE_PATH` at a path inside a fresh empty directory before
-verifying, so a real saved record can't shadow the `KUBECONFIG_*` vars above for either
-command, and your real config is never read or written:
+verifying, so a real saved record can't shadow the `KUBECONFIG_*` vars above, and your
+real config is never read or written:
 
 ```bash
 export OPENSRE_DEMO_STORE_DIR="$(mktemp -d /tmp/opensre-k8s-demo.XXXXXX)"
@@ -262,55 +262,17 @@ kubernetes │ local env │ ✓ passed │ Connected to Kubernetes cluster
            │           │          │ visible).
 ```
 
-Trigger a real investigation against the crash-looping pod:
+Now ask the agent about the crash-looping pod:
 
 ```bash
-opensre investigate --input-json '{
-  "alert_name": "KubePodCrashLooping",
-  "severity": "critical",
-  "labels": {
-    "namespace": "demo",
-    "pod": "demo-crashloop"
-  },
-  "annotations": {
-    "summary": "Pod demo-crashloop is in CrashLoopBackOff"
-  }
-}'
+opensre
 ```
 
-Real output from a run against this exact local cluster (edited for length). Another
-integration resolved from your own env/keyring can ride along harmlessly, since the store
-has no records to block fallback for any service:
+Ask: *Why is the demo-crashloop pod in the demo namespace crash-looping?*
 
-```
-Loading integrations: kubernetes, telegram
-↳ Kubernetes · kubernetes list pods
-↳ Kubernetes · kubernetes list deployments
-↳ Kubernetes · kubernetes list statefulsets
-↳ Kubernetes · kubernetes list daemonsets
-↳ Kubernetes · kubernetes list services
-↳ Kubernetes · kubernetes list ingresses
-↳ Kubernetes · kubernetes list configmaps
-↳ Kubernetes · kubernetes describe pod
-↳ Kubernetes · kubernetes get events
-↳ Kubernetes · kubernetes get resource
-
-Triage complete: One standalone pod demo/demo-crashloop is in
-CrashLoopBackOff (6 restarts, back-off 5m); blast radius limited to that
-pod, all other demo workloads healthy, no Service selects the crasher so
-user traffic is unaffected.
-
-root_cause: The standalone pod demo/demo-crashloop runs a busybox
-container whose command is hardcoded to sh -c "echo 'payment-service:
-connection refused to billing-api'; exit 1", causing it to exit
-non-zero on every start and enter CrashLoopBackOff. The pod has no
-owner reference and is not selected by any Service, so it is almost
-certainly a demo/training fixture with no production impact.
-```
-
-10 of the 12 registered tools were exercised in this single turn; the remaining two
-(`kubernetes_get_pod_logs`, `kubernetes_list_nodes`) were confirmed separately via direct
-tool calls, both returning real data.
+Against this exact local cluster the agent lists pods, describes `demo-crashloop`,
+pulls its events and logs, and finds the hardcoded `exit 1` in the container command.
+All 12 registered tools were confirmed to return real data against this cluster.
 
 Teardown:
 

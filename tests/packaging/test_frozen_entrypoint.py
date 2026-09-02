@@ -50,16 +50,6 @@ def test_package_module_runner_uses_the_entrypoint() -> None:
     assert f"from {_ENTRYPOINT_MODULE} import main" in source
 
 
-def test_frozen_bundle_ships_the_shared_surface_data() -> None:
-    """``surfaces/shared`` holds the bundled demo alert the CLI and shell offer."""
-    # Arrange
-    spec = (REPO_ROOT / "opensre.spec").read_text(encoding="utf-8")
-
-    # Act / Assert
-    assert 'collect_data_files("surfaces.shared")' in spec
-    assert (REPO_ROOT / "surfaces/shared/sample_alerts/alert.json").is_file()
-
-
 def test_frozen_bundle_ships_the_shared_system_prompt() -> None:
     """The shared prompt loader reads its adjacent Markdown at runtime."""
     spec = (REPO_ROOT / "opensre.spec").read_text(encoding="utf-8")

@@ -42,7 +42,7 @@ DEFAULT_GITHUB_MCP_TOOLSETS = ("repos", "issues", "pull_requests", "actions", "s
 # Non-transport metadata persisted alongside MCP credentials in the integration store.
 _CREDENTIAL_METADATA_KEYS: frozenset[str] = frozenset({"username"})
 
-REQUIRED_SOURCE_INVESTIGATION_TOOLS = (
+REQUIRED_SOURCE_TOOLS = (
     "get_file_contents",
     "get_repository_tree",
     "list_commits",
@@ -1285,12 +1285,12 @@ async def _validate_github_mcp_config_async(
     tools = _tool_defs((await session.list_tools()).tools)
     tool_names = tuple(sorted(t["name"] for t in tools))
 
-    missing = sorted(set(REQUIRED_SOURCE_INVESTIGATION_TOOLS) - set(tool_names))
+    missing = sorted(set(REQUIRED_SOURCE_TOOLS) - set(tool_names))
     if missing:
         return GitHubMCPValidationResult(
             ok=False,
             detail=(
-                "GitHub MCP connected, but required repository investigation tools are missing: "
+                "GitHub MCP connected, but required repository tools are missing: "
                 f"{', '.join(missing)}."
             ),
             tool_names=tool_names,

@@ -73,7 +73,7 @@ def _map_db_logs(
 @tool(
     name="read_yc_db_logs",
     evidence_mapper=_map_db_logs,
-    surfaces=(ToolSurface.INVESTIGATION, ToolSurface.ACTION),
+    surfaces=(ToolSurface.ACTION,),
     display_name="Managed Databases",
     source=SOURCE,
     description=(

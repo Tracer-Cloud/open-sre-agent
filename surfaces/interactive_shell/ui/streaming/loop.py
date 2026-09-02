@@ -53,9 +53,9 @@ _PROGRESS_INTERVAL_SECONDS = 0.1
 # external caller (e.g. agent_actions.py for the planned-actions
 # bullet header) stay in lock-step.
 _PARAGRAPH_BREAK = "\n\n"
-# Inline agent marker: a single ``∴`` leads the response's first line (no
-# separate ``∴ OpenSRE`` header row) so the turn carries one compact marker.
-_RESPONSE_MARKER = "∴ "
+# Inline agent marker: a single ``Ω`` leads the response's first line (no
+# separate ``Ω OpenSRE`` header row) so the turn carries one compact marker.
+_RESPONSE_MARKER = "Ω"
 _CODE_FENCE = "```"
 # Match a triple-backtick only when it opens a line. An inline mention
 # inside flowing text (e.g. "The ``` marker opens a code block") would
@@ -97,18 +97,16 @@ def _body_leads_with_block(stripped: str) -> bool:
     return False
 
 
-def _prepend_response_marker(body: str) -> str:
-    """Attach the ``∴`` marker: inline for prose, on its own line before a block.
+def _render_response_marker(console: Console, body: str) -> None:
+    """Render the theme-colored ``Ω`` inline or above a leading block.
 
-    A ``∴ `` fused onto the first line of a Markdown block — a table row, heading,
+    An ``Ω `` fused onto the first line of a Markdown block — a table row, heading,
     list item, or code fence — breaks CommonMark block parsing, so the block then
     renders as flattened raw text. Only a paragraph can carry the marker inline;
     any other leading block takes the marker on the line above it.
     """
-    stripped = body.lstrip()
-    if _body_leads_with_block(stripped):
-        return f"{_RESPONSE_MARKER.rstrip()}\n\n{stripped}"
-    return f"{_RESPONSE_MARKER}{stripped}"
+    end = "\n\n" if _body_leads_with_block(body.lstrip()) else " "
+    console.print(f"[{ui_theme.BOLD_BRAND}]{_RESPONSE_MARKER}[/]", end=end)
 
 
 def _paragraph_has_want_me_to(text: str) -> bool:
@@ -167,7 +165,7 @@ def stream_to_console_state(
     defer_want_me_to_closer: bool = False,
 ) -> StreamRenderResult:
     """Like :func:`stream_to_console` but returns render/defer metadata."""
-    del label  # the inline ∴ marker replaced the ``∴ OpenSRE`` header
+    del label  # the inline Ω marker replaced the ``Ω OpenSRE`` header
     if not console.is_terminal:
         text = "".join(chunks)
         if suppress_if_starts_with is not None and text.lstrip().startswith(
@@ -181,7 +179,9 @@ def stream_to_console_state(
             # gather path can print the canonical rewrite once.
             return StreamRenderResult(text=text, deferred_closer=True)
         console.print()
-        render_markdown_block(console, _prepend_response_marker(text))
+        body = text.lstrip()
+        _render_response_marker(console, body)
+        render_markdown_block(console, body)
         console.print()
         return StreamRenderResult(text=text)
 
@@ -259,9 +259,10 @@ def stream_to_console_state(
         if not visible.strip():
             return
         if rendered_paragraphs == 0:
-            # The first paragraph carries the ``∴`` marker — inline for prose, on
+            # The first paragraph carries the ``Ω`` marker — inline for prose, on
             # its own line when it leads with a block (table/heading/list/fence).
-            visible = _prepend_response_marker(visible)
+            visible = visible.lstrip()
+            _render_response_marker(console, visible)
         markdown = _build_markdown_block(visible)
         starts_with_self_spacing_block = bool(
             markdown.parsed and markdown.parsed[0].type in _SELF_SPACING_BLOCK_TOKEN_TYPES
@@ -453,10 +454,11 @@ def stream_to_console_state(
 
 def publish_full_response(console: Console, text: str, *, label: str = "assistant") -> None:
     """Render a complete assistant answer (non-TTY deferred gather path)."""
-    del label  # the inline ∴ marker replaced the ``∴ OpenSRE`` header
+    del label  # the inline Ω marker replaced the ``Ω OpenSRE`` header
     body = (text or "").strip()
     if not body:
         return
     console.print()
-    render_markdown_block(console, _prepend_response_marker(body))
+    _render_response_marker(console, body)
+    render_markdown_block(console, body)
     console.print()

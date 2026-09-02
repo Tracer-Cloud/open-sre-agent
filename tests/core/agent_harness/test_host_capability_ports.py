@@ -1,9 +1,9 @@
 """Host capability seams are typed contracts declared once.
 
-Four capabilities reach the agent from its host: named commands, LLM-provider
-switching, task cancellation and investigation launch. Each re-declared the
-same seven-parameter ``execution_allowed`` — one approval contract written out
-four times across three tiers — and the harness's factory aliases for them were
+Three capabilities reach the agent from its host: named commands, LLM-provider
+switching and task cancellation. Each re-declared the same seven-parameter
+``execution_allowed`` — one approval contract written out multiple times
+across three tiers — and the harness's factory aliases for them were
 re-declared again inside the gateway.
 
 The gate lives beside ``ExecutionPolicyResult``, the type it takes: the
@@ -31,7 +31,6 @@ _CAPABILITY_PROTOCOLS = {
     "SlashPorts",
     "LlmProviderPorts",
     "TaskCancelPorts",
-    "InvestigationLaunchPorts",
 }
 
 
@@ -139,7 +138,6 @@ def _aliases_bound_by(tree: ast.Module) -> set[str]:
 def test_no_tier_redeclares_a_host_port_factory_alias() -> None:
     # Arrange — the aliases are part of the harness API; a second copy drifts.
     aliases = {
-        "InvestigationPortsFactory",
         "LlmProviderPortsFactory",
         "TaskCancelPortsFactory",
         "SlashPortsFactory",

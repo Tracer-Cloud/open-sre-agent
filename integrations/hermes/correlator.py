@@ -45,7 +45,6 @@ class RouteDestination(StrEnum):
 
     DROP = "drop"
     TELEGRAM = "telegram"
-    TELEGRAM_WITH_RCA = "telegram_with_rca"
     PAGER = "pager"
 
 
@@ -84,16 +83,16 @@ def default_routing_matrix() -> dict[str, RouteDestination]:
     """
     return {
         # Structural rules
-        "error_severity": RouteDestination.TELEGRAM_WITH_RCA,
-        "traceback": RouteDestination.TELEGRAM_WITH_RCA,
+        "error_severity": RouteDestination.TELEGRAM,
+        "traceback": RouteDestination.TELEGRAM,
         "warning_burst": RouteDestination.TELEGRAM,
         # Pattern rules
-        "oom_killed": RouteDestination.TELEGRAM_WITH_RCA,
+        "oom_killed": RouteDestination.TELEGRAM,
         "crash_loop": RouteDestination.PAGER,
         "context_window_exceeded": RouteDestination.TELEGRAM,
-        "auth_failure": RouteDestination.TELEGRAM_WITH_RCA,
+        "auth_failure": RouteDestination.TELEGRAM,
         "rate_limit": RouteDestination.TELEGRAM,
-        "database_wal_growth": RouteDestination.TELEGRAM_WITH_RCA,
+        "database_wal_growth": RouteDestination.TELEGRAM,
         "deadlock": RouteDestination.PAGER,
         "disk_full": RouteDestination.PAGER,
     }

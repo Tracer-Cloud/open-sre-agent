@@ -28,12 +28,10 @@ _EXCLUSIVE_STDIN_MENU_COMMANDS: frozenset[str] = frozenset(
         "/choose",
         "/help",
         "/integrations",
-        "/investigate",
         "/mcp",
         "/memory",
         "/model",
         "/tools",
-        "/template",
         "/trust",
         "/verbose",
         "/?",
@@ -54,12 +52,9 @@ _EXCLUSIVE_STDIN_MENU_COMMANDS: frozenset[str] = frozenset(
         "/context",
         "/fleet",
         "/compact",
-        "/welcome",
         "/sessions",
         "/resume",
         "/new",
-        "/rca",
-        "/background",
         "/health",
     }
 )
@@ -77,14 +72,6 @@ _EXCLUSIVE_STDIN_SUBCOMMANDS: frozenset[tuple[str, str]] = frozenset(
         ("/loops", "inbox"),
         ("/loops", "list"),
         ("/loops", "messages"),
-        ("/background", "status"),
-        ("/background", "list"),
-        ("/background", "show"),
-        ("/rca", "history"),
-        ("/rca", "list"),
-        ("/rca", "ls"),
-        ("/rca", "show"),
-        ("/rca", "save"),
     }
 )
 _WAIT_FOR_COMPLETION_COMMANDS: frozenset[str] = frozenset(
@@ -139,8 +126,6 @@ def turn_needs_exclusive_stdin(text: str, _session: Session) -> bool:
     if name == "/theme":
         return True
     if name in _EXCLUSIVE_STDIN_MENU_COMMANDS and not args:
-        return True
-    if name == "/tests" and not args:
         return True
     return bool(args and (name, args[0]) in _EXCLUSIVE_STDIN_SUBCOMMANDS)
 

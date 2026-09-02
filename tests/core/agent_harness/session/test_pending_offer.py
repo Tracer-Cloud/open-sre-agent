@@ -17,19 +17,19 @@ from tools.interactive_shell.actions.propose_scheduled_delivery import (
 
 def test_pending_offer_to_slash_omits_slack_chat_id() -> None:
     offer = PendingScheduleOffer(
-        kind="daily_summary",
+        kind="manual_loop",
         cron="0 8 * * 1-5",
         timezone="Europe/Amsterdam",
         provider="slack",
     )
     assert offer.to_slash_command() == (
-        "/cron add --kind daily_summary --cron '0 8 * * 1-5' --tz Europe/Amsterdam --provider slack"
+        "/cron add --kind manual_loop --cron '0 8 * * 1-5' --tz Europe/Amsterdam --provider slack"
     )
 
 
 def test_yes_uses_pending_schedule_not_prose() -> None:
     pending = PendingScheduleOffer(
-        kind="daily_summary",
+        kind="manual_loop",
         cron="0 9 * * 1",
         timezone="UTC",
         provider="telegram",
@@ -38,13 +38,13 @@ def test_yes_uses_pending_schedule_not_prose() -> None:
     history = [
         (
             "assistant",
-            "Delivered.\nWant me to: schedule this as a daily_summary every "
+            "Delivered.\nWant me to: schedule this as a manual_loop every "
             "weekday at 8am to the same channel?",
         ),
     ]
     expanded = expand_affirmative_follow_up("yes", history, pending_schedule=pending)
     assert expanded == (
-        "/cron add --kind daily_summary --cron '0 9 * * 1' "
+        "/cron add --kind manual_loop --cron '0 9 * * 1' "
         "--tz UTC --provider telegram --chat-id -100123"
     )
     assert "1-5" not in expanded
@@ -74,7 +74,7 @@ def test_propose_tool_sets_session_pending_offer() -> None:
     )
     result = execute_propose_scheduled_delivery_tool(
         {
-            "kind": "daily_summary",
+            "kind": "manual_loop",
             "cron": "0 8 * * 1-5",
             "timezone": "UTC",
             "provider": "slack",
@@ -85,7 +85,7 @@ def test_propose_tool_sets_session_pending_offer() -> None:
     )
     assert result["ok"] is True
     assert session.pending_schedule_offer is not None
-    assert session.pending_schedule_offer.kind == "daily_summary"
+    assert session.pending_schedule_offer.kind == "manual_loop"
     assert result["closer"].startswith("**Want me to:**")
     assert "Weather — Amsterdam" in result["response_text"]
     assert result["closer"] in result["response_text"]
@@ -97,7 +97,7 @@ def test_propose_alone_without_briefing_work_is_rejected() -> None:
     ctx = ActionToolScope(session=session, console=object())
     result = execute_propose_scheduled_delivery_tool(
         {
-            "kind": "daily_summary",
+            "kind": "manual_loop",
             "cron": "0 8 * * 1-5",
             "timezone": "UTC",
             "provider": "slack",
@@ -116,7 +116,7 @@ def test_propose_alone_without_briefing_work_is_rejected() -> None:
 def test_run_turn_consumes_pending_schedule_on_yes() -> None:
     session = InMemorySessionState()
     session.pending_schedule_offer = PendingScheduleOffer(
-        kind="daily_summary",
+        kind="manual_loop",
         cron="0 8 * * 1-5",
         timezone="UTC",
         provider="slack",
@@ -168,7 +168,7 @@ def test_a_confirmed_schedule_survives_the_literal_slash_dispatcher(
         name = "slash_invoke"
 
     offer = PendingScheduleOffer(
-        kind="daily_summary", cron="0 8 * * 1-5", timezone="UTC", provider="slack"
+        kind="manual_loop", cron="0 8 * * 1-5", timezone="UTC", provider="slack"
     )
 
     # Act
@@ -221,7 +221,7 @@ def test_slash_tool_rebuild_keeps_cron_expression_for_dispatch() -> None:
             return True
 
     offer = PendingScheduleOffer(
-        kind="daily_summary",
+        kind="manual_loop",
         cron="0 8 * * 1-5",
         timezone="Europe/Amsterdam",
         provider="slack",
@@ -260,11 +260,11 @@ def test_an_apostrophe_in_a_typed_slash_command_still_dispatches() -> None:
         name = "slash_invoke"
 
     # Act
-    call = _literal_slash_tool_call("/investigate don't know why", [_SlashTool()])
+    call = _literal_slash_tool_call("/goal don't know why", [_SlashTool()])
 
     # Assert
     assert call is not None
-    assert call.input["command"] == "/investigate"
+    assert call.input["command"] == "/goal"
 
 
 def test_the_offer_tool_does_not_advertise_itself_as_the_way_to_run_a_report() -> None:
@@ -327,7 +327,7 @@ def test_a_failed_schedule_keeps_the_offer_for_a_second_try() -> None:
 
     session = InMemorySessionState()
     session.pending_schedule_offer = PendingScheduleOffer(
-        kind="daily_summary", cron="0 8 * * 1-5", timezone="UTC", provider="slack"
+        kind="manual_loop", cron="0 8 * * 1-5", timezone="UTC", provider="slack"
     )
 
     def _execute_failing(_text: str, **_kwargs: object) -> ToolCallingTurnResult:
@@ -363,7 +363,7 @@ def test_a_successful_schedule_consumes_the_offer() -> None:
 
     session = InMemorySessionState()
     session.pending_schedule_offer = PendingScheduleOffer(
-        kind="daily_summary", cron="0 8 * * 1-5", timezone="UTC", provider="slack"
+        kind="manual_loop", cron="0 8 * * 1-5", timezone="UTC", provider="slack"
     )
 
     def _execute_ok(_text: str, **_kwargs: object) -> ToolCallingTurnResult:
@@ -413,7 +413,7 @@ def test_a_stale_fetch_from_an_earlier_turn_does_not_unlock_the_offer() -> None:
     # Act
     result = execute_propose_scheduled_delivery_tool(
         {
-            "kind": "daily_summary",
+            "kind": "manual_loop",
             "cron": "0 8 * * 1-5",
             "provider": "slack",
             "chat_id": "C0123ABCD",

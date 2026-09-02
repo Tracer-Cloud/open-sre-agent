@@ -1,15 +1,15 @@
 ---
 title: "OpenClaw"
-description: "Connect OpenSRE to OpenClaw for native context lookup and RCA write-back"
+description: "Connect OpenSRE to OpenClaw for native context lookup"
 ---
 
 ## Overview
 
-OpenSRE integrates with OpenClaw in a native, one-way support loop:
+OpenSRE integrates with OpenClaw natively:
 
-- OpenSRE can search recent OpenClaw conversations during an investigation.
+- OpenSRE can search recent OpenClaw conversations when you ask about an incident.
 - OpenSRE can read full OpenClaw threads for extra engineering context.
-- OpenSRE writes completed RCA findings back into OpenClaw through the OpenClaw bridge.
+- OpenSRE can append follow-up messages to a conversation.
 
 OpenSRE no longer ships a separate `opensre-mcp` command. You do not need to register OpenSRE itself as an MCP server inside OpenClaw.
 
@@ -73,7 +73,7 @@ For local stdio, the OpenClaw CLI on `PATH` is enough. For remote MCP (`streamab
 
 Do **not** use `http://127.0.0.1:18789/` as the MCP URL — that is the OpenClaw Control UI / Gateway, not the MCP bridge.
 
-## Investigation tools
+## Tools
 
 | Tool | What it does |
 | --- | --- |
@@ -83,28 +83,15 @@ Do **not** use `http://127.0.0.1:18789/` as the MCP URL — that is the OpenClaw
 | `list_openclaw_tools` | List tools exposed by the OpenClaw MCP bridge |
 | `call_openclaw_tool` | Lower-level raw bridge call (fallback) |
 
-Preferred investigation path: search → get conversation → send message. Raw bridge tools remain available as fallback.
+Preferred path: search → get conversation → send message. Raw bridge tools remain available as fallback.
 
-### Write-back behavior
+### Pair it with observability
 
-After every completed investigation, OpenSRE attempts to write the full RCA report back into OpenClaw.
-
-- If state contains `openclaw_context.conversation_id`, OpenSRE appends to that conversation first.
-- Otherwise it creates a new conversation with the RCA report, root cause, remediation steps, and confidence score.
-
-### Accurate RCA
-
-OpenClaw improves RCA with engineering context, but is not enough alone. Also configure at least one of:
+OpenClaw supplies engineering context, but is not enough alone for root-cause questions. Also configure at least one of:
 
 - Grafana or Datadog for metrics/logs/traces
 - AWS for infra topology and runtime state
 - GitHub for deploy/code-change context
-
-Smoke test:
-
-```bash
-uv run opensre investigate -i tests/fixtures/openclaw_test_alert.json
-```
 
 Good local validation sequence:
 
@@ -112,15 +99,15 @@ Good local validation sequence:
 uv run opensre integrations verify openclaw
 uv run opensre integrations verify grafana
 uv run opensre integrations verify github
-uv run opensre investigate -i tests/fixtures/openclaw_test_alert.json
+uv run opensre
 ```
+
+Then ask: *Search OpenClaw for recent conversations about payment-service.*
 
 Contributor regression coverage:
 
 - `tests/integrations/openclaw/test_integration.py`
 - `tests/tools/test_openclaw_mcp_tool.py`
-- `tests/utils/test_openclaw_delivery.py`
-- `tests/e2e/openclaw/` — see its [README](https://github.com/Tracer-Cloud/opensre/tree/main/tests/e2e/openclaw/README.md)
 
 ## Verify
 
@@ -150,4 +137,4 @@ uv run opensre integrations verify openclaw
 
 - Prefer local stdio over exposing a remote MCP endpoint when possible.
 - Treat `OPENCLAW_MCP_AUTH_TOKEN` as a secret — store it in the keyring / `.env`, not source control.
-- Write-back posts RCA content into OpenClaw; keep conversation access appropriately scoped.
+- `send_openclaw_message` posts content into OpenClaw; keep conversation access appropriately scoped.

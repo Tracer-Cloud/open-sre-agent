@@ -1,11 +1,11 @@
 ---
 title: "MySQL"
-description: "Connect MySQL so OpenSRE can diagnose database issues during investigations"
+description: "Connect MySQL so OpenSRE can diagnose database issues"
 ---
 
 ## Overview
 
-OpenSRE uses MySQL diagnostics to investigate database-related alerts — checking server health, surfacing slow queries, monitoring replication status, and analyzing table statistics. Queries are wrapped as read-only.
+OpenSRE uses MySQL diagnostics to investigate database issues — checking server health, surfacing slow queries, monitoring replication status, and analyzing table statistics. Queries are wrapped as read-only.
 
 ## Prerequisites
 
@@ -147,7 +147,7 @@ mysql   │ local env │ ✓ passed │ Connected to MySQL 8.0.46
         │           │          │ target database: app_db.
 ```
 
-`opensre investigate` only treats an integration as active once the store resolution has *something* to fall through to env vars with -- an untouched `~/.opensre/integrations.json` with an unrelated integration in it blocks env-var fallback entirely. Point `OPENSRE_INTEGRATIONS_STORE_PATH` at an empty, valid store instead, so your real config is never read or written and the exported `MYSQL_*` vars above are the only source of credentials:
+Chat sessions only treat an integration as active once the store resolution has *something* to fall through to env vars with -- an untouched `~/.opensre/integrations.json` with an unrelated integration in it blocks env-var fallback entirely. Point `OPENSRE_INTEGRATIONS_STORE_PATH` at an empty, valid store instead, so your real config is never read or written and the exported `MYSQL_*` vars above are the only source of credentials:
 
 ```bash
 export OPENSRE_INTEGRATIONS_STORE_PATH=$(mktemp /tmp/opensre-mysql-demo.XXXXXX)
@@ -156,39 +156,23 @@ echo '{"version": 2, "integrations": []}' > "$OPENSRE_INTEGRATIONS_STORE_PATH"
 
 A literal zero-byte file does not work here -- the store loader expects valid JSON and raises on an empty read, so this writes an explicitly empty (but valid) store rather than just creating the file with `mktemp` alone.
 
-Kick off a long-running query so there is something real to investigate, then trigger a real investigation — this is the actual supported entrypoint, not an internal import:
+Kick off a long-running query so there is something real to investigate, then ask the agent:
 
 ```bash
 docker exec -d mysql-dev mysql -uroot -prootpass -e "SELECT SLEEP(30);"
 
-opensre investigate --input-json '{
-  "alert_name": "MySQLLongRunningQuery",
-  "severity": "warning",
-  "commonAnnotations": {
-    "summary": "app_db MySQL instance has a long-running query blocking other connections"
-  }
-}'
+opensre
 ```
 
-Real output from a run against this exact local instance (edited for length). An empty store makes `opensre investigate` fall through to env-var resolution for *every* integration, not just MySQL -- if your shell or machine already resolves another integration from its own env vars, it rides along too (harmless; it just means extra unrelated tool availability, not incorrect MySQL results). Here `telegram` appears because this environment happens to resolve it:
+Ask: *Is anything blocking connections on the app_db MySQL instance?*
 
-```
-Loading integrations: telegram, mysql
-↳ MySQL · get mysql current processes
-↳ MySQL · get mysql server status
-↳ MySQL · get mysql slow queries
-↳ MySQL · get mysql table stats
-↳ MySQL · get mysql replication status
-
-root_cause: "A single SELECT SLEEP(30) was executed by root@localhost on
-a freshly started MySQL 8.0.46 instance (uptime 32s), which tripped the
-long-running-query alert. All other health signals (connections, locks,
-buffer pool, slow queries, replication, table sizes) are clean,
-indicating no real workload impact -- this is a synthetic/manual probe,
-not a real incident."
-```
-
-All 5 registered tools were exercised in this single turn, and the agent correctly identified the exact synthetic probe query.
+Against this exact local instance the agent calls all 5 registered tools — current
+processes, server status, slow queries, table stats, and replication status — and
+correctly identifies the synthetic `SELECT SLEEP(30)` probe as the only long-running
+query, with every other health signal clean. An empty store makes the session fall
+through to env-var resolution for *every* integration, not just MySQL -- if your shell
+already resolves another integration from its own env vars, it rides along too
+(harmless).
 
 Teardown -- remove the demo store file and unset every demo variable, so nothing lingers in the shell to affect a later command:
 
@@ -199,7 +183,7 @@ unset MYSQL_HOST MYSQL_PORT MYSQL_DATABASE MYSQL_USERNAME MYSQL_PASSWORD MYSQL_S
 docker rm -f mysql-dev
 ```
 
-## Investigation tools
+## Tools
 
 | Tool | What it does |
 | --- | --- |

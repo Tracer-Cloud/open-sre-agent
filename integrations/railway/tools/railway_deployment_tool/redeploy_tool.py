@@ -17,7 +17,7 @@ from integrations.railway.client import (
 class RedeployRailwayServiceTool(BaseTool):
     name = "redeploy_railway_service"
     source: ClassVar[EvidenceSource] = "railway"
-    surfaces = (ToolSurface.INVESTIGATION, ToolSurface.CHAT, ToolSurface.ACTION)
+    surfaces = (ToolSurface.CHAT, ToolSurface.ACTION)
     side_effect_level = SideEffectLevel.EXTERNAL
     requires_approval = True
     approval_reason = "Triggers a Railway redeploy of the selected service."
@@ -76,5 +76,5 @@ class RedeployRailwayServiceTool(BaseTool):
 redeploy_railway_service = RedeployRailwayServiceTool()
 tool(
     redeploy_railway_service,
-    surfaces=(ToolSurface.INVESTIGATION, ToolSurface.CHAT, ToolSurface.ACTION),
+    surfaces=(ToolSurface.CHAT, ToolSurface.ACTION),
 )

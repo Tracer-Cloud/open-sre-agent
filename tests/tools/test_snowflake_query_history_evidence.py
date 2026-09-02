@@ -4,7 +4,6 @@ from __future__ import annotations
 
 from typing import Any
 
-from tools.investigation.stages.gather_evidence.tools import merge_tool_evidence
 from tools.registry import get_registered_tool
 
 _TOOL_NAME = "query_snowflake_history"
@@ -58,16 +57,3 @@ def test_query_history_tool_registration_exposes_mapper() -> None:
 
     assert tool is not None
     assert tool.evidence_mapper is not None
-
-
-def test_merge_tool_evidence_records_query_history_catalog_entry() -> None:
-    evidence: dict[str, Any] = {}
-    output = {"rows": [{"QUERY_ID": "q1"}, {"QUERY_ID": "q2"}]}
-
-    merge_tool_evidence(evidence, _TOOL_NAME, output, {})
-
-    assert evidence[_TOOL_NAME] == output
-    entries = _catalog_entries(evidence)
-    assert len(entries) == 1
-    assert entries[0]["source"] == _TOOL_NAME
-    assert entries[0]["summary"] == "2 queries"

@@ -118,5 +118,5 @@ class SlackAddReactionTool(BaseTool):
 
 slack_add_reaction = tool(
     SlackAddReactionTool(),
-    surfaces=(ToolSurface.INVESTIGATION, ToolSurface.CHAT, ToolSurface.ACTION),
+    surfaces=(ToolSurface.CHAT, ToolSurface.ACTION),
 )

@@ -1,16 +1,16 @@
 ---
 title: "Buzz"
-description: "Deliver investigation findings to a Buzz (block/buzz) channel."
+description: "Chat with the agent and deliver alarms to a Buzz (block/buzz) channel."
 ---
 
 ## Overview
 
-OpenSRE's Buzz integration delivers investigation findings to a channel in [Buzz](https://github.com/block/buzz), Block's self-hostable, Nostr-based workspace where humans and AI agents share rooms.
+OpenSRE's Buzz integration posts messages to a channel in [Buzz](https://github.com/block/buzz), Block's self-hostable, Nostr-based workspace where humans and AI agents share rooms.
 
 Start the interactive shell with `opensre` (no subcommand). Slash commands below are run from that REPL.
 
 <Note>
-Steps 1–3 give you **outbound delivery** (investigation reports, watchdog alarms, and agent-requested messages posted to a channel). To `@mention` the agent from a Buzz channel and get replies, also do [Step 4](#step-4-enable-two-way-chat).
+Steps 1–3 give you **outbound delivery** (watchdog alarms and agent-requested messages posted to a channel). To `@mention` the agent from a Buzz channel and get replies, also do [Step 4](#step-4-enable-two-way-chat).
 </Note>
 
 ## Prerequisites
@@ -42,7 +42,7 @@ Buzz channels are identified by **UUID**, not by name. List the channels your ag
 BUZZ_PRIVATE_KEY=<your-key> BUZZ_RELAY_URL=<your-relay> buzz channels list
 ```
 
-Copy the UUID of the channel investigation reports should land in.
+Copy the UUID of the channel messages should land in.
 
 ### Option 1: CLI setup (recommended)
 
@@ -94,7 +94,7 @@ BUZZ_PATH=buzz
 4. List channels and copy the destination UUID.
 5. Store the private key via setup (keyring) or `BUZZ_PRIVATE_KEY`.
 
-## Investigation tools
+## Buzz tools
 
 | Tool | What it does |
 | --- | --- |
@@ -116,11 +116,14 @@ Alarms use the same per-threshold cooldown as the other providers (default 300s)
 
 ### Delivery test
 
+Trip a one-shot watchdog alarm:
+
 ```bash
-opensre investigate --input tests/e2e/kubernetes/fixtures/datadog_k8s_alert.json
+sleep 30 &
+opensre watchdog --pid $! --max-runtime 2s --once --provider buzz
 ```
 
-Findings should appear in the configured channel. Long reports are truncated to 4,096 characters.
+An alarm message should appear in the configured channel within a few seconds. Long messages are truncated to 4,096 characters.
 
 ## Verify
 <Note>

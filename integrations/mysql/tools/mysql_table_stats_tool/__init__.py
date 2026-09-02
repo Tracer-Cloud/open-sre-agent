@@ -41,7 +41,7 @@ def _map_get_mysql_table_stats(
     name="get_mysql_table_stats",
     description="Retrieve MySQL table statistics including row counts and data/index sizes from information_schema.",
     source="mysql",
-    surfaces=(ToolSurface.INVESTIGATION, ToolSurface.CHAT),
+    surfaces=(ToolSurface.CHAT,),
     use_cases=[
         "Identifying the largest tables consuming storage during capacity incidents",
         "Reviewing table sizes and growth patterns for capacity planning",

@@ -236,7 +236,7 @@ def _map_db_cluster(
 @tool(
     name="list_yc_db_clusters",
     evidence_mapper=_map_db_clusters,
-    surfaces=(ToolSurface.INVESTIGATION, ToolSurface.ACTION),
+    surfaces=(ToolSurface.ACTION,),
     display_name="Managed Databases",
     source=SOURCE,
     description=(
@@ -348,7 +348,7 @@ def list_yc_db_clusters(
 @tool(
     name="get_yc_db_cluster",
     evidence_mapper=_map_db_cluster,
-    surfaces=(ToolSurface.INVESTIGATION, ToolSurface.ACTION),
+    surfaces=(ToolSurface.ACTION,),
     display_name="Managed Databases",
     source=SOURCE,
     description=(

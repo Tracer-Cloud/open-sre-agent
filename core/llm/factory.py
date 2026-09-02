@@ -2,7 +2,7 @@
 
 The provider/transport decision (CLI-backed vs LiteLLM vs native SDK, and which
 vendor) is resolved once in :func:`resolve_llm_route` and reused by every role, so
-an Azure/LiteLLM routing fix cannot drift between the investigation agent and the
+an Azure/LiteLLM routing fix cannot drift between the tool-calling agent and the
 reasoning/classification/toolcall clients.
 
 Roles differ only in the *client family* they build: :data:`LLMRole.AGENT` builds
@@ -39,7 +39,7 @@ from core.llm.types import AgentLLMClient, LLMRoute, ModelType
 class LLMRole(StrEnum):
     """The model tier a caller needs, independent of provider/transport."""
 
-    AGENT = "agent"  # tool-calling ReAct (action, gather, investigation)
+    AGENT = "agent"  # tool-calling ReAct (action, gather)
     REASONING = "reasoning"  # streamed assistant answer / complex reasoning
     CLASSIFICATION = "classification"  # mid-tier classifier
     TOOLCALL = "toolcall"  # lightweight tool selection / action planning

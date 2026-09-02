@@ -46,7 +46,7 @@ def _extract_params(sources: dict[str, dict]) -> dict[str, Any]:
 
 @tool(
     name="query_yc_metrics",
-    surfaces=(ToolSurface.INVESTIGATION, ToolSurface.ACTION),
+    surfaces=(ToolSurface.ACTION,),
     display_name="Yandex Monitoring",
     source=SOURCE,
     description=(
@@ -206,7 +206,7 @@ def _series_sample(client: YandexMonitoringClient, selectors: str) -> list[dict[
 
 @tool(
     name="list_yc_metrics",
-    surfaces=(ToolSurface.INVESTIGATION, ToolSurface.ACTION),
+    surfaces=(ToolSurface.ACTION,),
     display_name="Yandex Monitoring",
     source=SOURCE,
     description=(

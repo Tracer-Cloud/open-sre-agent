@@ -66,7 +66,6 @@ def _counts(
         generic_success_count=0,
         planned_count=steps,
         handled=True,
-        investigation_dispatched=False,
     )
 
 

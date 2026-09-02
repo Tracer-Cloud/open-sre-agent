@@ -39,7 +39,6 @@ USE THIS TOOL:
 DO NOT USE THIS SKILL FOR:
 - <Adjacent request that belongs to another skill/tool, and which one to use
   instead, e.g. "Ordinary PR reads … Use `github_cli`.">
-- <Live incident RCA. Use `investigation_start`.>
 
 HARD RULES:
 - <Exact call shapes: `<tool>(arg="<value>")` for each input variant

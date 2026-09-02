@@ -45,7 +45,7 @@ class VictoriaLogsTool(BaseTool):
     # tools without an explicit ``surfaces`` is investigation-only, which would
     # hide this from chat-mode investigations where log queries are a common
     # follow-up. Mirrors SplunkSearchTool, the closest log-query analog.
-    surfaces = (ToolSurface.INVESTIGATION, ToolSurface.CHAT)
+    surfaces = (ToolSurface.CHAT,)
     requires = ["base_url"]
     injected_params = ["base_url"]
     input_schema = {

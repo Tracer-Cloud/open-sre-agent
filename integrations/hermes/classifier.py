@@ -149,7 +149,7 @@ class IncidentClassifier:
         # Emitting ``error_severity`` for the same record would create two
         # separate incidents for every Python exception — different
         # fingerprints, different dedup buckets — resulting in duplicate
-        # Telegram notifications and two concurrent RCA investigation calls.
+        # Telegram notifications and two concurrent downstream alert handlers.
         if _looks_like_traceback_header(record):
             return None
         severity = (

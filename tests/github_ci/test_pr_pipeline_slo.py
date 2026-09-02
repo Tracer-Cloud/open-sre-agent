@@ -64,7 +64,6 @@ def test_heavy_test_suites_are_duration_balanced_with_measured_headroom() -> Non
     live_agent = next(entry for entry in entries if entry["shard"] == "cli-live-agent")
     assert live_agent["llm_provider"] == "openai"
     assert live_agent["pytest_paths"].split() == [
-        "tests/core/agent/test_turn_scenarios.py",
         "tests/tools/selection",
     ]
     tool_groups = [entry for entry in entries if entry["shard"].startswith("tools-runtime-")]
@@ -72,10 +71,6 @@ def test_heavy_test_suites_are_duration_balanced_with_measured_headroom() -> Non
         "--ignore=tests/tools/selection" in entry["extra_pytest_args"] for entry in tool_groups
     )
     cli_groups = [entry for entry in entries if entry["shard"].startswith("cli-runtime-")]
-    assert all(
-        "--ignore=tests/core/agent/test_turn_scenarios.py" in entry["extra_pytest_args"]
-        for entry in cli_groups
-    )
     assert all(
         "--ignore=tests/cli/test_smoke.py" in entry["extra_pytest_args"] for entry in cli_groups
     )

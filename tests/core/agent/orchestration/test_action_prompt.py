@@ -41,8 +41,6 @@ def _ctx(
         conversation_messages=tuple(messages or []),
         configured_integrations=integrations,
         configured_integrations_known=integrations_known,
-        last_state=None,
-        last_synthetic_observation_path=None,
         reasoning_effort=None,
         active_vcs_repositories=active_repositories or {},
         known_vcs_repositories=known_repositories or {},
@@ -160,8 +158,7 @@ def test_connected_integrations_block_renders_state() -> None:
 
     none_block = connected_integrations_block(_ctx(integrations=(), integrations_known=True))
     assert "none" in none_block
-    assert "does not gate diagnostic" in none_block.lower()
-    assert "investigation_start always" in none_block.lower()
+    assert "use available chat tools" in none_block.lower()
 
     listed = connected_integrations_block(
         _ctx(
@@ -170,8 +167,8 @@ def test_connected_integrations_block_renders_state() -> None:
         )
     )
     assert "github, posthog_mcp, sentry" in listed
-    # Connected listing still must not imply auto-investigate on diagnostic asks.
-    assert "does not gate diagnostic" in listed.lower()
+    # Cause/why questions still route to chat tools, not a special pipeline.
+    assert "use available chat tools" in listed.lower()
 
 
 def test_repository_context_renders_one_active_and_multiple_remembered_repos() -> None:
@@ -502,8 +499,6 @@ def test_from_session_pops_the_pending_recovery_note() -> None:
         cli_agent_messages=[],
         configured_integrations=(),
         configured_integrations_known=False,
-        last_state=None,
-        last_synthetic_observation_path=None,
         reasoning_effort=None,
         pending_recovery_note="previous turn was interrupted while executing shell_run step-2",
     )

@@ -43,7 +43,7 @@ logger = logging.getLogger(__name__)
 
 
 class LiteLLMAgentClient:
-    """LiteLLM-backed tool-calling client for the investigation agent loop."""
+    """LiteLLM-backed tool-calling client for the agent ReAct loop."""
 
     provider_name = "LiteLLM"
     auth_error_hint = "Check the provider API key configured for this model."

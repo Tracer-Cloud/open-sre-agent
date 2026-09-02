@@ -1,11 +1,11 @@
 ---
 title: "OpenObserve"
-description: "Connect OpenObserve so OpenSRE can pull structured log evidence during investigations"
+description: "Connect OpenObserve so OpenSRE can pull structured logs as evidence"
 ---
 
 ## Overview
 
-OpenSRE connects to OpenObserve to retrieve log evidence when an alert fires — correlating errors, anomalies, and service activity during investigations.
+OpenSRE connects to OpenObserve to retrieve log evidence when an alert fires — correlating errors, anomalies, and service activity during incidents.
 
 ## Prerequisites
 
@@ -86,7 +86,7 @@ Store credentials use `base_url` and `api_token` (not `url` / `token`). For user
 5. Note the organization name you want OpenSRE to query
 6. Add these values to your OpenSRE configuration
 
-## Investigation tools
+## Tools
 
 | Tool | Use it for |
 | --- | --- |
@@ -116,9 +116,9 @@ openobserve    local env   passed   Configured for OpenObserve at https://openob
 | **401 Unauthorized** | Regenerate the access token or confirm username/password credentials. |
 | **404 on query** | Check `OPENOBSERVE_ORG` matches your organization slug. Verify the stream name if `OPENOBSERVE_STREAM` is set. |
 | **Connection refused** | Confirm `OPENOBSERVE_URL` includes the correct protocol and port. Ensure network access from OpenSRE to the instance. |
-| **Empty log results** | Widen the time range in the investigation query. Confirm logs are ingested into the target stream. |
+| **Empty log results** | Widen the time range in the query. Confirm logs are ingested into the target stream. |
 | **Missing credentials on verify** | Set `OPENOBSERVE_URL` and either `OPENOBSERVE_TOKEN` or both `OPENOBSERVE_USERNAME` and `OPENOBSERVE_PASSWORD`. |
 
 ## Security
 
-Use a token with the minimum permissions required for investigation workflows whenever possible.
+Use a token with the minimum permissions required for the agent's queries whenever possible.

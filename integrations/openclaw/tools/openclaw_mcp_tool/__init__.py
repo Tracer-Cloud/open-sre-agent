@@ -135,7 +135,7 @@ def _normalize_named_bridge_call(
         "Finding the right tool by passing a name_filter (e.g. 'conversation event permission')",
         "Fetching the input schema of a specific tool with include_schema before calling it",
     ],
-    surfaces=(ToolSurface.INVESTIGATION, ToolSurface.CHAT),
+    surfaces=(ToolSurface.CHAT,),
     input_schema={
         "type": "object",
         "properties": {
@@ -236,7 +236,7 @@ def list_openclaw_bridge_tools(
         "Checking whether an engineer already discussed the failing service in OpenClaw",
         "Pulling recent OpenClaw context before querying external systems",
     ],
-    surfaces=(ToolSurface.INVESTIGATION, ToolSurface.CHAT),
+    surfaces=(ToolSurface.CHAT,),
     input_schema={
         "type": "object",
         "properties": {
@@ -321,7 +321,7 @@ def search_openclaw_conversations(
         "Pulling the latest assistant and engineer messages before continuing an investigation",
     ],
     requires=["conversation_id"],
-    surfaces=(ToolSurface.INVESTIGATION, ToolSurface.CHAT),
+    surfaces=(ToolSurface.CHAT,),
     input_schema={
         "type": "object",
         "properties": {
@@ -383,7 +383,7 @@ def get_openclaw_conversation(
         "Appending a short remediation note or next-step summary to an OpenClaw thread",
     ],
     requires=["conversation_id"],
-    surfaces=(ToolSurface.INVESTIGATION, ToolSurface.CHAT),
+    surfaces=(ToolSurface.CHAT,),
     input_schema={
         "type": "object",
         "properties": {
@@ -449,7 +449,7 @@ def send_openclaw_message(
         "Polling OpenClaw event queues or responding through an existing route",
     ],
     requires=["tool_name"],
-    surfaces=(ToolSurface.INVESTIGATION, ToolSurface.CHAT),
+    surfaces=(ToolSurface.CHAT,),
     input_schema={
         "type": "object",
         "properties": {

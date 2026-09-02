@@ -77,7 +77,7 @@ def _issue_events_extract_params(sources: dict[str, dict]) -> dict[str, Any]:
     injected_params=("organization_slug", "sentry_token", "sentry_url"),
     is_available=_issue_events_available,
     extract_params=_issue_events_extract_params,
-    surfaces=(ToolSurface.INVESTIGATION, ToolSurface.CHAT),
+    surfaces=(ToolSurface.CHAT,),
     evidence_mapper=_map_list_sentry_issue_events,
 )
 def list_sentry_issue_events(

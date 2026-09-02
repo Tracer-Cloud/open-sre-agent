@@ -43,6 +43,10 @@ _CLEARED_ENV_KEYS = (
     "DD_APP_KEY",
     "DD_SITE",
     "GEMINI_API_KEY",
+    "GITHUB_MCP_AUTH_TOKEN",
+    "GITHUB_MCP_MODE",
+    "GITHUB_MCP_TOOLSETS",
+    "GITHUB_MCP_URL",
     "GOOGLE_CREDENTIALS_FILE",
     "GOOGLE_DRIVE_FOLDER_ID",
     "GRAFANA_INSTANCE_URL",
@@ -466,7 +470,7 @@ def test_opensre_landing_page_smoke(cli_sandbox: CliSandbox) -> None:
 
     assert result.exit_code == 0
     assert "Quick start:" in result.stdout
-    assert "opensre investigate -i alert.json" in result.stdout
+    assert "opensre ask" in result.stdout
 
 
 def test_opensre_help_smoke(cli_sandbox: CliSandbox) -> None:
@@ -529,75 +533,6 @@ def test_update_check_smoke_uses_local_stub(cli_sandbox: CliSandbox, release_api
     assert "9999.0.0" in result.stdout
 
 
-def test_investigate_print_template_smoke(cli_sandbox: CliSandbox) -> None:
-    result = _run_cli(cli_sandbox, "investigate", "--print-template", "generic")
-
-    assert result.exit_code == 0
-    payload = json.loads(result.stdout)
-    assert payload["alert_source"] == "generic"
-    assert payload["message"]
-
-
-def test_investigate_print_template_new_relic_smoke(cli_sandbox: CliSandbox) -> None:
-    result = _run_cli(cli_sandbox, "investigate", "--print-template", "new_relic")
-
-    assert result.exit_code == 0
-    payload = json.loads(result.stdout)
-    assert payload["alert_source"] == "new_relic"
-    assert payload["message"]
-
-
-def test_investigate_onboard_handoff_smoke(cli_sandbox: CliSandbox, tmp_path: Path) -> None:
-    """project.env written by onboard is read by investigate before it reaches the LLM.
-
-    Only the project .env handoff is exercised here — investigate reads
-    LLM_PROVIDER and model env vars from that file, not from the wizard store.
-    No real API key is required. The test proves the plumbing works by asserting
-    the CLI reaches the LLM credential check (exit 1 + ANTHROPIC_API_KEY named
-    in the error) rather than crashing in config loading or file parsing.
-
-    LLM_PROVIDER is passed explicitly via extra_env so the assertion holds even
-    on CI runners where the variable is set to a different provider in the
-    parent environment.
-    """
-    cli_sandbox.seed_project_env(provider="anthropic", model="claude-opus-4-7")
-
-    alert_path = tmp_path / "alert.json"
-    alert_path.write_text(
-        json.dumps(
-            {
-                "alert_name": "High CPU on orders-rds-prod",
-                "pipeline_name": "orders",
-                "severity": "critical",
-                "message": "CPU utilisation exceeded 90% for 5 minutes.",
-            }
-        ),
-        encoding="utf-8",
-    )
-
-    result = _run_cli(
-        cli_sandbox,
-        "investigate",
-        "-i",
-        str(alert_path),
-        extra_env={"LLM_PROVIDER": "anthropic"},
-        # Full CLI boot (adapters + verifiers) then fail closed on credentials.
-        # Under loaded ``test-cov`` (xdist + coverage) a cold subprocess can
-        # exceed the default 15s budget even though the happy path is ~3s.
-        timeout=60.0,
-    )
-
-    # Exit 1 is expected — no real API key in CI.
-    assert result.exit_code == 1
-    # The failure must name the missing credential specifically — not a generic
-    # "run opensre onboard" fallback that would also appear when config loading
-    # itself is broken (the scenario this test is designed to catch).
-    combined = result.stdout + result.stderr
-    assert "ANTHROPIC_API_KEY" in combined, (
-        f"Expected a missing-credential error naming ANTHROPIC_API_KEY, got:\n{combined}"
-    )
-
-
 def test_integrations_list_and_show_smoke(cli_sandbox: CliSandbox) -> None:
     cli_sandbox.seed_integrations(
         [
@@ -648,18 +583,6 @@ def test_integrations_verify_datadog_smoke(cli_sandbox: CliSandbox) -> None:
     assert result.exit_code == 1
     assert "datadog" in result.stdout
     assert "Missing API key or application key." in result.stdout
-
-
-def test_tests_inventory_commands_smoke(cli_sandbox: CliSandbox) -> None:
-    list_result = _run_cli(cli_sandbox, "tests", "list", "--category", "ci-safe")
-    run_result = _run_cli(cli_sandbox, "tests", "run", "make:test-cov", "--dry-run")
-
-    assert list_result.exit_code == 0
-    assert "make:test-cov" in list_result.stdout
-    assert "make:test-full" in list_result.stdout
-
-    assert run_result.exit_code == 0
-    assert "make test-cov" in run_result.stdout
 
 
 @pytest.mark.skipif(os.name == "nt", reason="interactive smoke uses POSIX PTYs")
@@ -888,20 +811,6 @@ def test_integrations_remove_datadog_interactive_smoke(cli_sandbox: CliSandbox) 
     assert result.exit_code == 0
     assert "Removed 'datadog'." in result.stdout
     assert cli_sandbox.read_integrations() == []
-
-
-@pytest.mark.skipif(os.name == "nt", reason="interactive smoke uses POSIX PTYs")
-def test_tests_interactive_launcher_smoke(cli_sandbox: CliSandbox) -> None:
-    # The prompt instruction reads "Esc exit"; Escape is the PTY-safe way to
-    # dismiss the prompt in automation (no SIGINT/raw-mode race conditions).
-    result = _run_cli_pty(
-        cli_sandbox,
-        "tests",
-        actions=[PtyAction(expect="Choose a test category:", send=b"\x1b")],
-    )
-
-    assert result.exit_code == 0
-    assert "Choose a test category:" in result.stdout
 
 
 def test_gateway_help_smoke(cli_sandbox: CliSandbox) -> None:

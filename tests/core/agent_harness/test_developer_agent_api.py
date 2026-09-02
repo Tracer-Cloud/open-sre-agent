@@ -40,10 +40,6 @@ class _RecordingPrompts(EmptyPromptContextProvider):
         self.calls.append(f"docs:{query}")
         return ""
 
-    def investigation_flow(self) -> str:
-        self.calls.append("investigation_flow")
-        return ""
-
     def runtime_facts(self) -> Mapping[str, Any]:
         self.calls.append("runtime_facts")
         return {}

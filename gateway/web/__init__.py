@@ -1,4 +1,4 @@
-"""Web surface — FastAPI app, API routes, investigation persistence.
+"""Web surface — FastAPI app and API routes.
 
 Primary entry: :mod:`gateway.web.webapp` (``app``) — used by
 ``uvicorn gateway.web.webapp:app`` when ``MODE=web``, and by the gateway

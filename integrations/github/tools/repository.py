@@ -91,7 +91,7 @@ def _map_get_github_repository(
         "Searching GitHub issues by keyword (use search_github_issues)",
     ],
     requires=["owner", "repo"],
-    surfaces=(ToolSurface.INVESTIGATION, ToolSurface.CHAT),
+    surfaces=(ToolSurface.CHAT,),
     side_effect_level=SideEffectLevel.READ_ONLY,
     input_schema={
         "type": "object",

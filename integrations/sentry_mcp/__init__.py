@@ -4,7 +4,7 @@ Sentry ships a hosted Model Context Protocol (MCP) server that exposes its
 products — issues, events, traces, replays, releases, monitors, Seer
 root-cause analysis, and more — as function-calling tools. This module
 centralizes Sentry MCP configuration, validation, and tool-calling so the
-onboarding wizard, verify CLI, chat tools, and investigation actions all share
+onboarding wizard, verify CLI, and chat tools all share
 the same transport and parsing logic.
 
 This is distinct from ``integrations/sentry.py``, which is a narrow REST
@@ -458,7 +458,7 @@ async def _call_tool_async(
 ) -> SentryMCPToolCallResult:
     async with _open_sentry_mcp_session(config) as session:
         # Bound the call uniformly across transports so a hung MCP tool cannot
-        # block the investigation pipeline indefinitely.
+        # block the agent turn indefinitely.
         result = await asyncio.wait_for(
             session.call_tool(tool_name, arguments or {}),
             timeout=config.timeout_seconds,

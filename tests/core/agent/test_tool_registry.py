@@ -68,9 +68,17 @@ def test_tool_specs_include_required_fields() -> None:
 
 
 def test_action_tools_classify_side_effects() -> None:
+    """Every tool that opts into the action surface declares its side effect.
+
+    The execution gate branches on ``side_effect_level``; an unclassified
+    action tool would silently fail closed on every invocation. Chat-surface
+    knowledge tools are exempt here (an unset level already fails closed).
+    """
     tools = _action_tools(Session())
     unclassified = sorted(
-        tool.name for tool in tools if getattr(tool, "side_effect_level", None) is None
+        tool.name
+        for tool in tools
+        if ToolSurface.ACTION in tool.surfaces and getattr(tool, "side_effect_level", None) is None
     )
 
     assert unclassified == []
@@ -146,23 +154,18 @@ def test_tools_hidden_when_capabilities_are_explicitly_empty() -> None:
         available_capabilities={
             "slash_commands": (),
             "cli_commands": (),
-            "synthetic_suites": (),
             "shell_commands": (),
             "implementation": (),
             "llm_provider": (),
-            "investigation": (),
             "task_cancel": (),
         }
     )
     names = {spec["name"] for spec in _tool_specs(session)}
     assert "slash_invoke" not in names
     assert "cli_exec" not in names
-    assert "synthetic_run" not in names
     assert "shell_run" not in names
     assert "code_implement" not in names
     assert "llm_set_provider" not in names
-    assert "investigation_start" not in names
-    assert "alert_sample" not in names
     assert "task_cancel" not in names
 
 
@@ -224,25 +227,6 @@ def test_registry_agent_tools_exclude_unavailable_tool() -> None:
     assert "slash_invoke" not in names
 
 
-def test_investigation_offered_to_planner() -> None:
-    """``investigation_start`` is always offered to the planner so diagnostic
-    prompts can trigger the RCA pipeline from the REPL."""
-    names = {spec["name"] for spec in _tool_specs(Session())}
-    assert "investigation_start" in names
-
-
-def test_investigation_tool_description_preserves_compound_slash_guidance() -> None:
-    entry = get_action_tool("investigation_start")
-    assert entry is not None
-    description = entry.description.lower()
-    assert "run /remote and then investigate" in description
-    assert "placeholder quoted text like 'hello world'" in description
-    assert "separate second tool call" in description
-    assert "never drop the quoted investigation" in description
-    assert "do not call ask_user_choice first" in description
-    assert "pasted alert json" in description
-
-
 def test_session_goal_control_tool_is_registered() -> None:
     entry = get_action_tool("session_goal_set")
     assert entry is not None
@@ -277,23 +261,13 @@ def test_slash_tool_description_preserves_compound_followup_guidance() -> None:
     assert entry is not None
     description = entry.description.lower()
     assert "only the slash-command clause" in description
-    assert "run /remote and then investigate" in description
-    assert "investigation_start" in description
-
-
-def test_synthetic_tool_description_preserves_numeric_id_guidance() -> None:
-    entry = get_action_tool("synthetic_run")
-    assert entry is not None
-    description = entry.description.lower()
-    assert '"005" -> "005-failover"' in description
-    assert '"004" -> "004-cpu-saturation-bad-query"' in description
-    assert "never substitute a neighboring numbered scenario" in description
+    assert "run /remote and then send a summary to slack" in description
+    assert "separate tool call for every other actionable clause" in description
 
 
 def test_gateway_capabilities_only_hide_gateway_unsupported_tools() -> None:
     session = Session(
         available_capabilities={
-            "investigation": (),
             "llm_provider": (),
             "task_cancel": (),
         }
@@ -301,8 +275,6 @@ def test_gateway_capabilities_only_hide_gateway_unsupported_tools() -> None:
 
     names = {spec["name"] for spec in _tool_specs(session)}
 
-    assert "investigation_start" not in names
-    assert "alert_sample" not in names
     assert "llm_set_provider" not in names
     assert "task_cancel" not in names
     assert "slash_invoke" in names

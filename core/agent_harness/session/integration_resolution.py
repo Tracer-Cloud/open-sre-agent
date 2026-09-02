@@ -110,7 +110,7 @@ class IntegrationState:
     """Resolved integration configs (env/store) shared across turns.
 
     Populated silently at REPL boot and again after integration mutations so the
-    conversational assistant and investigations can call registered tools without
+    conversational assistant can call registered tools without
     waiting for the first user message to trigger a visible "Loading integrations"
     pass. Cleared by :meth:`refresh` when integrations change."""
     vcs_repo_scopes: dict[str, tuple[str, ...]] = field(default_factory=dict)

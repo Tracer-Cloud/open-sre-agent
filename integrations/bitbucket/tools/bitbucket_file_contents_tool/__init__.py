@@ -41,7 +41,7 @@ def _get_bitbucket_file_contents_available(sources: dict[str, dict]) -> bool:
     name="get_bitbucket_file_contents",
     description="Retrieve the contents of a file from a Bitbucket repository at a specific revision.",
     source="bitbucket",
-    surfaces=(ToolSurface.INVESTIGATION, ToolSurface.CHAT),
+    surfaces=(ToolSurface.CHAT,),
     use_cases=[
         "Reading configuration files that may explain a failure",
         "Comparing file contents between revisions during investigation",

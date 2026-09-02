@@ -17,13 +17,12 @@ from surfaces.interactive_shell.session.session import Session
 
 # Core fields are inherited from SessionCore; the shell adds these two facets.
 # Includes pending_schedule_offer (structured yes → /cron confirmations),
-# pending_investigation_offer (structured yes → investigation dispatch),
 # pending_user_choice (structured decision → /choose selection menu), and
 # pending_recovery_note (WAL recovery note for the first turn after /resume),
 # plus the session-goal trio (session_goal, pending_integration_setup_offer,
 # offered_upgrade_ctas), and the host-owned task-plan work log
 # (task_plan_work, task_plan_work_step_texts, task_plan_breakdown_emitted).
-_CORE_FIELD_COUNT = 34
+_CORE_FIELD_COUNT = 29
 _FACET_FIELDS = ("alerts", "terminal")
 
 
@@ -70,18 +69,6 @@ def test_terminal_facet_holds_the_pending_prompt_cluster() -> None:
         "pending_prompt_autosubmit",
         "exclusive_stdin_active",
         "dispatch_active",
-    ):
-        assert hasattr(terminal, f)
-
-
-def test_terminal_facet_holds_the_background_cluster() -> None:
-    terminal = _session().terminal
-    for f in (
-        "background_mode_enabled",
-        "background_investigations",
-        "background_notification_preferences",
-        "background_notices",
-        "_background_notices_lock",
     ):
         assert hasattr(terminal, f)
 

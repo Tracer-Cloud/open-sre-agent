@@ -1,9 +1,9 @@
 ---
 title: "Install OpenSRE"
-description: "Install the OpenSRE CLI on your machine and get ready to investigate."
+description: "Install the OpenSRE CLI on your machine and start chatting with the agent."
 ---
 
-This page gets the `opensre` command onto your laptop or server, then walks you through the short setup so you can run investigations.
+This page gets the `opensre` command onto your laptop or server, then walks you through the short setup so you can start asking questions.
 
 ## What you get
 
@@ -78,17 +78,15 @@ Then check that the tools you connected work:
 opensre integrations verify
 ```
 
-## Try a quick investigation
+## Ask your first question
 
-```bash
-opensre investigate -i tests/e2e/kubernetes/fixtures/datadog_k8s_alert.json
-```
-
-Or open the shell and describe what's going on:
+Open the shell and describe what's going on:
 
 ```bash
 opensre
 ```
+
+Ask: *why is checkout latency spiking?*
 
 Full walkthrough with GIFs: [Quickstart](/quickstart).
 

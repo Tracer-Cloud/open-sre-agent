@@ -3,12 +3,20 @@
 from __future__ import annotations
 
 from typing import Any
-from unittest.mock import MagicMock
 
 from surfaces.interactive_shell.session import Session
 from surfaces.interactive_shell.telemetry.integration_snapshot import (
     build_turn_integration_snapshot,
 )
+
+
+class _FakeTool:
+    def __init__(self, source: str, *, available: bool = True) -> None:
+        self.source = source
+        self._available = available
+
+    def is_available(self, _resolved: dict[str, Any]) -> bool:
+        return self._available
 
 
 def test_build_turn_integration_snapshot_empty_when_unconfigured() -> None:
@@ -38,11 +46,8 @@ def test_build_turn_integration_snapshot_uses_session_configured_slugs(
     }
 
     monkeypatch.setattr(
-        "surfaces.interactive_shell.telemetry.integration_snapshot.get_available_tools",
-        lambda _resolved: [
-            MagicMock(source="datadog"),
-            MagicMock(source="github"),
-        ],
+        "surfaces.interactive_shell.telemetry.integration_snapshot.get_registered_tools",
+        lambda: [_FakeTool("datadog"), _FakeTool("github")],
     )
 
     snapshot = build_turn_integration_snapshot(session)
@@ -64,8 +69,8 @@ def test_build_turn_integration_snapshot_excludes_unavailable_tools(
     }
 
     monkeypatch.setattr(
-        "surfaces.interactive_shell.telemetry.integration_snapshot.get_available_tools",
-        lambda _resolved: [MagicMock(source="datadog")],
+        "surfaces.interactive_shell.telemetry.integration_snapshot.get_registered_tools",
+        lambda: [_FakeTool("datadog"), _FakeTool("grafana", available=False)],
     )
 
     snapshot = build_turn_integration_snapshot(session)
@@ -83,11 +88,11 @@ def test_build_turn_integration_snapshot_survives_tool_resolution_failure(
     session.configured_integrations = ("datadog",)
     session.resolved_integrations_cache = {"datadog": {"api_key": "x", "app_key": "y"}}
 
-    def _boom(_resolved: dict[str, Any]) -> list[MagicMock]:
+    def _boom() -> list[_FakeTool]:
         raise RuntimeError("tool registry blew up")
 
     monkeypatch.setattr(
-        "surfaces.interactive_shell.telemetry.integration_snapshot.get_available_tools",
+        "surfaces.interactive_shell.telemetry.integration_snapshot.get_registered_tools",
         _boom,
     )
 
@@ -107,8 +112,8 @@ def test_build_turn_integration_snapshot_survives_family_key_failure(
     session.resolved_integrations_cache = {"datadog": {"api_key": "x", "app_key": "y"}}
 
     monkeypatch.setattr(
-        "surfaces.interactive_shell.telemetry.integration_snapshot.get_available_tools",
-        lambda _resolved: [MagicMock(source="datadog")],
+        "surfaces.interactive_shell.telemetry.integration_snapshot.get_registered_tools",
+        lambda: [_FakeTool("datadog")],
     )
 
     def _boom(_service: str) -> str:

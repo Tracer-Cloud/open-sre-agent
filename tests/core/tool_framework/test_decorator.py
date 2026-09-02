@@ -82,7 +82,7 @@ def test_tool_used_as_factory_produces_same_result() -> None:
     assert registered.name == "factory_tool"
 
 
-def test_function_tool_surfaces_defaults_to_investigation() -> None:
+def test_function_tool_surfaces_defaults_to_chat() -> None:
     @tool(
         name="default_surface_tool",
         description="Check surface default.",
@@ -93,7 +93,7 @@ def test_function_tool_surfaces_defaults_to_investigation() -> None:
         pass
 
     registered = getattr(fn, REGISTERED_TOOL_ATTR)
-    assert registered.surfaces == ("investigation",)
+    assert registered.surfaces == ("chat",)
 
 
 def test_function_tool_surfaces_are_propagated() -> None:
@@ -102,13 +102,13 @@ def test_function_tool_surfaces_are_propagated() -> None:
         description="Appears in two surfaces.",
         source="grafana",
         input_schema={"type": "object", "properties": {}},
-        surfaces=("investigation", "chat"),
+        surfaces=("action", "chat"),
     )
     def fn() -> None:
         pass
 
     registered = getattr(fn, REGISTERED_TOOL_ATTR)
-    assert set(registered.surfaces) == {"investigation", "chat"}
+    assert set(registered.surfaces) == {"action", "chat"}
 
 
 def test_function_tool_with_source_none_raises() -> None:

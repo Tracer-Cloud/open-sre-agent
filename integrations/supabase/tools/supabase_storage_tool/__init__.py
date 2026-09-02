@@ -39,7 +39,7 @@ def _map_get_supabase_storage_buckets(
     name="get_supabase_storage_buckets",
     description="List all Supabase Storage buckets and their configuration metadata.",
     source="supabase",
-    surfaces=(ToolSurface.INVESTIGATION, ToolSurface.CHAT),
+    surfaces=(ToolSurface.CHAT,),
     use_cases=[
         "Auditing storage bucket configuration during a file upload incident",
         "Checking whether a bucket is public or private when debugging access errors",

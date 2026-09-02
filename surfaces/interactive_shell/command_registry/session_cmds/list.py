@@ -37,7 +37,6 @@ def _cmd_sessions(session: Session, console: Console, _args: list[str]) -> bool:
     table.add_column("Started")
     table.add_column("Duration")
     table.add_column("Turns", justify="right")
-    table.add_column("Investigations", justify="right")
 
     for i, entry in enumerate(entries, start=1):
         sid = entry["session_id"]
@@ -65,7 +64,6 @@ def _cmd_sessions(session: Session, console: Console, _args: list[str]) -> bool:
                 duration_secs = elapsed
 
         total = entry.get("total_turns")
-        investigations = entry.get("investigation_turns")
 
         table.add_row(
             str(i),
@@ -74,7 +72,6 @@ def _cmd_sessions(session: Session, console: Console, _args: list[str]) -> bool:
             started_str,
             format_repl_duration(duration_secs),
             str(total) if total is not None else "—",
-            str(investigations) if investigations is not None else "—",
         )
 
     print_repl_table(console, table)

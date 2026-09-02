@@ -48,7 +48,7 @@ def _map_get_mariadb_slow_queries(
     name="get_mariadb_slow_queries",
     description="Retrieve top MariaDB queries by average execution time from performance_schema.events_statements_summary_by_digest.",
     source="mariadb",
-    surfaces=(ToolSurface.INVESTIGATION, ToolSurface.CHAT),
+    surfaces=(ToolSurface.CHAT,),
     is_available=mariadb_is_available,
     injected_params=("host", "password", "username"),
     extract_params=mariadb_extract_params,

@@ -114,19 +114,15 @@ integrations verify datadog
 
 From a normal terminal, prefix with `opensre` (for example `opensre integrations verify`).
 
-## 5. Run a first investigation
+## 5. Ask a first question
 
-**Inside the shell:**
-
-```bash
-investigate -i tests/e2e/kubernetes/fixtures/datadog_k8s_alert.json
-```
-
-**From your normal terminal:**
+Start the shell and describe what's going on in plain English:
 
 ```bash
-opensre investigate -i tests/e2e/kubernetes/fixtures/datadog_k8s_alert.json
+opensre
 ```
+
+Ask: *why is checkout latency spiking?* The agent calls the tools you connected and answers in the shell.
 
 ## Where to connect tools
 
@@ -137,5 +133,4 @@ Start at [Integrations overview](/integrations-overview), then open each provide
 ## Related
 
 - [Quickstart](/quickstart) — install + setup + sample run with GIFs
-- [Investigations overview](/investigation-overview) — how investigations work end to end
 - [Deployment](/deployment) — gateway and hosted options beyond a single laptop

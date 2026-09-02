@@ -19,7 +19,7 @@ from integrations.redis import (
         "keyspace statistics, and hit/miss and eviction counters."
     ),
     source="redis",
-    surfaces=(ToolSurface.INVESTIGATION, ToolSurface.CHAT),
+    surfaces=(ToolSurface.CHAT,),
     use_cases=[
         "Assess Redis health during an incident: memory pressure, eviction, and client load.",
         "Check used vs. max memory and the maxmemory-policy when investigating OOM or latency.",

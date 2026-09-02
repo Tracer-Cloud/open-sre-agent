@@ -2,13 +2,9 @@
 
 from __future__ import annotations
 
-import json
 from collections import defaultdict
-from pathlib import Path
 
 from tests.ci_sharding import FileTiming, assign_file_groups
-
-_TIMINGS_PATH = Path(__file__).resolve().parents[2] / ".github/ci/pytest-file-durations.json"
 
 
 def test_slow_files_are_balanced_across_groups() -> None:
@@ -35,11 +31,3 @@ def test_new_files_use_the_recorded_per_test_average() -> None:
     assignments = assign_file_groups(counts, timings, splits=2)
 
     assert assignments == {"tests/new.py": 1, "tests/known.py": 2}
-
-
-def test_snapshot_includes_internal_pr_live_scenario_cost() -> None:
-    timings = json.loads(_TIMINGS_PATH.read_text(encoding="utf-8"))
-
-    live_scenarios = timings["tests/core/agent/test_turn_scenarios.py"]
-    assert live_scenarios["tests"] >= 20
-    assert live_scenarios["seconds"] >= 30.0

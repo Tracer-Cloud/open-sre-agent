@@ -275,5 +275,5 @@ def _extract_list_id(raw: str) -> str:
 
 slack_read_list = tool(
     SlackReadListTool(),
-    surfaces=(ToolSurface.INVESTIGATION, ToolSurface.CHAT, ToolSurface.ACTION),
+    surfaces=(ToolSurface.CHAT, ToolSurface.ACTION),
 )

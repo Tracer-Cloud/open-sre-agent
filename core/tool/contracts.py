@@ -15,7 +15,7 @@ from typing import Any, ClassVar, TypeAlias, Union, cast, get_args, get_origin, 
 
 from pydantic import BaseModel, Field, field_validator
 
-from config.constants.investigation import DEFAULT_APPROVAL_EXPIRY_SECONDS
+from config.constants.tooling import DEFAULT_APPROVAL_EXPIRY_SECONDS
 from config.strict_config import StrictConfigModel
 from core.domain.types.evidence import EvidenceMapper, EvidenceSource
 from core.domain.types.retrieval import RetrievalControls
@@ -242,7 +242,7 @@ class ToolMetadata(StrictConfigModel):
 
 
 class BaseTool(ABC):
-    """Abstract base class for every investigation tool.
+    """Abstract base class for every registered tool.
 
     Subclass contract
     -----------------
@@ -258,7 +258,7 @@ class BaseTool(ABC):
       dict rather than propagating to the agent loop.
     * Override ``is_available`` and ``extract_params`` when the tool
       requires specific data-source checks or needs to pull kwargs from the
-      investigation sources dict.
+      resolved-integration sources dict.
     * Do **not** declare ``run`` with positional arguments — the call site
       always uses keyword arguments: ``tool_instance.run(**kwargs)``.
     """
@@ -285,7 +285,7 @@ class BaseTool(ABC):
     retrieval_controls: ClassVar[RetrievalControls] = (
         RetrievalControls()
     )  # Declares supported controls
-    surfaces: ClassVar[tuple[ToolSurface | str, ...]] = (ToolSurface.INVESTIGATION,)
+    surfaces: ClassVar[tuple[ToolSurface | str, ...]] = (ToolSurface.CHAT,)
     tags: ClassVar[Sequence[str]] = ()
     parallel_safe: ClassVar[bool] = True
     requires_approval: ClassVar[bool] = False  # Whether this tool needs approval from messaging
@@ -346,7 +346,7 @@ class BaseTool(ABC):
         """Return validated registry/runtime metadata for this subclass."""
         return BaseToolRegistryMetadata.model_validate(
             {
-                "surfaces": getattr(cls, "surfaces", ("investigation",)),
+                "surfaces": getattr(cls, "surfaces", ("chat",)),
                 "tags": tuple(getattr(cls, "tags", ())),
                 "parallel_safe": getattr(cls, "parallel_safe", True),
             }
@@ -372,7 +372,7 @@ class BaseTool(ABC):
 
 REGISTERED_TOOL_ATTR = "__opensre_registered_tool__"
 
-_DEFAULT_SURFACES: tuple[ToolSurface, ...] = (ToolSurface.INVESTIGATION,)
+_DEFAULT_SURFACES: tuple[ToolSurface, ...] = (ToolSurface.CHAT,)
 
 
 def _always_available(_sources: dict[str, dict]) -> bool:

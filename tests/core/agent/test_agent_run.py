@@ -55,8 +55,6 @@ def _runtime_request() -> TurnSnapshot:
         conversation_messages=(),
         configured_integrations=(),
         configured_integrations_known=True,
-        last_state=None,
-        last_synthetic_observation_path=None,
         reasoning_effort=None,
         system_prompt=PromptEnvelope.from_text("runtime system"),
         available_tools=(tool,),

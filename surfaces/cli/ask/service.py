@@ -27,8 +27,8 @@ from infrastructure.errors import OpenSREError
 from surfaces.cli.ask.approval import ApprovalTracker, build_approval_hooks
 
 #: Capabilities the one-shot ``ask`` agent must not reach — it answers or runs a
-#: bounded action, not investigations, slash commands, or task cancellation.
-_ASK_DISABLED_CAPABILITIES = ("investigation", "llm_provider", "slash_commands", "task_cancel")
+#: bounded action, not slash commands or task cancellation.
+_ASK_DISABLED_CAPABILITIES = ("llm_provider", "slash_commands", "task_cancel")
 
 
 class AskStatus(StrEnum):

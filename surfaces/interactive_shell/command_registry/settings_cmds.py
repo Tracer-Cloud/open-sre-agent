@@ -204,7 +204,7 @@ COMMANDS: list[SlashCommand] = [
         usage=("/auto", "/auto med", "/auto high"),
         notes=(
             "Default is high (alpha): actions run without approval.",
-            "off asks before every tool; low also asks before investigations; "
+            "off asks before every tool; "
             "med asks before mutating agent tools (shell, code, slash/CLI, …); "
             "high asks nothing.",
             "/trust on skips approval prompts even when /auto would ask.",

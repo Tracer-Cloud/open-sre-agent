@@ -41,7 +41,7 @@ class TerminalMetrics:
     actions_executed_count: int = 0
     actions_success_count: int = 0
     ctrl_c_intervention_count: int = 0
-    """Incremented when the user Ctrl-Cs an active investigation. Bare-prompt
+    """Incremented when the user Ctrl-Cs an active turn. Bare-prompt
     Ctrl-C with no agent running is intentionally not counted."""
     correction_intervention_count: int = 0
     """Incremented when a follow-up/new-alert message starts with a correction cue."""

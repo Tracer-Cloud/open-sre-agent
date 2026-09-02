@@ -19,7 +19,7 @@ from integrations.redis import (
         "Uses the non-blocking SCAN cursor (never KEYS) and is safe on large keyspaces."
     ),
     source="redis",
-    surfaces=(ToolSurface.INVESTIGATION, ToolSurface.CHAT),
+    surfaces=(ToolSurface.CHAT,),
     use_cases=[
         "Estimate how many keys match a pattern when investigating key growth or leaks.",
         "Sample TTL and type for matched keys to spot missing expirations or wrong value types.",

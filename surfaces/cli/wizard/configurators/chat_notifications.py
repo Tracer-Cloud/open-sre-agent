@@ -30,8 +30,8 @@ def _configure_discord() -> tuple[str, str]:
         intro=(
             "\n[bold]Discord Integration[/bold]\n"
             f"[{SECONDARY}]Get your credentials from https://discord.com/developers/applications. "
-            "Only the bot token is required; the application ID (needed to register the "
-            "/investigate slash command), public key, and a default channel ID are optional.[/]\n"
+            "Only the bot token is required; the application ID, public key, and a "
+            "default channel ID are optional.[/]\n"
         ),
     )
 

@@ -53,7 +53,7 @@ class ToolCatalogEntry:
     """Registered tool name, e.g. ``"search_github_code"``."""
 
     surfaces: tuple[str, ...]
-    """Surfaces the tool is exposed on (``"investigation"`` and/or ``"chat"``)."""
+    """Surfaces the tool is exposed on (``"chat"`` and/or ``"action"``)."""
 
     description: str
     """One-line description from the tool's metadata, trimmed for display."""
@@ -136,15 +136,15 @@ def build_tool_catalog(surface: ToolSurface | None = None) -> list[ToolCatalogEn
     """Return :class:`ToolCatalogEntry` records for tools registered on ``surface``.
 
     Pass ``surface=None`` (default) to get every registered tool, or
-    ``"investigation"`` / ``"chat"`` to filter. The order matches
+    ``"chat"`` / ``"action"`` to filter. The order matches
     :func:`get_registered_tools` (alphabetical by tool name).
     """
     return [_entry_from_tool(tool) for tool in get_registered_tools(surface)]
 
 
 def _surface_sort_key(surface: str) -> tuple[int, str]:
-    """Stable surface ordering — investigation first, chat second, others alphabetical."""
-    priority = {"investigation": 0, "chat": 1}
+    """Stable surface ordering — chat first, others alphabetical."""
+    priority = {"chat": 0}
     return (priority.get(surface, 99), surface)
 
 
@@ -152,8 +152,8 @@ def format_tool_catalog_text(entries: list[ToolCatalogEntry]) -> str:
     """Render entries as compact Markdown-ish text grouped by surface.
 
     Each tool may belong to multiple surfaces and will appear under each one
-    so the user can see at a glance which tools the chat agent versus the
-    investigation pipeline can reach. Returns ``""`` for an empty catalog.
+    so the user can see at a glance which tools each surface can reach.
+    Returns ``""`` for an empty catalog.
     """
     if not entries:
         return ""

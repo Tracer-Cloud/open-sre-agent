@@ -14,7 +14,7 @@ from infrastructure.scheduling.scheduler.types import (
 class TestScheduledTask:
     def test_default_id_generated(self) -> None:
         task = ScheduledTask(
-            kind=TaskKind.DAILY_SUMMARY,
+            kind=TaskKind.MANUAL_LOOP,
             cron="0 9 * * 1-5",
             provider=Provider.TELEGRAM,
             chat_id="-100123",
@@ -25,7 +25,7 @@ class TestScheduledTask:
     def test_display_id_truncates(self) -> None:
         task = ScheduledTask(
             id="abcdef123456",
-            kind=TaskKind.DAILY_SUMMARY,
+            kind=TaskKind.MANUAL_LOOP,
             cron="0 9 * * *",
             provider=Provider.TELEGRAM,
         )
@@ -33,7 +33,7 @@ class TestScheduledTask:
 
     def test_defaults(self) -> None:
         task = ScheduledTask(
-            kind=TaskKind.WEEKLY_AUDIT,
+            kind=TaskKind.SENTRY_MORNING_DIGEST,
             cron="0 8 * * 1",
             provider=Provider.SLACK,
             chat_id="C123",
@@ -47,16 +47,14 @@ class TestScheduledTask:
         assert task.next_run is None
 
     def test_all_task_kinds(self) -> None:
-        assert TaskKind.DAILY_SUMMARY == "daily_summary"
-        assert TaskKind.WEEKLY_AUDIT == "weekly_audit"
-        assert TaskKind.INCIDENT_WINDOW_REPLAY == "incident_window_replay"
-        assert TaskKind.SYNTHETIC_RUN == "synthetic_run"
-        assert TaskKind.CUSTOM_INVESTIGATION == "custom_investigation"
+        assert TaskKind.MANUAL_LOOP == "manual_loop"
         assert TaskKind.SENTRY_MORNING_DIGEST == "sentry_morning_digest"
         assert TaskKind.SENTRY_UPTIME_WATCH == "sentry_uptime_watch"
         assert TaskKind.GITHUB_PR_SWEEP == "github_pr_sweep"
+        assert TaskKind.POSTHOG_METRIC_REPORT == "posthog_metric_report"
         assert TaskKind.WORK_ITEM_REMINDER == "work_item_reminder"
         assert TaskKind.WORK_ITEM_CHECKIN == "work_item_checkin"
+        assert len(TaskKind) == 7
 
     def test_all_providers(self) -> None:
         assert Provider.TELEGRAM == "telegram"
@@ -64,6 +62,7 @@ class TestScheduledTask:
         assert Provider.DISCORD == "discord"
         assert Provider.ROCKETCHAT == "rocketchat"
         assert Provider.INTERACTIVE_SHELL == "interactive_shell"
+        assert Provider.BUZZ == "buzz"
 
 
 class TestTaskRun:

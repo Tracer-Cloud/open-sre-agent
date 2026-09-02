@@ -40,15 +40,10 @@ from tools.interactive_shell.shell.runner import (
     run_pwd_command,
     run_shell_command,
 )
-from tools.interactive_shell.synthetic.runner import (
-    run_synthetic_test,
-    watch_synthetic_subprocess,
-)
 
 _BACKGROUND_TASK_POPEN = "surfaces.interactive_shell.runtime.subprocess_runner.subprocess.Popen"
 _CLI_POPEN = "tools.interactive_shell.cli.subprocess.Popen"
 _CLI_RUN = "tools.interactive_shell.cli.subprocess.run"
-_SYNTHETIC_RUNNER_POPEN = "tools.interactive_shell.synthetic.runner.subprocess.Popen"
 
 
 def _presenter(
@@ -767,11 +762,11 @@ def test_start_background_cli_task_uses_pty_for_live_terminal_output(
     console = Console(file=buf, force_terminal=True)
 
     task = start_background_cli_task(
-        display_command="opensre tests synthetic --scenario 001-replication-lag",
-        argv_list=["python", "-m", "cli", "tests", "synthetic"],
+        display_command="opensre fleet scan",
+        argv_list=["python", "-m", "cli", "fleet", "scan"],
         session=session,
         console=console,
-        kind=TaskKind.SYNTHETIC_TEST,
+        kind=TaskKind.CLI_COMMAND,
         use_pty=True,
     )
 
@@ -824,11 +819,11 @@ def test_start_background_cli_task_falls_back_to_pipes_when_pty_unavailable(
     console = Console(file=buf, force_terminal=True)
 
     task = start_background_cli_task(
-        display_command="opensre tests synthetic --scenario 001-replication-lag",
-        argv_list=["python", "-m", "cli", "tests", "synthetic"],
+        display_command="opensre fleet scan",
+        argv_list=["python", "-m", "cli", "fleet", "scan"],
         session=session,
         console=console,
-        kind=TaskKind.SYNTHETIC_TEST,
+        kind=TaskKind.CLI_COMMAND,
         use_pty=True,
     )
 
@@ -845,7 +840,7 @@ def test_start_background_cli_task_logs_failure_outcome_to_posthog(
 ) -> None:
     """A background CLI task that fails asynchronously must still send its real
     stderr/exit outcome to the prompt-log/PostHog sink. This is the regression
-    for ``opensre investigate`` errors arriving after the turn recorder flushed.
+    for background CLI errors arriving after the turn recorder flushed.
     """
     captured: list[dict[str, object]] = []
 
@@ -878,8 +873,8 @@ def test_start_background_cli_task_logs_failure_outcome_to_posthog(
     console = Console(file=buf, force_terminal=False)
 
     task = start_background_cli_task(
-        display_command="opensre investigate --service myportfolio",
-        argv_list=["python", "-m", "cli", "investigate", "--service", "myportfolio"],
+        display_command="opensre fleet watch 1234",
+        argv_list=["python", "-m", "cli", "fleet", "watch", "1234"],
         session=session,
         console=console,
         kind=TaskKind.CLI_COMMAND,
@@ -893,7 +888,7 @@ def test_start_background_cli_task_logs_failure_outcome_to_posthog(
     assert props["$ai_trace_id"] == task.task_id
     ai_input = props["$ai_input"]
     assert isinstance(ai_input, list)
-    assert ai_input[0]["content"] == "opensre investigate --service myportfolio"
+    assert ai_input[0]["content"] == "opensre fleet watch 1234"
     choices = props["$ai_output_choices"]
     assert isinstance(choices, list)
     content = choices[0]["content"]
@@ -916,7 +911,7 @@ def test_start_background_cli_task_logs_success_outcome_to_posthog(
 
     class _FakeProcess:
         returncode = 0
-        stdout = io.StringIO("investigation complete: root cause identified\n")
+        stdout = io.StringIO("scan complete: 2 agents registered\n")
         stderr = io.StringIO("")
 
         def poll(self) -> int:
@@ -936,8 +931,8 @@ def test_start_background_cli_task_logs_success_outcome_to_posthog(
     console = Console(file=buf, force_terminal=False)
 
     task = start_background_cli_task(
-        display_command="opensre investigate --service checkout",
-        argv_list=["python", "-m", "cli", "investigate", "--service", "checkout"],
+        display_command="opensre fleet scan --register",
+        argv_list=["python", "-m", "cli", "fleet", "scan", "--register"],
         session=session,
         console=console,
         kind=TaskKind.CLI_COMMAND,
@@ -948,7 +943,7 @@ def test_start_background_cli_task_logs_success_outcome_to_posthog(
     assert len(captured) == 1
     content = captured[0]["$ai_output_choices"][0]["content"]
     assert "command completed (exit 0)" in content
-    assert "investigation complete: root cause identified" in content
+    assert "scan complete: 2 agents registered" in content
 
 
 def test_task_output_stream_reports_unexpected_failure(
@@ -1040,11 +1035,11 @@ def test_start_background_cli_task_reports_spawn_failure(
     console = Console(file=buf, force_terminal=False)
 
     task = start_background_cli_task(
-        display_command="opensre tests synthetic --scenario 001-replication-lag",
-        argv_list=["python", "-m", "cli", "tests", "synthetic"],
+        display_command="opensre fleet scan",
+        argv_list=["python", "-m", "cli", "fleet", "scan"],
         session=session,
         console=console,
-        kind=TaskKind.SYNTHETIC_TEST,
+        kind=TaskKind.CLI_COMMAND,
     )
 
     assert task is None
@@ -1092,11 +1087,11 @@ def test_start_background_cli_task_reports_watcher_failure(
     console = Console(file=buf, force_terminal=False)
 
     task = start_background_cli_task(
-        display_command="opensre tests synthetic --scenario 001-replication-lag",
-        argv_list=["python", "-m", "cli", "tests", "synthetic"],
+        display_command="opensre fleet scan",
+        argv_list=["python", "-m", "cli", "fleet", "scan"],
         session=session,
         console=console,
-        kind=TaskKind.SYNTHETIC_TEST,
+        kind=TaskKind.CLI_COMMAND,
     )
 
     assert task is not None
@@ -1106,258 +1101,13 @@ def test_start_background_cli_task_reports_watcher_failure(
     assert isinstance(captured_errors[0], RuntimeError)
 
 
-def test_start_background_cli_task_skips_follow_up_after_session_reset(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    class _FakeProcess:
-        stdout = None
-        stderr = None
-        returncode = 1
-
-        def poll(self) -> int:
-            return 1
-
-    class _DeferredThread:
-        pending: list[object] = []
-
-        def __init__(
-            self,
-            group: object = None,
-            target: object = None,
-            name: object = None,
-            args: tuple[object, ...] = (),
-            kwargs: dict[str, object] | None = None,
-            *,
-            daemon: object = None,
-        ) -> None:
-            del group, name, daemon, args, kwargs
-            if callable(target):
-                _DeferredThread.pending.append(target)
-
-        def start(self) -> None:
-            return
-
-    def _fake_popen(_command: list[str], **_kwargs: object) -> _FakeProcess:
-        return _FakeProcess()
-
-    _DeferredThread.pending.clear()
-    monkeypatch.setattr(
-        "surfaces.interactive_shell.runtime.subprocess_runner.threading.Thread",
-        _DeferredThread,
-    )
-    monkeypatch.setattr(
-        _BACKGROUND_TASK_POPEN,
-        _fake_popen,
-    )
-
-    session = Session()
-    buf = io.StringIO()
-    console = Console(file=buf, force_terminal=False)
-
-    task = start_background_cli_task(
-        display_command="opensre tests synthetic --scenario 001-replication-lag",
-        argv_list=["python", "-m", "cli", "tests", "synthetic"],
-        session=session,
-        console=console,
-        kind=TaskKind.SYNTHETIC_TEST,
-    )
-    assert task is not None
-    assert len(_DeferredThread.pending) == 1
-    session.clear()
-    _DeferredThread.pending[0]()  # type: ignore[operator]
-    assert session.terminal.pending_prompt_default is None
-    _DeferredThread.pending.clear()
-
-
-def test_watch_synthetic_subprocess_reports_daemon_failure(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    captured_errors: list[BaseException] = []
-
-    class _FakeProcess:
-        stdout = None
-        stderr = None
-
-        def poll(self) -> int:
-            raise RuntimeError("poll broke")
-
-    monkeypatch.setattr(
-        "surfaces.shared.error_handling.exception_reporting.capture_exception",
-        lambda exc, **_kwargs: captured_errors.append(exc),
-    )
-    monkeypatch.setattr(
-        "surfaces.interactive_shell.runtime.subprocess_runner.threading.Thread",
-        _ImmediateThread,
-    )
-
-    session = Session()
-    task = session.task_registry.create(TaskKind.SYNTHETIC_TEST, command="suite")
-    task.mark_running()
-    buf = io.StringIO()
-    console = Console(file=buf, force_terminal=False)
-
-    with tempfile.SpooledTemporaryFile() as stderr_buf:  # type: ignore[type-arg]
-        watch_synthetic_subprocess(
-            task,
-            _FakeProcess(),  # type: ignore[arg-type]
-            _presenter(session, console),
-            "suite:001-test",
-            stderr_buf,
-        )
-
-    assert task.status == TaskStatus.FAILED
-    assert "synthetic watcher failed" in buf.getvalue()
-    assert len(captured_errors) == 1
-    assert isinstance(captured_errors[0], RuntimeError)
-
-
-def test_run_synthetic_test_unknown_suite_records_failure() -> None:
-    session = Session()
-    buf = io.StringIO()
-    console = Console(file=buf, force_terminal=False)
-
-    run_synthetic_test("nonexistent_suite", _presenter(session, console))
-    assert "unknown synthetic" in buf.getvalue().lower()
-    entry = session.history[-1]
-    assert entry["type"] == "synthetic_test"
-    assert entry["ok"] is False
-
-
-def test_run_synthetic_test_streams_subprocess_output(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    popen_kwargs: list[dict[str, object]] = []
-    popen_commands: list[list[str]] = []
-
-    class _FakeProcess:
-        returncode = 0
-        stdout = io.StringIO("collecting fixtures\nrunning investigation\n")
-        stderr = io.StringIO("warning: slow cloudwatch response\n")
-
-        def poll(self) -> int:
-            return 0
-
-    def _fake_popen(command: list[str], **kwargs: object) -> _FakeProcess:
-        popen_commands.append(command)
-        popen_kwargs.append(kwargs)
-        return _FakeProcess()
-
-    monkeypatch.setattr(
-        _SYNTHETIC_RUNNER_POPEN,
-        _fake_popen,
-    )
-    monkeypatch.setattr(
-        "surfaces.interactive_shell.runtime.subprocess_runner.threading.Thread",
-        _ImmediateThread,
-    )
-
-    session = Session()
-    buf = io.StringIO()
-    console = Console(file=buf, force_terminal=False)
-
-    run_synthetic_test(
-        "rds_postgres",
-        _presenter(session, console, confirm_fn=lambda _prompt: "y", is_tty=True),
-    )
-
-    assert popen_commands[0][1] == "-u"
-    assert popen_commands[0][-2:] == ["--scenario", "001-replication-lag"]
-    assert popen_kwargs[0]["stdout"] is not None
-    assert popen_kwargs[0]["stderr"] is not None
-    assert popen_kwargs[0]["text"] is True
-    out = buf.getvalue()
-    assert "collecting fixtures" in out
-    assert "running investigation" in out
-    assert "warning: slow cloudwatch response" in out
-    task = session.task_registry.list_recent(1)[0]
-    assert task.status == TaskStatus.COMPLETED
-
-
-def test_run_synthetic_test_honours_explicit_scenario(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    popen_commands: list[list[str]] = []
-
-    class _FakeProcess:
-        returncode = 0
-        stdout = io.StringIO("scenario run\n")
-        stderr = io.StringIO("")
-
-        def poll(self) -> int:
-            return 0
-
-    def _fake_popen(command: list[str], **_kwargs: object) -> _FakeProcess:
-        popen_commands.append(command)
-        return _FakeProcess()
-
-    monkeypatch.setattr(
-        _SYNTHETIC_RUNNER_POPEN,
-        _fake_popen,
-    )
-    monkeypatch.setattr(
-        "surfaces.interactive_shell.runtime.subprocess_runner.threading.Thread",
-        _ImmediateThread,
-    )
-
-    session = Session()
-    buf = io.StringIO()
-    console = Console(file=buf, force_terminal=False)
-
-    run_synthetic_test(
-        "rds_postgres:005-failover",
-        _presenter(session, console, confirm_fn=lambda _prompt: "y", is_tty=True),
-    )
-
-    assert popen_commands[0][-2:] == ["--scenario", "005-failover"]
-    assert "opensre tests synthetic --scenario 005-failover" in buf.getvalue()
-
-
-def test_run_synthetic_test_all_launches_suite_alias(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    popen_commands: list[list[str]] = []
-
-    class _FakeProcess:
-        returncode = 0
-        stdout = io.StringIO("scenario run\n")
-        stderr = io.StringIO("")
-
-        def poll(self) -> int:
-            return 0
-
-    def _fake_popen(command: list[str], **_kwargs: object) -> _FakeProcess:
-        popen_commands.append(command)
-        return _FakeProcess()
-
-    monkeypatch.setattr(
-        _SYNTHETIC_RUNNER_POPEN,
-        _fake_popen,
-    )
-    monkeypatch.setattr(
-        "surfaces.interactive_shell.runtime.subprocess_runner.threading.Thread",
-        _ImmediateThread,
-    )
-
-    session = Session()
-    buf = io.StringIO()
-    console = Console(file=buf, force_terminal=False)
-
-    run_synthetic_test(
-        "rds_postgres:all",
-        _presenter(session, console, confirm_fn=lambda _prompt: "y", is_tty=True),
-    )
-
-    assert popen_commands[0][-2:] == ["synthetic", "all"]
-    assert "opensre tests synthetic all" in buf.getvalue()
-
-
 # ─────────────────────────────────────────────────────────────────────────────
 # Subprocess terminal width forwarding
 # ─────────────────────────────────────────────────────────────────────────────
 #
-# Regression: subprocess Rich output (synthetic suite panels and tables) used
-# to render at the default 80-column width because the subprocess's stdout is
-# a pipe. ``_print_task_output_line`` then prepended an 18-char ``<task_id>
+# Regression: subprocess Rich output (panels and tables) used to render at the
+# default 80-column width because the subprocess's stdout is a pipe.
+# ``_print_task_output_line`` then prepended an 18-char ``<task_id>
 # <stream> │ `` prefix, producing 98-char lines that wrapped mid-row in the
 # user's narrower terminal — the visible symptom was broken table headers and
 # panel borders. We forward ``user_width - prefix - 1`` via ``COLUMNS`` so the
@@ -1397,11 +1147,11 @@ def _capture_popen_kwargs(
 
 def _start_one_task(console: Console) -> None:
     start_background_cli_task(
-        display_command="opensre tests synthetic --scenario 001-replication-lag",
-        argv_list=["opensre", "tests", "synthetic", "--scenario", "001-replication-lag"],
+        display_command="opensre fleet scan",
+        argv_list=["opensre", "fleet", "scan"],
         session=Session(),
         console=console,
-        kind=TaskKind.SYNTHETIC_TEST,
+        kind=TaskKind.CLI_COMMAND,
     )
 
 
@@ -1451,7 +1201,7 @@ def test_background_task_preserves_existing_environment(
     """The forwarded env must inherit ``os.environ`` so the subprocess sees PATH etc.
 
     We only inject COLUMNS/LINES; everything else (PATH, HOME, virtualenv,
-    auth tokens) must reach the synthetic suite unchanged.
+    auth tokens) must reach the subprocess unchanged.
     """
     monkeypatch.setenv("OPENSRE_TEST_MARKER", "preserved-value")
     captured = _capture_popen_kwargs(monkeypatch)
@@ -1462,33 +1212,6 @@ def test_background_task_preserves_existing_environment(
     env = captured[0].get("env")
     assert isinstance(env, dict)
     assert env.get("OPENSRE_TEST_MARKER") == "preserved-value"
-
-
-def test_run_synthetic_test_forwards_columns_to_subprocess(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    """``run_synthetic_test`` opens its own Popen — it must also forward COLUMNS.
-
-    Regression: this code path bypasses ``start_background_cli_task`` and so
-    was missed by the first iteration of the width-forwarding fix. The
-    visible symptom was that the synthetic suite's Rich Panel and Table
-    output (the per-scenario "Synthetic RDS Run" panel, the "Synthetic
-    Suite Report" table, and the "Level Summary" table) rendered at the
-    pipe-default 80 columns and then wrapped mid-row in the user's terminal
-    once the 18-char ``<task_id> stdout │ `` prefix had been prepended.
-    """
-    captured = _capture_popen_kwargs(monkeypatch, popen_target=_SYNTHETIC_RUNNER_POPEN)
-    console = Console(file=io.StringIO(), force_terminal=False, width=110)
-
-    run_synthetic_test(
-        "rds_postgres:005-failover",
-        _presenter(Session(), console, confirm_fn=lambda _prompt: "y", is_tty=True),
-    )
-
-    assert captured, "run_synthetic_test must spawn at least one subprocess"
-    env = captured[0].get("env")
-    assert isinstance(env, dict)
-    assert env.get("COLUMNS") == str(110 - _TASK_OUTPUT_PREFIX_WIDTH - 1)
 
 
 @pytest.mark.parametrize(
@@ -1631,49 +1354,6 @@ def test_run_opensre_cli_command_refuses_integrations_setup_with_helpful_message
     assert "full terminal" in str(session.history[-1].get("response_text", ""))
 
 
-def test_run_opensre_cli_command_skips_confirmation_for_investigate(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    """``opensre investigate`` is the primary REPL purpose — no Proceed? prompt."""
-    confirm_calls: list[str] = []
-    start_calls: list[list[str]] = []
-
-    def _fake_confirm(prompt: str) -> str:
-        confirm_calls.append(prompt)
-        return "n"
-
-    def _fake_start_background_cli_task(*, argv_list: list[str], **_kw: object) -> None:
-        start_calls.append(argv_list)
-
-    monkeypatch.setattr(
-        "surfaces.interactive_shell.runtime.subprocess_runner.start_background_cli_task",
-        _fake_start_background_cli_task,
-    )
-
-    session = Session()
-    buf = io.StringIO()
-    console = Console(file=buf, force_terminal=False)
-
-    assert (
-        run_opensre_cli_command(
-            "investigate -i alert.json",
-            session,
-            console,
-            confirm_fn=_fake_confirm,
-            is_tty=True,
-        )
-        is True
-    )
-
-    assert confirm_calls == []
-    assert start_calls
-    assert "investigate" in start_calls[0]
-    assert "-i" in start_calls[0]
-    assert "alert.json" in start_calls[0]
-    assert "Proceed?" not in buf.getvalue()
-    assert "may change local config" not in buf.getvalue()
-
-
 def test_run_opensre_cli_command_runs_integrations_list_in_foreground(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -1751,14 +1431,14 @@ def test_start_background_cli_task_echoes_command_markup_literally(
         _ImmediateThread,
     )
 
-    display_command = 'opensre investigate --alert "[error] 5xx spike on [/api/checkout]"'
+    display_command = 'opensre fleet scan --note "[error] 5xx spike on [/api/checkout]"'
     session = Session()
     buf = io.StringIO()
     console = Console(file=buf, force_terminal=False)
 
     task = start_background_cli_task(
         display_command=display_command,
-        argv_list=["python", "-m", "cli", "investigate"],
+        argv_list=["python", "-m", "cli", "fleet", "scan"],
         session=session,
         console=console,
     )

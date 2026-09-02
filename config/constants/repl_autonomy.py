@@ -60,10 +60,7 @@ AUTO_LEVEL_ASK_TOOL_TYPES: Final[dict[AutoLevel, frozenset[str] | None]] = {
     # Med "allow reversible commands": read-only work runs, but mutation-capable
     # tool types still need confirmation.
     AutoLevel.MED: _MUTATING_AGENT_TOOL_TYPES,
-    # Low also asks before starting a full investigation — including the
-    # sample-alert path, which uses tool_type ``sample_alert`` (not
-    # ``investigation``) but still launches an investigation with side effects.
-    AutoLevel.LOW: _MUTATING_AGENT_TOOL_TYPES | frozenset({"investigation", "sample_alert"}),
+    AutoLevel.LOW: _MUTATING_AGENT_TOOL_TYPES,
     AutoLevel.OFF: None,  # ask every tool type
 }
 

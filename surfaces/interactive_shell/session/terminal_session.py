@@ -11,16 +11,11 @@ Populated cluster-by-cluster as the #3690 split lands; theme is the first cluste
 
 from __future__ import annotations
 
-import threading
 from collections.abc import Callable
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any
 
 from config.constants.repl_autonomy import DEFAULT_AUTO_LEVEL, AutoLevel
-from surfaces.interactive_shell.session.background_investigations import (
-    BackgroundInvestigationRecord,
-    BackgroundNotificationPreferences,
-)
 from surfaces.interactive_shell.session.terminal_metrics import TerminalMetrics
 
 if TYPE_CHECKING:
@@ -154,32 +149,8 @@ class TerminalSession:
     nesting another ``execute_shell_turn`` inside ``/goal set`` doubled the
     PostHog answer before the outer turn finished."""
 
-    background_mode_enabled: bool = False
-    """Whether new investigations should run as session-local background tasks."""
-
-    background_investigations: dict[str, BackgroundInvestigationRecord] = field(
-        default_factory=dict
-    )
-    """Completed or in-flight background RCA summaries, keyed by task id."""
-
-    background_notification_preferences: BackgroundNotificationPreferences = field(
-        default_factory=BackgroundNotificationPreferences.load
-    )
-    """Preferred notification channels for background RCA completion events.
-
-    Hydrated from the durable store, so channels chosen in an earlier shell still
-    apply. ``load`` never raises and costs one stat when the document is absent.
-    """
-
-    background_notices: list[str] = field(default_factory=list)
-    """Thread-safe queue of Rich markup messages drained by the REPL main loop."""
-
-    _background_notices_lock: threading.Lock = field(
-        default_factory=threading.Lock, repr=False, compare=False
-    )
-
     history_generation: int = 0
-    """Incremented on /new so background synthetic watchers can skip stale history writes."""
+    """Incremented on /new so background task watchers can skip stale history writes."""
 
     metrics: TerminalMetrics = field(default_factory=TerminalMetrics)
     """Interactive-shell turn/intervention analytics counters (see ``/status``)."""
@@ -297,19 +268,6 @@ class TerminalSession:
         """Request that the fleet sampler start (no-op if unwired or already running)."""
         if self.fleet_sampler_starter is not None:
             self.fleet_sampler_starter()
-
-    def enqueue_background_notice(self, message: str) -> None:
-        """Queue a background-thread status line for the main REPL loop to print."""
-        with self._background_notices_lock:
-            self.background_notices.append(message)
-        self.notify_prompt_changed()
-
-    def drain_background_notices(self) -> list[str]:
-        """Return and clear any queued background status lines."""
-        with self._background_notices_lock:
-            notices = list(self.background_notices)
-            self.background_notices.clear()
-        return notices
 
     def set_turn_outcome_hint(self, hint: str | None) -> None:
         """Attach a structured outcome for the current terminal handler."""

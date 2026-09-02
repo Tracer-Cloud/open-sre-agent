@@ -1,4 +1,4 @@
-"""SDK-backed tool-calling LLM clients for the investigation agent ReAct loop.
+"""SDK-backed tool-calling LLM clients for the agent ReAct loop.
 
 Supports Anthropic (native + Bedrock), OpenAI-compatible, and subprocess CLI providers.
 """
@@ -387,7 +387,7 @@ class BedrockAgentClient(AnthropicAgentClient):
 
 
 class BedrockConverseAgentClient:
-    """Bedrock investigation client using the boto3 Converse API (non-Anthropic models)."""
+    """Bedrock tool-calling client using the boto3 Converse API (non-Anthropic models)."""
 
     provider_name = "Bedrock"
 
@@ -768,7 +768,7 @@ class CLIBackedAgentClient:
     """Tool-calling wrapper for subprocess CLI providers (codex, claude-code, etc.).
 
     CLI adapters don't expose a native tool-calling API. This client implements
-    the investigation agent's ReAct interface by embedding tool schemas in the
+    the agent's ReAct interface by embedding tool schemas in the
     prompt as JSON and parsing the model's text response for tool call JSON.
     Each invoke flattens the full conversation history into a single stdin prompt.
     """

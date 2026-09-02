@@ -1,6 +1,6 @@
 """Agent-callable Hermes log inspection tool.
 
-Exposes :func:`get_hermes_logs` to the investigation planner so the
+Exposes :func:`get_hermes_logs` to the agent so the
 agent can read its own ``~/.hermes/logs/errors.log`` (or any file it's
 configured to watch) without re-implementing the polling logic. The
 heavy lifting lives in :mod:`integrations.hermes.poller`; this module is the
@@ -45,13 +45,13 @@ from pathlib import Path
 from typing import Any
 
 from config.constants.hermes import HERMES_LOG_PATH_ENV
+from core.domain.types.evidence import record_evidence_entry
 from core.tool_framework import tool
 from integrations.hermes.availability import hermes_available_or_backend
 from integrations.hermes.classifier import IncidentClassifier
 from integrations.hermes.config import default_hermes_log_path
 from integrations.hermes.incident import HermesIncident, LogLevel, LogRecord
 from integrations.hermes.poller import HermesLogCursor, HermesLogPoll, poll_hermes_logs
-from integrations.hermes.tools.hermes_session_evidence_tool._evidence import MAPPERS
 
 # Cap how many records the tool will serialise into a single
 # response. The poller has its own byte budget; this is the
@@ -214,11 +214,27 @@ def _resolve_cursor(
     return HermesLogCursor.at_end(resolved_path), min(max_records, _MAX_RECORDS_PER_CALL)
 
 
+def _map_hermes_logs_evidence(
+    evidence: dict[str, Any], output: dict[str, Any], _tool_input: dict[str, Any]
+) -> None:
+    if output.get("available") is False:
+        return
+    parts: list[str] = []
+    for key, noun in (("records", "record(s)"), ("incidents", "incident(s)")):
+        rows = output.get(key) or []
+        if isinstance(rows, list) and rows:
+            parts.append(f"{len(rows)} {noun}")
+    if parts:
+        record_evidence_entry(
+            evidence, source="get_hermes_logs", label="Hermes Logs", summary=", ".join(parts)
+        )
+
+
 @tool(
     name="get_hermes_logs",
     display_name="Hermes log poll",
     source="hermes",
-    evidence_mapper=MAPPERS["get_hermes_logs"],
+    evidence_mapper=_map_hermes_logs_evidence,
     description=(
         "Read Hermes Agent's own ~/.hermes/logs/errors.log (or another "
         "Hermes log file) incrementally. Use op='scan' for a one-shot "

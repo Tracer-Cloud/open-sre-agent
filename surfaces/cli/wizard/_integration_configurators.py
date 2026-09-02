@@ -43,7 +43,6 @@ from surfaces.cli.wizard.configurators.posthog import _configure_posthog, _confi
 from surfaces.cli.wizard.configurators.productivity import (
     _configure_google_docs,
     _configure_jira,
-    _configure_notion,
     _configure_servicenow,
 )
 from surfaces.cli.wizard.configurators.sentry import _configure_sentry, _configure_sentry_mcp
@@ -108,7 +107,6 @@ def _configure_selected_integrations() -> tuple[list[str], str | None]:
         "opsgenie": _configure_opsgenie,
         "pagerduty": _configure_pagerduty,
         "incident_io": _configure_incident_io,
-        "notion": _configure_notion,
         "openclaw": _configure_openclaw,
         "posthog": _configure_posthog,
         "posthog_mcp": _configure_posthog_mcp,
@@ -143,7 +141,6 @@ def _configure_selected_integrations() -> tuple[list[str], str | None]:
         "opsgenie": "opsgenie",
         "pagerduty": "pagerduty",
         "incident_io": "incident.io",
-        "notion": "notion",
         "openclaw": "openclaw",
         "posthog": "posthog",
         "posthog_mcp": "posthog mcp",

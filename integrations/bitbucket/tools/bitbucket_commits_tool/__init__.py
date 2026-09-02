@@ -37,7 +37,7 @@ def _list_bitbucket_commits_available(sources: dict[str, dict]) -> bool:
     name="list_bitbucket_commits",
     description="List recent commits for a Bitbucket repository, optionally filtered by file path.",
     source="bitbucket",
-    surfaces=(ToolSurface.INVESTIGATION, ToolSurface.CHAT),
+    surfaces=(ToolSurface.CHAT,),
     use_cases=[
         "Checking whether a recent change could explain a failure",
         "Reviewing commit history for a specific file or directory",

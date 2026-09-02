@@ -37,7 +37,7 @@ def test_registered_tool_is_scoped_off_the_chat_surface() -> None:
     # Not on the gateway chat surface: the reply sink delivers gateway messages,
     # so exposing a send tool there lets the agent target the wrong platform.
     registered = telegram_send_message.__opensre_registered_tool__
-    assert registered.surfaces == ("investigation", "action")
+    assert registered.surfaces == ("action",)
     assert registered.requires_approval is True
 
 

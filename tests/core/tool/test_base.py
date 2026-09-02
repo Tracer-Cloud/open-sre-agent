@@ -88,7 +88,7 @@ def test_metadata_classmethod_returns_tool_metadata() -> None:
 
 def test_registry_metadata_classmethod_returns_defaults() -> None:
     registry = _MinimalTool.registry_metadata()
-    assert registry.surfaces == ("investigation",)
+    assert registry.surfaces == ("chat",)
     assert registry.tags == ()
     assert registry.parallel_safe is True
 
@@ -99,14 +99,14 @@ def test_init_subclass_normalizes_registry_metadata() -> None:
         description = "Registry metadata tool."
         input_schema = {"type": "object", "properties": {}}
         source = "grafana"
-        surfaces = ("chat", "investigation")
+        surfaces = ("chat", "action")
         tags = ("metrics", " fast ", "metrics")
         parallel_safe = False
 
         def run(self) -> dict[str, Any]:
             return {}
 
-    assert _RegistryTool.surfaces == ("chat", "investigation")
+    assert _RegistryTool.surfaces == ("chat", "action")
     assert _RegistryTool.tags == ("metrics", "fast")
     assert _RegistryTool.parallel_safe is False
 
@@ -133,7 +133,7 @@ def test_from_base_tool_reads_registry_metadata_from_class() -> None:
         description = "Chat-facing tool."
         input_schema = {"type": "object", "properties": {}}
         source = "grafana"
-        surfaces = ("investigation", "chat")
+        surfaces = ("action", "chat")
         tags = ("safe",)
         parallel_safe = False
 
@@ -141,7 +141,7 @@ def test_from_base_tool_reads_registry_metadata_from_class() -> None:
             return {}
 
     registered = tool_contracts.RegisteredTool.from_base_tool(_ChatTool())
-    assert registered.surfaces == ("investigation", "chat")
+    assert registered.surfaces == ("action", "chat")
     assert registered.tags == ("safe",)
     assert registered.parallel_safe is False
 

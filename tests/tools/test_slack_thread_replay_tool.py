@@ -29,14 +29,13 @@ def test_runtime_tools_are_discoverable_on_declared_surfaces() -> None:
     from tools.registry import clear_tool_registry_cache, get_registered_tool_map
 
     clear_tool_registry_cache()
-    investigation = get_registered_tool_map("investigation")
     chat = get_registered_tool_map("chat")
     action = get_registered_tool_map("action")
 
-    assert "inspect_railway_deployment" in investigation
+    assert "inspect_railway_deployment" in chat
     assert "replay_slack_thread_locally" in chat
     assert "redeploy_railway_service" in action
-    assert investigation["inspect_railway_deployment"].requires_approval is False
+    assert chat["inspect_railway_deployment"].requires_approval is False
     assert action["redeploy_railway_service"].requires_approval is True
 
 

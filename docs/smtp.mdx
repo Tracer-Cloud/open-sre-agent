@@ -1,11 +1,11 @@
 ---
 title: "SMTP"
-description: "Configure SMTP email delivery for background RCA completion notifications."
+description: "Configure SMTP so OpenSRE can send email through your existing relay."
 ---
 
 ## Overview
 
-OpenSRE can send **background RCA completion emails** through any existing SMTP relay you already use. You do **not** need to run your own mail server.
+OpenSRE can send email through any existing SMTP relay you already use. You do **not** need to run your own mail server.
 
 Typical providers:
 
@@ -14,15 +14,6 @@ Typical providers:
 - AWS SES SMTP
 - SendGrid / Postmark / Mailgun SMTP
 - local dev SMTP sinks like Mailpit or MailHog
-
-In v1, the `smtp` integration is used for `/background` RCA completion notifications. Email is one of the completion channels — [Telegram](/messaging/telegram) is another, and you can enable both at once. See [Background investigations](/background-investigations).
-
-The email summary includes:
-
-- **Root cause**
-- **Top analysis**
-- **What to do next**
-- a small internal stats block
 
 ## Prerequisites
 
@@ -69,7 +60,7 @@ SMTP_DEFAULT_TO=team@example.com
 | `SMTP_USERNAME` | — | Optional auth username (set with password) |
 | `SMTP_PASSWORD` | — | Optional auth password (set with username) |
 | `SMTP_FROM_ADDRESS` | — | Sender address |
-| `SMTP_DEFAULT_TO` | — | Default recipient for background emails |
+| `SMTP_DEFAULT_TO` | — | Default recipient for outbound email |
 
 If authentication is required, set **both** `SMTP_USERNAME` and `SMTP_PASSWORD`.
 
@@ -87,35 +78,6 @@ SMTP_PORT=1025
 SMTP_SECURITY=none
 SMTP_FROM_ADDRESS=opensre@example.com
 SMTP_DEFAULT_TO=team@example.com
-```
-
-## Investigation tools
-
-No SMTP investigation tools are registered. Email delivery is used for `/background` RCA completion notifications when the `email` channel is selected.
-
-### Use it with background investigations
-
-Notification channels are empty by default, so `/background on` on its own sends nothing:
-
-```text
-/background on
-/background notify set email
-/background notify list   # -> email
-```
-
-Then start an investigation as usual. When it completes, OpenSRE sends the RCA summary email to the configured default recipient.
-
-To send the same summary to Telegram as well:
-
-```text
-/background notify set email,telegram
-```
-
-Inspect completed jobs with:
-
-```text
-/background list
-/background show <task_id>
 ```
 
 ## Verify

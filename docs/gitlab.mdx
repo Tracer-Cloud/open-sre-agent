@@ -1,11 +1,11 @@
 ---
 title: "GitLab"
-description: "Connect GitLab so OpenSRE can read merge requests, commits, pipelines, and files during investigations"
+description: "Connect GitLab so OpenSRE can read merge requests, commits, pipelines, and files"
 ---
 
 ## Overview
 
-OpenSRE's GitLab integration gives the investigation agent read access to your merge requests, commits, pipelines, and files for root cause analysis. Optionally, it can write investigation findings back as a note on the relevant MR.
+OpenSRE's GitLab integration gives the agent read access to your merge requests, commits, pipelines, and files, so it can answer questions about recent changes and failing pipelines.
 
 ## Prerequisites
 
@@ -37,7 +37,6 @@ Setup validates your token by calling the GitLab API and writes credentials to y
 | `GITLAB_PROJECT_ID` | Optional default project scope helper |
 | `GITLAB_REF` | Optional default ref helper |
 | `GITLAB_FILE_PATH` | Optional default file-path helper |
-| `GITLAB_MR_WRITEBACK` | Set to `true` / `1` / `yes` to post RCA notes on MRs (opt-in) |
 
 ```bash
 GITLAB_ACCESS_TOKEN=glpat-...
@@ -71,7 +70,7 @@ OpenSRE supports both **Personal Access Tokens** and **Project Access Tokens**. 
 If your GitLab instance is self-hosted, make sure your OpenSRE server can reach it over the network before proceeding.
 </Note>
 
-## Investigation tools
+## Tools
 
 | Tool | What it reads |
 | --- | --- |
@@ -79,8 +78,6 @@ If your GitLab instance is self-hosted, make sure your OpenSRE server can reach 
 | `list_gitlab_commits` | Commit messages, authors, and changed files in a branch or MR |
 | `list_gitlab_pipelines` | Pipeline status, failed jobs, and job logs |
 | `get_gitlab_file` | File contents at a specific ref for diff analysis |
-
-Once connected, OpenSRE automatically uses GitLab as an investigation source when an alert contains a GitLab MR reference.
 
 ### Use GitLab tools in the interactive shell
 
@@ -98,21 +95,6 @@ Check recent changes and failed pipelines for https://gitlab.com/group/project.
 
 OpenSRE also checks recent conversation, `GITLAB_PROJECT_ID`, `GITLAB_REF`, `GITLAB_FILE_PATH`, and the current repository's GitLab origin remote when the current message does not contain a URL.
 
-### MR write-back (optional)
-
-OpenSRE can post a formatted investigation summary directly as a note on the GitLab MR that triggered the alert. This is opt-in and disabled by default.
-
-```bash
-GITLAB_MR_WRITEBACK=true
-```
-
-When enabled, after each investigation OpenSRE posts a collapsible `### RCA Finding` note on the MR. The note is truncated to 4000 characters if needed.
-
-**Requirements for write-back:**
-
-- Your access token must have the `api` scope (not just `read_api`)
-- The alert payload must include a GitLab MR IID and project ID so OpenSRE can identify the target MR
-
 ## Verify
 
 ```bash
@@ -124,13 +106,10 @@ opensre integrations verify gitlab
 | Symptom | Fix |
 | --- | --- |
 | **Validation fails with 401** | Your token is invalid or has expired. Regenerate it in GitLab and re-run setup. |
-| **Validation fails with 403** | Ensure `read_api` is selected (and `api` if using write-back). |
+| **Validation fails with 403** | Ensure `read_api` is selected. |
 | **Self-hosted instance not reachable** | Verify that `GITLAB_BASE_URL` ends in `/api/v4` and that OpenSRE can reach the host. Test with `curl -H "Authorization: Bearer <token>" https://your-gitlab-host/api/v4/user`. |
-| **MR write-back not posting** | Check that `GITLAB_MR_WRITEBACK=true` is set and the alert payload contains `gitlab.merge_request_iid` and `gitlab.project_id`. Review logs for `[publish] GitLab MR` entries. |
 
 ## Security
 
-- Prefer a **Project Access Token** with **Reporter** for read-only investigations.
-- Enable `api` / Developer only when you need MR write-back.
+- Prefer a **Project Access Token** with **Reporter** for read-only access.
 - Store tokens in `.env` or your secret manager — not in source control.
-- Keep write-back off (`GITLAB_MR_WRITEBACK` unset) unless you intentionally want RCA notes on MRs.

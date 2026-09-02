@@ -87,27 +87,6 @@ def test_warm_resolved_integrations_skips_empty_cache(monkeypatch: Any) -> None:
     assert calls == ["resolve", "resolve"]
 
 
-def test_warm_resolved_integrations_uses_quiet_resolve(monkeypatch: Any) -> None:
-    progress_calls: list[str] = []
-    quiet_calls: list[str] = []
-
-    monkeypatch.setattr(
-        "tools.investigation.stages.resolve_integrations.resolve_integrations",
-        lambda _state: progress_calls.append("progress") or {"resolved_integrations": {}},
-    )
-    monkeypatch.setattr(
-        "core.agent_harness.session.integration_resolution.resolve_integrations",
-        lambda: quiet_calls.append("quiet") or {"datadog": {}},
-    )
-
-    session = Session()
-    session.warm_resolved_integrations()
-
-    assert quiet_calls == ["quiet"]
-    assert progress_calls == []
-    assert session.resolved_integrations_cache == {"datadog": {}}
-
-
 def test_get_integrations_returns_pydantic_cached_result(monkeypatch: Any) -> None:
     def _unexpected_resolve() -> dict[str, Any]:
         raise AssertionError("cached integrations should not re-resolve")
@@ -649,45 +628,7 @@ def test_controller_routes_its_console_to_echo_and_turns() -> None:
     assert controller.turn_runtime.console is captured
 
 
-def test_investigation_rendering_uses_the_supplied_console() -> None:
-    """``/investigate`` output must land in the caller's console too.
-
-    The stream renderer built its own ``Console``, so an embedding caller that
-    captured the conversation still lost investigation progress, tool detail and
-    the final report — the longest output the shell produces.
-    """
-    # Arrange
-    import surfaces.shared.terminal.stream_renderer as renderer_module
-    from surfaces.interactive_shell.runtime.investigation_adapter import (
-        repl_foreground_renderer,
-    )
-
-    captured = Console(file=io.StringIO(), force_terminal=False, width=80)
-    built: list[renderer_module.StreamRenderer] = []
-
-    class _RecordingRenderer(renderer_module.StreamRenderer):
-        def __init__(self, **kwargs: Any) -> None:
-            super().__init__(**kwargs)
-            built.append(self)
-
-        def render_stream(self, _events: Any) -> dict[str, Any]:
-            self._console.print("INVESTIGATION-PROGRESS")
-            return {}
-
-    # Act
-    original = renderer_module.StreamRenderer
-    renderer_module.StreamRenderer = _RecordingRenderer  # type: ignore[misc]
-    try:
-        repl_foreground_renderer(captured)(iter(()))
-    finally:
-        renderer_module.StreamRenderer = original  # type: ignore[misc]
-
-    # Assert
-    assert built[0]._console is captured
-    assert "INVESTIGATION-PROGRESS" in captured.file.getvalue()  # type: ignore[attr-defined]
-
-
-def test_investigation_progress_display_uses_the_supplied_console(
+def test_progress_display_uses_the_supplied_console(
     monkeypatch: Any,
 ) -> None:
     """Progress and tool-detail lines must follow the console too.
@@ -711,114 +652,3 @@ def test_investigation_progress_display_uses_the_supplied_console(
     # Assert
     assert tracker._display is not None
     assert tracker._display._console is captured  # type: ignore[attr-defined]
-
-
-def test_action_investigation_ports_forward_the_supplied_console(
-    monkeypatch: Any,
-) -> None:
-    """``investigation_start`` / ``alert_sample`` must keep the turn console.
-
-    Slash ``/investigate`` already threaded ``console=`` into the session runner.
-    Action-tool ports called the same adapters without it, so an embedding
-    caller that captured the conversation still lost investigation progress.
-    """
-    # Arrange
-    from surfaces.interactive_shell.runtime.investigation_adapter import (
-        repl_investigation_launch_ports,
-    )
-
-    captured = Console(file=io.StringIO(), force_terminal=False, width=80)
-    seen_text: list[Console | None] = []
-    seen_sample: list[Console | None] = []
-
-    def _fake_text(**kwargs: Any) -> dict[str, Any]:
-        seen_text.append(kwargs.get("console"))
-        return {}
-
-    def _fake_sample(**kwargs: Any) -> dict[str, Any]:
-        seen_sample.append(kwargs.get("console"))
-        return {}
-
-    def _unused_background(**_kwargs: Any) -> str:
-        raise AssertionError("background launcher should not run")
-
-    monkeypatch.setattr(
-        "surfaces.interactive_shell.runtime.investigation_adapter.run_investigation_for_session",
-        _fake_text,
-    )
-    monkeypatch.setattr(
-        "surfaces.interactive_shell.runtime.investigation_adapter.run_sample_alert_for_session",
-        _fake_sample,
-    )
-    ports = repl_investigation_launch_ports(
-        start_background_text=_unused_background,
-        start_background_sample=_unused_background,
-    )
-
-    # Act
-    ports.run_text_investigation(
-        alert_text="cpu high",
-        context_overrides=None,
-        cancel_requested=None,
-        console=captured,
-    )
-    ports.run_sample_alert(
-        template_name="generic",
-        context_overrides=None,
-        cancel_requested=None,
-        console=captured,
-    )
-
-    # Assert
-    assert seen_text == [captured]
-    assert seen_sample == [captured]
-
-
-def test_streamed_run_paints_only_through_the_renderer_on_the_supplied_console() -> None:
-    """The StreamRenderer is the single painter for a streamed foreground run.
-
-    The streamed pipeline silences the process-wide tracker at stream start;
-    stage progress reaches the caller's console through the StreamRenderer's
-    events. Re-arming the global tracker for the run would give every stage a
-    second painter on the same console (doubled READ/PLAN progress lines).
-    """
-    # Arrange
-    from infrastructure.observability.render.progress import (
-        NoopProgressTracker,
-        get_progress_tracker,
-        silence_progress_tracker,
-    )
-    from surfaces.interactive_shell.runtime.investigation_adapter import (
-        repl_foreground_renderer,
-    )
-
-    captured = Console(file=io.StringIO(), force_terminal=False, width=80)
-    silence_progress_tracker()
-    constructed: dict[str, Any] = {}
-    mid_stream_trackers: list[type] = []
-
-    def _fake_stream_renderer(**kwargs: Any) -> SimpleNamespace:
-        constructed.update(kwargs)
-
-        def _render(_events: Any) -> dict[str, Any]:
-            # Runs while the renderer is active, exactly where a stage would
-            # call ``get_progress_tracker()`` from the pipeline thread.
-            mid_stream_trackers.append(type(get_progress_tracker()))
-            return {}
-
-        return SimpleNamespace(render_stream=_render)
-
-    # Act
-    import surfaces.shared.terminal.stream_renderer as renderer_module
-
-    real_renderer = renderer_module.StreamRenderer
-    renderer_module.StreamRenderer = _fake_stream_renderer  # type: ignore[assignment]
-    try:
-        repl_foreground_renderer(captured)(iter(()))
-    finally:
-        renderer_module.StreamRenderer = real_renderer  # type: ignore[assignment]
-
-    # Assert: the renderer paints to the caller's console; the global tracker
-    # stays silenced for the whole stream.
-    assert constructed.get("console") is captured
-    assert mid_stream_trackers == [NoopProgressTracker]

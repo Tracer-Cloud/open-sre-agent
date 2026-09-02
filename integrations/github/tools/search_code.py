@@ -61,7 +61,7 @@ def _map_search_github_code(
         "Tracing config, workflow, or application code that may explain an incident",
     ],
     requires=["owner", "repo", "query"],
-    surfaces=(ToolSurface.INVESTIGATION, ToolSurface.CHAT),
+    surfaces=(ToolSurface.CHAT,),
     evidence_mapper=_map_search_github_code,
     input_schema={
         "type": "object",

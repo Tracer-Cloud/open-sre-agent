@@ -191,7 +191,7 @@ class TestCorrelateAllAndDefaults:
         matrix = default_routing_matrix()
         assert matrix["crash_loop"] is RouteDestination.PAGER
         assert matrix["disk_full"] is RouteDestination.PAGER
-        assert matrix["oom_killed"] is RouteDestination.TELEGRAM_WITH_RCA
+        assert matrix["oom_killed"] is RouteDestination.TELEGRAM
         assert matrix["rate_limit"] is RouteDestination.TELEGRAM
 
 
@@ -201,7 +201,7 @@ class TestCorrelatingSink:
         corr = IncidentCorrelator()
         sink = CorrelatingSink(
             correlator=corr,
-            routes={RouteDestination.TELEGRAM_WITH_RCA: delivered.append},
+            routes={RouteDestination.TELEGRAM: delivered.append},
         )
         sink(_incident())
         assert len(delivered) == 1
@@ -211,7 +211,7 @@ class TestCorrelatingSink:
         corr = IncidentCorrelator()
         sink = CorrelatingSink(
             correlator=corr,
-            routes={RouteDestination.TELEGRAM_WITH_RCA: delivered.append},
+            routes={RouteDestination.TELEGRAM: delivered.append},
         )
         sink(_incident(seconds=0))
         sink(_incident(seconds=10))  # within dedup window
@@ -235,7 +235,7 @@ class TestCorrelatingSink:
             raise RuntimeError("downstream broke")
 
         corr = IncidentCorrelator()
-        sink = CorrelatingSink(correlator=corr, routes={RouteDestination.TELEGRAM_WITH_RCA: boom})
+        sink = CorrelatingSink(correlator=corr, routes={RouteDestination.TELEGRAM: boom})
         # Must not raise:
         sink(_incident())
         assert sink.metrics_snapshot()["sink_errors"] == 1
@@ -251,7 +251,7 @@ class TestCorrelatingSink:
         sink = CorrelatingSink(
             correlator=corr,
             routes={
-                RouteDestination.TELEGRAM_WITH_RCA: delivered.append,
+                RouteDestination.TELEGRAM: delivered.append,
                 RouteDestination.PAGER: delivered.append,
             },
         )
@@ -268,7 +268,7 @@ class TestCorrelatingSink:
         sink = CorrelatingSink(
             correlator=corr,
             routes={
-                RouteDestination.TELEGRAM_WITH_RCA: delivered.append,
+                RouteDestination.TELEGRAM: delivered.append,
                 RouteDestination.PAGER: delivered.append,
             },
         )
@@ -287,7 +287,7 @@ class TestCorrelatingSink:
         corr = IncidentCorrelator()
         sink = CorrelatingSink(
             correlator=corr,
-            routes={RouteDestination.TELEGRAM_WITH_RCA: delivered.append},
+            routes={RouteDestination.TELEGRAM: delivered.append},
         )
         sink(_incident(seconds=0))
         sink(_incident(seconds=10))  # suppressed by dedup
@@ -312,7 +312,7 @@ class TestCorrelatingSink:
             correlator=corr,
             routes={
                 RouteDestination.TELEGRAM: closeable,
-                RouteDestination.TELEGRAM_WITH_RCA: closeable,
+                RouteDestination.PAGER: closeable,
             },
             default_route=closeable,
         )
@@ -348,7 +348,7 @@ class TestCorrelatingSink:
             correlator=corr,
             routes={
                 RouteDestination.TELEGRAM: raiser,
-                RouteDestination.TELEGRAM_WITH_RCA: good,
+                RouteDestination.PAGER: good,
             },
         )
         # Seed correlator state so we can verify reset() ran.
@@ -375,8 +375,8 @@ class TestCorrelatingSink:
         sink = CorrelatingSink(
             correlator=corr,
             routes={
-                RouteDestination.TELEGRAM: _RaisesOnClose(),
-                RouteDestination.TELEGRAM_WITH_RCA: delivered.append,
+                RouteDestination.TELEGRAM: delivered.append,
+                RouteDestination.PAGER: _RaisesOnClose(),
             },
         )
         sink(_incident(seconds=0))

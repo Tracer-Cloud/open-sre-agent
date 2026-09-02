@@ -88,7 +88,6 @@ class GatewayController:
             set_process_turn_gate(turn_gate)
             self.turn_gate = turn_gate
         else:
-            # Same gate POST /investigate and InvestigationWorker use.
             self.turn_gate = process_turn_gate()
         self._stopped = threading.Event()
 
@@ -155,8 +154,8 @@ class GatewayController:
         )
         from infrastructure.scheduling.scheduler.runner import start_background_scheduler
 
-        # Investigation + multiplexed scheduled-agent runners (Sentry digest, etc.).
-        # A scheduled run costs a turn, so both take the same capacity gate chat
+        # Multiplexed scheduled-agent runners (Sentry digest, etc.).
+        # A scheduled run costs a turn, so it takes the same capacity gate chat
         # turns take — stated here, once, and passed into the scheduler.
         self._scheduler_runners = scheduler_runners().gated(self.turn_gate)
         install_scheduled_delivery_adapters()

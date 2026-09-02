@@ -174,7 +174,7 @@ def _map_get_sqs_queue_attributes(
     injected_params=("aws_backend",),
     is_available=sqs_is_available,
     extract_params=sqs_extract_params,
-    surfaces=(ToolSurface.INVESTIGATION, ToolSurface.CHAT),
+    surfaces=(ToolSurface.CHAT,),
     evidence_mapper=_map_get_sqs_queue_attributes,
 )
 def get_sqs_queue_attributes(

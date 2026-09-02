@@ -4,7 +4,7 @@ One markdown file per memory plus a generated ``MEMORY.md`` index. Prompt
 injection and ``ensure_memory_store`` create the directory eagerly; writes also
 create it lazily. Write failures (disk full, permissions) are reported to
 stderr and surfaced as ``None``/``False`` results rather than exceptions,
-mirroring :mod:`core.domain.feedback.misses.store`.
+appending one JSON object per line.
 
 Mutating operations serialize through a directory-scoped ``FileLock`` so
 concurrent ``memory_remember`` / forget calls cannot silently overwrite each

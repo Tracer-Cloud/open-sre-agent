@@ -56,7 +56,7 @@ def _map_get_mariadb_replication_status(
     name="get_mariadb_replication_status",
     description="Retrieve MariaDB replication status including I/O and SQL thread state, lag, and errors from SHOW ALL SLAVES STATUS.",
     source="mariadb",
-    surfaces=(ToolSurface.INVESTIGATION, ToolSurface.CHAT),
+    surfaces=(ToolSurface.CHAT,),
     is_available=mariadb_is_available,
     injected_params=("host", "password", "username"),
     extract_params=mariadb_extract_params,

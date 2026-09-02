@@ -375,12 +375,12 @@ def test_skill_view_tool_end_without_start_prints_nothing() -> None:
 def test_llm_start_sets_thinking_phase_without_verb_rotation() -> None:
     """``llm_start`` labels the status row Thinking…; phase labels are the UX."""
     from surfaces.interactive_shell.runtime.core.state import SpinnerState
-    from surfaces.shared.terminal.output.console_state import set_investigation_spinner
+    from surfaces.shared.terminal.output.console_state import set_turn_spinner
 
     observer, _buffer = _observer_with_buffer()
     spinner = SpinnerState()
     spinner.start()
-    set_investigation_spinner(spinner)
+    set_turn_spinner(spinner)
     try:
         observer("llm_start", {"iteration": 0})
         assert spinner.phase == SpinnerState.THINKING_PHASE
@@ -388,7 +388,7 @@ def test_llm_start_sets_thinking_phase_without_verb_rotation() -> None:
         assert spinner.phase == SpinnerState.THINKING_PHASE
         assert "Thinking…" in re.sub(r"\x1b\[[0-9;]*m", "", spinner.inline_spinner_ansi())
     finally:
-        set_investigation_spinner(None)
+        set_turn_spinner(None)
 
 
 def test_llm_start_without_registered_spinner_is_noop() -> None:
@@ -572,17 +572,17 @@ def test_set_spinner_phase_does_not_activate_a_suppressed_spinner() -> None:
     llm_start / tool_start would leave the spinner on screen after the command.
     """
     from surfaces.interactive_shell.runtime.core.state import SpinnerState
-    from surfaces.shared.terminal.output.console_state import set_investigation_spinner
+    from surfaces.shared.terminal.output.console_state import set_turn_spinner
 
     observer, _buffer = _observer_with_buffer()
     spinner = SpinnerState()  # not started -> streaming False (suppressed)
-    set_investigation_spinner(spinner)
+    set_turn_spinner(spinner)
     try:
         observer("llm_start", {"iteration": 0})
         observer("tool_start", {"name": "slash_invoke", "input": {"command": "/model"}})
         assert spinner.streaming is False
     finally:
-        set_investigation_spinner(None)
+        set_turn_spinner(None)
 
 
 _UPDATE_PLAN = [
@@ -647,12 +647,12 @@ def test_observer_drives_load_state_phases_by_turn_stage() -> None:
     """The spinner label tracks the stage: llm_start → Thinking, tool_start →
     Invoking tools, tool_end → Executing. Never a stale label, never blank."""
     from surfaces.interactive_shell.runtime.core.state import SpinnerState
-    from surfaces.shared.terminal.output.console_state import set_investigation_spinner
+    from surfaces.shared.terminal.output.console_state import set_turn_spinner
 
     spinner = SpinnerState()
     spinner.start()  # initial dispatch shows Executing
     assert spinner.phase == SpinnerState.EXECUTING_PHASE
-    set_investigation_spinner(spinner)
+    set_turn_spinner(spinner)
     try:
         console = Console(file=io.StringIO(), force_terminal=False)
         observer = ActionRenderObserver(session=Session(), console=console, message="do it")
@@ -670,7 +670,7 @@ def test_observer_drives_load_state_phases_by_turn_stage() -> None:
         assert spinner.phase == SpinnerState.EXECUTING_PHASE
         assert spinner.active_action == ""  # cleared; scrollback keeps the solid copy
     finally:
-        set_investigation_spinner(None)
+        set_turn_spinner(None)
 
 
 def test_batched_tool_starts_keep_the_first_action_until_it_ends() -> None:
@@ -680,11 +680,11 @@ def test_batched_tool_starts_keep_the_first_action_until_it_ends() -> None:
     and must stay on Invoking tools until the last in-flight call ends.
     """
     from surfaces.interactive_shell.runtime.core.state import SpinnerState
-    from surfaces.shared.terminal.output.console_state import set_investigation_spinner
+    from surfaces.shared.terminal.output.console_state import set_turn_spinner
 
     spinner = SpinnerState()
     spinner.start()
-    set_investigation_spinner(spinner)
+    set_turn_spinner(spinner)
     try:
         observer, _buffer = _observer_with_buffer("do both")
         observer(
@@ -708,17 +708,17 @@ def test_batched_tool_starts_keep_the_first_action_until_it_ends() -> None:
         assert spinner.active_action == ""
         assert spinner.phase == SpinnerState.EXECUTING_PHASE
     finally:
-        set_investigation_spinner(None)
+        set_turn_spinner(None)
 
 
 def test_untracked_tool_end_does_not_clear_a_running_action() -> None:
     """update_plan never owns the live row; its end must not wipe another tool."""
     from surfaces.interactive_shell.runtime.core.state import SpinnerState
-    from surfaces.shared.terminal.output.console_state import set_investigation_spinner
+    from surfaces.shared.terminal.output.console_state import set_turn_spinner
 
     spinner = SpinnerState()
     spinner.start()
-    set_investigation_spinner(spinner)
+    set_turn_spinner(spinner)
     try:
         observer, _buffer = _observer_with_buffer("plan while running")
         observer("tool_start", {"id": "a", "name": "shell_run", "input": {"command": "true"}})
@@ -729,7 +729,7 @@ def test_untracked_tool_end_does_not_clear_a_running_action() -> None:
         assert spinner.active_action == "Execute"  # shell_run still running, not wiped
         assert spinner.phase == SpinnerState.INVOKING_TOOLS_PHASE
     finally:
-        set_investigation_spinner(None)
+        set_turn_spinner(None)
 
 
 def test_command_tools_suppress_the_static_action_header() -> None:

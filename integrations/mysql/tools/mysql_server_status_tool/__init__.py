@@ -41,7 +41,7 @@ def _map_get_mysql_server_status(
     name="get_mysql_server_status",
     description="Retrieve MySQL server metrics including connections, uptime, query rates, and InnoDB buffer pool statistics.",
     source="mysql",
-    surfaces=(ToolSurface.INVESTIGATION, ToolSurface.CHAT),
+    surfaces=(ToolSurface.CHAT,),
     use_cases=[
         "Checking MySQL server health during an incident",
         "Identifying connection saturation or exhaustion issues",

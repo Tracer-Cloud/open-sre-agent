@@ -2,7 +2,7 @@
 
 The refactor that moved vendor-specific behavior out of ``core/`` replaced
 direct imports with registries: integrations register prompt fragments, anchor
-parsers, taxonomy profiles, alert-detail fields, and repo-scope providers from
+parsers, alert-detail fields, and repo-scope providers from
 ``integrations/harness_adapters.py``. A vendor that stops registering does not
 raise — it silently disappears from prompts and parsing. These tests fail
 loudly instead, one assertion per registry.
@@ -16,7 +16,6 @@ import pytest
 
 import infrastructure.harness_providers as harness_providers
 from core.domain.alerts import extraction as alert_extraction
-from core.domain.diagnosis import taxonomy_registry
 from core.domain.types import incident_anchors
 from surfaces.shared.terminal.output import boundary as output_boundary
 
@@ -26,18 +25,6 @@ def _installed_ports() -> Iterator[None]:
     output_boundary.install_harness_providers()
     yield
     harness_providers.reset_harness_providers()
-
-
-def test_gather_prompt_fragments_cover_every_registered_vendor() -> None:
-    # Act
-    fragments = harness_providers.gather_prompt_vendor_fragments()
-
-    # Assert: one distinctive marker per vendor that owns a gather fragment.
-    assert "github" in fragments.lower()
-    assert "sentry" in fragments.lower()
-    assert "slack" in fragments.lower()
-    assert "posthog" in fragments.lower()
-    assert "execute-sql" in fragments.lower()
 
 
 def test_action_prompt_fragments_cover_every_registered_vendor() -> None:
@@ -131,16 +118,6 @@ def test_alert_detail_fields_registered_for_aws_and_kubernetes() -> None:
         assert field in fields
 
 
-def test_taxonomy_profile_registered_for_hermes() -> None:
-    # Act: hermes owns a scoped taxonomy; an unrelated source falls back.
-    hermes = taxonomy_registry.taxonomy_categories_for_alert_source("hermes")
-    other = taxonomy_registry.taxonomy_categories_for_alert_source("datadog")
-
-    # Assert: the profile claims hermes and yields a different set than the default.
-    assert hermes
-    assert hermes != other
-
-
 def test_reinstalling_ports_does_not_duplicate_fragments() -> None:
     # Arrange: capture the single-install prompt text.
     once = harness_providers.action_prompt_vendor_fragments()
@@ -158,7 +135,6 @@ def test_reset_clears_every_vendor_registry() -> None:
     harness_providers.reset_harness_providers()
 
     # Assert: nothing vendor-specific survives into the next test.
-    assert harness_providers.gather_prompt_vendor_fragments() == ""
     assert harness_providers.action_prompt_vendor_fragments() == ""
     assert harness_providers.assistant_prompt_vendor_fragments() == ""
     assert harness_providers.gateway_persona_fragments() == ""

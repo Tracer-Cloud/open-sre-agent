@@ -87,8 +87,6 @@ def _configure_grafana_local() -> tuple[str, str]:
     console.print(f"[{HIGHLIGHT}]Grafana Local · ready[/]")
     console.print(f"[{SECONDARY}]UI: {endpoint}[/]")
     console.print(f"[{SECONDARY}]Loki seeded with events_fact pipeline failure logs.[/]")
-    console.print(f"[{SECONDARY}]Run RCA:[/]")
-    console.print("[bold]  opensre investigate -i tests/fixtures/grafana_local_alert.json[/]")
     return "Grafana Local", str(env_path)
 
 

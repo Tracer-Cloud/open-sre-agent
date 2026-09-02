@@ -344,50 +344,6 @@ def test_achieved_with_tool_evidence_completes_condition_only_goal() -> None:
     assert verdict.reason == SessionGoalReason.ACHIEVED_TOOL_EVIDENCE
 
 
-def test_achieved_ignored_while_investigation_dispatched() -> None:
-    """Starting RCA must not close a daily-work goal before deliverables exist."""
-    session = SessionCore()
-    goal = SessionGoal(
-        condition="Sentry spike: issue id + next action",
-        max_outer_turns=6,
-        host_owned=True,
-    )
-    attach_session_goal(session, goal)
-    result = TurnResult(
-        final_intent="cli_agent_handled",
-        action_result=ToolCallingTurnResult(
-            planned_count=1,
-            executed_count=1,
-            executed_success_count=1,
-            has_unhandled_clause=False,
-            handled=True,
-            investigation_dispatched=True,
-        ),
-        assistant_response_text="Dispatching investigation. session_goal:achieved",
-    )
-    verdict = evaluate_session_goal(goal, result, session=session)
-    assert verdict.status == SessionGoalStatus.ACTIVE
-    assert "investigation" in verdict.reason
-    assert session.session_goal is not None
-    assert session.session_goal.status == SessionGoalStatus.ACTIVE
-
-
-def test_turn_has_session_goal_evidence_false_when_investigation_dispatched() -> None:
-    result = TurnResult(
-        final_intent="cli_agent_handled",
-        action_result=ToolCallingTurnResult(
-            planned_count=1,
-            executed_count=1,
-            executed_success_count=1,
-            has_unhandled_clause=False,
-            handled=True,
-            investigation_dispatched=True,
-        ),
-        assistant_response_text="started",
-    )
-    assert turn_has_session_goal_evidence(result) is False
-
-
 def test_achieved_ignored_when_checklist_incomplete() -> None:
     goal = SessionGoal(
         condition="checklist",

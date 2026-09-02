@@ -121,5 +121,5 @@ class SlackListTeamMembersTool(BaseTool):
 
 slack_list_team_members = tool(
     SlackListTeamMembersTool(),
-    surfaces=(ToolSurface.INVESTIGATION, ToolSurface.CHAT, ToolSurface.ACTION),
+    surfaces=(ToolSurface.CHAT, ToolSurface.ACTION),
 )

@@ -307,7 +307,7 @@ def _normalize_tool_result(result: PostHogMCPToolCallResult) -> PostHogMCPRespon
         "Finding the right tool for a task by passing a name_filter (e.g. 'events query sql')",
         "Fetching the input schema of a specific tool with include_schema before calling it",
     ],
-    surfaces=(ToolSurface.INVESTIGATION, ToolSurface.CHAT),
+    surfaces=(ToolSurface.CHAT,),
     input_schema={
         "type": "object",
         "properties": {
@@ -435,7 +435,7 @@ def list_posthog_tools(
         "Searching PostHog docs or fetching insight/dashboard data during an investigation",
     ],
     requires=["tool_name"],
-    surfaces=(ToolSurface.INVESTIGATION, ToolSurface.CHAT),
+    surfaces=(ToolSurface.CHAT,),
     input_schema={
         "type": "object",
         "properties": {

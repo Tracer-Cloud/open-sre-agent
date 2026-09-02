@@ -1,4 +1,4 @@
-"""The reusable tool-calling agent every surface runs (shell, gateway, investigation).
+"""The reusable tool-calling agent every surface runs (shell, gateway).
 
 You create an ``Agent`` with its config (LLM, system prompt, tools, iteration
 cap); ``run()`` gathers that config for one run and hands it to

@@ -101,9 +101,7 @@ output, not just what you typed) and is used for two purposes:
    can restore conversation context.
 2. **Product analytics**: forwarded to PostHog as an `$ai_generation` event
    (model, provider, latency, token counts, and the prompt/response text) so
-   usage and quality can be tracked. Investigation turns also include the
-   model/provider/token usage of the investigation run and an `investigation_id`
-   join key; failed turns carry structured error properties (`$ai_is_error`,
+   usage and quality can be tracked. Failed turns carry structured error properties (`$ai_is_error`,
    `$ai_error`, `error_kind`). Turns handled entirely by terminal tools or slash
    commands report `$ai_model` / `$ai_provider` as `no_conversational_agent`;
    when a conversational reply was intended but the LLM provider failed (missing

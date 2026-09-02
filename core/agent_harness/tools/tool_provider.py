@@ -9,7 +9,6 @@ from typing import Any
 from core.agent_harness.ports import (
     CancelCapableConsole,
     ConfirmFn,
-    InvestigationPortsFactory,
     LlmProviderPortsFactory,
     SlashPortsFactory,
     SubprocessPresenterFactory,
@@ -49,7 +48,6 @@ class DefaultToolProvider:
         observer_factory: ActionObserverFactory | None = None,
         tool_action_logger: logging.Logger | None = None,
         subprocess_presenter_factory: SubprocessPresenterFactory | None = None,
-        investigation_ports_factory: InvestigationPortsFactory | None = None,
         llm_provider_ports_factory: LlmProviderPortsFactory | None = None,
         task_cancel_ports_factory: TaskCancelPortsFactory | None = None,
         slash_ports_factory: SlashPortsFactory | None = None,
@@ -61,7 +59,6 @@ class DefaultToolProvider:
         self._observer_factory = observer_factory
         self._tool_action_logger = tool_action_logger
         self._subprocess_presenter_factory = subprocess_presenter_factory
-        self._investigation_ports_factory = investigation_ports_factory
         self._llm_provider_ports_factory = llm_provider_ports_factory
         self._task_cancel_ports_factory = task_cancel_ports_factory
         self._slash_ports_factory = slash_ports_factory
@@ -96,10 +93,6 @@ class DefaultToolProvider:
                 True,
             )
 
-        investigation_ports = None
-        if self._investigation_ports_factory is not None:
-            investigation_ports = self._investigation_ports_factory()
-
         llm_provider_ports = None
         if self._llm_provider_ports_factory is not None:
             llm_provider_ports = self._llm_provider_ports_factory()
@@ -124,7 +117,6 @@ class DefaultToolProvider:
             history_start=len(getattr(self._session, "history", None) or []),
             turn_user_message=turn_user_message,
             subprocess_presenter=subprocess_presenter,
-            investigation_ports=investigation_ports,
             llm_provider_ports=llm_provider_ports,
             task_cancel_ports=task_cancel_ports,
             slash_ports=slash_ports,

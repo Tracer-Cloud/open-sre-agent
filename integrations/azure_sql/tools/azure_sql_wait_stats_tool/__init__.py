@@ -16,7 +16,7 @@ from integrations.azure_sql import (
     name="get_azure_sql_wait_stats",
     description="Retrieve top wait statistics from Azure SQL Database to diagnose throttling, lock contention, IO bottlenecks, and network issues.",
     source="azure_sql",
-    surfaces=(ToolSurface.INVESTIGATION, ToolSurface.CHAT),
+    surfaces=(ToolSurface.CHAT,),
     use_cases=[
         "Identifying the most impactful wait types during an incident",
         "Diagnosing lock contention or IO bottlenecks",

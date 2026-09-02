@@ -1,11 +1,11 @@
 ---
 title: "PostHog (MCP)"
-description: "Connect PostHog's hosted MCP server so OpenSRE can query analytics, feature flags, error tracking, and HogQL during investigations"
+description: "Connect PostHog's hosted MCP server so OpenSRE can query analytics, feature flags, error tracking, and HogQL"
 ---
 
 ## Overview
 
-OpenSRE connects to PostHog’s hosted [Model Context Protocol (MCP)](https://posthog.com/docs/model-context-protocol) server. During investigations the agent can call PostHog products — product analytics, feature flags, error tracking, experiments, surveys, and HogQL — through MCP tools.
+OpenSRE connects to PostHog’s hosted [Model Context Protocol (MCP)](https://posthog.com/docs/model-context-protocol) server. The agent can call PostHog products — product analytics, feature flags, error tracking, experiments, surveys, and HogQL — through MCP tools.
 
 This is separate from the [PostHog REST integration](/posthog), which only stores project credentials for the REST API. Configure REST with `opensre integrations setup posthog`.
 
@@ -15,7 +15,7 @@ This is separate from the [PostHog REST integration](/posthog), which only store
 - A PostHog **personal API key** created with the **MCP Server** preset. See [PostHog personal API keys](https://posthog.com/docs/api/personal-api-keys).
 
 <Info>
-OpenSRE defaults to **read-only** access (`x-posthog-read-only: true`) so investigations cannot mutate your PostHog project. Set `POSTHOG_MCP_READ_ONLY=false` only if you explicitly want the agent to perform writes.
+OpenSRE defaults to **read-only** access (`x-posthog-read-only: true`) so the agent cannot mutate your PostHog project. Set `POSTHOG_MCP_READ_ONLY=false` only if you explicitly want the agent to perform writes.
 </Info>
 
 ## Setup
@@ -90,7 +90,7 @@ Use a PostHog **personal API key** created with the **MCP Server** preset. See [
 
 Set it as `POSTHOG_MCP_AUTH_TOKEN` (or paste it during interactive setup). Optionally scope with `POSTHOG_MCP_PROJECT_ID` and `POSTHOG_MCP_ORGANIZATION_ID`.
 
-## Investigation tools
+## Tools
 
 | Tool | What it does |
 | --- | --- |
@@ -124,12 +124,12 @@ A successful check connects to the MCP server and reports how many tools it disc
 
 ## Security
 
-OpenSRE defaults to **read-only** access (`x-posthog-read-only: true`) so investigations cannot mutate your PostHog project. Set `POSTHOG_MCP_READ_ONLY=false` only if you explicitly want the agent to perform writes.
+OpenSRE defaults to **read-only** access (`x-posthog-read-only: true`) so the agent cannot mutate your PostHog project. Set `POSTHOG_MCP_READ_ONLY=false` only if you explicitly want the agent to perform writes.
 A successful check connects to the MCP server and reports how many tools it discovered. If it fails, the most common cause is a missing or invalid personal API key — confirm the key was created with the `MCP Server` preset and that outbound HTTPS to `mcp.posthog.com` is allowed.
 
 ## Metric report (scheduled)
 
-Deliver a per-metric PostHog analytics pulse to Telegram, Slack, or Rocket.Chat, on demand or on a schedule — coworker-style digests (what moved and why it matters), not a raw dashboard dump. Slack delivery needs a bot token (a webhook alone cannot honor `--chat-id`). This uses the headless **posthog-summary** skill path (schema discovery, then one bounded HogQL query per metric), not the investigation pipeline or generic `opensre cron` kinds. It requires the PostHog **MCP** integration above — the REST `posthog` integration alone cannot serve it.
+Deliver a per-metric PostHog analytics pulse to Telegram, Slack, or Rocket.Chat, on demand or on a schedule — coworker-style digests (what moved and why it matters), not a raw dashboard dump. Slack delivery needs a bot token (a webhook alone cannot honor `--chat-id`). This uses the headless **posthog-summary** skill path (schema discovery, then one bounded HogQL query per metric), not generic `opensre cron` kinds. It requires the PostHog **MCP** integration above — the REST `posthog` integration alone cannot serve it.
 
 | Command | What it does |
 | --- | --- |

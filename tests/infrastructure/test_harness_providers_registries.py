@@ -33,18 +33,8 @@ def test_action_fragments_join_in_registration_order() -> None:
     assert joined == "FIRST\n\nSECOND"
 
 
-def test_gather_fragments_join_with_single_newline() -> None:
-    # Arrange
-    harness_providers.register_gather_prompt_fragment(lambda: "A")
-    harness_providers.register_gather_prompt_fragment(lambda: "B")
-
-    # Act / Assert: gather uses a tighter separator than action/assistant.
-    assert harness_providers.gather_prompt_vendor_fragments() == "A\nB"
-
-
 def test_empty_fragment_registries_render_empty_string() -> None:
     # Assert: a surface with no integrations wired must not raise.
-    assert harness_providers.gather_prompt_vendor_fragments() == ""
     assert harness_providers.action_prompt_vendor_fragments() == ""
     assert harness_providers.assistant_prompt_vendor_fragments() == ""
     assert harness_providers.gateway_persona_fragments() == ""

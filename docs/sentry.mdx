@@ -1,12 +1,12 @@
 ---
 title: "Sentry"
-description: "Connect Sentry so OpenSRE can surface error trends and issue details during investigations"
+description: "Connect Sentry so OpenSRE can surface error trends and issue details as evidence"
 ---
 
 ## Overview
 
 OpenSRE queries Sentry for recent issues, error events, and stack traces so
-investigations can correlate application errors with infrastructure alerts.
+the agent can correlate application errors with infrastructure alerts.
 
 This page covers the **REST Sentry integration**. For the broader MCP surface
 (Seer, traces, replays, and more), see [Sentry (MCP)](/sentry-mcp).
@@ -94,7 +94,7 @@ The organization slug appears in your Sentry URL:
 `https://sentry.io/organizations/<slug>/`
 </Info>
 
-## Investigation tools
+## Tools
 
 | Tool | What it does |
 | --- | --- |
@@ -119,8 +119,8 @@ Detail: Sentry validated for org your-org; 30 issue(s) in the last 7 days.
 ```
 
 The count reflects issues seen in the last 7 days (capped at 100, shown as
-`100+` when it saturates). Use `search_sentry_issues` during an investigation
-to enumerate issues over a custom window.
+`100+` when it saturates). Use `search_sentry_issues` when investigating an
+issue to enumerate issues over a custom window.
 
 ## Troubleshooting
 
@@ -144,7 +144,7 @@ to enumerate issues over a custom window.
 
 Deliver a daily unresolved-issues summary to Slack, Telegram, or Rocket.Chat.
 This uses the headless **sentry-summary** skill path (tools + LLM via the
-gateway), not the investigation pipeline or generic `opensre cron` kinds.
+gateway), not generic `opensre cron` kinds.
 When an uptime watch schedule is running, the skill also calls
 `get_sentry_uptime_digest` to include downtime/recovery context.
 
@@ -223,7 +223,7 @@ opensre sentry uptime watch add \
 ```
 
 Requires `alerts:read` (or equivalent) on the Sentry token.
-`list_sentry_uptime_alerts` exposes the same monitor list in chat/investigation.
+`list_sentry_uptime_alerts` exposes the same monitor list in chat.
 
 Schedule an uptime watch alongside the morning digest so `sentry-summary` can
 include yesterday's downtime summary via `get_sentry_uptime_digest`.

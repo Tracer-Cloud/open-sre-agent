@@ -11,14 +11,10 @@ respectively. ``--chat-id`` overrides the provider's default
 chat/channel (``TELEGRAM_DEFAULT_CHAT_ID`` or ``ROCKETCHAT_DEFAULT_CHANNEL``)
 when both are present.
 
-This command intentionally does *not* run an OpenSRE investigation by
-default. Pass ``--investigate`` (or set ``OPENSRE_HERMES_INVESTIGATE=1``)
-to enable the RCA bridge for ``HIGH``/``CRITICAL`` incidents.
 """
 
 from __future__ import annotations
 
-import os
 import signal
 import threading
 from pathlib import Path
@@ -34,7 +30,6 @@ from integrations.hermes import (
     IncidentCorrelator,
     RouteDestination,
     TelegramSink,
-    run_incident_investigation,
 )
 from integrations.rocketchat import (
     load_credentials_from_env as load_rocketchat_credentials_from_env,
@@ -42,7 +37,6 @@ from integrations.rocketchat import (
 from integrations.rocketchat.alarms import RocketChatAlarmDispatcher
 from integrations.telegram.alarms import AlarmDispatcher
 from integrations.telegram.credentials import load_credentials_from_env
-from tools.investigation.capability import run_investigation
 
 
 @click.group(name="hermes", invoke_without_command=True)
@@ -99,16 +93,6 @@ def hermes_command(ctx: click.Context) -> None:
     ),
 )
 @click.option(
-    "--investigate/--no-investigate",
-    "investigate",
-    default=None,
-    help=(
-        "Run an OpenSRE investigation for HIGH/CRITICAL incidents and append "
-        "the RCA summary before delivery. Defaults to off; set "
-        "OPENSRE_HERMES_INVESTIGATE=1 to enable globally."
-    ),
-)
-@click.option(
     "--correlate/--no-correlate",
     "correlate",
     default=True,
@@ -157,7 +141,6 @@ def hermes_watch(
     chat_id: str | None,
     cooldown_seconds: float,
     from_start: bool,
-    investigate: bool | None,
     correlate: bool,
     dedup_window_seconds: float,
     escalation_threshold: int,
@@ -179,13 +162,7 @@ def hermes_watch(
         creds = load_credentials_from_env(chat_id_override=chat_id)
         dispatcher = AlarmDispatcher(creds, cooldown_seconds=cooldown_seconds)
 
-    investigate_enabled = _resolve_investigate_flag(investigate)
-    bridge = (
-        (lambda incident: run_incident_investigation(incident, run_investigation))
-        if investigate_enabled
-        else None
-    )
-    telegram_sink = TelegramSink(dispatcher, investigation_bridge=bridge)
+    telegram_sink = TelegramSink(dispatcher)
 
     correlator: IncidentCorrelator | None = None
     sink: Any
@@ -203,7 +180,6 @@ def hermes_watch(
             correlator=correlator,
             routes={
                 RouteDestination.TELEGRAM: telegram_sink,
-                RouteDestination.TELEGRAM_WITH_RCA: telegram_sink,
                 RouteDestination.PAGER: telegram_sink,
             },
             default_route=telegram_sink,
@@ -224,7 +200,6 @@ def hermes_watch(
     click.echo(
         f"hermes-watch: tailing {resolved_log_path} "
         f"(provider={provider}, cooldown={cooldown_seconds:.0f}s, "
-        f"investigate={'on' if investigate_enabled else 'off'}, "
         f"correlate={'on' if correlate else 'off'})"
     )
 
@@ -237,9 +212,6 @@ def hermes_watch(
     finally:
         click.echo("hermes-watch: stopping…")
         agent.stop()
-        # Drain in-flight investigation calls (no-op when bridge is
-        # disabled). Done after agent.stop() so no new bridge submits
-        # can race the shutdown.
         telegram_sink.close()
         if correlator is not None and isinstance(sink, CorrelatingSink):
             snapshot = sink.metrics_snapshot()
@@ -253,14 +225,6 @@ def hermes_watch(
                 f"sink_errors={snapshot['sink_errors']}"
             )
         click.echo("hermes-watch: stopped.")
-
-
-def _resolve_investigate_flag(cli_value: bool | None) -> bool:
-    """CLI flag wins; otherwise fall back to the env var."""
-    if cli_value is not None:
-        return cli_value
-    env_value = os.getenv("OPENSRE_HERMES_INVESTIGATE", "").strip().lower()
-    return env_value in {"1", "true", "yes", "on"}
 
 
 def _install_shutdown_handlers(stop_event: threading.Event) -> None:

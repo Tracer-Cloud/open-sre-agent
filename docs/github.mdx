@@ -16,7 +16,7 @@ Once GitHub is connected, the interactive-shell **action agent** uses **`github_
 | Security and quality fixes and PRs | [GitHub security and quality fix](/github-security-fix) |
 | Failing CI fixes and branch pushes | [GitHub CI fix](/github-ci-fix) |
 | Slack → GitHub issue create/update/close | Propose + approve via workflow mutation tools |
-| Investigation: code, commits, files, issue search | Dedicated GitHub investigation tools |
+| Code, commits, files, issue search | Dedicated GitHub tools |
 | Failed deploys / workflow runs | [GitHub Actions tools](/integrations/github-actions) |
 
 ## Prerequisites
@@ -101,7 +101,7 @@ For GitHub Enterprise Server, set `GITHUB_MCP_URL` to your enterprise MCP endpoi
 | `sse` | For older MCP servers using Server-Sent Events |
 | `stdio` | For running a local MCP server process (`npx @modelcontextprotocol/server-github`) |
 
-## Investigation tools
+## Tools
 
 | Tool / area | What it does |
 | --- | --- |
@@ -127,7 +127,7 @@ Expected output:
 ```
 Service: github
 Status: passed
-Detail: GitHub MCP validated for your-username; discovered 18 tools including repository source investigation helpers
+Detail: GitHub MCP validated for your-username; discovered 18 tools including repository source helpers
 ```
 
 Inside the REPL: `/integrations verify github` or `/verify github`. Alias: `github_mcp`.
@@ -144,6 +144,6 @@ Inside the REPL: `/integrations verify github` or `/verify github`. Alias: `gith
 
 ## Security
 
-- Prefer the **least privilege** that matches how you use OpenSRE (read-only for investigation-only; write scopes if you want chat to create/edit issues and PRs).
+- Prefer the **least privilege** that matches how you use OpenSRE (read-only if you only ask questions; write scopes if you want chat to create/edit issues and PRs).
 - Limit token scope to the repositories OpenSRE needs.
 - Store the token in `.env`, not in source code.

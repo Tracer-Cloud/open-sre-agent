@@ -62,7 +62,6 @@ def _cmd_status(session: Session, console: Console, _args: list[str]) -> bool:
     alert_key, alert_value = _incoming_alerts_status(session)
     table.add_row(alert_key, alert_value)
 
-    table.add_row("last investigation", "yes" if session.last_state else "none")
     table.add_row("trust mode", "on" if trust_mode_enabled(session) else "off")
     table.add_row("reasoning effort", display_reasoning_effort(session.reasoning_effort))
     table.add_row("provider", _status_provider_display())

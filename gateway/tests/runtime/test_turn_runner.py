@@ -363,7 +363,6 @@ def test_turn_runner_disables_unsupported_gateway_capabilities(monkeypatch: Any)
         logging.getLogger("test"),
     )
 
-    assert session.available_capabilities["investigation"] == ()
     assert session.available_capabilities["llm_provider"] == ()
     assert session.available_capabilities["task_cancel"] == ()
 
@@ -373,7 +372,6 @@ def test_turn_runner_preserves_supported_capabilities(monkeypatch: Any) -> None:
     session = SessionCore(store=InMemorySessionStore())
     session.available_capabilities.update(
         {
-            "investigation": ("existing-investigation",),
             "llm_provider": ("existing-provider",),
             "task_cancel": ("existing-cancel",),
             "shell_commands": ("shell",),
@@ -389,7 +387,6 @@ def test_turn_runner_preserves_supported_capabilities(monkeypatch: Any) -> None:
         logging.getLogger("test.gateway.capabilities"),
     )
 
-    assert session.available_capabilities["investigation"] == ()
     assert session.available_capabilities["llm_provider"] == ()
     assert session.available_capabilities["task_cancel"] == ()
 
@@ -408,7 +405,6 @@ def test_turn_runner_capability_gating_is_stable_across_turns(monkeypatch: Any) 
     handler("first turn", session, RecordingTurnOutput(), logger)
     handler("second turn", session, RecordingTurnOutput(), logger)
 
-    assert session.available_capabilities["investigation"] == ()
     assert session.available_capabilities["llm_provider"] == ()
     assert session.available_capabilities["task_cancel"] == ()
     assert session.available_capabilities["shell_commands"] == ("shell",)

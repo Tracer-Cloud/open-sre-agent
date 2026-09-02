@@ -28,7 +28,7 @@ SOURCE = "yandex_cloud"
     name="find_yc_api",
     display_name="Yandex Cloud",
     source=SOURCE,
-    surfaces=(ToolSurface.INVESTIGATION, ToolSurface.ACTION),
+    surfaces=(ToolSurface.ACTION,),
     description=(
         "Find the exact REST path for any Yandex Cloud resource, across every "
         "service the API exposes — not just the ones with a dedicated tool. "

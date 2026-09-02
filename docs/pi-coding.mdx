@@ -51,11 +51,11 @@ There is no `opensre integrations setup` target for Pi coding. Enable it with en
 
 Pi coding shares the `pi` binary and provider credentials with the LLM-provider Pi path. Authenticate once with `/login` inside `pi`, or export the provider API key your Pi model needs. OpenSRE does not store a separate Pi coding token.
 
-## Investigation tools
+## Tools
 
 | Tool | What it does |
 | --- | --- |
-| `pi_coding_task` | Run Pi headlessly on a coding task; return summary, changed files, and diff (investigation surface) |
+| `pi_coding_task` | Run Pi headlessly on a coding task; return summary, changed files, and diff |
 
 ### How it works
 
@@ -69,7 +69,7 @@ You review the diff and decide whether to keep, commit, or revert the changes.
 
 ### Example
 
-Once enabled, the tool is available to the agent (investigation surface). Describe a scoped coding task, for example:
+Once enabled, the tool is available to the agent. Describe a scoped coding task, for example:
 
 ```
 add input validation to parse_config() in config/loader.py

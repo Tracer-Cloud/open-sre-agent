@@ -184,7 +184,7 @@ def _map_get_git_deploy_timeline(
         "Building a short-form deploy timeline for RCA narrative",
     ],
     requires=["owner", "repo"],
-    surfaces=(ToolSurface.INVESTIGATION, ToolSurface.CHAT),
+    surfaces=(ToolSurface.CHAT,),
     input_schema={
         "type": "object",
         "properties": {

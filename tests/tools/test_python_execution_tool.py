@@ -24,7 +24,6 @@ class TestPythonExecutionToolMetadata:
     def test_registered_on_interactive_surfaces(self) -> None:
         clear_tool_registry_cache()
         registered = get_registered_tool_map("chat")["execute_python_code"]
-        assert "investigation" in registered.surfaces
         assert "chat" in registered.surfaces
 
     def test_not_advertised_without_a_python_interpreter(self, monkeypatch) -> None:

@@ -18,12 +18,6 @@ from surfaces.cli.startup import sentry_entrypoint_for
 from surfaces.entrypoint import main
 
 
-class _EmptyCatalog:
-    def filter(self, *, category: str, search: str) -> list[object]:
-        _ = (category, search)
-        return []
-
-
 def _stub_analytics_httpx(monkeypatch: pytest.MonkeyPatch) -> list[dict[str, object]]:
     posted_payloads: list[dict[str, object]] = []
 
@@ -249,26 +243,6 @@ def test_main_fast_version_command_skips_first_run_setup(monkeypatch, capsys) ->
     assert captured == []
 
 
-def test_main_fast_print_template_skips_startup(monkeypatch, capsys) -> None:
-    """``investigate --print-template`` must not install harness adapters."""
-    boot_calls: list[str] = []
-
-    monkeypatch.setattr(
-        "surfaces.cli.app.startup.run",
-        lambda *_a, **_k: boot_calls.append("startup"),
-    )
-    monkeypatch.setattr("surfaces.cli.app.capture_first_run_if_needed", lambda: None)
-    monkeypatch.setattr("surfaces.cli.app.capture_cli_invoked", lambda *_a: None)
-    monkeypatch.setattr("surfaces.cli.app.shutdown_analytics", lambda **_kw: None)
-
-    exit_code = main(["investigate", "--print-template", "generic"])
-
-    assert exit_code == 0
-    assert boot_calls == []
-    payload = capsys.readouterr().out
-    assert '"alert_source": "generic"' in payload
-
-
 def test_main_debug_sentry_sends_synthetic_event(monkeypatch, capsys) -> None:
     debug_module = importlib.import_module("surfaces.cli.commands.debug")
     captured: list[tuple[tuple[object, ...], dict[str, object]]] = []
@@ -417,11 +391,6 @@ def test_main_emits_first_run_install_before_cli_invoked(
             "integrations_listed",
             "integrations.cli.cmd_list",
         ),
-        (
-            ["tests", "list"],
-            "tests_listed",
-            "surfaces.cli.tests.discover.load_test_catalog",
-        ),
     ],
 )
 def test_main_captures_cli_invoked_before_reported_subcommand_families(
@@ -448,26 +417,13 @@ def test_main_captures_cli_invoked_before_reported_subcommand_families(
             lambda: captured.append(subcommand_event),
         )
         monkeypatch.setattr(onboard_module, "capture_onboard_completed", lambda _cfg: None)
-    elif setup == "integrations.cli.cmd_list":
+    else:
         integrations_module = importlib.import_module("surfaces.cli.commands.integrations")
         monkeypatch.setattr(setup, lambda: None)
         monkeypatch.setattr(
             integrations_module,
             "capture_integrations_listed",
             lambda: captured.append(subcommand_event),
-        )
-    else:
-        tests_module = importlib.import_module("surfaces.cli.commands.tests")
-        monkeypatch.setattr(setup, _EmptyCatalog)
-
-        def _capture_tests_listed(_category: str, *, search: bool) -> None:
-            _ = (_category, search)
-            captured.append(subcommand_event)
-
-        monkeypatch.setattr(
-            tests_module,
-            "capture_tests_listed",
-            _capture_tests_listed,
         )
 
     exit_code = main(argv)
@@ -732,7 +688,11 @@ def test_root_main_propagates_the_cli_exit_code(monkeypatch) -> None:
     main.py is the documented entry point, so a swallowed exit code silently
     breaks CI steps, shell `&&` chains, and anything that checks $?.
     """
-    # Arrange
+    # Arrange: repo-root main.py is not an installed module, so import it from
+    # the checkout explicitly rather than relying on sys.path containing cwd.
+    from config.constants.paths import REPO_ROOT
+
+    monkeypatch.syspath_prepend(str(REPO_ROOT))
     import main as root_main
 
     monkeypatch.setattr("surfaces.cli.app.main", lambda *_a, **_k: 2)

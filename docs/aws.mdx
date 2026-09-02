@@ -1,11 +1,11 @@
 ---
 title: "AWS"
-description: "Connect AWS so OpenSRE can map your infrastructure and investigate cloud-related alerts"
+description: "Connect AWS so OpenSRE can map your infrastructure and investigate cloud-related issues"
 ---
 
 ## Overview
 
-OpenSRE uses AWS to map your environment: Lambda functions, EKS clusters, S3 buckets, and more. It reads infrastructure state to build investigation context when cloud-related alerts fire.
+OpenSRE uses AWS to map your environment: Lambda functions, EKS clusters, S3 buckets, and more. It reads infrastructure state to build context when you ask about cloud resources.
 
 Related AWS tool pages (same credentials, no separate setup): [EC2](/ec2), [ELB](/elb), [S3](/s3), [Lambda](/aws_lambda), and [CloudTrail](/cloudtrail_events).
 
@@ -133,10 +133,10 @@ For least privilege, the minimum services used are:
 ```
 
 <Note>
-`opensre integrations verify aws` assumes `AWS_ROLE_ARN` when set. Many AWS investigation tools (S3, CloudTrail, EC2, ELB, Lambda) call AWS through the ambient credential chain (environment keys, shared profile, or instance/task role) and do **not** assume that role for the API call. Give S3/CloudTrail/EC2 permissions to the identity the OpenSRE process actually runs as.
+`opensre integrations verify aws` assumes `AWS_ROLE_ARN` when set. Many AWS tools (S3, CloudTrail, EC2, ELB, Lambda) call AWS through the ambient credential chain (environment keys, shared profile, or instance/task role) and do **not** assume that role for the API call. Give S3/CloudTrail/EC2 permissions to the identity the OpenSRE process actually runs as.
 </Note>
 
-## Investigation tools
+## Tools
 
 | Area | Tools / capability |
 | --- | --- |
@@ -216,7 +216,7 @@ aws     │ local env │ ✓ passed │ Connected to AWS STS via static-creds
 
 `execute_aws_operation` is the registered AWS tool. It is read-only: the allowlist admits `describe_*`, `get_*`, `list_*`, `head_*`, `select_*`, `batch_get_*`, `lookup_*` (e.g. `cloudtrail.lookup_events`), and the exact operations `query` and `scan` (e.g. `dynamodb.query`). Mutating operations (e.g. `terminate_instances`) are rejected with an `"Operation not allowed"` error.
 
-It is not auto-planned during an investigation (the agent needs an explicit service and operation), so call it by looking it up in the tool registry and running it directly. Any region works — set `AWS_REGION`, or pass a region-scoped service; `us-east-1` is used here as the example:
+The agent needs an explicit service and operation to call it, so to exercise it directly, look it up in the tool registry and run it. Any region works — set `AWS_REGION`, or pass a region-scoped service; `us-east-1` is used here as the example:
 
 ```bash
 uv run python -c "from tools.registry import get_registered_tool; import json; tool = get_registered_tool('execute_aws_operation'); print(json.dumps(tool.run(service='sts', operation='get_caller_identity'), indent=2, default=str))"

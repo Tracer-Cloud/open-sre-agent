@@ -145,7 +145,7 @@ def _footer(
 
 
 class _EventLogDisplay:
-    """Rich Live-backed animated event log. One instance per investigation."""
+    """Rich Live-backed animated event log. One instance per run."""
 
     def __init__(
         self,

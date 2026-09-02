@@ -85,7 +85,7 @@ class TestExecutor:
         adapters[Provider.TELEGRAM].result = (True, "", "msg_42")
         task = ScheduledTask(
             id="test_tg_01",
-            kind=TaskKind.DAILY_SUMMARY,
+            kind=TaskKind.MANUAL_LOOP,
             cron="0 9 * * *",
             provider=Provider.TELEGRAM,
             chat_id="-100123",
@@ -104,7 +104,7 @@ class TestExecutor:
         _install_real_bundle()
         task = ScheduledTask(
             id="test_tg_02",
-            kind=TaskKind.DAILY_SUMMARY,
+            kind=TaskKind.MANUAL_LOOP,
             cron="0 9 * * *",
             provider=Provider.TELEGRAM,
             chat_id="-100123",
@@ -129,7 +129,7 @@ class TestExecutor:
         adapters[Provider.SLACK].result = (True, "", "ts_123")
         task = ScheduledTask(
             id="test_sl_01",
-            kind=TaskKind.DAILY_SUMMARY,
+            kind=TaskKind.MANUAL_LOOP,
             cron="0 9 * * *",
             provider=Provider.SLACK,
             chat_id="C123456",
@@ -149,7 +149,7 @@ class TestExecutor:
         adapters[Provider.DISCORD].result = (True, "", "msg_99")
         task = ScheduledTask(
             id="test_dc_01",
-            kind=TaskKind.DAILY_SUMMARY,
+            kind=TaskKind.MANUAL_LOOP,
             cron="0 9 * * *",
             provider=Provider.DISCORD,
             chat_id="123456789",
@@ -169,7 +169,7 @@ class TestExecutor:
         adapters[Provider.ROCKETCHAT].result = (True, "", "msg_rc")
         task = ScheduledTask(
             id="test_rc_01",
-            kind=TaskKind.DAILY_SUMMARY,
+            kind=TaskKind.MANUAL_LOOP,
             cron="0 9 * * *",
             provider=Provider.ROCKETCHAT,
             chat_id="#ops",
@@ -190,7 +190,7 @@ class TestExecutor:
         task = ScheduledTask(
             id="test_shell_01",
             name="Local loop",
-            kind=TaskKind.DAILY_SUMMARY,
+            kind=TaskKind.MANUAL_LOOP,
             cron="0 9 * * *",
             provider=Provider.INTERACTIVE_SHELL,
         )
@@ -225,7 +225,7 @@ class TestExecutor:
         task = ScheduledTask(
             id="test_ops_log",
             name="Local loop",
-            kind=TaskKind.DAILY_SUMMARY,
+            kind=TaskKind.MANUAL_LOOP,
             cron="0 9 * * *",
             provider=Provider.INTERACTIVE_SHELL,
         )
@@ -257,7 +257,7 @@ class TestExecutor:
         adapters[Provider.SLACK].result = (True, "", "ts_123")
         task = ScheduledTask(
             id="test_fanout",
-            kind=TaskKind.DAILY_SUMMARY,
+            kind=TaskKind.MANUAL_LOOP,
             cron="0 9 * * *",
             provider=Provider.INTERACTIVE_SHELL,
             params={LOOP_CHANNELS_PARAM: "interactive_shell,slack"},
@@ -283,7 +283,7 @@ class TestExecutor:
         adapters[Provider.SLACK].result = (False, "webhook missing", "")
         task = ScheduledTask(
             id="test_fanout_partial",
-            kind=TaskKind.DAILY_SUMMARY,
+            kind=TaskKind.MANUAL_LOOP,
             cron="0 9 * * *",
             provider=Provider.INTERACTIVE_SHELL,
             params={LOOP_CHANNELS_PARAM: "interactive_shell,slack"},
@@ -311,7 +311,7 @@ class TestExecutor:
         adapters = _install_fake_bundle()
         task = ScheduledTask(
             id="test_fanout_slack_default",
-            kind=TaskKind.DAILY_SUMMARY,
+            kind=TaskKind.MANUAL_LOOP,
             cron="0 9 * * *",
             provider=Provider.INTERACTIVE_SHELL,
             params={LOOP_CHANNELS_PARAM: "interactive_shell,slack"},
@@ -341,7 +341,7 @@ class TestExecutor:
         adapters = _install_fake_bundle()
         task = ScheduledTask(
             id="test_fanout_slack_webhook",
-            kind=TaskKind.CUSTOM_INVESTIGATION,
+            kind=TaskKind.MANUAL_LOOP,
             cron="0 9 * * *",
             provider=Provider.INTERACTIVE_SHELL,
             params={LOOP_CHANNELS_PARAM: "slack"},
@@ -372,7 +372,7 @@ class TestExecutor:
         adapters = _install_fake_bundle()
         task = ScheduledTask(
             id="test_fanout_slack_ignore_foreign_chat",
-            kind=TaskKind.CUSTOM_INVESTIGATION,
+            kind=TaskKind.MANUAL_LOOP,
             cron="0 9 * * *",
             provider=Provider.INTERACTIVE_SHELL,
             chat_id="8098636622",
@@ -401,7 +401,7 @@ class TestExecutor:
         _install_real_bundle()
         task = ScheduledTask(
             id="test_rc_02",
-            kind=TaskKind.DAILY_SUMMARY,
+            kind=TaskKind.MANUAL_LOOP,
             cron="0 9 * * *",
             provider=Provider.ROCKETCHAT,
             chat_id="#ops",
@@ -441,7 +441,7 @@ class TestExecutor:
         _install_real_bundle()
         task = ScheduledTask(
             id="test_sl_webhook_chat",
-            kind=TaskKind.DAILY_SUMMARY,
+            kind=TaskKind.MANUAL_LOOP,
             cron="0 9 * * *",
             provider=Provider.SLACK,
             chat_id="C0123ABCD",
@@ -467,7 +467,7 @@ class TestExecutor:
         _install_real_bundle()
         task = ScheduledTask(
             id="test_rc_03",
-            kind=TaskKind.DAILY_SUMMARY,
+            kind=TaskKind.MANUAL_LOOP,
             cron="0 9 * * *",
             provider=Provider.ROCKETCHAT,
             chat_id="#ops",
@@ -493,7 +493,7 @@ class TestExecutor:
         adapters[Provider.TELEGRAM].result = (True, "", "msg_1")
         task = ScheduledTask(
             id="test_dedup",
-            kind=TaskKind.DAILY_SUMMARY,
+            kind=TaskKind.MANUAL_LOOP,
             cron="0 9 * * *",
             provider=Provider.TELEGRAM,
             chat_id="-100123",
@@ -516,7 +516,7 @@ class TestExecutor:
     def test_message_build_failure_records_error(self) -> None:
         task = ScheduledTask(
             id="test_fail",
-            kind=TaskKind.CUSTOM_INVESTIGATION,
+            kind=TaskKind.MANUAL_LOOP,
             cron="0 9 * * *",
             provider=Provider.TELEGRAM,
             chat_id="-100123",
@@ -533,7 +533,7 @@ class TestExecutor:
         adapters[Provider.TELEGRAM].result = (False, "Connection refused", "")
         task = ScheduledTask(
             id="test_del_fail",
-            kind=TaskKind.DAILY_SUMMARY,
+            kind=TaskKind.MANUAL_LOOP,
             cron="0 9 * * *",
             provider=Provider.TELEGRAM,
             chat_id="-100123",

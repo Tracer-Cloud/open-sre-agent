@@ -1,6 +1,6 @@
 ---
 title: "OpenSRE"
-description: "Agentic alert investigation for production systems."
+description: "An agentic SRE for production systems."
 ---
 
 <div className="index-hero index-page">
@@ -15,18 +15,18 @@ description: "Agentic alert investigation for production systems."
   </div>
 
   <blockquote className="index-hero-quote">
-    <p>Investigate before you get paged.</p>
+    <p>Ask before you get paged.</p>
   </blockquote>
 
   <p className="index-hero-lead">
-    An agentic SRE that investigates production incidents autonomously —
+    An agentic SRE that answers production questions autonomously —
     so your on-call rotation doesn't have to start cold.
   </p>
 
   <p className="index-hero-dek">
     Point it at the tools your team already uses — Datadog, Grafana, Slack,
     PagerDuty, and 60+ others. It pulls the logs and metrics that matter,
-    figures out what happened, and hands you a plain-English report.
+    figures out what happened, and answers in plain English.
   </p>
 </div>
 
@@ -42,16 +42,16 @@ description: "Agentic alert investigation for production systems."
   <Card title="Connect your tools" icon="plug" href="/integrations-overview">
     Datadog, Grafana, PagerDuty, Slack, Kubernetes, and more.
   </Card>
-  <Card title="Try an investigation" icon="magnifying-glass" href="/investigation-overview">
+  <Card title="Open the shell" icon="terminal" href="/interactive-shell-commands">
     Paste in an alert, or just describe what's going on.
   </Card>
 </CardGroup>
 
 ## What is OpenSRE?
 
-OpenSRE is an open-source agent that investigates production incidents for you. When an alert comes in — or you just tell it something's wrong — it goes and checks: recent deploys, logs, metrics, whatever's connected. Then it writes up what it found.
+OpenSRE is an open-source agent that answers production questions for you. When an alert comes in — or you just tell it something's wrong — it goes and checks: recent deploys, logs, metrics, whatever's connected. Then it tells you what it found.
 
-**Who's it for?** Anyone on call who's tired of starting from a blank tab at 3am. It's built for engineers who want a head start on root cause, not a black box that hides how it got there.
+**Who's it for?** Anyone on call who's tired of starting from a blank tab at 3am. It's built for engineers who want a head start on the cause, not a black box that hides how it got there.
 
 **Why people like it:**
 
@@ -64,11 +64,11 @@ OpenSRE is an open-source agent that investigates production incidents for you. 
 ## What you can do with it
 
 <CardGroup cols={2}>
-  <Card title="Investigate an alert" icon="magnifying-glass" href="/investigation-overview">
-    Get a written report with the likely cause, the evidence, and next steps.
-  </Card>
   <Card title="Chat with it" icon="terminal" href="/interactive-shell-commands">
-    Describe an incident in plain language, or use commands like `/investigate` and `/verify`.
+    Describe an incident in plain language, or use commands like `/health` and `/verify`.
+  </Card>
+  <Card title="Set a goal" icon="flag" href="/goals">
+    Give it a finish line and let it keep working across turns until it gets there.
   </Card>
   <Card title="Connect 60+ tools" icon="plug" href="/integrations-overview">
     Monitoring, incident management, cloud, code, chat, databases — most of what you already run.
@@ -95,14 +95,8 @@ OpenSRE is an open-source agent that investigates production incidents for you. 
     opensre onboard
     ```
   </Step>
-  <Step title="Give it something to investigate">
-    Point it at a sample alert to see the whole thing run end to end:
-
-    ```bash
-    opensre investigate -i tests/e2e/kubernetes/fixtures/datadog_k8s_alert.json
-    ```
-
-    Or skip the file and just talk to it — open the shell with no arguments and describe what's going on in your own words:
+  <Step title="Give it something to look at">
+    Open the shell with no arguments and describe what's going on in your own words — or paste the alert body straight in:
 
     ```bash
     opensre
@@ -110,24 +104,22 @@ OpenSRE is an open-source agent that investigates production incidents for you. 
   </Step>
 </Steps>
 
-Once it's done, you'll have three files worth a look: `problem.md` (what it was looking at), the `theory/hypothesis_*.md` files (what it tried), and `report.md` (what it concluded). Prefer JSON? Add `--output ./rca.json`.
-
 <Tip>
   Something not working? [Quickstart troubleshooting](/quickstart#troubleshooting) covers the usual suspects — Docker not running, `make` missing, LLM not configured.
 </Tip>
 
-## How an investigation runs
+## How a turn runs
 
-Say an alert fires. Here's roughly what happens next:
+Say an alert fires and you paste it in. Here's roughly what happens next:
 
 1. OpenSRE reads the alert and figures out what kind of problem it's looking at
 2. It gathers context — who owns the service, what changed recently, what's normal
 3. It goes and checks the tools you've connected for logs, metrics, and traces
-4. It keeps digging and testing ideas until it's confident it found the cause
-5. It writes up a report and sends it wherever you asked — Slack, a file, your API
+4. It keeps digging and testing ideas until it can answer
+5. It answers in the shell, and sends the result wherever you asked — Slack, Telegram, a file
 
 <div className="index-diagram-frame">
-  <div className="index-diagram-kicker">Investigation workflow</div>
+  <div className="index-diagram-kicker">Agent workflow</div>
   <img
     src="/images/how_tracer_works.png"
     alt="How OpenSRE Works"
@@ -135,13 +127,11 @@ Say an alert fires. Here's roughly what happens next:
   />
 </div>
 
-Want more detail? [How an investigation works](/how-investigations-work) walks through each step.
-
 ## Keep exploring
 
 <CardGroup cols={2}>
   <Card title="Showcase" icon="photo-film" href="/showcase">
-    See real output from sample investigations.
+    See real output from sample runs.
   </Card>
   <Card title="Features" icon="list-check" href="/features">
     A rundown of everything OpenSRE can do today.

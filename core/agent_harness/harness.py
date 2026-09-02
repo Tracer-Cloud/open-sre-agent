@@ -1,11 +1,10 @@
-"""``AgentSession`` — the embedder's entry point for chat and investigation.
+"""``AgentSession`` — the embedder's entry point for chat.
 
 Create the session, attach an agent, run turns::
 
     session = AgentSession.start(config)  # builds the default agent
     result = session.chat("…")            # turn 1
     follow = session.chat("…")            # turn 2 — same attached agent
-    report = session.investigate({…}, runner=run)  # needs no attached chat agent
 
 Embedded scripts that need local adapters use
 ``bootstrap.embedded.start_embedded_session``. Scheduled one-shots may use
@@ -14,7 +13,7 @@ Embedded scripts that need local adapters use
 A host with its own ports (the gateway pool, the REPL) builds the agent through
 :class:`~core.agent_harness.turns.headless_build.DefaultHeadlessBuild` and drives it
 with :meth:`HeadlessAgent.handle` per message; it may still attach it here to
-use :meth:`chat` and :meth:`investigate`.
+use :meth:`chat`.
 
 Session lifecycle (create / resolve / rotate / restore) belongs to
 :class:`~core.agent_harness.session.lifecycle.SessionManager`; this module adds
@@ -33,11 +32,6 @@ from typing import TYPE_CHECKING, Any, Protocol, runtime_checkable
 from core.agent_harness.session import SessionManager
 
 if TYPE_CHECKING:
-    from core.agent_harness.investigation_api import (
-        AlertInput,
-        InvestigationPayloadRunner,
-        InvestigationResult,
-    )
     from core.agent_harness.ports import (
         OutputSink,
         PromptContextProvider,
@@ -124,7 +118,7 @@ class SessionStartupResult:
 
 
 class AgentSession:
-    """Public host API: ``start`` / ``chat`` / ``investigate``.
+    """Public host API: ``start`` / ``chat``.
 
     Order of startup steps matters: env vars must be resolved before session
     creation (integration hydration/warm may depend on env-provided credentials),
@@ -316,30 +310,6 @@ class AgentSession:
             cancel_requested=cancel_requested,
             on_progress=on_progress,
         )
-
-    def investigate(
-        self,
-        alert: AlertInput,
-        *,
-        runner: InvestigationPayloadRunner,
-        opensre_evaluate: bool = False,
-        investigation_metadata: tuple[str, str] | None = None,
-    ) -> InvestigationResult:
-        """Run an investigation through ``runner`` and return a typed result.
-
-        ``agent_harness`` must not import ``tools``, so the caller (a surface or
-        the gateway) supplies the payload callable — normally
-        :func:`tools.investigation.capability.run_investigation_payload`. Does
-        not require an attached chat agent.
-        """
-        from core.agent_harness.investigation_api import InvestigationResult
-
-        payload = runner(
-            raw_alert=alert,
-            opensre_evaluate=opensre_evaluate,
-            investigation_metadata=investigation_metadata,
-        )
-        return InvestigationResult.from_payload(payload)
 
     def resolve_integrations(self, session: SessionCore) -> dict[str, Any]:
         """Return resolved integration configs for ``session``."""

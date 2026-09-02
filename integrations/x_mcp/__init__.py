@@ -7,7 +7,7 @@ tools. Unlike PostHog/Sentry's always-on hosted MCP servers, XMCP is designed
 to run locally (optionally tunneled for remote access): a user clones the
 repo, supplies their own X API credentials, and runs the server themselves.
 This module centralizes X MCP configuration, validation, and tool-calling so
-the onboarding wizard, verify CLI, chat tools, and investigation actions all
+the onboarding wizard, verify CLI, and chat tools all
 share the same transport and parsing logic.
 
 Supported transports:

@@ -31,10 +31,6 @@ owner module instead of broadening module responsibilities.
   only.
 - `background/workers.py` — alert watcher lifecycle, spinner ticker lifecycle,
   sampler startup, turn-start background-output drains only.
-- `background/runner.py`, `background/notifications.py` — session-local
-  background investigation launchers and RCA completion notification delivery
-  only (record/preferences ownership itself lives in
-  `core.agent_harness.session.background`).
 - `core/state.py` — `ReplState`, `SpinnerState`: runtime state and transition
   helpers only (see State ownership rules below).
 - `core/turn_detection.py` — pure text classifiers for cancel/confirm
@@ -94,7 +90,7 @@ flowchart TD
   controller --> turnHost["runtime.turn_host.run_agent_turn(turn_runtime, text)"]
   turnHost --> turnEntry["interactive_shell.runtime.shell_turn_execution.execute_shell_turn"]
   turnEntry --> coreHarness["core.agent_harness.turns.orchestrator.run_turn"]
-  coreHarness --> sideEffects["slash/help/agent/follow-up/investigation side effects"]
+  coreHarness --> sideEffects["slash/help/agent/follow-up side effects"]
   controller --> replState["core.state.ReplState"]
   controller --> spinnerState["core.state.SpinnerState"]
   controller --> inputReader["input.PromptInputReader"]

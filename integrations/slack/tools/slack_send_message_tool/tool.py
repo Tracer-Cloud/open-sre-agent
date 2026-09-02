@@ -166,5 +166,5 @@ class SlackSendMessageTool(BaseTool):
 
 slack_send_message = tool(
     SlackSendMessageTool(),
-    surfaces=(ToolSurface.INVESTIGATION, ToolSurface.ACTION),
+    surfaces=(ToolSurface.ACTION,),
 )

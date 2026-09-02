@@ -1,11 +1,11 @@
 ---
 title: "Messaging"
-description: "Deliver investigation findings and trigger investigations from Slack, Discord, Telegram, Rocket.Chat, WhatsApp, Twilio SMS, Buzz, or email (SMTP)."
+description: "Chat with the OpenSRE agent and receive scheduled reports via Slack, Discord, Telegram, Rocket.Chat, WhatsApp, Twilio SMS, Buzz, or email (SMTP)."
 ---
 
 ## Overview
 
-OpenSRE can deliver investigation findings — and, on some platforms, accept investigation triggers — through messaging and email. Pick the channel where your team already responds to incidents.
+OpenSRE can chat two-way on some platforms and post messages — agent replies, scheduled reports, watchdog alarms — through messaging and email. Pick the channel where your team already responds to incidents.
 
 ## Prerequisites
 
@@ -14,18 +14,18 @@ OpenSRE can deliver investigation findings — and, on some platforms, accept in
 
 ## Setup
 
-| Platform | Best for | Trigger investigations from chat? | Configured by | Setup time |
+| Platform | Best for | Two-way chat? | Configured by | Setup time |
 | --- | --- | --- | --- | --- |
 | [**Slack**](/messaging/slack) | Teams already paged in Slack channels | ✅ Socket Mode chat via `opensre gateway start` (+ webhook delivery) | `opensre integrations setup slack` | ~10 min |
-| [**Discord**](/messaging/discord) | Communities and teams using Discord servers | ✅ Gateway chat + `/investigate` via `opensre gateway start` | `opensre integrations setup discord` | ~10 min |
+| [**Discord**](/messaging/discord) | Communities and teams using Discord servers | ✅ Gateway chat via `opensre gateway start` | `opensre integrations setup discord` | ~10 min |
 | [**Telegram**](/messaging/telegram) | Mobile-first and on-call rotations | ✅ DM text chat via `opensre gateway start` | `opensre integrations setup telegram` | ~5 min |
 | [**Rocket.Chat**](/messaging/rocketchat) | Self-hosted and open-source workspaces | ❌ delivery only | `opensre integrations setup rocketchat` | ~5 min |
 | [**WhatsApp**](/messaging/whatsapp) | Mobile alerting via Twilio WhatsApp | ❌ delivery only | `opensre integrations setup whatsapp` | ~5 min |
 | [**Twilio SMS**](/messaging/twilio-sms) | SMS paging via Twilio (separate from WhatsApp) | ❌ delivery only | `opensre integrations setup twilio` | ~5 min |
-| [**Buzz**](/messaging/buzz) | Block Buzz / Nostr workspaces | ❌ delivery only | `opensre integrations setup buzz` | ~5 min |
-| [**SMTP**](/smtp) | Background RCA completion email | ❌ email only | `opensre integrations setup smtp` | ~5 min |
+| [**Buzz**](/messaging/buzz) | Block Buzz / Nostr workspaces | ✅ channel mentions via `opensre gateway start` | `opensre integrations setup buzz` | ~5 min |
+| [**SMTP**](/smtp) | Outbound email | ❌ email only | `opensre integrations setup smtp` | ~5 min |
 
-If you're not sure, start with Slack. Pick Discord if you want chat-driven investigations with threaded follow-ups. Pick WhatsApp or Twilio SMS when your team already pages via Twilio.
+If you're not sure, start with Slack. Pick Discord if you want chat with threaded follow-ups. Pick WhatsApp or Twilio SMS when your team already pages via Twilio.
 
 You can configure more than one. Each is independent and uses its own credentials.
 
@@ -85,14 +85,14 @@ BUZZ_RELAY_URL=
 BUZZ_PRIVATE_KEY=
 BUZZ_DEFAULT_CHANNEL=
 
-# SMTP (background email)
+# SMTP (email)
 SMTP_HOST=
 SMTP_PORT=587
 SMTP_FROM_ADDRESS=
 SMTP_DEFAULT_TO=
 ```
 
-## Investigation tools
+## Agent tools
 
 Platform-specific send/read tools and gateway behavior are documented on each page (for example `slack_send_message`, `telegram_send_message`, `buzz_send_message`, `twilio_notify`).
 

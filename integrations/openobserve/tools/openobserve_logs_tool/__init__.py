@@ -125,7 +125,7 @@ def _extract_records(body: dict[str, Any]) -> list[dict[str, Any]]:
     name="query_openobserve_logs",
     description="Query OpenObserve logs using bounded read-only search.",
     source="openobserve",
-    surfaces=(ToolSurface.INVESTIGATION, ToolSurface.CHAT),
+    surfaces=(ToolSurface.CHAT,),
     requires=["base_url"],
     input_schema={
         "type": "object",

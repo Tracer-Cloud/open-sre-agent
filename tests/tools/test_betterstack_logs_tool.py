@@ -21,7 +21,7 @@ def test_metadata() -> None:
     rt = query_betterstack_logs.__opensre_registered_tool__
     assert rt.name == "query_betterstack_logs"
     assert rt.source == "betterstack"
-    assert "investigation" in rt.surfaces
+    assert "chat" in rt.surfaces
 
 
 def test_run_happy_path_explicit_source() -> None:

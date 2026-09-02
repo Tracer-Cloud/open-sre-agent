@@ -45,7 +45,7 @@ def _map_get_mariadb_global_status(
     name="get_mariadb_global_status",
     description="Retrieve key MariaDB server metrics including connections, threads, slow queries, InnoDB buffer pool stats, and uptime from SHOW GLOBAL STATUS.",
     source="mariadb",
-    surfaces=(ToolSurface.INVESTIGATION, ToolSurface.CHAT),
+    surfaces=(ToolSurface.CHAT,),
     is_available=mariadb_is_available,
     injected_params=("host", "password", "username"),
     extract_params=mariadb_extract_params,

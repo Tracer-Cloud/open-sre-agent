@@ -68,7 +68,7 @@ def _find_failed_run(client: Any, pipeline_names: Iterable[str]) -> PipelineRunS
         "required": [],
     },
     is_available=lambda sources: bool(sources.get("tracer_web")),
-    surfaces=(ToolSurface.INVESTIGATION, ToolSurface.CHAT),
+    surfaces=(ToolSurface.CHAT,),
 )
 def fetch_failed_run(pipeline_name: str | None = None) -> dict[str, Any]:
     """Fetch context (metadata) about a failed run from Tracer Web App."""

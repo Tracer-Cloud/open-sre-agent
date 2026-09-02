@@ -1023,7 +1023,6 @@ _TOOLS_WITHOUT_DELIBERATE_CATCH: frozenset[str] = frozenset(
         # there as an external registry package and are only loaded when the
         # bench is actively imported, so they don't appear in the production
         # registry that this test enumerates.
-        "alert_sample",
         "alertmanager_alerts",
         "alertmanager_silences",
         # architecture_* catch only WorkspaceError / ReportPersistenceError for
@@ -1083,25 +1082,7 @@ _TOOLS_WITHOUT_DELIBERATE_CATCH: frozenset[str] = frozenset(
         "get_github_repository_tree",
         "get_gitlab_file",
         "get_groundcover_query_reference",
-        "get_hermes_adapter_catalog",
-        "get_hermes_approval_events",
-        "get_hermes_audit_trail",
-        "get_hermes_config",
-        "get_hermes_credential_state",
-        "get_hermes_cron_state",
-        "get_hermes_filesystem_state",
-        "get_hermes_kv_cache_state",
         "get_hermes_logs",
-        "get_hermes_memory_state",
-        "get_hermes_message_history",
-        "get_hermes_orchestration_state",
-        "get_hermes_provider_traffic",
-        "get_hermes_rbac_state",
-        "get_hermes_routing_decisions",
-        "get_hermes_runtime_state",
-        "get_hermes_session_log",
-        "get_hermes_session_topology",
-        "get_hermes_workflow_run",
         "get_host_metrics",
         "get_jenkins_build_log",
         "get_jenkins_pipeline_stages",
@@ -1170,7 +1151,6 @@ _TOOLS_WITHOUT_DELIBERATE_CATCH: frozenset[str] = frozenset(
         "inspect_lambda_function",
         "inspect_s3_object",
         "inspect_railway_deployment",
-        "investigation_start",
         "jira_add_comment",
         "jira_create_issue",
         "jira_issue_detail",
@@ -1249,7 +1229,6 @@ _TOOLS_WITHOUT_DELIBERATE_CATCH: frozenset[str] = frozenset(
         "query_yc_metrics",
         "redeploy_railway_service",
         "replay_slack_thread_locally",
-        "run_investigation",
         "scan_redis_keys",
         "search_bitbucket_code",
         "search_github_code",
@@ -1270,7 +1249,6 @@ _TOOLS_WITHOUT_DELIBERATE_CATCH: frozenset[str] = frozenset(
         "slash_invoke",
         "summarize_community_followups",
         "summarize_github_pr_status",
-        "synthetic_run",
         "task_cancel",
         # update_plan returns structured invalid-plan dicts; unexpected
         # exceptions escape to the global wrapper.

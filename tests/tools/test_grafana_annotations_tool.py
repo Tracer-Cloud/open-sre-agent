@@ -137,19 +137,6 @@ def test_iso_to_epoch_ms_treats_naive_as_utc() -> None:
     assert _iso_to_epoch_ms("2026-05-30T14:00:00") == _iso_to_epoch_ms("2026-05-30T14:00:00Z")
 
 
-def test_fixture_backend_implements_query_annotations() -> None:
-    # Regression guard: the synthetic FixtureGrafanaBackend must expose query_annotations
-    # so the backend path returns data instead of an AttributeError. spec= ties this test
-    # to the real class — removing the method makes the attribute access fail here.
-    from tests.synthetic.mock_grafana_backend.backend import FixtureGrafanaBackend
-
-    backend = MagicMock(spec=FixtureGrafanaBackend)
-    backend.query_annotations.return_value = []
-    result = query_grafana_annotations(grafana_backend=backend)
-    assert result["available"] is True
-    assert result["total"] == 0
-
-
 def test_run_backend_forwards_tags_and_limit() -> None:
     mock_backend = MagicMock()
     mock_backend.query_annotations.return_value = []

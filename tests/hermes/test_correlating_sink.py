@@ -154,7 +154,7 @@ def _discord_sink() -> Any:
     return _sink
 
 
-def _three_channel_sink(
+def _multi_channel_sink(
     monkeypatch: pytest.MonkeyPatch,
     *,
     correlator: IncidentCorrelator | None = None,
@@ -164,8 +164,7 @@ def _three_channel_sink(
     sink = CorrelatingSink(
         correlator=corr,
         routes={
-            RouteDestination.TELEGRAM_WITH_RCA: _telegram_sink(),
-            RouteDestination.TELEGRAM: _slack_sink(),
+            RouteDestination.TELEGRAM: _telegram_sink(),
             RouteDestination.PAGER: _discord_sink(),
         },
     )
@@ -177,33 +176,17 @@ def _three_channel_sink(
 
 
 class TestChannelFanOut:
-    def test_rca_route_hits_only_telegram(self, monkeypatch: pytest.MonkeyPatch) -> None:
-        sink, channels = _three_channel_sink(monkeypatch)
+    def test_telegram_route_hits_only_telegram(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        sink, channels = _multi_channel_sink(monkeypatch)
 
-        # error_severity → TELEGRAM_WITH_RCA in the default matrix.
+        # error_severity → TELEGRAM in the default matrix.
         sink(_incident(rule="error_severity", severity=IncidentSeverity.HIGH))
 
         assert channels.counts == (1, 0, 0)
         assert "Hermes incident" in channels.telegram[0]["text"]
 
-    def test_warning_burst_route_hits_only_slack(self, monkeypatch: pytest.MonkeyPatch) -> None:
-        sink, channels = _three_channel_sink(monkeypatch)
-
-        # warning_burst → TELEGRAM (wired here to the Slack adapter).
-        sink(
-            _incident(
-                rule="warning_burst",
-                severity=IncidentSeverity.MEDIUM,
-                fingerprint="fp-warn",
-            )
-        )
-
-        assert channels.counts == (0, 1, 0)
-        assert "warning_burst" in channels.slack[0]["text"]
-        assert channels.slack[0]["kwargs"]["webhook_url"] == "https://hooks.example/x"
-
     def test_pager_route_hits_only_discord(self, monkeypatch: pytest.MonkeyPatch) -> None:
-        sink, channels = _three_channel_sink(monkeypatch)
+        sink, channels = _multi_channel_sink(monkeypatch)
 
         # crash_loop → PAGER (wired here to the Discord adapter).
         sink(
@@ -222,19 +205,19 @@ class TestChannelFanOut:
     ) -> None:
         """A mixed batch must land each incident on exactly its routed channel
         and leave the others untouched."""
-        sink, channels = _three_channel_sink(monkeypatch)
+        sink, channels = _multi_channel_sink(monkeypatch)
 
         sink(_incident(rule="error_severity", severity=IncidentSeverity.HIGH, fingerprint="a"))
         sink(_incident(rule="warning_burst", severity=IncidentSeverity.MEDIUM, fingerprint="b"))
         sink(_incident(rule="crash_loop", severity=IncidentSeverity.HIGH, fingerprint="c"))
 
-        assert channels.counts == (1, 1, 1)
+        assert channels.counts == (2, 0, 1)
         assert sink.metrics_snapshot()["delivered"] == 3
 
 
 class TestNonDeliveringDecisions:
     def test_dropped_incident_touches_no_channel(self, monkeypatch: pytest.MonkeyPatch) -> None:
-        sink, channels = _three_channel_sink(monkeypatch)
+        sink, channels = _multi_channel_sink(monkeypatch)
 
         # Unknown rule + MEDIUM severity → DROP in the fallback route.
         sink(_incident(rule="unknown_rule", severity=IncidentSeverity.MEDIUM))
@@ -243,7 +226,7 @@ class TestNonDeliveringDecisions:
         assert sink.metrics_snapshot()["dropped"] == 1
 
     def test_suppressed_duplicate_touches_no_channel(self, monkeypatch: pytest.MonkeyPatch) -> None:
-        sink, channels = _three_channel_sink(monkeypatch)
+        sink, channels = _multi_channel_sink(monkeypatch)
 
         sink(_incident(fingerprint="dup", seconds=0))
         sink(_incident(fingerprint="dup", seconds=10))  # within dedup window
@@ -261,8 +244,7 @@ class TestNonDeliveringDecisions:
         sink = CorrelatingSink(
             correlator=corr,
             routes={
-                RouteDestination.TELEGRAM_WITH_RCA: _telegram_sink(),
-                RouteDestination.TELEGRAM: _slack_sink(),
+                RouteDestination.TELEGRAM: _telegram_sink(),
                 # PAGER intentionally omitted.
             },
         )
@@ -279,14 +261,16 @@ class TestNonDeliveringDecisions:
         corr = IncidentCorrelator()
         sink = CorrelatingSink(
             correlator=corr,
-            routes={RouteDestination.TELEGRAM_WITH_RCA: _telegram_sink()},
-            default_route=_discord_sink(),
+            routes={RouteDestination.TELEGRAM: _telegram_sink()},
+            default_route=_slack_sink(),
         )
 
-        # crash_loop → PAGER, unregistered, so the default (Discord) catches it.
+        # crash_loop → PAGER, unregistered, so the default (Slack) catches it.
         sink(_incident(rule="crash_loop", severity=IncidentSeverity.HIGH, fingerprint="fp-d"))
 
-        assert channels.counts == (0, 0, 1)
+        assert channels.counts == (0, 1, 0)
+        assert "crash_loop" in channels.slack[0]["text"]
+        assert channels.slack[0]["kwargs"]["webhook_url"] == "https://hooks.example/x"
         assert sink.metrics_snapshot()["delivered"] == 1
 
 
@@ -306,17 +290,17 @@ class TestChannelIsolation:
         sink = CorrelatingSink(
             correlator=corr,
             routes={
-                RouteDestination.TELEGRAM_WITH_RCA: _telegram_sink(),
                 RouteDestination.TELEGRAM: _boom_slack,
+                RouteDestination.PAGER: _discord_sink(),
             },
         )
 
-        # Route to the broken Slack channel first…
+        # Route to the broken channel first…
         sink(_incident(rule="warning_burst", severity=IncidentSeverity.MEDIUM, fingerprint="w"))
-        # …then to the healthy Telegram channel.
-        sink(_incident(rule="error_severity", severity=IncidentSeverity.HIGH, fingerprint="e"))
+        # …then to the healthy Discord channel.
+        sink(_incident(rule="crash_loop", severity=IncidentSeverity.HIGH, fingerprint="e"))
 
-        assert channels.counts == (1, 0, 0)  # telegram delivered, slack never captured
+        assert channels.counts == (0, 0, 1)  # discord delivered, broken channel never captured
         snap = sink.metrics_snapshot()
         assert snap["sink_errors"] == 1
         assert snap["delivered"] == 1
@@ -337,7 +321,7 @@ class TestChannelIsolation:
         sink = CorrelatingSink(
             correlator=corr,
             routes={
-                RouteDestination.TELEGRAM_WITH_RCA: telegram,
+                RouteDestination.TELEGRAM: telegram,
                 RouteDestination.PAGER: telegram,
             },
         )
@@ -369,8 +353,8 @@ class TestCloseFanOut:
         sink = CorrelatingSink(
             correlator=corr,
             routes={
-                RouteDestination.TELEGRAM_WITH_RCA: _telegram_sink(),
-                RouteDestination.TELEGRAM: _ClosableSlack(),
+                RouteDestination.TELEGRAM: _telegram_sink(),
+                RouteDestination.PAGER: _ClosableSlack(),
             },
         )
 

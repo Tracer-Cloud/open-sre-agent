@@ -8,7 +8,7 @@ covers connecting the account and what OpenSRE can read once connected.
 
 ## What OpenSRE reads
 
-Once the folder is connected, an investigation can reach:
+Once the folder is connected, the agent can reach:
 
 | Area | What it answers |
 |---|---|
@@ -34,7 +34,7 @@ pip install 'opensre[yandex_cloud_logs]'
 Everything else — including listing log groups — works without it. Log entries
 are kept for at most 31 days, and reads are limited to five per second.
 
-OpenSRE never changes anything in your cloud. When an investigation concludes
+OpenSRE never changes anything in your cloud. When the agent concludes
 that something needs doing, it reports the exact `yc` command for you to run.
 
 ## What you need

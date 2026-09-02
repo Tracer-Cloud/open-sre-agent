@@ -23,8 +23,6 @@ def _ctx() -> TurnSnapshot:
         conversation_messages=(("user", "hello"),),
         configured_integrations=("github",),
         configured_integrations_known=True,
-        last_state=None,
-        last_synthetic_observation_path=None,
         reasoning_effort=None,
     )
 
@@ -119,8 +117,6 @@ def _turn(messages: list[tuple[str, str]]) -> TurnSnapshot:
         conversation_messages=tuple(messages),
         configured_integrations=("github",),
         configured_integrations_known=True,
-        last_state=None,
-        last_synthetic_observation_path=None,
         reasoning_effort=None,
     )
 

@@ -1,11 +1,11 @@
 ---
 title: "MariaDB"
-description: "Connect MariaDB so OpenSRE can diagnose database issues during investigations"
+description: "Connect MariaDB so OpenSRE can diagnose database issues"
 ---
 
 ## Overview
 
-OpenSRE uses MariaDB diagnostics to investigate database-related alerts — global status, process list, slow queries, InnoDB status, and replication. Operations are read-only.
+OpenSRE uses MariaDB diagnostics to investigate database issues — global status, process list, slow queries, InnoDB status, and replication. Operations are read-only.
 
 ## Prerequisites
 
@@ -139,7 +139,7 @@ mariadb  │ local env │ ✓ passed │ Connected to MariaDB 11.8.8-MariaDB-ub
          │           │          │ target database: app_db.
 ```
 
-`opensre investigate` (unlike `opensre integrations verify`) only falls through to env
+Chat sessions (unlike `opensre integrations verify`) only fall through to env
 vars when the store has no records at all -- any existing record, for any service, blocks
 env-var resolution entirely. Point `OPENSRE_INTEGRATIONS_STORE_PATH` at a path inside a
 fresh empty directory instead, so your real config is never read or written and the
@@ -150,43 +150,19 @@ export OPENSRE_DEMO_STORE_DIR="$(mktemp -d /tmp/opensre-mariadb-demo.XXXXXX)"
 export OPENSRE_INTEGRATIONS_STORE_PATH="$OPENSRE_DEMO_STORE_DIR/integrations.json"
 ```
 
-Trigger a real investigation against the seeded slow query:
+Now ask the agent about the seeded slow query:
 
 ```bash
-opensre investigate --input-json '{
-  "alert_name": "MariaDBSlowQuery",
-  "severity": "warning",
-  "commonAnnotations": {
-    "summary": "app_db MariaDB instance has a slow query"
-  }
-}'
+opensre
 ```
 
-Real output from a run against this exact local instance (edited for length). Another
-integration resolved from your own env/keyring can ride along harmlessly, since the store
-has no records to block fallback for any service:
+Ask: *Does the app_db MariaDB instance have any slow queries?*
 
-```
-Loading integrations: telegram, mariadb
-↳ MariaDB · get mariadb global status
-↳ MariaDB · get mariadb process list
-↳ MariaDB · get mariadb replication status
-↳ MariaDB · get mariadb slow queries
-↳ MariaDB · get mariadb innodb status
-
-Triage complete: Single MariaDB instance (not a replica), ~155s uptime, low
-activity (max 5 connections, 0 deadlocks, 0 row lock waits), but
-performance_schema shows one outlier statement SELECT SLEEP(?) at ~2001 ms --
-the sole "slow" query driving the alert.
-
-root_cause: The MariaDBSlowQuery alert fired because a single SELECT SLEEP(?)
-statement executed for ~2001ms, exceeding the slow-query threshold. SLEEP()
-is an intentional wait with 0 rows examined/sent, not real database work. All
-other engine, buffer pool, lock, replication, and connection metrics are
-within normal bounds on a freshly-started (155s uptime) instance.
-```
-
-All 5 registered tools were exercised in this single turn.
+Against this exact local instance the agent calls all 5 registered tools — global
+status, process list, replication status, slow queries, and InnoDB status — and
+finds the one outlier: a `SELECT SLEEP(?)` statement at ~2001 ms in
+`performance_schema`, with every other engine, lock, and connection metric within
+normal bounds.
 
 Teardown:
 
@@ -197,7 +173,7 @@ unset OPENSRE_DEMO_STORE_DIR OPENSRE_INTEGRATIONS_STORE_PATH
 unset MARIADB_HOST MARIADB_PORT MARIADB_DATABASE MARIADB_USERNAME MARIADB_PASSWORD MARIADB_SSL
 ```
 
-## Investigation tools
+## Tools
 
 | Tool | What it does |
 | --- | --- |

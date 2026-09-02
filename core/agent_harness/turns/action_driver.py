@@ -87,9 +87,6 @@ _EXECUTED_HISTORY_TYPES = {
     "implementation",
     "cli_command",
 }
-INVESTIGATION_DISPATCH_TOOL_NAMES: frozenset[str] = frozenset(
-    {"investigation_start", "alert_sample"}
-)
 
 
 # Tools whose user-facing event is owned by the host UI, so the end-of-turn
@@ -411,11 +408,11 @@ def _literal_slash_tool_call(message: str, agent_tools: list[Any]) -> ToolCall |
     LLM is unavailable — e.g. a provider with no credit — so users can still run
     ``/login``, ``/onboard``, ``/model``, etc. to recover instead of deadlocking.
 
-    Also accepts schedule / investigation affirmatives that
-    ``expand_affirmative_follow_up`` rewrote into a leading ``/cron add …`` or
-    ``/investigate alert:…`` (after stripping a vendor context prefix). Those
-    expands are themselves literal slash text — not a separate static tool-call
-    bypass — so they stay inside the repository-mandated action-selection path.
+    Also accepts schedule affirmatives that ``expand_affirmative_follow_up``
+    rewrote into a leading ``/cron add …`` (after stripping a vendor context
+    prefix). Those expands are themselves literal slash text — not a separate
+    static tool-call bypass — so they stay inside the repository-mandated
+    action-selection path.
 
     Returns ``None`` (so the normal LLM path runs) when the input is not literal
     slash text or when ``slash_invoke`` is not an available tool this turn.
@@ -454,7 +451,7 @@ def _build_action_agent(
     """Build the Agent for one action turn; return an ``ActionTurnPlan``.
 
     Detects the three branches — verbatim ``!shell``, literal ``/slash``
-    (including Want-me-to yes expanded to ``/cron`` / ``/investigate``), or
+    (including Want-me-to yes expanded to ``/cron``), or
     LLM-selected — and picks a matching LLM (deterministic tool-call or hosted
     factory), system prompt, and user-message envelope. The caller only has to
     invoke ``.run()`` and shape the result.
@@ -646,7 +643,6 @@ class _TurnCounts:
     generic_success_count: int
     planned_count: int
     handled: bool
-    investigation_dispatched: bool
 
 
 def _compose_response(
@@ -861,9 +857,6 @@ def _count_turn(result: Any, session: SessionState, history_start: int) -> _Turn
         generic_success_count=generic_success_count,
         planned_count=planned_count,
         handled=planned_count > 0,
-        investigation_dispatched=any(
-            tc.name in INVESTIGATION_DISPATCH_TOOL_NAMES for tc, _output in result.executed
-        ),
     )
 
 
@@ -986,12 +979,11 @@ def _run_action_turn(
         _show_completed_plan_breakdown(args.output, session)
 
     log.debug(
-        "action_turn done planned=%s executed=%s handled=%s cancelled=%s investigation=%s",
+        "action_turn done planned=%s executed=%s handled=%s cancelled=%s",
         counts.planned_count,
         counts.executed_count,
         counts.handled,
         cancelled,
-        counts.investigation_dispatched,
     )
     return ToolCallingTurnResult(
         counts.planned_count,
@@ -1001,7 +993,6 @@ def _run_action_turn(
         False if cancelled else counts.handled,
         response_text="" if cancelled else response_text,
         response_streamed=bool(use_final_text and not cancelled),
-        investigation_dispatched=(False if cancelled else counts.investigation_dispatched),
         hit_iteration_cap=bool(result.hit_iteration_cap and not cancelled),
         cancelled=cancelled,
     )

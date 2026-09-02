@@ -10,7 +10,6 @@ from typing import Any
 from rich.console import Console
 
 from core.domain.alerts import inbox as _alert_inbox
-from surfaces.interactive_shell.runtime.background.runner import drain_background_notices
 from surfaces.interactive_shell.runtime.core.state import ReplState, SpinnerState
 from surfaces.interactive_shell.session import Session
 from surfaces.interactive_shell.ui.alerts import drain_and_render_incoming
@@ -81,10 +80,6 @@ class BackgroundTaskPool:
                 drain_and_render_incoming(self.session, console, self.inbox)
             except Exception as exc:
                 log.warning("Error draining alerts at turn start: %s", exc)
-        try:
-            drain_background_notices(self.session, console)
-        except Exception as exc:
-            log.warning("Error draining background notices at turn start: %s", exc)
 
     async def _alert_watcher(self) -> None:
         if self.inbox is None:

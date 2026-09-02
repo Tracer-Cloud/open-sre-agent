@@ -98,7 +98,7 @@ def _extract_params(sources: dict[str, dict]) -> dict[str, Any]:
     injected_params=("organization_slug", "sentry_token", "sentry_url", "project_slug"),
     is_available=_sentry_available,
     extract_params=_extract_params,
-    surfaces=(ToolSurface.INVESTIGATION, ToolSurface.CHAT),
+    surfaces=(ToolSurface.CHAT,),
     evidence_mapper=_map_list_sentry_uptime_alerts,
 )
 def list_sentry_uptime_alerts(

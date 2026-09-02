@@ -57,7 +57,7 @@ def _map_failed_jobs(
     is_available=_tracer_available,
     extract_params=lambda sources: {"trace_id": _tracer_trace_id(sources)},
     evidence_mapper=_map_failed_jobs,
-    surfaces=(ToolSurface.INVESTIGATION, ToolSurface.CHAT),
+    surfaces=(ToolSurface.CHAT,),
 )
 def get_failed_jobs(trace_id: str) -> dict[str, Any]:
     """Get AWS Batch jobs that failed during a pipeline run."""

@@ -25,7 +25,7 @@ from tests.scheduler._bundle import real_runners
 class TestMakeTrigger:
     def test_valid_cron(self) -> None:
         task = ScheduledTask(
-            kind=TaskKind.DAILY_SUMMARY,
+            kind=TaskKind.MANUAL_LOOP,
             cron="0 9 * * 1-5",
             timezone="UTC",
             provider=Provider.TELEGRAM,
@@ -35,7 +35,7 @@ class TestMakeTrigger:
 
     def test_invalid_cron_too_few_fields(self) -> None:
         task = ScheduledTask(
-            kind=TaskKind.DAILY_SUMMARY,
+            kind=TaskKind.MANUAL_LOOP,
             cron="0 9 *",
             timezone="UTC",
             provider=Provider.TELEGRAM,
@@ -45,7 +45,7 @@ class TestMakeTrigger:
 
     def test_invalid_cron_bad_values(self) -> None:
         task = ScheduledTask(
-            kind=TaskKind.DAILY_SUMMARY,
+            kind=TaskKind.MANUAL_LOOP,
             cron="61 25 * * *",
             timezone="UTC",
             provider=Provider.TELEGRAM,
@@ -55,7 +55,7 @@ class TestMakeTrigger:
 
     def test_invalid_timezone(self) -> None:
         task = ScheduledTask(
-            kind=TaskKind.DAILY_SUMMARY,
+            kind=TaskKind.MANUAL_LOOP,
             cron="0 9 * * *",
             timezone="Invalid/Timezone",
             provider=Provider.TELEGRAM,
@@ -65,7 +65,7 @@ class TestMakeTrigger:
 
     def test_valid_timezone(self) -> None:
         task = ScheduledTask(
-            kind=TaskKind.DAILY_SUMMARY,
+            kind=TaskKind.MANUAL_LOOP,
             cron="0 9 * * 1-5",
             timezone="Europe/London",
             provider=Provider.TELEGRAM,
@@ -117,7 +117,7 @@ class TestComputeNextRun:
         from datetime import UTC, datetime
 
         task = ScheduledTask(
-            kind=TaskKind.DAILY_SUMMARY,
+            kind=TaskKind.MANUAL_LOOP,
             cron="0 8 * * 1-5",
             timezone="UTC",
             provider=Provider.SLACK,
@@ -153,7 +153,7 @@ class TestRegisterJobs:
         add_task(
             ScheduledTask(
                 id="prompt-loop",
-                kind=TaskKind.CUSTOM_INVESTIGATION,
+                kind=TaskKind.MANUAL_LOOP,
                 cron="* * * * *",
                 provider=Provider.INTERACTIVE_SHELL,
                 params={LOOP_PROMPT_PARAM: "Report stars"},
@@ -163,7 +163,7 @@ class TestRegisterJobs:
         add_task(
             ScheduledTask(
                 id="digest",
-                kind=TaskKind.DAILY_SUMMARY,
+                kind=TaskKind.SENTRY_MORNING_DIGEST,
                 cron="0 9 * * *",
                 provider=Provider.TELEGRAM,
             ),
@@ -215,7 +215,7 @@ class TestRegisterJobs:
         add_task(
             ScheduledTask(
                 id="keep",
-                kind=TaskKind.DAILY_SUMMARY,
+                kind=TaskKind.MANUAL_LOOP,
                 cron="0 9 * * *",
                 provider=Provider.TELEGRAM,
             ),
@@ -258,7 +258,7 @@ class TestRunTaskNow:
     def test_runs_existing_task(self, monkeypatch: pytest.MonkeyPatch) -> None:
         task = ScheduledTask(
             id="run_now_test",
-            kind=TaskKind.DAILY_SUMMARY,
+            kind=TaskKind.MANUAL_LOOP,
             cron="0 9 * * *",
             provider=Provider.TELEGRAM,
             chat_id="-100",

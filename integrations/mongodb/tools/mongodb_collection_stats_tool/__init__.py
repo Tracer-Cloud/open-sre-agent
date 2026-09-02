@@ -35,7 +35,7 @@ def _map_get_mongodb_collection_stats(
     name="get_mongodb_collection_stats",
     description="Retrieve document counts, size metrics, and index information for a specific MongoDB collection.",
     source="mongodb",
-    surfaces=(ToolSurface.INVESTIGATION, ToolSurface.CHAT),
+    surfaces=(ToolSurface.CHAT,),
     is_available=mongodb_database_is_available,
     injected_params=("connection_string",),
     extract_params=mongodb_extract_params,

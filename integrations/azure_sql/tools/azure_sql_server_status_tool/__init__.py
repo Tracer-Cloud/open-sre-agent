@@ -16,7 +16,7 @@ from integrations.azure_sql import (
     name="get_azure_sql_server_status",
     description="Retrieve Azure SQL Database server metrics including service tier, resource utilization, connections, and database size.",
     source="azure_sql",
-    surfaces=(ToolSurface.INVESTIGATION, ToolSurface.CHAT),
+    surfaces=(ToolSurface.CHAT,),
     use_cases=[
         "Checking Azure SQL Database health during an incident",
         "Identifying DTU/vCore throttling or resource exhaustion",

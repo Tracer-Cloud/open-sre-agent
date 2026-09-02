@@ -38,7 +38,7 @@ def _telegram_store_config() -> dict[str, object]:
     """Return the Telegram integration's effective config, or ``{}``.
 
     Reads the merged integration store + environment view used everywhere else
-    (investigation pipeline, scheduler). Returns an empty mapping when the store
+    (agent turns, scheduler). Returns an empty mapping when the store
     is unavailable or has no Telegram integration so callers fall back to the
     environment / keyring. Resolution is wrapped defensively: a malformed or
     locked store must never crash the caller at startup.

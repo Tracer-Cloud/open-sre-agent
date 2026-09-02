@@ -200,7 +200,7 @@ levels promote a default-`allow` policy result to `ask` based on `tool_type`
 | --- | --- |
 | `high` | Nothing |
 | `med` | Mutating agent tools (`shell`, `code_agent`, `slash`, `cli_command`, `opensre_cli`, `switch_llm_provider`, `synthetic_test`, `sentry_issue_fix`, …) |
-| `low` | Med set, plus `investigation` / `sample_alert` |
+| `low` | Same as `med` |
 | `off` | Every tool type |
 
 **Interaction with `/trust`:** `trust_mode` still short-circuits `ask` to allow

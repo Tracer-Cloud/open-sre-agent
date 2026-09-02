@@ -72,7 +72,7 @@ def _search_bitbucket_code_available(sources: dict[str, dict]) -> bool:
     name="search_bitbucket_code",
     description="Search code across a Bitbucket workspace or specific repository.",
     source="bitbucket",
-    surfaces=(ToolSurface.INVESTIGATION, ToolSurface.CHAT),
+    surfaces=(ToolSurface.CHAT,),
     use_cases=[
         "Finding where a specific function or configuration is defined",
         "Searching for error patterns across repositories",

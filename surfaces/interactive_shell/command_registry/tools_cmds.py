@@ -25,7 +25,7 @@ _cmd_tools = make_list_root_handler(
 )
 
 _TOOLS_FIRST_ARGS: tuple[tuple[str, str], ...] = (
-    ("list", "list registered tools (investigation + chat surfaces)"),
+    ("list", "list registered tools (chat + action surfaces)"),
     ("ls", "alias for list"),
     ("tool", "alias for list"),
     ("tools", "alias for list"),

@@ -104,7 +104,7 @@ Notes:
 
 - `source` is required for function tools.
 - `name`, `description`, and `input_schema` are inferred by default.
-- `surfaces` defaults to `("investigation",)`. Pass `surfaces=("investigation", "chat")` to expose the tool in both investigation and chat contexts.
+- `surfaces` defaults to `("chat",)`. Pass `surfaces=("chat", "action")` to expose the tool in both chat and action contexts.
 - Use the existing package/class style when a tool has complex helper logic, multiple exports, or substantial integration-specific code.
 
 The example above is the minimal shape. For **where** the tool belongs
@@ -120,25 +120,6 @@ verification) follow [docs/adding-tools-and-integrations.md](docs/adding-tools-a
 - Bug fixes should include a test that would have caught the bug
 - New features should have corresponding tests
 - Aim for >80% code coverage (run `make test-cov` to check)
-
-#### Tests under `tests/synthetic/` need an explicit `pytest.mark.synthetic` marker
-
-The synthetic test tree has its own Make target (`make test-synthetic`) and is excluded from `make test-cov`. The two targets use marker filters:
-
-- `make test-cov` runs `pytest --ignore=tests/synthetic -m "not synthetic"`, so the whole `tests/synthetic/` tree is excluded.
-- `make test-synthetic` runs `pytest -m synthetic`, so a file without `pytest.mark.synthetic` is collected but skipped.
-
-If you add a new test file under `tests/synthetic/`, declare the marker at module level so the file runs under `make test-synthetic`:
-
-```python
-import pytest
-
-pytestmark = pytest.mark.synthetic
-```
-
-Without this marker the new file silently runs in **zero** standard CI configurations. The pattern is already in `tests/synthetic/rds_postgres/test_suite.py`; new files in the same tree should follow it.
-
-See [#1671](https://github.com/Tracer-Cloud/opensre/issues/1671) for the meta-issue tracking this discoverability gap.
 
 ### 4. Run Local Checks (Required Before PR)
 
@@ -159,7 +140,6 @@ Replace the placeholders with your actual file or test name:
 pytest tests/cli/test_.py                                       # single file
 pytest tests/cli/test_.py::test_                                # single function
 pytest tests/tools/ -k "test_registry"                          # tools example
-pytest tests/synthetic/ -k "test_scenario"                      # no live infra needed
 ```
 
 ### 5. Open a Pull Request
@@ -277,14 +257,14 @@ Use the **[bug report template](https://github.com/Tracer-Cloud/opensre/issues/n
 
 ```
 ### Expected Behavior
-`opensre investigate --org myorg` should return investigation results
+`opensre ask "why is checkout-api slow?"` should print an answer
 
 ### Actual Behavior
 Command exits silently with no output
 Error: exit code 0
 
 ### Steps to Reproduce
-1. Run `opensre investigate --org myorg`
+1. Run `opensre ask "why is checkout-api slow?"`
 2. Observe output
 
 ### Environment

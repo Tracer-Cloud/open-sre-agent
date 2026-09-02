@@ -1,4 +1,4 @@
-"""OpenSRE CLI - open-source SRE agent for automated incident investigation.
+"""OpenSRE CLI - open-source SRE agent.
 
 Enable shell tab-completion (add to your shell profile for persistence):
 
@@ -26,7 +26,6 @@ from surfaces.cli.invocation import (
     is_fast_version_invocation,
     print_fast_version,
     resolve_command_parts,
-    try_fast_investigate_print_template,
 )
 from surfaces.cli.telemetry import (
     analytics_needs_flush,
@@ -45,9 +44,9 @@ from surfaces.cli.telemetry import (
 if TYPE_CHECKING:
     from infrastructure.analytics.provider import Properties
 
-# One-shot CLI exit: a queued or in-flight event (e.g. ``investigation_completed``)
-# dies with the process because the sender runs on a daemon thread, so wait briefly
-# for the POST to land before returning.
+# One-shot CLI exit: a queued or in-flight analytics event dies with the
+# process because the sender runs on a daemon thread, so wait briefly for the
+# POST to land before returning.
 _ANALYTICS_FLUSH_TIMEOUT_SECONDS = 2.0
 
 _CAPTURE_CLI_ANALYTICS = "capture_cli_analytics"
@@ -202,7 +201,7 @@ def cli(
     layout: str | None,
     theme: str | None,
 ) -> None:
-    """OpenSRE - open-source SRE agent for automated incident investigation and root cause analysis."""
+    """OpenSRE - open-source SRE agent."""
     ctx.ensure_object(dict)
     ctx.obj["json"] = json_output
     ctx.obj["verbose"] = verbose
@@ -256,10 +255,6 @@ def main(argv: list[str] | None = None, *, host: CliHost | None = None) -> int:
     if is_fast_version_invocation(cli_argv):
         print_fast_version(cli_argv)
         return 0
-
-    print_template_exit = try_fast_investigate_print_template(cli_argv)
-    if print_template_exit is not None:
-        return print_template_exit
 
     startup.run(cli, cli_argv)
     StructuredError = load_structured_error_type()

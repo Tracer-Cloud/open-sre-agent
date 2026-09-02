@@ -48,7 +48,7 @@ def require_local_or_token(request: Request) -> JSONResponse | None:
     """Bearer-token auth when configured; otherwise loopback callers only.
 
     The trust boundary shared by every mutating endpoint behind the alert
-    listener (``/alerts`` here, ``/investigate`` on the gateway app): a
+    listener (``/alerts``): a
     configured token, or a local caller.
     """
     token = os.environ.get("OPENSRE_ALERT_LISTENER_TOKEN")
@@ -118,7 +118,7 @@ async def receive_alert(request: Request) -> JSONResponse:
 def build_alert_intake_app() -> FastAPI:
     """A standalone app serving only alert intake — the interactive shell's listener.
 
-    Unlike the gateway web app it pulls in no storage, investigations, or process
+    Unlike the gateway web app it pulls in no storage or process
     profile — it needs only the shared inbox the host installs.
     """
     app = FastAPI()

@@ -36,7 +36,7 @@ class ReplaySlackThreadLocallyTool(BaseTool):
     name = "replay_slack_thread_locally"
     source: ClassVar[EvidenceSource] = "slack"
     evidence_mapper = _map_replay_slack_thread_locally
-    surfaces = (ToolSurface.INVESTIGATION, ToolSurface.CHAT, ToolSurface.ACTION)
+    surfaces = (ToolSurface.CHAT, ToolSurface.ACTION)
     side_effect_level = SideEffectLevel.READ_ONLY
     description = "Fetch a captured Slack thread for local replay and Slack bot behavior testing."
     input_schema = {
@@ -72,5 +72,5 @@ class ReplaySlackThreadLocallyTool(BaseTool):
 replay_slack_thread_locally = ReplaySlackThreadLocallyTool()
 tool(
     replay_slack_thread_locally,
-    surfaces=(ToolSurface.INVESTIGATION, ToolSurface.CHAT, ToolSurface.ACTION),
+    surfaces=(ToolSurface.CHAT, ToolSurface.ACTION),
 )

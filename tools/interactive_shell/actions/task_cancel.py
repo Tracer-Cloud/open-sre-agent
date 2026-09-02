@@ -15,7 +15,7 @@ from core.agent_harness.tools import (
 from core.domain.types.tools import ToolSurface
 from core.tool import RegisteredTool, SideEffectLevel
 from core.tool_framework.utils import object_schema
-from infrastructure.scheduling.task_types import TaskKind, TaskStatus
+from infrastructure.scheduling.task_types import TaskStatus
 from tools.interactive_shell.shared import plan_foreground_tool
 
 
@@ -25,15 +25,13 @@ def _running_task_matches(ctx: ActionToolScope, target: str) -> Sequence[object]
         for task in ctx.session.task_registry.list_recent(n=50)
         if task.status == TaskStatus.RUNNING
     ]
-    if target == "synthetic_test":
-        return [task for task in running if task.kind == TaskKind.SYNTHETIC_TEST]
     if target == "task":
         return running
     return []
 
 
 def _resolve_task_cancel_target(ctx: ActionToolScope, target: str) -> str | None:
-    if target in {"synthetic_test", "task"}:
+    if target == "task":
         matches = _running_task_matches(ctx, target)
         if not matches:
             ctx.console.print(
@@ -110,13 +108,12 @@ task_cancel_tool = RegisteredTool(
         properties={
             "target": {
                 "oneOf": [
-                    {"type": "string", "enum": ["synthetic_test", "task"]},
+                    {"type": "string", "enum": ["task"]},
                     {"type": "string", "pattern": "^[A-Za-z0-9_-]{3,}$"},
                 ],
                 "description": (
-                    "Task selector: `synthetic_test` to cancel the one running synthetic task, "
-                    "`task` to cancel a single running task of any kind, or a task id/prefix "
-                    "for `/cancel <id>` resolution."
+                    "Task selector: `task` to cancel a single running task of any kind, "
+                    "or a task id/prefix for `/cancel <id>` resolution."
                 ),
             }
         },

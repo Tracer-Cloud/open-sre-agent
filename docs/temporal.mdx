@@ -1,6 +1,6 @@
 ---
 title: "Temporal"
-description: "Connect Temporal so OpenSRE can inspect workflow executions, event history, and worker health during investigations"
+description: "Connect Temporal so OpenSRE can inspect workflow executions, event history, and worker health"
 ---
 
 ## Overview
@@ -174,7 +174,7 @@ EOF
 python worker.py
 ```
 
-`opensre investigate` only treats an integration as active once the store resolution has *something* to fall through to env vars with -- an untouched `~/.opensre/integrations.json` with an unrelated integration in it blocks env-var fallback entirely. Point `OPENSRE_INTEGRATIONS_STORE_PATH` at an empty, valid store instead, so your real config is never read or written and `TEMPORAL_API_URL` above is the only source of connection info:
+Chat sessions only treat an integration as active once the store resolution has *something* to fall through to env vars with -- an untouched `~/.opensre/integrations.json` with an unrelated integration in it blocks env-var fallback entirely. Point `OPENSRE_INTEGRATIONS_STORE_PATH` at an empty, valid store instead, so your real config is never read or written and `TEMPORAL_API_URL` above is the only source of connection info:
 
 ```bash
 export OPENSRE_INTEGRATIONS_STORE_PATH=$(mktemp /tmp/opensre-temporal-demo.XXXXXX)
@@ -183,38 +183,23 @@ echo '{"version": 2, "integrations": []}' > "$OPENSRE_INTEGRATIONS_STORE_PATH"
 
 A literal zero-byte file does not work here -- the store loader expects valid JSON and raises on an empty read, so this writes an explicitly empty (but valid) store rather than just creating the file with `mktemp` alone.
 
-Trigger a real investigation — this is the actual supported entrypoint, not an internal class:
+Now ask the agent about the failed workflow:
 
 ```bash
-opensre investigate --input-json '{
-  "alert_name": "TemporalWorkflowFailed",
-  "severity": "critical",
-  "commonAnnotations": {
-    "summary": "Temporal workflow payment-service-deploy-1 failed",
-    "workflow_id": "payment-service-deploy-1"
-  }
-}'
+opensre
 ```
 
-Real output from a run against this exact local workflow (edited for length). An empty store makes `opensre investigate` fall through to env-var resolution for *every* integration, not just Temporal -- if your shell or machine already resolves another integration from its own env vars, it rides along too (harmless, and unrelated to the Temporal tool calls below):
+Ask: *Why did the Temporal workflow payment-service-deploy-1 fail?*
 
-```
-Loading integrations: telegram, temporal
-↳ Temporal · temporal namespace info
-↳ Temporal · temporal workflows
-↳ Temporal · temporal workflow history
-↳ Temporal · temporal task queue
-
-root_cause: "The deploy_payment_service activity in the PaymentServiceDeploy
-workflow raised RuntimeError('payment-service deploy failed: connection
-refused to billing-api') when calling the billing-api dependency. Because
-the activity's retry policy is maximumAttempts=1, the failure immediately
-propagated to WORKFLOW_EXECUTION_FAILED with no retries. The Temporal
-worker and task queue are healthy; the fault is a downstream connectivity
-failure to billing-api."
-```
-
-All 4 registered tools were exercised in this single turn.
+Against this exact local workflow the agent calls all 4 registered tools —
+namespace info, workflow list, workflow history, and task queue — and finds the
+real cause: the `deploy_payment_service` activity raised
+`RuntimeError('payment-service deploy failed: connection refused to billing-api')`
+and, with `maximumAttempts=1`, the failure propagated straight to
+`WORKFLOW_EXECUTION_FAILED`. An empty store makes the session fall through to
+env-var resolution for *every* integration, not just Temporal -- if your shell
+already resolves another integration from its own env vars, it rides along too
+(harmless).
 
 Teardown:
 
@@ -224,7 +209,7 @@ rm -f "$OPENSRE_INTEGRATIONS_STORE_PATH"
 unset OPENSRE_INTEGRATIONS_STORE_PATH TEMPORAL_API_URL
 ```
 
-## Investigation tools
+## Tools
 
 | Tool | What it does |
 | --- | --- |
@@ -233,7 +218,7 @@ unset OPENSRE_INTEGRATIONS_STORE_PATH TEMPORAL_API_URL
 | `temporal_workflow_history` | Event history for a specific execution |
 | `temporal_task_queue` | Active pollers and backlog stats (depth, add/dispatch rates) |
 
-### Typical investigation flow
+### Typical flow when you ask about a failed workflow
 
 1. **Namespace info** — how many workflows are running vs failed?
 2. **Workflows** — filter to failed/timed-out executions; note workflow type and task queue

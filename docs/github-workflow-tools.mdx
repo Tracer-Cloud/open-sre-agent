@@ -49,7 +49,7 @@ Set a GitHub token through the configured GitHub integration, `GITHUB_TOKEN`, or
 
 Security alert endpoints require token scopes that GitHub enforces separately. If the token cannot read one alert class, the tool returns an error for that alert type while still returning any alert classes it can read.
 
-## Investigation tools
+## Tools
 
 | Tool | Role | Side effects |
 | --- | --- | --- |
@@ -118,7 +118,7 @@ Mutation behavior:
 - **close**: fetches the issue, adds a closing comment unless the proposal marker is already present, then patches `state=closed` and `state_reason=completed`. It never replaces the issue body.
 
 <Warning>
-Do not expose `execute_github_issue_mutation` on investigation surfaces. Investigation and headless runs may render proposals, but should not execute mutations directly.
+Do not expose `execute_github_issue_mutation` outside the runtime approval path. Headless runs may render proposals, but should not execute mutations directly.
 </Warning>
 
 ### Example prompts

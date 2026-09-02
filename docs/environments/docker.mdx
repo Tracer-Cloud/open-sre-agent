@@ -30,7 +30,7 @@ docker build -t opensre:latest .
 
 The image can run in two modes via `MODE`:
 
-- **`web`** (default) — HTTP API for health checks and investigations
+- **`web`** (default) — HTTP API for health checks
 - **`gateway`** — messaging gateway (Slack / Telegram / Discord / Buzz) plus related services
 
 ## 2. Run web mode
@@ -79,4 +79,4 @@ See [Install](/install) and [Quickstart](/quickstart).
 
 - [Deployment](/deployment) — hosting, gateway commands, health checks
 - [Environment variables](/configuration/environment-variables) — full config list
-- [HTTP API](/api) — investigate over HTTP
+- [HTTP API](/api) — health and status endpoints

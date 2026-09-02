@@ -190,31 +190,6 @@ class InMemorySessionStore:
             },
         )
 
-    def append_investigation_result(
-        self,
-        session_id: str,
-        state: dict[str, Any],
-        *,
-        trigger: str = "",
-    ) -> str:
-        investigation_id = uuid.uuid4().hex[:8]
-        report = state.get("problem_md") or state.get("slack_message") or state.get("report") or ""
-        self._append(
-            session_id,
-            "investigation_result",
-            {
-                "investigation_id": investigation_id,
-                "completed_at": _now(),
-                "trigger": trigger.strip()[:_TRIGGER_MAX_CHARS],
-                "root_cause": str(state.get("root_cause") or ""),
-                "report": str(report),
-                "root_cause_category": str(state.get("root_cause_category") or ""),
-                "alert_name": str(state.get("alert_name") or ""),
-                "run_id": str(state.get("run_id") or ""),
-            },
-        )
-        return investigation_id
-
     def flush(self, session: SessionPersistenceSource) -> None:
         records = self._files.get(session.session_id)
         if not records:

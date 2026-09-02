@@ -6,7 +6,7 @@
 
 <h1>OpenSRE v0.1: Build Your Own AI SRE Agents</h1>
 
-<p>The open-source framework for AI SRE agents, and the training and evaluation environment they need to improve. Connect the 60+ tools you already run, define your own workflows, and investigate incidents on your own infrastructure.</p>
+<p>The open-source framework for AI SRE agents, and the training and evaluation environment they need to improve. Connect the 60+ tools you already run, define your own workflows, and answer production questions on your own infrastructure.</p>
 
 <p align="center">
   <a href="https://github.com/Tracer-Cloud/opensre/actions/workflows/ci.yml?branch=main"><img src="https://img.shields.io/github/actions/workflow/status/Tracer-Cloud/opensre/ci.yml?branch=main&style=for-the-badge" alt="CI status"></a>
@@ -51,7 +51,6 @@
 - [Quick Start](#quick-start)
 - [Deployment](#deployment)
 - [How OpenSRE Works](#how-opensre-works)
-- [Benchmark](#benchmark)
 - [Capabilities & integrations](#capabilities--integrations)
 - [Contributing & development](#contributing--development)
 - [Security](#security)
@@ -71,14 +70,13 @@ Distributed failures are slower, noisier, and harder to simulate and evaluate th
 
 OpenSRE is building _that_ missing layer:
 
-> an open reinforcement learning environment for agentic infrastructure incident response, with end-to-end tests and synthetic incident simulations for realistic production failures
+> an open reinforcement learning environment for agentic infrastructure incident response, with end-to-end tests for realistic production failures
 
 We do that by:
 
-- building easy-to-deploy, customizable AI SRE agents for production incident investigation and response
-- running scored synthetic RCA suites that check root-cause accuracy, required evidence, and adversarial red herrings [(tests/synthetic)](tests/synthetic/rds_postgres)
-- running real-world end-to-end tests across cloud-backed scenarios including Kubernetes, EC2, CloudWatch, Lambda, ECS Fargate, and Flink [(tests/e2e)](tests/e2e)
-- keeping semantic test-catalog naming so e2e vs synthetic and local vs cloud boundaries stay obvious [(tests/README.md)](tests/README.md)
+- building easy-to-deploy, customizable AI SRE agents for production operations and incident response
+- running real-world end-to-end tests across cloud-backed scenarios [(tests/e2e)](tests/e2e)
+- keeping semantic test-catalog naming so e2e vs unit and local vs cloud boundaries stay obvious [(tests/README.md)](tests/README.md)
 
 Our mission is to build AI SRE agents on top of this, scale it to thousands of realistic infrastructure failure scenarios, and establish OpenSRE as the benchmark and training ground for AI SRE.
 
@@ -128,13 +126,13 @@ pipx install opensre
 
 Contributors: start at [`main.py`](main.py) for the process entrypoint map.
 
-Configure once, then pick how you want to run investigations:
+Configure once, then pick how you want to run the agent:
 
 ```bash
 opensre setup
 ```
 
-**Interactive shell** — with no subcommand, `opensre` starts a REPL (TTY required). Describe incidents in plain language, stream investigations, and use slash commands for session control (`/help`, `/status`, `/cost`, `/sessions`, `/resume`, `/compact`, `/new`, `/exit`), integrations (`/integrations list`, `/integrations verify`), local agent fleet monitoring (`/agents`), and reasoning depth (`/effort` for **OpenAI** and **Codex** — `low` through `max`). Ctrl+C cancels an in-flight investigation without losing session state. See **[interactive shell commands](https://www.opensre.com/docs/interactive-shell-commands)** for the full reference.
+**Interactive shell** — with no subcommand, `opensre` starts a REPL (TTY required). Describe incidents in plain language, watch the agent work, and use slash commands for session control (`/help`, `/status`, `/cost`, `/sessions`, `/resume`, `/compact`, `/new`, `/exit`), integrations (`/integrations list`, `/integrations verify`), local agent fleet monitoring (`/agents`), and reasoning depth (`/effort` for **OpenAI** and **Codex** — `low` through `max`). Ctrl+C cancels an in-flight turn without losing session state. See **[interactive shell commands](https://www.opensre.com/docs/interactive-shell-commands)** for the full reference.
 
 ```bash
 opensre
@@ -147,18 +145,6 @@ opensre ask "why is checkout-api slow?"
 ```
 
 See **[Headless CLI](https://www.opensre.com/docs/headless-cli)** for stdin prompts, JSON output, and tool approvals.
-
-**One-shot investigation** — run the agent once against an alert file:
-
-```bash
-opensre investigate -i tests/e2e/kubernetes/fixtures/datadog_k8s_alert.json
-```
-
-**Remote runtime investigation** — investigate a deployed service by name (live health, logs, and deployment status):
-
-```bash
-opensre investigate --service api-backend
-```
 
 **Hermes log watch** — tail a Hermes `errors.log`, classify incidents, and optionally alert on Telegram:
 
@@ -213,12 +199,12 @@ Two primary AWS EC2 paths and a general hosted option:
   alt="opensre-how-it-works-github"
 />
 
-When an alert fires, OpenSRE automatically:
+When you ask a question or an alert arrives, OpenSRE automatically:
 
-1. **Fetches** the alert context and correlated logs, metrics, traces, and recent deploys
+1. **Fetches** the relevant context and correlated logs, metrics, traces, and recent deploys
 2. **Masks** sensitive identifiers (optional) before external LLM calls
 3. **Reasons** across your connected systems to test hypotheses in a tool-calling loop
-4. **Generates** a structured investigation report with probable root cause and linked evidence
+4. **Answers** with an evidence-linked response in the conversation
 5. **Suggests** next steps and, optionally, executes remediation actions
 6. **Posts** a summary directly to Slack, PagerDuty, or Telegram — no context switching needed
 
@@ -227,29 +213,16 @@ framework layers, see [AGENTS.md](AGENTS.md).
 
 ---
 
-## Benchmark
-
-Regenerate numbers with **`make benchmark`**; refresh this table from cached results via **`make benchmark-update-readme`**. See **[docs/DEVELOPMENT.md](docs/DEVELOPMENT.md#benchmark)** for details.
-
-<!-- BENCHMARK-START -->
-
-_No benchmark results yet._
-
-<!-- BENCHMARK-END -->
-
----
-
 ## Capabilities & integrations
 
 |                                          |                                                                                  |
 | ---------------------------------------- | -------------------------------------------------------------------------------- |
-| 🔍 **Structured incident investigation** | Correlated root-cause analysis across logs, metrics, traces, deploys, and config |
+| 🔍 **Evidence-driven diagnosis**         | Correlated analysis across logs, metrics, traces, deploys, and config            |
 | 📋 **Runbook-aware reasoning**           | OpenSRE reads your runbooks and applies them automatically                       |
 | 🔗 **Evidence-backed root cause**        | Every conclusion is linked to the data behind it                                 |
 | 🛡️ **Reversible identifier masking**     | Redact pods, clusters, and account IDs before external LLM calls; restore in output |
 | 📊 **Session cost & history**            | Per-session token tracking (`/cost`) and resumable REPL sessions (`/sessions`) |
 | 👥 **Local agent fleet**                 | Monitor Claude Code, Cursor, Codex, and other coding agents on your machine      |
-| 🌐 **Remote runtime RCA**                | Investigate deployed services by name with live health probes and recent logs    |
 | 📡 **Hermes log watch**                  | Tail Hermes error logs, classify incidents, and deliver Telegram alerts          |
 | 🤖 **Full LLM flexibility**              | Bring your own model — Anthropic, OpenAI, Codex, Ollama, Gemini, OpenRouter, TrustedRouter, NVIDIA NIM, Bedrock |
 
@@ -278,7 +251,7 @@ OpenSRE is community-built. Looking for a safe first contribution? Browse [`good
 
 **Local environment:** **[SETUP.md](SETUP.md)** (all platforms, Windows, MCP/OpenClaw).
 
-**Developing in this repo:** **[docs/DEVELOPMENT.md](docs/DEVELOPMENT.md)** (install from source, CI parity checks, dev container, benchmark, deployment detail, telemetry reference).
+**Developing in this repo:** **[docs/DEVELOPMENT.md](docs/DEVELOPMENT.md)** (install from source, CI parity checks, dev container, deployment detail, telemetry reference).
 
 <p>
   <a href="https://discord.gg/7NTpevXf7w">

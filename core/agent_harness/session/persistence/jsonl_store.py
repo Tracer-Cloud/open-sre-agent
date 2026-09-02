@@ -391,31 +391,6 @@ class JsonlSessionStore:
             resolve_parent=False,
         )
 
-    def append_investigation_result(
-        self,
-        session_id: str,
-        state: dict[str, Any],
-        *,
-        trigger: str = "",
-    ) -> str:
-        investigation_id = uuid.uuid4().hex[:8]
-        report = state.get("problem_md") or state.get("slack_message") or state.get("report") or ""
-        self._append_entry(
-            session_id,
-            "investigation_result",
-            {
-                "investigation_id": investigation_id,
-                "completed_at": _now(),
-                "trigger": trigger.strip()[:_TRIGGER_MAX_CHARS],
-                "root_cause": str(state.get("root_cause") or ""),
-                "report": str(report),
-                "root_cause_category": str(state.get("root_cause_category") or ""),
-                "alert_name": str(state.get("alert_name") or ""),
-                "run_id": str(state.get("run_id") or ""),
-            },
-        )
-        return investigation_id
-
     def flush(self, session: SessionPersistenceSource) -> None:
         with contextlib.suppress(Exception):
             path = session_path(session.session_id)
@@ -508,7 +483,6 @@ class JsonlSessionStore:
                 "duration_secs": duration_secs,
                 "total_turns": self._count_turns(records),
                 "chat_turns": self._count_chat_turns(records),
-                "investigation_turns": self._count_investigation_turns(records),
                 "ended_at": _now(),
             },
         )
@@ -722,7 +696,7 @@ class JsonlSessionStore:
     @staticmethod
     def _has_turns(records: list[dict[str, Any]]) -> bool:
         return any(
-            rec.get("type") in {"message", "investigation_result"}
+            rec.get("type") == "message"
             or (rec.get("type") == "custom_message" and rec.get("custom_type") == "turn_stub")
             for rec in records
         )
@@ -743,14 +717,4 @@ class JsonlSessionStore:
             if rec.get("type") == "custom_message"
             and rec.get("custom_type") == "turn_stub"
             and rec.get("kind") in CHAT_KINDS
-        )
-
-    @staticmethod
-    def _count_investigation_turns(records: list[dict[str, Any]]) -> int:
-        return sum(
-            1
-            for rec in records
-            if rec.get("type") == "custom_message"
-            and rec.get("custom_type") == "turn_stub"
-            and rec.get("kind") in {"alert", "incoming_alert"}
         )

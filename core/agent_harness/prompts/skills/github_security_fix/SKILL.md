@@ -25,7 +25,6 @@ USE THIS TOOL:
 DO NOT USE THIS SKILL FOR:
 - Ordinary GitHub issue/PR create, close, comment, assign, label, merge, or repo
   reads. Use `github_cli`.
-- Live incident RCA. Use `investigation_start`.
 - Secret-scanning remediation. The tool will refuse it because the secret must
   be revoked/rotated outside the repo before code cleanup.
 

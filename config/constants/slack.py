@@ -9,7 +9,6 @@ SLACK_DEFAULT_CHAT_ID_ENV = "SLACK_DEFAULT_CHAT_ID"
 SLACK_WEBHOOK_URL_ENV = "SLACK_WEBHOOK_URL"
 
 # Default channel for RCA report delivery.
-SLACK_CHANNEL = "tracer-rca-report-alerts"
 SLACK_GITHUB_ISSUES_WEBHOOK_URL_ENV = "SLACK_GITHUB_ISSUES_WEBHOOK_URL"
 # Comma-separated Slack team ids allowed to fall back to the silo organization
 # when they have no install record. When set, any other team is refused instead
@@ -40,7 +39,6 @@ __all__ = [
     "SLACK_ACCESS_TOKEN_ENV",
     "SLACK_APP_TOKEN_ENV",
     "SLACK_BOT_TOKEN_ENV",
-    "SLACK_CHANNEL",
     "SLACK_DEFAULT_CHAT_ID_ENV",
     "SLACK_FILE_HOST_SUFFIXES",
     "SLACK_GITHUB_ISSUES_WEBHOOK_URL_ENV",

@@ -4,8 +4,6 @@ from __future__ import annotations
 
 import logging
 import threading
-from http import HTTPStatus
-from pathlib import Path
 
 import pytest
 
@@ -138,76 +136,6 @@ def test_process_turn_gate_is_shared_singleton(monkeypatch: pytest.MonkeyPatch) 
     reset_process_turn_gate_for_tests()
 
 
-def test_path2_sync_investigate_busy_drops_when_gate_full(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    """POST /investigate shares process_turn_gate — try_acquire like chat."""
-    from fastapi.testclient import TestClient
-
-    from gateway.web import webapp
-    from infrastructure.turn_host.concurrency import (
-        TurnConcurrencyGate,
-        reset_process_turn_gate_for_tests,
-        set_process_turn_gate,
-    )
-
-    reset_process_turn_gate_for_tests()
-    gate = TurnConcurrencyGate(1)
-    assert gate.try_acquire() is True  # simulate active chat turn
-    set_process_turn_gate(gate)
-    monkeypatch.setattr(webapp, "require_local_or_token", lambda _req: None)
-
-    client = TestClient(webapp.app)
-    resp = client.post("/investigate", json={"raw_alert": {"alert_name": "x"}})
-    assert resp.status_code == HTTPStatus.SERVICE_UNAVAILABLE
-    assert "capacity" in resp.json()["error"].lower()
-    gate.release()
-    reset_process_turn_gate_for_tests()
-
-
-def test_investigation_worker_waits_for_the_same_chat_capacity(
-    tmp_path: Path,
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    from gateway.core.storage.investigations.repository import InMemoryInvestigationRepository
-    from gateway.web.worker import InvestigationWorker
-    from infrastructure.turn_host.concurrency import (
-        TurnConcurrencyGate,
-        reset_process_turn_gate_for_tests,
-        set_process_turn_gate,
-    )
-
-    reset_process_turn_gate_for_tests()
-    gate = TurnConcurrencyGate(1)
-    assert gate.try_acquire() is True
-    set_process_turn_gate(gate)
-    monkeypatch.setenv("OPENSRE_ANALYTICS_DISABLED", "1")
-
-    store = InMemoryInvestigationRepository()
-    store.create(clerk_org_id="org_a", trigger={"raw_alert": {"alert_name": "cpu"}})
-    entered = threading.Event()
-    result: list[str] = []
-
-    def runner(_trigger: dict[str, object]) -> dict[str, object]:
-        entered.set()
-        return {"report": "ok"}
-
-    worker = InvestigationWorker(store, runner=runner, artifacts_dir=tmp_path)
-    thread = threading.Thread(target=lambda: result.append(str(worker.run_once())))
-    thread.start()
-    assert not entered.wait(0.05)
-    gate.release()
-    assert entered.wait(1)
-    thread.join(1)
-    assert result == ["True"]
-    reset_process_turn_gate_for_tests()
-
-
-def _unused_runner(_payload: dict[str, object]) -> None:
-    """Stands in for the investigation seam, which this test never dispatches."""
-    return None
-
-
 def test_scheduler_runner_waits_for_the_same_chat_capacity() -> None:
     gate = TurnConcurrencyGate(1)
     assert gate.try_acquire() is True  # active chat turn
@@ -218,7 +146,7 @@ def test_scheduler_runner_waits_for_the_same_chat_capacity() -> None:
         entered.set()
         return "done"
 
-    bundle = SchedulerRunners(agent=scheduled_runner, investigation=_unused_runner).gated(gate)
+    bundle = SchedulerRunners(agent=scheduled_runner).gated(gate)
     thread = threading.Thread(
         target=lambda: result.append(bundle.agent({})),
     )

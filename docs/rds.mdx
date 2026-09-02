@@ -5,7 +5,7 @@ description: "Investigate AWS RDS instance health and recent events during incid
 
 ## Overview
 
-OpenSRE uses AWS RDS to investigate database instance health and surface recent operational events — failovers, maintenance windows, parameter changes, and backup activity — when an alert fires against a managed RDS database.
+OpenSRE uses AWS RDS to investigate database instance health and surface recent operational events — failovers, maintenance windows, parameter changes, and backup activity — when you ask about a managed RDS database.
 
 All RDS API calls are read-only and routed through the shared `aws_sdk_client` allowlist, so the integration cannot mutate your RDS resources.
 
@@ -65,7 +65,7 @@ The integration only needs two read-only RDS actions on the same IAM role or use
 
 If you already use the AWS managed `ReadOnlyAccess` policy, both actions are covered.
 
-## Investigation tools
+## Tools
 
 | Tool | AWS API call | What it returns |
 | --- | --- | --- |
@@ -76,43 +76,13 @@ Both tools become available whenever `rds.db_instance_identifier` is present in 
 
 ### Use cases
 
-- Verifying RDS instance status (`available`, `modifying`, `failed`) when an alert fires
+- Verifying RDS instance status (`available`, `modifying`, `failed`)
 - Detecting Multi-AZ failover events around an incident timestamp
 - Tracing recent maintenance, parameter group changes, or backup activity that may correlate with the incident
 
-### Upstream correlation validation
-
-OpenSRE includes a deterministic upstream-correlation smoke path for no-trace-ID RDS CPU spike investigations — useful without live Datadog credentials or a full LLM investigation:
-
-```bash
-opensre tests upstream-correlation-smoke
-# machine-readable:
-opensre tests upstream-correlation-smoke --json
-```
-
-Expected output includes correlated signals and most likely causal driver(s).
-
-For live validation, configure Datadog and investigate an RDS CPU spike alert. The runtime scopes RDS metrics to the alerting DB instance using the `dbinstanceidentifier` tag to avoid cross-instance aggregation.
-
-Recommended alert fields:
-
-```json
-{
-  "service": "orders",
-  "resource": "orders-rds-prod",
-  "upstream_services": ["orders-web"]
-}
-```
-
-Then run:
-
-```bash
-opensre investigate
-```
-
 ## Verify
 
-There is no dedicated `opensre integrations verify rds` target today. Confirm AWS credentials work (see [AWS](/aws)) and that tools can describe your instance during an investigation.
+There is no dedicated `opensre integrations verify rds` target today. Confirm AWS credentials work (see [AWS](/aws)), then start `opensre` and ask, e.g. *"What's the status of prod-orders-db? Any recent failovers?"*
 
 ## Troubleshooting
 

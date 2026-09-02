@@ -19,6 +19,7 @@ from config.constants.yandex_cloud import (
     YC_SA_KEY_FILE_ENV,
     YC_USE_METADATA_ENV,
 )
+from core.tool import availability_view
 from integrations.catalog import (
     classify_integrations,
     load_env_integrations,
@@ -30,7 +31,6 @@ from integrations.yandex_cloud.availability import (
     yc_credentials,
 )
 from integrations.yandex_cloud.config import YandexCloudIntegrationConfig
-from tools.investigation.stages.gather_evidence.tools import availability_view
 
 FOLDER = "b1gtestfolder"
 

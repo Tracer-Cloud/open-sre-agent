@@ -4,7 +4,6 @@ Use this checklist whenever you add or materially change:
 
 - a tool — under `integrations/<vendor>/tools/` for a single-vendor tool, or `tools/system/` / `tools/cross_vendor/` for a cross-cutting one (see [tool-placement-policy.md](tool-placement-policy.md))
 - an integration under `integrations/<name>/` — its config, client, verifier, and tools
-- investigation source wiring for an existing tool or integration
 
 This is the detailed definition of done; use it with [AGENTS.md](../AGENTS.md) and [CI.md](../CI.md).
 
@@ -33,11 +32,11 @@ Tool packages must be substantive production modules — no empty or discovery-o
 - [ ] `extract_params` maps resolved integration state into tool args correctly
 - [ ] Validation, credential/parameter resolution, transport/client calls, and result formatting are separated so each can be tested independently
 - [ ] Reusable transport or integration-specific parsing lives in `integrations/<name>/` or `core/tool_framework/utils/`, not copied into the tool body
-- [ ] Failure responses have a stable, investigation-friendly shape; expected external failures (missing config, auth, rate limit, upstream 4xx/5xx) return structured errors rather than raising — unexpected exceptions use the global `BaseTool` wrapper intentionally or are migrated with telemetry coverage
-- [ ] Output is normalized enough for the planner/LLM to consume reliably
+- [ ] Failure responses have a stable, agent-friendly shape; expected external failures (missing config, auth, rate limit, upstream 4xx/5xx) return structured errors rather than raising — unexpected exceptions use the global `BaseTool` wrapper intentionally or are migrated with telemetry coverage
+- [ ] Output is normalized enough for the agent/LLM to consume reliably
 - [ ] Secrets never leak through `extract_params`, return values, logs, or traceable tool-call kwargs; secret/PII output is run through `infrastructure/safety/masking/` before return
 - [ ] External side effects declare `side_effect_level`, `requires_approval`, and `approval_reason` where appropriate
-- [ ] To appear in both investigation and chat, set `surfaces=(ToolSurface.INVESTIGATION, ToolSurface.CHAT)`
+- [ ] To appear in both chat and action turns, set `surfaces=(ToolSurface.CHAT, ToolSurface.ACTION)`
 
 ### Live payload parsing
 
@@ -47,7 +46,7 @@ If the tool parses API, MCP, log, or webhook payloads:
 - [ ] Handle alternate field names used in live payloads
 - [ ] Handle missing or partial fields without returning unusable output
 - [ ] Preserve important context when truncating, tailing, paginating, or flattening data
-- [ ] Upstream 429 / 5xx responses return a clear, investigation-friendly error rather than raising
+- [ ] Upstream 429 / 5xx responses return a clear, agent-friendly error rather than raising
 - [ ] Add at least one regression test using a realistic fixture payload
 
 Common failure modes to consider: grouped + ungrouped log content; nested/foldered resources; paginated responses; `hasMore` / cursor mismatches; content-vs-pointer shapes (`logs_content` vs `logs_url`-style payloads).
@@ -106,11 +105,10 @@ disable-model-invocation: false   # optional — set true to suppress attachment
 - `integrations/<name>/client.py` — a dedicated API client, when the integration makes direct remote calls
 - `integrations/<name>/verifier.py` — local verification logic
 - `integrations/<name>/tools/<tool_name>_tool/` — the vendor's agent-callable tools (see §1)
-- `integrations/<name>/background_adapter.py` — only for messaging integrations you want selectable as a background-RCA completion channel (see [Notification channels](#notification-channels))
 - `integrations/catalog.py` — resolve the integration into the shared runtime config
 - `integrations/verify.py` — wire the local verification path
 - `docs/<name>.mdx` — user-facing setup, usage, verification
-- `tests/integrations/test_<name>.py`, plus `tests/tools/`, `tests/e2e/`, or `tests/synthetic/` where tools or scenarios exercise it
+- `tests/integrations/test_<name>.py`, plus `tests/tools/` or `tests/e2e/` where tools or scenarios exercise it
 
 `integrations/<name>/` owns everything about one vendor — config, resolution, clients, verifiers, helpers, **and its tools**. Only vendor-less (`tools/system/`) and cross-vendor (`tools/cross_vendor/`) tools live under top-level `tools/`.
 
@@ -118,7 +116,7 @@ disable-model-invocation: false   # optional — set true to suppress attachment
 
 - Datadog: `integrations/datadog/` (with `integrations/datadog/tools/`), `integrations/catalog.py`, tests under `tests/integrations/datadog/` and `tests/tools/test_datadog_*.py`.
 - Grafana: `integrations/grafana/` (with `integrations/grafana/tools/`), `integrations/catalog.py`, `surfaces/cli/wizard/local_grafana_stack/`, tests under `tests/integrations/grafana/` and `tests/tools/test_grafana_*.py`.
-- Hermes: `integrations/hermes/` (with `integrations/hermes/tools/hermes_logs_tool/` and `.../hermes_session_evidence_tool/`), `surfaces/cli/commands/hermes.py`, `tests/hermes/`, `tests/synthetic/hermes/`.
+- Hermes: `integrations/hermes/` (with `integrations/hermes/tools/hermes_logs_tool/`), `surfaces/cli/commands/hermes.py`, `tests/hermes/`.
 - Bitbucket: `integrations/bitbucket/` shows the facade layout — a one-line `__init__.py` beside `config.py`, `client.py`, `verifier.py`, and `tools/`.
 
 ### Core completeness
@@ -129,35 +127,10 @@ disable-model-invocation: false   # optional — set true to suppress attachment
 - [ ] Integration-local client added under `integrations/<name>/client.py` (only if it makes direct remote calls)
 - [ ] Tool layer is wired and stable
 - [ ] CLI setup flow is updated if the integration is user-configurable locally
-- [ ] Background-RCA delivery is wired, or intentionally out of scope (see [Notification channels](#notification-channels))
 - [ ] `opensre integrations setup <name>` parity is added, or intentionally documented as out of scope
 - [ ] New required env vars / credentials are added to `.env.example` (never `.env`)
 - [ ] Sensitive credentials follow the [Credential resolution](#credential-resolution) contract below
 - [ ] `make verify-integrations` passes
-
-### Notification channels
-
-Only if the integration should appear in `/background notify set <channel>` as a destination for a completed background RCA. See [background-investigations.mdx](background-investigations.mdx) for the user-facing behaviour.
-
-Add `integrations/<name>/background_adapter.py` with three members:
-
-```python
-class _MyChannelBackgroundAdapter:
-    name = "mychannel"  # the literal a user types
-    capabilities = frozenset(
-        {BACKGROUND_RCA}
-    )  # from infrastructure.delivery.notifications.outbound_registry
-
-    def deliver(self, record: BackgroundInvestigationRecord) -> str:
-        return deliver_mychannel_notification(record)  # module-level function, see below
-```
-
-- [ ] Register the adapter object in `bootstrap/adapters.py`. Nothing auto-discovers it, and importing the module is **not** enough: imports are cached, so a re-import after the registry is cleared runs no module body.
-- [ ] `deliver` **never raises**. Return `"sent"`, `"failed: <reason>"`, or `"missing <name> integration: <what to configure>"`. The string is persisted on the record and shown by `/background show`, so redact any credential in the reason.
-- [ ] Import the vendor client **inside** `deliver`, not at module scope. These modules are imported when a user runs `/background notify set`, so a module-level client lands on that path.
-- [ ] Send the bounded summary from `infrastructure.delivery.notifications.rca_summary`, not the full report, for any channel with a message-size limit.
-
-The channel becomes selectable as soon as it is registered — `/background notify set` derives its allowed list from the registry, so there is no channel list to edit.
 
 ### Credential resolution
 
@@ -181,27 +154,7 @@ Keep this contract when adding or changing an integration.
 
 Canonical helpers: `resolve_env_credential` (env → credentials file), `sync_env_secret` / `save_credential` (secret writes to the credentials file and `.env`), `sync_env_values` (`.env` keys, including secrets).
 
-## 3. Investigation wiring
-
-If the tool/integration is relevant to investigations:
-
-- [ ] Review alert-source seeding in `core/domain/alerts/alert_source.py`
-- [ ] Review source-priority/prompt mapping in `tools/investigation/stages/gather_evidence/prompt.py`
-- [ ] Review evidence/source registration in `core/domain/types/` or related state models
-- [ ] **Declare `@tool(evidence_mapper=...)`** (or set the `evidence_mapper`
-  class attribute on a `BaseTool`) if the tool's output should be citeable in the
-  report. The mapper lifts the raw output into the canonical report keys the
-  evidence catalog cites, and it lives with the tool in its own package — the
-  investigation stage stays vendor-agnostic. A tool with no mapper keeps its raw
-  output only; the catalog never mints a citeable key for it. The coverage guard
-  (`tests/tools/investigation/stages/gather_evidence/test_evidence_mapper_coverage.py`)
-  fails until you either add the mapper or record the tool in
-  `evidence_mapper_baseline.txt` as a deliberate known gap.
-- [ ] Add scenario coverage proving the tool surfaces useful RCA evidence
-
-If the integration is first-class for an `alert_source`, review the source-to-tool maps explicitly.
-
-## 4. Discovery and edge cases
+## 3. Discovery and edge cases
 
 For tools that list, search, or inspect resources:
 
@@ -210,13 +163,12 @@ For tools that list, search, or inspect resources:
 - [ ] Partial fetches are surfaced clearly (`truncated`, `fetch_error`, etc.)
 - [ ] Time/order-sensitive results preserve causal ordering where it matters
 
-## 5. Docs and tests
+## 4. Docs and tests
 
 ### Docs
 
-- [ ] Ship or update a `docs/` page/section in the same PR (new tool, CLI command, pipeline behavior, or integration; and whenever a tool's API/schema or an integration's setup changes)
+- [ ] Ship or update a `docs/` page/section in the same PR (new tool, CLI command, agent behavior, or integration; and whenever a tool's API/schema or an integration's setup changes)
 - [ ] Any new `docs/` page is registered in `docs/docs.json` (without the `.mdx` suffix) so Mintlify navigation shows it
-- [ ] Investigation LLM tool-calling changes follow [investigation-tool-calling.md](investigation-tool-calling.md)
 
 ### Tests
 
@@ -225,7 +177,7 @@ For tools that list, search, or inspect resources:
 - [ ] A registry/discovery test proves the tool is visible on the expected surface(s)
 - [ ] Runtime behavior tests for success and failure paths
 - [ ] At least one realistic fixture for live-payload parsing when external payloads are involved
-- [ ] If investigation-relevant, a test proves the planner/agent can discover or invoke the tool through the normal runtime path (plus synthetic/scenario coverage when the loop depends on it)
+- [ ] A test proves the agent can discover or invoke the tool through the normal runtime path
 - [ ] `tests/integrations/` updated when integration wiring changes
 
 Green tests are not enough if they only cover idealized mocks.
@@ -235,11 +187,11 @@ Green tests are not enough if they only cover idealized mocks.
 Everything above is complete, **and**:
 
 - [ ] Screenshot or demo GIF showing the integration working end-to-end
-- [ ] E2E or synthetic test added
+- [ ] E2E test added
 - [ ] CI checks pass (see [CI.md](../CI.md))
 
-## 6. Reviewer focus
+## 5. Reviewer focus
 
-Before opening or approving the PR, confirm the items most often missed are handled **explicitly**: tool placement (§1), live-payload robustness (§1), alert-source maps (§3), onboarding/setup/docs parity (§2 and §5), pagination/truncation/partial-response behavior (§4), and tests that cover realistic payloads and investigation usefulness — not only happy-path mocks (§5).
+Before opening or approving the PR, confirm the items most often missed are handled **explicitly**: tool placement (§1), live-payload robustness (§1), onboarding/setup/docs parity (§2 and §4), pagination/truncation/partial-response behavior (§3), and tests that cover realistic payloads and usefulness to the agent — not only happy-path mocks (§4).
 
 Follow [CI.md](../CI.md) for the mandatory pre-push commands.

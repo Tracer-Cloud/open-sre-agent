@@ -29,7 +29,6 @@ core/tool_framework/utils/sql_wrapper.py|module|sql_wrapper
 # port (hexagonal sense — not network ports)
 core/agent_harness/ports.py|module|ports
 integrations/hermes/sinks.py|class|AlarmDispatcherPort
-surfaces/interactive_shell/runtime/investigation_adapter.py|class|ReplInvestigationLaunchPorts
 surfaces/interactive_shell/runtime/llm_provider_adapter.py|class|LlmProviderPorts
 surfaces/interactive_shell/runtime/llm_provider_adapter.py|class|ReplLlmProviderPorts
 surfaces/interactive_shell/runtime/slash_adapter.py|class|HeadlessSlashPorts
@@ -37,7 +36,6 @@ surfaces/interactive_shell/runtime/slash_adapter.py|class|ReplSlashPorts
 surfaces/interactive_shell/runtime/slash_adapter.py|class|SlashPorts
 surfaces/interactive_shell/runtime/task_cancel_adapter.py|class|ReplTaskCancelPorts
 surfaces/interactive_shell/runtime/task_cancel_adapter.py|class|TaskCancelPorts
-tools/interactive_shell/shared/investigation_launch.py|class|InvestigationLaunchPorts
 tools/system/watch_dog/monitor.py|class|AlarmDispatcherPort
 
 # context
@@ -51,8 +49,6 @@ core/agent_harness/tools/tool_context.py|module|tool_context
 core/agent_harness/turns/headless_adapters.py|class|EmptyPromptContextProvider
 core/agent_harness/turns/host_cancel.py|class|CancelProbeContext
 core/context_budget.py|module|context_budget
-core/state/channel_context.py|module|channel_context
-core/state/runtime_slices.py|class|DeliveryContextSlice
 core/tool/contracts.py|class|AgentToolContext
 core/tool_framework/utils/__init__.py|module|utils
 core/agent_harness/session/persistence/contracts.py|class|RestoreContextKey
@@ -67,8 +63,5 @@ integrations/github/tools/security_fix/context.py|module|context
 integrations/slack/message_context.py|module|message_context
 surfaces/interactive_shell/grounding/cli_reference.py|class|ShellPromptContextProvider
 surfaces/interactive_shell/runtime/context.py|module|context
-surfaces/shared/terminal/feedback/context_display.py|module|context_display
 tools/cross_vendor/fix_sentry_issue/context.py|class|IssueContext
 tools/cross_vendor/fix_sentry_issue/context.py|module|context
-tools/investigation/reporting/context/schema.py|class|ReportContext
-tools/investigation/reporting/context/__init__.py|module|context

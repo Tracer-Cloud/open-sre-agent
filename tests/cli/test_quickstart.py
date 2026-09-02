@@ -3,12 +3,8 @@
 Pins every command and path the quickstart tells users to type, so a doc drift
 or CLI rename fails here before a new user hits it.
 
-Live paths (real brew/curl CDN + full LLM investigate) live in:
-
-- ``tests/e2e/install/test_live_installers.py`` (``OPENSRE_LIVE_INSTALL=1``)
-- ``tests/e2e/quickstart/test_live_investigate.py`` (``OPENSRE_LIVE_QUICKSTART=1``)
-- ``./trace smoke --suite all`` → ``install.live_*`` /
-  ``agent.investigate.quickstart_k8s``
+Live install paths (real brew/curl CDN) live in
+``tests/e2e/install/test_live_installers.py`` (``OPENSRE_LIVE_INSTALL=1``).
 """
 
 from __future__ import annotations
@@ -24,16 +20,11 @@ from threading import Thread
 import pytest
 
 from config.constants.paths import REPO_ROOT
-from surfaces.cli.investigation.payload import load_file
 from surfaces.cli.lifecycle.update import _INSTALL_SCRIPT, _INSTALL_SCRIPT_PS1
 from surfaces.interactive_shell.command_registry import SLASH_COMMANDS
 from tests.cli.test_smoke import CliSandbox, _cli_env, _run_cli
 
 QUICKSTART_MDX = REPO_ROOT / "docs" / "quickstart.mdx"
-QUICKSTART_ALERT = (
-    REPO_ROOT / "tests" / "e2e" / "kubernetes" / "fixtures" / "datadog_k8s_alert.json"
-)
-QUICKSTART_ALERT_DOC_PATH = "tests/e2e/kubernetes/fixtures/datadog_k8s_alert.json"
 
 
 @pytest.fixture()
@@ -97,7 +88,7 @@ def test_quickstart_doc_lists_every_user_command() -> None:
         "irm https://install.opensre.com | iex",
         "opensre setup",
         "opensre\n",
-        f"opensre investigate -i {QUICKSTART_ALERT_DOC_PATH}",
+        'opensre ask "why did checkout latency increase today?"',
         "opensre update",
         "opensre uninstall",
         "opensre uninstall --yes",
@@ -135,14 +126,14 @@ def test_quickstart_bare_opensre_shows_landing_page(cli_sandbox: CliSandbox) -> 
     assert result.exit_code == 0
     assert "Quick start:" in result.stdout
     assert "opensre setup" in result.stdout or "setup" in result.stdout
-    assert "investigate" in result.stdout
+    assert "ask" in result.stdout
 
 
 def test_quickstart_help_lists_documented_commands(cli_sandbox: CliSandbox) -> None:
     result = _run_cli(cli_sandbox, "--help")
 
     assert result.exit_code == 0
-    for command in ("setup", "onboard", "investigate", "update", "uninstall"):
+    for command in ("setup", "onboard", "ask", "update", "uninstall"):
         assert command in result.stdout, f"missing `{command}` in opensre --help"
     assert "No COMMAND: start the interactive shell" in result.stdout
 
@@ -168,53 +159,6 @@ def test_quickstart_onboard_help(cli_sandbox: CliSandbox) -> None:
 
     assert result.exit_code == 0
     assert "onboarding" in result.stdout.lower() or "wizard" in result.stdout.lower()
-
-
-# ── Step: investigate with the documented fixture ────────────────────────────
-
-
-def test_quickstart_alert_fixture_exists_and_loads() -> None:
-    assert QUICKSTART_ALERT.is_file(), (
-        f"quickstart points at {QUICKSTART_ALERT_DOC_PATH} but the file is missing"
-    )
-    payload = load_file(str(QUICKSTART_ALERT))
-    assert isinstance(payload, dict)
-    assert payload, "quickstart alert fixture loaded empty"
-
-
-def test_quickstart_investigate_accepts_documented_fixture_path(
-    cli_sandbox: CliSandbox,
-) -> None:
-    """``opensre investigate -i <quickstart path>`` must parse the fixture.
-
-    Without credentials the run stops at the LLM gate (exit 1) — the point of
-    this test is that the documented path is not a 404 / usage error.
-    """
-    cli_sandbox.seed_project_env(provider="anthropic", model="claude-opus-4-7")
-
-    result = _run_cli(
-        cli_sandbox,
-        "investigate",
-        "-i",
-        QUICKSTART_ALERT_DOC_PATH,
-        extra_env={"LLM_PROVIDER": "anthropic"},
-        timeout=60.0,
-    )
-
-    combined = result.stdout + result.stderr
-    assert result.exit_code == 1, combined
-    assert "Usage:" not in combined
-    assert "No such file" not in combined
-    assert "ANTHROPIC_API_KEY" in combined, (
-        f"expected missing-credential gate after loading the quickstart fixture, got:\n{combined}"
-    )
-
-
-def test_quickstart_investigate_help_documents_dash_i(cli_sandbox: CliSandbox) -> None:
-    result = _run_cli(cli_sandbox, "investigate", "--help")
-
-    assert result.exit_code == 0
-    assert "-i, --input" in result.stdout
 
 
 # ── Step: update ─────────────────────────────────────────────────────────────

@@ -18,34 +18,12 @@ class Event(StrEnum):
     ONBOARD_COMPLETED = "onboard_completed"
     ONBOARD_FAILED = "onboard_failed"
 
-    # Investigation
-    INVESTIGATION_STARTED = "investigation_started"
-    INVESTIGATION_COMPLETED = "investigation_completed"
-    INVESTIGATION_FAILED = "investigation_failed"
-    INVESTIGATION_CANCELLED = "investigation_cancelled"
-    INVESTIGATION_OUTCOME = "investigation_outcome"
-    INVESTIGATION_FIRST_HYPOTHESIS_RENDERED = "investigation_first_hypothesis_rendered"
-    INVESTIGATION_ABANDONED = "investigation_abandoned"
-    INVESTIGATION_FEEDBACK_SUBMITTED = "investigation_feedback_submitted"
-    INVESTIGATION_MISS_CLASSIFIED = "investigation_miss_classified"
-    DIAGNOSIS_CATEGORY_MISMATCH = "diagnosis_category_mismatch"
-
     # Integrations
     INTEGRATION_SETUP_STARTED = "integration_setup_started"
     INTEGRATION_SETUP_COMPLETED = "integration_setup_completed"
     INTEGRATION_REMOVED = "integration_removed"
     INTEGRATION_VERIFIED = "integration_verified"
     INTEGRATIONS_LISTED = "integrations_listed"
-
-    # Tests
-    TESTS_PICKER_OPENED = "tests_picker_opened"
-    TESTS_LISTED = "tests_listed"
-    TEST_RUN_STARTED = "test_run_started"
-    TEST_RUN_COMPLETED = "test_run_completed"
-    TEST_RUN_FAILED = "test_run_failed"
-    TEST_SYNTHETIC_STARTED = "test_synthetic_started"
-    TEST_SYNTHETIC_COMPLETED = "test_synthetic_completed"
-    TEST_SYNTHETIC_FAILED = "test_synthetic_failed"
 
     # Interactive terminal analytics
     TERMINAL_ACTIONS_PLANNED = "terminal_actions_planned"

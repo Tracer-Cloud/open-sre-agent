@@ -1,11 +1,11 @@
 ---
 title: "Google Docs"
-description: "Connect Google Docs so OpenSRE can write investigation reports to your Google Drive"
+description: "Connect Google Docs so OpenSRE can write incident reports to your Google Drive"
 ---
 
 ## Overview
 
-OpenSRE can write investigation findings directly to Google Drive as formatted Google Docs — creating a persistent, shareable record of each incident investigation linked to your team's existing Drive folder.
+Ask OpenSRE to write incident findings to Google Drive as formatted Google Docs — creating a persistent, shareable record of an incident linked to your team's existing Drive folder.
 
 ## Environment recipe
 
@@ -80,11 +80,11 @@ GOOGLE_DRIVE_FOLDER_ID=your-google-drive-folder-id
 }
 ```
 
-## Investigation tools
+## Tools
 
 | Tool | What it does |
 | --- | --- |
-| `create_google_docs_incident_report` | Creates a Google Doc in the configured Drive folder and inserts the investigation / postmortem content. Can optionally share the doc (`reader` / `writer` / `owner`). |
+| `create_google_docs_incident_report` | Creates a Google Doc in the configured Drive folder and inserts the incident / postmortem content. Can optionally share the doc (`reader` / `writer` / `owner`). |
 
 ## Verify
 

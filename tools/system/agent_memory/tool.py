@@ -62,7 +62,7 @@ def _memory_available(sources: dict[str, dict[str, Any]]) -> bool:
         "An investigation uncovers a lesson worth keeping (known-flaky service)",
     ],
     tags=("safe", "fast", "no-credentials"),
-    surfaces=(ToolSurface.ACTION, ToolSurface.INVESTIGATION),
+    surfaces=(ToolSurface.ACTION,),
     side_effect_level=SideEffectLevel.MUTATING,
     parallel_safe=False,
     is_available=_memory_available,
@@ -147,7 +147,7 @@ def memory_forget(name: str) -> dict[str, Any]:
         "search names, descriptions, and bodies, or no arguments to list the index."
     ),
     tags=("safe", "fast", "no-credentials"),
-    surfaces=(ToolSurface.ACTION, ToolSurface.INVESTIGATION),
+    surfaces=(ToolSurface.ACTION,),
     side_effect_level=SideEffectLevel.READ_ONLY,
     is_available=_memory_available,
     input_schema={

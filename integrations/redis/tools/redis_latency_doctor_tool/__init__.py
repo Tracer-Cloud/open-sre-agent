@@ -21,7 +21,7 @@ from integrations.redis import (
         "specific event."
     ),
     source="redis",
-    surfaces=(ToolSurface.INVESTIGATION, ToolSurface.CHAT),
+    surfaces=(ToolSurface.CHAT,),
     use_cases=[
         "Find the root cause of a Redis latency spike during an incident.",
         "Check whether RDB/AOF persistence or fork is stalling command processing.",

@@ -5,9 +5,6 @@ from __future__ import annotations
 from collections.abc import Mapping
 from typing import Any
 
-from core.agent_harness.grounding.investigation_flow_reference import (
-    build_investigation_flow_reference_text,
-)
 from core.agent_harness.prompts.grounding.environment import build_environment_block
 from core.agent_harness.prompts.kernel.surfaces import profile_for
 from core.llm.provider_models import resolve_provider_models
@@ -83,9 +80,6 @@ class DefaultPromptContextProvider:
         # colliding with cost-center-mapping) so unrelated pages never leak into
         # the answer. Below the floor the block is omitted entirely.
         return str(self._session.grounding.docs.build_text(query, min_score=_DOCS_RELEVANCE_FLOOR))
-
-    def investigation_flow(self) -> str:
-        return build_investigation_flow_reference_text()
 
     def runtime_facts(self) -> Mapping[str, Any]:
         from config.runtime_metadata import capture_runtime_facts

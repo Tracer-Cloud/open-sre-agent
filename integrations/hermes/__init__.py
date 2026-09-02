@@ -20,14 +20,9 @@ from integrations.hermes.classifier import (
 from integrations.hermes.correlating_sink import CorrelatingSink
 from integrations.hermes.correlator import IncidentCorrelator, RouteDestination
 from integrations.hermes.incident import HermesIncident, IncidentSeverity, LogLevel, LogRecord
-from integrations.hermes.investigation import (
-    build_alert_from_incident,
-    run_incident_investigation,
-)
 from integrations.hermes.parser import parse_log_line
 from integrations.hermes.sinks import (
     AlarmDispatcherPort,
-    InvestigationBridge,
     TelegramSink,
     TelegramSinkConfig,
     make_telegram_sink,
@@ -48,15 +43,12 @@ __all__ = [
     "IncidentCorrelator",
     "IncidentSeverity",
     "IncidentSink",
-    "InvestigationBridge",
     "LogLevel",
     "LogRecord",
     "RouteDestination",
     "TelegramSink",
     "TelegramSinkConfig",
-    "build_alert_from_incident",
     "classify_all",
     "make_telegram_sink",
     "parse_log_line",
-    "run_incident_investigation",
 ]

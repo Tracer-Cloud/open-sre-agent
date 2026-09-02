@@ -62,7 +62,7 @@ def _map_search_github_issues(
         "Finding related bug reports that may explain a failure",
     ],
     requires=["owner", "repo", "query"],
-    surfaces=(ToolSurface.INVESTIGATION, ToolSurface.CHAT),
+    surfaces=(ToolSurface.CHAT,),
     evidence_mapper=_map_search_github_issues,
     input_schema={
         "type": "object",

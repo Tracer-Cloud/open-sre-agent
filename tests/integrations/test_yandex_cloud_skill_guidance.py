@@ -64,7 +64,7 @@ class TestTheSkillDocument:
 class TestWhatReachesTheModel:
     def test_both_generic_readers_carry_the_guidance(self) -> None:
         clear_tool_registry_cache()
-        tools = get_registered_tool_map("investigation")
+        tools = get_registered_tool_map("action")
 
         for name in sorted(GUIDED_TOOLS):
             assert tools[name].skill_guidance, f"{name} carries no guidance"
@@ -72,7 +72,7 @@ class TestWhatReachesTheModel:
     def test_the_pod_paragraph_survives_truncation(self) -> None:
         """Without it the agent burns the investigation looking for pods in the REST API."""
         clear_tool_registry_cache()
-        tools = get_registered_tool_map("investigation")
+        tools = get_registered_tool_map("action")
 
         for name in sorted(GUIDED_TOOLS):
             attached = tools[name].skill_guidance
@@ -96,14 +96,14 @@ class TestWhatReachesTheModel:
         result = load_tool_skill_guidance(SKILL_FILE, known_tool_names=GUIDED_TOOLS)
 
         assert result.skill is not None
-        registered = get_registered_tool_map("investigation")
+        registered = get_registered_tool_map("action")
         for shipped in SHIPPED_FAMILY_TOOLS:
             assert shipped in registered, shipped
             assert shipped in result.skill.content, shipped
 
     def test_the_attached_slice_stays_within_the_registry_ceiling(self) -> None:
         clear_tool_registry_cache()
-        tools = get_registered_tool_map("investigation")
+        tools = get_registered_tool_map("action")
 
         for name in sorted(GUIDED_TOOLS):
             assert len(tools[name].skill_guidance) <= MAX_ATTACHED_CHARS, name

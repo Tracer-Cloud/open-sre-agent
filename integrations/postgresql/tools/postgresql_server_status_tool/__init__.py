@@ -17,7 +17,7 @@ from integrations.postgresql import (
     name="get_postgresql_server_status",
     description="Retrieve PostgreSQL server metrics including connections, transactions, cache hit ratio, and database statistics.",
     source="postgresql",
-    surfaces=(ToolSurface.INVESTIGATION, ToolSurface.CHAT),
+    surfaces=(ToolSurface.CHAT,),
     use_cases=[
         "Checking PostgreSQL server health during an incident",
         "Identifying connection saturation or exhaustion issues",

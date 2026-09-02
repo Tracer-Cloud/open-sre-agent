@@ -52,7 +52,7 @@ def test_looks_like_timeout_recognizes_httpx_timeout_exception_by_class_name() -
 def test_timeout_user_message_does_not_echo_exception_text() -> None:
     failure = classify_llm_invoke_failure(TimeoutError("deadline with token=sk-secret"))
     assert failure is not None
-    assert failure.user_message == "Investigation stopped: the LLM request timed out."
+    assert failure.user_message == "LLM call stopped: the LLM request timed out."
     assert "sk-secret" not in failure.user_message
     assert "sk-secret" not in failure.tracker_message
 
@@ -92,7 +92,7 @@ def test_auth_failure_user_message_does_not_echo_provider_exception_text() -> No
         RuntimeError("AuthenticationError: invalid x-api-key sk-secret-fragment")
     )
     assert failure is not None
-    assert failure.user_message == "Investigation stopped: LLM authentication failed."
+    assert failure.user_message == "LLM call stopped: LLM authentication failed."
     assert "sk-secret-fragment" not in failure.user_message
     assert "sk-secret-fragment" not in failure.tracker_message
 
@@ -146,7 +146,7 @@ def test_classify_provider_error_kind(message: str, expected: str) -> None:
 
 
 def test_llm_provider_failure_kinds_exclude_terminal_task_kinds() -> None:
-    """Background-task/investigation error kinds must never count as LLM provider failures."""
+    """Background-task/terminal error kinds must never count as LLM provider failures."""
     for terminal_kind in ("timeout", "cli_exit_nonzero", "spawn_failed", "unknown", "config"):
         assert terminal_kind not in LLM_PROVIDER_FAILURE_KINDS
 

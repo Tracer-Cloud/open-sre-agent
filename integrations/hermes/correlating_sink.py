@@ -12,7 +12,6 @@ Usage::
         correlator=correlator,
         routes={
             RouteDestination.TELEGRAM: telegram,
-            RouteDestination.TELEGRAM_WITH_RCA: telegram,
         },
     )
     agent = HermesAgent(..., incident_sink=sink)

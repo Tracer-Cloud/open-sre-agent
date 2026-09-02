@@ -177,7 +177,7 @@ def test_anthropic_rate_limit_error_is_retried_then_raises(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """Rate-limit is transient by design — retry with backoff like 500s do.
-    Without retry, a single 429 mid-investigation kills the whole case.
+    Without retry, a single 429 mid-turn kills the whole turn.
     """
     from core.llm.shared.openai_chat_completions import _RETRY_MAX_ATTEMPTS
 
@@ -853,7 +853,7 @@ def test_openai_rate_limit_error_is_retried_then_raises(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """Rate-limit is transient by design — retry with backoff like 500s do.
-    Without retry, a single 429 mid-investigation kills the whole case (matters
+    Without retry, a single 429 mid-turn kills the whole turn (matters
     especially on tight OpenAI tiers like gpt-4o's 30k TPM).
     """
     from core.llm.shared.openai_chat_completions import _RETRY_MAX_ATTEMPTS
@@ -1078,9 +1078,6 @@ def test_build_openai_tool_specs_preserves_additional_properties_false() -> None
 
 def test_build_openai_tool_specs_normalizes_anyof_optional_parameters() -> None:
     from core.llm.shared.tool_schema_normalize import build_openai_tool_specs
-    from tests.core.runtime.llm.investigation_tool_schema_contract import (
-        assert_strict_tool_schema_node,
-    )
 
     tool = types.SimpleNamespace(
         name="optional_field_tool",
@@ -1098,9 +1095,8 @@ def test_build_openai_tool_specs_normalizes_anyof_optional_parameters() -> None:
     specs = build_openai_tool_specs([tool])
     parameters = specs[0]["function"]["parameters"]
     assert parameters["type"] == "object"
-    assert "anyOf" not in parameters["properties"]["optional_field"]
-    assert parameters["properties"]["optional_field"]["type"] == "string"
-    assert_strict_tool_schema_node(parameters, path="optional_field_tool")
+    optional_field = parameters["properties"]["optional_field"]
+    assert optional_field == {"type": "string"}, "anyOf/nullable must be flattened away"
 
 
 def test_get_llm_agent_routes_deepseek_to_openai_compatible_client(
@@ -1777,7 +1773,7 @@ def test_anthropic_unexpected_response_shape_raises_runtime_error(
 
 def test_anthropic_agent_client_emits_provider_usage(monkeypatch: pytest.MonkeyPatch) -> None:
     """Successful agent invokes must report provider token usage via the usage hook
-    so investigation-turn telemetry can carry real token counts (issue #3698)."""
+    so agent-turn telemetry can carry real token counts (issue #3698)."""
     from core.llm.shared.usage import set_usage_hook
 
     _install_fake_anthropic(monkeypatch)

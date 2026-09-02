@@ -118,5 +118,5 @@ class BuzzSendMessageTool(BaseTool):
 
 buzz_send_message = tool(
     BuzzSendMessageTool(),
-    surfaces=(ToolSurface.INVESTIGATION, ToolSurface.ACTION),
+    surfaces=(ToolSurface.ACTION,),
 )

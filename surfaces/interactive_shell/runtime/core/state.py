@@ -308,10 +308,10 @@ class SpinnerState:
     def set_phase(self, label: str) -> None:
         """Animate a caller-supplied phase label on the status row.
 
-        Investigation stages (``/investigate``) dispatch deterministically, so
-        the turn-level spinner may not have been started. The progress display
-        calls this to keep the prompt spinner cycling with the active pipeline
-        stage; it can be called repeatedly to advance the phase.
+        Some dispatch paths run deterministically, so the turn-level spinner
+        may not have been started. The progress display calls this to keep the
+        prompt spinner cycling with the active stage; it can be called
+        repeatedly to advance the phase.
         """
         if not self.streaming:
             self.started_at = time.monotonic()

@@ -37,7 +37,7 @@ class SlackReplyMessageTool(BaseTool):
         "Answering a question in the channel where it was asked",
     ]
     anti_examples = [
-        "Publishing a full RCA report (use the investigation publish flow instead)",
+        "Publishing a long multi-section report as one message (send a short summary instead)",
         "Posting to a channel the bot has not been invited to",
     ]
     requires = ["slack"]
@@ -141,5 +141,5 @@ class SlackReplyMessageTool(BaseTool):
 
 slack_reply_message = tool(
     SlackReplyMessageTool(),
-    surfaces=(ToolSurface.INVESTIGATION, ToolSurface.ACTION),
+    surfaces=(ToolSurface.ACTION,),
 )

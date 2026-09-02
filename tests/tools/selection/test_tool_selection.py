@@ -156,7 +156,7 @@ def test_live_tool_selection_matches_target_tool(scenario: SelectionScenario) ->
     """
     _require_live_llm_credentials()
 
-    tool_map = get_registered_tool_map("investigation")
+    tool_map = get_registered_tool_map()
     for name in scenario.candidate_tool_names:
         assert name in tool_map, (
             f"Scenario {scenario.scenario_id!r} references unregistered candidate tool {name!r}"

@@ -109,7 +109,7 @@ repository-wide test result.
 
 The required automated pull-request execution gate has a p90 target of 90
 seconds. Static checks, cached typechecking, duration-balanced pytest shards,
-synthetic tests, and interactive-shell checks run concurrently. Automated and
+and interactive-shell checks run concurrently. Automated and
 human review completion, including Greptile, remains a separate merge
 requirement and is not part of that execution-time SLO.
 

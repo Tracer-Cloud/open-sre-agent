@@ -35,7 +35,7 @@ class PythonExecutionTool(BaseTool):
     source = "knowledge"
     evidence_mapper = map_execute_python_code
     side_effect_level = SideEffectLevel.READ_ONLY
-    surfaces = (ToolSurface.INVESTIGATION, ToolSurface.CHAT)
+    surfaces = (ToolSurface.CHAT,)
     injected_params = ["github_token"]
     description = (
         "Execute generated Python code in a restricted subprocess, capture stdout, stderr, "

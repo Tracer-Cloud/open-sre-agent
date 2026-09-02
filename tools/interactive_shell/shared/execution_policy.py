@@ -5,7 +5,7 @@ Alpha mode: allow everything
 OpenSRE is in **alpha**, and the interactive REPL runs with **no command
 guardrails** so developer velocity stays high. Every policy decision below
 resolves to ``allow`` and nothing prompts for confirmation: slash/``opensre``
-commands (any tier), investigations, synthetic tests, code-agent launches, LLM
+commands (any tier), synthetic tests, code-agent launches, LLM
 runtime switches, and shell commands of every kind — read-only, mutating,
 ``restricted`` (``sudo``, ``systemctl``, ``kill``, ``dd`` …), shell operators
 (``| && ; > <``), and command substitution (`` ` ``/``$(...)``) — all run
@@ -212,7 +212,7 @@ def allow_tool(tool_type: str) -> ExecutionPolicyResult:
     """Default-allow verdict for a tool launch.
 
     Under alpha the policy never denies a tool launch (slash commands,
-    investigations, synthetic tests, code-agent launches, LLM runtime switches),
+    synthetic tests, code-agent launches, LLM runtime switches),
     so every caller resolves to ``allow``. ``tool_type`` is carried through for
     analytics and confirmation UX.
     """

@@ -102,7 +102,7 @@ def current_task_plan_block(
         lines.append(
             "Do not conclude this turn while a step is in_progress. "
             "Keep working that step, or ask_user_choice if facts are missing. "
-            "Do not start another investigation."
+            "Do not start another workload."
         )
     elif not plan.all_completed and not plan_only:
         lines.append(

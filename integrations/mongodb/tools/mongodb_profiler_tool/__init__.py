@@ -54,7 +54,7 @@ def _map_get_mongodb_profiler_data(
     name="get_mongodb_profiler_data",
     description="Retrieve slow queries from the MongoDB database system.profile collection (requires profiling enabled).",
     source="mongodb",
-    surfaces=(ToolSurface.INVESTIGATION, ToolSurface.CHAT),
+    surfaces=(ToolSurface.CHAT,),
     is_available=mongodb_database_is_available,
     injected_params=("connection_string",),
     extract_params=mongodb_extract_params,

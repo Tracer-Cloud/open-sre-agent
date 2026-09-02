@@ -24,8 +24,8 @@ When you type `/` and browse with the arrow keys, the hint line above the prompt
 | Input type | What happens |
 | --- | --- |
 | Slash command (`/status`) | Routed through the action agent and executed via `slash_invoke` |
-| Plain language (`verify datadog`) | Routed by the action agent to slash commands, investigations, or doc-grounded answers |
-| Pasted alert JSON/text | Often starts an investigation without a slash command |
+| Plain language (`verify datadog`) | Routed by the action agent to slash commands, tool calls, or doc-grounded answers |
+| Pasted alert JSON/text | The agent triages it in chat, calling integration tools as needed |
 | Shell one-liner (`kubectl get pods`) | Executed through shell policy when the action agent selects a shell action |
 
 **TTY vs non-TTY:** Interactive menus, confirmations, and onboarding wizards need a real terminal. Piping input or running in CI is non-interactive — prefer explicit CLI commands outside the REPL for automation.
@@ -73,15 +73,6 @@ When you first launch the shell with no scheduled loops, a picker offers three s
 | `/new` | Start a new session file while keeping LLM context |
 | `/goal` | Set a finish line and keep working toward it across turns — see [Goals](/goals) |
 
-### Investigation
-
-| Command | What it does |
-| --- | --- |
-| `/investigate` | Run an RCA from a file path or sample template |
-| `/template` | Print a starter alert JSON template |
-| `/last` | Reprint the most recent investigation report |
-| `/save <path>` | Export the last investigation to a file **elevated** |
-
 ### Integrations, models, and tools
 
 | Command | What it does |
@@ -91,7 +82,7 @@ When you first launch the shell with no scheduled loops, a picker offers three s
 | `/integrations` | List, verify, show, setup, or remove integrations |
 | `/mcp` | List, connect, or disconnect MCP servers |
 | `/model` | Show or switch LLM provider and models |
-| `/tools` | List registered investigation and chat tools |
+| `/tools` | List registered chat and action tools |
 
 ### Privacy and history
 
@@ -104,12 +95,11 @@ When you first launch the shell with no scheduled loops, a picker offers three s
 
 | Command | What it does |
 | --- | --- |
-| `/background` | Run investigations async; track RCAs and completion notifications |
 | `/loops` | List, create, run once, and debug recurring prompt loops |
 | `/tasks` | List recent and in-flight background tasks |
 | `/work` | List, add, complete, and prioritize human work items |
 | `/cancel <id>` | Cancel a running task by id **elevated** |
-| `/stop` | Guidance for stopping investigations and background work |
+| `/stop` | Guidance for stopping background work |
 
 ### Watchdog
 
@@ -145,7 +135,6 @@ These commands delegate to the same Click CLI you would run outside the REPL.
 | `/messaging` | Telegram pairing and allowlist |
 | `/hermes` | Hermes log tailing and incident escalation |
 | `/guardrails` | Sensitive-information guardrail rules |
-| `/tests` | Browse and run inventoried tests |
 | `/update` | Check for updates and upgrade OpenSRE |
 | `/debug` | Targeted runtime diagnostics |
 | `/uninstall` | Remove OpenSRE and local data **elevated** |
@@ -167,8 +156,6 @@ Bare invocation opens a picker or submenu:
 | `/integrations` | list / verify / show / setup / remove |
 | `/mcp` | list / connect / disconnect |
 | `/model` | show / set / restore / toolcall |
-| `/investigate` | Demo alerts, templates, custom file path |
-| `/template` | Template type picker |
 | `/trust`, `/verbose` | on / off |
 | `/history` | show / clear / off / on / retention |
 | `/resume` | Numbered list of recent sessions |
@@ -183,7 +170,6 @@ Bare invocation opens a picker or submenu:
 ```text
 /help
 /help /model
-/help investigation
 /help tasks
 /help all
 ```
@@ -192,12 +178,12 @@ Bare invocation opens a picker or submenu:
 | --- | --- |
 | `/help` | Interactive picker in a TTY; category index otherwise |
 | `/help &lt;command&gt;` | Detailed usage for one command (e.g. `/help /watch`) |
-| `/help &lt;category&gt;` | All commands in a section (`investigation`, `session`, `tasks`, …) |
+| `/help &lt;category&gt;` | All commands in a section (`session`, `tasks`, …) |
 | `/help all` | Full command index |
 
-Help categories mirror the REPL grouping: Quick Access, Session, Integrations/Models/Tools, Investigation, Privacy, Tasks, Agents, Alerts, CLI parity, and System.
+Help categories mirror the REPL grouping: Quick Access, Session, Integrations/Models/Tools, Privacy, Tasks, Agents, Alerts, CLI parity, and System.
 
-**Quick Access** duplicates frequently used commands (`/investigate`, `/integrations`, `/model`, `/health`, `/watch`, `/status`, `/help`) for faster discovery in the picker.
+**Quick Access** duplicates frequently used commands (`/integrations`, `/model`, `/health`, `/watch`, `/status`, `/help`) for faster discovery in the picker.
 
 </Accordion>
 
@@ -225,12 +211,11 @@ Typical fields:
 | --- | --- |
 | `interactions` | Count of recorded turns (chat, slash, alerts) |
 | `incoming alerts` | Alerts received by the local listener this session, plus age of the latest |
-| `last investigation` | `yes` if `/investigate` or a streamed investigation completed |
 | `trust mode` | `on` / `off` |
 | `reasoning effort` | Current `/effort` level (OpenAI/Codex only) |
 | `provider` | Active `LLM_PROVIDER` |
 | `grounding … cache` | Doc/source cache stats used for help answers |
-| `accumulated context` | Comma-separated keys from prior investigations (e.g. `service`, `cluster`) |
+| `accumulated context` | Comma-separated keys from prior turns (e.g. `service`, `cluster`) |
 
 Use `/status` for **session** state. Use `/health` for **integration connectivity**.
 
@@ -278,13 +263,13 @@ Token totals reset on `/new` or when session identity is rotated. They do **not*
 
 <Accordion title="/context">
 
-Displays key/value infra metadata collected during investigations and chat — typically `service`, `cluster`, `region`, or similar fields extracted from alert text and investigation state.
+Displays key/value infra metadata collected during chat — typically `service`, `cluster`, `region`, or similar fields extracted from alert text and tool results.
 
 ```text
 /context
 ```
 
-Context is **inherited** across investigations in the same session (and restored by `/resume`). It is passed as overrides to subsequent `/investigate` runs so the pipeline does not re-ask for environment details you already established.
+Context is **inherited** across turns in the same session (and restored by `/resume`), so the agent does not re-ask for environment details you already established.
 
 </Accordion>
 
@@ -301,7 +286,7 @@ Set reasoning depth for **OpenAI and Codex** providers in this REPL session only
 | --- | --- |
 | `low` | Fast triage, simple lookups, lower token cost |
 | `medium` | Default balance for most incident work |
-| `high` | Deeper RCA when latency is acceptable |
+| `high` | Deeper analysis when latency is acceptable |
 | `xhigh`, `max` | Maximum reasoning; best with newer GPT-5 or Codex models — older models may reject these levels |
 
 Bare `/effort` prints the current level, the config default for your provider/model, and supported choices. `/status` includes the same field.
@@ -324,7 +309,7 @@ Set how often the REPL asks before running agent tools. Shown on the status line
 | --- | --- |
 | `high` (default) | Nothing — alpha default; every tool runs immediately |
 | `med` | Mutating agent tools: shell, code agent, slash/CLI, synthetic tests, LLM provider switch, Sentry issue fix, … |
-| `low` | Everything `med` asks about, plus starting an investigation (including sample-alert) |
+| `low` | Everything `med` asks about, plus additional tool starts |
 | `off` | Every tool type |
 
 `/auto` is **not** a shell-command allowlist: under alpha, shell strings still run when approved (or when High skips the prompt). Lower levels only promote the existing `ask` confirmation hook by `tool_type`.
@@ -337,7 +322,7 @@ Session preference only — not restored by `/resume`. Bare `/auto` prints the c
 
 <Accordion title="/trust">
 
-Trust mode skips execution confirmation prompts for **elevated** commands (`/save`, `/watch`, `/cancel`, `/uninstall`, integration remove, etc.).
+Trust mode skips execution confirmation prompts for **elevated** commands (`/watch`, `/cancel`, `/uninstall`, integration remove, etc.).
 
 ```text
 /trust on
@@ -348,7 +333,7 @@ Trust mode skips execution confirmation prompts for **elevated** commands (`/sav
 In a TTY, bare `/trust` opens an interactive on/off menu. Trust mode is a **session preference** — it is not restored by `/resume`.
 
 <Tip>
-  During watchdog demos or repeated `/save` exports, `/trust on` avoids confirmation fatigue. Turn it off before running destructive commands you might mistype.
+  During watchdog demos, `/trust on` avoids confirmation fatigue. Turn it off before running destructive commands you might mistype.
 </Tip>
 
 </Accordion>
@@ -398,10 +383,10 @@ List up to **20** recent sessions stored on disk, newest first:
 ```text
   Recent sessions
 
-   #  Session ID  Name                           Started            Duration  Turns  Investigations
-   ─────────────────────────────────────────────────────────────────────────────────────────────
-   1  3f8a1c2d    (current)                      Jun 17 10:00       42m       8      2
-   2  9b2e4f7a    why is CPU spiking on prod-api Jun 16 14:30       1h 5m    15     4
+   #  Session ID  Name                           Started            Duration  Turns
+   ───────────────────────────────────────────────────────────────────────────────
+   1  3f8a1c2d    (current)                      Jun 17 10:00       42m       8
+   2  9b2e4f7a    why is CPU spiking on prod-api Jun 16 14:30       1h 5m    15
 ```
 
 | Column | Meaning |
@@ -409,7 +394,6 @@ List up to **20** recent sessions stored on disk, newest first:
 | `Session ID` | First 8 characters of the UUID (enough for `/resume`) |
 | `Name` | Derived from the first user message or resumed session label |
 | `Turns` | Total chat + slash + alert turns recorded |
-| `Investigations` | Count of investigation turns |
 
 The current row updates **duration** live. Sessions with no name show `(current)` or `↩ &lt;resumed-from&gt;` when applicable.
 
@@ -499,108 +483,6 @@ Set a finish line and keep working toward it across turns:
 
 Bare `/goal` shows the current goal. `/goal set` starts work immediately.
 See [Goals](/goals) for the full workflow.
-
-</Accordion>
-
-</AccordionGroup>
-
-### Investigation
-Three ways to start RCA from the REPL:
-
-| Method | Example | Best for |
-| --- | --- | --- |
-| Plain language | `checkout returns 502 on prod` | Quick starts, pasted context |
-| Slash + file/template | `/investigate alert.json` | Repeatable runs, CI fixtures |
-| Slash + interactive picker | `/investigate` → choose template | Demos, first-time users |
-
-Investigations inherit [accumulated context](#context) from earlier runs in the same session.
-
-<AccordionGroup>
-<Accordion title="/investigate">
-
-```text
-/investigate alert.json
-/investigate generic
-/investigate sample:datadog
-/investigate ./alerts/checkout-502.json
-/investigate
-```
-
-| Target | Behavior |
-| --- | --- |
-| `alert.json` | Bundled demo alert file shipped with OpenSRE |
-| `generic`, `datadog`, `grafana`, `honeycomb`, `coralogix`, `splunk` | Built-in sample templates (runs immediately) |
-| `sample:&lt;name&gt;` or `template:&lt;name&gt;` | Explicit template prefix |
-| File path | Read alert text from disk (`.json`, `.md`, `.txt`) |
-| Bare `/investigate` | Interactive picker in a TTY |
-
-<Tip>
-  Template names win over same-named files in the working directory. Force file mode: `/investigate ./generic`
-</Tip>
-
-**During a run:**
-
-- Output streams to the terminal like chat
-- **Ctrl+C** cancels and marks the task cancelled
-- `/tasks` shows the investigation task id and status
-- On completion, `last_state` is updated for `/last` and `/save`
-- Infra fields from the result merge into accumulated context
-
-**Errors:** Missing files, unreadable paths, and pipeline failures print actionable messages; failed runs do not update `last_state`.
-
-</Accordion>
-
-<Accordion title="/template">
-
-Print starter alert JSON to stdout — copy, edit, save, then `/investigate your-file.json`.
-
-```text
-/template generic
-/template datadog
-/template
-```
-
-| Template | Typical use |
-| --- | --- |
-| `generic` | Minimal portable alert shape |
-| `datadog` | Datadog monitor-style payload |
-| `grafana` | Grafana alerting format |
-| `honeycomb` | Honeycomb trigger shape |
-| `coralogix` | Coralogix alert JSON |
-| `splunk` | Splunk notable-event style |
-
-</Accordion>
-
-<Accordion title="/last">
-
-Reprint the root cause and report sections from the most recent successful investigation in **this session**.
-
-```text
-/last
-```
-
-Sections rendered when present: **Root Cause**, **Report** (from `problem_md` or `slack_message`). If no investigation ran yet, prints a dim empty-state message.
-
-</Accordion>
-
-<Accordion title="/save">
-
-Write the last investigation to disk. Requires confirmation unless trust mode is on.
-
-```text
-/save report.md
-/save out.json
-/save ./rca/checkout-502.json
-```
-
-| Extension | Output |
-| --- | --- |
-| `.json` | Full investigation state object (machine-readable) |
-| Other (`.md`, `.txt`, …) | Markdown with `## Root Cause` and `## Report` sections |
-
-Parent directories must exist or be creatable; write failures print the underlying error.
-
----
 
 </Accordion>
 
@@ -713,11 +595,11 @@ Show or change LLM provider and models. Updates project `.env` (default: reposit
 | `set &lt;provider&gt; [model] [--toolcall-model &lt;m&gt;]` | Switch provider; optional per-slot models |
 | `set &lt;model&gt;` (no provider) | Update reasoning model for **current** provider only |
 | `restore [provider]` | Reset to provider's default reasoning model |
-| `toolcall set &lt;model&gt;` | Set investigation tool-call model for active provider |
+| `toolcall set &lt;model&gt;` | Set the tool-call model for the active provider |
 
 **Credential guard:** Switching to a provider without prompt-safe auth status fails fast with setup instructions. Run `/auth login &lt;provider&gt;` or export the provider API key before switching. If status is stale, run `/auth verify &lt;provider&gt;`.
 
-**Reasoning vs toolcall model:** Reasoning model drives chat and planning; toolcall model drives investigation tool invocation when the provider exposes a separate slot (common on Anthropic/OpenAI).
+**Reasoning vs toolcall model:** Reasoning model drives chat and planning; toolcall model drives tool invocation when the provider exposes a separate slot (common on Anthropic/OpenAI).
 
 Interactive `/model` menu flow: pick provider → reasoning model (or default) → optional toolcall model (`keep`, `match-reasoning`, or explicit).
 
@@ -727,7 +609,7 @@ See [LLM providers](/llm-providers).
 
 <Accordion title="/tools">
 
-List tools available to investigation and chat surfaces in this build (name, source, surfaces).
+List tools available to the chat and action surfaces in this build (name, source, surfaces).
 
 ```text
 /tools
@@ -795,10 +677,8 @@ Human todos and reminders are tracked separately by `/work`.
 
 | Kind | Source |
 | --- | --- |
-| `investigation` | `/investigate`, streamed free-text investigations |
 | `watchdog` | `/watch` |
-| `synthetic_test` | `/tests synthetic`, CloudOpsBench |
-| `cli_command` | Other `/tests` runs, delegated CLI subprocesses |
+| `cli_command` | Delegated CLI subprocesses |
 | `code_agent` | Code-agent integrations (when used) |
 
 </Accordion>
@@ -827,7 +707,6 @@ Example:
   Tasks
 
   id      kind           status     started (UTC)     duration  detail
-  abc12   investigation  running    2026-06-17 10:01  45.2s     streaming…
   def34   watchdog       completed  2026-06-17 09:55  120.0s    pid=12345 max_cpu=80%
 ```
 
@@ -864,7 +743,6 @@ What should I focus on next?
 
 - Matches task id by **prefix** (must be unique among active/recent tasks)
 - Only **running** tasks accept cancellation
-- Investigations: signals cancel; press **Ctrl+C** if streaming continues
 - Watchdogs: prefer `/unwatch` for watchdog-specific messaging
 
 </Accordion>
@@ -879,36 +757,9 @@ Prints guidance only — does not kill processes:
 
 | Situation | Action |
 | --- | --- |
-| Streaming investigation | **Ctrl+C** |
-| Background test or CLI task | `/tasks` → `/cancel &lt;id&gt;` |
+| Streaming turn | **Ctrl+C** |
+| Background CLI task | `/tasks` → `/cancel &lt;id&gt;` |
 | Watchdog | `/unwatch &lt;id&gt;` or `/cancel &lt;id&gt;` |
-
-</Accordion>
-
-<Accordion title="/background">
-
-Session-local async investigation mode. Launch an RCA, keep using the shell, and get the finished report delivered to email, Telegram, Rocket.Chat, or Buzz.
-
-| Subcommand | What it does |
-| --- | --- |
-| `/background on` \| `off` | Enable or disable async investigation launches |
-| `/background status` | Mode, tracked job count, and active notify channels |
-| `/background list` | Tracked jobs with status and root cause |
-| `/background show &lt;task_id&gt;` | Full RCA summary plus per-channel notification result |
-| `/background use &lt;task_id&gt;` | Promote a completed RCA into active follow-up context |
-| `/background notify list` | Show the current completion channels |
-| `/background notify set &lt;channel[,channel...]&gt;` | Set channels — `email`, `telegram`, `rocketchat`, `buzz`, or a combination |
-
-```text
-/background on
-/background notify set email,telegram
-/investigate datadog
-/background show &lt;task_id&gt;
-```
-
-Channels are **off by default**. They are cleared when the REPL process exits; `/new` keeps notify prefs but clears jobs and turns background mode off. `email` requires [`smtp`](/smtp); `telegram` requires [`telegram`](/messaging/telegram); `rocketchat` requires [`rocketchat`](/messaging/rocketchat); `buzz` requires [`buzz`](/messaging/buzz). Interactive shell only — there is no `opensre background …` CLI command. Full guide: [Background investigations](/background-investigations).
-
----
 
 </Accordion>
 
@@ -1047,7 +898,7 @@ When the alert listener is active:
 | `dropped` | Alerts dropped when queue was full |
 | `recent` | Up to 5 latest alert names/snippets |
 
-If the listener is inactive, prints a warning. Incoming alerts also appear in `/status` as `incoming alerts`. Post alerts to your configured webhook/listener URL during setup; the REPL can start investigations from plain language.
+If the listener is inactive, prints a warning. Incoming alerts also appear in `/status` as `incoming alerts`. Post alerts to your configured webhook/listener URL during setup; the REPL triages them in chat.
 
 ---
 
@@ -1114,13 +965,12 @@ First-run setup: LLM keys, integrations, Telegram, alert listener. A blank LLM k
 
 ```text
 /remote health
-/remote investigate
 /remote ops
 /remote pull
 /remote trigger
 ```
 
-Operate remote deployed OpenSRE agents (EC2, Nitro, hosted runtime). See [Remote runtime investigation](/remote-runtime-investigation).
+Operate remote deployed OpenSRE agents (EC2, Nitro, hosted runtime).
 
 </Accordion>
 
@@ -1159,7 +1009,7 @@ Read/write `~/.opensre/config.yml`. Prefer env vars for secrets; use config for 
 /cron logs &lt;id&gt;
 ```
 
-Scheduled investigation or report delivery. See [Cron](/cron).
+Scheduled report delivery. See [Cron](/cron).
 
 </Accordion>
 
@@ -1250,28 +1100,6 @@ Tail Hermes logs and escalate classified incidents. See [Hermes](/hermes) and [H
 | `audit` | Scan recent content for sensitive patterns |
 
 Related: [Masking](/masking).
-
-</Accordion>
-
-<Accordion title="/tests">
-
-```text
-/tests
-/tests list
-/tests run &lt;test_id&gt;
-/tests synthetic
-/tests cloudopsbench
-/tests synthetic --scenario &lt;name&gt;
-```
-
-| Form | Behavior |
-| --- | --- |
-| Bare `/tests` | Interactive multi-select picker; chosen tests run in background |
-| `list` | Print inventoried tests (captured output) |
-| `run`, `synthetic`, `cloudopsbench` | Background task — monitor with `/tasks` |
-| Flags after subcommand | Passed through to CLI |
-
-Synthetic tests can run for a long time; default timeout is generous — use `/cancel` to stop.
 
 </Accordion>
 
@@ -1373,8 +1201,8 @@ Two controls decide whether the REPL prompts before an action:
 | Tier | Examples | Confirmation |
 | --- | --- | --- |
 | Exempt | `/help`, `/exit`, `/trust`, `/auto` | Never prompts |
-| Safe | `/status`, `/health`, `/investigate`, `/integrations list` | Read-only or standard risk |
-| Elevated | `/save`, `/watch`, `/cancel`, `/integrations remove`, `/fleet kill`, `/uninstall` | Prompt unless trust on |
+| Safe | `/status`, `/health`, `/integrations list` | Read-only or standard risk |
+| Elevated | `/watch`, `/cancel`, `/integrations remove`, `/fleet kill`, `/uninstall` | Prompt unless trust on |
 
 Non-TTY: actions that would ask **fail closed** (error message, no side effect).
 
@@ -1397,7 +1225,6 @@ You do not need to memorize every slash command. Examples:
 | "verify datadog" | `/verify datadog` |
 | "show datadog config" | `/integrations show datadog` |
 | "switch to openai gpt-4.1" | `/model set openai gpt-4.1` |
-| "run the generic sample alert" | `/investigate generic` |
 | "list my past sessions" | `/sessions` |
 | "check health then list integrations" | `/health` then `/integrations list` |
 | "how do I configure Datadog?" | Doc-grounded answer (no mutating command) |
@@ -1442,13 +1269,7 @@ If you skip onboarding's LLM key, later turns that need a model point you at `/a
 /health
 ```
 
-Paste alert text or:
-
-```text
-/investigate ./alerts/prod-502.json
-/last
-/save ./rca/prod-502.md
-```
+Paste alert text or describe the incident in plain language and the agent will triage it with your connected integrations.
 
 ### Pick up yesterday's thread
 
@@ -1494,7 +1315,7 @@ Continue chatting, then optionally:
 | Symptom | Try |
 | --- | --- |
 | `unknown command` | `/help`; check spelling; use suggested correction |
-| Elevated command blocked in CI | Use CLI equivalent (`opensre investigate …`) or run interactively |
+| Elevated command blocked in CI | Use the CLI equivalent or run interactively |
 | `/cost` shows zero | No LLM turns yet this session; chat once and retry |
 | `/resume` not found | Run `/sessions`; use longer ID prefix |
 | `/resume` ambiguous prefix | Add more characters from Session ID column |
@@ -1511,10 +1332,8 @@ Continue chatting, then optionally:
 - [Goals](/goals) — `/goal` set, pause, resume, edit, clear
 - [Session History](/sessions) — persistence format, privacy, `/new` vs `/clear`
 - [Interactive Shell Privacy](/interactive-shell-privacy) — redaction, env vars, threat model
-- [Investigation overview](/investigation-overview) — RCA workflow, plain-language actions, CLI investigate
 - [LLM providers](/llm-providers) — `/model` and `/effort`
 - [Agents](/fleet) — fleet dashboard, bus, trace, budgets
 - [Cron](/cron) — `/cron` scheduled deliveries
 - [Hermes](/hermes) — `/hermes watch`
-- [Remote runtime investigation](/remote-runtime-investigation) — `/remote`
 - [Sync to your own object store](/configuration/remote-sync) — `/remote-sync`

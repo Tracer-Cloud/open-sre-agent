@@ -9,13 +9,8 @@ import pytest
 import infrastructure.harness_providers as harness_providers
 from infrastructure.observability import NoopProgressTracker
 from infrastructure.observability.render import debug as obs_debug
-from infrastructure.observability.render import display as obs_display
 from infrastructure.observability.render import progress as obs_progress
 from infrastructure.observability.render.debug import set_debug_printer
-from infrastructure.observability.render.display import (
-    set_investigation_footer_renderer,
-    set_investigation_header_renderer,
-)
 from infrastructure.observability.render.progress import (
     set_progress_tracker,
     set_progress_tracker_factory,
@@ -30,8 +25,6 @@ def _reset_all_providers() -> None:
     set_progress_tracker_factory(None)
     obs_progress._silenced = False
     set_debug_printer(obs_debug._default_debug_printer)
-    set_investigation_header_renderer(obs_display._default_header_renderer)
-    set_investigation_footer_renderer(obs_display._default_footer_renderer)
 
 
 @pytest.fixture(autouse=True)
@@ -121,7 +114,7 @@ def test_install_harness_providers_wires_cli_llm_adapters() -> None:
 def test_install_harness_providers_wires_soc_registries() -> None:
     """SoC registries must not stay silently empty after install (or leak after reset).
 
-    Alert routing, Hermes taxonomy, VCS scope, prompt fragments, Slack prefix
+    Alert routing, VCS scope, prompt fragments, Slack prefix
     stripping, secondary sources, and alert-detail fields all moved out of
     core into registered adapters. Empty registries look like "healthy but
     dumb" product behavior — this test fails loud if install regresses.
@@ -134,13 +127,11 @@ def test_install_harness_providers_wires_soc_registries() -> None:
         seed_tool_sources_for_alert,
     )
     from core.domain.alerts.extraction import alert_detail_field_names
-    from core.domain.diagnosis import taxonomy_categories_for_alert_source
 
     harness_providers.reset_harness_providers()
 
     assert alert_source_routing() == {}
     assert secondary_tool_sources() == frozenset()
-    assert "agent_hang" not in taxonomy_categories_for_alert_source("hermes")
     assert "kube_namespace" not in alert_detail_field_names()
     assert harness_providers.action_prompt_vendor_fragments() == ""
     assert harness_providers.gateway_persona_fragments() == ""
@@ -153,7 +144,6 @@ def test_install_harness_providers_wires_soc_registries() -> None:
     assert "grafana" in alert_source_routing()
     assert seed_tool_sources_for_alert({"alert_source": "grafana"}) == ("grafana",)
     assert "knowledge" in secondary_tool_sources()
-    assert "agent_hang" in taxonomy_categories_for_alert_source("hermes")
     assert "kube_namespace" in alert_detail_field_names()
     assert "slack_send_message" in harness_providers.action_prompt_vendor_fragments()
     assert "telegram_send_message" in harness_providers.action_prompt_vendor_fragments()
@@ -179,8 +169,6 @@ def test_install_harness_providers_wires_soc_registries() -> None:
             conversation_messages=(),
             configured_integrations=(),
             configured_integrations_known=False,
-            last_state=None,
-            last_synthetic_observation_path=None,
             reasoning_effort=None,
         )
     )
@@ -189,5 +177,4 @@ def test_install_harness_providers_wires_soc_registries() -> None:
 
     harness_providers.reset_harness_providers()
     assert alert_source_routing() == {}
-    assert "agent_hang" not in taxonomy_categories_for_alert_source("hermes")
     assert harness_providers.action_prompt_vendor_fragments() == ""

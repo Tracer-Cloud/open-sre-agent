@@ -27,16 +27,15 @@ def test_shell_agent_build_omits_capability_policy() -> None:
 def test_gateway_policy_still_withholds_on_a_fresh_session() -> None:
     session = Session()
     ensure_gateway_capability_policy(session)
-    assert session.available_capabilities["investigation"] == ()
     assert session.available_capabilities["llm_provider"] == ()
     assert session.available_capabilities["task_cancel"] == ()
 
 
-def test_build_shell_agent_keeps_investigation_capability() -> None:
+def test_build_shell_agent_keeps_existing_capabilities() -> None:
     session = Session()
-    session.available_capabilities["investigation"] = ("investigate",)
+    session.available_capabilities["task_cancel"] = ("cancel",)
     build_shell_agent(session, Console(file=io.StringIO(), force_terminal=False))
-    assert session.available_capabilities["investigation"] == ("investigate",)
+    assert session.available_capabilities["task_cancel"] == ("cancel",)
 
 
 def test_build_shell_agent_applies_capability_policy_when_set(

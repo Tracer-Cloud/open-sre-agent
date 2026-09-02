@@ -254,13 +254,8 @@ def connected_integrations_block(turn_snapshot: TurnSnapshot) -> str:
         listing = "none"
     else:
         listing = "unknown"
-    # Missing integrations do not turn a cause question into an explicit RCA.
     gate_note = (
-        "This listing does NOT gate diagnostic→investigation. Cause/why / "
-        "figure-out questions → use available chat tools, then answer directly. "
-        "Explicit investigate/RCA/diagnose/analyze/"
-        "root-cause verbs → investigation_start ALWAYS (even when this line "
-        "is none).\n"
+        "Cause/why / figure-out questions → use available chat tools, then answer directly.\n"
     )
     return f"CONNECTED INTEGRATIONS (this install, right now): {listing}\n{gate_note}\n"
 
