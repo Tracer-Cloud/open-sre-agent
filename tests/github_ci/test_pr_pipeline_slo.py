@@ -135,3 +135,28 @@ def test_source_filter_defaults_to_running_ci_for_new_file_types() -> None:
 
     assert inputs["predicate-quantifier"] == "every"
     assert filters == ["**", "!**/*.md", "!**/*.mdx", "!docs/**"]
+
+
+def test_session_store_locked_job_contracts() -> None:
+    workflow = _workflow("ci.yml")
+    jobs = workflow["jobs"]
+    locked_job = jobs["session-store-locked"]
+
+    assert (
+        locked_job["outputs"]["session_persistence"]
+        == "${{ steps.changes.outputs.session_persistence }}"
+    )
+    change_step = next(step for step in locked_job["steps"] if step.get("id") == "changes")
+    filters = yaml.safe_load(change_step["with"]["filters"])
+    assert filters["session_persistence"] == ["core/agent_harness/session/persistence/**"]
+
+    gate_run = next(
+        step["run"]
+        for step in jobs["ci-gate"]["steps"]
+        if step.get("name") == "Require green upstream jobs"
+    )
+    assert (
+        "session_persistence_changed='${{ needs.session-store-locked.outputs.session_persistence }}'"
+        in gate_run
+    )
+    assert 'if [ "$session_persistence_changed" = "true" ]; then' in gate_run

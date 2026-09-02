@@ -843,13 +843,24 @@ jobs:
     name: session-store-locked
     runs-on: ubuntu-latest
     timeout-minutes: 15
+    outputs:
+      session_persistence: ${{ steps.changes.outputs.session_persistence }}
 
     steps:
       - uses: actions/checkout@v5
 
-      - name: Detect source changes
+      - name: Detect changes
         id: changes
-        uses: ./.github/actions/detect-source
+        uses: dorny/paths-filter@7b450fff21473bca461d4b92ce414b9d0420d706 # v4.0.2
+        with:
+          filters: |
+            source:
+              - "**"
+              - "!**/*.md"
+              - "!**/*.mdx"
+              - "!docs/**"
+            session_persistence:
+              - "core/agent_harness/session/persistence/**"
 
       - name: Install uv
         if: steps.changes.outputs.source == 'true' || github.event_name == 'push'
@@ -899,7 +910,8 @@ jobs:
           test_result='${{ needs.test.result }}'
           coverage='${{ needs.coverage-report.result }}'
           session_locked='${{ needs.session-store-locked.result }}'
-          echo "static=$static typecheck=$typecheck test=$test_result coverage-report=$coverage session-store-locked=$session_locked"
+          session_persistence_changed='${{ needs.session-store-locked.outputs.session_persistence }}'
+          echo "static=$static typecheck=$typecheck test=$test_result coverage-report=$coverage session-store-locked=$session_locked session_persistence=$session_persistence_changed"
 
           # Source jobs always start. On docs-only PRs their setup and test
           # steps skip after the per-job classifier, leaving a successful job.
@@ -917,7 +929,17 @@ jobs:
             *) echo "::error::coverage-report is $coverage"; exit 1 ;;
           esac
 
+          # session-store-locked is required for session/persistence/ changes,
+          # and non-blocking elsewhere.
           case "$session_locked" in
-            success|skipped) ;;
-            *) echo "::error::session-store-locked is $session_locked"; exit 1 ;;
+            success) ;;
+            skipped) echo "session-store-locked skipped" ;;
+            *)
+              if [ "$session_persistence_changed" = "true" ]; then
+                echo "::error::session-store-locked is $session_locked (required for session/persistence/ changes)"
+                exit 1
+              else
+                echo "session-store-locked is $session_locked (non-blocking for changes outside session/persistence/)"
+              fi
+              ;;
           esac

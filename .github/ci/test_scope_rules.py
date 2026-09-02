@@ -597,9 +597,7 @@ def _matches(path: str, prefix: str) -> bool:
 def _area_key(prefix: str) -> str:
     parts = prefix.split("/")
     if parts[0] == "deployment" or (
-        len(parts) >= 2
-        and parts[0] == "infrastructure"
-        and parts[1].startswith("deployment")
+        len(parts) >= 2 and parts[0] == "infrastructure" and parts[1].startswith("deployment")
     ):
         return "deployment"
     return prefix
