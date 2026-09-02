@@ -255,12 +255,12 @@ async def test_queued_literal_quit_requests_runtime_exit(
         # deadlock; stubbing the analytics flush above keeps ``/quit`` off the
         # PostHog network path under xdist + coverage.
         await state.queue.join()
-        await worker
+        _ = await worker
     finally:
         if not worker.done():
             worker.cancel()
             with contextlib.suppress(asyncio.CancelledError):
-                await worker
+                _ = await worker
 
     assert state.exit_requested is True
 

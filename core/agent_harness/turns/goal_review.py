@@ -26,7 +26,6 @@ vs metric ``call_*_tool`` can be distinguished).
 
 from __future__ import annotations
 
-import logging
 from collections.abc import Callable
 from dataclasses import dataclass, field
 from typing import Any
@@ -40,8 +39,6 @@ from core.agent_harness.turns.gather_discovery_budget import (
 )
 from core.events import RuntimeEvent, RuntimeEventCallback, ToolExecutionEndEvent
 from core.llm.types import AgentLLMClient
-
-log = logging.getLogger(__name__)
 
 # One rejection is enough to catch a stopped-short turn; the follow-up work is
 # then accepted as-is. More reviews only amplify the damage when the reviewer

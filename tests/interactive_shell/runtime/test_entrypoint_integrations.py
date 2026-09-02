@@ -432,7 +432,8 @@ def test_package_facade_exposes_every_runtime_parameter() -> None:
     import inspect
 
     from surfaces.interactive_shell import run_repl as facade
-    from surfaces.interactive_shell.main import run_repl as runtime
+
+    runtime = main_entrypoint.run_repl
 
     # Act
     facade_params = inspect.signature(facade).parameters

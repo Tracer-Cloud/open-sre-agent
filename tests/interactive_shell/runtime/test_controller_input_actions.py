@@ -218,4 +218,4 @@ async def test_running_dispatch_keeps_a_completed_plan() -> None:
     finally:
         task.cancel()
         with contextlib.suppress(asyncio.CancelledError):
-            await task
+            _ = await task

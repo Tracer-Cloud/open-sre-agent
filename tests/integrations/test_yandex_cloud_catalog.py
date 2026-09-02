@@ -24,7 +24,7 @@ from integrations.catalog import (
     load_env_integrations,
     resolve_effective_integrations,
 )
-from integrations.yandex_cloud import classify
+from integrations.yandex_cloud import classify, endpoints
 from integrations.yandex_cloud.availability import (
     yc_available_or_backend,
     yc_credentials,
@@ -322,8 +322,6 @@ class TestEndpointRegistryBackoff:
     def test_a_failed_fetch_is_not_retried_before_the_cache_period(
         self, monkeypatch: pytest.MonkeyPatch
     ) -> None:
-        import integrations.yandex_cloud.endpoints as endpoints
-
         endpoints.reset_endpoint_cache()
         attempts = {"n": 0}
 
@@ -374,14 +372,12 @@ class TestObjectStorageResolvesToItsControlPlane:
     """
 
     def test_storage_reads_go_to_the_control_plane(self) -> None:
-        from integrations.yandex_cloud.endpoints import resolve_endpoint
-
-        assert resolve_endpoint("storage", refresh=False) == "storage.api.cloud.yandex.net"
+        assert (
+            endpoints.resolve_endpoint("storage", refresh=False) == "storage.api.cloud.yandex.net"
+        )
 
     def test_the_alias_survives_a_registry_refresh(self, monkeypatch: pytest.MonkeyPatch) -> None:
         """A refresh brings back Yandex's own mapping; the alias must outlive it."""
-        from integrations.yandex_cloud import endpoints
-
         monkeypatch.setattr(
             endpoints, "_fetch_endpoints", lambda: {"storage": "storage.yandexcloud.net"}
         )
@@ -393,8 +389,6 @@ class TestObjectStorageResolvesToItsControlPlane:
         self, monkeypatch: pytest.MonkeyPatch
     ) -> None:
         """An operator overrides the name they call, not the one the registry uses."""
-        from integrations.yandex_cloud import endpoints
-
         monkeypatch.setenv(YC_ENDPOINT_OVERRIDES_ENV, '{"storage": "storage.internal"}')
         endpoints.reset_endpoint_cache()
 
@@ -404,8 +398,6 @@ class TestObjectStorageResolvesToItsControlPlane:
         self, monkeypatch: pytest.MonkeyPatch
     ) -> None:
         """Either name is a fair thing to override, so both have to take effect."""
-        from integrations.yandex_cloud import endpoints
-
         monkeypatch.setenv(YC_ENDPOINT_OVERRIDES_ENV, '{"storage-api": "storage.internal"}')
         endpoints.reset_endpoint_cache()
 
