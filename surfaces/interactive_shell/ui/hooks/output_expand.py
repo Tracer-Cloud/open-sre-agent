@@ -19,9 +19,9 @@ from collections.abc import Callable
 from prompt_toolkit.filters import Condition
 from prompt_toolkit.key_binding import KeyBindings
 from prompt_toolkit.key_binding.key_processor import KeyPressEvent
+from rich.text import Text
 
 from infrastructure.safety.terminal_output import strip_terminal_controls
-from rich.text import Text
 from surfaces.interactive_shell.session.terminal_session import (
     INLINE_EXPAND_MAX_CHARS,
     INLINE_EXPAND_MAX_LINES,

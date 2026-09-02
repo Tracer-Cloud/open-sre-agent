@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import io
+import re
 
 import pytest
 from prompt_toolkit.application import create_app_session
@@ -22,11 +23,26 @@ from surfaces.interactive_shell.ui.input_prompt.key_bindings import (
 from surfaces.interactive_shell.ui.input_prompt.stdout import patch_prompt_stdout
 from surfaces.interactive_shell.ui.terminal_ui import render_prompt_region
 
+# prompt_toolkit skips rewriting a space when the previous cell was already a
+# space (``ESC[C`` / ``ESC[nC``). After Ready fills the status row, the Ctrl+C
+# hint lands on those columns as cursor-forward — correct on a real TTY, but
+# absent as literal `` `` in the VT100 capture.
+_CURSOR_FORWARD_RE = re.compile(r"\x1b\[(\d*)C")
+
+
+def _visible_prompt_text(raw: str) -> str:
+    """Expand cursor-forward skips so markers match what the user sees."""
+
+    def _expand(match: re.Match[str]) -> str:
+        return " " * int(match.group(1) or "1")
+
+    return _CURSOR_FORWARD_RE.sub(_expand, raw)
+
 
 async def _wait_for_output(buffer: io.StringIO, marker: str, *, count: int = 1) -> str:
     for _ in range(200):
         rendered = buffer.getvalue()
-        if rendered.count(marker) >= count:
+        if _visible_prompt_text(rendered).count(marker) >= count:
             return rendered
         await asyncio.sleep(0.01)
     pytest.fail(f"prompt output never rendered {marker!r} {count} time(s)")

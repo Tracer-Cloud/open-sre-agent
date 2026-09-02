@@ -135,6 +135,10 @@ def build_cancel_key_bindings(state: _DispatchCancelState) -> KeyBindings:
             event.app.exit(result="")
             return
         state.arm_ctrl_c_exit_hint(CTRL_C_DOUBLE_PRESS_WINDOW_S)
+        # Full repaint, not a diff: the transient hint replaces the idle
+        # "Ready…" line in place, and the renderer's line diff can skip an
+        # in-place text→text swap on that row, leaving the hint unshown.
+        event.app.renderer.reset()
         event.app.invalidate()
 
     @kb.add("escape", eager=True)
