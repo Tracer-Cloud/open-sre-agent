@@ -1131,6 +1131,80 @@ class TestRenderMarkdownBlock:
         assert "Phase" in plain
         assert "Checking the token" in plain
 
+    def test_collapses_url_heavy_json_the_model_pasted(self) -> None:
+        """The real gh case: URL-heavy JSON, no inline marker. Long URLs dilute a
+        char ratio, so detection keys off the ``":`` separators instead."""
+        console, buf = _non_tty_console()
+        dump = (
+            '"login":"Tracer-Cloud",'
+            '"followers_url":"https://api.github.com/users/Tracer-Cloud/followers",'
+            '"following_url":"https://api.github.com/users/Tracer-Cloud/following{/other_user}",'
+            '"gists_url":"https://api.github.com/users/Tracer-Cloud/gists{/gist_id}",'
+            '"organizations_url":"https://api.github.com/users/Tracer-Cloud/orgs",'
+            '"type":"Organization","site_admin":false'
+        )
+
+        render_markdown_block(console, dump)
+
+        out = _strip_ansi(buf.getvalue())
+        assert "tool output omitted" in out  # collapsed to a one-line marker
+        assert "followers_url" not in out  # the raw blob is gone
+
+    def test_collapses_a_dump_flagged_by_the_truncated_marker(self) -> None:
+        console, buf = _non_tty_console()
+        rows = "\n".join(f"repo-{i}\tmain\t2026-01-01\t{i}\t0\t0" for i in range(20))
+
+        render_markdown_block(console, f"{rows}\n… (output truncated)")
+
+        assert "tool output omitted" in _strip_ansi(buf.getvalue())
+
+    def test_keeps_the_summary_and_collapses_only_the_pasted_blob(self) -> None:
+        """When a summary sentence and a pasted blob arrive as one block, keep the
+        summary and collapse only the blob — never nuke the whole reply."""
+        console, buf = _non_tty_console()
+        reply = (
+            "Repository is public with 10,984 stars.\n\n"
+            '"login":"Tracer-Cloud","followers_url":"https://api.github.com/users/Tracer-Cloud/f",'
+            '"gists_url":"https://api.github.com/users/Tracer-Cloud/gists{/gist_id}",'
+            '"organizations_url":"https://api.github.com/users/Tracer-Cloud/orgs",'
+            '"type":"Organization","site_admin":false'
+        )
+
+        render_markdown_block(console, reply)
+
+        out = _strip_ansi(buf.getvalue())
+        assert "Repository is public" in out  # summary survives
+        assert "tool output omitted" in out  # blob collapsed
+        assert "followers_url" not in out
+
+    def test_keeps_a_short_inline_json_snippet(self) -> None:
+        console, buf = _non_tty_console()
+
+        render_markdown_block(console, 'The API returned `{"ok": true, "count": 3}`.')
+
+        out = _strip_ansi(buf.getvalue())
+        assert '"ok"' in out
+        assert "tool output omitted" not in out
+
+    def test_keeps_ordinary_prose(self) -> None:
+        console, buf = _non_tty_console()
+
+        render_markdown_block(console, "The repository is public and its default branch is main.")
+
+        out = _strip_ansi(buf.getvalue())
+        assert "default branch is main" in out
+        assert "tool output omitted" not in out
+
+    def test_keeps_fenced_code_the_model_meant_to_show(self) -> None:
+        """A fenced block signals intent — never collapse it."""
+        console, buf = _non_tty_console()
+
+        render_markdown_block(console, '```json\n{"stars": 10984, "forks": 1603}\n```')
+
+        out = _strip_ansi(buf.getvalue())
+        assert "10984" in out
+        assert "tool output omitted" not in out
+
 
 class TestDeferWantMeToCloser:
     """Gather path holds drifted Want-me-to until the canonical rewrite paints."""

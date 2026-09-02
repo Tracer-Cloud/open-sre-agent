@@ -31,6 +31,59 @@ def _escape_markdown_dunder_filenames(text: str) -> str:
     return _DUNDER_FILENAME_RE.sub(r"\_\_\1\_\_", text)
 
 
+# The model sometimes pastes a tool's raw result (JSON, listings) into its reply
+# instead of answering in prose. Collapse such a block to a compact marker so the
+# reply reads like Claude Code / Droid, regardless of which model echoed it.
+_DUMP_TRUNCATED_MARKER = "output truncated"
+_DUMP_MIN_CHARS = 200
+_DUMP_MIN_JSON_KEYS = 3
+_DUMP_STRUCTURAL_RATIO = 0.15
+_DUMP_STRUCTURAL_CHARS = frozenset('{}[]":,')
+
+
+def _looks_like_raw_dump(text: str) -> bool:
+    """Whether *text* is an echoed tool result rather than prose.
+
+    True when it carries the ``output truncated`` marker a tool cap leaves, or
+    when it is large and reads as a record/JSON blob. The ``":`` key separator
+    is common in such a dump and rare in prose, and — unlike a raw char ratio —
+    long URL values do not dilute it (a GitHub API object stays URL-heavy yet
+    keeps many keys). A structural-char ratio still catches non-JSON dense data.
+    Prose and Markdown tables/lists trip neither test.
+    """
+    if len(text) < _DUMP_MIN_CHARS:
+        return False  # too small to be a wall — a short block is not a problem
+    if _DUMP_TRUNCATED_MARKER in text:
+        return True
+    if text.count('":') >= _DUMP_MIN_JSON_KEYS:
+        return True
+    structural = sum(1 for ch in text if ch in _DUMP_STRUCTURAL_CHARS)
+    return structural / len(text) >= _DUMP_STRUCTURAL_RATIO
+
+
+def _collapse_paragraph(paragraph: str) -> str:
+    """Collapse *paragraph* to a marker when it is a raw dump, else return it."""
+    stripped = paragraph.strip()
+    if not _looks_like_raw_dump(stripped):
+        return paragraph
+    lines = stripped.count("\n") + 1
+    noun = "line" if lines == 1 else "lines"
+    return f"_[tool output omitted — {lines} {noun}]_"
+
+
+def _collapse_raw_dumps(text: str) -> str:
+    """Replace echoed raw tool-output paragraphs with a one-line marker.
+
+    Fenced code is left untouched — a fence means the model meant to show it.
+    Works per blank-line-separated paragraph so a summary sentence beside a
+    pasted blob keeps the summary and collapses only the blob, whether the reply
+    arrives whole (finalize path) or paragraph-by-paragraph (streaming).
+    """
+    if "```" in text:  # fenced code — respect the model's intent
+        return text
+    return "\n\n".join(_collapse_paragraph(part) for part in re.split(r"\n[ \t]*\n", text))
+
+
 def _build_markdown_block(text: str) -> Markdown:
     """Build a Markdown renderable with the shared escaping and code theme.
 
@@ -49,6 +102,7 @@ def _build_markdown_block(text: str) -> Markdown:
     assert __package__  # always set for a package submodule
     package = sys.modules[__package__]
     safe = strip_terminal_controls(text, keep_whitespace=True)
+    safe = _collapse_raw_dumps(safe)
     spaced = normalize_three_tier_spacing(safe)
     return package.Markdown(  # type: ignore[no-any-return]
         _escape_markdown_dunder_filenames(spaced.rstrip()),

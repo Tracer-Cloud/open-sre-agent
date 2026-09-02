@@ -38,6 +38,7 @@ from core.agent_harness.prompts import (
     build_action_user_message,
 )
 from core.agent_harness.session.integration_resolution import resolve_and_cache_integrations
+from infrastructure.terminal.peek import build_output_peek, format_expand_marker
 from core.agent_harness.session.pending_choice import parse_ask_user_answers
 from core.agent_harness.session.terminal_access import execute_cli_onboard_on_missing_key
 from core.agent_harness.session_goal.goal import strip_session_goal_progress_tags
@@ -341,8 +342,8 @@ def _generic_tool_results(result: Any) -> list[tuple[ToolCall, Any]]:
     ]
 
 
-_DISPLAY_OUTPUT_MAX_LINES = 12
-_DISPLAY_OUTPUT_MAX_CHARS = 800
+_DISPLAY_OUTPUT_MAX_LINES = 4
+_DISPLAY_OUTPUT_MAX_CHARS = 240
 _OUTPUT_TRUNCATED_MARKER = "… (output truncated)"
 
 
@@ -375,30 +376,50 @@ def _looks_like_json(text: str) -> bool:
 def _cap_for_display(text: str) -> str:
     """Cap verbose tool output for the console so a large result cannot flood the
     transcript. The model and persisted history keep the full text; only the
-    user-facing preview is truncated."""
+    user-facing preview is truncated to a short head (Droid-style)."""
     if not text:
         return text
-    lines = text.splitlines()
-    capped = "\n".join(lines[:_DISPLAY_OUTPUT_MAX_LINES])
-    truncated = len(lines) > _DISPLAY_OUTPUT_MAX_LINES
-    if len(capped) > _DISPLAY_OUTPUT_MAX_CHARS:
-        capped = capped[:_DISPLAY_OUTPUT_MAX_CHARS].rstrip()
-        truncated = True
-    return f"{capped}\n{_OUTPUT_TRUNCATED_MARKER}" if truncated else capped
+    peek, hidden = build_output_peek(text, max_lines=_DISPLAY_OUTPUT_MAX_LINES)
+    char_truncated = False
+    if len(peek) > _DISPLAY_OUTPUT_MAX_CHARS:
+        peek = peek[:_DISPLAY_OUTPUT_MAX_CHARS].rstrip()
+        char_truncated = True
+    if hidden:
+        return f"{peek}\n{format_expand_marker(hidden)}"
+    if char_truncated:
+        return f"{peek}\n{_OUTPUT_TRUNCATED_MARKER}"
+    return peek
+
+
+def _is_data_blob(text: str) -> bool:
+    """Whether *text* is a JSON/record blob — valid, truncated, or a mid-object
+    fragment (a capped ``gh api`` response can arrive starting mid-value).
+
+    Detected by shape (opens an object/array) or by density of ``":`` key
+    separators, which URLs do not inflate and prose/logs almost never contain.
+    Such data is what the reply summarizes; it should not fill the transcript.
+    """
+    stripped = text.strip()
+    if not stripped:
+        return False
+    return stripped[0] in "{[" or stripped.count('":') >= 3
 
 
 def _visible_stdout(stdout: str) -> str:
-    """Plain-text stdout is shown as-is; a JSON payload (e.g. a ``gh api``
-    response) is pretty-printed so it reads as formatted data, not a one-line
-    blob. Capping and fenced-block styling happen later, at display time."""
+    """Plain-text stdout is shown as-is; a JSON payload is hidden.
+
+    A ``gh api`` / structured response is data the reply already summarizes, so
+    dumping it into the transcript only adds a wall that reads as unattached to
+    the command. Hide the blob and let the summary carry the answer — the way
+    Claude Code / Droid keep tool results out of the reply prose. Plain-text
+    output (logs, a short listing) is still shown, capped later at display time.
+    """
     stripped = stdout.strip()
     if not stripped:
         return ""
-    try:
-        parsed = json.loads(stripped)
-    except (TypeError, ValueError, json.JSONDecodeError):
-        return stripped
-    return json.dumps(parsed, indent=2, ensure_ascii=False)
+    if _is_data_blob(stripped):
+        return ""
+    return stripped
 
 
 def _format_generic_tool_payload(tool_call: ToolCall, tool_result: Any) -> str:
@@ -440,11 +461,15 @@ def _format_generic_tool_payload(tool_call: ToolCall, tool_result: Any) -> str:
             return _visible_stdout(str(parsed["stdout"]))
         if parsed.get("error"):
             return str(parsed["error"]).strip()
-    if parsed is not None:
-        # An opaque JSON payload (a dict with no user-facing field, or a list):
-        # pretty-print it so raw data reads as formatted JSON rather than a
-        # one-line blob. Capping and fenced-block styling happen at display time.
-        return json.dumps(parsed, indent=2, ensure_ascii=False)
+    if isinstance(parsed, (dict, list)):
+        # An opaque JSON payload (no user-facing field — e.g. a raw ``gh api``
+        # response) is for the model, not the transcript: the reply summarizes
+        # it. Hide it rather than dump a wall of data unattached to the command.
+        return ""
+    # A truncated / fragmentary JSON blob (a capped ``gh api`` response) that
+    # failed to parse — hide it, same as valid JSON.
+    if _is_data_blob(content):
+        return ""
     # Non-JSON content is the tool's real text output; show it under the name.
     return f"{tool_call.name} result: {content}"
 
@@ -961,15 +986,22 @@ def _compose_response(
     # response_text still includes history for persistence / non-TTY surfaces.
     display_generic = _cap_for_display(generic_text)
     is_json = _looks_like_json(generic_text)
-    truncated = display_generic.endswith(_OUTPUT_TRUNCATED_MARKER)
+    truncated = display_generic.endswith(_OUTPUT_TRUNCATED_MARKER) or (
+        "… " in display_generic and " more line" in display_generic
+    )
     bulky = display_generic.count("\n") >= 4 or truncated
     if display_generic and (is_json or bulky):
         # Truncated JSON is invalid — fencing it as ``json`` makes Rich/Pygments
         # paint error tokens (red blocks) on the cut. Use a text fence instead
         # and keep the truncation marker outside the block.
         if truncated:
-            body = display_generic[: -len(_OUTPUT_TRUNCATED_MARKER)].rstrip("\n")
-            display_generic = f"\n```text\n{body}\n```\n{_OUTPUT_TRUNCATED_MARKER}"
+            # Marker is either the legacy char-cap line or a peek ``… N more``.
+            body, _, marker = display_generic.rpartition("\n")
+            if not body:
+                body, marker = display_generic, ""
+            fence_body = body if body else display_generic
+            suffix = f"\n{marker}" if marker else ""
+            display_generic = f"\n```text\n{fence_body}\n```{suffix}"
         else:
             lang = "json" if is_json else "text"
             display_generic = f"\n```{lang}\n{display_generic}\n```"

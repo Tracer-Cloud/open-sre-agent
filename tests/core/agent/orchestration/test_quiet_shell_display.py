@@ -441,7 +441,7 @@ def test_bulky_tool_output_is_capped_and_fenced_for_display() -> None:
 
     # Display: capped + text-fenced (truncated content is not valid code to highlight).
     assert "```text" in joined
-    assert "… (output truncated)" in joined
+    assert "more lines" in joined
     assert joined.count("run ") <= 12
     assert "```text" not in response_text
     assert response_text.count("run ") == 30
@@ -463,10 +463,10 @@ def test_truncated_json_uses_text_fence_not_json_highlight() -> None:
 
     assert "```json" not in joined
     assert "```text" in joined
-    assert "… (output truncated)" in joined
+    assert "more lines" in joined
     # Marker sits outside the fence so it is not syntax-highlighted as an error.
     fence_end = joined.index("```", joined.index("```text") + 1)
-    assert "… (output truncated)" in joined[fence_end:]
+    assert "more lines" in joined[fence_end:]
 
 
 def test_plan_snapshots_are_stripped_from_the_reply() -> None:

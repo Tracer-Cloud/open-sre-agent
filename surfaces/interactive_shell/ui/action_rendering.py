@@ -19,15 +19,13 @@ import shlex
 from typing import Any
 
 from rich.console import Console
-from rich.padding import Padding
-from rich.syntax import Syntax
 from rich.text import Text
 
 from core.agent_harness.spi.accounting import SELF_RECORDING_ACTION_TOOL_NAMES
 from core.agent_harness.spi.task_plan import is_plan_diagnosis_prose
 from infrastructure.observability.trace.redaction import redact_sensitive
 from infrastructure.safety.terminal_output import strip_terminal_controls
-from infrastructure.terminal.theme import BOLD_SKILL, BRAND, DIM, HIGHLIGHT, MARKDOWN_CODE_THEME
+from infrastructure.terminal.theme import BOLD_SKILL, BRAND, DIM, HIGHLIGHT
 from surfaces.interactive_shell.runtime import Session
 from surfaces.interactive_shell.runtime.core.state import SpinnerState
 from surfaces.interactive_shell.ui.streaming import render_note_block
@@ -35,9 +33,12 @@ from surfaces.shared.terminal.output.console_state import get_investigation_spin
 from tools.interactive_shell.action_names import ActionToolName
 from tools.interactive_shell.shell.display import format_shell_command_for_display
 
-# Tool labels whose payload is a runnable command: render it as a highlighted
-# shell code block rather than plain inline text.
+# Tool labels whose payload is a runnable command.
 _COMMAND_TOOL_LABELS: frozenset[str] = frozenset({"Execute", "GitHub CLI", "opensre"})
+
+# Leads every tool-call line so a call reads apart from the ``∴`` reply and the
+# ``[n] ❯`` user row — the call → result → reply hierarchy Claude Code / Droid use.
+_TOOL_CALL_MARKER = "⏺"
 
 # Tools whose preview is just ``(label, single-arg)``. The display content is the
 # stripped string value of that single argument. Anything that needs to combine
@@ -487,31 +488,20 @@ class ActionRenderObserver:
         self.console.print(line)
 
     def _render_tool_invocation(self, name: str, data: dict[str, Any]) -> None:
-        """Show the running tool: orange verb, then payload."""
+        """Show the running tool as one marked line: ``⏺ Label · payload``."""
         args = data.get("input")
         label, content = tool_call_display(name, args if isinstance(args, dict) else {})
         self.console.print()
-        if content and label in _COMMAND_TOOL_LABELS:
-            # A runnable command reads as code: label line, then a syntax-
-            # highlighted shell block indented under it.
-            self.console.print(Text(label, style=str(HIGHLIGHT)))
-            self.console.print(
-                Padding(
-                    Syntax(
-                        content,
-                        "bash",
-                        theme=MARKDOWN_CODE_THEME,
-                        background_color="default",
-                        word_wrap=True,
-                    ),
-                    (0, 0, 0, 2),
-                )
-            )
-            return
+        # One line per call, led by ``⏺``: the label reads as the action and the
+        # payload (command / args) as its detail. A command tool separates the two
+        # with ``·`` so ``⏺ GitHub CLI · gh api …`` reads as a single unit.
         line = Text()
-        line.append(label, style=str(HIGHLIGHT))
+        line.append(f"{_TOOL_CALL_MARKER} ", style=str(HIGHLIGHT))
+        line.append(label, style=f"bold {HIGHLIGHT}")
         if content:
-            line.append(f" {content}", style=str(BRAND))
+            separator = " · " if label in _COMMAND_TOOL_LABELS else " "
+            line.append(separator, style=str(DIM))
+            line.append(content, style=str(BRAND))
         self.console.print(line)
 
     def _render_skill_end(self, data: dict[str, Any]) -> None:

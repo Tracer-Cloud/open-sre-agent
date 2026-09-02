@@ -22,9 +22,12 @@ def _console() -> Console:
 
 
 def test_account_is_signed_in_follows_saved_github_username(monkeypatch: Any) -> None:
-    monkeypatch.setattr("integrations.github.identity.saved_github_username", lambda: "octocat")
+    # Patch the package API (what account_gate imports). Patching only
+    # ``integrations.github.identity`` misses when another test has bound the
+    # name on ``integrations.github`` and shadowed ``__getattr__``.
+    monkeypatch.setattr("integrations.github.saved_github_username", lambda: "octocat")
     assert account_gate.account_is_signed_in() is True
-    monkeypatch.setattr("integrations.github.identity.saved_github_username", lambda: "")
+    monkeypatch.setattr("integrations.github.saved_github_username", lambda: "")
     assert account_gate.account_is_signed_in() is False
 
 
@@ -36,7 +39,7 @@ def test_account_login_returns_ok_from_github_device_flow(monkeypatch: Any) -> N
         return GitHubLoginResult(ok=True, username="octocat")
 
     monkeypatch.setattr(
-        "integrations.github.login.authenticate_and_configure_github",
+        "integrations.github.authenticate_and_configure_github",
         _auth,
     )
 
@@ -50,7 +53,7 @@ def test_account_login_returns_false_when_device_flow_fails(monkeypatch: Any) ->
         raise RuntimeError("denied")
 
     monkeypatch.setattr(
-        "integrations.github.login.authenticate_and_configure_github",
+        "integrations.github.authenticate_and_configure_github",
         _auth,
     )
     console = _console()

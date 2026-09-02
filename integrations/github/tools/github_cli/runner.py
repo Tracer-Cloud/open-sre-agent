@@ -17,13 +17,6 @@ MAX_TIMEOUT_SECONDS = 120
 # and the context budget silently trims the tail, so the agent reads a handful
 # of records and cannot tell the rest existed. Cap here instead and say so on
 # the payload, matching what ``shell_run`` already does.
-#
-# A bounded slice also keeps the model from pasting the raw result into its
-# reply: given the whole blob it tends to echo it, so the transcript fills with
-# JSON instead of a prose answer. A small window plus the ``truncated`` flag
-# nudges it to answer from the summary and re-query with a ``--jq`` filter for
-# more — the read-a-slice-then-filter pattern. This is a partial mitigation; the
-# real fix is to bound tool observations for every tool at the harness layer.
 MAX_GH_OUTPUT_CHARS = 6_000
 
 # Top-level ``gh`` commands that must never run under OpenSRE-injected credentials.

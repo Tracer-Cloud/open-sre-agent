@@ -36,18 +36,16 @@ HARD RULES (violating any = failed turn):
   + save observations + final report.
 
 STEP LABELING RULES (UX) — this skill hides its shell output (quiet=true), so
-narrate the 9 steps of the compact sequence:
-- Before every step's tool calls, emit this exact header format as assistant
-  text in the SAME response as the tool calls, then one short status sentence:
-    ### [n/9] <step name>
-    <One-sentence status.>
-- Never start tool calls for a new step without its header.
-- After a step's tool results are in, state its outcome in one line (start it
-  with ✓ on success, ✗ plus what failed otherwise) before the next step's
-  header.
-- Use the step's own number as n and a short name (e.g. `### [2/9] Agent
-  scan`, `### [3/9] Import pass`), even when a step is skipped or trivial
-  (a ✓ line with no tool calls is fine); never renumber mid-run.
+the pinned plan overlay is the user's progress signal (Droid-style):
+- Call `update_plan` **once at the start** of the run with the 9 compact-
+  sequence steps below (pending). Mark the first step `in_progress`.
+- Before starting each next step's tool calls, call `update_plan` again:
+  mark the finished step `completed`, the next one `in_progress`. Never leave
+  the plan idle with every step still pending.
+- Do **not** dump `### [n/9]` headers into the transcript — the overlay already
+  shows `Plan · n/m`. One short status sentence per step is enough.
+- After the final report is ready, call `update_plan` with every step
+  `completed` (or leave the last step completed from the prior update).
 
 Compact sequence:
 1) architecture_clone_repo(owner, repo, ref?)
