@@ -1,6 +1,6 @@
 def retry_delay(attempt: int) -> int:
     """Return the cumulative delay before a retry attempt."""
-    return attempt
+    return attempt * (attempt + 1) // 2
 
 
 if __name__ == "__main__":
