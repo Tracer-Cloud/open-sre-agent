@@ -49,7 +49,6 @@ from core.agent_harness.turns.conversation_recording import record_conversation_
 from core.agent_harness.turns.display_text import (
     cap_for_display,
     format_generic_tool_payload,
-    is_data_blob,
     looks_like_json,
     preferred_tool_response_text,
     split_output_truncation_markers,
@@ -71,6 +70,7 @@ from core.tool_framework.tags import SUMMARIZE_OBSERVATION_TAG
 from infrastructure.analytics.react_turn import run_react_agent_with_telemetry
 from infrastructure.observability.trace.prompts import persist_turn_system_prompt
 from infrastructure.observability.trace.spans import component_span
+from infrastructure.text import is_data_blob
 
 log = logging.getLogger(__name__)
 
@@ -195,11 +195,21 @@ def _generic_tool_results(result: Any) -> list[tuple[ToolCall, Any]]:
 
 
 def _stash_collapsed_tool_output(session: SessionState, text: str | None) -> None:
-    """Remember the full body so Ctrl+O can page it; no-op without a terminal."""
+    """Remember a capped peek so Ctrl+O can expand it; no-op without a terminal.
+
+    ``None`` never clears earlier peeks (same semantics as
+    ``TerminalSession.stash_collapsed_tool_output``).
+    """
     terminal = getattr(session, "terminal", None)
     if terminal is None:
         return
-    terminal.collapsed_tool_output = text
+    stash = getattr(terminal, "stash_collapsed_tool_output", None)
+    if callable(stash):
+        stash(text)
+        return
+    # Minimal test doubles without the ring API: only record a non-None peek.
+    if text is not None:
+        terminal.collapsed_tool_output = text
 
 
 def _has_preferred_tool_response_text(result: Any) -> bool:

@@ -1,4 +1,4 @@
-"""Tests for the inline turn spinner in runtime.core.state."""
+"""SpinnerState: phase status row, live tool fold-in, idle Ready hint."""
 
 from __future__ import annotations
 
@@ -8,115 +8,20 @@ import time
 from surfaces.interactive_shell.runtime.core.state import SpinnerState
 
 
-def _rgb(hex_color: str) -> str:
-    """``"#RRGGBB"`` → the ``"r;g;b"`` triple as it appears in a truecolor escape."""
-    h = hex_color.lstrip("#")
-    return f"{int(h[0:2], 16)};{int(h[2:4], 16)};{int(h[4:6], 16)}"
+def test_inline_spinner_empty_when_idle() -> None:
+    assert SpinnerState().inline_spinner_ansi() == ""
 
 
-_GLYPHS = SpinnerState._SPINNER_FRAMES
-
-
-def _glyph(spinner: SpinnerState) -> str:
-    rendered = spinner.inline_spinner_ansi()
-    match = re.search("|".join(map(re.escape, _GLYPHS)), rendered)
-    assert match is not None, f"no spinner glyph in {rendered!r}"
-    return match.group(0)
-
-
-def test_spinner_frame_is_a_function_of_elapsed_time_not_call_count() -> None:
-    """Regression: the glyph must animate no matter how often it is rendered.
-
-    prompt_toolkit evaluates the prompt message callable several times per
-    render pass. A per-call frame counter advanced exactly one full cycle per
-    visible render (10 evals x 10 frames), so the on-screen glyph never
-    changed. Deriving the frame from elapsed time makes repeated evaluations
-    idempotent and guarantees the animation advances between renders.
-    """
+def test_inline_spinner_includes_phase_and_stop_hint() -> None:
     spinner = SpinnerState()
     spinner.start()
-
-    # Repeated evaluations inside one render pass: same frame every time.
-    first = _glyph(spinner)
-    assert all(_glyph(spinner) == first for _ in range(10))
-
-    # A frame interval later the glyph must have advanced.
-    spinner.started_at -= SpinnerState._FRAME_INTERVAL_SECONDS * 1.01
-    assert _glyph(spinner) != first
-
-    # Over a full cycle of elapsed time, every frame is visited in order.
-    spinner.start()
-    seen = []
-    for step in range(len(_GLYPHS)):
-        spinner.started_at = time.monotonic() - step * SpinnerState._FRAME_INTERVAL_SECONDS * 1.001
-        seen.append(_glyph(spinner))
-    assert seen == list(_GLYPHS)
-
-
-def test_spinner_renders_elapsed_seconds_and_cancel_hint() -> None:
-    spinner = SpinnerState()
-    spinner.start()
-    spinner.started_at = time.monotonic() - 8.2
-
-    rendered = spinner.inline_spinner_ansi()
-
-    assert "[ 8s]" in rendered
-    assert "(Press ESC to stop)" in rendered
-    assert SpinnerState.EXECUTING_PHASE in rendered
-
-
-def test_spinner_invoking_tools_phase_matches_factory_copy() -> None:
-    spinner = SpinnerState()
-    spinner.start()
-    spinner.set_phase(SpinnerState.INVOKING_TOOLS_PHASE)
-
-    rendered = spinner.inline_spinner_ansi()
-
-    assert SpinnerState.INVOKING_TOOLS_PHASE in rendered
-    assert "(Press ESC to stop)" in rendered
-
-
-def test_load_state_phases_use_distinct_accents() -> None:
-    """Thinking=highlight, Executing=brand, Invoking tools=bold brand — a glance
-    tells LLM latency (thinking) from tool work (invoking)."""
-    from infrastructure.terminal.theme import THEME_REGISTRY, set_active_theme
-
-    set_active_theme("blue")
-    highlight = _rgb(THEME_REGISTRY["blue"].HIGHLIGHT)
-    brand = _rgb(THEME_REGISTRY["blue"].BRAND)
-    spinner = SpinnerState()
-    spinner.start()
-
     spinner.set_phase(SpinnerState.THINKING_PHASE)
-    thinking = spinner.inline_spinner_ansi().split("(Press ESC")[0]
-    assert SpinnerState.THINKING_PHASE in thinking
-    assert highlight in thinking
-    assert brand not in thinking
-
-    spinner.set_phase(SpinnerState.EXECUTING_PHASE)
-    executing = spinner.inline_spinner_ansi().split("(Press ESC")[0]
-    assert SpinnerState.EXECUTING_PHASE in executing
-    assert brand in executing
-    assert highlight not in executing
-    assert "\x1b[1m" not in executing  # brand is not bold in the executing phase
-
-    spinner.set_phase(SpinnerState.INVOKING_TOOLS_PHASE)
-    invoking = spinner.inline_spinner_ansi().split("(Press ESC")[0]
-    assert SpinnerState.INVOKING_TOOLS_PHASE in invoking
-    assert brand in invoking
-    assert "\x1b[1m" in invoking  # bold brand — the hottest state
-    assert highlight not in invoking
+    rendered = re.sub(r"\x1b\[[0-9;]*m", "", spinner.inline_spinner_ansi())
+    assert SpinnerState.THINKING_PHASE in rendered
+    assert "Press ESC to stop" in rendered
 
 
-def test_spinner_empty_when_not_streaming() -> None:
-    spinner = SpinnerState()
-    assert spinner.inline_spinner_ansi() == ""
-    spinner.start()
-    spinner.stop()
-    assert spinner.inline_spinner_ansi() == ""
-
-
-def test_inline_spinner_clips_a_long_phase_to_one_prompt_row() -> None:
+def test_long_phase_clips_to_one_prompt_column_budget() -> None:
     """A long phase label must not soft-wrap past the one reserved prompt row."""
     from surfaces.shared.terminal.prompt_layout import prompt_line_width, prompt_text_width
 
@@ -128,24 +33,22 @@ def test_inline_spinner_clips_a_long_phase_to_one_prompt_row() -> None:
     assert prompt_text_width(rendered) <= prompt_line_width()
 
 
-def test_active_action_renders_indented_line_and_clears() -> None:
-    """The running action shows an indented action line with a theme fill;
-    cleared → blank. (The shimmer→solid transition is pinned separately.)"""
-    from infrastructure.terminal.theme import set_active_theme
-
-    set_active_theme("solarized")
+def test_live_tool_folds_into_spinner_row_and_clears() -> None:
+    """Running tool appears on the same status row as the phase; clear drops it."""
     spinner = SpinnerState()
     spinner.start()
-    assert spinner.active_action_ansi() == ""  # none by default
+    spinner.set_phase(SpinnerState.INVOKING_TOOLS_PHASE)
+    before = re.sub(r"\x1b\[[0-9;]*m", "", spinner.inline_spinner_ansi())
+    assert "Execute · cd /tmp" not in before
 
     spinner.set_active_action("Execute · cd /tmp")
-    rendered = spinner.active_action_ansi()
+    rendered = re.sub(r"\x1b\[[0-9;]*m", "", spinner.inline_spinner_ansi())
+    assert "Invoking tools…" in rendered
     assert "Execute · cd /tmp" in rendered
-    assert SpinnerState._ACTION_INDENT in rendered  # indented under the header, no glyph
-    assert "\x1b[38;2;" in rendered  # a 24-bit theme fill
 
     spinner.clear_active_action()
-    assert spinner.active_action_ansi() == ""
+    cleared = re.sub(r"\x1b\[[0-9;]*m", "", spinner.inline_spinner_ansi())
+    assert "Execute · cd /tmp" not in cleared
 
 
 def test_active_action_stack_keeps_earlier_tools_until_they_end() -> None:
@@ -162,14 +65,15 @@ def test_active_action_stack_keeps_earlier_tools_until_they_end() -> None:
     assert spinner.active_action == ""
 
 
-def test_active_action_row_clips_wide_glyphs_to_one_prompt_column_budget() -> None:
+def test_status_row_with_tool_clips_wide_glyphs_to_one_column_budget() -> None:
     """CJK / emoji must be measured in terminal columns, not code points."""
     from surfaces.shared.terminal.prompt_layout import prompt_line_width, prompt_text_width
 
     spinner = SpinnerState()
     spinner.start()
+    spinner.set_phase(SpinnerState.INVOKING_TOOLS_PHASE)
     spinner.set_active_action("查询 · " + "中" * 200)
-    rendered = re.sub(r"\x1b\[[0-9;]*m", "", spinner.active_action_ansi())
+    rendered = re.sub(r"\x1b\[[0-9;]*m", "", spinner.inline_spinner_ansi())
     assert prompt_text_width(rendered) <= prompt_line_width()
 
 
@@ -192,23 +96,56 @@ def test_untracked_tool_end_pops_only_an_untracked_slot() -> None:
     assert spinner.active_action == ""
 
 
-def test_action_line_shimmers_in_then_holds_solid() -> None:
-    """The action glows in over the lead window (shimmer prior), then holds a
-    solid fill while it runs (solid in progress)."""
-    from infrastructure.terminal.theme import fade_fg_ansi, set_active_theme
+def test_idle_hint_ready_line() -> None:
+    rendered = re.sub(r"\x1b\[[0-9;]*m", "", SpinnerState().idle_hint_ansi())
+    assert rendered.startswith("Ready")
+    assert "/ for commands" in rendered
+
+
+def test_ready_hint_ansi_matches_spinner_idle_hint() -> None:
+    from surfaces.interactive_shell.runtime.core.state import ready_hint_ansi
+
+    assert ready_hint_ansi() == SpinnerState().idle_hint_ansi()
+
+
+def test_ready_hint_clips_to_one_prompt_column_budget(monkeypatch) -> None:
+    from surfaces.interactive_shell.runtime.core.state import ready_hint_ansi
+    from surfaces.shared.terminal.prompt_layout import prompt_text_width
+
+    monkeypatch.setattr(
+        "surfaces.interactive_shell.runtime.core.state.prompt_line_width",
+        lambda: 24,
+    )
+    rendered = re.sub(r"\x1b\[[0-9;]*m", "", ready_hint_ansi())
+    assert prompt_text_width(rendered) <= 24
+    assert rendered.startswith("Ready")
+
+
+def test_status_sentence_shimmers_with_elapsed_time() -> None:
+    """Live status text carries a traveling light wave (still one prompt row)."""
+    from infrastructure.terminal.theme import set_active_theme
+    from surfaces.shared.terminal.prompt_layout import prompt_line_width, prompt_text_width
 
     set_active_theme("solarized")
     spinner = SpinnerState()
     spinner.start()
-    spinner.set_active_action("Execute · sleep 4")
-    action = spinner._in_flight_actions[0]
+    spinner.set_phase(SpinnerState.THINKING_PHASE)
+    early = spinner.inline_spinner_ansi()
+    spinner.started_at = time.monotonic() - 0.8
+    later = spinner.inline_spinner_ansi()
+    assert early.count("\x1b[38;2;") >= 5
+    assert early != later
+    plain = re.sub(r"\x1b\[[0-9;]*m", "", later)
+    assert "Thinking…" in plain
+    assert prompt_text_width(plain) <= prompt_line_width()
 
-    # Early in the lead window: still shimmering in (partial glow), not solid.
-    action.started_at = time.monotonic() - SpinnerState._SHIMMER_LEAD_SECONDS * 0.25
-    early = spinner.active_action_ansi()
-    assert fade_fg_ansi(1.0) not in early
 
-    # After the lead window: solid fill held for the rest of the run.
-    action.started_at = time.monotonic() - (SpinnerState._SHIMMER_LEAD_SECONDS + 0.3)
-    solid = spinner.active_action_ansi()
-    assert fade_fg_ansi(1.0) in solid
+def test_status_shimmer_includes_live_tool_on_same_row() -> None:
+    spinner = SpinnerState()
+    spinner.start()
+    spinner.set_phase(SpinnerState.INVOKING_TOOLS_PHASE)
+    spinner.set_active_action("GitHub CLI · gh api repos/x")
+    plain = re.sub(r"\x1b\[[0-9;]*m", "", spinner.inline_spinner_ansi())
+    assert "Invoking tools…" in plain
+    assert "GitHub CLI" in plain
+    assert plain.count("\n") == 0

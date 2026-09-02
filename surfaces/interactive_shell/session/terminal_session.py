@@ -27,6 +27,17 @@ if TYPE_CHECKING:
     from prompt_toolkit.history import History
 
 
+#: How many capped tool peeks Ctrl+O can cycle through.
+COLLAPSED_OUTPUT_RING_SIZE = 5
+
+#: Bound each stashed peek so five ring slots cannot retain unbounded dumps.
+COLLAPSED_STASH_MAX_CHARS = 32_000
+
+#: Expand in-scrollback when the body fits; larger peeks open ``$PAGER`` / less.
+INLINE_EXPAND_MAX_CHARS = 8_000
+INLINE_EXPAND_MAX_LINES = 120
+
+
 @dataclass
 class TerminalSession:
     """Shell-surface session state, composed onto ``Session`` for the interactive shell."""
@@ -111,11 +122,11 @@ class TerminalSession:
     The response composer consumes the label to hide a pure acknowledgement
     while preserving meaningful follow-up the selected option unlocks."""
 
-    collapsed_tool_output: str | None = None
-    """Full text of the last display-capped tool result, for Ctrl+O paging.
+    collapsed_tool_outputs: list[str] = field(default_factory=list)
+    """Ring of the last N capped tool peeks (newest last). Ctrl+O cycles."""
 
-    Set by the action turn when the console preview is folded; cleared when
-    the next turn's preview fits. None when nothing is collapsed."""
+    _collapsed_expand_next: int = -1
+    """Index into :attr:`collapsed_tool_outputs` for the next Ctrl+O press."""
 
     inline_tool_results: bool = False
     """True when this turn already printed tool results under their call lines.
@@ -199,6 +210,58 @@ class TerminalSession:
         """Advance and return the 1-based ``[N]`` number for a just-submitted prompt."""
         self.submitted_turn_count += 1
         return self.submitted_turn_count
+
+    def has_collapsed_tool_output(self) -> bool:
+        """True when Ctrl+O can expand at least one stashed peek."""
+        return bool(self.collapsed_tool_outputs)
+
+    @property
+    def collapsed_tool_output(self) -> str | None:
+        """Newest capped peek, or ``None`` when the ring is empty."""
+        return self.collapsed_tool_outputs[-1] if self.collapsed_tool_outputs else None
+
+    @collapsed_tool_output.setter
+    def collapsed_tool_output(self, value: str | None) -> None:
+        """Compat for direct assignment; ``None`` is a no-op (keeps the ring)."""
+        if value is None:
+            return
+        self.stash_collapsed_tool_output(value)
+
+    def stash_collapsed_tool_output(self, text: str | None) -> None:
+        """Push a size-bounded peek onto the ring.
+
+        ``None`` means the latest preview was not folded — leave earlier peeks
+        reachable via Ctrl+O. Bodies longer than ``COLLAPSED_STASH_MAX_CHARS``
+        are truncated so the ring cannot retain unbounded API dumps.
+        """
+        if text is None:
+            return
+        body = text
+        if len(body) > COLLAPSED_STASH_MAX_CHARS:
+            marker = "\n… (truncated for Ctrl+O stash)\n"
+            keep = max(0, COLLAPSED_STASH_MAX_CHARS - len(marker))
+            body = body[:keep].rstrip() + marker
+        self.collapsed_tool_outputs.append(body)
+        overflow = len(self.collapsed_tool_outputs) - COLLAPSED_OUTPUT_RING_SIZE
+        if overflow > 0:
+            del self.collapsed_tool_outputs[:overflow]
+        self._collapsed_expand_next = len(self.collapsed_tool_outputs) - 1
+
+    def next_collapsed_output_for_expand(self) -> str:
+        """Return the next peek for Ctrl+O and advance toward older entries.
+
+        First press after a stash shows the newest body; repeated presses cycle
+        older peeks, then wrap back to newest.
+        """
+        ring = self.collapsed_tool_outputs
+        if not ring:
+            return ""
+        idx = self._collapsed_expand_next
+        if idx < 0 or idx >= len(ring):
+            idx = len(ring) - 1
+        body = ring[idx]
+        self._collapsed_expand_next = idx - 1 if idx > 0 else len(ring) - 1
+        return body
 
     def pop_pending_prompt_default(self) -> str:
         """Return pre-filled text for the next prompt line, if any, and clear it."""

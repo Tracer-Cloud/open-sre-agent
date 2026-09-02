@@ -24,7 +24,7 @@ from surfaces.interactive_shell.ui.hooks import (
     install_output_expand_key_bindings,
     install_plan_expand_key_bindings,
 )
-from surfaces.interactive_shell.ui.hooks.output_expand import page_collapsed_output
+from surfaces.interactive_shell.ui.hooks.output_expand import expand_collapsed_output
 from surfaces.interactive_shell.ui.input_prompt import rendering as prompt_rendering
 from surfaces.interactive_shell.ui.input_prompt.key_bindings import (
     build_cancel_key_bindings,
@@ -60,6 +60,7 @@ class PromptBuilder:
         self._invalidate_prompt: Callable[[], None] | None = None
         self._submitted: asyncio.Queue[str] = asyncio.Queue()
         self._prompt_task: asyncio.Task[str] | None = None
+        self._expand_in_flight: bool = False
 
     def _composer_hidden(self) -> bool:
         """True while structured input (confirmation, menus) owns the keyboard.
@@ -105,22 +106,35 @@ class PromptBuilder:
         )
         install_session_key_bindings(self.pt_session, plan_kb)
         output_kb = install_output_expand_key_bindings(
-            lambda: bool(self.session.terminal.collapsed_tool_output),
-            lambda: str(self.session.terminal.collapsed_tool_output or ""),
-            self._page_collapsed_output,
+            self.session.terminal.has_collapsed_tool_output,
+            self.session.terminal.next_collapsed_output_for_expand,
+            self._expand_collapsed_output,
         )
         install_session_key_bindings(self.pt_session, output_kb)
 
-    def _page_collapsed_output(self, text: str) -> None:
-        """Suspend the prompt and page the last folded tool result (Ctrl+O)."""
+    def _expand_collapsed_output(self, text: str) -> None:
+        """Suspend the prompt and expand the next folded tool result (Ctrl+O).
+
+        Single-flight: ignore further Ctrl+O while an expand is still running
+        so key-mash cannot interleave ``run_in_terminal`` sessions.
+        """
+        if self._expand_in_flight:
+            return
+        self._expand_in_flight = True
 
         async def _run() -> None:
-            await run_in_terminal(lambda: page_collapsed_output(text), in_executor=False)
+            try:
+                await run_in_terminal(lambda: expand_collapsed_output(text), in_executor=False)
+            finally:
+                self._expand_in_flight = False
 
         if self.pt_app is not None and self.pt_app.is_running:
             self.pt_app.create_background_task(_run())
             return
-        page_collapsed_output(text)
+        try:
+            expand_collapsed_output(text)
+        finally:
+            self._expand_in_flight = False
 
     @property
     def invalidate_prompt(self) -> Callable[[], None]:

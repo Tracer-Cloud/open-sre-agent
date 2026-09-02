@@ -111,12 +111,12 @@ def test_confirmation_region_height_is_stable_across_selection_changes() -> None
     assert yes_rows == no_rows
 
 
-def test_streaming_prompt_height_matches_idle_and_ignores_action_shimmer() -> None:
+def test_streaming_prompt_height_matches_idle_with_live_tool_on_status_row() -> None:
     """Prompt stack is Plan → status → Auto (Droid); no reserved action gap.
 
-    Tools paint ``⏺`` into scrollback. Keeping a blank/shimmer row in the prompt
-    region made Thinking→Auto look sparse and used to resize the composer when
-    the row filled. Height must match idle, with or without an in-flight action.
+    Live tool awareness folds into the spinner row
+    (``Invoking tools… · GitHub CLI · …``). Height must match idle whether or
+    not a tool is in flight — never a second reserved prompt row.
     """
     session = Session()
     idle = SpinnerState()
@@ -128,12 +128,21 @@ def test_streaming_prompt_height_matches_idle_and_ignores_action_shimmer() -> No
     thinking_rows = render_prompt_region(session, ReplState(), spinner).value.count("\n")
     assert thinking_rows == idle_rows
 
+    spinner.set_phase(SpinnerState.INVOKING_TOOLS_PHASE)
     spinner.set_active_action("GitHub CLI · gh api repos/x", action_id="t1")
     filled = render_prompt_region(session, ReplState(), spinner).value
     assert filled.count("\n") == idle_rows
     plain = _plain(filled)
-    assert "GitHub CLI" not in plain  # action stays out of the prompt region
-    assert "Thinking" in plain or "…" in plain
+    assert "GitHub CLI" in plain
+    assert "Invoking tools" in plain
+    assert plain.count("\n") == idle_rows or filled.count("\n") == idle_rows
+
+
+def test_idle_status_row_shows_ready_hint() -> None:
+    session = Session()
+    rendered = _plain(render_prompt_region(session, ReplState(), SpinnerState()).value)
+    assert "Ready" in rendered
+    assert "/ for commands" in rendered
 
 
 def test_confirmation_region_shows_stacked_yes_no_choice() -> None:

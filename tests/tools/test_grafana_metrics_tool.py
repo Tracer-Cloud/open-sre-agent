@@ -116,3 +116,13 @@ def test_run_happy_path() -> None:
         )
     assert result["available"] is True
     assert result["total_series"] == 1
+    assert result["summary"] == "1 series for `pipeline_runs_total`"
+
+
+def test_run_with_backend_includes_prose_summary() -> None:
+    mock_backend = MagicMock()
+    mock_backend.query_timeseries.return_value = {
+        "data": {"result": [{"metric": {}, "values": [[1000, "42"]]}]}
+    }
+    result = query_grafana_metrics(metric_name="pipeline_runs_total", grafana_backend=mock_backend)
+    assert result["summary"] == "1 series for `pipeline_runs_total`"

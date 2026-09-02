@@ -796,11 +796,6 @@ class TestSpinnerState:
         assert _rgb(THEME_REGISTRY["blue"].BRAND) in raw  # blue BRAND
         assert _rgb(THEME_REGISTRY["blue"].HIGHLIGHT) not in raw.split("(Press ESC")[0]
 
-    @staticmethod
-    def _all_verbs(spinner: loop_state.SpinnerState) -> tuple[str, ...]:
-        """Union of every tier's verb pool."""
-        return tuple(verb for _threshold, pool in spinner._VERB_TIERS for verb in pool)
-
     def test_streaming_inline_spinner_includes_glyph_and_token_count(self) -> None:
         spinner = loop_state.SpinnerState()
         spinner.start()
@@ -836,87 +831,22 @@ class TestSpinnerState:
         rendered = _strip_ansi(spinner.inline_spinner_ansi())
         assert "tokens" in rendered
 
-    def test_streaming_inline_spinner_verb_stays_constant_across_calls(self) -> None:
-        """A turn's verb is fixed at ``start()`` so the indicator
-        doesn't flicker between words mid-stream. The visible label is the
-        executing phase; the verb is kept for investigation-stage fallback.
-        """
+    def test_streaming_inline_spinner_phase_stays_stable_across_calls(self) -> None:
+        """Phase labels are the product UX — no rotating verbs mid-stream."""
         spinner = loop_state.SpinnerState()
         spinner.start()
-        first = spinner._verb
         for _ in range(20):
             rendered = _strip_ansi(spinner.inline_spinner_ansi())
-            assert spinner._verb == first
             assert loop_state.SpinnerState.EXECUTING_PHASE in rendered
 
-    def test_advance_verb_changes_verb_between_agent_steps(self) -> None:
-        """``advance_verb`` re-rolls the verb and never repeats the current one."""
+    def test_inline_spinner_folds_live_tool_onto_status_row(self) -> None:
         spinner = loop_state.SpinnerState()
         spinner.start()
-        for _ in range(20):
-            before = spinner._verb
-            spinner.advance_verb()
-            assert spinner._verb != before
-            assert spinner._verb in spinner._VERB_TIERS[0][1]
-
-    def test_weighted_verbs_are_picked_about_twice_as_often(self) -> None:
-        """Verbs in ``_VERB_WEIGHTS`` (weight 2) beat the unweighted average."""
-        import random as _random
-
-        _random.seed(20260807)
-        spinner = loop_state.SpinnerState()
-        counts: dict[str, int] = dict.fromkeys(spinner._VERB_TIERS[0][1], 0)
-        for _ in range(6000):
-            spinner.start()
-            counts[spinner._verb] += 1
-        plain = [count for verb, count in counts.items() if verb not in spinner._VERB_WEIGHTS]
-        plain_avg = sum(plain) / len(plain)
-        for verb in spinner._VERB_WEIGHTS:
-            assert counts[verb] > 1.5 * plain_avg, (
-                f"{verb!r} picked {counts[verb]}x vs plain avg {plain_avg:.0f}"
-            )
-
-    def test_spinner_verb_escalates_through_tiers_with_elapsed_time(self) -> None:
-        """The verb pool escalates as the run goes hot, and never de-escalates."""
-        spinner = loop_state.SpinnerState()
-        spinner.start()
-        tier0, tier1, tier2 = (pool for _threshold, pool in spinner._VERB_TIERS)
-        assert spinner._verb in tier0
-
-        spinner.started_at -= 45  # elapsed ≈ 45s → ICE contact
-        _strip_ansi(spinner.inline_spinner_ansi())
-        assert spinner._verb in tier1
-        assert spinner._verb_tier == 1
-
-        spinner.started_at -= 75  # elapsed ≈ 120s → deep run
-        _strip_ansi(spinner.inline_spinner_ansi())
-        assert spinner._verb in tier2
-        assert spinner._verb_tier == 2
-
-        # Re-rendering at the same elapsed time keeps the deep-run tier.
-        _strip_ansi(spinner.inline_spinner_ansi())
-        assert spinner._verb in tier2
-
-    def test_advance_verb_after_escalation_picks_within_escalated_tier(self) -> None:
-        spinner = loop_state.SpinnerState()
-        spinner.start()
-        spinner.started_at -= 45  # escalate to the ICE-contact tier
-        spinner.inline_spinner_ansi()
-        tier1 = spinner._VERB_TIERS[1][1]
-        for _ in range(10):
-            spinner.advance_verb()
-            assert spinner._verb in tier1
-
-    def test_start_resets_escalation_to_calm_tier(self) -> None:
-        spinner = loop_state.SpinnerState()
-        spinner.start()
-        spinner.started_at -= 120
-        spinner.inline_spinner_ansi()
-        assert spinner._verb_tier == 2
-
-        spinner.start()
-        assert spinner._verb_tier == 0
-        assert spinner._verb in spinner._VERB_TIERS[0][1]
+        spinner.set_phase(loop_state.SpinnerState.INVOKING_TOOLS_PHASE)
+        spinner.set_active_action("GitHub CLI · gh api repos/x")
+        rendered = _strip_ansi(spinner.inline_spinner_ansi())
+        assert "Invoking tools…" in rendered
+        assert "GitHub CLI · gh api repos/x" in rendered
 
     def test_inline_spinner_glyph_animates_with_elapsed_time(self) -> None:
         """The frame is a function of elapsed time, not of render-call count.

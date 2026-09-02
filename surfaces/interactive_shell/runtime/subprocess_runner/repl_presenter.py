@@ -223,7 +223,7 @@ class ReplSubprocessPresenter:
             self._console,
             text,
             style=resolved,
-            on_collapse=lambda body: setattr(self._session.terminal, "collapsed_tool_output", body),
+            on_collapse=lambda body: self._session.terminal.stash_collapsed_tool_output(body),
         )
 
     def print_plain(self, text: str) -> None:

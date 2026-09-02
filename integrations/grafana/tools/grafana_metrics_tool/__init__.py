@@ -11,7 +11,10 @@ from core.domain.types.evidence import record_evidence_entry
 from core.tool import EvidenceType, SideEffectLevel
 from core.tool_framework import tool
 from core.tool_framework.utils import tool_unavailable
-from integrations.opensre.grafana_backend_queries import query_metrics_from_backend
+from integrations.opensre.grafana_backend_queries import (
+    format_grafana_metrics_summary,
+    query_metrics_from_backend,
+)
 
 _GRAFANA_RUNTIME_PARAMS = grafana_helpers.GRAFANA_RUNTIME_PARAMS
 
@@ -133,14 +136,19 @@ def query_grafana_metrics(
     if not result.get("success"):
         return tool_unavailable("grafana_mimir", result.get("error", "Unknown error"), metrics=[])
 
+    metrics = result.get("metrics", [])
+    total_series = result.get("total_series", 0) or len(metrics)
     return {
         "source": "grafana_mimir",
         "available": True,
-        "metrics": result.get("metrics", []),
-        "total_series": result.get("total_series", 0),
+        "metrics": metrics,
+        "total_series": total_series,
         "metric_name": metric_name,
         "service_name": service_name,
         "account_id": client.account_id,
+        "summary": format_grafana_metrics_summary(
+            metric_name, total_series, service_name=service_name
+        ),
     }
 
 

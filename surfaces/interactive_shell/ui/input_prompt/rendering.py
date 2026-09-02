@@ -134,9 +134,11 @@ def resolve_prompt_prefix_ansi(*, inline_spinner: str, idle_hint: str) -> str:
 
 
 def resolve_idle_hint_ansi(session: Session) -> str:
-    """Return the idle spacer used by the fixed-height prompt region."""
+    """Return the one-line Ready/commands hint for the fixed-height status row."""
+    from surfaces.interactive_shell.runtime.core.state import ready_hint_ansi
+
     del session
-    return ""
+    return ready_hint_ansi()
 
 
 def ctrl_c_exit_hint_ansi() -> str:
@@ -145,19 +147,11 @@ def ctrl_c_exit_hint_ansi() -> str:
 
 
 def composer_footer_ansi() -> str:
-    """Return the help hint and terminal-mode label below the composer."""
+    """Return the help hint below the composer (no competing mode chrome)."""
     left = "Enter send · Shift+Enter newline · ? help"
-    right = "TERMINAL ■"
     width = prompt_line_width()
-    if len(left) + len(right) + 2 > width:
-        clipped = clip_prompt_text(left, width)
-        return f"{ui_theme.DIM_ANSI}{clipped}{ui_theme.ANSI_RESET}"
-    pad = width - len(left) - len(right)
-    return (
-        f"{ui_theme.DIM_ANSI}{left}{ui_theme.ANSI_RESET}"
-        f"{' ' * pad}{ui_theme.BRAND_ANSI}TERMINAL "
-        f"{ui_theme.HIGHLIGHT_ANSI}■{ui_theme.ANSI_RESET}"
-    )
+    clipped = clip_prompt_text(left, width)
+    return f"{ui_theme.DIM_ANSI}{clipped}{ui_theme.ANSI_RESET}"
 
 
 def resolve_prompt_placeholder(session: Session) -> ANSI:

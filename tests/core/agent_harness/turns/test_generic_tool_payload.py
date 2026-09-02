@@ -63,6 +63,26 @@ def test_opaque_json_list_is_hidden() -> None:
     assert format_generic_tool_payload(_call("list_runs"), _result([{"id": 1}, {"id": 2}])) == ""
 
 
+def test_github_repository_summary_is_shown_not_blob() -> None:
+    payload = {
+        "available": True,
+        "summary": "Tracer-Cloud/opensre · 42★ · main · public · Python",
+        "repository": {"full_name": "Tracer-Cloud/opensre", "stargazers_count": 42},
+    }
+    shown = format_generic_tool_payload(_call("get_github_repository"), _result(payload))
+    assert shown == "Tracer-Cloud/opensre · 42★ · main · public · Python"
+
+
+def test_grafana_metrics_summary_is_shown_not_blob() -> None:
+    payload = {
+        "available": True,
+        "summary": "3 series for `http_requests_total` for api",
+        "metrics": [{"metric": {}, "values": []}],
+    }
+    shown = format_generic_tool_payload(_call("query_grafana_metrics"), _result(payload))
+    assert shown == "3 series for `http_requests_total` for api"
+
+
 def test_truncated_json_blob_is_hidden_not_dumped_raw() -> None:
     # A capped gh-api response arrives as invalid (cut-off) JSON — it must not
     # slip past the JSON check and dump raw. Detection is by shape, not parse.

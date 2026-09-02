@@ -46,4 +46,16 @@ def looks_like_data_blob(
     return False
 
 
-__all__ = ["looks_like_data_blob"]
+def is_data_blob(text: str) -> bool:
+    """Whether a tool-result payload is a JSON/record blob to keep out of view.
+
+    The aggressive policy shared by the transcript hider and the inline result
+    preview: any payload opening with ``{``/``[``, or carrying two ``":`` key
+    separators, is data the reply already summarizes — valid, truncated, or a
+    mid-object fragment. The reply-prose collapse uses ``looks_like_data_blob``
+    directly with a larger floor so it never mistakes real prose for a dump.
+    """
+    return looks_like_data_blob(text, min_json_keys=2, honor_open_bracket=True)
+
+
+__all__ = ["is_data_blob", "looks_like_data_blob"]

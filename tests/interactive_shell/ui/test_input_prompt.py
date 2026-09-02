@@ -178,23 +178,24 @@ class TestPromptTurnCounter:
 
 
 class TestResolveIdleHint:
-    def test_idle_hint_is_a_spacer_because_help_lives_below_the_composer(self) -> None:
+    def test_idle_hint_shows_ready_and_commands(self) -> None:
         session = Session()
         session.configured_integrations_known = True
         session.configured_integrations = ("datadog", "github", "grafana")
         rendered = _strip_ansi(resolve_idle_hint_ansi(session))
-        assert rendered == ""
+        assert "Ready" in rendered
+        assert "/ for commands" in rendered
 
 
 class TestComposerFooter:
-    def test_places_help_and_terminal_mode_at_opposite_edges(
+    def test_places_help_hint_without_terminal_mode_chrome(
         self, monkeypatch: pytest.MonkeyPatch
     ) -> None:
         monkeypatch.setattr(prompt_rendering, "prompt_line_width", lambda: 79)
         footer = _strip_ansi(composer_footer_ansi())
         assert footer.startswith("Enter send · Shift+Enter newline · ? help")
-        assert footer.endswith("TERMINAL ■")
-        assert len(footer) == 79
+        assert "TERMINAL" not in footer
+        assert "■" not in footer
 
     def test_narrow_footer_keeps_only_a_clipped_help_hint(
         self, monkeypatch: pytest.MonkeyPatch
@@ -466,7 +467,9 @@ class TestResolvePromptPrefix:
             inline_spinner=spinner.inline_spinner_ansi(),
             idle_hint=resolve_idle_hint_ansi(Session()),
         )
-        assert _strip_ansi(prefix) == ""
+        rendered = _strip_ansi(prefix)
+        assert "Ready" in rendered
+        assert "/ for commands" in rendered
 
 
 @pytest.mark.asyncio

@@ -19,7 +19,7 @@ from infrastructure.terminal.peek import (
     cap_output_for_display,
     format_view_all_marker,
 )
-from infrastructure.text import looks_like_data_blob
+from infrastructure.text import is_data_blob
 
 # Tools whose result the host already rendered to the console; their payload is
 # not re-shown in the transcript.
@@ -86,19 +86,6 @@ def cap_for_display(text: str) -> str:
     """
     preview, _full = cap_output_for_display(text)
     return preview
-
-
-def is_data_blob(text: str) -> bool:
-    """Whether a tool-result payload is a JSON/record blob to keep out of the
-    transcript — valid, truncated, or a mid-object fragment (a capped
-    ``gh api`` response can arrive starting mid-value).
-
-    Aggressive by design: any payload opening with ``{``/``[``, or carrying two
-    ``":`` key separators, is data the reply already summarizes. The reply-prose
-    collapse in the streaming renderer applies the *same* mechanism with a
-    larger floor so it never mistakes real prose for a dump.
-    """
-    return looks_like_data_blob(text, min_json_keys=2, honor_open_bracket=True)
 
 
 def _user_facing_tool_text(text: str) -> str:
@@ -201,7 +188,6 @@ __all__ = [
     "DISPLAY_OUTPUT_MAX_LINES",
     "cap_for_display",
     "format_generic_tool_payload",
-    "is_data_blob",
     "looks_like_json",
     "preferred_tool_response_text",
     "split_output_truncation_markers",

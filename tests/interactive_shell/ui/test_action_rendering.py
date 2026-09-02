@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import io
+import re
 from unittest.mock import Mock
 
 import pytest
@@ -371,27 +372,21 @@ def test_skill_view_tool_end_without_start_prints_nothing() -> None:
     assert buffer.getvalue() == ""
 
 
-def test_llm_start_advances_spinner_verb_every_two_steps() -> None:
-    """The spinner verb re-rolls once per two agent steps, not every step."""
+def test_llm_start_sets_thinking_phase_without_verb_rotation() -> None:
+    """``llm_start`` labels the status row Thinking…; phase labels are the UX."""
     from surfaces.interactive_shell.runtime.core.state import SpinnerState
     from surfaces.shared.terminal.output.console_state import set_investigation_spinner
 
     observer, _buffer = _observer_with_buffer()
     spinner = SpinnerState()
     spinner.start()
-    initial = spinner._verb
     set_investigation_spinner(spinner)
     try:
         observer("llm_start", {"iteration": 0})
-        observer("llm_start", {"iteration": 1})
-        assert spinner._verb == initial, "steps 0-1 must keep the verb picked at start()"
+        assert spinner.phase == SpinnerState.THINKING_PHASE
         observer("llm_start", {"iteration": 2})
-        second = spinner._verb
-        assert second != initial, "step 2 must rotate the verb"
-        observer("llm_start", {"iteration": 3})
-        assert spinner._verb == second, "step 3 must keep step 2's verb"
-        observer("llm_start", {"iteration": 4})
-        assert spinner._verb != second, "step 4 must rotate again"
+        assert spinner.phase == SpinnerState.THINKING_PHASE
+        assert "Thinking…" in re.sub(r"\x1b\[[0-9;]*m", "", spinner.inline_spinner_ansi())
     finally:
         set_investigation_spinner(None)
 

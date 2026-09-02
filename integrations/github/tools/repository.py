@@ -135,11 +135,19 @@ def get_github_repository(
             repository={},
         )
     repository = _normalize_repository(payload, owner=owner, repo_name=repo)
+    stars = repository["stargazers_count"] or 0
+    branch = repository["default_branch"] or "unknown"
+    visibility = repository["visibility"] or "unknown"
+    language = repository["language"]
+    parts = [f"{owner}/{repo}", f"{stars}★", branch, visibility]
+    if language:
+        parts.append(language)
     return {
         "source": "github",
         "available": True,
         "owner": owner,
         "repo": repo,
         "repository": repository,
-        "stargazers_count": repository["stargazers_count"] or 0,
+        "stargazers_count": stars,
+        "summary": " · ".join(str(p) for p in parts),
     }

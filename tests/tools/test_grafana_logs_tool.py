@@ -105,6 +105,7 @@ def test_run_with_backend_returns_logs() -> None:
     assert result["available"] is True
     assert result["total_logs"] == 2
     assert len(result["error_logs"]) == 1
+    assert result["summary"] == "2 log(s) for svc, 1 look like errors"
 
 
 def test_run_returns_unavailable_when_no_client() -> None:
@@ -155,6 +156,7 @@ def test_run_happy_path() -> None:
     assert result["available"] is True
     assert result["total_logs"] == 2
     assert len(result["error_logs"]) == 1
+    assert result["summary"] == "2 log(s) for svc, 1 look like errors"
 
 
 def test_run_fallback_to_pipeline_name() -> None:

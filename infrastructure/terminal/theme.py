@@ -271,6 +271,47 @@ def fade_fg_ansi(intensity: float) -> str:
     )
 
 
+def shimmer_text_ansi(
+    text: str,
+    *,
+    elapsed: float,
+    period: float = 1.5,
+    high_hex: str | None = None,
+) -> str:
+    """Paint *text* with a traveling light wave (Cursor / Droid style).
+
+    Brightness is a pure function of *elapsed* and character index so prompt
+    re-measure passes at the same clock stay visually stable. Whitespace is
+    left unstyled so the wave reads as light over the words, not the gaps.
+    """
+    if not text:
+        return ""
+    low = _parse_hex_color(_ACTIVE_THEME.DIM)
+    high = _parse_hex_color(high_hex or _ACTIVE_THEME.TEXT)
+    span = max(period, 0.05)
+    wave = (elapsed / span) % 1.0
+    n = len(text)
+    parts: list[str] = []
+    for index, char in enumerate(text):
+        if char.isspace():
+            parts.append(char)
+            continue
+        pos = index / max(n - 1, 1)
+        # Circular distance on the unit interval; peak is a ~quarter-string band.
+        distance = abs((pos - wave + 0.5) % 1.0 - 0.5)
+        peak = max(0.0, 1.0 - distance / 0.25)
+        # Floor keeps non-peak letters readable; square softens the band edges.
+        level = 0.38 + 0.62 * (peak * peak)
+        rgb = (
+            int(low[0] + (high[0] - low[0]) * level),
+            int(low[1] + (high[1] - low[1]) * level),
+            int(low[2] + (high[2] - low[2]) * level),
+        )
+        parts.append(f"{_fg(rgb)}{char}")
+    parts.append(ANSI_RESET)
+    return "".join(parts)
+
+
 def _parse_hex_color(value: str) -> tuple[int, int, int]:
     stripped = value.lstrip("#")
     return (int(stripped[0:2], 16), int(stripped[2:4], 16), int(stripped[4:6], 16))
@@ -481,6 +522,7 @@ __all__ = [
     "DIM_COUNTER_ANSI",
     "ERROR",
     "fade_fg_ansi",
+    "shimmer_text_ansi",
     "GLYPH_ACTIVE",
     "GLYPH_BULLET",
     "GLYPH_ERROR",

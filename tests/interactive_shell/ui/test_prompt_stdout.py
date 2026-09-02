@@ -56,14 +56,14 @@ async def test_background_output_is_inserted_above_the_redrawn_composer(
                     refresh_interval=0,
                 )
             )
-            await _wait_for_output(terminal, "TERMINAL ")
+            await _wait_for_output(terminal, "Auto (")
 
             print("assistant response")
-            rendered = await _wait_for_output(terminal, "TERMINAL ", count=2)
+            rendered = await _wait_for_output(terminal, "Auto (", count=2)
 
-            assert rendered.rfind("assistant response") < rendered.rfind("TERMINAL ")
+            assert rendered.rfind("assistant response") < rendered.rfind("Auto (")
             assert rendered.rfind("\x1b[?2026h") < rendered.rfind("assistant response")
-            assert rendered.rfind("\x1b[?2026l") > rendered.rfind("TERMINAL ")
+            assert rendered.rfind("\x1b[?2026l") > rendered.rfind("Auto (")
             pipe_input.send_bytes(b"\x04")
             with pytest.raises(EOFError):
                 await asyncio.wait_for(prompt_task, timeout=2)
@@ -106,7 +106,7 @@ async def test_ctrl_c_updates_the_live_prompt_before_second_press_exits(
                     refresh_interval=0,
                 )
             )
-            await _wait_for_output(terminal, "TERMINAL ")
+            await _wait_for_output(terminal, "Auto (")
 
             pipe_input.send_bytes(b"\x03")
             await _wait_for_output(terminal, "(Press Ctrl+C again to exit)")

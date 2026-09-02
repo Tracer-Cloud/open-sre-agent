@@ -60,7 +60,7 @@ def _decode_subprocess_stream(value: str | bytes | None) -> str:
 def _stash_collapsed_output(session: Session | None, body: str) -> None:
     terminal = session_terminal(session) if session is not None else None
     if terminal is not None:
-        terminal.collapsed_tool_output = body
+        terminal.stash_collapsed_tool_output(body)
 
 
 def _cli_command_succeeded(exit_code: int | None) -> bool:

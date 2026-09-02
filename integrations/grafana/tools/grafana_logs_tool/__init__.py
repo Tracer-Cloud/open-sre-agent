@@ -9,7 +9,10 @@ from core.tool_framework import tool
 from core.tool_framework.utils import tool_unavailable
 from infrastructure.evidence.evidence_compaction import summarize_counts
 from infrastructure.evidence.log_compaction import build_error_taxonomy, deduplicate_logs
-from integrations.opensre.grafana_backend_queries import query_logs_from_backend
+from integrations.opensre.grafana_backend_queries import (
+    format_grafana_logs_summary,
+    query_logs_from_backend,
+)
 
 _GRAFANA_RUNTIME_PARAMS = grafana_helpers.GRAFANA_RUNTIME_PARAMS
 
@@ -185,6 +188,10 @@ def query_grafana_logs(
 
     if summary:
         result_data["truncation_note"] = summary
+    log_count = result.get("total_logs", len(logs_data)) or len(logs_data)
+    result_data["summary"] = format_grafana_logs_summary(
+        log_count, error_count=len(error_logs), service_name=service_name
+    )
     return result_data
 
 
