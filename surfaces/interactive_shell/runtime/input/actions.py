@@ -16,9 +16,6 @@ from surfaces.interactive_shell.runtime.input.events import (
     InputEvent,
     InputSubmitted,
 )
-from surfaces.interactive_shell.ui.input_prompt.rendering import (
-    DEFAULT_PLACEHOLDER_TEXT,
-)
 
 QUEUE_DURING_CONFIRMATION_WARNING = (
     "[dim](type y/N to confirm the pending action; your input has been queued for after)[/]"
@@ -82,10 +79,6 @@ def decide_input_action(
             # turn, SessionGoal condition, or a doubled ``[n] ❯ [n] ❯`` echo.
             stripped = strip_shell_prompt_chrome(text)
             if not stripped:
-                return IgnoreInput()
-            # Placeholder text stuck in the buffer (not dim placeholder styling)
-            # must not submit as a real turn.
-            if stripped == DEFAULT_PLACEHOLDER_TEXT:
                 return IgnoreInput()
 
             if snapshot.dispatch_running and looks_like_cancel_request(stripped):

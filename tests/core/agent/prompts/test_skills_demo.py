@@ -1,35 +1,30 @@
-"""Capability answers list skill demos instead of platform features."""
+"""Capability answers offer the stable getting-started choices."""
 
 from __future__ import annotations
 
 from core.agent_harness.prompts.action import build_action_system_prompt
-from core.agent_harness.prompts.skills.loader import (
-    clear_skills_caches,
-    list_action_skills,
-    load_skills_demo_block,
-    load_skills_index,
+from core.agent_harness.prompts.getting_started import (
+    GETTING_STARTED_OPTIONS,
+    load_getting_started_block,
 )
+from core.agent_harness.prompts.skills.loader import clear_skills_caches, load_skills_index
 from core.agent_harness.turns.turn_snapshot import TurnSnapshot
 
 
-def test_skills_demo_block_lists_frontmatter_demos_only() -> None:
-    clear_skills_caches()
-    demos = {skill.name: skill.demo for skill in list_action_skills() if skill.demo}
-
-    assert demos == {
-        "architecture-audit": "Audit this repo's architecture and give me a sequenced refactor plan",
-        "github-ci-fix": "Find open PRs with failing CI and fix them",
-        "github-security-fix": "Remediate the open Dependabot and CodeQL alerts",
-        "morning-report": "Set up a weekday morning briefing with weather and news",
-    }
-    block = load_skills_demo_block()
-    assert "ONLY the skill demos" in block
-    assert "Do not list platform features" in block
-    for prompt in demos.values():
-        assert prompt in block
+def test_getting_started_block_lists_exact_options() -> None:
+    assert GETTING_STARTED_OPTIONS == (
+        "Explore a repo and analyze its CI/CD performance (recommended)",
+        "Set up an agent that improves CI/CD reliability over time",
+        "Connect OpenSRE to Slack and hand off DevOps chores for your team",
+    )
+    block = load_getting_started_block()
+    assert "Use each option verbatim" in block
+    assert "Or type your own answer..." in block
+    for option in GETTING_STARTED_OPTIONS:
+        assert f"- {option}" in block
 
 
-def test_agent_prompt_includes_skill_demos() -> None:
+def test_agent_prompt_includes_getting_started_options() -> None:
     clear_skills_caches()
     prompt = build_action_system_prompt(
         TurnSnapshot(
@@ -43,14 +38,13 @@ def test_agent_prompt_includes_skill_demos() -> None:
         )
     )
 
-    assert "ONLY the skill demos" in prompt
-    assert "Audit this repo's architecture and give me a sequenced refactor plan" in prompt
-    assert "Find open PRs with failing CI and fix them" in prompt
-    assert "Remediate the open Dependabot and CodeQL alerts" in prompt
-    assert "Set up a weekday morning briefing with weather and news" in prompt
+    for option in GETTING_STARTED_OPTIONS:
+        assert option in prompt
+    assert "Remediate the open Dependabot and CodeQL alerts" not in prompt
+    assert "Set up a weekday morning briefing with weather and news" not in prompt
 
 
-def test_agent_prompt_combines_demo_catalog_with_selectable_choice_contract() -> None:
+def test_agent_prompt_combines_starter_options_with_selectable_choice_contract() -> None:
     clear_skills_caches()
     prompt = build_action_system_prompt(
         TurnSnapshot(
@@ -69,12 +63,11 @@ def test_agent_prompt_combines_demo_catalog_with_selectable_choice_contract() ->
 
     assert "ask_user_choice menu: available" in prompt
     assert "For a demo or getting-started request" in collapsed
-    assert "available skill demos as selectable options" in collapsed
-    assert "ONLY the skill demos below" in collapsed
-    assert "that overview supplies the menu options only" in collapsed
-    for skill in list_action_skills():
-        if skill.demo:
-            assert skill.demo in prompt
+    assert "assembled getting-started prompts as selectable options" in collapsed
+    assert "call `ask_user_choice` with ONLY the getting-started options" in collapsed
+    assert "that block supplies the menu options only" in collapsed
+    for option in GETTING_STARTED_OPTIONS:
+        assert option in prompt
 
 
 def test_skills_index_routes_capability_questions_to_direct_answer() -> None:

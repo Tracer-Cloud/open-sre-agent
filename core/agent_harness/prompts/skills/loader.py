@@ -9,10 +9,9 @@ Layout (either form is supported):
   with an optional sibling ``<name>_report.md`` report template.
 - Flat: ``skills/<name>.md`` with optional ``skills/<name>_report.md``.
 
-Optional YAML frontmatter (``name``, ``description``, optional ``recurring``,
-optional ``demo``) feeds the compact index and capability overview. Without
-frontmatter, the name is derived from the path and the description from the
-first ``WHEN TO USE`` / subtitle lines.
+Optional YAML frontmatter (``name``, ``description``, optional ``recurring``)
+feeds the compact index. Without frontmatter, the name is derived from the path
+and the description from the first ``WHEN TO USE`` / subtitle lines.
 
 The harness prompt carries only :func:`load_skills_index` (~hundreds of
 chars). Full bodies load through the ``skill_view`` tool via
@@ -35,7 +34,6 @@ __all__ = (
     "list_action_skills",
     "load_skill_body",
     "load_skills_block",
-    "load_skills_demo_block",
     "load_skills_index",
     "skills_dir",
 )
@@ -58,7 +56,6 @@ class ActionSkill:
     description: str
     path: Path
     recurring: str | None = None
-    demo: str | None = None
 
 
 def skills_dir() -> Path:
@@ -198,13 +195,11 @@ def _load_action_skill(skill_path: Path) -> ActionSkill | None:
         name = _name_from_path(skill_path)
     description = _string_field(frontmatter.get("description")) or _derive_description(body)
     recurring = _string_field(frontmatter.get("recurring")) or None
-    demo = _string_field(frontmatter.get("demo")) or None
     return ActionSkill(
         name=name,
         description=description,
         path=skill_path,
         recurring=recurring,
-        demo=demo,
     )
 
 
@@ -254,28 +249,6 @@ def load_skills_index() -> str:
     return "".join(("\n".join(lines), "\n\n"))
 
 
-_CAPABILITY_OVERVIEW_RULE = (
-    "When the user asks what you can do, what you're capable of, how you can "
-    "help, what tools you have, or for a demo / getting-started suggestion: "
-    "answer with ONLY the skill demos below. Do not list platform features, "
-    "slash commands, AGENTS.md capabilities, or a generic coding-agent menu. "
-    "Do not add a Want-me-to closer that invents a fifth action (no open-PR "
-    "check, no /health, no /investigate). Offer the demos as copy-pasteable "
-    "prompts the user can send next."
-)
-
-
-@lru_cache(maxsize=1)
-def load_skills_demo_block() -> str:
-    """Return the capability-overview rule and copy-pasteable skill demos."""
-    demos = tuple(skill for skill in list_action_skills() if skill.demo)
-    if not demos:
-        return ""
-    lines = [_CAPABILITY_OVERVIEW_RULE, ""]
-    lines.extend(f"- {skill.demo}" for skill in demos)
-    return "\n".join(lines)
-
-
 def load_skills_block() -> str:
     """Return the skills section for the action envelope (the compact index).
 
@@ -302,7 +275,6 @@ def clear_skills_caches() -> None:
     """Drop cached discovery/index (tests mutate on-disk skills)."""
     list_action_skills.cache_clear()
     load_skills_index.cache_clear()
-    load_skills_demo_block.cache_clear()
 
 
 # Back-compat for tests that call ``load_skills_block.cache_clear()``.

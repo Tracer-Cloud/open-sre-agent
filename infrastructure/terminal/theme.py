@@ -253,6 +253,28 @@ def _fg(rgb: tuple[int, int, int]) -> str:
     return f"\x1b[38;2;{rgb[0]};{rgb[1]};{rgb[2]}m"
 
 
+def _mix_rgb(
+    start: tuple[int, int, int],
+    end: tuple[int, int, int],
+    amount: float,
+) -> tuple[int, int, int]:
+    clamped = 0.0 if amount < 0.0 else 1.0 if amount > 1.0 else amount
+    return (
+        int(start[0] + (end[0] - start[0]) * clamped),
+        int(start[1] + (end[1] - start[1]) * clamped),
+        int(start[2] + (end[2] - start[2]) * clamped),
+    )
+
+
+def _sample_cyclic_gradient(
+    stops: tuple[tuple[int, int, int], ...],
+    position: float,
+) -> tuple[int, int, int]:
+    scaled = (position % 1.0) * len(stops)
+    index = int(scaled)
+    return _mix_rgb(stops[index], stops[(index + 1) % len(stops)], scaled - index)
+
+
 def fade_fg_ansi(intensity: float) -> str:
     """Foreground between DIM and TEXT.
 
@@ -262,13 +284,7 @@ def fade_fg_ansi(intensity: float) -> str:
     clamped = 0.0 if intensity < 0.0 else 1.0 if intensity > 1.0 else intensity
     dim = _parse_hex_color(_ACTIVE_THEME.DIM)
     text = _parse_hex_color(_ACTIVE_THEME.TEXT)
-    return _fg(
-        (
-            int(dim[0] + (text[0] - dim[0]) * clamped),
-            int(dim[1] + (text[1] - dim[1]) * clamped),
-            int(dim[2] + (text[2] - dim[2]) * clamped),
-        )
-    )
+    return _fg(_mix_rgb(dim, text, clamped))
 
 
 def shimmer_text_ansi(
@@ -278,16 +294,31 @@ def shimmer_text_ansi(
     period: float = 1.5,
     high_hex: str | None = None,
 ) -> str:
-    """Paint *text* with a traveling light wave (Cursor / Droid style).
+    """Paint *text* with a traveling metallic, iridescent wave.
 
     Brightness is a pure function of *elapsed* and character index so prompt
     re-measure passes at the same clock stay visually stable. Whitespace is
-    left unstyled so the wave reads as light over the words, not the gaps.
+    left unstyled so the wave reads as light over the words, not the gaps. The
+    narrow accent reflections are softened with TEXT to avoid a saturated
+    rainbow while neutral TEXT and SECONDARY stops provide a silver sheen.
     """
     if not text:
         return ""
-    low = _parse_hex_color(_ACTIVE_THEME.DIM)
-    high = _parse_hex_color(high_hex or _ACTIVE_THEME.TEXT)
+    dim = _parse_hex_color(_ACTIVE_THEME.DIM)
+    secondary = _parse_hex_color(_ACTIVE_THEME.SECONDARY)
+    text_rgb = _parse_hex_color(_ACTIVE_THEME.TEXT)
+    accent = _parse_hex_color(high_hex or _ACTIVE_THEME.HIGHLIGHT)
+    brand = _parse_hex_color(_ACTIVE_THEME.BRAND)
+    stops = (
+        dim,
+        secondary,
+        _mix_rgb(text_rgb, brand, 0.38),
+        text_rgb,
+        _mix_rgb(text_rgb, accent, 0.52),
+        text_rgb,
+        secondary,
+        dim,
+    )
     span = max(period, 0.05)
     wave = (elapsed / span) % 1.0
     n = len(text)
@@ -297,16 +328,7 @@ def shimmer_text_ansi(
             parts.append(char)
             continue
         pos = index / max(n - 1, 1)
-        # Circular distance on the unit interval; peak is a ~quarter-string band.
-        distance = abs((pos - wave + 0.5) % 1.0 - 0.5)
-        peak = max(0.0, 1.0 - distance / 0.25)
-        # Floor keeps non-peak letters readable; square softens the band edges.
-        level = 0.38 + 0.62 * (peak * peak)
-        rgb = (
-            int(low[0] + (high[0] - low[0]) * level),
-            int(low[1] + (high[1] - low[1]) * level),
-            int(low[2] + (high[2] - low[2]) * level),
-        )
+        rgb = _sample_cyclic_gradient(stops, pos - wave)
         parts.append(f"{_fg(rgb)}{char}")
     parts.append(ANSI_RESET)
     return "".join(parts)

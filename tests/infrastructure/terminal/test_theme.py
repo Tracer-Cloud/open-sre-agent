@@ -99,16 +99,33 @@ def test_fade_fg_ansi_interpolates_dim_to_text() -> None:
     assert mid != ui_theme.TEXT_ANSI
 
 
-def test_shimmer_text_ansi_paints_a_traveling_wave() -> None:
-    """Status sentence shimmer: per-glyph truecolor that moves with elapsed time."""
+def test_shimmer_text_ansi_paints_a_traveling_metallic_wave() -> None:
+    """Status shimmer mixes neutral silver stops with muted accent reflections."""
     from infrastructure.terminal import theme as ui_theme
 
-    ui_theme.set_active_theme("solarized")
+    ui_theme.set_active_theme("blue")
     early = ui_theme.shimmer_text_ansi("Thinking…", elapsed=0.0)
     later = ui_theme.shimmer_text_ansi("Thinking…", elapsed=0.75)
     assert early.count("\x1b[38;2;") >= 5
     assert early.endswith(ui_theme.ANSI_RESET)
     assert early != later
+    assert ui_theme.TEXT_ANSI in early
+    assert ui_theme.SECONDARY_ANSI in early
+    colors = re.findall(r"\x1b\[38;2;(\d+);(\d+);(\d+)m", early)
+    assert len(set(colors)) >= 5
+
+    highlight_wave = ui_theme.shimmer_text_ansi(
+        "Thinking…",
+        elapsed=0.0,
+        high_hex=ui_theme.get_active_theme().HIGHLIGHT,
+    )
+    brand_wave = ui_theme.shimmer_text_ansi(
+        "Thinking…",
+        elapsed=0.0,
+        high_hex=ui_theme.get_active_theme().BRAND,
+    )
+    assert highlight_wave != brand_wave
+
     # Whitespace is not individually coloured.
     spaced = ui_theme.shimmer_text_ansi("Invoking tools", elapsed=0.1)
     assert " tools" in spaced or "tools" in re.sub(r"\x1b\[[0-9;]*m", "", spaced)

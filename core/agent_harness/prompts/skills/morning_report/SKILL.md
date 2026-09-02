@@ -4,7 +4,6 @@ description: >-
   Weather + news morning briefing: fetch live weather and headlines, compose
   a plain-text briefing, deliver it. Multi-step; load before acting.
 recurring: weekdays 08:00
-demo: Set up a weekday morning briefing with weather and news
 ---
 ══════════════════════════════════════════════════════════
 MORNING REPORT SKILL #1 — weather + daily news briefing:

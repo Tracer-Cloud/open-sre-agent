@@ -56,9 +56,19 @@ def test_plain_command_output_is_recessed_but_keeps_command_colours() -> None:
     presenter.print_command_output("\x1b[32mgreen success\x1b[0m")
 
     raw = buffer.getvalue()
-    secondary = str(ui_theme.SECONDARY)
-    r, g, b = (int(secondary[i : i + 2], 16) for i in (1, 3, 5))
-    assert f"38;2;{r};{g};{b}" in raw  # plain output recessed to SECONDARY
+    # Compare against SECONDARY rendered through an identical console rather than
+    # hard-coding the truecolor SGR. Rich caches the rendered ANSI on the Style
+    # object, and ``Style.parse`` is process-wide lru_cached, so whichever test
+    # renders this colour first fixes its escape sequence for the whole run --
+    # an 8-colour console elsewhere in the shard would otherwise make this assert
+    # a stale ``\x1b[37m``. Both sides here share that cache, so the check holds
+    # at any colour depth.
+    reference = io.StringIO()
+    Console(file=reference, force_terminal=True, color_system="truecolor", width=80).print(
+        "x", style=str(ui_theme.SECONDARY)
+    )
+    secondary_sgr = reference.getvalue().split("x")[0]
+    assert secondary_sgr and secondary_sgr in raw  # plain output recessed to SECONDARY
     assert re.search(r"\x1b\[[0-9;]*32m", raw)  # command's own green survives the base
 
 
