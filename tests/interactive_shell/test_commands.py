@@ -2784,6 +2784,7 @@ class TestRunCliCommand:
             output: str,
             *,
             style: str | None = None,
+            on_collapse: object = None,
         ) -> None:
             replayed.append((output, style))
 
