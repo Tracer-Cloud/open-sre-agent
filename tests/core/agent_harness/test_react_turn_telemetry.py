@@ -75,6 +75,11 @@ def test_run_react_agent_with_telemetry_emits_one_completed_event(
     assert properties["stop_reason"] == "no_tools_needed"
     assert properties["llm_iterations_used"] == 1
 
+    # Dashboards key on the exact strings; the event must carry plain str, not
+    # enum members, so the serialized payload stays byte-for-byte identical
+    assert type(properties["phase"]) is str
+    assert type(properties["stop_reason"]) is str
+
 
 def test_run_react_agent_with_telemetry_emits_error_event(
     monkeypatch: pytest.MonkeyPatch,

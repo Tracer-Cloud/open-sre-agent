@@ -141,12 +141,13 @@ def emit_react_turn_completed(
     investigation_id = _session_investigation_id(session)
     investigation_loop_count = _session_investigation_loop_count(session)
 
+    # Analytics is an external boundary: emit plain strings, not enum members
     capture_react_turn_completed(
-        phase=phase,
+        phase=phase.value,
         llm_iterations_used=llm_iterations_used,
         llm_iteration_cap=iteration_cap,
         hit_iteration_cap=hit_iteration_cap,
-        stop_reason=stop_reason,
+        stop_reason=stop_reason.value,
         tool_calls_executed=tool_calls_executed,
         duration_ms=duration_ms,
         cli_session_id=_resolve_cli_session_id(session),
