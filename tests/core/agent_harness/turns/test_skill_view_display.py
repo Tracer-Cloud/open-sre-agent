@@ -10,7 +10,7 @@ escaped JSON, box-drawing characters and all — onto the user's screen.
 
 from __future__ import annotations
 
-from core.agent_harness.turns.action_driver import _format_generic_tool_payload
+from core.agent_harness.turns.display_text import format_generic_tool_payload
 from core.llm.types import ToolCall
 from tools.interactive_shell.actions.skill_view import execute_skill_view_tool
 
@@ -36,7 +36,7 @@ def test_loading_a_skill_emits_nothing_from_the_generic_formatter() -> None:
         details = result
 
     # Act
-    shown = _format_generic_tool_payload(
+    shown = format_generic_tool_payload(
         ToolCall(id="t1", name="skill_view", input={"name": "morning-report"}), _Result()
     )
 

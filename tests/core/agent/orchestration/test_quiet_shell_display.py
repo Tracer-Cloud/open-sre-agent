@@ -426,6 +426,26 @@ def test_selected_choice_keeps_meaningful_follow_up_response() -> None:
     assert session.terminal.pending_choice_response is None
 
 
+def test_inline_tool_results_are_not_repeated_in_the_closing() -> None:
+    """When the shell already nested results under ``⏺``, the closing stays the reply."""
+    github = ToolCall(id="1", name="github_cli", input={"command": "api user"})
+    result = _Result(
+        tool_results=[(github, _ToolResult({"ok": True, "summary": "GitHub API call succeeded."}))],
+        final_text="The repository is public.",
+    )
+    session = _Session()
+    session.terminal.inline_tool_results = True
+    session.terminal.collapsed_tool_output = "stashed-by-observer"
+
+    _response_text, display_chunks, _use_final = _compose_response(result, session, _counts(1))
+    shown = "\n".join(display_chunks)
+
+    assert "The repository is public." in shown
+    assert "GitHub API call succeeded." not in shown
+    assert session.terminal.inline_tool_results is False
+    assert session.terminal.collapsed_tool_output == "stashed-by-observer"
+
+
 def test_bulky_tool_output_is_capped_and_fenced_for_display() -> None:
     # A large tool result must not flood the transcript or blend into the report:
     # it is capped and shown in its own fenced code block for the console.

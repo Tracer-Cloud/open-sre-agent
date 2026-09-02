@@ -1205,6 +1205,45 @@ class TestRenderMarkdownBlock:
         assert "10984" in out
         assert "tool output omitted" not in out
 
+    def test_collapses_an_independent_dump_beside_a_fenced_block(self) -> None:
+        """A fence exempts only its region — a separate dump still collapses."""
+        console, buf = _non_tty_console()
+        dump = (
+            '"login":"Tracer-Cloud",'
+            '"followers_url":"https://api.github.com/users/Tracer-Cloud/followers",'
+            '"following_url":"https://api.github.com/users/Tracer-Cloud/following{/other_user}",'
+            '"gists_url":"https://api.github.com/users/Tracer-Cloud/gists{/gist_id}",'
+            '"organizations_url":"https://api.github.com/users/Tracer-Cloud/orgs",'
+            '"type":"Organization","site_admin":false'
+        )
+        reply = f'Use this snippet:\n\n```json\n{{"stars": 10984, "forks": 1603}}\n```\n\n{dump}'
+
+        render_markdown_block(console, reply)
+
+        out = _strip_ansi(buf.getvalue())
+        assert "10984" in out  # intentional fence survives
+        assert "tool output omitted" in out  # independent dump collapsed
+        assert "followers_url" not in out
+
+    def test_keeps_dump_like_content_inside_a_fenced_block(self) -> None:
+        """Blank lines inside a fence must not expose the inner body to collapsing."""
+        console, buf = _non_tty_console()
+        inner = (
+            '{"note":"inside-fence",'
+            '"homepage":"https://example.com/inside-fence/homepage",'
+            '"clone_url":"https://example.com/inside-fence.git",'
+            '"ssh_url":"git@example.com:inside-fence/repo.git",'
+            '"description":"kept because it sits inside the intentional fence"}'
+        )
+        reply = f'```json\n{{"stars": 10984}}\n\n{inner}\n```'
+
+        render_markdown_block(console, reply)
+
+        out = _strip_ansi(buf.getvalue())
+        assert "10984" in out
+        assert "inside-fence" in out
+        assert "tool output omitted" not in out
+
 
 class TestDeferWantMeToCloser:
     """Gather path holds drifted Want-me-to until the canonical rewrite paints."""

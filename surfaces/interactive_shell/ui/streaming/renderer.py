@@ -39,6 +39,9 @@ _DUMP_MIN_CHARS = 200
 _DUMP_MIN_JSON_KEYS = 3
 _DUMP_STRUCTURAL_RATIO = 0.15
 _DUMP_STRUCTURAL_CHARS = frozenset('{}[]":,')
+# Line-start fences only — matches the streaming splitter so an inline
+# ``Use ``` to fence code`` mention does not freeze dump collapsing.
+_FENCE_LINE_RE = re.compile(r"^```", re.MULTILINE)
 
 
 def _looks_like_raw_dump(text: str) -> bool:
@@ -74,14 +77,25 @@ def _collapse_paragraph(paragraph: str) -> str:
 def _collapse_raw_dumps(text: str) -> str:
     """Replace echoed raw tool-output paragraphs with a one-line marker.
 
-    Fenced code is left untouched — a fence means the model meant to show it.
-    Works per blank-line-separated paragraph so a summary sentence beside a
-    pasted blob keeps the summary and collapses only the blob, whether the reply
-    arrives whole (finalize path) or paragraph-by-paragraph (streaming).
+    Fenced regions stay intact — a fence means the model meant to show them.
+    Independent paragraphs still collapse, including when they sit beside a
+    fence in the same reply. Works per blank-line-separated paragraph so a
+    summary sentence beside a pasted blob keeps the summary and collapses
+    only the blob, whether the reply arrives whole (finalize path) or
+    paragraph-by-paragraph (streaming).
     """
-    if "```" in text:  # fenced code — respect the model's intent
-        return text
-    return "\n\n".join(_collapse_paragraph(part) for part in re.split(r"\n[ \t]*\n", text))
+    parts = re.split(r"\n[ \t]*\n", text)
+    collapsed: list[str] = []
+    inside_fence = False
+    for part in parts:
+        fence_count = len(_FENCE_LINE_RE.findall(part))
+        if inside_fence or fence_count:
+            collapsed.append(part)
+        else:
+            collapsed.append(_collapse_paragraph(part))
+        if fence_count % 2:
+            inside_fence = not inside_fence
+    return "\n\n".join(collapsed)
 
 
 def _build_markdown_block(text: str) -> Markdown:

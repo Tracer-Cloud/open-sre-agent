@@ -117,6 +117,12 @@ class TerminalSession:
     Set by the action turn when the console preview is folded; cleared when
     the next turn's preview fits. None when nothing is collapsed."""
 
+    inline_tool_results: bool = False
+    """True when this turn already printed tool results under their call lines.
+
+    The closing reply must not repeat those results. The response composer
+    reads and clears the flag."""
+
     pending_confirm_options: tuple[tuple[str, str], ...] | None = None
     """Rows the next execution confirmation should offer, or None for Yes/No.
 

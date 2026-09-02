@@ -10,7 +10,7 @@ from __future__ import annotations
 
 import json
 
-from core.agent_harness.turns.action_driver import _format_generic_tool_payload
+from core.agent_harness.turns.display_text import format_generic_tool_payload
 from core.llm.types import ToolCall
 
 
@@ -33,7 +33,7 @@ def test_update_plan_emits_nothing_from_the_generic_formatter() -> None:
         is_error = False
 
     # Act
-    shown = _format_generic_tool_payload(
+    shown = format_generic_tool_payload(
         ToolCall(id="t1", name="update_plan", input={"plan": []}), _Result()
     )
 
