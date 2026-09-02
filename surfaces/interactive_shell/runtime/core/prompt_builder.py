@@ -9,7 +9,7 @@ from prompt_toolkit import PromptSession
 from prompt_toolkit.application import Application, run_in_terminal
 from prompt_toolkit.buffer import Buffer
 from prompt_toolkit.filters import Condition
-from prompt_toolkit.formatted_text import ANSI
+from prompt_toolkit.formatted_text import ANSI, FormattedText
 from rich.console import Console
 
 from surfaces.interactive_shell.runtime.core.state import (
@@ -247,15 +247,14 @@ class PromptBuilder:
             await asyncio.gather(submitted, return_exceptions=True)
             raise
 
-    def _prompt_placeholder(self) -> ANSI:
+    def _prompt_placeholder(self) -> FormattedText:
         # Options menus / confirmation own the keyboard — suppress free-text ghost.
         if typing_box_hidden(self.session, self.state):
-            return ANSI("")
+            return FormattedText()
         return prompt_rendering.resolve_prompt_placeholder(self.session)
 
     def render_submitted_prompt(self, console: Console, text: str) -> None:
-        # A blank row above each new user turn: Droid keeps the user row and its
-        # reply tight, with a clear gap between turns. The gap lives here (not in
-        # the row renderer) so the user row itself stays a single full-width plate.
-        console.print()
+        # The between-turns blank row is placed inside ``render_submitted_prompt``
+        # itself: the handoff-answer marker must hug the reply it answers, so the
+        # gap falls after the marker rather than blanket-above the whole turn.
         prompt_rendering.render_submitted_prompt(console, self.session, text)

@@ -90,6 +90,7 @@ def render_submitted_prompt(console: Console, session: Session, text: str) -> No
         # Keep the Ask User block in the transcript (Q white, A brand). Claim the
         # turn number so the next prompt still advances; do not paint a fake
         # ``[N] ❯`` — leave this as the Ask User card.
+        console.print()
         session.terminal.claim_turn_number()
         render_ask_user_qa(console, ask_user_pairs)
         return
@@ -102,16 +103,23 @@ def render_submitted_prompt(console: Console, session: Session, text: str) -> No
         session.terminal.pending_choice_response = stripped
         return
     if is_handoff_answer:
+        # The marker hugs the assistant answer it responds to (no gap above);
+        # the between-turns gap falls below it, before the user's input row.
         console.print(render_handoff_answer_marker())
+        console.print()
     elif autosubmitted:
         # Keep this shorter than the condition — the ``[N] ❯`` line carries the
         # full text; this only answers "is this still /goal set or real work?".
+        console.print()
         console.print(
             Text(
                 "↗ /goal — work turn (condition auto-submitted)",
                 style=str(ui_theme.DIM),
             )
         )
+    else:
+        # Blank row between the previous turn and this one (Droid rhythm).
+        console.print()
     counter = _counter_text(session.terminal.claim_turn_number())
     lines = text.splitlines() or [""]
     # Full-width surface plate + warm left bar (Droid paints the user row

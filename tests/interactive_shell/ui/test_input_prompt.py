@@ -136,7 +136,10 @@ class TestPromptTurnCounter:
         )
         render_submitted_prompt(console, session, "why does it show that?")
         raw = buf.getvalue()
-        visible = re.sub(r"\x1b\[[0-9;]*m", "", raw).rstrip("\n")
+        # A blank row precedes the echo (between-turns gap); the plate itself is
+        # the row after it.
+        assert re.sub(r"\x1b\[[0-9;]*m", "", raw).startswith("\n")
+        visible = re.sub(r"\x1b\[[0-9;]*m", "", raw).strip("\n")
         assert "▌" in visible
         assert "❯" not in visible
         assert "why does it show that?" in visible
