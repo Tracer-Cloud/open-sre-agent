@@ -236,56 +236,87 @@ def cleanup(state_file: Path) -> dict[str, Any]:
     branch = str(state["branch"])
     repo = str(state["repo"])
     pr_number = state.get("pr_number")
+    errors: list[str] = []
+    pr_closed = False
+    remote_branch_deleted = False
+    local_branch_deleted = False
+    worktree_removed = False
 
-    if pr_number is not None:
-        pr = json.loads(
+    try:
+        if pr_number is not None:
+            pr = json.loads(
+                _run(
+                    "gh",
+                    "pr",
+                    "view",
+                    str(pr_number),
+                    "--repo",
+                    repo,
+                    "--json",
+                    "body,headRefName,state",
+                    cwd=root,
+                )
+            )
+            if pr.get("headRefName") != branch or PR_MARKER not in str(pr.get("body") or ""):
+                raise DemoError("refusing to close a PR without matching demo markers")
+        else:
+            pr = _matching_open_pr(root, repo, branch)
+            pr_number = pr.get("number") if pr is not None else None
+        if pr_number is not None and pr is not None and pr.get("state") == "OPEN":
             _run(
                 "gh",
                 "pr",
-                "view",
+                "close",
                 str(pr_number),
                 "--repo",
                 repo,
-                "--json",
-                "body,headRefName,state",
+                "--delete-branch",
                 cwd=root,
             )
-        )
-        if pr.get("headRefName") != branch or PR_MARKER not in str(pr.get("body") or ""):
-            raise DemoError("refusing to close a PR without matching demo markers")
-    else:
-        pr = _matching_open_pr(root, repo, branch)
-        pr_number = pr.get("number") if pr is not None else None
-    if pr_number is not None and pr is not None and pr.get("state") == "OPEN":
-        _run(
-            "gh",
-            "pr",
-            "close",
-            str(pr_number),
-            "--repo",
-            repo,
-            "--delete-branch",
-            cwd=root,
-        )
+        pr_closed = pr is None or pr.get("state") != "OPEN" or pr_number is not None
+    except (DemoError, json.JSONDecodeError, OSError, TypeError, ValueError) as exc:
+        errors.append(f"pull request cleanup failed: {exc}")
 
-    remote_ref = _run("git", "ls-remote", "--heads", "origin", branch, cwd=root)
-    if remote_ref:
-        _run("git", "push", "origin", "--delete", branch, cwd=root)
-    registered_worktrees = _run("git", "worktree", "list", "--porcelain", cwd=root)
-    if worktree.exists() and f"worktree {worktree}" in registered_worktrees:
-        _run("git", "worktree", "remove", "--force", str(worktree), cwd=root)
-    elif worktree.exists():
-        worktree.rmdir()
-    local_branches = _run("git", "branch", "--list", branch, cwd=root)
-    if local_branches:
-        _run("git", "branch", "-D", branch, cwd=root)
-    state_file.unlink()
+    try:
+        remote_ref = _run("git", "ls-remote", "--heads", "origin", branch, cwd=root)
+        if remote_ref:
+            _run("git", "push", "origin", "--delete", branch, cwd=root)
+        remote_branch_deleted = True
+    except DemoError as exc:
+        errors.append(f"remote branch cleanup failed: {exc}")
+
+    try:
+        registered_worktrees = _run("git", "worktree", "list", "--porcelain", cwd=root)
+        if worktree.exists() and f"worktree {worktree}" in registered_worktrees:
+            _run("git", "worktree", "remove", "--force", str(worktree), cwd=root)
+        elif worktree.exists():
+            worktree.rmdir()
+        worktree_removed = True
+    except (DemoError, OSError) as exc:
+        errors.append(f"worktree cleanup failed: {exc}")
+
+    try:
+        local_branches = _run("git", "branch", "--list", branch, cwd=root)
+        if local_branches:
+            _run("git", "branch", "-D", branch, cwd=root)
+        local_branch_deleted = True
+    except DemoError as exc:
+        errors.append(f"local branch cleanup failed: {exc}")
+
+    if not errors:
+        try:
+            state_file.unlink()
+        except OSError as exc:
+            errors.append(f"state file cleanup failed: {exc}")
     return {
-        "ok": True,
-        "branch_deleted": True,
-        "pr_closed": pr_number is not None,
-        "state_file_deleted": True,
-        "worktree_removed": True,
+        "ok": not errors,
+        "branch_deleted": remote_branch_deleted and local_branch_deleted,
+        "errors": errors,
+        "local_branch_deleted": local_branch_deleted,
+        "pr_closed": pr_closed,
+        "remote_branch_deleted": remote_branch_deleted,
+        "state_file_deleted": not state_file.exists(),
+        "worktree_removed": worktree_removed,
     }
 
 
@@ -303,7 +334,7 @@ def main() -> int:
     args = _parser().parse_args()
     result = create(args.repo_root) if args.command == "create" else cleanup(args.state_file)
     print(json.dumps(result, sort_keys=True))
-    return 0
+    return 0 if result.get("ok") else 1
 
 
 if __name__ == "__main__":

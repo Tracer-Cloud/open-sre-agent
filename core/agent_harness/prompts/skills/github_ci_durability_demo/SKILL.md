@@ -97,7 +97,9 @@ Steps, in order:
    The helper refuses cleanup unless the branch prefix, temporary worktree,
    repository, and PR marker all identify this demo. It closes the PR, deletes
    the generated remote/local branch, removes its worktree, and deletes the
-   temporary state file.
+   temporary state file. If one operation fails, it still attempts every
+   independent cleanup step and retains the state file for a safe retry. Resolve
+   the reported blocker and repeat cleanup until the result has `ok=true`.
 
 8. **Report verdict**
    Report one of these exact verdict labels, followed by PR URL, before/after
