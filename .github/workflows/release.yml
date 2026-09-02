@@ -708,6 +708,19 @@ jobs:
           export VERSION="${VERSION#v}"
           bash .github/scripts/sync-homebrew-tap-formula.sh
 
+      - name: Trigger installer canary
+        if: steps.github_release.outputs.created == 'true'
+        continue-on-error: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG_NAME: ${{ needs.prepare.outputs.tag_name }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          gh api "repos/${{ github.repository }}/dispatches" \
+            -f event_type=installer-release-published \
+            -f "client_payload[tag]=${TAG_NAME}"
+
   publish-main-release:
     if: always() && needs.prepare.outputs.channel == 'main' && needs.build-binaries.result == 'success'
     runs-on: ubuntu-latest
