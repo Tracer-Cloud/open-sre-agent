@@ -25,7 +25,7 @@ from core.agent_harness.spi.accounting import SELF_RECORDING_ACTION_TOOL_NAMES
 from core.agent_harness.spi.task_plan import is_plan_diagnosis_prose
 from infrastructure.observability.trace.redaction import redact_sensitive
 from infrastructure.safety.terminal_output import strip_terminal_controls
-from infrastructure.terminal.theme import BOLD_SKILL, BRAND, DIM, HIGHLIGHT
+from infrastructure.terminal.theme import BOLD_SKILL, BRAND, DIM, HIGHLIGHT, SECONDARY
 from surfaces.interactive_shell.runtime import Session
 from surfaces.interactive_shell.runtime.core.state import SpinnerState
 from surfaces.interactive_shell.ui.streaming import render_note_block
@@ -574,19 +574,23 @@ class ActionRenderObserver:
         print_command_output(
             self.console,
             preview,
+            style=str(SECONDARY),
             on_collapse=lambda body: setattr(self.session.terminal, "collapsed_tool_output", body),
         )
         self.session.terminal.inline_tool_results = True
 
     def _render_skill_end(self, data: dict[str, Any]) -> None:
-        """Print the ``↳`` child line under the skill's ``tool_start`` parent."""
+        """Print the ``↳`` child line under the skill's ``tool_start`` parent.
+
+        The next block (another call, a note, or the ``∴`` reply) opens with
+        its own blank line — do not add one here or the gap doubles.
+        """
         if self._pending_skill_calls.pop(str(data.get("id") or ""), None) is None:
             return
         output = data.get("output")
         activated = isinstance(output, dict) and bool(output.get("ok"))
         label = "Skill activated" if activated else "Skill failed to load"
         self.console.print(Text(f"  ↳ {label}", style=DIM))
-        self.console.print()
 
 
 __all__ = [

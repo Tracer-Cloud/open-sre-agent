@@ -13,6 +13,7 @@ import infrastructure.terminal.theme as ui_theme
 from core.agent_harness.spi.prompt_chrome import normalize_three_tier_spacing
 from core.agent_harness.spi.session_goal import strip_session_goal_progress_tags
 from infrastructure.safety.terminal_output import strip_terminal_controls
+from infrastructure.text import looks_like_data_blob
 
 if TYPE_CHECKING:
     from rich.markdown import Markdown
@@ -38,30 +39,26 @@ _DUMP_TRUNCATED_MARKER = "output truncated"
 _DUMP_MIN_CHARS = 200
 _DUMP_MIN_JSON_KEYS = 3
 _DUMP_STRUCTURAL_RATIO = 0.15
-_DUMP_STRUCTURAL_CHARS = frozenset('{}[]":,')
 # Line-start fences only — matches the streaming splitter so an inline
 # ``Use ``` to fence code`` mention does not freeze dump collapsing.
 _FENCE_LINE_RE = re.compile(r"^```", re.MULTILINE)
 
 
 def _looks_like_raw_dump(text: str) -> bool:
-    """Whether *text* is an echoed tool result rather than prose.
+    """Whether a paragraph in the model's reply is an echoed tool result.
 
-    True when it carries the ``output truncated`` marker a tool cap leaves, or
-    when it is large and reads as a record/JSON blob. The ``":`` key separator
-    is common in such a dump and rare in prose, and — unlike a raw char ratio —
-    long URL values do not dilute it (a GitHub API object stays URL-heavy yet
-    keeps many keys). A structural-char ratio still catches non-JSON dense data.
-    Prose and Markdown tables/lists trip neither test.
+    Conservative by design: a paragraph collapses only when it is large and
+    dense (or carries the ``output truncated`` marker), so real prose is never
+    mistaken for a dump. The tool-result hider in ``display_text`` runs the same
+    mechanism with a smaller floor, since a raw payload is always data.
     """
-    if len(text) < _DUMP_MIN_CHARS:
-        return False  # too small to be a wall — a short block is not a problem
-    if _DUMP_TRUNCATED_MARKER in text:
-        return True
-    if text.count('":') >= _DUMP_MIN_JSON_KEYS:
-        return True
-    structural = sum(1 for ch in text if ch in _DUMP_STRUCTURAL_CHARS)
-    return structural / len(text) >= _DUMP_STRUCTURAL_RATIO
+    return looks_like_data_blob(
+        text,
+        min_chars=_DUMP_MIN_CHARS,
+        min_json_keys=_DUMP_MIN_JSON_KEYS,
+        structural_ratio=_DUMP_STRUCTURAL_RATIO,
+        truncation_marker=_DUMP_TRUNCATED_MARKER,
+    )
 
 
 def _collapse_paragraph(paragraph: str) -> str:

@@ -19,6 +19,7 @@ from infrastructure.terminal.peek import (
     cap_output_for_display,
     format_view_all_marker,
 )
+from infrastructure.text import looks_like_data_blob
 
 # Tools whose result the host already rendered to the console; their payload is
 # not re-shown in the transcript.
@@ -88,22 +89,16 @@ def cap_for_display(text: str) -> str:
 
 
 def is_data_blob(text: str) -> bool:
-    """Whether *text* is a JSON/record blob — valid, truncated, or a mid-object
-    fragment (a capped ``gh api`` response can arrive starting mid-value).
+    """Whether a tool-result payload is a JSON/record blob to keep out of the
+    transcript — valid, truncated, or a mid-object fragment (a capped
+    ``gh api`` response can arrive starting mid-value).
 
-    Detected by shape (opens an object/array) or by density of ``":`` key
-    separators, which URLs do not inflate and prose/logs almost never contain.
-    Such data is what the reply summarizes; it should not fill the transcript.
+    Aggressive by design: any payload opening with ``{``/``[``, or carrying two
+    ``":`` key separators, is data the reply already summarizes. The reply-prose
+    collapse in the streaming renderer applies the *same* mechanism with a
+    larger floor so it never mistakes real prose for a dump.
     """
-    stripped = text.strip()
-    if not stripped:
-        return False
-    if stripped[0] in "{[":
-        return True
-    # Mid-object fragments (and short gh ``summary`` previews of JSON) still
-    # carry ``":`` key separators — two is enough once the text is clearly a
-    # record slice rather than prose.
-    return stripped.count('":') >= 2
+    return looks_like_data_blob(text, min_json_keys=2, honor_open_bracket=True)
 
 
 def _user_facing_tool_text(text: str) -> str:
