@@ -148,13 +148,13 @@ def test_request_matches_webapp_contract(monkeypatch: pytest.MonkeyPatch) -> Non
 
     def capture(url: str, **kwargs: Any) -> httpx.Response:
         calls.append({"url": url, **kwargs})
-        return httpx.Response(HTTPStatus.OK, json={"balance": 9, "consumed": 2.5})
+        return httpx.Response(HTTPStatus.OK, json={"balance": 9, "consumed": 2})
 
     monkeypatch.setattr("gateway.core.billing.credits_client.httpx.post", capture)
 
     # Act
     outcome = consume_credits(
-        "org_x", amount=2.5, reason="investigation", metadata={"investigationId": "inv-1"}
+        "org_x", amount=2, reason="investigation", metadata={"investigationId": "inv-1"}
     )
 
     # Assert: bearer secret + the webapp's body shape ("amount", never "units").
@@ -164,7 +164,7 @@ def test_request_matches_webapp_contract(monkeypatch: pytest.MonkeyPatch) -> Non
     assert call["headers"]["Authorization"] == "Bearer sekrit"
     assert call["timeout"] == 5.0
     assert call["json"] == {
-        "amount": 2.5,
+        "amount": 2,
         "organizationId": "org_x",
         "reason": "investigation",
         "investigationId": "inv-1",
@@ -185,7 +185,7 @@ def test_metadata_cannot_override_billing_fields(monkeypatch: pytest.MonkeyPatch
     # Act
     consume_credits(
         organization_id="org_real",
-        amount=1.0,
+        amount=1,
         reason="slack_turn",
         metadata={"amount": 0, "organizationId": "org_injected", "reason": "free_ride"},
     )
@@ -196,6 +196,12 @@ def test_metadata_cannot_override_billing_fields(monkeypatch: pytest.MonkeyPatch
     assert sent["json"]["amount"] == 1.0
     assert sent["json"]["organizationId"] == "org_real"
     assert sent["json"]["reason"] == "slack_turn"
+
+
+@pytest.mark.parametrize("amount", [0, -1, 1.5, True])
+def test_rejects_non_positive_or_fractional_amounts(amount: Any) -> None:
+    with pytest.raises(ValueError, match="positive integer"):
+        consume_credits(organization_id="org_real", amount=amount, reason="slack_turn")
 
 
 def test_creditsoutcome_is_strenum_with_identical_values() -> None:

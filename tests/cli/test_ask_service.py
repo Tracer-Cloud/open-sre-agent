@@ -179,6 +179,30 @@ def test_run_ask_reports_denial_before_agent_failure(monkeypatch) -> None:
     assert "--dangerously-bypass-approvals" in outcome.response
 
 
+def test_run_ask_maps_hosted_credit_exhaustion_to_nonzero_upgrade_error(
+    monkeypatch,
+) -> None:
+    from core.llm.shared.llm_retry import OpenSRECreditsExhaustedError
+
+    upgrade_url = "https://app.opensre.test/usage"
+
+    def exhaust_credits(_prompt: str, _hooks: ToolExecutionHooks) -> TurnResult:
+        raise OpenSRECreditsExhaustedError(
+            "OpenSRE hosted credits are exhausted.",
+            upgrade_url=upgrade_url,
+        )
+
+    monkeypatch.setattr(service, "_run_agent_turn", exhaust_credits)
+
+    outcome = service.run_ask("prompt", allowed_tools=(), bypass_approvals=False)
+
+    assert outcome.status is AskStatus.ERROR
+    assert outcome.exit_code is AskExitCode.ERROR
+    assert outcome.error is not None
+    assert outcome.error.suggestion is not None
+    assert upgrade_url in outcome.error.suggestion
+
+
 def test_run_ask_maps_incomplete_and_cancelled_turns(monkeypatch) -> None:
     monkeypatch.setattr(
         service,

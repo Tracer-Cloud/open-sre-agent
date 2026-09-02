@@ -66,7 +66,7 @@ def _log_metering_disabled_once() -> None:
 def consume_credits(
     organization_id: str | None = None,
     *,
-    amount: float = 1.0,
+    amount: int = 1,
     reason: str,
     metadata: dict[str, Any] | None = None,
 ) -> CreditsOutcome:
@@ -75,7 +75,7 @@ def consume_credits(
     Args:
         organization_id: Neon/Clerk org id; defaults to the silo's
             ``ORGANIZATION_ID`` env value.
-        amount: Credits to consume (webapp requires a positive number).
+        amount: Whole credits to consume (webapp requires a positive integer).
         reason: Short machine-readable cause, e.g. ``"slack_turn"``.
         metadata: Optional extra JSON fields merged into the request body.
 
@@ -87,6 +87,9 @@ def consume_credits(
     base_url = _env(WEBAPP_URL_ENV).rstrip("/")
     token = webapp_bearer_token()
     org = (organization_id or organization_id_for_silo()).strip()
+
+    if isinstance(amount, bool) or not isinstance(amount, int) or amount <= 0:
+        raise ValueError("amount must be a positive integer")
 
     if not (base_url and token and org):
         _log_metering_disabled_once()

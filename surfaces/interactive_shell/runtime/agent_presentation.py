@@ -93,9 +93,15 @@ async def _render_agent_presentation_transition(
                 raise ValueError("turn_error event requires an error")
             console.print(f"[{ERROR}]turn error:[/] {escape(str(exc))}")
             # On a credit/billing wall, add the in-tool recovery hint.
-            from core.llm.shared.llm_retry import LLMCreditExhaustedError
+            from core.llm.shared.llm_retry import (
+                LLMCreditExhaustedError,
+                OpenSRECreditsExhaustedError,
+            )
 
-            if isinstance(exc, LLMCreditExhaustedError):
+            if isinstance(exc, OpenSRECreditsExhaustedError):
+                destination = exc.upgrade_url or "the OpenSRE Usage page"
+                console.print(f"[{DIM}]Upgrade or buy a credit top-up: {escape(destination)}[/]")
+            elif isinstance(exc, LLMCreditExhaustedError):
                 console.print(f"[{DIM}]Run /model to switch to another provider.[/]")
                 console.print(
                     f"[{DIM}]Or run /auth login <provider> to re-authenticate "

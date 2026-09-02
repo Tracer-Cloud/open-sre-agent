@@ -1548,6 +1548,52 @@ class _FakeQuotaError(OpenAIRateLimitError):
 _FakeInsufficientQuotaError = _FakeQuotaError
 
 
+def test_openai_invoke_hosted_credit_exhaustion_preserves_upgrade_url(
+    monkeypatch,
+) -> None:
+    """A generic HTTP 402 from the OpenSRE proxy stops without retrying."""
+    from core.llm.shared.llm_retry import OpenSRECreditsExhaustedError
+
+    call_count = 0
+    upgrade_url = "https://app.opensre.dev/usage"
+
+    class _HostedCreditError(Exception):
+        code = "opensre_credits_exhausted"
+        body = {
+            "code": "opensre_credits_exhausted",
+            "upgrade_url": "https://app.opensre.dev/usage",
+        }
+
+    class _Completions:
+        def create(self, **_kwargs):
+            nonlocal call_count
+            call_count += 1
+            raise _HostedCreditError("Payment required")
+
+    class _Chat:
+        def __init__(self) -> None:
+            self.completions = _Completions()
+
+    class _OpenAI:
+        def __init__(self, **_kwargs) -> None:
+            self.chat = _Chat()
+
+    monkeypatch.setattr(
+        "core.llm.providers.provider_credentials.resolve_llm_api_key", lambda _env: "k"
+    )
+    monkeypatch.setattr(sdk_llm, "OpenAI", _OpenAI)
+    sleeps: list[float] = []
+    monkeypatch.setattr(sdk_llm.time, "sleep", lambda seconds: sleeps.append(seconds))
+
+    client = sdk_llm.OpenAILLMClient(model="gpt-4", api_key_env="OPENAI_API_KEY")
+    with pytest.raises(OpenSRECreditsExhaustedError) as excinfo:
+        client.invoke("hi")
+
+    assert call_count == 1
+    assert sleeps == []
+    assert excinfo.value.upgrade_url == upgrade_url
+
+
 def test_openai_invoke_rate_limit_insufficient_quota_raises_immediately(monkeypatch) -> None:
     """insufficient_quota (billing limit) must raise RuntimeError without retrying."""
     call_count = 0

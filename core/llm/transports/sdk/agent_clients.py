@@ -698,6 +698,7 @@ class OpenAIAgentClient:
             except PermissionDeniedError as err:
                 raise RuntimeError(f"{self._provider_label} request forbidden: {err}") from err
             except Exception as err:
+                maybe_raise_credit_exhausted(self._provider_label, err)
                 last_err = err
                 if attempt == _RETRY_MAX_ATTEMPTS - 1:
                     raise RuntimeError(f"{self._provider_label} API failed: {err}") from err
