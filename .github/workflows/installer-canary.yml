@@ -30,6 +30,8 @@ env:
 jobs:
   canary:
     if: github.repository == 'Tracer-Cloud/opensre'
+    permissions:
+      contents: read
     strategy:
       fail-fast: false
       matrix:
@@ -117,6 +119,13 @@ jobs:
               gh issue close "$existing_issue" --repo "${{ github.repository }}" \
                 --reason completed
             fi
+            exit 0
+          fi
+
+          # cancelled/skipped are not evidence the installers are broken — leave
+          # any existing tracking issue as-is and don't open a new one on a guess.
+          if [ "$CANARY_RESULT" != "failure" ]; then
+            echo "Canary result was '$CANARY_RESULT' (not failure); nothing to report."
             exit 0
           fi
 
