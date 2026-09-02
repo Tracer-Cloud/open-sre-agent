@@ -36,7 +36,7 @@ def _strip_ansi(text: str) -> str:
 
 
 def _placeholder_text(session: Session) -> str:
-    return resolve_prompt_placeholder(session).value
+    return "".join(fragment for _style, fragment in resolve_prompt_placeholder(session))
 
 
 class _RefreshFakeBuffer:
@@ -213,7 +213,7 @@ class TestPromptMessage:
 class TestResolvePromptPlaceholder:
     def test_default_when_no_session_context(self) -> None:
         session = Session()
-        assert _strip_ansi(_placeholder_text(session)) == "see what you can do"
+        assert _placeholder_text(session) == "see what you can do"
 
     def test_placeholder_prompts_to_continue_an_unfinished_plan(self) -> None:
         from core.agent_harness.task_plan.plan import parse_task_plan

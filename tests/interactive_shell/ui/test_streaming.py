@@ -27,26 +27,29 @@ def _strip_ansi(text: str) -> str:
     return re.sub(r"\x1b\[[0-9;?]*[A-Za-z]", "", text)
 
 
-def test_render_note_block_is_dim_and_indented_but_keeps_bold() -> None:
-    # A working note reads as dim + indented (no glyph), distinct from the bright
-    # reply, while the bold action word stays bold within the dim base.
+def test_render_note_block_is_recessed_and_indented_but_keeps_bold() -> None:
+    # A working note reads as soft recessed grey + indented (no glyph), distinct
+    # from the bright reply, while the bold action word stays bold.
     from infrastructure.terminal import theme as ui_theme
 
+    ui_theme.set_active_theme("amber")
     buf = io.StringIO()
     console = Console(
-        file=buf, force_terminal=True, color_system="truecolor", width=80, highlight=False
+        file=buf,
+        force_terminal=True,
+        color_system="truecolor",
+        legacy_windows=False,
+        no_color=False,
+        width=80,
+        highlight=False,
     )
 
     render_note_block(console, "I'll **load** the workflow.")
 
     raw = buf.getvalue()
-    dim = str(ui_theme.DIM)  # e.g. "#6E6E6E"
-    r, g, b = (int(dim[i : i + 2], 16) for i in (1, 3, 5))
-    # DIM may render as 8-colour (``90m``) or truecolor (``38;2;r;g;b``) depending
-    # on the color system the runner advertises — accept either so the test does
-    # not hinge on terminal capability.
-    assert f"38;2;{r};{g};{b}" in raw or "\x1b[90m" in raw  # dim base on the note body
-    assert re.search(r"\x1b\[[0-9;]*1[;m]", raw)  # bold action word survives the dim base
+    # Soft recessed base (SECONDARY), not ghost DIM — accept truecolor or 256.
+    assert "38;2;" in raw or "38;5;" in raw
+    assert re.search(r"\x1b\[[0-9;]*1[;m]", raw)  # bold action word survives
     first_line = _strip_ansi(raw).splitlines()[0]
     assert first_line.startswith("   ")  # three-space left indent, no glyph
     assert "load the workflow" in first_line
@@ -757,20 +760,20 @@ class TestRenderResponseHeader:
     to one helper, so we lock in the visible output here.
     """
 
-    def test_emits_bullet_glyph_and_label(self) -> None:
+    def test_emits_bullet_glyph_without_role_label(self) -> None:
         console, buf = _tty_console()
         render_response_header(console, "assistant")
         output = _strip_ansi(buf.getvalue())
         assert "∴" in output
-        assert "assistant" in output
+        assert "assistant" not in output
 
-    def test_label_is_passthrough(self) -> None:
-        """The function takes the label verbatim — callers pass either
-        ``STREAM_LABEL_ANSWER`` or ``STREAM_LABEL_ASSISTANT`` (or any
-        free-form word). No filtering, no defaults."""
+    def test_role_label_is_accepted_but_not_painted(self) -> None:
+        """Callers still pass ``STREAM_LABEL_ANSWER`` / ``STREAM_LABEL_ASSISTANT``
+        for port compatibility; the shell no longer echoes the dim role word."""
         console, buf = _tty_console()
         render_response_header(console, "answer")
-        assert "answer" in _strip_ansi(buf.getvalue())
+        assert "answer" not in _strip_ansi(buf.getvalue())
+        assert "∴" in _strip_ansi(buf.getvalue())
 
 
 class TestFormatTokenCountShort:

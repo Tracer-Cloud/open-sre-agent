@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from prompt_toolkit.formatted_text import ANSI
+from prompt_toolkit.formatted_text import ANSI, FormattedText
 from rich.console import Console
 from rich.text import Text
 
@@ -23,6 +23,11 @@ from surfaces.interactive_shell.ui.input_prompt.layout import (
 
 DEFAULT_PLACEHOLDER_TEXT = "see what you can do"
 _PLAN_CONTINUE_PLACEHOLDER = "continue the plan, or type a message"
+
+
+def _placeholder_formatted(text: str) -> FormattedText:
+    """Ghost text on the composer plate (style carries INPUT_SURFACE bg)."""
+    return FormattedText([("class:placeholder", text)])
 
 
 def _prompt_turn_number(session: Session) -> int:
@@ -134,11 +139,15 @@ def resolve_prompt_prefix_ansi(*, inline_spinner: str, idle_hint: str) -> str:
 
 
 def resolve_idle_hint_ansi(session: Session) -> str:
-    """Return the one-line Ready/commands hint for the fixed-height status row."""
-    from surfaces.interactive_shell.runtime.core.state import ready_hint_ansi
+    """No idle chrome above the composer.
 
+    The command/shortcut hints live once in the launch banner and the composer
+    footer, so the prompt does not repeat a "Ready · …" line on every turn. That
+    recurring line also stacked into duplicate copies on terminal resize; with
+    nothing rendered here, there is nothing to leave behind.
+    """
     del session
-    return ready_hint_ansi()
+    return ""
 
 
 def ctrl_c_exit_hint_ansi() -> str:
@@ -154,11 +163,12 @@ def composer_footer_ansi() -> str:
     return f"{ui_theme.DIM_ANSI}{clipped}{ui_theme.ANSI_RESET}"
 
 
-def resolve_prompt_placeholder(session: Session) -> ANSI:
+def resolve_prompt_placeholder(session: Session) -> FormattedText:
     """Contextual ghost text when the input buffer is empty.
 
-    Built per redraw (not at import) so theme ANSI cannot freeze stale, and so
-    an unfinished live plan can replace the default exploratory hint.
+    Built per redraw (not at import) so theme styles cannot freeze stale, and so
+    an unfinished live plan can replace the default exploratory hint. Uses a
+    style class (not raw ANSI) so the composer INPUT_SURFACE fill is preserved.
     """
     parts: list[str] = []
     if session.terminal.trust_mode:
@@ -169,15 +179,13 @@ def resolve_prompt_placeholder(session: Session) -> ANSI:
     if session.resumed_from_name:
         parts.append(f"resumed: {_short_meta(session.resumed_from_name, max_len=32)}")
     if parts:
-        return ANSI(f"{ui_theme.DIM_ANSI}{' · '.join(parts)}{ui_theme.ANSI_RESET}")
+        return _placeholder_formatted(" · ".join(parts))
     if (
         session.task_plan is not None
         and session.task_plan.all_pending
         and session.plan_only_until_authorized
     ):
-        return ANSI(
-            f"{ui_theme.DIM_ANSI}say go to start the plan, or type a message{ui_theme.ANSI_RESET}"
-        )
+        return _placeholder_formatted("say go to start the plan, or type a message")
     plan = session.task_plan
     if (
         plan is not None
@@ -185,5 +193,5 @@ def resolve_prompt_placeholder(session: Session) -> ANSI:
         and not plan.all_completed
         and not session.plan_only_until_authorized
     ):
-        return ANSI(f"{ui_theme.DIM_ANSI}{_PLAN_CONTINUE_PLACEHOLDER}{ui_theme.ANSI_RESET}")
-    return ANSI(f"{ui_theme.DIM_ANSI}{DEFAULT_PLACEHOLDER_TEXT}{ui_theme.ANSI_RESET}")
+        return _placeholder_formatted(_PLAN_CONTINUE_PLACEHOLDER)
+    return _placeholder_formatted(DEFAULT_PLACEHOLDER_TEXT)

@@ -161,8 +161,8 @@ def test_reply_block_paints_orange_marker_and_themed_body() -> None:
     assert "∴" in output
     # Factory droid orange #D78700 → 215,135,0
     assert "38;2;215;135;0m" in output
-    # Body uses theme TEXT (#B6BAC2 on blue), not unstyled default white
-    assert "38;2;182;186;194m" in output
+    # Body uses sunny Droid-like agent grey TEXT (#D0D0D0)
+    assert "38;2;208;208;208m" in output
 
 
 def test_palette_registry_keys_match_the_config_vocabulary() -> None:

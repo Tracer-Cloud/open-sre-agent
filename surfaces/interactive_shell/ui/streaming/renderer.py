@@ -152,7 +152,8 @@ def render_note_block(console: Console, text: str) -> None:
         return
     with console.use_theme(ui_theme.MARKDOWN_THEME):
         console.print(
-            Padding(_build_markdown_block(visible), (0, 0, 0, 3)), style=str(ui_theme.DIM)
+            Padding(_build_markdown_block(visible), (0, 0, 0, 3)),
+            style=str(ui_theme.SECONDARY),
         )
 
 
@@ -196,5 +197,10 @@ def render_response_header(console: Console, label: str) -> None:
     A single triangle is opensre's uniquely identifiable agent marker. Shared
     with ``action_turn.run_action_tool_turn`` so the planned-actions path and the
     streaming response path use the exact same prefix.
+
+    ``label`` is accepted for port compatibility (callers still pass
+    ``answer`` / ``assistant``) but is not painted — a dim role word under the
+    marker read as school-project chrome next to Droid's silent replies.
     """
-    console.print(f"[{_reply_marker_style()}]∴[/] [{ui_theme.DIM}]{label}[/]")
+    del label
+    console.print(f"[{_reply_marker_style()}]∴[/]")

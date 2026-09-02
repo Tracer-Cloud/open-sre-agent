@@ -36,7 +36,8 @@ class Theme(StrEnum):
 
 
 #: Theme applied when none is configured or an unknown name is requested.
-DEFAULT_THEME_NAME = Theme.BLUE
+# Amber matches Factory droid's warm gold chrome (sunny); blue reads cold/rainy.
+DEFAULT_THEME_NAME = Theme.AMBER
 
 #: Theme names in display order (a plain tuple for callers that iterate names).
 THEME_NAMES: tuple[Theme, ...] = tuple(Theme)

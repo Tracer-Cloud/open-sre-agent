@@ -31,12 +31,12 @@ def auto_status_ansi(session: Session) -> str:
     rest = "" if title_end < 0 else left[title_end:]
     if not right:
         clipped = clip_prompt_text(left, width)
-        return f"{ui_theme.PROMPT_ACCENT_ANSI}{clipped}{ui_theme.ANSI_RESET}"
+        return f"{ui_theme.BOLD_REPLY_MARKER_ANSI}{clipped}{ui_theme.ANSI_RESET}"
     pad = max(width - len(left) - len(right), gap)
     return (
-        f"{ui_theme.PROMPT_ACCENT_ANSI}{title}{ui_theme.ANSI_RESET}"
+        f"{ui_theme.BOLD_REPLY_MARKER_ANSI}{title}{ui_theme.ANSI_RESET}"
         f"{ui_theme.DIM_ANSI}{rest}{ui_theme.ANSI_RESET}"
-        f"{' ' * pad}{ui_theme.BRAND_ANSI}{right}{ui_theme.ANSI_RESET}"
+        f"{' ' * pad}{ui_theme.SECONDARY_ANSI}{right}{ui_theme.ANSI_RESET}"
     )
 
 

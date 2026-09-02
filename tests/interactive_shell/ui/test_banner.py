@@ -1,4 +1,4 @@
-"""Tests for the compact interactive-shell launch banner."""
+"""Tests for the interactive-shell launch banner."""
 
 from __future__ import annotations
 
@@ -26,20 +26,23 @@ def _fixed_status() -> LaunchStatus:
     )
 
 
-def test_launch_banner_is_borderless_and_shows_only_compact_identity(
-    monkeypatch: object,
-) -> None:
+def test_launch_banner_is_borderless_centered_hero(monkeypatch: object) -> None:
     monkeypatch.setattr(banner_module, "load_launch_status", _fixed_status)
-    monkeypatch.setattr(banner_module, "get_opensre_version", lambda: "2026.8.27+main.85fd865")
+    monkeypatch.setattr(banner_module, "get_opensre_version", lambda: "0.1.2026.9.2+main.baba83a")
     console_file = io.StringIO()
     console = Console(file=console_file, force_terminal=False, highlight=False, width=120)
 
     banner_module.render_launch_banner(console)
 
     output = console_file.getvalue()
-    assert "opensre  ·  v2026.8.27+main.85fd865" in output
+    assert "opensre" in output
+    assert "v0.1" in output
     assert "Skills (21) ✓" in output
     assert "Integrations (2) ✓" in output
+    assert "TIP" in output
+    assert "/theme" in output
+    assert "Ctrl+O" in output
+    assert "/ commands" in output
     # Only the two capability items — no MCPs or AGENTS.md line.
     assert "MCPs" not in output
     assert "AGENTS.md" not in output
@@ -134,9 +137,10 @@ def test_status_probes_survive_loader_failures(monkeypatch: object) -> None:
     assert banner_state_module._count_configured_integrations() == 0
 
 
-def test_banner_uses_runtime_version(monkeypatch: object) -> None:
+def test_banner_shows_the_full_build_version(monkeypatch: object) -> None:
     monkeypatch.setattr(banner_module, "load_launch_status", _fixed_status)
     details = banner_module._build_details(_fixed_status()).plain
+    # The banner shows the full build version (identity for support / bug reports).
     assert f"v{get_opensre_version()}" in details
 
 

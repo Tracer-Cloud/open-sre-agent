@@ -1,4 +1,8 @@
-"""Compact launch banner shared by the CLI landing page and REPL."""
+"""Launch banner shared by the CLI landing page and REPL.
+
+Centered hero (mark + identity + tip + shortcuts + capability chips) so the
+first viewport reads like a shipped product, not a left-aligned school demo.
+"""
 
 from __future__ import annotations
 
@@ -7,25 +11,35 @@ import enum
 from rich.align import Align
 from rich.console import Console, Group, RenderableType
 from rich.padding import Padding
-from rich.table import Table
 from rich.text import Text
 
 from config.constants import PRODUCT_NAME
 from config.version import get_opensre_version
-from infrastructure.terminal.theme import BRAND, DIM, ERROR, HIGHLIGHT, SECONDARY, TEXT
+from infrastructure.terminal.theme import (
+    BOLD_SKILL,
+    BRAND,
+    DIM,
+    ERROR,
+    HIGHLIGHT,
+    SECONDARY,
+    TEXT,
+)
 from surfaces.shared.terminal.banner.banner_state import LaunchStatus, load_launch_status
 
-_SIDE_BY_SIDE_MIN_WIDTH = 72
 _BANNER_VERTICAL_PADDING = 1
 
-#: Identity separator and version prefix on the ``opensre · vX`` line.
-_IDENTITY_SEPARATOR = "  ·  "
+#: Version prefix under the product name.
 _VERSION_PREFIX = "v"
 #: Capability-status glyphs: present/usable vs. absent.
 _STATUS_OK_GLYPH = "✓"
 _STATUS_MISSING_GLYPH = "✗"
 #: Spacing between status items.
-_STATUS_ITEM_GAP = "   "
+_STATUS_ITEM_GAP = "     "
+
+#: One tip under the identity — mirrors Droid's launch tip, OpenSRE-specific.
+_TIP_BODY = "try /theme for a new look · Ctrl+O expands long tool output"
+#: Keyboard hints (real bindings, not aspirational shortcuts).
+_SHORTCUTS_LINE = "/ commands · tab tool details · ? help · Enter send"
 
 
 class LaunchStatusLabel(enum.StrEnum):
@@ -51,8 +65,12 @@ _LOGO_ROWS: tuple[str, ...] = (
 
 
 def _build_logo_mark() -> Text:
-    """Return the overlapping-ring OpenSRE mark."""
-    return Text("\n".join(_LOGO_ROWS), style=SECONDARY, no_wrap=True)
+    """Return the overlapping-ring OpenSRE mark in a bright, confident accent.
+
+    Bold ``HIGHLIGHT`` (not dim grey) so the hero reads crisp and high-contrast
+    like a landing screen, rather than washed-out.
+    """
+    return Text("\n".join(_LOGO_ROWS), style=f"bold {HIGHLIGHT}", no_wrap=True)
 
 
 def _append_status_item(
@@ -68,17 +86,32 @@ def _append_status_item(
     if count is not None:
         line.append(f" ({count})", style=SECONDARY)
     glyph = _STATUS_OK_GLYPH if available else _STATUS_MISSING_GLYPH
-    line.append(f" {glyph}", style=HIGHLIGHT if available else ERROR)
+    # Green success / red missing — same signal language as Droid's chips.
+    line.append(f" {glyph}", style=BOLD_SKILL if available else ERROR)
 
 
-def _build_details(status: LaunchStatus) -> Text:
-    """Return the product/version line and compact capability summary."""
-    identity = Text(no_wrap=True)
-    identity.append(PRODUCT_NAME, style=f"bold {TEXT}")
-    identity.append(_IDENTITY_SEPARATOR, style=DIM)
-    identity.append(f"{_VERSION_PREFIX}{get_opensre_version()}", style=BRAND)
+def _build_identity() -> Text:
+    """Centered product name + clean marketing version (no build tail)."""
+    name = Text(PRODUCT_NAME, style=f"bold {TEXT}", justify="center")
+    version = Text(
+        f"{_VERSION_PREFIX}{get_opensre_version()}",
+        style=str(BRAND),
+        justify="center",
+    )
+    return Text("\n").join([name, version])
 
-    capabilities = Text(overflow="fold")
+
+def _build_tip_block() -> Text:
+    tip = Text(no_wrap=False)
+    tip.append("TIP", style=f"bold {HIGHLIGHT}")
+    tip.append("  ", style=DIM)
+    tip.append(_TIP_BODY, style=str(SECONDARY))
+    shortcuts = Text(_SHORTCUTS_LINE, style=str(DIM))
+    return Text("\n").join([tip, shortcuts])
+
+
+def _build_capabilities(status: LaunchStatus) -> Text:
+    capabilities = Text(overflow="fold", justify="center")
     _append_status_item(
         capabilities,
         LaunchStatusLabel.SKILLS,
@@ -91,7 +124,20 @@ def _build_details(status: LaunchStatus) -> Text:
         status.integration_count,
         available=status.integration_count > 0,
     )
-    return Text("\n").join([identity, Text(), capabilities])
+    return capabilities
+
+
+def _build_details(status: LaunchStatus) -> Text:
+    """Return identity + tip + capability summary (tests assert version here)."""
+    return Text("\n").join(
+        [
+            _build_identity(),
+            Text(),
+            _build_tip_block(),
+            Text(),
+            _build_capabilities(status),
+        ]
+    )
 
 
 def build_launch_banner(
@@ -99,30 +145,16 @@ def build_launch_banner(
     *,
     session: object = None,
 ) -> RenderableType:
-    """Build the responsive borderless OpenSRE launch banner."""
+    """Build the centered, borderless OpenSRE launch banner."""
     del session  # Reserved for future session-scoped launch indicators.
-    console = console or Console(
-        highlight=False,
-        force_terminal=True,
-        color_system="truecolor",
-        legacy_windows=False,
-    )
+    del console  # Width no longer switches layout; always stack/center.
     logo = _build_logo_mark()
     details = _build_details(load_launch_status())
-
-    if console.width < _SIDE_BY_SIDE_MIN_WIDTH:
-        body: RenderableType = Group(
-            Align.center(logo),
-            Text(),
-            Align.center(details),
-        )
-    else:
-        grid = Table.grid(padding=(0, 5), expand=False)
-        grid.add_column(vertical="middle")
-        grid.add_column(vertical="middle")
-        grid.add_row(logo, details)
-        body = Align.center(grid)
-
+    body: RenderableType = Group(
+        Align.center(logo),
+        Text(),
+        Align.center(details),
+    )
     return Padding(body, (_BANNER_VERTICAL_PADDING, 0))
 
 
@@ -131,7 +163,7 @@ def render_launch_banner(
     *,
     session: object = None,
 ) -> None:
-    """Print the compact OpenSRE launch banner."""
+    """Print the OpenSRE launch banner."""
     console = console or Console(
         highlight=False,
         force_terminal=True,

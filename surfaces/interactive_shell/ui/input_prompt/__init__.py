@@ -6,7 +6,7 @@ from collections.abc import Callable
 
 from prompt_toolkit import PromptSession
 from prompt_toolkit.filters import Condition, to_filter
-from prompt_toolkit.formatted_text import ANSI
+from prompt_toolkit.formatted_text import ANSI, FormattedText
 from prompt_toolkit.layout.containers import (
     AnyContainer,
     ConditionalContainer,
@@ -19,7 +19,6 @@ from prompt_toolkit.layout.controls import FormattedTextControl
 from prompt_toolkit.layout.dimension import Dimension
 from prompt_toolkit.widgets import Frame
 
-from infrastructure.terminal import theme as ui_theme
 from surfaces.interactive_shell.prompt_history import load_prompt_history
 from surfaces.interactive_shell.runtime import Session
 from surfaces.interactive_shell.ui.input_prompt.completion import ShellCompleter
@@ -81,7 +80,10 @@ def _install_prompt_frame(
 
     before_input = main_input.content.children[0]
     editable_body = _limit_editable_height(main_input.content)
-    composer: AnyContainer = Frame(editable_body, style="class:composer")
+    # Inner surface so the editable rows share INPUT_SURFACE with the border
+    # (otherwise the frame looks hollow against the terminal bg).
+    surface_body: AnyContainer = HSplit([editable_body], style="class:composer-body")
+    composer: AnyContainer = Frame(surface_body, style="class:composer")
     footer: AnyContainer = Window(
         FormattedTextControl(lambda: ANSI(composer_footer_ansi())),
         height=1,
@@ -139,8 +141,12 @@ def build_prompt_session(
     *,
     hide_composer: Callable[[], bool] | None = None,
 ) -> PromptSession[str]:
-    def _default_placeholder() -> ANSI:
-        return ANSI(f"{ui_theme.DIM_ANSI}{DEFAULT_PLACEHOLDER_TEXT}{ui_theme.ANSI_RESET}")
+    def _default_placeholder() -> FormattedText:
+        from surfaces.interactive_shell.ui.input_prompt.rendering import (
+            _placeholder_formatted,
+        )
+
+        return _placeholder_formatted(DEFAULT_PLACEHOLDER_TEXT)
 
     placeholder = (
         (lambda: resolve_prompt_placeholder(session))
