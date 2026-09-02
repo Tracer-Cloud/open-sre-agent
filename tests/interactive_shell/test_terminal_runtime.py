@@ -177,6 +177,7 @@ def test_build_prompt_session_installs_growing_bordered_composer() -> None:
     from prompt_toolkit.layout.containers import (
         FloatContainer,
         HSplit,
+        VSplit,
         Window,
     )
 
@@ -195,7 +196,8 @@ def test_build_prompt_session_installs_growing_bordered_composer() -> None:
     assert isinstance(composer, HSplit)
     assert composer.height is None
     editable_row = composer.children[1]
-    surface_body = editable_row.children[1].get_container()
+    assert isinstance(editable_row, VSplit)
+    surface_body = editable_row.children[1]
     assert isinstance(surface_body, HSplit)
     editable_body = surface_body.children[0]
     default_buffer_slot = editable_body.children[0]
