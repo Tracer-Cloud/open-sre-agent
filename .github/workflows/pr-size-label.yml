@@ -4,7 +4,10 @@
 name: PR Size Label
 
 on:
-  pull_request:
+  # pull_request_target (not pull_request) so fork PRs get a write-scoped
+  # token — this workflow never checks out PR code, only reads the file list
+  # and mutates labels via the API, so it's safe against untrusted PR content.
+  pull_request_target:
     branches: [main]
     types: [opened, synchronize, reopened]
 
