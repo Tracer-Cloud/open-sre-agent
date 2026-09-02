@@ -54,12 +54,6 @@ get_lambda_configuration
 get_lambda_errors
 get_lambda_invocation_logs
 get_pods_on_node
-get_postgresql_current_queries
-get_postgresql_lock_status
-get_postgresql_replication_status
-get_postgresql_server_status
-get_postgresql_slow_queries
-get_postgresql_table_stats
 get_redis_client_list
 get_redis_latency_doctor
 get_redis_list_depth

@@ -6,6 +6,7 @@ from typing import Any
 
 from pydantic import BaseModel, Field
 
+from core.domain.types.evidence import record_evidence_entry
 from core.domain.types.tools import ToolSurface
 from core.tool import EvidenceType, SideEffectLevel
 from core.tool_framework import tool
@@ -16,6 +17,37 @@ from integrations.postgresql import (
     postgresql_is_available,
     resolve_postgresql_config,
 )
+
+
+def _map_get_postgresql_slow_queries(
+    evidence: dict[str, Any], output: dict[str, Any], _tool_input: dict[str, Any]
+) -> None:
+    """Cite the slow-query count and the slowest mean execution time."""
+    if not output.get("available"):
+        return
+    if not output.get("extension_available", True):
+        record_evidence_entry(
+            evidence,
+            source="get_postgresql_slow_queries",
+            label="PostgreSQL Slow Queries",
+            summary="pg_stat_statements extension not installed",
+        )
+        return
+    queries = output.get("queries") or []
+    if not isinstance(queries, list) or not queries:
+        return
+    parts = [f"{len(queries)} slow query/queries"]
+    means = [
+        q.get("mean_time_ms") for q in queries if isinstance(q.get("mean_time_ms"), (int, float))
+    ]
+    if means:
+        parts.append(f"slowest mean {max(means):.0f}ms")
+    record_evidence_entry(
+        evidence,
+        source="get_postgresql_slow_queries",
+        label="PostgreSQL Slow Queries",
+        summary=", ".join(parts),
+    )
 
 
 class PostgreSQLSlowQueriesInput(BaseModel):
@@ -74,6 +106,7 @@ class PostgreSQLSlowQueriesOutput(BaseModel):
     is_available=postgresql_is_available,
     injected_params=("host",),
     extract_params=postgresql_extract_params,
+    evidence_mapper=_map_get_postgresql_slow_queries,
 )
 def get_postgresql_slow_queries(
     host: str,

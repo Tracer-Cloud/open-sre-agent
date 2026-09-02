@@ -2,6 +2,7 @@
 
 from typing import Any
 
+from core.domain.types.evidence import record_evidence_entry
 from core.domain.types.tools import ToolSurface
 from core.tool_framework import tool
 from core.tool_framework.utils import call_db_tool_with_default_db_warning
@@ -11,6 +12,35 @@ from integrations.postgresql import (
     postgresql_is_available,
     resolve_postgresql_config,
 )
+
+
+def _map_get_postgresql_replication_status(
+    evidence: dict[str, Any], output: dict[str, Any], _tool_input: dict[str, Any]
+) -> None:
+    """Cite primary/replica role and streaming replica count."""
+    if not output.get("available"):
+        return
+    if not output.get("is_primary", False):
+        record_evidence_entry(
+            evidence,
+            source="get_postgresql_replication_status",
+            label="PostgreSQL Replication Status",
+            summary="server is a replica, not a primary",
+        )
+        return
+    replicas = output.get("replicas") or []
+    count = output.get("replica_count")
+    if not isinstance(count, int) or count <= 0:
+        count = len(replicas) if isinstance(replicas, list) else 0
+    if count <= 0:
+        return
+    parts = [f"{count} streaming replica(s)"]
+    record_evidence_entry(
+        evidence,
+        source="get_postgresql_replication_status",
+        label="PostgreSQL Replication Status",
+        summary=", ".join(parts),
+    )
 
 
 @tool(
@@ -26,6 +56,7 @@ from integrations.postgresql import (
     is_available=postgresql_is_available,
     injected_params=("host",),
     extract_params=postgresql_extract_params,
+    evidence_mapper=_map_get_postgresql_replication_status,
 )
 def get_postgresql_replication_status(
     host: str,

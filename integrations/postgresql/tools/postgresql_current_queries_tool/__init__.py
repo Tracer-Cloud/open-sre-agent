@@ -2,6 +2,7 @@
 
 from typing import Any
 
+from core.domain.types.evidence import record_evidence_entry
 from core.domain.types.tools import ToolSurface
 from core.tool_framework import tool
 from core.tool_framework.utils import call_db_tool_with_default_db_warning
@@ -11,6 +12,31 @@ from integrations.postgresql import (
     postgresql_is_available,
     resolve_postgresql_config,
 )
+
+
+def _map_get_postgresql_current_queries(
+    evidence: dict[str, Any], output: dict[str, Any], _tool_input: dict[str, Any]
+) -> None:
+    """Cite the count of long-running queries and their longest duration."""
+    if not output.get("available"):
+        return
+    queries = output.get("queries") or []
+    if not isinstance(queries, list) or not queries:
+        return
+    parts = [f"{len(queries)} running query/queries"]
+    durations = [
+        q.get("duration_seconds")
+        for q in queries
+        if isinstance(q.get("duration_seconds"), (int, float))
+    ]
+    if durations:
+        parts.append(f"max duration {max(durations)}s")
+    record_evidence_entry(
+        evidence,
+        source="get_postgresql_current_queries",
+        label="PostgreSQL Current Queries",
+        summary=", ".join(parts),
+    )
 
 
 @tool(
@@ -28,6 +54,7 @@ from integrations.postgresql import (
     is_available=postgresql_is_available,
     injected_params=("host",),
     extract_params=postgresql_extract_params,
+    evidence_mapper=_map_get_postgresql_current_queries,
 )
 def get_postgresql_current_queries(
     host: str,

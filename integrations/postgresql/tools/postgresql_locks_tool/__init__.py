@@ -2,6 +2,7 @@
 
 from typing import Any
 
+from core.domain.types.evidence import record_evidence_entry
 from core.domain.types.tools import ToolSurface
 from core.tool import EvidenceType, SideEffectLevel
 from core.tool_framework import tool
@@ -12,6 +13,29 @@ from integrations.postgresql import (
     postgresql_is_available,
     resolve_postgresql_config,
 )
+
+
+def _map_get_postgresql_lock_status(
+    evidence: dict[str, Any], output: dict[str, Any], _tool_input: dict[str, Any]
+) -> None:
+    """Cite blocked-query count and the longest blocking wait."""
+    if not output.get("available"):
+        return
+    blocked = output.get("blocked_queries") or []
+    if not isinstance(blocked, list) or not blocked:
+        return
+    parts = [f"{len(blocked)} blocked query/queries"]
+    waits = [
+        q.get("wait_seconds") for q in blocked if isinstance(q.get("wait_seconds"), (int, float))
+    ]
+    if waits:
+        parts.append(f"longest wait {max(waits)}s")
+    record_evidence_entry(
+        evidence,
+        source="get_postgresql_lock_status",
+        label="PostgreSQL Lock Status",
+        summary=", ".join(parts),
+    )
 
 
 @tool(
@@ -38,6 +62,7 @@ from integrations.postgresql import (
     is_available=postgresql_is_available,
     injected_params=("host",),
     extract_params=postgresql_extract_params,
+    evidence_mapper=_map_get_postgresql_lock_status,
 )
 def get_postgresql_lock_status(
     host: str,
