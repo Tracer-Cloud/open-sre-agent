@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import contextlib
 import json
 import signal
 
@@ -31,17 +32,30 @@ def test_ask_answer_stays_plain_when_piped(monkeypatch, capsys) -> None:
     assert "**main**" in capsys.readouterr().out
 
 
-def test_ask_answer_renders_markdown_on_a_tty(monkeypatch, capsys) -> None:
-    # Arrange: stdout is an interactive terminal.
+def test_ask_answer_renders_markdown_on_a_tty(monkeypatch) -> None:
+    # Arrange: stdout is an interactive terminal. Use a spy console so the path
+    # is verified without constructing a real Rich console (which would cache
+    # global terminal/color state and bleed into other tests).
+    from rich.markdown import Markdown
+
     monkeypatch.setattr("sys.stdout.isatty", lambda: True)
+    printed: list[object] = []
+
+    class _SpyConsole:
+        def use_theme(self, *_args, **_kwargs):
+            return contextlib.nullcontext()
+
+        def print(self, renderable: object = "") -> None:
+            printed.append(renderable)
+
+    monkeypatch.setattr("rich.console.Console", lambda *_a, **_k: _SpyConsole())
 
     # Act
     _echo_answer("Branch is **main**.")
 
-    # Assert: the emphasis is rendered, not echoed as literal ``**`` syntax.
-    out = capsys.readouterr().out
-    assert "**main**" not in out
-    assert "main" in out
+    # Assert: the answer is handed to Markdown rendering, not echoed as raw text.
+    assert len(printed) == 1
+    assert isinstance(printed[0], Markdown)
 
 
 def test_ask_passes_prompt_and_invocation_authority(monkeypatch) -> None:

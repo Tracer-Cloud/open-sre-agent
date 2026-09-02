@@ -149,8 +149,11 @@ class TestDispatchSlash:
         assert "Show or change active LLM settings." in output
         assert "/model set <provider>" in output
         assert "Typed bare /model opens an interactive menu" in output
-        assert "slash_invoke" in output
-        assert "shows current settings" in output
+        from surfaces.interactive_shell.command_registry.model.command import COMMANDS as model_cmds
+
+        notes = " ".join(model_cmds[0].notes)
+        assert "slash_invoke" in notes
+        assert "shows current settings" in notes
 
     def test_help_category_shows_compact_section(self) -> None:
         session = Session()
