@@ -21,8 +21,8 @@ from tests.synthetic.mock_eks_backend.backend import FixtureEKSBackend
 from tools.investigation.capability import run_investigation
 
 # Maps fixture schema evidence keys to the agent's internal state keys.
-# Kept identity for the initial harness drop; refine as scenarios #261+ land
-# and we learn which state keys the K8s pipeline actually populates.
+# Kept identity for the initial harness drop; refine as difficulty-tiered
+# scenarios land and we learn which state keys the K8s pipeline populates.
 _EVIDENCE_KEY_MAP: dict[str, str] = {
     "eks_pods": "eks_pods",
     "eks_events": "eks_events",

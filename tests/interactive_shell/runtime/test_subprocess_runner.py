@@ -369,7 +369,9 @@ def test_run_claude_code_implementation_rejects_vague_request_without_context() 
     assert session.task_registry.list_recent(1) == []
 
 
-def test_run_shell_command_silent_success_prints_checkmark(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_run_shell_command_outputless_success_omits_marker(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     def _fake_execute(**_kwargs: object) -> ShellExecutionResult:
         return ShellExecutionResult(
             command="true",
@@ -392,7 +394,9 @@ def test_run_shell_command_silent_success_prints_checkmark(monkeypatch: pytest.M
     console = Console(file=buf, force_terminal=False)
 
     run_shell_command("true", _presenter(session, console))
-    assert GLYPH_SUCCESS in buf.getvalue()
+    output = buf.getvalue()
+    assert "$ true" in output
+    assert GLYPH_SUCCESS not in output
     assert session.history[-1] == {"type": "shell", "text": "true", "ok": True}
 
 

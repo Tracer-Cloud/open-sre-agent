@@ -126,9 +126,9 @@ def _cmd_agents_bus(console: Console) -> bool:
 
 
 def _cmd_agents_conflicts(console: Console) -> bool:
-    # Real write-event collection comes from #1500 (filesystem blast-radius
-    # watcher), out of scope for this PR. Until that lands, the event source
-    # is empty and `/fleet conflicts` reports "no conflicts detected".
+    # Real write-event collection (a filesystem blast-radius watcher) is not
+    # implemented yet. Until it exists, the event source is empty and
+    # `/fleet conflicts` reports "no conflicts detected".
     events: list[WriteEvent] = []
     conflicts = detect_conflicts(
         events,

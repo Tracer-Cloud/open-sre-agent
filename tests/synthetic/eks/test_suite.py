@@ -229,7 +229,7 @@ class TestScorer:
 # ---------------------------------------------------------------------------
 # Parametrized LLM runs — gated behind scenarios existing at each difficulty level.
 # The placeholder 000-healthy uses scenario_difficulty: 0, so these collections
-# are empty until scenarios #261+ land with real difficulty-tiered content.
+# are empty until real difficulty-tiered scenario content lands.
 # ---------------------------------------------------------------------------
 
 

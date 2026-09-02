@@ -8,6 +8,18 @@ Welcome to OpenSRE
 - **Discord:** [https://discord.gg/opensre](https://discord.gg/opensre)
 - **X/Twitter:** [@open_sre](https://x.com/open_sre)
 
+## Current Priorities
+
+The public roadmap focuses on three areas:
+
+- **Scheduled tasks** — recurring skills, scheduler reliability, and delivery
+- **CI/CD skills and improvements** — release gating, packaging checks, installer verification
+- **Parallelization** — concurrent scheduled runs, delivery fan-out, and CI/test parallelism
+
+Browse the backlog by the `scheduled-task`, `ci`, `skills`, and `parallelization`
+labels. Investigation-pipeline, evidence-mapper, and cleanup-only refactor tasks
+are no longer on the roadmap; new issues in those areas will be closed.
+
 ## How to Contribute
 
 Looking for a safe first contribution? See [Good First Issues](docs/good-first-issues/README.md).
@@ -16,7 +28,7 @@ Use the path that matches the kind of contribution you want to make:
 
 1. **Bugs & small fixes** -> Open a PR. If you need to file an issue first, use the [bug report template](https://github.com/Tracer-Cloud/opensre/issues/new?template=bug_report.yml).
 2. **New features or behavioral changes** -> Start with a [feature request](https://github.com/Tracer-Cloud/opensre/issues/new?template=feature_request.yml) or ask in Discord before coding. Most feature ideas are better shipped as third-party plugins via the plugin SDK.
-3. **Improvements tied to concrete work** -> Use the [improvement template](https://github.com/Tracer-Cloud/opensre/issues/new?template=improvement.yml) when proposing a focused refactor, optimization, or quality improvement.
+3. **Improvements tied to concrete work** -> Use the [improvement template](https://github.com/Tracer-Cloud/opensre/issues/new?template=improvement.yml) when proposing a measurable improvement to scheduled tasks, CI/CD, performance, reliability, or parallel execution.
 4. **Refactor-only PRs** -> Do not open one unless a maintainer explicitly asked for it as part of a real fix.
 5. **Test/CI-only PRs for known `main` failures** -> Do not open one unless the change is required to validate a real fix the maintainers asked for.
 6. **Questions** -> Use the docs, email [support@opensre.com](mailto:support@opensre.com), or ask in Discord [#contribute](http://discord.gg/opensre). GitHub Issues are for actionable work.
@@ -294,7 +306,7 @@ Use the **[feature request template](https://github.com/Tracer-Cloud/opensre/iss
 
 ## Suggesting Improvements
 
-Use the **[improvement template](https://github.com/Tracer-Cloud/opensre/issues/new?template=improvement.yml)** to propose refactors, optimizations, or quality improvements. It requires:
+Use the **[improvement template](https://github.com/Tracer-Cloud/opensre/issues/new?template=improvement.yml)** to propose measurable improvements to scheduled tasks, CI/CD, performance, reliability, or parallel execution. Cleanup-only refactors are out of scope. It requires:
 
 - **Current state:** How does it work now? (with code references)
 - **Desired state:** How should it work instead?

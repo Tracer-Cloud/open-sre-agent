@@ -1,4 +1,4 @@
-"""Tests for the model pricing table and $/hr computation (#2023, #4035)."""
+"""Tests for the model pricing table and $/hr computation."""
 
 from __future__ import annotations
 
