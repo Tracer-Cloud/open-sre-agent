@@ -15,7 +15,7 @@ one.
 
 from __future__ import annotations
 
-from typing import Any, Final
+from typing import Any
 
 from core.domain.types.evidence import record_evidence_entry
 from core.domain.types.tools import ToolSurface
@@ -27,15 +27,13 @@ from integrations.yandex_cloud.availability import (
     yc_available_or_backend,
     yc_credentials,
 )
-from integrations.yandex_cloud.mdb_catalog import engine_choices, resolve_engine
+from integrations.yandex_cloud.mdb_catalog import (
+    READ_ONLY_HANDOFF,
+    engine_choices,
+    resolve_engine,
+)
 
 SOURCE = "yandex_cloud"
-
-
-#: See the note beside the same constant in yc_db_tool: one sentence rather than
-#: the full SKILL.md slice, because duplicating 2400 characters per tool buys
-#: nothing an investigation actually needs.
-_READ_ONLY_HANDOFF: Final = "These tools only read, so when the finding calls for a change, end with the exact `yc ...` command an operator can paste."
 
 #: Enough to see a pattern without flooding the prompt.
 DEFAULT_PAGE_SIZE = 100
@@ -90,7 +88,7 @@ def _map_db_logs(
         "read_yc_logs is not evidence a cluster logged nothing. Each engine keeps "
         "several streams and one is served at a time, so name the stream when the "
         "question is about slow queries or the pooler rather than general errors. "
-        + _READ_ONLY_HANDOFF
+        + READ_ONLY_HANDOFF
     ),
     use_cases=[
         "Finding why a managed database is erroring or restarting",

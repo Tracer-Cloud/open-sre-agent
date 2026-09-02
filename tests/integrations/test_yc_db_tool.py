@@ -563,6 +563,6 @@ class TestTheHandoffToAnOperatorIsInEveryDescription:
 
     def test_it_stays_a_sentence_and_not_a_second_copy_of_the_skill(self) -> None:
         """Duplicating the 2400-character slice per tool buys nothing."""
-        from integrations.yandex_cloud.tools.yc_db_tool import _READ_ONLY_HANDOFF
+        from integrations.yandex_cloud.mdb_catalog import READ_ONLY_HANDOFF
 
-        assert len(_READ_ONLY_HANDOFF) < 200
+        assert len(READ_ONLY_HANDOFF) < 200

@@ -14,22 +14,18 @@ from integrations.yandex_cloud.availability import (
     yc_available_or_backend,
     yc_credentials,
 )
-from integrations.yandex_cloud.mdb_catalog import ManagedDatabase, engine_choices, resolve_engine
+from integrations.yandex_cloud.mdb_catalog import (
+    READ_ONLY_HANDOFF,
+    ManagedDatabase,
+    engine_choices,
+    resolve_engine,
+)
 from integrations.yandex_cloud.rest_client import YandexCloudClient
 
 SOURCE = "yandex_cloud"
 
 #: The private CA managed clusters present, which is in no system trust store.
 CA_CERTIFICATE_URL = "https://storage.yandexcloud.net/cloud-certs/CA.pem"
-
-
-#: Attached to every tool of this family rather than the full SKILL.md slice:
-#: the slice is 2400 characters and would be duplicated into each description,
-#: while the one thing an investigation loses without it is this sentence. A
-#: read-only integration cannot change anything, so the command it writes out is
-#: the remediation - and an investigation that only touched these tools never
-#: saw the generic readers where the slice is attached.
-_READ_ONLY_HANDOFF: Final = "These tools only read, so when the finding calls for a change, end with the exact `yc ...` command an operator can paste."
 
 _HEALTHY = "ALIVE"
 _RUNNING = "RUNNING"
@@ -252,7 +248,7 @@ def _map_db_cluster(
         "List managed database clusters in the folder with their status and "
         "health. Covers PostgreSQL, MySQL, ClickHouse, Valkey (was Redis), "
         "StoreDoc (was MongoDB), Kafka, OpenSearch, and MPP Analytics (was "
-        "Greenplum). Omit the engine to search all of them. " + _READ_ONLY_HANDOFF
+        "Greenplum). Omit the engine to search all of them. " + READ_ONLY_HANDOFF
     ),
     use_cases=[
         "Finding a cluster id from its name",
@@ -365,7 +361,7 @@ def list_yc_db_clusters(
         "role and zone, and recent operations. Recent operations are where a "
         "failover, a restart, or a resize shows up — often the thing that "
         "explains an incident. Also returns how to connect the matching "
-        "data-plane integration for querying the database itself. " + _READ_ONLY_HANDOFF
+        "data-plane integration for querying the database itself. " + READ_ONLY_HANDOFF
     ),
     use_cases=[
         "Checking whether a failover happened around the time of an incident",

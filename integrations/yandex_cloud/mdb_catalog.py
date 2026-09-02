@@ -14,6 +14,14 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Final
 
+#: Carried in every tool description of this family rather than as the full
+#: SKILL.md slice: the slice is 2400 characters and would be duplicated into each
+#: description, while the one thing an investigation loses without it is this
+#: sentence. A read-only integration cannot change anything, so the command it
+#: writes out is the remediation - and an investigation that only touched these
+#: tools never saw the generic readers where the slice is attached.
+READ_ONLY_HANDOFF: Final = "These tools only read, so when the finding calls for a change, end with the exact `yc ...` command an operator can paste."
+
 
 @dataclass(frozen=True)
 class ManagedDatabase:
@@ -194,4 +202,11 @@ def engine_choices() -> str:
     return ", ".join(ENGINE_KEYS)
 
 
-__all__ = ["ENGINES", "ENGINE_KEYS", "ManagedDatabase", "engine_choices", "resolve_engine"]
+__all__ = [
+    "ENGINES",
+    "READ_ONLY_HANDOFF",
+    "ENGINE_KEYS",
+    "ManagedDatabase",
+    "engine_choices",
+    "resolve_engine",
+]
