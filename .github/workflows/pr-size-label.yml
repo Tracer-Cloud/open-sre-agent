@@ -33,27 +33,15 @@ jobs:
             // references PR size labels.
             const EXCLUDED_FILES = new Set(["uv.lock"]);
 
+            // Labels already exist in the repo (size:small #0E8A16, size:medium
+            // #FBCA04, size:large #D93F0B, size:extra-large #B60205) — recreate
+            // manually with `gh label create` if one is ever deleted.
             const SIZES = [
-              { name: "size:small", color: "0E8A16", max: 99 },
-              { name: "size:medium", color: "FBCA04", max: 499 },
-              { name: "size:large", color: "D93F0B", max: 1999 },
-              { name: "size:extra-large", color: "B60205", max: Infinity },
+              { name: "size:small", max: 99 },
+              { name: "size:medium", max: 499 },
+              { name: "size:large", max: 1999 },
+              { name: "size:extra-large", max: Infinity },
             ];
-
-            async function ensureLabelsExist() {
-              for (const { name, color } of SIZES) {
-                try {
-                  await github.rest.issues.createLabel({
-                    owner: context.repo.owner,
-                    repo: context.repo.repo,
-                    name,
-                    color,
-                  });
-                } catch (error) {
-                  if (error.status !== 422) throw error; // already exists
-                }
-              }
-            }
 
             async function countChangedLines(pullNumber) {
               const files = await github.paginate(
@@ -71,8 +59,6 @@ jobs:
             }
 
             const pullNumber = context.payload.pull_request.number;
-            await ensureLabelsExist();
-
             const changedLines = await countChangedLines(pullNumber);
             const size = SIZES.find((candidate) => changedLines <= candidate.max);
 
