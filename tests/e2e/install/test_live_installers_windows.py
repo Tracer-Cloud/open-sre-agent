@@ -16,8 +16,7 @@ from pathlib import Path
 
 import pytest
 
-from config.constants.paths import REPO_ROOT
-from tests.e2e.install._shared import assert_binary_smoke
+from tests.e2e.install._shared import assert_binary_smoke, assert_checksum_verified
 
 pytestmark = [
     pytest.mark.e2e,
@@ -29,7 +28,7 @@ pytestmark = [
     pytest.mark.skipif(sys.platform != "win32", reason="install.ps1 only runs on Windows"),
 ]
 
-INSTALL_PS1 = REPO_ROOT / "install.ps1"
+INSTALL_CDN = "https://install.opensre.com"
 
 
 def _sanitized_install_env(
@@ -66,8 +65,8 @@ def test_live_install_ps1_release_channel(tmp_path: Path) -> None:
             "-NoProfile",
             "-ExecutionPolicy",
             "Bypass",
-            "-File",
-            str(INSTALL_PS1),
+            "-Command",
+            f"Invoke-RestMethod -Uri '{INSTALL_CDN}' | Invoke-Expression",
         ],
         cwd=str(tmp_path),
         env=env,
@@ -78,6 +77,7 @@ def test_live_install_ps1_release_channel(tmp_path: Path) -> None:
     )
     combined = result.stdout + result.stderr
     assert result.returncode == 0, combined
+    assert_checksum_verified(combined)
 
     binary = install_dir / "opensre.exe"
     assert binary.is_file(), combined

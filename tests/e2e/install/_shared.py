@@ -6,6 +6,13 @@ import subprocess
 from pathlib import Path
 
 
+def assert_checksum_verified(installer_output: str) -> None:
+    """Require the installer output to prove checksum verification completed."""
+    normalized_output = installer_output.casefold()
+    assert "verifying checksum" in normalized_output, installer_output
+    assert "missing checksum asset" not in normalized_output, installer_output
+
+
 def assert_binary_smoke(binary: Path, *, help_flag: str, requested_tag: str) -> None:
     """Assert ``--version`` (matches ``requested_tag`` if pinned), ``help_flag``, and ``_package-smoke`` all succeed."""
     version = subprocess.run(

@@ -22,7 +22,7 @@ from pathlib import Path
 import pytest
 
 from config.constants.paths import REPO_ROOT
-from tests.e2e.install._shared import assert_binary_smoke
+from tests.e2e.install._shared import assert_binary_smoke, assert_checksum_verified
 
 pytestmark = [
     pytest.mark.e2e,
@@ -141,13 +141,21 @@ def test_live_install_sh_release_channel(tmp_path: Path) -> None:
     home.mkdir()
     env = _sanitized_install_env(home)
 
-    args = ["bash", str(INSTALL_SH), "--release", "--install-dir", str(install_dir)]
+    installer_args = ["--release", "--install-dir", str(install_dir)]
     requested_tag = os.environ.get("OPENSRE_LIVE_INSTALL_TAG", "").strip()
     if requested_tag:
-        args += ["--version", requested_tag.removeprefix("v")]
+        installer_args += ["--version", requested_tag.removeprefix("v")]
 
     result = subprocess.run(
-        args,
+        [
+            "bash",
+            "-o",
+            "pipefail",
+            "-c",
+            f'curl -fsSL {INSTALL_CDN} | bash -s -- "$@"',
+            "opensre-installer",
+            *installer_args,
+        ],
         cwd=str(tmp_path),
         env=env,
         capture_output=True,
@@ -157,6 +165,7 @@ def test_live_install_sh_release_channel(tmp_path: Path) -> None:
     )
     combined = result.stdout + result.stderr
     assert result.returncode == 0, combined
+    assert_checksum_verified(combined)
 
     binary = install_dir / "opensre"
     assert binary.is_file(), combined
