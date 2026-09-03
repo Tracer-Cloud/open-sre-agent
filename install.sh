@@ -23,6 +23,9 @@ else
   SUCCESS_MARK="Success:"
 fi
 
+# Release binaries are built (and glibc-symbol-capped) on ubuntu-22.04 in
+# .github/workflows/release.yml — keep this in sync with that cap.
+LINUX_MIN_GLIBC="2.35"
 REPO="${OPENSRE_INSTALL_REPO:-Tracer-Cloud/opensre}"
 DEFAULT_INSTALL_DIR="${HOME}/.local/bin"
 USER_INSTALL_DIR_CANDIDATES="${OPENSRE_USER_INSTALL_DIR_CANDIDATES:-$HOME/.local/bin:$HOME/bin}"
@@ -909,6 +912,45 @@ detect_platform() {
   esac
 }
 
+detect_glibc_version() {
+  # getconf reports "glibc X.Y" on glibc systems and is part of the C library
+  # itself, so prefer it; fall back to parsing `ldd --version`. Both are
+  # empty (not an error) on musl/other libc systems, where this check does
+  # not apply.
+  if command -v getconf >/dev/null 2>&1; then
+    getconf GNU_LIBC_VERSION 2>/dev/null | sed -n 's/^glibc \([0-9][0-9.]*\)/\1/p'
+    return 0
+  fi
+
+  if command -v ldd >/dev/null 2>&1; then
+    ldd --version 2>/dev/null | sed -n '1s/.*[^0-9]\([0-9][0-9]*\.[0-9][0-9]*\)$/\1/p'
+    return 0
+  fi
+}
+
+version_ge() {
+  [ "$(printf '%s\n%s\n' "$1" "$2" | sort -V | tail -n 1)" = "$1" ]
+}
+
+check_linux_glibc_compatibility() {
+  local glibc_version
+
+  [ "$platform" = "linux" ] || return 0
+
+  glibc_version="$(detect_glibc_version)"
+  # Can't determine the version (non-glibc libc, or missing getconf/ldd) —
+  # don't block install on a check we can't perform.
+  [ -n "$glibc_version" ] || return 0
+
+  if ! version_ge "$glibc_version" "$LINUX_MIN_GLIBC"; then
+    die "$(cat <<EOF
+The OpenSRE Linux binary requires glibc ${LINUX_MIN_GLIBC}+ (Ubuntu 22.04+, Debian 12+, Fedora 36+, or similarly current distributions). This system reports glibc ${glibc_version}, so the prebuilt binary will not start here.
+Run OpenSRE from source instead: clone https://github.com/${REPO}, install uv (https://docs.astral.sh/uv/getting-started/installation/), then run 'make install' followed by 'uv run opensre'.
+EOF
+)"
+  fi
+}
+
 resolve_release_metadata() {
   version="$requested_version"
   release_tag=""
@@ -1090,6 +1132,7 @@ main() {
   parse_args "$@"
   require_prerequisites
   detect_platform
+  check_linux_glibc_compatibility
   resolve_install_dir
   resolve_release_metadata
   select_archive_asset

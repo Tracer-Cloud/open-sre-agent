@@ -434,6 +434,58 @@ def test_install_sh_unknown_flag_fails(tmp_path: Path) -> None:
     assert "Unknown argument" in (result.stdout + result.stderr)
 
 
+@pytest.mark.skipif(
+    sys.platform != "linux",
+    reason="glibc preflight only runs when install.sh detects platform=linux",
+)
+def test_install_sh_rejects_incompatible_glibc(tmp_path: Path) -> None:
+    """An old-glibc host fails fast with an actionable message, before any download.
+
+    Regression for https://github.com/Tracer-Cloud/opensre/issues/5993: the
+    release binary is built (and glibc-symbol-capped) on ubuntu-22.04, so it
+    cannot start on Ubuntu 20.04 (glibc 2.31). Without this preflight, users
+    only saw a cryptic PyInstaller loader error after downloading the archive.
+    """
+    home = tmp_path / "home"
+    home.mkdir()
+    fake_bin = tmp_path / "fake-bin"
+    fake_bin.mkdir()
+    getconf_shim = fake_bin / "getconf"
+    getconf_shim.write_text(
+        textwrap.dedent(
+            """\
+            #!/usr/bin/env bash
+            if [ "${1:-}" = "GNU_LIBC_VERSION" ]; then
+              printf 'glibc 2.31\\n'
+              exit 0
+            fi
+            exit 1
+            """
+        ),
+        encoding="utf-8",
+    )
+    getconf_shim.chmod(getconf_shim.stat().st_mode | stat.S_IXUSR | stat.S_IXGRP | stat.S_IXOTH)
+
+    env = os.environ.copy()
+    env["HOME"] = str(home)
+    env["PATH"] = f"{fake_bin}{os.pathsep}{env.get('PATH', '')}"
+
+    result = subprocess.run(
+        ["bash", str(INSTALL_SH), "--main"],
+        cwd=str(tmp_path),
+        env=env,
+        capture_output=True,
+        text=True,
+        timeout=30,
+        check=False,
+    )
+    combined = result.stdout + result.stderr
+    assert result.returncode != 0, combined
+    assert "glibc 2.35" in combined
+    assert "glibc 2.31" in combined
+    assert "uv run opensre" in combined
+
+
 def test_install_sh_skip_gh_and_no_auto_launch_env(tmp_path: Path) -> None:
     """Documented CI/provisioning knobs must keep install non-interactive."""
     result = _run_install_sh(
