@@ -238,12 +238,16 @@ def test_plan_breakdown_dims_work_notes_and_accents_checked_steps() -> None:
     """Droid/Cursor/Claude: checklist steps primary; ``↳`` work notes dim."""
     import io
 
+    from rich.color import ColorSystem
     from rich.console import Console
+    from rich.style import Style
 
     import infrastructure.terminal.theme as ui_theme
     from surfaces.interactive_shell.ui.task_plan import render_plan_breakdown
 
     ui_theme.set_active_theme("amber")
+    # A 16-color render of theme DIM must not pin work notes to bright-black.
+    Style.parse(str(ui_theme.DIM))._make_ansi_codes(ColorSystem.STANDARD)
     breakdown = (
         "Plan complete · 2/2\n"
         "  ✓ Confirm repository\n"
@@ -268,6 +272,7 @@ def test_plan_breakdown_dims_work_notes_and_accents_checked_steps() -> None:
     assert "↳ GitHub CLI · gh repo view" in plain
     # Work notes use DIM; checked glyphs use HIGHLIGHT — not one flat color.
     assert ui_theme.DIM_ANSI in out
+    assert "\x1b[90m" not in out
     assert ui_theme.HIGHLIGHT_ANSI in out
     assert ui_theme.TEXT_ANSI in out
     # Caption is secondary, distinct from step body and work notes.

@@ -57,9 +57,15 @@ def render_plan_breakdown(console: Console, breakdown: str) -> None:
             console.print()
             continue
         if stripped.startswith(_WORK_NOTE_MARKER):
-            # Preserve leading indent; mute the whole work-note row.
-            line.append(raw, style=str(ui_theme.DIM))
-            console.print(line)
+            # Theme DIM as raw truecolor. Rich Style.parse caches ANSI from
+            # the first color_system that rendered ``#6E6E6E``; a prior
+            # 16-color console then emits bright-black ``[90m`` instead of
+            # DIM_ANSI on a truecolor breakdown.
+            console.print(
+                f"{ui_theme.DIM_ANSI}{raw}{ui_theme.ANSI_RESET}",
+                highlight=False,
+                markup=False,
+            )
             continue
         # Header (``Plan complete · n/n``) or a checklist step (``  ✓ …``).
         if stripped.startswith("Plan"):

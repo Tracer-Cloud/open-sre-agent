@@ -203,21 +203,11 @@ class TestResolveIdleHint:
 
 
 class TestComposerFooter:
-    def test_places_help_hint_without_terminal_mode_chrome(
-        self, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
-        monkeypatch.setattr(prompt_rendering, "prompt_line_width", lambda: 79)
-        footer = _strip_ansi(composer_footer_ansi())
-        assert footer.startswith("Enter send · Shift+Enter newline · ? help")
-        assert "TERMINAL" not in footer
-        assert "■" not in footer
-
-    def test_narrow_footer_keeps_only_a_clipped_help_hint(
-        self, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
-        monkeypatch.setattr(prompt_rendering, "prompt_line_width", lambda: 6)
-        footer = _strip_ansi(composer_footer_ansi())
-        assert footer == "Enter…"
+    def test_footer_row_is_empty_hints_live_in_the_placeholder(self) -> None:
+        assert composer_footer_ansi() == ""
+        session = Session()
+        assert "Enter send" in _placeholder_text(session)
+        assert "? help" in _placeholder_text(session)
 
 
 class TestPromptMessage:
@@ -228,7 +218,9 @@ class TestPromptMessage:
 class TestResolvePromptPlaceholder:
     def test_default_when_no_session_context(self) -> None:
         session = Session()
-        assert _placeholder_text(session) == "see what you can do"
+        text = _placeholder_text(session)
+        assert text.startswith("see what you can do")
+        assert "Enter send" in text
 
     def test_placeholder_prompts_to_continue_an_unfinished_plan(self) -> None:
         from core.agent_harness.task_plan.plan import parse_task_plan

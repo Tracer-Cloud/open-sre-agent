@@ -20,11 +20,6 @@ def _display_safe(text: str) -> str:
     return "\n".join(strip_terminal_controls(line) for line in text.splitlines())
 
 
-def render_handoff_answer_marker() -> Text:
-    """Dim marker painted above a submitted answer to a hand-off question."""
-    return Text("↗ answer", style=str(ui_theme.DIM))
-
-
 def render_choice_selection(console: Console, title: str, answer: str) -> None:
     """Persist a compact selected-choice result after the transient picker closes.
 
@@ -83,6 +78,5 @@ def try_render_ask_user_submission(console: Console, text: str) -> bool:
 __all__ = [
     "render_ask_user_qa",
     "render_choice_selection",
-    "render_handoff_answer_marker",
     "try_render_ask_user_submission",
 ]

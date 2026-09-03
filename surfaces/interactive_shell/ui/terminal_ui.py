@@ -75,7 +75,6 @@ def render_prompt_region(session: Session, state: ReplState, spinner: SpinnerSta
         base = hidden_typing_box_pad()
     else:
         base = prompt_rendering._prompt_message(session).value
-    auto_line = strip_cpr_sequences(auto_status_ansi(session))
     plan = session.task_plan
     if plan is None or not plan.steps:
         # Drop expand so the next plan opens collapsed rather than inheriting
@@ -98,11 +97,13 @@ def render_prompt_region(session: Session, state: ReplState, spinner: SpinnerSta
     # A pending confirmation renders a stacked, arrow-navigable Yes/No choice
     # (box hidden). Density matches the streaming stack: status → Auto → composer.
     if state.is_awaiting_confirmation():
+        auto_line = strip_cpr_sequences(auto_status_ansi(session, quiet=False))
         choice = _confirmation_block(state)
         return ANSI(f"\n{plan_prefix}{choice}\n{auto_line}\n{base}")
 
     if state.is_ctrl_c_exit_hint_visible():
         prefix = prompt_rendering.ctrl_c_exit_hint_ansi()
+        inline_spinner = ""
     else:
         inline_spinner = spinner.inline_spinner_ansi()
         prefix = strip_cpr_sequences(
@@ -111,6 +112,9 @@ def render_prompt_region(session: Session, state: ReplState, spinner: SpinnerSta
                 idle_hint=prompt_rendering.resolve_idle_hint_ansi(session),
             )
         )
+    # Thinking / Invoking owns the gold accent; Auto recedes so the bar is
+    # one status row, not two headlines.
+    auto_line = strip_cpr_sequences(auto_status_ansi(session, quiet=bool(inline_spinner)))
     # Tools already paint a ``⏺`` line into scrollback; the live tool name is
     # folded into the spinner status row (same line as ``Invoking tools…``).
     # Leading blank = Droid row margin under the last transcript line.

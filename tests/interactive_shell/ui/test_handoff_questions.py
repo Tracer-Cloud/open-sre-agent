@@ -25,7 +25,7 @@ def test_render_markdown_block_highlights_a_question() -> None:
     assert "Which environment should I investigate first?" in output
 
 
-def test_submitted_answer_to_a_handoff_is_marked() -> None:
+def test_submitted_handoff_answer_is_the_user_row() -> None:
     session = Session()
     # Only a structured picker / Ask-User handoff sets this flag; a plain
     # assistant question in prose must not trigger the answer treatment.
@@ -34,16 +34,9 @@ def test_submitted_answer_to_a_handoff_is_marked() -> None:
     console = Console(file=buffer, force_terminal=False, highlight=False, width=80)
     render_submitted_prompt(console, session, "staging")
     output = buffer.getvalue()
-    assert "↗ answer" in output
+    # No hanging ``↗ answer`` — the user row is the answer (Droid / Cursor).
+    assert "↗ answer" not in output
     assert "staging" in output
-    # The marker hugs the assistant answer it responds to (no blank row above it),
-    # and the between-turns gap falls after the marker, before the input row.
-    assert not output.startswith("\n")
-    lines = output.splitlines()
-    marker_index = next(i for i, line in enumerate(lines) if "↗ answer" in line)
-    input_index = next(i for i, line in enumerate(lines) if "staging" in line)
-    assert lines[marker_index + 1].strip() == ""
-    assert marker_index < input_index
 
 
 def test_ask_user_answers_render_as_numbered_qa() -> None:
