@@ -725,6 +725,28 @@ jobs:
             exit 1
           fi
 
+  publish-python-dist:
+    name: Publish Python distributions to PyPI
+    runs-on: ubuntu-latest
+    needs:
+      - build-python-dist
+      - publish-release
+    environment:
+      name: pypi
+      url: https://pypi.org/p/opensre
+    permissions:
+      id-token: write
+
+    steps:
+      - name: Download Python distributions
+        uses: actions/download-artifact@v4
+        with:
+          name: release-python-dist
+          path: dist
+
+      - name: Publish Python distributions to PyPI
+        uses: pypa/gh-action-pypi-publish@dc37677b2e1c63e2034f94d8a5b11f265b73ba33 # v1.14.2
+
   publish-main-release:
     if: always() && needs.prepare.outputs.channel == 'main' && needs.build-binaries.result == 'success'
     runs-on: ubuntu-latest
