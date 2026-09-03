@@ -836,7 +836,13 @@ def _show_completed_plan_breakdown(output: OutputSink, session: SessionState) ->
     if not breakdown:
         return
     output.print()
-    output.print(breakdown)
+    # Shell paints ✓ steps vs ↳ work notes in different theme colors; other
+    # sinks (headless / chat) keep the plain-text checklist.
+    render = getattr(output, "render_plan_breakdown", None)
+    if callable(render):
+        render(breakdown)
+    else:
+        output.print(breakdown)
 
 
 def _count_turn(result: Any, session: SessionState, history_start: int) -> _TurnCounts:

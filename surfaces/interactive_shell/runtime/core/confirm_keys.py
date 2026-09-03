@@ -11,9 +11,14 @@ interactive TTY is available (non-TTY, or a platform without ``termios``).
 from __future__ import annotations
 
 import sys
+from collections.abc import Callable
 
 #: Row shape shared with the confirmation gate: ``(answer_key, label)`` pairs.
 ConfirmRows = tuple[tuple[str, str], ...]
+
+#: How long to wait for the CSI introducer after ESC before treating it as
+#: a standalone Escape (no tail bytes will arrive).
+_ESCAPE_INTRODUCER_WAIT_S = 0.05
 
 
 def resolve_confirm_answer(key: str, rows: ConfirmRows) -> str | None:
@@ -54,6 +59,38 @@ def _stdin_is_interactive_tty() -> bool:
         return False
 
 
+def _stdin_has_pending(fd: int, timeout: float) -> bool:
+    """True when *fd* has a byte ready within *timeout* seconds."""
+    import select
+
+    try:
+        return bool(select.select([fd], [], [], timeout)[0])
+    except (OSError, ValueError):
+        return False
+
+
+def _drain_escape_tail(
+    read_char: Callable[[], str],
+    *,
+    has_input: Callable[[float], bool],
+    first_wait: float = _ESCAPE_INTRODUCER_WAIT_S,
+) -> None:
+    """Swallow a CSI tail after ESC without blocking on a standalone Escape.
+
+    Arrow keys arrive as ``ESC [ A`` (and similar). A lone Escape has no tail
+    — *has_input* must return False so this returns immediately and does not
+    consume the next intended choice.
+    """
+    if not has_input(first_wait):
+        return
+    if read_char() != "[":
+        return
+    while has_input(0):
+        nxt = read_char()
+        if not nxt or (len(nxt) == 1 and 0x40 <= ord(nxt) <= 0x7E):
+            break
+
+
 def _read_key_answer(prompt: str, rows: ConfirmRows, tags: str, cancel: str) -> str:
     """Read one keypress in cbreak mode (echo off); swallow arrow/escape keys."""
     import termios
@@ -74,9 +111,12 @@ def _read_key_answer(prompt: str, rows: ConfirmRows, tags: str, cancel: str) -> 
             if not char:
                 break
             if char == "\x1b":
-                # Arrow/nav escape (ESC [ A/B/C/D): drain the CSI tail, ignore.
-                if sys.stdin.read(1) == "[":
-                    sys.stdin.read(1)
+                # Arrow/nav escape (ESC [ A/B/C/D): drain a pending CSI tail,
+                # ignore. A standalone Escape has no tail — do not block.
+                _drain_escape_tail(
+                    lambda: sys.stdin.read(1),
+                    has_input=lambda timeout: _stdin_has_pending(fd, timeout),
+                )
                 continue
             if char in ("\r", "\n"):
                 break

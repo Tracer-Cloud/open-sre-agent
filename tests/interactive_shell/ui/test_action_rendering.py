@@ -42,11 +42,11 @@ def test_slash_invoke_tool_start_does_not_record_cli_agent() -> None:
         {"name": "slash_invoke", "input": {"command": "/model", "args": ["show"]}},
     )
 
-    # slash_invoke is self-recording, so no cli_agent history row is written,
-    # but the call is buffered for the grouped action log.
+    # A user slash command is echoed as the ``[N]`` row, so it is not added to
+    # the tool action log (that would duplicate it, and strand a line at exit).
     assert session.history == []
     assert observer.planned_count == 1
-    assert any("/model show" in entry.detail for entry in session.terminal.action_log_entries)
+    assert session.terminal.action_log_entries == []
 
 
 def test_internal_choose_slash_has_no_tool_preview() -> None:

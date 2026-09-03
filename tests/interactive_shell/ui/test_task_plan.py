@@ -232,3 +232,43 @@ def test_updating_plan_status_keeps_expanded_state() -> None:
     assert state.plan_expanded is True
     assert "Inspect the repo" in rendered
     assert "Confirm green" in rendered
+
+
+def test_plan_breakdown_dims_work_notes_and_accents_checked_steps() -> None:
+    """Droid/Cursor/Claude: checklist steps primary; ``↳`` work notes dim."""
+    import io
+
+    from rich.console import Console
+
+    import infrastructure.terminal.theme as ui_theme
+    from surfaces.interactive_shell.ui.task_plan import render_plan_breakdown
+
+    ui_theme.set_active_theme("amber")
+    breakdown = (
+        "Plan complete · 2/2\n"
+        "  ✓ Confirm repository\n"
+        "      ↳ GitHub CLI · gh repo view\n"
+        "  ✓ Collect workflow runs\n"
+        "      ↳ Python · analyze runs"
+    )
+    buf = io.StringIO()
+    console = Console(
+        file=buf,
+        force_terminal=True,
+        color_system="truecolor",
+        highlight=False,
+        no_color=False,
+        width=80,
+    )
+    render_plan_breakdown(console, breakdown)
+    out = buf.getvalue()
+    plain = _strip_ansi(out)
+    assert "Plan complete · 2/2" in plain
+    assert "✓ Confirm repository" in plain
+    assert "↳ GitHub CLI · gh repo view" in plain
+    # Work notes use DIM; checked glyphs use HIGHLIGHT — not one flat color.
+    assert ui_theme.DIM_ANSI in out
+    assert ui_theme.HIGHLIGHT_ANSI in out
+    assert ui_theme.TEXT_ANSI in out
+    # Caption is secondary, distinct from step body and work notes.
+    assert ui_theme.SECONDARY_ANSI in out

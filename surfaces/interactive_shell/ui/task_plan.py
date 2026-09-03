@@ -1,13 +1,16 @@
-"""Live task-plan overlay for the interactive shell.
+"""Live task-plan overlay and themed post-execution breakdown for the shell.
 
-The plan renders in one place: an ANSI overlay pinned above the prompt, at the
-bottom of the screen. Before execution the whole checklist is shown; once work
-starts it collapses to the header plus the current step so the prompt region
-stays short while tool output streams above it. The plan is never dumped into
-the transcript.
+The live plan renders as an ANSI overlay pinned above the prompt. Before
+execution the whole checklist is shown; once work starts it collapses to the
+header plus the current step so the prompt region stays short while tool
+output streams above it. The live checklist is never dumped into the
+transcript — only the one-shot ``Plan complete`` breakdown is.
 """
 
 from __future__ import annotations
+
+from rich.console import Console
+from rich.text import Text
 
 from core.agent_harness.spi.task_plan import (
     PLAN_STATUS_GLYPH,
@@ -25,6 +28,8 @@ _STEP_INDENT = "  "
 # around the current step until the user expands it.
 _COLLAPSED_MAX_STEPS = 3
 _EXPAND_HINT = "Ctrl+P to view all"
+# Work-note lines in the post-execution breakdown (``↳ …`` under each step).
+_WORK_NOTE_MARKER = "↳"
 
 
 def task_plan_from_tool_args(args: dict[str, object]) -> TaskPlan | None:
@@ -33,6 +38,51 @@ def task_plan_from_tool_args(args: dict[str, object]) -> TaskPlan | None:
         return None
     plan, _error = parse_task_plan(args)
     return plan
+
+
+def render_plan_breakdown(console: Console, breakdown: str) -> None:
+    """Paint the one-shot plan breakdown with Droid/Cursor/Claude hierarchy.
+
+    Checked steps stay primary (warm ``✓`` + body text); nested work notes
+    under ``↳`` go dim so the checklist reads apart from tool chatter —
+    the same parent/child split live tool rows already use.
+    """
+    text = (breakdown or "").rstrip("\n")
+    if not text:
+        return
+    for raw in text.splitlines():
+        line = Text()
+        stripped = raw.lstrip()
+        if not stripped:
+            console.print()
+            continue
+        if stripped.startswith(_WORK_NOTE_MARKER):
+            # Preserve leading indent; mute the whole work-note row.
+            line.append(raw, style=str(ui_theme.DIM))
+            console.print(line)
+            continue
+        # Header (``Plan complete · n/n``) or a checklist step (``  ✓ …``).
+        if stripped.startswith("Plan"):
+            line.append(raw, style=str(ui_theme.SECONDARY))
+            console.print(line)
+            continue
+        # Step row: accent the status glyph, keep the step title as body text.
+        indent_len = len(raw) - len(stripped)
+        if indent_len:
+            line.append(raw[:indent_len])
+        glyph, _, rest = stripped.partition(" ")
+        if glyph in PLAN_STATUS_GLYPH.values() and rest:
+            glyph_style = (
+                str(ui_theme.HIGHLIGHT)
+                if glyph == PLAN_STATUS_GLYPH[PlanStepStatus.COMPLETED]
+                else str(ui_theme.TEXT)
+            )
+            line.append(glyph, style=glyph_style)
+            line.append(" ")
+            line.append(rest, style=str(ui_theme.TEXT))
+        else:
+            line.append(stripped, style=str(ui_theme.TEXT))
+        console.print(line)
 
 
 def _overlay_line(text: str, style: str, width: int) -> str:
@@ -113,6 +163,7 @@ def task_plan_overlay_ansi(plan: TaskPlan, *, expanded: bool = False) -> str:
 
 
 __all__ = [
+    "render_plan_breakdown",
     "task_plan_from_tool_args",
     "task_plan_overlay_ansi",
 ]

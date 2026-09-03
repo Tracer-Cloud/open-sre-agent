@@ -427,6 +427,8 @@ class ActionRenderObserver:
             pass  # no transcript preview; the plan shows in the pinned bottom overlay
         elif _is_internal_choice_command(name, data):
             pass  # private picker plumbing; the menu owns the visible interaction
+        elif name == ActionToolName.SLASH_INVOKE:
+            pass  # a user slash command is already echoed as the ``[N]`` row
         elif name in _SELF_RENDERING_TOOLS:
             pass  # owns its UI; a generic preview would duplicate it
         else:

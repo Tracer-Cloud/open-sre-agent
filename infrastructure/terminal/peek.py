@@ -11,9 +11,6 @@ import re
 
 DISPLAY_OUTPUT_MAX_LINES = 12
 DISPLAY_OUTPUT_MAX_CHARS = 800
-#: Bordered tables must never be folded mid-box or capped mid-line — a partial
-#: box reads as corrupted. Show whole rows up to this generous cap instead.
-_TABLE_OUTPUT_MAX_LINES = 40
 _BOX_DRAWING_RE = re.compile(r"[─-╿]")
 _VIEW_ALL_MARKER = "Ctrl+O to view all"
 
@@ -60,18 +57,19 @@ def cap_output_for_display(
     *full_if_folded* is the original text when the preview was truncated (so
     Ctrl+O can restore it), or None when the preview is the whole text. A
     mid-line character-cap is an inline ``…``; hidden lines add one expand
-    marker. Never two marker lines.
+    marker. Never two marker lines. A bordered table is never folded or
+    character-capped — a partial box reads as corrupted.
     """
     if not text:
         return text, None
-    # A bordered table shreds if folded mid-box or capped mid-line, so give it a
-    # generous whole-row budget and never apply the character cap.
-    is_table = _looks_like_boxed_table(text)
-    if is_table:
-        max_lines = max(max_lines, _TABLE_OUTPUT_MAX_LINES)
+    # A bordered table shreds if folded mid-box or capped mid-line, so show
+    # the complete box — every row and the closing border — and never apply
+    # the character cap.
+    if _looks_like_boxed_table(text):
+        return text, None
     peek, hidden = build_output_peek(text, max_lines=max_lines)
     char_truncated = False
-    if not is_table and len(peek) > max_chars:
+    if len(peek) > max_chars:
         peek = peek[:max_chars].rstrip() + "…"
         char_truncated = True
     if hidden:

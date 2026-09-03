@@ -47,19 +47,37 @@ def test_cap_output_uses_one_marker_when_both_caps_apply() -> None:
     assert body.endswith("…")
 
 
+def _boxed_table(*, data_rows: int) -> str:
+    return "\n".join(
+        [
+            "┌────────┬────────┐",
+            "│ ID     │ Name   │",
+            "├────────┼────────┤",
+            *(f"│ id{i:<5}│ name{i:<3}│" for i in range(data_rows)),
+            "└────────┴────────┘",
+        ]
+    )
+
+
 def test_boxed_table_is_not_folded_mid_box_or_capped_mid_line() -> None:
     # A rendered table (box-drawing chars) must show whole rows, never a partial
-    # box or a mid-line character cut. Well under the 40-row table budget.
-    rows = [
-        "┌────────┬────────┐",
-        "│ ID     │ Name   │",
-        "├────────┼────────┤",
-        *(f"│ id{i:<5}│ name{i:<3}│" for i in range(8)),
-        "└────────┴────────┘",
-    ]
-    text = "\n".join(rows)
+    # box or a mid-line character cut.
+    text = _boxed_table(data_rows=8)
     preview, folded = cap_output_for_display(text)
     assert folded is None  # shown whole, nothing stashed
     assert preview == text
+    assert "Ctrl+O" not in preview
+    assert "…" not in preview
+
+
+def test_long_boxed_table_is_shown_whole_including_the_closing_border() -> None:
+    # A table over the old 40-line fold still has to stay a complete box —
+    # chopping it replaces the closing border with the expand marker.
+    text = _boxed_table(data_rows=50)
+    assert text.count("\n") + 1 > 40
+    preview, folded = cap_output_for_display(text)
+    assert folded is None
+    assert preview == text
+    assert preview.endswith("└────────┴────────┘")
     assert "Ctrl+O" not in preview
     assert "…" not in preview

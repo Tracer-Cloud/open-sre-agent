@@ -78,6 +78,27 @@ def test_format_breakdown_lists_work_under_steps() -> None:
     assert "(verify)" in text
 
 
+def test_format_breakdown_groups_same_kind_work_into_a_count() -> None:
+    session = _session_with_plan("completed", "completed", "completed", "completed")
+    session.task_plan_work = [
+        [
+            "GitHub CLI gh -R Tracer-Cloud/opensre repo view --json name,description",
+            "GitHub CLI gh -R Tracer-Cloud/opensre pr list --state open --limit 20",
+            "GitHub CLI gh -R Tracer-Cloud/opensre issue list --state open",
+        ],
+        ["Execute make test"],
+        [],
+        [],
+    ]
+    text = format_task_plan_breakdown(session.task_plan, session.task_plan_work)
+    # Three GitHub CLI calls collapse to one grouped summary, not three lines.
+    assert "↳ GitHub CLI · 3 calls" in text
+    assert text.count("↳ GitHub CLI") == 1
+    assert "repo view" not in text  # verbose commands hidden by the grouping
+    # A lone call keeps its concrete (trimmed) text.
+    assert "↳ Execute make test" in text
+
+
 def test_take_completed_plan_breakdown_is_one_shot() -> None:
     session = _session_with_plan("completed", "in_progress", "pending", "pending")
     record_task_plan_work(session, "mid work")

@@ -66,6 +66,12 @@ class ShellOutputSink:
         # No leading blank — Droid-dense turn stacking (user row → Ω reply).
         render_response_header(self._console, label)
 
+    def render_plan_breakdown(self, breakdown: str) -> None:
+        """Theme the post-execution checklist: primary steps, dim work notes."""
+        from surfaces.interactive_shell.ui.task_plan import render_plan_breakdown
+
+        render_plan_breakdown(self._console, breakdown)
+
     def render_error(self, message: str) -> None:
         self._console.print(f"[yellow]{escape(message)}[/]")
         # On a credit/billing wall, add the in-tool recovery hint.
