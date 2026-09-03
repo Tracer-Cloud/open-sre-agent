@@ -441,13 +441,18 @@ def test_generic_tool_end_nests_the_result_under_the_call() -> None:
         },
     )
 
-    # The call is buffered for the grouped log; its result folds into the
-    # entry's Ctrl+O detail under a ``↳`` child, not printed live.
+    # The call is buffered — nothing prints live until the log flushes.
+    assert buffer.getvalue() == ""
     entries = observer.session.terminal.action_log_entries
     assert len(entries) == 1
     assert entries[0].kind == "GitHub CLI"
     assert "↳ GitHub API call succeeded" in entries[0].detail
     assert observer.session.terminal.inline_tool_results is True
+
+    observer("agent_end", {})
+    out = buffer.getvalue()
+    assert "GitHub CLI" in out
+    assert "↳ GitHub API call succeeded" in out
 
 
 def test_generic_tool_end_hides_a_json_blob() -> None:
@@ -469,11 +474,17 @@ def test_generic_tool_end_hides_a_json_blob() -> None:
 
     # The call is buffered; the JSON blob result is not folded under it — the
     # reply summarizes model-only data.
+    assert buffer.getvalue() == ""
     entries = observer.session.terminal.action_log_entries
     assert len(entries) == 1
     assert "gh api user" in entries[0].detail
     assert "login" not in entries[0].detail
     assert observer.session.terminal.inline_tool_results is False
+
+    observer("agent_end", {})
+    out = buffer.getvalue()
+    assert "gh api user" in out
+    assert "login" not in out
 
 
 def test_skill_block_renders_live_not_buffered() -> None:
