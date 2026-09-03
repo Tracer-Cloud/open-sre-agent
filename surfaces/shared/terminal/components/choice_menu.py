@@ -332,21 +332,18 @@ def _draw_menu(
     # accent header (slash-command pickers).
     if header:
         write_menu_line(
-            f"{ui_theme.PROMPT_ACCENT_ANSI}{_clip_to_row(f'{_BLOCK_INDENT}{header}', w)}"
-            f"{ui_theme.ANSI_RESET}"
+            f"{ui_theme.PROMPT_ACCENT_ANSI}{_clip_to_row(f'{_BLOCK_INDENT}{header}', w)}{ui_theme.ANSI_RESET}"
         )
         write_menu_line(
             f"{ui_theme.TEXT_ANSI}{_clip_to_row(f'{_BLOCK_INDENT}{title}', w)}{ui_theme.ANSI_RESET}"
         )
     else:
         write_menu_line(
-            f"{ui_theme.PROMPT_ACCENT_ANSI}{_clip_to_row(f'{_BLOCK_INDENT}{title}', w)}"
-            f"{ui_theme.ANSI_RESET}"
+            f"{ui_theme.PROMPT_ACCENT_ANSI}{_clip_to_row(f'{_BLOCK_INDENT}{title}', w)}{ui_theme.ANSI_RESET}"
         )
     if crumb:
         write_menu_line(
-            f"{ui_theme.DIM_COUNTER_ANSI}{_clip_to_row(f'{_BLOCK_INDENT}{crumb}', w)}"
-            f"{ui_theme.ANSI_RESET}"
+            f"{ui_theme.DIM_COUNTER_ANSI}{_clip_to_row(f'{_BLOCK_INDENT}{crumb}', w)}{ui_theme.ANSI_RESET}"
         )
     # Airy: a blank line instead of a full-width rule between question and options.
     write_menu_line()
