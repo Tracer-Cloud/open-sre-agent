@@ -142,8 +142,7 @@ class SetupField:
 
     When set, collection surfaces skip this field and :func:`apply_setup`
     ignores any submitted value under *name*. Use for transport modes and
-    other values the user must not choose — OpenClaw's ``stdio`` mode, for
-    example, whose config-model default is ``streamable-http``.
+    other values the user must not choose.
     """
 
     validate: Callable[[str], str | None] | None = None
@@ -267,7 +266,7 @@ def _collect_credentials(
     credentials: dict[str, str | None] = {}
     for field in spec.fields:
         if field.is_constant:
-            # Keep "" as "" — OpenClaw's empty url/auth_token are intentional.
+            # Keep "" as "" for optional constant fields.
             credentials[field.name] = field.constant
             continue
         value = (values.get(field.name) or "").strip() or field.default

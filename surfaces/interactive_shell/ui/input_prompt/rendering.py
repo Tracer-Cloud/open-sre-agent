@@ -10,7 +10,6 @@ from core.agent_harness.spi.handoff import parse_ask_user_answers
 from infrastructure.terminal import theme as ui_theme
 from surfaces.interactive_shell.runtime import Session
 from surfaces.interactive_shell.ui.handoff_questions import (
-    last_assistant_asked_handoff,
     render_ask_user_qa,
     render_handoff_answer_marker,
 )
@@ -79,11 +78,11 @@ def render_submitted_prompt(console: Console, session: Session, text: str) -> No
     if stripped == "/choose" or stripped.startswith("/choose "):
         session.terminal.last_input_autosubmitted = False
         return
+    # A turn is an answer to a hand-off only when a structured picker/Ask-User
+    # actually issued one (the harness sets this flag). Do not infer it from the
+    # assistant's prose ending in ``?`` — a plain opener like "How can I help?"
+    # would then paint every ordinary follow-up as a brand-coloured answer.
     is_handoff_answer = bool(session.terminal.awaiting_handoff_answer)
-    if not is_handoff_answer:
-        is_handoff_answer = last_assistant_asked_handoff(
-            list(getattr(session, "cli_agent_messages", []) or [])
-        )
     session.terminal.awaiting_handoff_answer = False
     ask_user_pairs = parse_ask_user_answers(stripped) if is_handoff_answer else []
     if len(ask_user_pairs) >= 2:

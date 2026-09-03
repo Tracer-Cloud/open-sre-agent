@@ -51,7 +51,7 @@ def _map_get_rabbitmq_queue_backlog(
     name="get_rabbitmq_queue_backlog",
     description="List RabbitMQ queues ranked by backlog size (unacknowledged + ready messages). Reveals which queues are accumulating messages, their consumer count, and publish/deliver/ack rates.",
     source="rabbitmq",
-    surfaces=(ToolSurface.INVESTIGATION, ToolSurface.CHAT),
+    surfaces=(ToolSurface.CHAT,),
     use_cases=[
         "Identifying queues with growing backlogs during an incident",
         "Checking if consumers are keeping up with publish rate",

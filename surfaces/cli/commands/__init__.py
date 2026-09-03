@@ -15,41 +15,33 @@ from surfaces.cli.commands.doctor import doctor_command
 from surfaces.cli.commands.gateway import gateway_command
 from surfaces.cli.commands.general import (
     health_command,
-    investigate_command,
     uninstall_command,
     update_command,
     version_command,
 )
 from surfaces.cli.commands.guardrails import guardrails
-from surfaces.cli.commands.hermes import hermes_command
 from surfaces.cli.commands.integrations import integrations
 from surfaces.cli.commands.messaging import messaging
-from surfaces.cli.commands.misses import misses_command
 from surfaces.cli.commands.onboard import onboard
 from surfaces.cli.commands.package_smoke import package_smoke_command
 from surfaces.cli.commands.posthog_report import posthog_command
 from surfaces.cli.commands.remote_sync import remote_sync_command
 from surfaces.cli.commands.sentry_digest import sentry_command
 from surfaces.cli.commands.setup import setup_command
-from surfaces.cli.commands.tests import tests
 from surfaces.cli.commands.watchdog import watchdog_command
 from surfaces.cli.commands.work import work_command
 
 _COMMANDS: tuple[click.Command, ...] = (
     account_command,
     ask_command,
-    investigate_command,
     setup_command,
     onboard,
     auth_command,
     config_command,
-    tests,
     integrations,
     guardrails,
     fleet,
     messaging,
-    misses_command,
-    hermes_command,
     cron_command,
     sentry_command,
     posthog_command,

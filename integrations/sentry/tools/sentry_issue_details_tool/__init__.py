@@ -88,7 +88,7 @@ def _issue_details_extract_params(sources: dict[str, dict]) -> dict[str, Any]:
     injected_params=("organization_slug", "sentry_token", "sentry_url"),
     is_available=_issue_details_available,
     extract_params=_issue_details_extract_params,
-    surfaces=(ToolSurface.INVESTIGATION, ToolSurface.CHAT),
+    surfaces=(ToolSurface.CHAT,),
     evidence_mapper=_map_get_sentry_issue_details,
 )
 def get_sentry_issue_details(

@@ -141,7 +141,7 @@ def validate_provider_credentials(
             anthropic_kwargs: dict[str, Any] = {"api_key": api_key, "timeout": 30.0}
             if provider.value == "custom-anthropic":
                 # Point the probe at the user's gateway, not api.anthropic.com,
-                # so a "validated" result reflects the endpoint investigate uses.
+                # so a "validated" result reflects the endpoint the agent uses.
                 from core.llm.providers.custom_endpoints import custom_anthropic_probe_base_url
 
                 anthropic_base_url = custom_anthropic_probe_base_url()

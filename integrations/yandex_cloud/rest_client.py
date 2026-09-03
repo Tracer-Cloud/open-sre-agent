@@ -82,16 +82,6 @@ def send_request(method: str, url: str, **kwargs: Any) -> httpx.Response:
     return _pooled_client().request(method, url, **kwargs)
 
 
-def close_pool() -> None:
-    """Close the pooled client and its connections."""
-    global _pool
-
-    with _pool_lock:
-        if _pool is not None:
-            _pool.close()
-            _pool = None
-
-
 #: Action suffixes that change something even though Yandex binds them to GET.
 #: ``/operations/{id}:cancel`` is the one that exists today: a plain GET there
 #: cancels a running operation. Read-only rests on the index carrying no write

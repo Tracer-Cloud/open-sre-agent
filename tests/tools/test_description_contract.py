@@ -52,7 +52,7 @@ _SECRET_RE = re.compile(
 # Today's production tool count. Discovery swallows import errors, so a silently
 # short registry would make every per-tool check pass by testing nothing. This
 # floor fails loud when the registry shrinks; raise it when the registry grows.
-_MIN_REGISTRY_SIZE = 290
+_MIN_REGISTRY_SIZE = 265
 
 #: Tools that currently violate at least one description-contract rule.
 #: Compared exactly against the live violator set — a fixed tool MUST be removed
@@ -61,7 +61,6 @@ _MIN_REGISTRY_SIZE = 290
 #: issue #5498; rewriting descriptions is out of scope for that issue.
 _DESCRIPTION_CONTRACT_ALLOWLIST: frozenset[str] = frozenset(
     {
-        "alert_sample",
         "cli_exec",
         "code_implement",
         "fix_sentry_issue_start",
@@ -82,7 +81,6 @@ _DESCRIPTION_CONTRACT_ALLOWLIST: frozenset[str] = frozenset(
         "get_mongodb_replica_status",
         "get_mongodb_server_status",
         "inspect_railway_deployment",
-        "investigation_start",
         "list_dagster_assets",
         "list_dagster_runs",
         "list_dagster_schedule_ticks",
@@ -92,11 +90,9 @@ _DESCRIPTION_CONTRACT_ALLOWLIST: frozenset[str] = frozenset(
         "memory_recall",
         "redeploy_railway_service",
         "replay_slack_thread_locally",
-        "run_investigation",
         "shell_run",
         "skill_view",
         "slash_invoke",
-        "synthetic_run",
         "task_cancel",
         "work_task_complete",
         "work_task_list",

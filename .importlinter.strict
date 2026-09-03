@@ -44,20 +44,6 @@ ignore_imports =
     tools.cross_vendor.fix_sentry_issue.ship -> integrations.git
     tools.cross_vendor.fix_sentry_issue.ship -> integrations.github
     tools.interactive_shell.implementation.claude_code_executor -> integrations.llm_cli
-    tools.investigation.reporting.delivery.bootstrap -> integrations.buzz.reporting_adapter
-    tools.investigation.reporting.delivery.bootstrap -> integrations.discord.reporting_adapter
-    tools.investigation.reporting.delivery.bootstrap -> integrations.grafana.reporting_adapter
-    tools.investigation.reporting.delivery.bootstrap -> integrations.openclaw.reporting_adapter
-    tools.investigation.reporting.delivery.bootstrap -> integrations.rocketchat.reporting_adapter
-    tools.investigation.reporting.delivery.bootstrap -> integrations.slack.reporting_adapter
-    tools.investigation.reporting.delivery.bootstrap -> integrations.telegram.reporting_adapter
-    tools.investigation.reporting.delivery.bootstrap -> integrations.twilio.reporting_adapter
-    tools.investigation.reporting.delivery.bootstrap -> integrations.whatsapp.reporting_adapter
-    tools.investigation.reporting.evaluation -> integrations.opensre.llm_eval_judge
-    tools.investigation.reporting.formatters.report -> integrations.telegram.formatting
-    tools.investigation.reporting.gitlab_writeback -> integrations.gitlab
-    tools.investigation.reporting.upstream_correlation.registry -> integrations.datadog.correlation.registration
-    tools.investigation.state_factory -> integrations.opensre
     tools.system.python_execution_tool.credentials -> integrations.github
     tools.system.watch_dog.runner -> integrations.buzz
     tools.system.watch_dog.runner -> integrations.buzz.alarms

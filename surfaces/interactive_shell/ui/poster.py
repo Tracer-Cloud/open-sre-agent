@@ -10,6 +10,7 @@ from rich.markup import escape
 from rich.text import Text
 
 import infrastructure.terminal.theme as ui_theme
+from surfaces.shared.terminal.banner import animate_launch_wordmark
 from surfaces.shared.terminal.components.rendering import (
     _console_is_capturing,
     _console_print_prepared,
@@ -49,6 +50,7 @@ def repl_render_launch_poster(
         )
         render_terminal_ui(buf_console, session=session)
         prefix = _theme_notice_line(theme_notice) if theme_notice else ""
+        animate_launch_wordmark(console)
         _repl_write_buffer(prefix + buf.getvalue())
         _feed_record_buffer(console, Text.from_ansi(buf.getvalue()).plain)
         return

@@ -54,7 +54,7 @@ def _map_query_betterstack_logs(
         "timestamps (ISO 8601)."
     ),
     source="betterstack",
-    surfaces=(ToolSurface.INVESTIGATION, ToolSurface.CHAT),
+    surfaces=(ToolSurface.CHAT,),
     use_cases=[
         "Fetching application log lines from a Better Stack source during RCA",
         "Correlating timestamped log events with an alert window",

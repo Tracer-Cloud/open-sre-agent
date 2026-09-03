@@ -14,10 +14,10 @@ Two flavors share the same reviewer:
 
 The review is deliberately conservative — a wrong ``NOT_REACHED`` makes the
 agent flail through extra actions the user never asked for (observed live:
-duplicate investigation dispatches). It fails open on any LLM error, runs at
+duplicate async dispatches). It fails open on any LLM error, runs at
 most once per turn, and is skipped entirely when no tools ran, when the agent
 is asking the user a question, or when the turn ran a tool whose outcome is
-not reviewable this turn (async investigation dispatch, assistant handoff).
+not reviewable this turn (async dispatch, assistant handoff).
 
 The reviewer learns which tools ran through :func:`tap_executed_tool_names`
 (action) or :func:`tap_executed_tool_calls` (gather — needs args so discovery
@@ -26,7 +26,6 @@ vs metric ``call_*_tool`` can be distinguished).
 
 from __future__ import annotations
 
-import logging
 from collections.abc import Callable
 from dataclasses import dataclass, field
 from typing import Any
@@ -41,22 +40,15 @@ from core.agent_harness.turns.gather_discovery_budget import (
 from core.events import RuntimeEvent, RuntimeEventCallback, ToolExecutionEndEvent
 from core.llm.types import AgentLLMClient
 
-log = logging.getLogger(__name__)
-
 # One rejection is enough to catch a stopped-short turn; the follow-up work is
 # then accepted as-is. More reviews only amplify the damage when the reviewer
 # itself is wrong, because every rejection burns loop iterations on nudges.
 _MAX_GOAL_REVIEWS = 1
 
 # Tools whose presence makes the turn's goal unreviewable at conclusion time:
-# investigation dispatches are async, so "not yet reached" must not trigger a
-# nudge before results arrive.
-_SKIP_REVIEW_TOOL_NAMES = frozenset(
-    {
-        "alert_sample",
-        "investigation_start",
-    }
-)
+# async dispatches must not trigger a "not yet reached" nudge before results
+# arrive. Currently empty — kept as the extension point for future async tools.
+_SKIP_REVIEW_TOOL_NAMES: frozenset[str] = frozenset()
 
 _REVIEW_SYSTEM_PROMPT = (
     "You review whether an agent completed the user's goal this turn.\n"

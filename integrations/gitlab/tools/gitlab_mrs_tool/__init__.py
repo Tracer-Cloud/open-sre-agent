@@ -64,7 +64,7 @@ def _list_gitlab_mrs_available(sources: dict[str, dict]) -> bool:
         "Identifying open MRs that may have deployed breaking changes",
     ],
     requires=["project_id"],
-    surfaces=(ToolSurface.INVESTIGATION, ToolSurface.CHAT),
+    surfaces=(ToolSurface.CHAT,),
     input_schema={
         "type": "object",
         "properties": {

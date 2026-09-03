@@ -38,7 +38,6 @@ from infrastructure.terminal.theme import (
     WARNING,
 )
 from integrations.store import get_integration
-from surfaces.cli.wizard.probes import ProbeResult
 from surfaces.cli.wizard.prompts import select as select_prompt
 from surfaces.shared.llm_setup.catalog import (
     PROVIDER_BY_VALUE,
@@ -436,31 +435,3 @@ def persist_llm_api_key(env_var: str, value: str) -> bool:
 
 def parse_csv_values(raw_value: str) -> list[str]:
     return [part.strip() for part in raw_value.split(",") if part.strip()]
-
-
-def _display_probe(result: ProbeResult) -> None:
-    status = f"[{HIGHLIGHT}]reachable[/]" if result.reachable else f"[{ERROR}]unreachable[/]"
-    console.print(f"{result.target}: {status} [{SECONDARY}]({result.detail})[/]")
-
-
-def select_target_for_advanced(local_probe: ProbeResult, remote_probe: ProbeResult) -> str | None:
-    console.print(f"\n[{SECONDARY}]reachability[/]")
-    _display_probe(local_probe)
-    _display_probe(remote_probe)
-
-    target = choose(
-        "Choose a configuration target:",
-        [
-            Choice(value="local", label="Local machine"),
-            Choice(value="remote", label="Remote target (future support)"),
-        ],
-        default="local",
-    )
-    if target == "local":
-        return "local"
-
-    console.print(f"\n[{WARNING}]Remote setup is not available yet.[/]")
-    if confirm("Use local setup instead?", default=True):
-        return "local"
-    console.print(f"[{WARNING}]Setup cancelled.[/]")
-    return None

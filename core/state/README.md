@@ -1,23 +1,19 @@
-# Agent & Investigation State
+# Agent State
 
-`core/state/` owns the provider-agnostic agent and investigation state that OpenSRE
-carries between alert intake, evidence gathering, diagnosis, and reporting stages.
+`core/state/` owns the provider-agnostic conversation state that OpenSRE carries
+between agent turns.
 
-Use this package for typed investigation state, evidence records, and the
-state-update helpers that decide which incident facts are carried forward. This is
+Use this package for the cross-turn transcript and its compaction helpers. This is
 **state** — not REPL session state, CLI prompt grounding, or generic agent-runtime
 request assembly.
 
 ## Belongs Here
 
-- The shared `AgentState` runtime envelope and its Pydantic validation model.
-- Investigation pipeline slice contracts and the chat-mode slice.
-- Incident evidence entries (`EvidenceEntry`), provenance, and evidence contracts.
-- State-update helpers and pure defaults.
+- The mutable per-session conversation store (`MutableAgentState`).
+- Transcript-window compaction helpers.
 
 ## Does Not Belong Here
 
-- Agent orchestration or stage sequencing; keep that in `tools/investigation/`.
 - Context trimming, ranking, and budget logic; keep that in `core/context_budget.py`.
 - The LLM/tool-calling loop and runtime request contracts; keep those in sibling
   `core/` runtime modules.
@@ -41,6 +37,6 @@ request assembly.
 ## Naming Rule
 
 New names here should make the state boundary obvious. Prefer terms such as
-`state`, `slice`, `evidence`, `provenance`, and `snapshot`. Avoid adding generic
-`prompt`, `session`, `runtime`, or `grounding` modules here; those belong to their
-owning surface or runtime package.
+`state`, `slice`, and `snapshot`. Avoid adding generic `prompt`, `session`,
+`runtime`, or `grounding` modules here; those belong to their owning surface or
+runtime package.

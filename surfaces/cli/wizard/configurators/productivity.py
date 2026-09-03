@@ -13,34 +13,8 @@ from surfaces.cli.wizard.components import (
     prompt_value,
 )
 from surfaces.cli.wizard.configurators.spec_configurator import configure_from_spec
-from surfaces.cli.wizard.integration_health import (
-    validate_jira_integration,
-    validate_notion_integration,
-)
+from surfaces.cli.wizard.integration_health import validate_jira_integration
 from surfaces.cli.wizard.summaries import render_integration_result
-
-
-def _configure_notion() -> tuple[str, str]:
-    _, credentials = integration_defaults("notion")
-    console.print("\n[bold]Notion Integration[/bold]")
-    console.print("Create an internal integration at https://www.notion.so/my-integrations")
-    console.print("then share your target database with the integration.\n")
-
-    while True:
-        api_key = prompt_value("Notion API key (secret_...)", secret=True)
-        database_id = prompt_value("Notion database ID")
-
-        with console.status("Validating Notion connection...", spinner="dots"):
-            result = validate_notion_integration(api_key=api_key, database_id=database_id)
-        render_integration_result("Notion", result)
-
-        if result.ok:
-            upsert_integration(
-                "notion", {"credentials": {"api_key": api_key, "database_id": database_id}}
-            )
-            env_path = sync_env_values({"NOTION_DATABASE_ID": database_id})
-            return "Notion", str(env_path)
-        console.print(f"[{SECONDARY}]Try again or press Ctrl+C to cancel.[/]")
 
 
 def _configure_jira() -> tuple[str, str]:

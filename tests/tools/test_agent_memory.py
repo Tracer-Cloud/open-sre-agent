@@ -52,13 +52,13 @@ class TestMemoryRecallContract(BaseToolContract):
 
 class TestMetadata:
     def test_surfaces_and_side_effects(self) -> None:
-        assert _registered(memory_remember).surfaces == ("action", "investigation")
+        assert _registered(memory_remember).surfaces == ("action",)
         assert _registered(memory_remember).side_effect_level == "mutating"
         assert _registered(memory_remember).parallel_safe is False
         assert _registered(memory_forget).surfaces == ("action",)
         assert _registered(memory_forget).side_effect_level == "mutating"
         assert _registered(memory_forget).parallel_safe is False
-        assert _registered(memory_recall).surfaces == ("action", "investigation")
+        assert _registered(memory_recall).surfaces == ("action",)
         assert _registered(memory_recall).side_effect_level == "read_only"
 
     def test_unavailable_when_disabled(self, monkeypatch: pytest.MonkeyPatch) -> None:

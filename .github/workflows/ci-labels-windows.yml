@@ -106,6 +106,4 @@ jobs:
           --cov=config --cov=core --cov=infrastructure.deployment.ec2 --cov=integrations --cov=infrastructure --cov=surfaces --cov=tools
           --cov-report=term-missing
           --cov-report=html
-          --ignore=tests/e2e/kubernetes_local_alert_simulation
-          --ignore=tests/synthetic
-          -m "not synthetic and not integration"
+          -m "not integration"

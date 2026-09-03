@@ -193,7 +193,7 @@ Want credentials only from the environment, never on disk? Set
 | --- | --- | --- |
 | `OPENSRE_REASONING_EFFORT` |  | Effort for extended-thinking models: `low`, `medium`, `high`, or `xhigh` |
 
-## CLI investigation tools
+## CLI providers
 
 <AccordionGroup>
   <Accordion title="Codex">
@@ -377,7 +377,6 @@ Want credentials only from the environment, never on disk? Set `OPENSRE_DISABLE_
 
 | Variable | Default | Description |
 | --- | --- | --- |
-| `INVESTIGATIONS_DIR` | `~/.opensre/investigations` | Directory for saved investigations |
 | `OPENSRE_HOME` | `~/.opensre` | Root directory for local OpenSRE state |
 | `OPENSRE_PROJECT_ENV_PATH` | `PROJECT_ROOT/.env` | Path to project-level `.env` file |
 | `OPENSRE_WIZARD_STORE_PATH` | `~/.opensre/opensre.json` | Path to the local wizard/provider selection store |
@@ -440,8 +439,7 @@ Mirror conversation history and memory to a user-owned object store. Details: [R
 | --- | --- | --- |
 | `GRAFANA_INSTANCE_URL` |  | Grafana instance URL |
 | `GRAFANA_READ_TOKEN` |  | Grafana API token |
-| `GRAFANA_WRITE_TOKEN` |  | Grafana token for writing annotations (log sink) |
-| `GRAFANA_LOKI_PUSH_URL` |  | Loki push URL for the Grafana investigation log sink |
+| `GRAFANA_WRITE_TOKEN` |  | Grafana token for writing annotations |
 | `GRAFANA_LOKI_DATASOURCE_UID` |  | UID of Loki datasource in Grafana |
 | `GRAFANA_TEMPO_DATASOURCE_UID` |  | UID of Tempo datasource in Grafana |
 | `GRAFANA_MIMIR_DATASOURCE_UID` |  | UID of Mimir datasource in Grafana |
@@ -717,8 +715,6 @@ Mirror conversation history and memory to a user-owned object store. Details: [R
 | `OPENOBSERVE_MAX_RESULTS` | `100` | Max OpenObserve results |
 | `VICTORIA_LOGS_URL` |  | VictoriaLogs instance URL |
 | `VICTORIA_LOGS_TENANT_ID` |  | VictoriaLogs tenant ID |
-| `HERMES_LOG_PATH` | `~/.hermes/logs/errors.log` | Hermes log path saved by `opensre integrations setup hermes`; also defines the path sandbox for `get_hermes_logs` |
-| `OPENSRE_HERMES_INVESTIGATE` |  | Set to `1` to enable Hermes watch auto-investigation when the CLI flag is omitted |
 | `CLICKHOUSE_HOST` |  | ClickHouse host |
 | `CLICKHOUSE_PORT` | `8123` | ClickHouse port |
 | `CLICKHOUSE_DATABASE` | `default` | ClickHouse database |
@@ -756,11 +752,6 @@ Mirror conversation history and memory to a user-owned object store. Details: [R
 
 | Variable | Default | Description |
 | --- | --- | --- |
-| `OPENCLAW_MCP_URL` |  | OpenClaw MCP server URL |
-| `OPENCLAW_MCP_COMMAND` |  | OpenClaw MCP command to execute |
-| `OPENCLAW_MCP_MODE` | `streamable-http` | OpenClaw MCP transport mode |
-| `OPENCLAW_MCP_ARGS` |  | OpenClaw MCP command arguments |
-| `OPENCLAW_MCP_AUTH_TOKEN` |  | OpenClaw MCP auth token |
 | `POSTHOG_MCP_MODE` | `streamable-http` | PostHog MCP transport mode |
 | `POSTHOG_MCP_URL` | `https://mcp.posthog.com/mcp` | PostHog MCP URL |
 | `POSTHOG_MCP_AUTH_TOKEN` |  | PostHog MCP auth token |

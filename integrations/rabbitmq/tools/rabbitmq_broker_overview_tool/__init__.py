@@ -39,7 +39,7 @@ def _map_get_rabbitmq_broker_overview(
     name="get_rabbitmq_broker_overview",
     description="Return a cluster-wide RabbitMQ overview: version, cluster name, total message counts, publish/deliver rates, queue/consumer/connection/channel totals, plus the alarm health-check status (memory / disk / file-descriptor alarms).",
     source="rabbitmq",
-    surfaces=(ToolSurface.INVESTIGATION, ToolSurface.CHAT),
+    surfaces=(ToolSurface.CHAT,),
     use_cases=[
         "Getting a quick cluster-wide health snapshot during an incident",
         "Checking if memory or disk alarms are active on the broker",

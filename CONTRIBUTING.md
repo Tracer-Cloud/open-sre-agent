@@ -8,6 +8,18 @@ Welcome to OpenSRE
 - **Discord:** [https://discord.gg/opensre](https://discord.gg/opensre)
 - **X/Twitter:** [@open_sre](https://x.com/open_sre)
 
+## Current Priorities
+
+The public roadmap focuses on three areas:
+
+- **Scheduled tasks** — recurring skills, scheduler reliability, and delivery
+- **CI/CD skills and improvements** — release gating, packaging checks, installer verification
+- **Parallelization** — concurrent scheduled runs, delivery fan-out, and CI/test parallelism
+
+Browse the backlog by the `scheduled-task`, `ci`, `skills`, and `parallelization`
+labels. Investigation-pipeline, evidence-mapper, and cleanup-only refactor tasks
+are no longer on the roadmap; new issues in those areas will be closed.
+
 ## How to Contribute
 
 Looking for a safe first contribution? See [Good First Issues](docs/good-first-issues/README.md).
@@ -16,7 +28,7 @@ Use the path that matches the kind of contribution you want to make:
 
 1. **Bugs & small fixes** -> Open a PR. If you need to file an issue first, use the [bug report template](https://github.com/Tracer-Cloud/opensre/issues/new?template=bug_report.yml).
 2. **New features or behavioral changes** -> Start with a [feature request](https://github.com/Tracer-Cloud/opensre/issues/new?template=feature_request.yml) or ask in Discord before coding. Most feature ideas are better shipped as third-party plugins via the plugin SDK.
-3. **Improvements tied to concrete work** -> Use the [improvement template](https://github.com/Tracer-Cloud/opensre/issues/new?template=improvement.yml) when proposing a focused refactor, optimization, or quality improvement.
+3. **Improvements tied to concrete work** -> Use the [improvement template](https://github.com/Tracer-Cloud/opensre/issues/new?template=improvement.yml) when proposing a measurable improvement to scheduled tasks, CI/CD, performance, reliability, or parallel execution.
 4. **Refactor-only PRs** -> Do not open one unless a maintainer explicitly asked for it as part of a real fix.
 5. **Test/CI-only PRs for known `main` failures** -> Do not open one unless the change is required to validate a real fix the maintainers asked for.
 6. **Questions** -> Use the docs, email [support@opensre.com](mailto:support@opensre.com), or ask in Discord [#contribute](http://discord.gg/opensre). GitHub Issues are for actionable work.
@@ -92,7 +104,7 @@ Notes:
 
 - `source` is required for function tools.
 - `name`, `description`, and `input_schema` are inferred by default.
-- `surfaces` defaults to `("investigation",)`. Pass `surfaces=("investigation", "chat")` to expose the tool in both investigation and chat contexts.
+- `surfaces` defaults to `("chat",)`. Pass `surfaces=("chat", "action")` to expose the tool in both chat and action contexts.
 - Use the existing package/class style when a tool has complex helper logic, multiple exports, or substantial integration-specific code.
 
 The example above is the minimal shape. For **where** the tool belongs
@@ -108,25 +120,6 @@ verification) follow [docs/adding-tools-and-integrations.md](docs/adding-tools-a
 - Bug fixes should include a test that would have caught the bug
 - New features should have corresponding tests
 - Aim for >80% code coverage (run `make test-cov` to check)
-
-#### Tests under `tests/synthetic/` need an explicit `pytest.mark.synthetic` marker
-
-The synthetic test tree has its own Make target (`make test-synthetic`) and is excluded from `make test-cov`. The two targets use marker filters:
-
-- `make test-cov` runs `pytest --ignore=tests/synthetic -m "not synthetic"`, so the whole `tests/synthetic/` tree is excluded.
-- `make test-synthetic` runs `pytest -m synthetic`, so a file without `pytest.mark.synthetic` is collected but skipped.
-
-If you add a new test file under `tests/synthetic/`, declare the marker at module level so the file runs under `make test-synthetic`:
-
-```python
-import pytest
-
-pytestmark = pytest.mark.synthetic
-```
-
-Without this marker the new file silently runs in **zero** standard CI configurations. The pattern is already in `tests/synthetic/rds_postgres/test_suite.py`; new files in the same tree should follow it.
-
-See [#1671](https://github.com/Tracer-Cloud/opensre/issues/1671) for the meta-issue tracking this discoverability gap.
 
 ### 4. Run Local Checks (Required Before PR)
 
@@ -147,7 +140,6 @@ Replace the placeholders with your actual file or test name:
 pytest tests/cli/test_.py                                       # single file
 pytest tests/cli/test_.py::test_                                # single function
 pytest tests/tools/ -k "test_registry"                          # tools example
-pytest tests/synthetic/ -k "test_scenario"                      # no live infra needed
 ```
 
 ### 5. Open a Pull Request
@@ -265,14 +257,14 @@ Use the **[bug report template](https://github.com/Tracer-Cloud/opensre/issues/n
 
 ```
 ### Expected Behavior
-`opensre investigate --org myorg` should return investigation results
+`opensre ask "why is checkout-api slow?"` should print an answer
 
 ### Actual Behavior
 Command exits silently with no output
 Error: exit code 0
 
 ### Steps to Reproduce
-1. Run `opensre investigate --org myorg`
+1. Run `opensre ask "why is checkout-api slow?"`
 2. Observe output
 
 ### Environment
@@ -294,7 +286,7 @@ Use the **[feature request template](https://github.com/Tracer-Cloud/opensre/iss
 
 ## Suggesting Improvements
 
-Use the **[improvement template](https://github.com/Tracer-Cloud/opensre/issues/new?template=improvement.yml)** to propose refactors, optimizations, or quality improvements. It requires:
+Use the **[improvement template](https://github.com/Tracer-Cloud/opensre/issues/new?template=improvement.yml)** to propose measurable improvements to scheduled tasks, CI/CD, performance, reliability, or parallel execution. Cleanup-only refactors are out of scope. It requires:
 
 - **Current state:** How does it work now? (with code references)
 - **Desired state:** How should it work instead?

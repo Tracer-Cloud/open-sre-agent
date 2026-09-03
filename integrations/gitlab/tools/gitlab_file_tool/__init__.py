@@ -63,7 +63,7 @@ def _get_gitlab_file_available(sources: dict[str, dict]) -> bool:
         "Viewing a specific version of a file at the deployed commit or branch",
     ],
     requires=["project_id", "file_path"],
-    surfaces=(ToolSurface.INVESTIGATION, ToolSurface.CHAT),
+    surfaces=(ToolSurface.CHAT,),
     input_schema={
         "type": "object",
         "properties": {

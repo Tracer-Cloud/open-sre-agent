@@ -1,11 +1,11 @@
 ---
 title: "PostgreSQL"
-description: "Connect PostgreSQL so OpenSRE can diagnose database issues during investigations"
+description: "Connect PostgreSQL so OpenSRE can diagnose database issues"
 ---
 
 ## Overview
 
-OpenSRE uses PostgreSQL diagnostics to investigate database-related alerts — checking server health, surfacing slow queries, monitoring replication status, and analyzing table statistics. All queries are read-only SELECTs.
+OpenSRE uses PostgreSQL diagnostics to investigate database issues — checking server health, surfacing slow queries, monitoring replication status, and analyzing table statistics. All queries are read-only SELECTs.
 
 ## Prerequisites
 
@@ -151,40 +151,18 @@ export OPENSRE_INTEGRATIONS_STORE_PATH="$OPENSRE_DEMO_STORE_DIR/integrations.jso
 
 The file does not need to exist. OpenSRE treats the missing temporary store as empty and resolves PostgreSQL from the exported variables above.
 
-Trigger a real investigation against the slow query — this is the actual supported entrypoint, not an internal import:
+Now ask the agent about the slow query:
 
 ```bash
-opensre investigate --input-json '{
-  "alert_name": "PostgreSQLSlowQuery",
-  "severity": "warning",
-  "commonAnnotations": {
-    "summary": "app_db PostgreSQL instance has a slow query"
-  }
-}'
+opensre
 ```
 
-Real output from a run against this exact local instance (edited for length):
+Ask: *Does the app_db PostgreSQL instance have any slow queries?*
 
-```
-Loading integrations: postgresql
-↳ PostgreSQL · get postgresql slow queries
-↳ PostgreSQL · get postgresql server status
-↳ PostgreSQL · get postgresql current queries
-↳ PostgreSQL · get postgresql lock status
-↳ PostgreSQL · get postgresql table stats
-↳ PostgreSQL · get postgresql replication status
-
-Triage complete: Single flagged slow query is SELECT pg_sleep($1)
-averaging 2016 ms -- an intentional sleep call; all other PostgreSQL
-health indicators are normal (8/100 connections, 97.97% cache hit,
-0 locks/waits, 0 long-running queries, primary with no replicas).
-
-Hypothesis confirmed: pg_sleep() is intentional latency, not a
-performance problem -- no other slow queries, no locks, no long
-transactions, no bloat, healthy cache/connection counts.
-```
-
-All 6 registered tools were exercised in this single turn.
+Against this exact local instance the agent calls all 6 registered tools — slow
+queries, server status, current queries, lock status, table stats, and replication
+status — and correctly identifies the intentional `SELECT pg_sleep($1)` call
+(~2016 ms average) as the only slow query, with every other health indicator normal.
 
 Teardown:
 
@@ -196,7 +174,7 @@ unset POSTGRESQL_HOST POSTGRESQL_PORT POSTGRESQL_DATABASE
 unset POSTGRESQL_USERNAME POSTGRESQL_PASSWORD POSTGRESQL_SSL_MODE
 ```
 
-## Investigation tools
+## Tools
 
 | Tool | What it does |
 | --- | --- |

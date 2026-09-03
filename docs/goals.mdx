@@ -143,13 +143,13 @@ The turn budget defaults to **5** and exists so an impossible condition cannot
 loop forever. Raise it with `--max-turns` when the work genuinely needs more
 steps.
 
-## `/goal` vs `/work` vs `/background`
+## `/goal` vs `/work` vs `/loops`
 
 | Use | When |
 | --- | --- |
 | `/goal` | One question that needs several turns to answer, and you want OpenSRE to keep going by itself |
 | [`/work`](/work-management) | A durable human todo list that outlives the session |
-| [`/background`](/background-investigations) | An investigation that runs asynchronously and delivers its report to Slack, Telegram, or email |
+| [`/loops`](/cron) | A recurring prompt that runs on a schedule and delivers its result to Slack, Telegram, or the shell inbox |
 
 ## Where goals live
 
@@ -172,6 +172,6 @@ becomes the first turn, and continuation proceeds normally from there.
 
 - [Interactive Shell Commands](/interactive-shell-commands) — the full slash command reference
 - [Work Management](/work-management) — `/work` durable todos
-- [Background investigations](/background-investigations) — async RCA delivery
+- [Scheduled deliveries](/cron) — `/loops` recurring prompts
 - [Session History](/sessions) — how sessions persist and resume
 - [PostHog](/posthog) — connect PostHog so product questions can run live

@@ -102,6 +102,3 @@ Do not add a separate Vertex client class — extend `transports/litellm/routing
 `providers/vertex_ai.py`. Like Bedrock, `credential_kind="ambient"`: OpenSRE never stores a
 Vertex secret and does not enforce a required-field precondition — a missing project surfaces
 as a LiteLLM/google-auth error at request time.
-
-For investigation tool calling details, see
-[`docs/investigation-tool-calling.md`](../../docs/investigation-tool-calling.md).

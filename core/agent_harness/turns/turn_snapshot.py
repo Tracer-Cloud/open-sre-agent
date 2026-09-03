@@ -61,8 +61,6 @@ class TurnSnapshotSource(Protocol):
 
     cli_agent_messages: list[tuple[str, str]]
     configured_integrations_known: bool
-    last_state: dict[str, Any] | None
-    last_synthetic_observation_path: str | None
     reasoning_effort: ReasoningEffortChoice | None
 
     # Read-only here; ``Session`` stores a tuple. A property matches
@@ -153,12 +151,6 @@ class TurnSnapshot:
 
     configured_integrations_known: bool
     """Whether ``configured_integrations`` reflects real state (vs unknown)."""
-
-    last_state: dict[str, Any] | None
-    """Final ``AgentState`` from the most recent investigation (follow-up grounding)."""
-
-    last_synthetic_observation_path: str | None
-    """Path to latest synthetic-run observation file (failure explanation context)."""
 
     reasoning_effort: ReasoningEffortChoice | None
     """Session-scoped reasoning effort preference for LLM calls this turn."""
@@ -260,8 +252,6 @@ class TurnSnapshot:
             configured_integrations=tuple(session.configured_integrations),
             configured_integrations_known=bool(session.configured_integrations_known),
             setup_state=_setup_state_for_surface(session.configured_integrations, surface),
-            last_state=session.last_state,
-            last_synthetic_observation_path=session.last_synthetic_observation_path,
             reasoning_effort=session.reasoning_effort,
             system_prompt=getattr(runtime_input, "system_prompt", ""),
             available_tools=tuple(getattr(runtime_input, "available_tools", ())),

@@ -294,8 +294,7 @@ ask_user_choice_tool = RegisteredTool(
         ),
         (
             "Triage is blocked on several facts the user must supply (where a "
-            "service lives, how to get metrics, the time window) and there is "
-            "no investigate/RCA verb with a concrete alert payload yet — one "
+            "service lives, how to get metrics, the time window) — one "
             "questions payload, then plan"
         ),
         "A skill instructs presenting a structured choice / dropdown to the user",
@@ -307,10 +306,6 @@ ask_user_choice_tool = RegisteredTool(
         "Optional end-of-turn follow-up on a headless, scheduled, gateway, or /goal turn",
         "One ask_user_choice call per question when several facts block the same job",
         "Calling update_plan before the Ask User answers arrive",
-        (
-            "Explicit investigate/RCA/diagnose with pasted alert JSON or quoted "
-            "payload — call investigation_start instead of Ask User"
-        ),
     ],
     input_schema=object_schema(
         properties={

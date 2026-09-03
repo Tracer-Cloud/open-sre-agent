@@ -40,7 +40,8 @@ class _DispatchCancelState(Protocol):
 _SHIFT_ENTER_SEQUENCE = "\x1b[27;2;13~"
 _MODIFIED_ENTER_SEQUENCES = frozenset(
     {
-        *(f"\x1b[27;{modifier};13~" for modifier in range(2, 9)),
+        _SHIFT_ENTER_SEQUENCE,
+        *(f"\x1b[27;{modifier};13~" for modifier in range(3, 9)),
         *(f"\x1b[13;{modifier}u" for modifier in range(2, 9)),
         "\x1b\r",
         "\x1b\n",

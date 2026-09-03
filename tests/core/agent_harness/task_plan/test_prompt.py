@@ -17,8 +17,6 @@ def _ctx(*, plan=None) -> TurnSnapshot:
         conversation_messages=(),
         configured_integrations=(),
         configured_integrations_known=True,
-        last_state=None,
-        last_synthetic_observation_path=None,
         reasoning_effort=None,
         task_plan=plan,
     )
@@ -76,8 +74,6 @@ def test_ask_user_answers_inject_start_now_block() -> None:
         conversation_messages=(),
         configured_integrations=(),
         configured_integrations_known=True,
-        last_state=None,
-        last_synthetic_observation_path=None,
         reasoning_effort=None,
     )
     envelope = build_action_system_prompt_envelope(snapshot)
@@ -129,8 +125,6 @@ def test_ask_user_answers_preserve_original_repo_and_all_requested_metrics() -> 
         conversation_messages=(("user", original),),
         configured_integrations=(),
         configured_integrations_known=True,
-        last_state=None,
-        last_synthetic_observation_path=None,
         reasoning_effort=None,
     )
 
@@ -161,8 +155,6 @@ def test_ask_user_answered_plan_only_guidance_does_not_authorize_execute() -> No
         conversation_messages=(),
         configured_integrations=(),
         configured_integrations_known=True,
-        last_state=None,
-        last_synthetic_observation_path=None,
         reasoning_effort=None,
         plan_only_until_authorized=True,
     )

@@ -54,7 +54,6 @@ class EffectiveIntegrations(StrictConfigModel):
     opsgenie: EffectiveIntegrationEntry | None = None
     pagerduty: EffectiveIntegrationEntry | None = None
     incident_io: EffectiveIntegrationEntry | None = None
-    notion: EffectiveIntegrationEntry | None = None
     prefect: EffectiveIntegrationEntry | None = None
     posthog: EffectiveIntegrationEntry | None = None
     kafka: EffectiveIntegrationEntry | None = None
@@ -70,7 +69,6 @@ class EffectiveIntegrations(StrictConfigModel):
     smtp: EffectiveIntegrationEntry | None = None
     whatsapp: EffectiveIntegrationEntry | None = None
     twilio: EffectiveIntegrationEntry | None = None
-    openclaw: EffectiveIntegrationEntry | None = None
     posthog_mcp: EffectiveIntegrationEntry | None = None
     sentry_mcp: EffectiveIntegrationEntry | None = None
     x_mcp: EffectiveIntegrationEntry | None = None
@@ -84,7 +82,6 @@ class EffectiveIntegrations(StrictConfigModel):
     airflow: dict[str, Any] | None = None
     argocd: EffectiveIntegrationEntry | None = None
     helm: EffectiveIntegrationEntry | None = None
-    hermes: EffectiveIntegrationEntry | None = None
     victoria_logs: EffectiveIntegrationEntry | None = None
     alicloud: EffectiveIntegrationEntry | None = None
     signoz: EffectiveIntegrationEntry | None = None

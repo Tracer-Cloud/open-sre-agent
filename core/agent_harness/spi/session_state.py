@@ -1,8 +1,8 @@
 """Session state a host reads and sets around a turn.
 
-Background and trust mode, the terminal, auto-command and turn-outcome hints,
-resume notes from an interrupted turn, transcript compaction, and the
-capabilities a host withholds.
+Trust mode, the terminal, auto-command and turn-outcome hints, resume notes
+from an interrupted turn, transcript compaction, and the capabilities a host
+withholds.
 """
 
 from __future__ import annotations
@@ -15,9 +15,6 @@ from core.agent_harness.session.pending_offer import (
 )
 from core.agent_harness.session.persistence.wal_recovery import format_recovery_note
 from core.agent_harness.session.terminal_access import (
-    background_investigations,
-    background_mode_enabled,
-    background_notification_channels,
     clear_pending_autosubmit,
     exclusive_stdin_active,
     pop_turn_outcome_hint,
@@ -31,9 +28,6 @@ from core.agent_harness.turns.transcript_compaction import compact_session_branc
 __all__ = [
     "PendingScheduleOffer",
     "PendingUserChoice",
-    "background_investigations",
-    "background_mode_enabled",
-    "background_notification_channels",
     "clear_competing_pending_offers",
     "clear_pending_autosubmit",
     "compact_session_branch",

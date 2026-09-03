@@ -73,7 +73,7 @@ def _map_get_github_file_contents(
         "Checking how a specific path looked on a branch or commit",
     ],
     requires=["owner", "repo", "path"],
-    surfaces=(ToolSurface.INVESTIGATION, ToolSurface.CHAT),
+    surfaces=(ToolSurface.CHAT,),
     input_schema={
         "type": "object",
         "properties": {

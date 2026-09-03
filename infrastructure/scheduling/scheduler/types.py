@@ -12,11 +12,7 @@ from pydantic import BaseModel, Field
 class TaskKind(StrEnum):
     """Supported scheduled task kinds."""
 
-    DAILY_SUMMARY = "daily_summary"
-    WEEKLY_AUDIT = "weekly_audit"
-    INCIDENT_WINDOW_REPLAY = "incident_window_replay"
-    SYNTHETIC_RUN = "synthetic_run"
-    CUSTOM_INVESTIGATION = "custom_investigation"
+    MANUAL_LOOP = "manual_loop"
     SENTRY_MORNING_DIGEST = "sentry_morning_digest"
     SENTRY_UPTIME_WATCH = "sentry_uptime_watch"
     GITHUB_PR_SWEEP = "github_pr_sweep"
@@ -33,6 +29,14 @@ class TaskStatus(StrEnum):
     SUCCESS = "success"
     FAILED = "failed"
     SKIPPED = "skipped"
+
+
+class DeliveryStatus(StrEnum):
+    """Outcome of fanning one built message out to a task's destinations."""
+
+    SUCCESS = "success"
+    PARTIAL = "partial"
+    FAILED = "failed"
 
 
 class Provider(StrEnum):
@@ -81,6 +85,25 @@ class ScheduledTask(BaseModel):
         return self.id[:12]
 
 
+class DeliveryOutcome(BaseModel):
+    """What happened when one built message was delivered to one destination.
+
+    Persisted per run in plan order, so a fan-out that completes out of order
+    still reads back deterministically.
+    """
+
+    provider: Provider
+    chat_id: str = ""
+    ok: bool = False
+    message_id: str = ""
+    error: str = ""
+    attempts: int = 0
+
+    def label(self) -> str:
+        """Human-readable destination name used in run message-id/error text."""
+        return f"{self.provider.value}:{self.chat_id}" if self.chat_id else self.provider.value
+
+
 class TaskRun(BaseModel):
     """A single execution record for a scheduled task."""
 
@@ -92,9 +115,12 @@ class TaskRun(BaseModel):
     posted_message_id: str = ""
     error: str = ""
     provider: str = ""
+    targets: tuple[DeliveryOutcome, ...] = ()
 
 
 __all__ = [
+    "DeliveryOutcome",
+    "DeliveryStatus",
     "Provider",
     "ScheduledTask",
     "TaskKind",

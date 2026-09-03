@@ -19,7 +19,7 @@ Token reference
   BG         terminal background, never used as foreground
   INPUT_SURFACE  composer/menu plate — visibly lifted vs BG (input box fill)
   BOLD_SKILL fixed green skill-activation label
-  reply marker  assistant ``∴`` lead-in — Factory/Droid-warm accent via
+  reply marker  assistant ``Ω`` lead-in — Factory/Droid-warm accent via
                 :func:`reply_marker_style` (not WARNING; must stay vivid)
 
 Usage
@@ -362,15 +362,14 @@ def _parse_hex_color(value: str) -> tuple[int, int, int]:
 
 
 def reply_marker_hex() -> str:
-    """Hex for the assistant ``∴`` / tool ``⏺`` accent — the active theme's
+    """Hex for the assistant ``Ω`` / tool ``⏺`` accent — the active theme's
     ``HIGHLIGHT``, so every component follows the selected palette rather than a
     fixed colour that would read as a copy of another tool."""
     return _ACTIVE_THEME.HIGHLIGHT
 
 
 def reply_marker_style() -> str:
-    """Bold accent for the assistant ``∴`` reply marker and ``⏺`` tool lead-in,
-    in the active theme's highlight colour (one branded lead beside softer body)."""
+    """Bold tool-lead accent using the reply marker's active highlight colour."""
     return f"bold {reply_marker_hex()}"
 
 
@@ -501,7 +500,7 @@ def _apply_theme(theme: CliTheme) -> None:
     MARKDOWN_THEME = Theme(
         {
             # Sunny Droid-like reply: bright warm-grey body (#D0D0D0 TEXT), warm
-            # ``∴`` accent. Strong stays bold TEXT; avoid icy blue chrome.
+            # ``Ω`` accent. Strong stays bold TEXT; avoid icy blue chrome.
             "markdown.paragraph": theme.TEXT,
             "markdown.code": f"bold {theme.HIGHLIGHT}",
             "markdown.code_block": theme.TEXT,

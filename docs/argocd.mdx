@@ -1,18 +1,17 @@
 ---
 title: "Argo CD"
-description: "Connect Argo CD so OpenSRE can inspect GitOps application health, sync state, revisions, and drift during investigations"
+description: "Connect Argo CD so OpenSRE can inspect GitOps application health, sync state, revisions, and drift"
 ---
 
 ## Overview
 
-OpenSRE queries the Argo CD REST API as a read-only evidence source during GitOps incident investigations. It can list visible applications, inspect one application's sync and health status, and fetch sanitized server-side diff output to show deployment drift.
+OpenSRE queries the Argo CD REST API as a read-only evidence source when you ask about GitOps deployments. It can list visible applications, inspect one application's sync and health status, and fetch sanitized server-side diff output to show deployment drift.
 
 ## Prerequisites
 
 - Argo CD API server reachable from the machine running OpenSRE
 - A dedicated Argo CD account or API token with read access to the applications you want OpenSRE to inspect
 - The Argo CD base URL, for example `https://argocd.example.com`
-- Optional alert annotations that identify the affected Argo CD application, project, namespace, or revision
 
 ## Setup
 
@@ -80,7 +79,7 @@ The store also accepts `auth_token` or `token` as aliases for `bearer_token`. Fo
 
 ### Option 3: Multiple Argo CD instances
 
-For multiple Argo CD instances, set `ARGOCD_INSTANCES` to a JSON array. The first valid instance is used as the default integration for investigations.
+For multiple Argo CD instances, set `ARGOCD_INSTANCES` to a JSON array. The first valid instance is used as the default integration.
 
 ```bash
 export ARGOCD_INSTANCES='[
@@ -114,49 +113,14 @@ When `ARGOCD_INSTANCES` is set, the single-instance `ARGOCD_BASE_URL` and auth v
    - `ARGOCD_USERNAME` + `ARGOCD_PASSWORD` (or store `username` / `password`)
 4. Set `ARGOCD_BASE_URL` to your API base (HTTPS for remote hosts).
 
-## Investigation tools
+## Tools
 
 | Tool / evidence | What it does |
 | --- | --- |
 | `argocd_application_status` | With `application_name`, returns a compact summary: sync status, health status, current revision, operation phase/message, destination, images, and recent deployment history. Without `application_name`, lists visible applications (optionally scoped by `ARGOCD_PROJECT`). |
 | `argocd_application_diff` | Server-side diff for one application (requires `application_name`). Returns `drift_detected`, `diff_count`, and sanitized diff records for Kubernetes objects whose live state differs from GitOps. |
 
-### Usage in investigations
-
-When Argo CD is configured and an incoming alert contains GitOps context, OpenSRE can add Argo CD evidence to the investigation plan.
-
-OpenSRE recognizes these explicit alert fields:
-
-| Field | Location | Purpose |
-| --- | --- | --- |
-| `argocd_application` or `argocd_app` | Top-level alert payload or `annotations` | Name of the affected Argo CD application. |
-| `application_name` | `annotations` | Generic application name fallback. |
-| `argocd_revision` | Top-level alert payload or `annotations` | Revision mentioned by the alert. |
-| `revision` | `annotations` | Generic revision fallback. |
-| `argocd_project` | Top-level alert payload or `annotations` | Argo CD project for scoped application requests. |
-| `argocd_app_namespace` | Top-level alert payload or `annotations` | Argo CD application namespace for scoped requests. |
-
-OpenSRE also looks for GitOps hints in alert text such as `argocd`, `argo cd`, `argo-cd`, `gitops`, `outofsync`, or `outofsynced`.
-
-Example alert:
-
-```json
-{
-  "alert_name": "checkout-api OutOfSync",
-  "annotations": {
-    "summary": "Argo CD reports checkout-api is OutOfSync",
-    "argocd_application": "checkout-api",
-    "argocd_project": "default",
-    "argocd_revision": "abc123"
-  }
-}
-```
-
-Then run OpenSRE with the alert payload:
-
-```bash
-opensre investigate -i alert.json
-```
+Once Argo CD is configured, start `opensre` and name the application in your question, e.g. *"Is checkout-api out of sync? What drifted?"*
 
 ### Local verification recipe
 
@@ -255,7 +219,7 @@ SERVICE │ SOURCE    │ STATUS   │ DETAIL
 argocd  │ local env │ ✓ passed │ Connected to Argo CD and listed 1 application.
 ```
 
-`opensre investigate` (unlike `opensre integrations verify`) only falls through to env
+Chat sessions (unlike `opensre integrations verify`) only fall through to env
 vars when the store has no records at all -- any existing record, for any service, blocks
 env-var resolution entirely. Point `OPENSRE_INTEGRATIONS_STORE_PATH` at a path inside a
 fresh empty directory instead, so your real config is never read or written and the
@@ -275,27 +239,20 @@ kubectl -n argocd patch application guestbook --type merge -p '{"spec":{"syncPol
 kubectl -n demo-app patch deployment guestbook-ui -p '{"spec":{"replicas":3}}'
 ```
 
-Trigger a real investigation against the drift:
+Now ask the agent about the drift:
 
 ```bash
-opensre investigate --input-json '{
-  "alert_name": "guestbook OutOfSync",
-  "severity": "warning",
-  "annotations": {
-    "summary": "Argo CD reports guestbook has configuration drift",
-    "argocd_application": "guestbook",
-    "argocd_project": "default"
-  }
-}'
+opensre
 ```
 
-The investigation planner decides which tools to call on a given turn, so
-`argocd_application_diff` isn't guaranteed to run on every investigation -- on a turn
-where it did, it correctly reported the drift introduced above: `guestbook-ui`'s
-replica count changed from the desired `1` to the live `3`. Both registered tools
-return real data through this same `opensre investigate` flow --
+Ask: *Is the guestbook Argo CD application out of sync? What drifted?*
+
+The agent decides which tools to call on a given turn, so `argocd_application_diff`
+isn't guaranteed to run every time -- on a turn where it did, it correctly reported the
+drift introduced above: `guestbook-ui`'s replica count changed from the desired `1` to
+the live `3`. Both registered tools return real data through this same chat flow --
 `argocd_application_status` for sync/health status, revision, and operation phase, and
-`argocd_application_diff` for per-resource drift when the planner calls it.
+`argocd_application_diff` for per-resource drift when the agent calls it.
 
 Teardown:
 
@@ -331,7 +288,7 @@ Verification performs a read-only application list call. It proves OpenSRE can r
 | **401 Unauthorized** | Check the token, or verify that username/password login can create an Argo CD session. |
 | **403 Forbidden** | Ensure the account can list applications and read the target application. |
 | **SSL error** | Fix the certificate chain or, for a trusted lab only, set `ARGOCD_VERIFY_SSL=false`. |
-| **No diff evidence** | Confirm the alert provides `argocd_application` or `argocd_app`; the diff tool requires an application name. |
+| **No diff evidence** | The diff tool requires an application name — name the application in your question. |
 | **Application list succeeds but a named app fails** | Check `ARGOCD_PROJECT` and `ARGOCD_APP_NAMESPACE`, and confirm the account has access to that application. |
 
 ## Security

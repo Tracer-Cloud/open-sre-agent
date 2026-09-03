@@ -33,7 +33,7 @@ class TestStore:
 
     def test_add_and_list(self, store_path: Path) -> None:
         task = ScheduledTask(
-            kind=TaskKind.DAILY_SUMMARY,
+            kind=TaskKind.MANUAL_LOOP,
             cron="0 9 * * 1-5",
             provider=Provider.TELEGRAM,
             chat_id="-100123",
@@ -44,11 +44,11 @@ class TestStore:
         tasks = list_tasks(store_path)
         assert len(tasks) == 1
         assert tasks[0].id == task.id
-        assert tasks[0].kind == TaskKind.DAILY_SUMMARY
+        assert tasks[0].kind == TaskKind.MANUAL_LOOP
 
     def test_get_task(self, store_path: Path) -> None:
         task = ScheduledTask(
-            kind=TaskKind.WEEKLY_AUDIT,
+            kind=TaskKind.SENTRY_MORNING_DIGEST,
             cron="0 8 * * 1",
             provider=Provider.SLACK,
             chat_id="C123",
@@ -57,14 +57,14 @@ class TestStore:
 
         found = get_task(task.id, store_path)
         assert found is not None
-        assert found.kind == TaskKind.WEEKLY_AUDIT
+        assert found.kind == TaskKind.SENTRY_MORNING_DIGEST
 
     def test_get_task_not_found(self, store_path: Path) -> None:
         assert get_task("nonexistent", store_path) is None
 
     def test_remove_task(self, store_path: Path) -> None:
         task = ScheduledTask(
-            kind=TaskKind.DAILY_SUMMARY,
+            kind=TaskKind.MANUAL_LOOP,
             cron="0 9 * * *",
             provider=Provider.TELEGRAM,
             chat_id="-100",
@@ -76,7 +76,7 @@ class TestStore:
     def test_remove_task_cascade_deletes_runs(self, store_path: Path) -> None:
         """Removing a task must also remove its TaskRun records."""
         task = ScheduledTask(
-            kind=TaskKind.DAILY_SUMMARY,
+            kind=TaskKind.MANUAL_LOOP,
             cron="0 9 * * *",
             provider=Provider.TELEGRAM,
             chat_id="-100",
@@ -95,14 +95,14 @@ class TestStore:
         """Removing one task's runs must not delete another task's runs."""
         task_a = ScheduledTask(
             id="task-a",
-            kind=TaskKind.DAILY_SUMMARY,
+            kind=TaskKind.MANUAL_LOOP,
             cron="0 9 * * *",
             provider=Provider.TELEGRAM,
             chat_id="-100",
         )
         task_b = ScheduledTask(
             id="task-b",
-            kind=TaskKind.WEEKLY_AUDIT,
+            kind=TaskKind.SENTRY_MORNING_DIGEST,
             cron="0 8 * * 1",
             provider=Provider.SLACK,
             chat_id="C123",
@@ -124,7 +124,7 @@ class TestStore:
 
     def test_update_task(self, store_path: Path) -> None:
         task = ScheduledTask(
-            kind=TaskKind.DAILY_SUMMARY,
+            kind=TaskKind.MANUAL_LOOP,
             cron="0 9 * * *",
             provider=Provider.TELEGRAM,
             chat_id="-100",
@@ -141,7 +141,7 @@ class TestStore:
     def test_update_nonexistent(self, store_path: Path) -> None:
         task = ScheduledTask(
             id="nonexistent",
-            kind=TaskKind.DAILY_SUMMARY,
+            kind=TaskKind.MANUAL_LOOP,
             cron="0 9 * * *",
             provider=Provider.TELEGRAM,
         )
@@ -150,7 +150,7 @@ class TestStore:
     def test_multiple_tasks(self, store_path: Path) -> None:
         for i in range(3):
             task = ScheduledTask(
-                kind=TaskKind.DAILY_SUMMARY,
+                kind=TaskKind.MANUAL_LOOP,
                 cron=f"{i} 9 * * *",
                 provider=Provider.TELEGRAM,
                 chat_id=f"-{i}",
@@ -171,7 +171,7 @@ class TestStore:
 
         store_path.parent.mkdir(parents=True, exist_ok=True)
         data = [
-            {"id": "valid1", "kind": "daily_summary", "cron": "0 9 * * *", "provider": "telegram"},
+            {"id": "valid1", "kind": "manual_loop", "cron": "0 9 * * *", "provider": "telegram"},
             {"invalid": "entry"},
         ]
         store_path.write_text(json.dumps(data), encoding="utf-8")
@@ -190,7 +190,7 @@ class TestAddTaskDeduplicates:
     @staticmethod
     def _daily_summary(**overrides: object) -> ScheduledTask:
         fields: dict[str, object] = {
-            "kind": TaskKind.DAILY_SUMMARY,
+            "kind": TaskKind.MANUAL_LOOP,
             "cron": "0 8 * * 1-5",
             "timezone": "UTC",
             "provider": Provider.SLACK,
@@ -259,7 +259,7 @@ class TestReloadSignal:
     @staticmethod
     def _task() -> ScheduledTask:
         return ScheduledTask(
-            kind=TaskKind.DAILY_SUMMARY,
+            kind=TaskKind.MANUAL_LOOP,
             cron="0 9 * * *",
             provider=Provider.TELEGRAM,
             chat_id="-100123",

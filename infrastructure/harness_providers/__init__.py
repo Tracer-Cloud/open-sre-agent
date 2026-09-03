@@ -78,13 +78,10 @@ from infrastructure.harness_providers.prompt_fragments import (
     clear_action_prompt_fragments,
     clear_assistant_prompt_fragments,
     clear_gateway_persona_fragments,
-    clear_gather_prompt_fragments,
     gateway_persona_fragments,
-    gather_prompt_vendor_fragments,
     register_action_prompt_fragment,
     register_assistant_prompt_fragment,
     register_gateway_persona_fragment,
-    register_gather_prompt_fragment,
 )
 from infrastructure.harness_providers.prompt_fragments import reset as _reset_prompt_fragments
 from infrastructure.harness_providers.repo_scope import (
@@ -102,9 +99,7 @@ from infrastructure.harness_providers.subprocess_presenter import (
     reset as _reset_subprocess_presenter,
 )
 from infrastructure.harness_providers.tool_registry import (
-    InvestigationToolsFn,
     ToolSources,
-    resolve_investigation_tools,
     resolve_surface_tool_map,
     resolve_surface_tools,
 )
@@ -116,7 +111,7 @@ def reset_harness_providers() -> None:
 
     Also clears core leaf registries that integrations register through
     :func:`integrations.harness_adapters.register_harness_adapters` (alert
-    routing, taxonomy profiles, anchor parsers, detail fields, …). Without
+    routing, anchor parsers, detail fields, …). Without
     those clears, tests that call ``reset_harness_providers()`` mid-suite would
     keep stale vendor registrations while VCS/prompt providers look empty — a
     silent inconsistency.
@@ -138,7 +133,6 @@ def reset_harness_providers() -> None:
         clear_source_aliases,
     )
     from core.domain.alerts.extraction import clear_alert_detail_fields
-    from core.domain.diagnosis.taxonomy_registry import clear_taxonomy_profiles
     from core.domain.types.incident_anchors import clear_anchor_parsers
 
     clear_alert_source_detectors()
@@ -146,7 +140,6 @@ def reset_harness_providers() -> None:
     clear_source_aliases()
     clear_secondary_tool_sources()
     clear_alert_detail_fields()
-    clear_taxonomy_profiles()
     clear_anchor_parsers()
 
 
@@ -162,7 +155,6 @@ __all__ = [
     "IntegrationResolutionResult",
     "IntegrationSetupCommand",
     "IntegrationStorePathFn",
-    "InvestigationToolsFn",
     "LoadEnvIntegrationsFn",
     "LoadIntegrationsFn",
     "MergeIntegrationsByServiceFn",
@@ -184,7 +176,6 @@ __all__ = [
     "clear_action_prompt_fragments",
     "clear_assistant_prompt_fragments",
     "clear_gateway_persona_fragments",
-    "clear_gather_prompt_fragments",
     "clear_message_context_prefix_strippers",
     "clear_metric_query_drafts",
     "clear_preferred_evidence_sources",
@@ -195,7 +186,6 @@ __all__ = [
     "fetch_remote_integrations",
     "flatten_cli_messages_to_prompt",
     "gateway_persona_fragments",
-    "gather_prompt_vendor_fragments",
     "integration_setup_command",
     "metric_cohort_resolved_for",
     "metric_query_draft_for",
@@ -205,7 +195,6 @@ __all__ = [
     "register_assistant_prompt_fragment",
     "register_discovery_targets",
     "register_gateway_persona_fragment",
-    "register_gather_prompt_fragment",
     "register_message_context_prefix_stripper",
     "register_metric_cohort_resolver",
     "register_metric_query_draft",
@@ -217,7 +206,6 @@ __all__ = [
     "reset_harness_providers",
     "resolve_integrations",
     "resolve_integrations_with_metadata",
-    "resolve_investigation_tools",
     "resolve_subprocess_presenter",
     "resolve_surface_tool_map",
     "resolve_surface_tools",

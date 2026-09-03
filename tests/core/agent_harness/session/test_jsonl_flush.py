@@ -66,7 +66,7 @@ def test_flush_leaf_counts_survive_context_and_message_appends(storage_home: Pat
     """The leaf's counts are the contract; the appends before it must not shift them.
 
     ``flush`` appends an accumulated-context record and the chat messages before
-    counting. Neither is a ``turn_stub``, so all three counts have to reflect the
+    counting. Neither is a ``turn_stub``, so both counts have to reflect the
     turns seeded here and nothing else.
     """
     # Arrange
@@ -85,7 +85,6 @@ def test_flush_leaf_counts_survive_context_and_message_appends(storage_home: Pat
     leaf = _leaf(session.session_id)
     assert leaf["total_turns"] == 3
     assert leaf["chat_turns"] == 2
-    assert leaf["investigation_turns"] == 1
 
 
 def test_flush_still_persists_context_and_messages(storage_home: Path) -> None:

@@ -16,7 +16,7 @@ def test_base_envelope_without_optional_fields() -> None:
 
 def test_source_is_passed_through() -> None:
     assert unavailable_response("sentry_mcp", "boom")["source"] == "sentry_mcp"
-    assert unavailable_response("openclaw", "boom")["source"] == "openclaw"
+    assert unavailable_response("posthog_mcp", "boom")["source"] == "posthog_mcp"
 
 
 def test_tool_name_added_when_truthy() -> None:
@@ -32,18 +32,18 @@ def test_tool_name_omitted_when_none_or_empty() -> None:
 
 def test_arguments_added_when_provided() -> None:
     args = {"conversation_id": "abc"}
-    result = unavailable_response("openclaw", "failed", arguments=args)
+    result = unavailable_response("posthog_mcp", "failed", arguments=args)
     assert result["arguments"] == args
 
 
 def test_empty_arguments_dict_is_still_recorded() -> None:
     # ``arguments={}`` is distinct from ``arguments=None``: the empty dict is kept.
-    result = unavailable_response("openclaw", "failed", arguments={})
+    result = unavailable_response("posthog_mcp", "failed", arguments={})
     assert result["arguments"] == {}
 
 
 def test_arguments_omitted_when_none() -> None:
-    assert "arguments" not in unavailable_response("openclaw", "failed", arguments=None)
+    assert "arguments" not in unavailable_response("posthog_mcp", "failed", arguments=None)
 
 
 def test_all_fields_together() -> None:

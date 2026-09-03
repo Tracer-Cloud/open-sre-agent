@@ -36,35 +36,19 @@ _ALLOWED: dict[str, frozenset[str]] = {
     ),
     "bootstrap": frozenset(
         {
-            "integrations.buzz.background_adapter",
             "integrations.discord.scheduled_delivery",
-            "integrations.rocketchat.background_adapter",
             "integrations.rocketchat.scheduled_delivery",
             "integrations.slack.scheduled_delivery",
-            "integrations.smtp.background_adapter",
-            "integrations.telegram.background_adapter",
             "integrations.telegram.scheduled_delivery",
         }
     ),
     "tools": frozenset(
         {
             "integrations.buzz.alarms",
-            "integrations.buzz.reporting_adapter",
-            "integrations.datadog.correlation.registration",
-            "integrations.discord.reporting_adapter",
-            "integrations.grafana.reporting_adapter",
-            "integrations.openclaw.reporting_adapter",
-            "integrations.opensre.llm_eval_judge",
             "integrations.rocketchat.alarms",
-            "integrations.rocketchat.reporting_adapter",
             "integrations.sentry.issue_url",
-            "integrations.slack.reporting_adapter",
             "integrations.telegram.alarms",
             "integrations.telegram.credentials",
-            "integrations.telegram.formatting",
-            "integrations.telegram.reporting_adapter",
-            "integrations.twilio.reporting_adapter",
-            "integrations.whatsapp.reporting_adapter",
         }
     ),
     "surfaces": frozenset(
@@ -74,7 +58,6 @@ _ALLOWED: dict[str, frozenset[str]] = {
             "integrations.dagster.setup",
             "integrations.github.setup",
             "integrations.jenkins.setup",
-            "integrations.openclaw.setup",
             "integrations.posthog.report_prerequisites",
             "integrations.posthog.setup",
             "integrations.posthog_mcp.setup",

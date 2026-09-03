@@ -3,8 +3,8 @@
 The shell is a host: it supplies :class:`AgentBuildConfig` (tools, prompts,
 error reporter) and omits capability policy so gateway-chat withholds
 do not run. Construction still goes through :class:`DefaultHeadlessBuild` — the same
-family the gateway pool uses — so the shell keeps investigation / llm_provider
-/ task_cancel and REPL slash / TTY paint.
+family the gateway pool uses — so the shell keeps llm_provider / task_cancel
+and REPL slash / TTY paint.
 """
 
 from __future__ import annotations
@@ -29,10 +29,6 @@ from surfaces.interactive_shell.runtime.agent_harness_adapters import (
     ShellErrorReporter,
     resolve_output_sink,
 )
-from surfaces.interactive_shell.runtime.background import runner as background_runner
-from surfaces.interactive_shell.runtime.investigation_adapter import (
-    repl_investigation_launch_ports,
-)
 from surfaces.interactive_shell.runtime.llm_provider_adapter import repl_llm_provider_ports
 from surfaces.interactive_shell.runtime.slash_adapter import repl_slash_ports
 from surfaces.interactive_shell.runtime.subprocess_runner.repl_presenter import (
@@ -41,7 +37,6 @@ from surfaces.interactive_shell.runtime.subprocess_runner.repl_presenter import 
 from surfaces.interactive_shell.runtime.task_cancel_adapter import repl_task_cancel_ports
 from surfaces.interactive_shell.session import Session
 from surfaces.interactive_shell.ui.action_rendering import ActionRenderObserver
-from tools.interactive_shell.shared.investigation_launch import InvestigationLaunchPorts
 
 
 def _subprocess_presenter_factory(
@@ -57,13 +52,6 @@ def _subprocess_presenter_factory(
         confirm_fn=confirm_fn,
         is_tty=is_tty,
         action_already_listed=action_already_listed,
-    )
-
-
-def _investigation_ports_factory() -> InvestigationLaunchPorts:
-    return repl_investigation_launch_ports(
-        start_background_text=background_runner.start_background_text_investigation,
-        start_background_sample=background_runner.start_background_template_investigation,
     )
 
 
@@ -111,7 +99,6 @@ def shell_tool_provider(
         request_exit=request_exit,
         observer_factory=_observer_factory(session, console),
         subprocess_presenter_factory=_subprocess_presenter_factory,
-        investigation_ports_factory=_investigation_ports_factory,
         llm_provider_ports_factory=repl_llm_provider_ports,
         task_cancel_ports_factory=repl_task_cancel_ports,
         slash_ports_factory=repl_slash_ports,

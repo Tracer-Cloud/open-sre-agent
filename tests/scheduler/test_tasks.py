@@ -6,201 +6,16 @@ import pytest
 
 import infrastructure.scheduling.scheduler.tasks as tasks_mod
 from infrastructure.scheduling.scheduler.loop_constants import LOOP_PROMPT_PARAM
-from infrastructure.scheduling.scheduler.runners import SchedulerRunners
 from infrastructure.scheduling.scheduler.types import Provider, ScheduledTask, TaskKind
-from tests.scheduler._bundle import real_runners, runners_with_agent
+from tests.scheduler._bundle import runners_with_agent
 
 
 class TestMessageBuilders:
-    def test_daily_summary(self, monkeypatch: pytest.MonkeyPatch) -> None:
-        task = ScheduledTask(
-            kind=TaskKind.DAILY_SUMMARY,
-            cron="0 9 * * *",
-            provider=Provider.TELEGRAM,
-            chat_id="-100",
-            window_hours=24,
-        )
-        # Mock the pipeline so the test doesn't need live infra
-        monkeypatch.setattr(
-            "tools.investigation.capability.run_investigation",
-            lambda *_a, **_kw: {},
-        )
-        msg = tasks_mod.build_message(task, real_runners())
-        assert "Daily Reliability Summary" in msg
-        assert "24h" in msg
-        assert "OpenSRE" in msg
-
-    def test_weekly_audit(self, monkeypatch: pytest.MonkeyPatch) -> None:
-        task = ScheduledTask(
-            kind=TaskKind.WEEKLY_AUDIT,
-            cron="0 8 * * 1",
-            provider=Provider.SLACK,
-            chat_id="C123",
-            window_hours=168,
-        )
-        monkeypatch.setattr(
-            "tools.investigation.capability.run_investigation",
-            lambda *_a, **_kw: {},
-        )
-        msg = tasks_mod.build_message(task, real_runners())
-        assert "Weekly Alert Audit" in msg
-        assert "168h" in msg
-
-    def test_synthetic_run(self, monkeypatch: pytest.MonkeyPatch) -> None:
-        task = ScheduledTask(
-            kind=TaskKind.SYNTHETIC_RUN,
-            cron="0 6 * * *",
-            provider=Provider.DISCORD,
-            chat_id="123",
-        )
-        monkeypatch.setattr(
-            "tools.investigation.capability.run_investigation",
-            lambda *_a, **_kw: {},
-        )
-        msg = tasks_mod.build_message(task, real_runners())
-        assert "Synthetic Test Summary" in msg
-
-    def test_daily_summary_uses_pipeline_report(self, monkeypatch: pytest.MonkeyPatch) -> None:
-        """When the pipeline returns a report, it is used as the message."""
-        task = ScheduledTask(
-            kind=TaskKind.DAILY_SUMMARY,
-            cron="0 9 * * *",
-            provider=Provider.TELEGRAM,
-            chat_id="-100",
-            window_hours=24,
-        )
-        monkeypatch.setattr(
-            "tools.investigation.capability.run_investigation",
-            lambda *_a, **_kw: {"report": "Real incident data from pipeline"},
-        )
-        msg = tasks_mod.build_message(task, real_runners())
-        assert msg == "Real incident data from pipeline"
-
-    def test_weekly_audit_uses_pipeline_report(self, monkeypatch: pytest.MonkeyPatch) -> None:
-        task = ScheduledTask(
-            kind=TaskKind.WEEKLY_AUDIT,
-            cron="0 8 * * 1",
-            provider=Provider.SLACK,
-            chat_id="C123",
-            window_hours=168,
-        )
-        monkeypatch.setattr(
-            "tools.investigation.capability.run_investigation",
-            lambda *_a, **_kw: {"report": "Weekly audit from real data"},
-        )
-        msg = tasks_mod.build_message(task, real_runners())
-        assert msg == "Weekly audit from real data"
-
-    def test_synthetic_run_uses_pipeline_report(self, monkeypatch: pytest.MonkeyPatch) -> None:
-        task = ScheduledTask(
-            kind=TaskKind.SYNTHETIC_RUN,
-            cron="0 6 * * *",
-            provider=Provider.DISCORD,
-            chat_id="123",
-        )
-        monkeypatch.setattr(
-            "tools.investigation.capability.run_investigation",
-            lambda *_a, **_kw: {"report": "3/3 probes passed"},
-        )
-        msg = tasks_mod.build_message(task, real_runners())
-        assert msg == "3/3 probes passed"
-
-    def test_incident_window_replay_pipeline_failure(self, monkeypatch: pytest.MonkeyPatch) -> None:
-        task = ScheduledTask(
-            kind=TaskKind.INCIDENT_WINDOW_REPLAY,
-            cron="0 9 * * *",
-            provider=Provider.TELEGRAM,
-            chat_id="-100",
-        )
-
-        def _mock_build_replay(_t: ScheduledTask, _runners: SchedulerRunners) -> str:
-            raise RuntimeError("Pipeline failed")
-
-        monkeypatch.setattr(tasks_mod, "_build_incident_window_replay", _mock_build_replay)
-
-        with pytest.raises(RuntimeError, match="Pipeline failed"):
-            tasks_mod._build_incident_window_replay(task, real_runners())
-
-    def test_custom_investigation_pipeline_failure(self, monkeypatch: pytest.MonkeyPatch) -> None:
-        task = ScheduledTask(
-            kind=TaskKind.CUSTOM_INVESTIGATION,
-            cron="0 9 * * *",
-            provider=Provider.TELEGRAM,
-            chat_id="-100",
-        )
-
-        def _mock_build_custom(_t: ScheduledTask, _runners: SchedulerRunners) -> str:
-            raise RuntimeError("Custom investigation failed")
-
-        monkeypatch.setattr(tasks_mod, "_build_custom_investigation", _mock_build_custom)
-
-        with pytest.raises(RuntimeError, match="Custom investigation failed"):
-            tasks_mod._build_custom_investigation(task, real_runners())
-
-    def test_daily_summary_pipeline_failure_raises(self, monkeypatch: pytest.MonkeyPatch) -> None:
-        task = ScheduledTask(
-            kind=TaskKind.DAILY_SUMMARY,
-            cron="0 9 * * *",
-            provider=Provider.TELEGRAM,
-            chat_id="-100",
-            window_hours=24,
-        )
-
-        def _raise(_payload: object, **_kwargs: object) -> dict[str, str]:
-            raise RuntimeError("pipeline down")
-
-        monkeypatch.setattr("tools.investigation.capability.run_investigation", _raise)
-
-        with pytest.raises(RuntimeError, match="Daily summary failed"):
-            tasks_mod.build_message(task, real_runners())
-
-    def test_weekly_audit_pipeline_failure_raises(self, monkeypatch: pytest.MonkeyPatch) -> None:
-        task = ScheduledTask(
-            kind=TaskKind.WEEKLY_AUDIT,
-            cron="0 8 * * 1",
-            provider=Provider.SLACK,
-            chat_id="C123",
-            window_hours=168,
-        )
-
-        def _raise(_payload: object, **_kwargs: object) -> dict[str, str]:
-            raise RuntimeError("pipeline down")
-
-        monkeypatch.setattr("tools.investigation.capability.run_investigation", _raise)
-
-        with pytest.raises(RuntimeError, match="Weekly audit failed"):
-            tasks_mod.build_message(task, real_runners())
-
-    def test_custom_investigation_strips_credentials(self, monkeypatch: pytest.MonkeyPatch) -> None:
-        """Verify credential keys are not passed to the investigation pipeline."""
-        task = ScheduledTask(
-            kind=TaskKind.CUSTOM_INVESTIGATION,
-            cron="0 9 * * *",
-            provider=Provider.TELEGRAM,
-            chat_id="-100",
-            params={"bot_token": "secret123", "custom_param": "safe_value"},
-        )
-
-        captured_payload: dict[str, object] = {}
-
-        def _mock_run_investigation(payload: object, **_kwargs: object) -> dict[str, str]:
-            captured_payload.update(payload)  # type: ignore[arg-type]
-            return {"report": "test report"}
-
-        monkeypatch.setattr(
-            "tools.investigation.capability.run_investigation",
-            _mock_run_investigation,
-        )
-
-        tasks_mod._build_custom_investigation(task, real_runners())
-        assert "bot_token" not in captured_payload
-        assert captured_payload.get("custom_param") == "safe_value"
-
-    def test_custom_investigation_with_loop_prompt_uses_agent_runner(self) -> None:
+    def test_manual_loop_uses_agent_runner(self) -> None:
         task = ScheduledTask(
             id="manual-loop",
             name="Morning ops",
-            kind=TaskKind.CUSTOM_INVESTIGATION,
+            kind=TaskKind.MANUAL_LOOP,
             cron="0 8 * * *",
             provider=Provider.INTERACTIVE_SHELL,
             params={LOOP_PROMPT_PARAM: "Check incidents and summarize risk."},
@@ -211,16 +26,50 @@ class TestMessageBuilders:
             captured.update(payload)
             return "Manual loop report"
 
-        def _fail_investigation(_payload: dict[str, object]) -> object:
-            return pytest.fail("manual loops must not run RCA investigation")
-
-        runners = SchedulerRunners(agent=_mock_agent_runner, investigation=_fail_investigation)
-        msg = tasks_mod._build_custom_investigation(task, runners)
+        msg = tasks_mod.build_message(task, runners_with_agent(_mock_agent_runner))
 
         assert msg == "Manual loop report"
         assert captured["source"] == "scheduled_manual_loop"
         assert captured["loop_prompt"] == "Check incidents and summarize risk."
         assert captured["name"] == "Morning ops"
+
+    def test_manual_loop_strips_credentials(self) -> None:
+        """Verify credential keys are not forwarded to the agent runner."""
+        task = ScheduledTask(
+            kind=TaskKind.MANUAL_LOOP,
+            cron="0 9 * * *",
+            provider=Provider.TELEGRAM,
+            chat_id="-100",
+            params={
+                LOOP_PROMPT_PARAM: "Check incidents.",
+                "bot_token": "secret123",
+                "custom_param": "safe_value",
+            },
+        )
+        captured: dict[str, object] = {}
+
+        def _mock_agent_runner(payload: dict[str, object]) -> str:
+            captured.update(payload)
+            return "report"
+
+        tasks_mod.build_message(task, runners_with_agent(_mock_agent_runner))
+        assert "bot_token" not in captured
+        assert captured.get("custom_param") == "safe_value"
+
+    def test_manual_loop_failure_raises(self) -> None:
+        task = ScheduledTask(
+            kind=TaskKind.MANUAL_LOOP,
+            cron="0 9 * * *",
+            provider=Provider.TELEGRAM,
+            chat_id="-100",
+            params={LOOP_PROMPT_PARAM: "Check incidents."},
+        )
+
+        def _raise(_payload: dict[str, object]) -> str:
+            raise RuntimeError("LLM unavailable")
+
+        with pytest.raises(RuntimeError, match="Manual loop failed"):
+            tasks_mod.build_message(task, runners_with_agent(_raise))
 
     def test_sentry_morning_digest_uses_agent_runner(self) -> None:
         task = ScheduledTask(

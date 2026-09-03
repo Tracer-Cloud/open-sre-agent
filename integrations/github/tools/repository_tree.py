@@ -60,7 +60,7 @@ def _map_get_github_repository_tree(
         "Narrowing down where to read code next",
     ],
     requires=["owner", "repo"],
-    surfaces=(ToolSurface.INVESTIGATION, ToolSurface.CHAT),
+    surfaces=(ToolSurface.CHAT,),
     input_schema={
         "type": "object",
         "properties": {

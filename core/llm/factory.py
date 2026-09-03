@@ -2,7 +2,7 @@
 
 The provider/transport decision (CLI-backed vs LiteLLM vs native SDK, and which
 vendor) is resolved once in :func:`resolve_llm_route` and reused by every role, so
-an Azure/LiteLLM routing fix cannot drift between the investigation agent and the
+an Azure/LiteLLM routing fix cannot drift between the tool-calling agent and the
 reasoning/classification/toolcall clients.
 
 Roles differ only in the *client family* they build: :data:`LLMRole.AGENT` builds
@@ -39,7 +39,7 @@ from core.llm.types import AgentLLMClient, LLMRoute, ModelType
 class LLMRole(StrEnum):
     """The model tier a caller needs, independent of provider/transport."""
 
-    AGENT = "agent"  # tool-calling ReAct (action, gather, investigation)
+    AGENT = "agent"  # tool-calling ReAct (action, gather)
     REASONING = "reasoning"  # streamed assistant answer / complex reasoning
     CLASSIFICATION = "classification"  # mid-tier classifier
     TOOLCALL = "toolcall"  # lightweight tool selection / action planning
@@ -55,7 +55,20 @@ _MODEL_TYPE_BY_ROLE: dict[LLMRole, ModelType] = {
 
 def resolve_llm_route() -> LLMRoute:
     """Resolve settings + runtime provider + transport once (the single routing decision)."""
-    settings = _resolve_settings_or_raise()
+    from config.account import account_llm_route
+    from config.llm_settings import PROVIDER_OPENAI
+
+    account_route = account_llm_route()
+    settings = _resolve_settings_or_raise(
+        provider_override=PROVIDER_OPENAI if account_route is not None else None
+    )
+    if account_route is not None:
+        return LLMRoute(
+            settings=settings,
+            provider=PROVIDER_OPENAI,
+            cli_provider_registration=None,
+            use_litellm=False,
+        )
 
     runtime_provider = settings.provider
     return LLMRoute(
@@ -66,12 +79,14 @@ def resolve_llm_route() -> LLMRoute:
     )
 
 
-def _resolve_settings_or_raise() -> Any:
+def _resolve_settings_or_raise(*, provider_override: str | None = None) -> Any:
     from pydantic import ValidationError
 
     from config.llm_settings import resolve_llm_settings
 
     try:
+        if provider_override is not None:
+            return resolve_llm_settings(provider_override=provider_override)
         return resolve_llm_settings()
     except ValidationError as exc:
         errors = exc.errors()

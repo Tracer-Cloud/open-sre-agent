@@ -4,8 +4,8 @@ from __future__ import annotations
 
 from typing import Final
 
-# Injected by the org-silo infra (ECS task definition). Metering/vault stay off
-# unless the webapp URL, an auth token, and the org id are all set.
+# Injected by the org-silo infra (ECS task definition). No URL explicitly means
+# self-hosted metering is disabled; a URL without auth/org is a hosted error.
 WEBAPP_URL_ENV: Final[str] = "OPENSRE_WEBAPP_URL"
 
 #: The organization this deployment serves — usage attribution, credits

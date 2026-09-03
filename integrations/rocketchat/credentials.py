@@ -1,4 +1,4 @@
-"""Rocket.Chat credential resolution for alarm dispatch (watchdog, Hermes).
+"""Rocket.Chat credential resolution for alarm dispatch.
 
 ``server_url``/``auth_token``/``user_id``/``webhook_url`` reuse the
 scheduler's resolver (:func:`infrastructure.scheduling.scheduler.credentials.resolve_rocketchat_credentials`)

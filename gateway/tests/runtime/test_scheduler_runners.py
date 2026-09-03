@@ -34,12 +34,6 @@ class _CountingGate:
         self.released += 1
 
 
-def _unused_runner(payload: dict[str, Any]) -> None:
-    """Stands in for the seam a given test never dispatches."""
-    _ = payload
-    return None
-
-
 def test_a_scheduled_run_takes_the_gate_once_and_gives_it_back() -> None:
     # Arrange — a loop task's runner, gated the way the host gates it
     runs: list[dict[str, Any]] = []
@@ -49,7 +43,7 @@ def test_a_scheduled_run_takes_the_gate_once_and_gives_it_back() -> None:
         return "report body"
 
     gate = _CountingGate()
-    bundle = SchedulerRunners(agent=runner, investigation=_unused_runner).gated(gate)
+    bundle = SchedulerRunners(agent=runner).gated(gate)
 
     # Act
     result = bundle.agent({"source": "sentry_digest"})
@@ -67,7 +61,7 @@ def test_the_gate_is_given_back_when_a_scheduled_run_fails() -> None:
         raise RuntimeError("digest failed")
 
     gate = _CountingGate()
-    bundle = SchedulerRunners(agent=failing_runner, investigation=_unused_runner).gated(gate)
+    bundle = SchedulerRunners(agent=failing_runner).gated(gate)
 
     # Act
     with pytest.raises(RuntimeError, match="digest failed"):
@@ -92,7 +86,7 @@ def test_gating_returns_a_new_value_and_does_not_mutate_the_original() -> None:
         return "report body"
 
     gate = _CountingGate()
-    bundle = SchedulerRunners(agent=runner, investigation=_unused_runner)
+    bundle = SchedulerRunners(agent=runner)
     gated = bundle.gated(gate)
 
     # Act / Assert — a distinct value, and one run through it costs one permit

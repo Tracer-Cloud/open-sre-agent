@@ -1,4 +1,4 @@
-"""Shared unavailable-payload helper for investigation tools.
+"""Shared unavailable-payload helper for agent tools.
 
 Every tool that can't reach its backend (missing config, failed auth, no
 client) returns the same base envelope shape: ``{"source", "available":

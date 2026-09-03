@@ -32,8 +32,6 @@ def test_agent_prompt_includes_getting_started_options() -> None:
             conversation_messages=(),
             configured_integrations=(),
             configured_integrations_known=True,
-            last_state=None,
-            last_synthetic_observation_path=None,
             reasoning_effort=None,
         )
     )
@@ -52,8 +50,6 @@ def test_agent_prompt_combines_starter_options_with_selectable_choice_contract()
             conversation_messages=(),
             configured_integrations=(),
             configured_integrations_known=True,
-            last_state=None,
-            last_synthetic_observation_path=None,
             reasoning_effort=None,
             prompt_surface="interactive_shell",
             interactive_choice_available=True,

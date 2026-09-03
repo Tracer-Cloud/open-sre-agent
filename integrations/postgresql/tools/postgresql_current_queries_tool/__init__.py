@@ -19,7 +19,7 @@ from integrations.postgresql import (
         "Retrieve currently executing PostgreSQL queries above a specific duration threshold."
     ),
     source="postgresql",
-    surfaces=(ToolSurface.INVESTIGATION, ToolSurface.CHAT),
+    surfaces=(ToolSurface.CHAT,),
     use_cases=[
         "Identifying long-running queries that may be causing performance issues",
         "Investigating database locks and blocking queries during incidents",

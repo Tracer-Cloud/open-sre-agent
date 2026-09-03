@@ -8,7 +8,7 @@ from pathlib import Path
 from typing import Any
 
 import config.constants.platform as _platform
-from infrastructure.terminal.theme import ERROR, GLYPH_ERROR, GLYPH_SUCCESS, HIGHLIGHT
+from infrastructure.terminal.theme import ERROR, GLYPH_ERROR
 from tools.interactive_shell.shell import execution as shell_execution
 from tools.interactive_shell.shell.display import format_shell_command_for_display
 from tools.interactive_shell.shell.parsing import (
@@ -148,8 +148,6 @@ def run_shell_command(
             response_text = (result.stdout or "").strip()
         elif had_stderr:
             response_text = (result.stderr or "").strip()
-        elif not quiet:
-            presenter.print(f"[{HIGHLIGHT}]{GLYPH_SUCCESS}[/]")
     else:
         code = result.exit_code if result.exit_code is not None else "?"
         exit_text = f"{GLYPH_ERROR} exit {code}"

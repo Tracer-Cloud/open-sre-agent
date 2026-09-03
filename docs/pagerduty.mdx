@@ -1,13 +1,13 @@
 ---
 title: "PagerDuty"
-description: "Connect PagerDuty so OpenSRE can read incidents, on-call schedules, and service topology during investigations"
+description: "Connect PagerDuty so OpenSRE can read incidents, on-call schedules, and service topology"
 ---
 
 ## Overview
 
 OpenSRE queries PagerDuty for active incidents, timelines, on-call responders, and
-service / escalation-policy configuration so RCA can correlate incident management
-data with infrastructure events.
+service / escalation-policy configuration so the agent can correlate incident
+management data with infrastructure events.
 
 ## Prerequisites
 
@@ -65,7 +65,7 @@ PAGERDUTY_BASE_URL=https://api.pagerduty.com   # optional
 PagerDuty API keys are account-level. Use a read-only key for least privilege.
 </Info>
 
-## Investigation tools
+## Tools
 
 | Tool | Description |
 | --- | --- |
@@ -74,7 +74,7 @@ PagerDuty API keys are account-level. Use a read-only key for least privilege.
 | `pagerduty_oncall` | Current on-call responders by escalation policy |
 | `pagerduty_services` | Services with escalation policies, integrations, and alert routing |
 
-During an investigation, OpenSRE may use these tools to:
+When investigating an incident, OpenSRE may use these tools to:
 
 - Find incidents around the alert time window
 - Identify who was on-call and how quickly incidents were acknowledged

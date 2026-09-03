@@ -1,11 +1,11 @@
 ---
 title: "WhatsApp"
-description: "Deliver investigation findings to WhatsApp via Twilio."
+description: "Deliver OpenSRE messages to WhatsApp via Twilio."
 ---
 
 ## Overview
 
-OpenSRE's WhatsApp integration delivers investigation findings to any WhatsApp number via Twilio's Messaging API. Delivery-only — no gateway or pairing.
+OpenSRE's WhatsApp integration delivers messages to any WhatsApp number via Twilio's Messaging API. Delivery-only — no gateway or pairing.
 
 <Note>
 This integration uses Twilio as the WhatsApp provider. SMS is a separate integration — see [Twilio SMS](/messaging/twilio-sms).
@@ -55,21 +55,9 @@ WHATSAPP_DEFAULT_TO=+1234567890
 2. Enable WhatsApp Sandbox or a production WhatsApp sender.
 3. Copy Account SID and Auth Token from the Twilio Console.
 4. Set `TWILIO_WHATSAPP_FROM` to your WhatsApp-enabled sender.
-5. Set `WHATSAPP_DEFAULT_TO` for automatic delivery after investigations.
+5. Set `WHATSAPP_DEFAULT_TO` as the default recipient.
 
-From/to numbers are auto-prefixed with `whatsapp:` in delivery.
-
-## Investigation tools
-
-No WhatsApp-specific investigation tools are registered. Delivery happens when an investigation finishes and WhatsApp is configured as a notify channel / default recipient.
-
-### Test with an investigation
-
-```bash
-opensre investigate --input tests/e2e/kubernetes/fixtures/datadog_k8s_alert.json
-```
-
-Findings should arrive in WhatsApp as a plain-text message. Long reports are truncated to WhatsApp limits.
+From/to numbers are auto-prefixed with `whatsapp:` in delivery. No WhatsApp-specific agent tools are registered — this is a delivery channel only. Long messages are truncated to WhatsApp limits.
 
 ## Verify
 

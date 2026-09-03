@@ -17,7 +17,7 @@ from integrations.mongodb_atlas.tools._evidence import map_get_mongodb_atlas_clu
     name="get_mongodb_atlas_clusters",
     description="Retrieve all MongoDB Atlas clusters in a project including state, version, instance size, and replication topology.",
     source="mongodb_atlas",
-    surfaces=(ToolSurface.INVESTIGATION, ToolSurface.CHAT),
+    surfaces=(ToolSurface.CHAT,),
     is_available=atlas_is_available,
     injected_params=("api_private_key", "api_public_key", "base_url"),
     extract_params=atlas_extract_params,

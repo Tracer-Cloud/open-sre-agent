@@ -51,7 +51,7 @@ def _extract_params(sources: dict[str, dict]) -> dict[str, Any]:
 
 @tool(
     name="execute_yc_operation",
-    surfaces=(ToolSurface.INVESTIGATION, ToolSurface.ACTION),
+    surfaces=(ToolSurface.ACTION,),
     display_name="Yandex Cloud",
     source=SOURCE,
     description=(

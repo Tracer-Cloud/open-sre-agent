@@ -11,7 +11,7 @@ configuration questions about your instance — for example
 *"Is ServiceNow configured?"*.
 
 ServiceNow today is a **config and verify** integration. It does not register
-investigation query tools.
+agent query tools.
 
 ## Prerequisites
 
@@ -69,7 +69,7 @@ Use a dedicated ServiceNow user with the minimum roles needed for a one-row read
 of `sys_user` (for example `itil`). Prefer `opensre integrations setup servicenow`
 so the password stays in `~/.opensre/credentials.json` instead of `.env`.
 
-## Investigation tools
+## Tools
 
 None. ServiceNow is used for configuration and verification only. The interactive
 shell can still answer *"Is ServiceNow configured?"* by running the verifier.

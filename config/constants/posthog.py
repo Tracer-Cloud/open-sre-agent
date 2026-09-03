@@ -2,7 +2,7 @@
 
 Two unrelated things share the vendor name. ``POSTHOG_CAPTURE_API_KEY`` is a
 write-only key for *OpenSRE's* analytics project; the ``*_ENV`` names further
-down identify the credentials a *user* supplies to let investigations query
+down identify the credentials a *user* supplies to let agent tools query
 *their* PostHog. Nothing is shared between them but the default host.
 """
 

@@ -401,11 +401,13 @@ class LLMResolution:
 
 def resolve_llm_settings_verbose(
     fallback_providers: Sequence[str] = (),
+    *,
+    provider_override: str | None = None,
 ) -> LLMResolution:
     """Resolve LLM settings without implicit provider fallback."""
     bootstrap_opensre_env(override=False)
     _ = fallback_providers
-    configured_provider = get_configured_llm_provider()
+    configured_provider = provider_override or get_configured_llm_provider()
     settings = LLMSettings.model_validate(_llm_settings_env_payload(configured_provider))
     return LLMResolution(
         settings=settings,
@@ -418,9 +420,14 @@ def resolve_llm_settings_verbose(
 
 def resolve_llm_settings(
     fallback_providers: Sequence[str] = (),
+    *,
+    provider_override: str | None = None,
 ) -> LLMSettings:
     """Resolve LLM settings for the configured provider only."""
-    return resolve_llm_settings_verbose(fallback_providers).settings
+    return resolve_llm_settings_verbose(
+        fallback_providers,
+        provider_override=provider_override,
+    ).settings
 
 
 def describe_llm_resolution(

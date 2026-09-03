@@ -148,7 +148,7 @@ def _run_harness_adapters(_profile: ProcessProfile, _log: logging.Logger) -> Non
 
 
 def _run_scheduler_runners(_profile: ProcessProfile, _log: logging.Logger) -> None:
-    # The agent/investigation runners are now built at the scheduler-start call
+    # The agent runners are now built at the scheduler-start call
     # site and passed in (no global); this step only installs delivery adapters.
     install_scheduled_delivery_adapters()
 

@@ -114,5 +114,5 @@ class SlackJoinChannelTool(BaseTool):
 
 slack_join_channel = tool(
     SlackJoinChannelTool(),
-    surfaces=(ToolSurface.INVESTIGATION, ToolSurface.CHAT, ToolSurface.ACTION),
+    surfaces=(ToolSurface.CHAT, ToolSurface.ACTION),
 )

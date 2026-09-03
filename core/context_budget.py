@@ -232,7 +232,7 @@ def system_and_tools_overhead(
 ) -> int:
     """Fixed token overhead for the system prompt and tool schemas.
 
-    Callers on a hot path (e.g. the investigation ReAct loop) should call this
+    Callers on a hot path (e.g. the agent ReAct loop) should call this
     once and pass the result to ``enforce_context_budget`` via
     ``fixed_overhead_tokens`` so tool schemas are not re-serialized every
     iteration.

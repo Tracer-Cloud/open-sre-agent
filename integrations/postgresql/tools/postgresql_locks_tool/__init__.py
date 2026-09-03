@@ -21,7 +21,7 @@ from integrations.postgresql import (
         " blocked queries, their blockers, and a summary of lock types."
     ),
     source="postgresql",
-    surfaces=(ToolSurface.INVESTIGATION, ToolSurface.CHAT),
+    surfaces=(ToolSurface.CHAT,),
     use_cases=[
         "Diagnosing query blocking chains during performance incidents",
         "Identifying deadlock-prone transactions or long-held locks",

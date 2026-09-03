@@ -56,12 +56,9 @@ _READ_ONLY_INTEGRATIONS_SUBCOMMANDS: frozenset[str] = frozenset(
     }
 )
 
-INVESTIGATION_OPENSRE_SUBCOMMANDS: frozenset[str] = frozenset({"investigate"})
-
 
 class OpensreCommandClass(StrEnum):
     READ_ONLY = "read_only"
-    INVESTIGATION = "investigation"
     MUTATING = "mutating"
 
 
@@ -169,8 +166,6 @@ def classify_opensre_command(tokens: list[str]) -> str:
         return OpensreCommandClass.READ_ONLY.value
     if _is_read_only_integrations(tokens):
         return OpensreCommandClass.READ_ONLY.value
-    if first_token in INVESTIGATION_OPENSRE_SUBCOMMANDS:
-        return OpensreCommandClass.INVESTIGATION.value
     if first_token == "fleet":
         subcommand = tokens[1].lower() if len(tokens) > 1 else "list"
         if subcommand in {"list"}:
@@ -462,7 +457,6 @@ def run_opensre_cli_command(args: str, presenter: SubprocessPresenter) -> bool:
 __all__ = [
     "ForegroundCliResult",
     "INTERACTIVE_OPENSRE_COMMAND_PATHS",
-    "INVESTIGATION_OPENSRE_SUBCOMMANDS",
     "OPENSRE_BLOCKED_SUBCOMMANDS",
     "READ_ONLY_OPENSRE_SUBCOMMANDS",
     "OpensreCommandClass",

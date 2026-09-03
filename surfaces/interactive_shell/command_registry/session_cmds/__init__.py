@@ -51,7 +51,7 @@ COMMANDS: list[SlashCommand] = [
         usage=("/compact",),
         notes=(
             "Writes a compaction entry and keeps the most recent messages plus a summary.",
-            "Useful before continuing a long-running investigation in the same REPL.",
+            "Useful before continuing a long-running session in the same REPL.",
         ),
     ),
     SlashCommand(

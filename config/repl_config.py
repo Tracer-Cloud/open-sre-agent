@@ -54,10 +54,7 @@ def _resolve_layout(raw: str) -> Layout:
 # exactly 2 user-visible changes. Keep each entry under ~50 chars so it fits
 # the right column without truncation. The banner reads this at import time.
 
-WHATS_NEW: tuple[str, ...] = (
-    "Confidence scoring now shown during diagnosis",
-    "New /save command exports investigation reports",
-)
+WHATS_NEW: tuple[str, ...] = ("New /save command exports session transcripts",)
 
 
 def _read_config_file() -> dict[str, Any]:

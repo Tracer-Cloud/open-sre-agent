@@ -16,7 +16,7 @@ This complements the GitHub deploy timeline, which only sees GitHub-originated d
 ## Prerequisites
 
 No new credentials. The tool reuses your existing [Grafana](/grafana) integration. Once
-Grafana is connected, `query_grafana_annotations` is available during investigations.
+Grafana is connected, `query_grafana_annotations` is available in chat.
 
 ## Setup
 
@@ -27,7 +27,7 @@ variables, or persistent store). Annotation query uses that connection.
 
 None beyond your Grafana service account token. See [Grafana → Credentials](/grafana#credentials).
 
-## Investigation tools
+## Tools
 
 ### `query_grafana_annotations`
 
@@ -103,4 +103,4 @@ curl -s -X POST "$GRAFANA_URL/api/annotations" \
 ```
 
 Tag deploy annotations consistently (for example `deployment`) so the agent can filter
-precisely during an investigation.
+precisely.

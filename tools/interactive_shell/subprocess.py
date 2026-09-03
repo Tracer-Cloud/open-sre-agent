@@ -18,11 +18,10 @@ from tools.interactive_shell.shared import ExecutionPolicyResult
 # --- constants ---
 
 SHELL_COMMAND_TIMEOUT_SECONDS = 120
-SYNTHETIC_TEST_TIMEOUT_SECONDS = 1800
 CLAUDE_CODE_IMPLEMENTATION_TIMEOUT_SECONDS = 1800
-SYNTHETIC_POLL_SECONDS = 0.25
+TASK_POLL_SECONDS = 0.25
 MAX_COMMAND_OUTPUT_CHARS = 24_000
-SYNTHETIC_DIAG_CHARS = 2_000
+TASK_DIAG_CHARS = 2_000
 SIGTERM_GRACE_SECONDS = 10
 TASK_OUTPUT_JOIN_TIMEOUT_SECONDS = 2
 
@@ -68,8 +67,8 @@ def read_task_output(
 
 
 def read_diag(buf: tempfile.SpooledTemporaryFile[bytes]) -> str:  # type: ignore[type-arg]
-    """Read up to ``SYNTHETIC_DIAG_CHARS`` bytes from a captured stderr buffer."""
-    return read_task_output(buf, limit=SYNTHETIC_DIAG_CHARS)
+    """Read up to ``TASK_DIAG_CHARS`` bytes from a captured stderr buffer."""
+    return read_task_output(buf, limit=TASK_DIAG_CHARS)
 
 
 # --- environment ---
@@ -105,7 +104,7 @@ def watch_subprocess_until_exit(
     *,
     cancel_event: threading.Event,
     timeout_seconds: float,
-    poll_seconds: float = SYNTHETIC_POLL_SECONDS,
+    poll_seconds: float = TASK_POLL_SECONDS,
 ) -> SubprocessWatchResult:
     """Poll ``proc`` until it exits, ``cancel_event`` is set, or ``timeout_seconds`` elapses."""
     started = time.monotonic()
@@ -211,9 +210,8 @@ __all__ = [
     "MIN_SUBPROCESS_TERMINAL_WIDTH",
     "SHELL_COMMAND_TIMEOUT_SECONDS",
     "SIGTERM_GRACE_SECONDS",
-    "SYNTHETIC_DIAG_CHARS",
-    "SYNTHETIC_POLL_SECONDS",
-    "SYNTHETIC_TEST_TIMEOUT_SECONDS",
+    "TASK_DIAG_CHARS",
+    "TASK_POLL_SECONDS",
     "SubprocessPresenter",
     "SubprocessWatchResult",
     "TASK_OUTPUT_JOIN_TIMEOUT_SECONDS",

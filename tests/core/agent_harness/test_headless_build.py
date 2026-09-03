@@ -8,7 +8,7 @@ from types import SimpleNamespace
 
 from rich.console import Console
 
-from core.agent_harness.runtime import TurnBinding
+import core.agent_harness.runtime as runtime
 from core.agent_harness.session import SessionCore
 from core.agent_harness.session.persistence.memory import InMemorySessionStore
 from core.agent_harness.turns.headless_adapters import BufferOutputSink
@@ -36,7 +36,6 @@ def test_default_headless_build_sets_gateway_surface() -> None:
 
 def test_default_headless_build_is_exported_from_runtime_and_the_buffer_sink_is_not() -> None:
     import core.agent_harness as pkg
-    import core.agent_harness.runtime as runtime
 
     assert runtime.DefaultHeadlessBuild is DefaultHeadlessBuild
     assert not hasattr(pkg, "DefaultHeadlessBuild")
@@ -136,7 +135,7 @@ def test_default_headless_build_takes_the_hosts_tool_provider_and_forwards_the_l
     agent = DefaultHeadlessBuild(session=session, output=BufferOutputSink()).agent(
         tools=tools, llm_factory=llm_factory
     )
-    agent.bind_turn(TurnBinding(tool_hooks=hooks))
+    agent.bind_turn(runtime.TurnBinding(tool_hooks=hooks))
     bare = DefaultHeadlessBuild(session=session, output=BufferOutputSink()).agent()
 
     # Assert — the host's provider is used as-is; the factory and hooks reach the

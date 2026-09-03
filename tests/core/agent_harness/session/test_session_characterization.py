@@ -22,12 +22,8 @@ _CORE_FIELDS = (
     "store",
     "resumed_from_name",
     "history",
-    "last_state",
-    "last_investigation_id",
     "last_assistant_intent",
-    "last_synthetic_observation_path",
     "pending_schedule_offer",
-    "pending_investigation_offer",
     "pending_user_choice",
     "ask_user_rounds",
     "task_plan",
@@ -52,7 +48,6 @@ _CORE_FIELDS = (
     "agent",
     "grounding",
     "runtime_metadata",
-    "_ACCUMULATED_KEYS",
 )
 
 

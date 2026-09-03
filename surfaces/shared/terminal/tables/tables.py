@@ -36,7 +36,7 @@ if TYPE_CHECKING:
     from surfaces.shared.terminal.tables.tool_catalog import ToolCatalogEntry
 
 # MCP-type services are also rendered under `/mcp list` for focused MCP actions.
-MCP_INTEGRATION_SERVICES = frozenset({"github", "openclaw"})
+MCP_INTEGRATION_SERVICES = frozenset({"github"})
 
 
 def status_style(status: str) -> str:

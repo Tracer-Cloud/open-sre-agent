@@ -5,9 +5,8 @@ session. Created once per ``Session`` and threaded through prompt assembly
 so callers always get a single, consistent view of the grounding data.
 
 **What lives here:** per-session caches for docs and AGENTS.md grounding.
-**What must NOT live here:** LLM completions, investigation state, tool
-outputs, or any data that belongs to a specific investigation run rather
-than the session setup.
+**What must NOT live here:** LLM completions, tool outputs, or any data
+that belongs to a specific turn rather than the session setup.
 """
 
 from __future__ import annotations
@@ -29,9 +28,9 @@ class GroundingContext:
     """Per-session container for repo-level grounding caches.
 
     Owns exactly one :class:`DocsReference` and one :class:`AgentsMdReference`.
-    Callers must not store investigation-scoped data (tool outputs, LLM
-    completions, run state) here — those belong on the investigation context,
-    not the session grounding cache.
+    Callers must not store turn-scoped data (tool outputs, LLM
+    completions, run state) here — those do not belong on the session
+    grounding cache.
 
     Attributes:
         docs: Cached reference to the project documentation.

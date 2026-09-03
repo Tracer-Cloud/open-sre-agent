@@ -25,7 +25,7 @@ class _FixedClock:
 
 
 def _git_head_at(monkeypatch, sha: str) -> None:
-    monkeypatch.setattr(build_info, "find_git_layout", lambda: object())
+    monkeypatch.setattr(build_info, "find_git_layout", object)
     monkeypatch.setattr(build_info, "read_git_head_sha", lambda _layout: sha)
     monkeypatch.setattr(version_module, "datetime", _FixedClock)
 

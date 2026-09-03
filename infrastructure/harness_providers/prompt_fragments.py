@@ -7,7 +7,7 @@ prompt builders append the joined fragments without naming any vendor.
 
 Gateway persona fragments are distinct: Slack/gateway teammate-persona wording
 that only applies when the turn's surface is ``"gateway"``, whereas the
-gather/action/assistant fragments join into the shared prompt regardless of
+action/assistant fragments join into the shared prompt regardless of
 surface.
 """
 
@@ -17,22 +17,9 @@ from collections.abc import Callable
 
 PromptFragmentFn = Callable[[], str]
 
-_gather_prompt_fragments: list[PromptFragmentFn] = []
 _action_prompt_fragments: list[PromptFragmentFn] = []
 _assistant_prompt_fragments: list[PromptFragmentFn] = []
 _gateway_persona_fragments: list[PromptFragmentFn] = []
-
-
-def register_gather_prompt_fragment(fn: PromptFragmentFn) -> None:
-    _gather_prompt_fragments.append(fn)
-
-
-def gather_prompt_vendor_fragments() -> str:
-    return "\n".join(fn() for fn in _gather_prompt_fragments)
-
-
-def clear_gather_prompt_fragments() -> None:
-    _gather_prompt_fragments.clear()
 
 
 def register_action_prompt_fragment(fn: PromptFragmentFn) -> None:
@@ -73,7 +60,6 @@ def clear_gateway_persona_fragments() -> None:
 
 def reset() -> None:
     """Clear all registered prompt/persona fragments (tests)."""
-    clear_gather_prompt_fragments()
     clear_action_prompt_fragments()
     clear_assistant_prompt_fragments()
     clear_gateway_persona_fragments()
@@ -86,11 +72,8 @@ __all__ = [
     "clear_action_prompt_fragments",
     "clear_assistant_prompt_fragments",
     "clear_gateway_persona_fragments",
-    "clear_gather_prompt_fragments",
     "gateway_persona_fragments",
-    "gather_prompt_vendor_fragments",
     "register_action_prompt_fragment",
     "register_assistant_prompt_fragment",
     "register_gateway_persona_fragment",
-    "register_gather_prompt_fragment",
 ]

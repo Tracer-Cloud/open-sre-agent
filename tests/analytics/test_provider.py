@@ -295,7 +295,7 @@ def test_analytics_events_from_same_instance_share_exact_distinct_id(
     analytics = provider.Analytics()
     analytics.capture(Event.CLI_INVOKED, {"interactive": False})
     analytics.capture(Event.ONBOARD_STARTED, {"entrypoint": "cli"})
-    analytics.capture(Event.INVESTIGATION_COMPLETED)
+    analytics.capture(Event.UPDATE_COMPLETED)
     analytics.shutdown(flush=True)
 
     assert len(posted_payloads) == 3

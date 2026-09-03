@@ -1,4 +1,4 @@
-"""Telegram delivery helper - posts investigation findings to Telegram Bot API."""
+"""Telegram delivery helper - posts messages to the Telegram Bot API."""
 
 from __future__ import annotations
 

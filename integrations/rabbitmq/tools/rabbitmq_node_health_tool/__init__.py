@@ -40,7 +40,7 @@ def _map_get_rabbitmq_node_health(
     name="get_rabbitmq_node_health",
     description="Return per-node RabbitMQ resource utilization: memory used vs. limit (with alarm flag), disk free vs. limit (with alarm flag), file descriptors, sockets, erlang process usage, and cluster partition state. Essential for diagnosing backpressure, partitions, or node crashes.",
     source="rabbitmq",
-    surfaces=(ToolSurface.INVESTIGATION, ToolSurface.CHAT),
+    surfaces=(ToolSurface.CHAT,),
     use_cases=[
         "Checking if a RabbitMQ node is under memory or disk pressure",
         "Detecting cluster network partitions between nodes",

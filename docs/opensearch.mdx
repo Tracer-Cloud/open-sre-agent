@@ -1,11 +1,11 @@
 ---
 title: "OpenSearch / Elasticsearch"
-description: "Connect OpenSearch or Elasticsearch so OpenSRE can search application logs and analytics indices during investigations"
+description: "Connect OpenSearch or Elasticsearch so OpenSRE can search application logs and analytics indices"
 ---
 
 ## Overview
 
-OpenSRE queries OpenSearch (or Elasticsearch) to retrieve application logs, error events, and analytics records — pulling concrete log lines into the investigation alongside metrics and traces from your other observability tools.
+OpenSRE queries OpenSearch (or Elasticsearch) to retrieve application logs, error events, and analytics records — pulling concrete log lines into its answers alongside metrics and traces from your other observability tools.
 
 For Amazon OpenSearch Service (AWS ES) domain specifics, see also [AWS Elasticsearch](/elasticsearch).
 
@@ -139,33 +139,19 @@ Register the local instance through the supported setup flow:
 opensre integrations setup opensearch
 ```
 
-Trigger a real investigation against the seeded index — this is the actual supported entrypoint, not an internal import:
+Now ask the agent about the seeded index:
 
 ```bash
-opensre investigate --input-json '{
-  "alert_name": "PaymentServiceErrors",
-  "severity": "critical",
-  "commonAnnotations": {
-    "summary": "payment-service throwing connection timeout errors calling billing-api"
-  }
-}'
+opensre
 ```
 
-Real output from a run against this exact seeded index (edited for length):
+Ask: *Is payment-service throwing connection timeout errors calling billing-api? Check the logs.*
 
-```
-Loading integrations: opensearch
-↳ Elasticsearch · query elasticsearch logs (service:payment-service AND (timeout OR "connection" OR error)) → total: 1
-↳ Elasticsearch · query elasticsearch logs (service:billing-api AND (error OR exception OR timeout ...)) → total: 0
-
-root_cause: "billing-api appears to be non-functional or absent -- it has
-produced zero logs across the entire 6-hour observation window while its
-dependent caller (payment-service) has begun reporting connection
-timeouts against it. The most likely explanation is that billing-api
-pods are not running, not ready, or otherwise not serving traffic..."
-```
-
-The agent found the seeded error via `query_elasticsearch_logs` and didn't need `query_opensearch_analytics` for this alert — both tools share the same credentials and index, so either is reachable from the same setup.
+Against this exact seeded index the agent finds the seeded error via
+`query_elasticsearch_logs` (one payment-service timeout, zero billing-api logs
+across the window) and concludes billing-api is not serving traffic. It didn't
+need `query_opensearch_analytics` here — both tools share the same credentials
+and index, so either is reachable from the same setup.
 
 Teardown:
 
@@ -173,7 +159,7 @@ Teardown:
 docker rm -f opensearch-dev
 ```
 
-## Investigation tools
+## Tools
 
 | Tool | What it does |
 | --- | --- |

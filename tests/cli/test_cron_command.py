@@ -31,7 +31,7 @@ def test_cron_add_rejects_non_positive_window() -> None:
         [
             "add",
             "--kind",
-            "daily_summary",
+            "manual_loop",
             "--cron",
             "0 9 * * *",
             "--provider",
@@ -73,7 +73,7 @@ def test_cron_add_allows_slack_without_chat_id(
         [
             "add",
             "--kind",
-            "daily_summary",
+            "manual_loop",
             "--cron",
             "0 8 * * 1-5",
             "--tz",
@@ -102,7 +102,7 @@ def test_cron_add_persists_loop_name(tmp_path: Path, monkeypatch: pytest.MonkeyP
             "--name",
             "Morning report",
             "--kind",
-            "daily_summary",
+            "manual_loop",
             "--cron",
             "0 8 * * 1-5",
             "--provider",
@@ -132,7 +132,7 @@ def test_cron_add_allows_interactive_shell_without_chat_id(
             "--name",
             "Local loop",
             "--kind",
-            "daily_summary",
+            "manual_loop",
             "--cron",
             "0 8 * * 1-5",
             "--provider",
@@ -151,7 +151,7 @@ def test_cron_add_still_requires_chat_id_for_telegram() -> None:
         [
             "add",
             "--kind",
-            "daily_summary",
+            "manual_loop",
             "--cron",
             "0 8 * * 1-5",
             "--provider",
@@ -160,3 +160,144 @@ def test_cron_add_still_requires_chat_id_for_telegram() -> None:
     )
     assert result.exit_code == 2
     assert "--chat-id is required" in result.output
+
+
+def _partial_run(task_id: str) -> object:
+    from infrastructure.scheduling.scheduler.types import DeliveryOutcome, TaskRun, TaskStatus
+
+    return TaskRun(
+        task_id=task_id,
+        fire_time="2026-01-01T09:00",
+        status=TaskStatus.SUCCESS,
+        targets=(
+            DeliveryOutcome(provider=Provider.SLACK, chat_id="C1", ok=True, message_id="ts_1"),
+            DeliveryOutcome(provider=Provider.TELEGRAM, chat_id="-100", ok=False, error="no token"),
+        ),
+    )
+
+
+def _patch_cron_run_deps(
+    monkeypatch: pytest.MonkeyPatch, task_id: str, latest_run: object
+) -> list[dict[str, object]]:
+    from infrastructure.scheduling.scheduler.types import ScheduledTask
+
+    task = ScheduledTask(
+        id=task_id, kind=TaskKind.MANUAL_LOOP, cron="0 9 * * *", provider=Provider.SLACK
+    )
+    calls: list[dict[str, object]] = []
+
+    def _fake_run_task_now(tid: str, _runners: object, *, only_failed: bool = False) -> bool:
+        calls.append({"task_id": tid, "only_failed": only_failed})
+        return True
+
+    monkeypatch.setattr("bootstrap.process.configure_process", lambda _profile: None)
+    monkeypatch.setattr("bootstrap.adapters.scheduler_runners", lambda: object())
+    monkeypatch.setattr("infrastructure.scheduling.scheduler.store.get_task", lambda _tid: task)
+    monkeypatch.setattr(
+        "infrastructure.scheduling.scheduler.runner.run_task_now", _fake_run_task_now
+    )
+    monkeypatch.setattr(
+        "infrastructure.scheduling.scheduler.operation_log.record_scheduler_task_operation",
+        lambda *_args, **_kwargs: None,
+    )
+    monkeypatch.setattr(
+        "infrastructure.scheduling.scheduler.claim_store.get_latest_targeted_run",
+        lambda _tid: latest_run,
+    )
+    return calls
+
+
+def test_cron_run_failed_only_flag_is_passed_through(monkeypatch: pytest.MonkeyPatch) -> None:
+    """``--failed-only`` must reach ``run_task_now`` as ``only_failed=True``."""
+    calls = _patch_cron_run_deps(monkeypatch, "t1", _partial_run("t1"))
+
+    result = CliRunner().invoke(cron_command, ["run", "t1", "--failed-only"])
+
+    assert result.exit_code == 0, result.output
+    assert calls == [{"task_id": "t1", "only_failed": True}]
+
+
+def test_cron_run_defaults_to_a_full_run(monkeypatch: pytest.MonkeyPatch) -> None:
+    calls = _patch_cron_run_deps(monkeypatch, "t1", None)
+
+    result = CliRunner().invoke(cron_command, ["run", "t1"])
+
+    assert result.exit_code == 0, result.output
+    assert calls == [{"task_id": "t1", "only_failed": False}]
+
+
+def test_cron_run_failed_only_refuses_when_history_is_unreadable(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Unknown history must stop the retry, never widen it to every destination."""
+    calls = _patch_cron_run_deps(monkeypatch, "t1", None)
+
+    result = CliRunner().invoke(cron_command, ["run", "t1", "--failed-only"])
+
+    assert result.exit_code == 1
+    # Rich wraps the console output, so assert on a phrase that survives it.
+    assert "No readable per-target history" in result.output
+    assert "Run without --failed-only" in result.output
+    assert calls == []
+
+
+def test_cron_run_failed_only_reports_nothing_to_retry(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from infrastructure.scheduling.scheduler.types import DeliveryOutcome, TaskRun, TaskStatus
+
+    all_ok = TaskRun(
+        task_id="t1",
+        fire_time="2026-01-01T09:00",
+        status=TaskStatus.SUCCESS,
+        targets=(DeliveryOutcome(provider=Provider.SLACK, chat_id="C1", ok=True),),
+    )
+    calls = _patch_cron_run_deps(monkeypatch, "t1", all_ok)
+
+    result = CliRunner().invoke(cron_command, ["run", "t1", "--failed-only"])
+
+    assert result.exit_code == 0, result.output
+    assert "Nothing to retry" in result.output
+    assert calls == []
+
+
+def test_cron_run_warns_that_a_full_rerun_redelivers_after_a_partial_failure(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The default rerun still delivers everywhere — say so before it does."""
+    _patch_cron_run_deps(monkeypatch, "t1", _partial_run("t1"))
+
+    result = CliRunner().invoke(cron_command, ["run", "t1"])
+
+    assert result.exit_code == 0, result.output
+    assert "already delivered to slack:C1" in result.output
+    assert "--failed-only" in result.output
+
+
+def test_cron_run_does_not_warn_when_the_last_run_fully_succeeded(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from infrastructure.scheduling.scheduler.types import DeliveryOutcome, TaskRun, TaskStatus
+
+    all_ok = TaskRun(
+        task_id="t1",
+        fire_time="2026-01-01T09:00",
+        status=TaskStatus.SUCCESS,
+        targets=(DeliveryOutcome(provider=Provider.SLACK, chat_id="C1", ok=True),),
+    )
+    _patch_cron_run_deps(monkeypatch, "t1", all_ok)
+
+    result = CliRunner().invoke(cron_command, ["run", "t1"])
+
+    assert result.exit_code == 0, result.output
+    assert "already delivered" not in result.output
+
+
+def test_cron_run_failed_only_skips_the_warning(monkeypatch: pytest.MonkeyPatch) -> None:
+    calls = _patch_cron_run_deps(monkeypatch, "t1", _partial_run("t1"))
+
+    result = CliRunner().invoke(cron_command, ["run", "t1", "--failed-only"])
+
+    assert result.exit_code == 0, result.output
+    assert "already delivered" not in result.output
+    assert calls == [{"task_id": "t1", "only_failed": True}]

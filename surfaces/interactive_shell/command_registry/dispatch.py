@@ -135,7 +135,7 @@ def dispatch_slash(
                 # Quote-aware split: /cron add --cron '0 8 * * 1-5' must keep the
                 # five-field expression as one argument. Plain str.split fragments
                 # it and Click reports unexpected extra arguments. Fall back when
-                # shlex rejects unbalanced quotes (e.g. /investigate don't …).
+                # shlex rejects unbalanced quotes (e.g. /goal set don't …).
                 try:
                     parts = shlex.split(stripped, posix=True)
                 except ValueError:

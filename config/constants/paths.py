@@ -149,7 +149,7 @@ def opensre_home() -> Path:
 def deployment_home() -> Path:
     """The organization this deployment serves, whether or not a scope is bound.
 
-    For an artifact two surfaces must share. A background investigation is
+    For an artifact two surfaces must share. A background task can be
     started in the shell, which binds no scope, and retrieved from a chat
     transport, which binds the organization, so :func:`opensre_home` would put
     them on different files. An unbound caller therefore resolves to the

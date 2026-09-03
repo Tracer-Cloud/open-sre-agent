@@ -8,7 +8,7 @@ description: "Connect Trello so OpenSRE can create cards on boards during incide
 When incidents happen, keeping everyone organized matters. OpenSRE can talk to the Trello API with an API key and token so you can create incident cards on a board and list you choose.
 
 <Note>
-Trello is configured via environment variables or the persistent store. There is currently no `opensre integrations setup trello` wizard, no `opensre integrations verify trello` target, and no registered investigation tool package — card creation is available through the Trello client helpers (`create_trello_card`) when you wire credentials yourself.
+Trello is configured via environment variables or the persistent store. There is currently no `opensre integrations setup trello` wizard, no `opensre integrations verify trello` target, and no registered tool package — card creation is available through the Trello client helpers (`create_trello_card`) when you wire credentials yourself.
 </Note>
 
 ## Prerequisites
@@ -100,11 +100,11 @@ For long-lived OpenSRE integrations, consider using an appropriately scoped toke
 Your Trello token should have:
 
 - **read** — Allows OpenSRE to view boards, lists, and cards
-- **write** — Allows OpenSRE to create or update cards during investigations
+- **write** — Allows OpenSRE to create or update cards during incident follow-up
 
-## Investigation tools
+## Tools
 
-There is no registered Trello tool package in the investigation planner today. The integration library exposes:
+There is no registered Trello tool package today. The integration library exposes:
 
 | Helper | What it does |
 | --- | --- |
@@ -115,7 +115,7 @@ Set `TRELLO_LIST_ID` to the list where new cards should appear. If omitted, card
 
 Once credentials are set, you can:
 
-- Create Trello cards from investigation findings (via the client helper)
+- Create Trello cards from the agent's findings (via the client helper)
 - Send incident titles and descriptions to a target list
 - Track follow-up tasks on your incident board
 
@@ -134,7 +134,7 @@ curl "https://api.trello.com/1/members/me?key=${TRELLO_API_KEY}&token=${TRELLO_T
 | **401 / unauthorized** | Regenerate the API key and token from https://trello.com/app-key |
 | **Card create fails without list** | Set `TRELLO_LIST_ID` or pass `list_id` to `create_trello_card` |
 | **Board not visible** | Confirm the token has access to that board |
-| **No Trello tools in investigation plan** | Expected today — there is no registered Trello investigation tool package yet |
+| **No Trello tools available** | Expected today — there is no registered Trello tool package yet |
 
 ## Security
 

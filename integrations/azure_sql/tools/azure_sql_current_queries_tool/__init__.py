@@ -20,7 +20,7 @@ from integrations.azure_sql import (
         " threshold, including wait types and resource usage."
     ),
     source="azure_sql",
-    surfaces=(ToolSurface.INVESTIGATION, ToolSurface.CHAT),
+    surfaces=(ToolSurface.CHAT,),
     use_cases=[
         "Identifying long-running queries causing lock contention",
         "Diagnosing blocking chains during an Azure SQL incident",

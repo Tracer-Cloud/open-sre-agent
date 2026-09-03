@@ -36,7 +36,6 @@ def _outcome(result: Any) -> dict[str, Any]:
         "has_unhandled_clause": result.has_unhandled_clause,
         "handled": result.handled,
         "accounting_status": result.accounting_status,
-        "investigation_dispatched": result.investigation_dispatched,
     }
 
 
@@ -57,7 +56,6 @@ def test_a_turn_with_no_tool_calls_returns_the_agent_reply() -> None:
         "has_unhandled_clause": False,
         "handled": False,
         "accounting_status": "completed",
-        "investigation_dispatched": False,
     }
     assert "just talking" in _console_text(harness)
 

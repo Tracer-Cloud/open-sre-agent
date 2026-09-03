@@ -5,20 +5,20 @@ description: "Common questions about OpenSRE."
 
 <AccordionGroup>
   <Accordion title="What is OpenSRE?">
-    OpenSRE is an open-source framework for AI SRE agents that investigate
-    production incidents. It uses your observability stack, cloud context, and
-    runbooks; runs a structured root-cause analysis pipeline; and delivers
-    findings to Slack, local files, or other messaging channels. See the
+    OpenSRE is an open-source framework for AI SRE agents that answer questions
+    about production systems. It uses your observability stack, cloud context,
+    and runbooks, and can deliver its findings to Slack, local files, or other
+    messaging channels. See the
     [Integrations overview](/integrations-overview) for supported tools.
   </Accordion>
 
   <Accordion title="How do I get started?">
-    Install OpenSRE, complete onboarding, then investigate a sample alert:
+    Install OpenSRE, complete onboarding, then ask it something:
 
     ```bash
     curl -fsSL https://install.opensre.com | bash
     opensre onboard
-    opensre investigate -i tests/e2e/kubernetes/fixtures/datadog_k8s_alert.json
+    opensre ask "why did checkout latency increase today?"
     ```
 
     Full walkthrough: [Quickstart](/quickstart).
@@ -59,9 +59,8 @@ description: "Common questions about OpenSRE."
 
   <Accordion title="What happens when I run opensre with no arguments?">
     Running `opensre` starts the interactive shell. You can describe issues in
-    plain language, stream investigations, and ask follow-up questions in the
-    same session. Slash commands such as `/help`, `/investigate`, and
-    `/verify datadog` are documented in
+    plain language and ask follow-up questions in the same session. Slash
+    commands such as `/help`, `/status`, and `/verify datadog` are documented in
     [Shell commands](/interactive-shell-commands).
   </Accordion>
 

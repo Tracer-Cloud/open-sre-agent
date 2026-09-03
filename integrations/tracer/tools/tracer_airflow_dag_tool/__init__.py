@@ -57,7 +57,7 @@ def _airflow_dag_id(sources: dict[str, Any]) -> str:
         "Finding failed or retrying task instances",
         "Grounding RCA in Airflow DAG/task evidence",
     ],
-    surfaces=(ToolSurface.INVESTIGATION, ToolSurface.CHAT),
+    surfaces=(ToolSurface.CHAT,),
     requires=["dag_id"],
     input_schema={
         "type": "object",
@@ -104,7 +104,7 @@ def get_recent_airflow_failures(
         "Finding failed DAG runs",
         "Validating Airflow orchestration state",
     ],
-    surfaces=(ToolSurface.INVESTIGATION, ToolSurface.CHAT),
+    surfaces=(ToolSurface.CHAT,),
     requires=["dag_id"],
     input_schema={
         "type": "object",
@@ -154,7 +154,7 @@ def get_airflow_dag_runs(
         "Finding task-level failure evidence",
         "Grounding RCA in Airflow task state",
     ],
-    surfaces=(ToolSurface.INVESTIGATION, ToolSurface.CHAT),
+    surfaces=(ToolSurface.CHAT,),
     requires=["dag_id", "dag_run_id"],
     input_schema={
         "type": "object",

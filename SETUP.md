@@ -100,10 +100,7 @@ uv run mypy config core gateway integrations infrastructure surfaces tools
 
 uv run pytest -n auto -v \
   --cov=config --cov=core --cov=gateway --cov=integrations \
-  --cov=infrastructure --cov=surfaces --cov=tools --cov-report=term-missing \
-  --ignore=tests/e2e/kubernetes_local_alert_simulation \
-  --ignore=tests/synthetic \
-  -m "not synthetic"
+  --cov=infrastructure --cov=surfaces --cov=tools --cov-report=term-missing
 ```
 
 ---
@@ -170,58 +167,3 @@ make lint && make format-check && make typecheck && make test-cov
 If those pass, you are ready to develop. Contribution flow: **[CONTRIBUTING.md](CONTRIBUTING.md)**. Deeper contributor topics (benchmark, deployment, telemetry detail): **[docs/DEVELOPMENT.md](docs/DEVELOPMENT.md)**.
 
 ---
-
-## Connecting OpenClaw
-
-OpenSRE no longer exposes a separate `opensre-mcp` server. Instead, OpenSRE connects to the OpenClaw bridge directly to read recent conversation context and write RCA findings back into OpenClaw.
-
-### 1. Configure observability
-
-Run the full wizard once (**recommended**):
-
-```bash
-uv run opensre onboard
-```
-
-To add or reconfigure a **single** integration non-interactively:
-
-```bash
-uv run opensre integrations setup <service>
-```
-
-### 2. Configure the OpenClaw bridge
-
-Use the wizard or the direct setup flow:
-
-```bash
-uv run opensre integrations setup openclaw
-uv run opensre integrations verify openclaw
-```
-
-Recommended local settings:
-
-```bash
-OPENCLAW_MCP_MODE=stdio
-OPENCLAW_MCP_COMMAND=openclaw
-OPENCLAW_MCP_ARGS="mcp serve"
-```
-
-### 3. Run a test
-
-```bash
-uv run opensre investigate -i tests/fixtures/openclaw_test_alert.json
-```
-
-### 4. Optional: OpenSRE calls OpenClaw during RCA
-
-```bash
-export OPENCLAW_MCP_MODE=stdio
-export OPENCLAW_MCP_COMMAND=openclaw
-export OPENCLAW_MCP_ARGS="mcp serve"
-```
-
-Keep the OpenClaw gateway running while you investigate, then verify:
-
-```bash
-opensre integrations verify openclaw
-```

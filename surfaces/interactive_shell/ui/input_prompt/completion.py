@@ -5,7 +5,7 @@ from __future__ import annotations
 from collections.abc import Iterable
 
 from prompt_toolkit.application.current import get_app_or_none
-from prompt_toolkit.completion import CompleteEvent, Completer, Completion, PathCompleter
+from prompt_toolkit.completion import CompleteEvent, Completer, Completion
 from prompt_toolkit.document import Document
 
 from infrastructure.terminal import theme as ui_theme
@@ -105,7 +105,7 @@ class ShellCompleter(Completer):
     def get_completions(
         self,
         document: Document,
-        complete_event: CompleteEvent,
+        complete_event: CompleteEvent,  # noqa: ARG002 — prompt_toolkit override signature
     ) -> Iterable[Completion]:
         text = document.text_before_cursor
         if not text:
@@ -141,25 +141,6 @@ class ShellCompleter(Completer):
             if _suppress_empty_arg_completions_for_inline_picker(cmd_name, raw_arg):
                 return
 
-            if cmd_name in ("/investigate", "/save"):
-                if cmd_name == "/investigate":
-                    entry = SLASH_COMMANDS.get(cmd_name)
-                    hints = entry.first_arg_completions if entry is not None else ()
-                    sub_prefix = raw_arg.lower()
-                    for sub, meta in hints:
-                        if sub.startswith(sub_prefix):
-                            yield Completion(
-                                sub,
-                                start_position=-len(raw_arg),
-                                display=sub,
-                                display_meta=meta,
-                            )
-                yield from PathCompleter(expanduser=True).get_completions(
-                    Document(raw_arg, len(raw_arg)),
-                    complete_event,
-                )
-                return
-
             entry = SLASH_COMMANDS.get(cmd_name)
             hints = entry.first_arg_completions if entry is not None else ()
             sub_prefix = raw_arg.lower()
@@ -178,11 +159,8 @@ _INLINE_PICKER_COMMANDS: frozenset[str] = frozenset(
     {
         "/history",
         "/integrations",
-        "/investigate",
         "/mcp",
         "/model",
-        "/template",
-        "/tests",
         "/trust",
         "/verbose",
     }

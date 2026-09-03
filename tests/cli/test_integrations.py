@@ -8,7 +8,6 @@ from click.testing import CliRunner
 
 from integrations.cli import (
     _HANDLERS,
-    _setup_openclaw,
     _setup_servicenow,
 )
 from surfaces.cli.app import cli
@@ -72,77 +71,6 @@ def test_integrations_setup_accepts_vercel() -> None:
     mock_setup.assert_called_once_with("vercel")
     mock_verify.assert_called_once_with("vercel")
     mock_capture.assert_not_called()
-
-
-def test_integrations_setup_accepts_openclaw() -> None:
-    runner = CliRunner()
-
-    with (
-        patch("surfaces.cli.commands.integrations.capture_integration_setup_started"),
-        patch("surfaces.cli.commands.integrations.capture_integration_setup_completed"),
-        patch("surfaces.cli.commands.integrations.capture_integration_verified") as mock_capture,
-        patch("integrations.cli.cmd_setup") as mock_setup,
-        patch("integrations.cli.cmd_verify", return_value=1) as mock_verify,
-    ):
-        mock_setup.return_value = "openclaw"
-        result = runner.invoke(cli, ["integrations", "setup", "openclaw"])
-
-    assert result.exit_code == 1
-    mock_setup.assert_called_once_with("openclaw")
-    mock_verify.assert_called_once_with("openclaw")
-    mock_capture.assert_not_called()
-
-
-def test_setup_openclaw_saves_credentials(monkeypatch) -> None:
-    import dataclasses
-
-    import integrations.openclaw.setup as openclaw_setup
-
-    answers = iter(["openclaw", "mcp serve"])
-
-    def fake_p(_label: str, default: str = "", secret: bool = False) -> str:
-        return next(answers)
-
-    saved: list[tuple[str, dict[str, object]]] = []
-    monkeypatch.setattr("integrations.cli._p", fake_p)
-    monkeypatch.setattr(
-        "integrations.setup_flow.upsert_integration",
-        lambda service, entry: saved.append((service, entry)),
-    )
-    monkeypatch.setattr(
-        "integrations.setup_flow.sync_env_secret",
-        lambda *_args, **_kwargs: None,
-    )
-    monkeypatch.setattr(
-        "integrations.setup_flow.sync_env_values",
-        lambda *_args, **_kwargs: Path("/tmp/.env"),
-    )
-    monkeypatch.setattr(
-        openclaw_setup,
-        "OPENCLAW_SETUP",
-        dataclasses.replace(
-            openclaw_setup.OPENCLAW_SETUP,
-            verify=lambda _source, _config: {"status": "passed", "detail": "ok"},
-        ),
-    )
-
-    _setup_openclaw()
-
-    assert _HANDLERS["openclaw"] is _setup_openclaw
-    assert saved == [
-        (
-            "openclaw",
-            {
-                "credentials": {
-                    "mode": "stdio",
-                    "command": "openclaw",
-                    "args": "mcp serve",
-                    "url": "",
-                    "auth_token": "",
-                }
-            },
-        )
-    ]
 
 
 def test_setup_servicenow_saves_normalized_https_url(monkeypatch) -> None:
@@ -326,23 +254,6 @@ def test_integrations_verify_accepts_github() -> None:
         send_slack_test=False,
     )
     mock_capture.assert_called_once_with("github")
-
-
-def test_integrations_verify_accepts_openclaw() -> None:
-    runner = CliRunner()
-
-    with (
-        patch("surfaces.cli.commands.integrations.capture_integration_verified") as mock_capture,
-        patch("integrations.cli.cmd_verify", return_value=1) as mock_verify,
-    ):
-        result = runner.invoke(cli, ["integrations", "verify", "openclaw"])
-
-    assert result.exit_code == 1
-    mock_verify.assert_called_once_with(
-        "openclaw",
-        send_slack_test=False,
-    )
-    mock_capture.assert_not_called()
 
 
 def test_integrations_verify_accepts_argocd() -> None:

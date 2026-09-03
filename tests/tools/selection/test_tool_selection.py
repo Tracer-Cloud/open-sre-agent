@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from collections.abc import Sequence
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from typing import Any
 
@@ -21,7 +21,7 @@ from core.llm.types import SchemaDescribedTool
 from tests.core.agent._ci_gates import skip_or_fail
 from tools.registry import get_registered_tool_map
 
-pytestmark = [pytest.mark.live_llm, pytest.mark.integration]
+pytestmark = pytest.mark.integration
 
 _TOOL_SELECTION_SYSTEM_PROMPT = (
     "You are selecting the first diagnostic tool for a live contract test. "
@@ -106,6 +106,31 @@ SELECTION_SCENARIOS: Sequence[SelectionScenario] = (
 )
 
 
+def _assert_scenario_tools_are_registered(
+    scenario: SelectionScenario, tool_map: Mapping[str, object]
+) -> None:
+    for name in scenario.candidate_tool_names:
+        assert name in tool_map, (
+            f"Scenario {scenario.scenario_id!r} references unregistered candidate tool {name!r}"
+        )
+    for name in scenario.expected_tool_names:
+        assert name in tool_map, (
+            f"Scenario {scenario.scenario_id!r} references unregistered expected tool {name!r}"
+        )
+
+
+@pytest.mark.parametrize(
+    "scenario",
+    SELECTION_SCENARIOS,
+    ids=lambda s: s.scenario_id,
+)
+def test_tool_selection_scenario_references_registered_tools(
+    scenario: SelectionScenario,
+) -> None:
+    """Keep scenario metadata valid even when live LLM tests are unavailable."""
+    _assert_scenario_tools_are_registered(scenario, get_registered_tool_map())
+
+
 def _require_live_llm_credentials() -> None:
     settings: Any = None
     try:
@@ -146,6 +171,7 @@ def _require_live_llm_credentials() -> None:
     SELECTION_SCENARIOS,
     ids=lambda s: s.scenario_id,
 )
+@pytest.mark.live_llm
 def test_live_tool_selection_matches_target_tool(scenario: SelectionScenario) -> None:
     """Assert live LLM selects an appropriate tool for the given incident context.
 
@@ -156,15 +182,8 @@ def test_live_tool_selection_matches_target_tool(scenario: SelectionScenario) ->
     """
     _require_live_llm_credentials()
 
-    tool_map = get_registered_tool_map("investigation")
-    for name in scenario.candidate_tool_names:
-        assert name in tool_map, (
-            f"Scenario {scenario.scenario_id!r} references unregistered candidate tool {name!r}"
-        )
-    for name in scenario.expected_tool_names:
-        assert name in tool_map, (
-            f"Scenario {scenario.scenario_id!r} references unregistered expected tool {name!r}"
-        )
+    tool_map = get_registered_tool_map()
+    _assert_scenario_tools_are_registered(scenario, tool_map)
 
     candidate_tools: list[SchemaDescribedTool] = [
         tool_map[name] for name in scenario.candidate_tool_names

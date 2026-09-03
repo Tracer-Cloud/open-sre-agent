@@ -18,11 +18,11 @@ from prompt_toolkit.layout.containers import (
 )
 from prompt_toolkit.layout.controls import FormattedTextControl
 from prompt_toolkit.layout.dimension import Dimension
-from prompt_toolkit.widgets import Frame
 
 from surfaces.interactive_shell.prompt_history import load_prompt_history
 from surfaces.interactive_shell.runtime import Session
 from surfaces.interactive_shell.ui.input_prompt.completion import ShellCompleter
+from surfaces.interactive_shell.ui.input_prompt.frame import rounded_composer_frame
 from surfaces.interactive_shell.ui.input_prompt.key_bindings import _build_prompt_key_bindings
 from surfaces.interactive_shell.ui.input_prompt.layout import prompt_line_width
 from surfaces.interactive_shell.ui.input_prompt.lexer import ReplInputLexer
@@ -84,7 +84,7 @@ def _install_prompt_frame(
     # Inner surface so the editable rows share INPUT_SURFACE with the border
     # (otherwise the frame looks hollow against the terminal bg).
     surface_body: AnyContainer = HSplit([editable_body], style="class:composer-body")
-    composer: AnyContainer = Frame(surface_body, style="class:composer")
+    composer: AnyContainer = rounded_composer_frame(surface_body)
     footer: AnyContainer = Window(
         FormattedTextControl(lambda: ANSI(composer_footer_ansi())),
         height=1,
@@ -177,4 +177,5 @@ def build_prompt_session(
 __all__ = [
     "_install_prompt_frame",
     "build_prompt_session",
+    "rounded_composer_frame",
 ]

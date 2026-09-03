@@ -79,8 +79,6 @@ class SessionState(Protocol):
     def configured_integrations(self) -> Sequence[str]:
         raise NotImplementedError
 
-    last_state: dict[str, Any] | None
-    last_synthetic_observation_path: str | None
     reasoning_effort: ReasoningEffortChoice | None
 
     # --- turn execution state ---
@@ -189,9 +187,9 @@ class ErrorReporter(Protocol):
 class PromptContextProvider(Protocol):
     """Supplies grounding text for the conversational assistant prompt.
 
-    The grounding corpora (CLI reference, repo map, docs, investigation-flow,
-    environment) are surface/repo content; the shell adapter wires its grounding
-    caches, the headless adapter returns empty strings.
+    The grounding corpora (CLI reference, repo map, docs, environment) are
+    surface/repo content; the shell adapter wires its grounding caches, the
+    headless adapter returns empty strings.
     """
 
     def surface(self) -> str:
@@ -205,9 +203,6 @@ class PromptContextProvider(Protocol):
         raise NotImplementedError
 
     def docs(self, query: str) -> str:
-        raise NotImplementedError
-
-    def investigation_flow(self) -> str:
         raise NotImplementedError
 
     def runtime_facts(self) -> Mapping[str, Any]:
@@ -281,7 +276,6 @@ __all__ = [
     "ErrorReporter",
     "ExecuteActions",
     "GatheredEvidence",
-    "InvestigationPortsFactory",
     "LlmFactory",
     "LlmProviderPortsFactory",
     "OutputBindable",
@@ -309,7 +303,7 @@ SubprocessPresenterFactory = Callable[
 
 
 # Host capabilities an action tool calls back into: named commands, LLM-provider
-# switching, task cancellation and investigation launch. Their contracts live in
+# switching, and task cancellation. Their contracts live in
 # ``tools`` beside the tools that call them (see
 # ``tools.interactive_shell.shared.host_contracts.ExecutionGate``), and naming those
 # Protocols here would mean ``core`` importing ``tools``.
@@ -318,7 +312,6 @@ SubprocessPresenterFactory = Callable[
 # result to ``ActionToolScope`` without reading a single attribute, and
 # ``object`` is the type that says so. ``Any`` would silence a typo here as
 # readily as it silences the import ``core`` is avoiding.
-InvestigationPortsFactory = Callable[[], object]
 LlmProviderPortsFactory = Callable[[], object]
 TaskCancelPortsFactory = Callable[[], object]
 SlashPortsFactory = Callable[[], object]

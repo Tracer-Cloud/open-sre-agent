@@ -25,7 +25,6 @@ datas += collect_data_files(
     includes=["opensre_system_prompt.md"],
 )
 datas += collect_data_files("surfaces.cli")
-datas += collect_data_files("surfaces.shared")
 datas += collect_data_files("config")
 datas += collect_data_files("litellm")
 datas += copy_metadata("opensre")

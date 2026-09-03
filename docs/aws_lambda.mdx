@@ -1,6 +1,6 @@
 ---
 title: "AWS Lambda"
-description: "Connect AWS Lambda so OpenSRE can inspect function configuration, invocation logs, and runtime errors during investigations."
+description: "Connect AWS Lambda so OpenSRE can inspect function configuration, invocation logs, and runtime errors."
 ---
 
 ## Overview
@@ -52,7 +52,7 @@ Give the running identity permission to:
 
 If you already use the AWS managed `ReadOnlyAccess` policy on that identity, both are covered. See also the least-privilege example on the [AWS](/aws) page.
 
-## Investigation tools
+## Tools
 
 | Tool | What it does |
 | --- | --- |
@@ -71,7 +71,7 @@ Lambda invocation history is retrieved from **CloudWatch Logs**. Ensure the conf
 opensre integrations verify aws
 ```
 
-There is no separate `aws_lambda` verify target. A successful AWS verify confirms the account credentials OpenSRE uses; Lambda tools then use the ambient credential chain at investigation time.
+There is no separate `aws_lambda` verify target. A successful AWS verify confirms the account credentials OpenSRE uses; Lambda tools then use the ambient credential chain when called.
 
 Expected output (example):
 
@@ -92,7 +92,7 @@ Detail: Connected to AWS STS via static-creds in us-east-1; caller identity acco
 
 ## Security
 
-- All Lambda investigation tools are read-only.
+- All Lambda tools are read-only.
 - Prefer IAM roles over long-lived static keys.
 - Scope permissions to the functions and log groups you want OpenSRE to inspect.
 - Store credentials in `.env` or your secret manager — not in source control.

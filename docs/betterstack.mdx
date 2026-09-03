@@ -1,11 +1,11 @@
 ---
 title: "Better Stack Telemetry"
-description: "Connect Better Stack so OpenSRE can pull log evidence from your Telemetry sources during investigations"
+description: "Connect Better Stack so OpenSRE can pull log evidence from your Telemetry sources"
 ---
 
 ## Overview
 
-OpenSRE uses Better Stack's ClickHouse SQL Query API to read log evidence during investigations. It queries the configured source via `remote(<source>_logs)` for recent rows and `s3Cluster(primary, <source>_s3)` for historical rows, bounded by the alert window.
+OpenSRE uses Better Stack's ClickHouse SQL Query API to read log evidence. It queries the configured source via `remote(<source>_logs)` for recent rows and `s3Cluster(primary, <source>_s3)` for historical rows, bounded by the incident time window.
 
 ## Prerequisites
 
@@ -74,7 +74,7 @@ From the Better Stack dashboard:
 3. Copy the generated **username**, **password**, and **query endpoint**. The endpoint's subdomain encodes the region (for example `eu-nbg-2-connect`, `us-connect`).
 4. The **base source ID** (for example `t123456_myapp`) is shown above the integration panel and is the value to supply for `BETTERSTACK_SOURCES`. Use the base name only — OpenSRE appends `_logs` and `_s3` internally.
 
-## Investigation tools
+## Tools
 
 OpenSRE exposes one tool against a Better Stack source:
 
@@ -127,21 +127,3 @@ The verify step issues a cheap probe (`SELECT 1 FORMAT JSONEachRow`) against the
 - The integration is **read-only**: OpenSRE only issues `SELECT` statements against `remote(...)` and `s3Cluster(...)` table functions.
 - Source identifiers are allowlisted against `^[A-Za-z0-9_]+$` before being interpolated into SQL, preventing identifier-injection attacks from the alert payload.
 - Rotate credentials periodically via the Better Stack dashboard.
-
-## Extras
-
-### Triggering investigation from an alert
-
-When an alert carries a `betterstack_source` annotation, the planner wires it through to `query_betterstack_logs` automatically:
-
-```json
-{
-  "title": "[betterstack] Agent silent (no info logs in 5min)",
-  "state": "alerting",
-  "alert_source": "betterstack",
-  "commonAnnotations": {
-    "summary": "Agent silent (no info logs in 5min): info < 1",
-    "betterstack_source": "t123456_myapp"
-  }
-}
-```

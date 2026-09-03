@@ -12,7 +12,6 @@ from typing import Any
 from core.agent_harness.spi.session_state import withhold_capabilities
 
 UNSUPPORTED_GATEWAY_CAPABILITIES = (
-    "investigation",
     "llm_provider",
     "task_cancel",
 )

@@ -49,7 +49,7 @@ def _map_get_mariadb_process_list(
         " information_schema.PROCESSLIST, excluding idle connections."
     ),
     source="mariadb",
-    surfaces=(ToolSurface.INVESTIGATION, ToolSurface.CHAT),
+    surfaces=(ToolSurface.CHAT,),
     is_available=mariadb_is_available,
     injected_params=("host", "password", "username"),
     extract_params=mariadb_extract_params,

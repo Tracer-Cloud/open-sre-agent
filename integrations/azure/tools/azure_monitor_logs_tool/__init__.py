@@ -59,7 +59,7 @@ def _ensure_take_clause(query: str, limit: int) -> str:
     name="query_azure_monitor_logs",
     description="Query Azure Monitor Log Analytics using a bounded KQL query.",
     source="azure",
-    surfaces=(ToolSurface.INVESTIGATION, ToolSurface.CHAT),
+    surfaces=(ToolSurface.CHAT,),
     requires=["workspace_id", "access_token"],
     input_schema={
         "type": "object",

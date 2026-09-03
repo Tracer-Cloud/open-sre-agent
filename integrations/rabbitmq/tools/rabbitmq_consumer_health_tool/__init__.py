@@ -49,7 +49,7 @@ def _map_get_rabbitmq_consumer_health(
     name="get_rabbitmq_consumer_health",
     description="List active RabbitMQ consumers with per-queue diagnostics: prefetch count, ack mode, active state, and the channel/connection each consumer is bound to. Helps identify stalled or missing consumers behind a backlog.",
     source="rabbitmq",
-    surfaces=(ToolSurface.INVESTIGATION, ToolSurface.CHAT),
+    surfaces=(ToolSurface.CHAT,),
     use_cases=[
         "Diagnosing why a queue backlog is growing — are consumers connected?",
         "Checking prefetch counts to see if consumers are throttled",

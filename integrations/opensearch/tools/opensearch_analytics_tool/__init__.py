@@ -73,7 +73,7 @@ def _opensearch_extract_params(sources: dict[str, dict[str, Any]]) -> dict[str, 
     name="query_opensearch_analytics",
     description="Query OpenSearch-compatible analytics indices with bounded retrieval.",
     source="opensearch",
-    surfaces=(ToolSurface.INVESTIGATION, ToolSurface.CHAT),
+    surfaces=(ToolSurface.CHAT,),
     requires=["url"],
     input_schema={
         "type": "object",

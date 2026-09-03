@@ -203,7 +203,7 @@ def test_run_repl_async_does_not_run_the_gate_itself(monkeypatch: Any) -> None:
 
     class _Controller:
         def __init__(self, *_args: object, **_kwargs: object) -> None:
-            del _args, _kwargs
+            pass
 
         async def start_interactive_shell(self) -> None:
             started.append(True)

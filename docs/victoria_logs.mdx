@@ -1,6 +1,6 @@
 ---
 title: "VictoriaLogs"
-description: "Connect VictoriaLogs so OpenSRE can pull structured log evidence during investigations"
+description: "Connect VictoriaLogs so OpenSRE can pull structured logs as evidence"
 ---
 
 ## Overview
@@ -60,9 +60,9 @@ VictoriaLogs typically needs no API token for OpenSRE. Point
 `VICTORIA_LOGS_URL` at a reachable instance. On multi-tenant deployments, set
 `VICTORIA_LOGS_TENANT_ID` so OpenSRE sends the correct `AccountID` header.
 
-## Investigation tools
+## Tools
 
-When VictoriaLogs is configured, the `victoria_logs_query` tool becomes available to the investigation agent. It runs LogsQL queries against `/select/logsql/query` and returns structured rows. The default is a wildcard match over the past hour; the agent narrows the query from alert context (service, level, trace ID, time window).
+When VictoriaLogs is configured, the `victoria_logs_query` tool becomes available to the agent. It runs LogsQL queries against `/select/logsql/query` and returns structured rows. The default is a wildcard match over the past hour; the agent narrows the query from alert context (service, level, trace ID, time window).
 
 ## Verify
 
@@ -92,7 +92,7 @@ Leave `VICTORIA_LOGS_TENANT_ID` unset for single-tenant clusters. OpenSRE does n
 
 ## Extras
 
-### How it works in investigations
+### How it works
 
 Typical agent uses:
 

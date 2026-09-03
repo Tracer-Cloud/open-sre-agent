@@ -20,7 +20,7 @@ from integrations.azure_sql import (
         " ordered by average elapsed time."
     ),
     source="azure_sql",
-    surfaces=(ToolSurface.INVESTIGATION, ToolSurface.CHAT),
+    surfaces=(ToolSurface.CHAT,),
     use_cases=[
         "Identifying queries with high average execution time",
         "Finding resource-intensive queries causing DTU throttling",

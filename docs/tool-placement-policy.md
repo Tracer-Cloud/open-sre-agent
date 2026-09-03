@@ -35,8 +35,8 @@ SaaS backend (an `integrations/<vendor>/` package)?
    an agent-callable tool's business logic lives.
 
 `tools/` also holds framework subsystems that aren't individual tools —
-`tools/investigation` (the investigation pipeline), `tools/interactive_shell`
-(REPL action tools), `tools/registry.py` (the tool registry itself). These
+`tools/interactive_shell` (REPL action tools), `tools/registry.py` (the tool
+registry itself). These
 stay at the top level of `tools/`; the `system` / `cross_vendor` split only
 applies to individual tool packages.
 

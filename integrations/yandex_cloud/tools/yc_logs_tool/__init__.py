@@ -66,7 +66,7 @@ def _extract_params(sources: dict[str, dict]) -> dict[str, Any]:
 
 @tool(
     name="read_yc_logs",
-    surfaces=(ToolSurface.INVESTIGATION, ToolSurface.ACTION),
+    surfaces=(ToolSurface.ACTION,),
     display_name="Cloud Logging",
     source=SOURCE,
     description=(
@@ -223,7 +223,7 @@ def read_yc_logs(
 
 @tool(
     name="list_yc_log_groups",
-    surfaces=(ToolSurface.INVESTIGATION, ToolSurface.ACTION),
+    surfaces=(ToolSurface.ACTION,),
     display_name="Cloud Logging",
     source=SOURCE,
     description=(

@@ -151,7 +151,7 @@ def _map_summarize_github_pr_status(
     ],
     anti_examples=["Creating, editing, or closing GitHub issues"],
     requires=["owner", "repo"],
-    surfaces=(ToolSurface.INVESTIGATION, ToolSurface.CHAT),
+    surfaces=(ToolSurface.CHAT,),
     side_effect_level=SideEffectLevel.READ_ONLY,
     evidence_mapper=_map_list_github_work_items,
     input_schema={
@@ -292,7 +292,7 @@ def _count_prs(prs: list[dict[str, Any]]) -> dict[str, int]:
         "Preparing engineering status updates without changing GitHub state",
     ],
     requires=["owner", "repo"],
-    surfaces=(ToolSurface.INVESTIGATION, ToolSurface.CHAT),
+    surfaces=(ToolSurface.CHAT,),
     side_effect_level=SideEffectLevel.READ_ONLY,
     evidence_mapper=_map_summarize_github_pr_status,
     input_schema={
@@ -415,7 +415,7 @@ _ISSUE_MUTATION_OPERATIONS = {"create", "update", "close"}
         "Building a read-only engineering status report with security context",
     ],
     requires=["owner", "repo"],
-    surfaces=(ToolSurface.INVESTIGATION, ToolSurface.CHAT),
+    surfaces=(ToolSurface.CHAT,),
     side_effect_level=SideEffectLevel.READ_ONLY,
     input_schema={
         "type": "object",

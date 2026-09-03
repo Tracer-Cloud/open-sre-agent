@@ -161,7 +161,6 @@ URIs
 URI
 hostnames
 hostname
-# Hermes / incident operations terms
 cron
 cooldown
 correlator

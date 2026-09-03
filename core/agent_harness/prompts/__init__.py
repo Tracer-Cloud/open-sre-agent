@@ -7,7 +7,7 @@ Subpackages (by agent path):
 * ``grounding/`` — prompt-side grounding providers
   (``DefaultPromptContextProvider``); distinct from harness ``grounding/``
 * ``action/`` — the single tool-calling agent's system + user prompts
-* ``memory/`` — conversation window + prior-investigation recall fragments
+* ``memory/`` — conversation window + prior-turn recall fragments
 * ``runtime_facts/`` — runtime-metadata fact lines for prompt assembly
 * ``skills/`` — progressive skill index (thin) + markdown bodies on demand
 

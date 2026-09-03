@@ -37,7 +37,7 @@ class TestRegistration:
         clear_tool_registry_cache()
         by_name = {
             t.name: str(t.source)
-            for t in get_registered_tools("investigation")
+            for t in get_registered_tools("action")
             if t.name in {"query_yc_metrics", "list_yc_metrics"}
         }
 
@@ -212,7 +212,7 @@ class TestTheQueryLanguageIsDocumented:
     def test_it_says_the_language_is_not_promql(self) -> None:
         from tools.registry import get_registered_tool_map
 
-        schema = get_registered_tool_map("investigation")["query_yc_metrics"].input_schema
+        schema = get_registered_tool_map("action")["query_yc_metrics"].input_schema
         description = schema["properties"]["query"]["description"]
 
         assert "NOT PromQL" in description
@@ -222,7 +222,7 @@ class TestTheQueryLanguageIsDocumented:
         """`folderId` parses fine and silently matches nothing, which reads as no data."""
         from tools.registry import get_registered_tool_map
 
-        schema = get_registered_tool_map("investigation")["query_yc_metrics"].input_schema
+        schema = get_registered_tool_map("action")["query_yc_metrics"].input_schema
         description = schema["properties"]["query"]["description"]
 
         assert "folder_id" in description

@@ -1,6 +1,6 @@
 ---
 title: "SigNoz"
-description: "Connect SigNoz so OpenSRE can query logs, metrics, and traces during investigations"
+description: "Connect SigNoz so OpenSRE can query logs, metrics, and traces"
 ---
 
 ## Overview
@@ -97,15 +97,13 @@ docker compose -f pours/deployment/compose.yaml down
 In SigNoz: **Settings → Service Accounts** → create a service account → **Keys** → **Add Key**.
 Copy the key (shown once).
 
-## Investigation tools
+## Tools
 
 | Tool | What it does |
 | --- | --- |
 | `query_signoz_logs` | Search logs by service, severity, and time window |
 | `query_signoz_metrics` | Query CPU, memory, and request-rate signals |
 | `query_signoz_traces` | Query error spans, latency percentiles, and dependencies |
-
-When `alert_source` is `signoz`, OpenSRE auto-seeds these three tools before the ReAct loop.
 
 ### Supported metrics (V1)
 
@@ -134,58 +132,13 @@ Expected verify output mentions the SigNoz Query API (`/api/v2/metrics`, `/api/v
 | `HTTP 401` on verify | Regenerate the service account key; check URL (local Docker: port **8080**). |
 | `No logs returned` | Confirm telemetry exists in SigNoz and filter fields match (`service.name` for logs). |
 | `No metrics returned` | Verify the metric name in SigNoz Metrics Explorer; empty results return a warning for unknown metrics. |
-| Gateway `422` on `/investigate` | Body must include `raw_alert` (object). A bare SigNoz webhook JSON is not enough. |
 
 ## Security
 
 - Use a dedicated SigNoz service-account key with the minimum permissions needed for query access.
 - Store `SIGNOZ_API_KEY` in `.env` or your secret manager — not in source control.
-- Protect `POST /investigate` with `OPENSRE_ALERT_LISTENER_TOKEN` on any non-loopback gateway.
 
 ## Extras
-
-### Webhook / gateway trigger
-
-SigNoz can emit Prometheus-style webhook payloads. The OpenSRE gateway does **not** accept a raw SigNoz webhook body as-is. Synchronous investigations use:
-
-```
-POST /investigate
-```
-
-with a JSON body matching `InvestigateRequest`:
-
-| Field | Required | Description |
-| --- | --- | --- |
-| `raw_alert` | **Yes** | Alert object passed into the investigation pipeline |
-| `alert_name` | No | Optional override |
-| `severity` | No | Optional override |
-
-Include `alert_source: "signoz"` inside `raw_alert` (or set fields the pipeline can resolve to SigNoz) so auto-seed and tool relevance apply. Auth: set `OPENSRE_ALERT_LISTENER_TOKEN` and send `Authorization: Bearer <token>`; if unset, only loopback callers are accepted. See [API](/api).
-
-Example (map or wrap your SigNoz notification into this shape):
-
-```bash
-curl -X POST "https://your-opensre-host/investigate" \
-  -H "Authorization: Bearer $OPENSRE_ALERT_LISTENER_TOKEN" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "raw_alert": {
-      "alert_source": "signoz",
-      "alert_name": "HighErrorRate",
-      "pipeline_name": "payment-service",
-      "severity": "critical",
-      "commonLabels": {
-        "service_name": "payment-service",
-        "severity": "critical"
-      },
-      "commonAnnotations": {
-        "summary": "Error rate exceeded 5%"
-      }
-    }
-  }'
-```
-
-In SigNoz, create a **Webhook** notification channel that POSTs a body your adapter transforms into this shape (or post directly from a small proxy). Pointing the channel at `/investigate` with an unmodified SigNoz payload will fail validation (`raw_alert` required).
 
 ### API reference
 
@@ -244,18 +197,18 @@ PY
 ```
 
 `opensre integrations verify` checks a saved store record before env vars, and
-`opensre investigate` only falls through to env vars when the store has no records at
+chat sessions only fall through to env vars when the store has no records at
 all -- any existing record, for any service, blocks env-var resolution entirely. Point
 `OPENSRE_INTEGRATIONS_STORE_PATH` at a path inside a fresh empty directory before
-verifying, so a real saved record can't shadow the `SIGNOZ_*` vars above for either
-command, and your real config is never read or written:
+verifying, so a real saved record can't shadow the `SIGNOZ_*` vars above, and your
+real config is never read or written:
 
 ```bash
 export OPENSRE_DEMO_STORE_DIR="$(mktemp -d /tmp/opensre-signoz-demo.XXXXXX)"
 export OPENSRE_INTEGRATIONS_STORE_PATH="$OPENSRE_DEMO_STORE_DIR/integrations.json"
 ```
 
-Verify, then trigger a real investigation:
+Verify, then ask the agent:
 
 ```bash
 opensre integrations verify signoz
@@ -268,42 +221,15 @@ signoz  │ local env │ ✓ passed │ Connected to SigNoz Query API (/api/v2/
 ```
 
 ```bash
-opensre investigate --input-json '{
-  "alert_source": "signoz",
-  "alert_name": "HighErrorRate",
-  "pipeline_name": "payment-service-verify",
-  "severity": "critical",
-  "commonLabels": {
-    "service_name": "payment-service-verify",
-    "severity": "critical"
-  },
-  "commonAnnotations": {
-    "summary": "Error rate exceeded 5%"
-  }
-}'
+opensre
 ```
 
-Real output from a run against this exact local stack (edited for length). Another
-integration resolved from your own env/keyring can ride along harmlessly, since the store
-has no records to block fallback for any service:
+Ask: *Why is payment-service-verify erroring? Check SigNoz logs, traces, and metrics.*
 
-```
-Loading integrations: telegram, signoz
-↳ query_signoz_logs
-↳ query_signoz_traces
-↳ query_signoz_metrics
-
-Triage complete: Single ERROR log at 2026-08-21T20:51:17Z from
-payment-service-verify reporting 'connection refused to billing-api';
-billing-api has zero telemetry across the 2h incident window;
-payment-service traces for the same trace_id show has_error=false.
-
-root_cause: payment-service-verify failed a call to billing-api with TCP
-'connection refused'. billing-api shows no logs, traces, or request-rate
-telemetry over the 2-hour window, strongly suggesting the service is not
-running. Because payment traffic is very low (~0.03 rps), a single failed
-call is enough to trip a ratio-based HighErrorRate alert.
-```
+The agent calls `query_signoz_logs`, `query_signoz_traces`, and `query_signoz_metrics`
+against this exact local stack and finds the seeded failure: a single ERROR log from
+`payment-service-verify` reporting `connection refused to billing-api`, with zero
+`billing-api` telemetry across the window — the service is not running.
 
 Teardown:
 

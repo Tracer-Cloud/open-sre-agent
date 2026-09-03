@@ -26,7 +26,7 @@ from tools.interactive_shell.shared import allow_tool
 from tools.interactive_shell.subprocess import (
     CLAUDE_CODE_IMPLEMENTATION_TIMEOUT_SECONDS,
     MAX_COMMAND_OUTPUT_CHARS,
-    SYNTHETIC_DIAG_CHARS,
+    TASK_DIAG_CHARS,
     SubprocessPresenter,
     terminate_child_process,
 )
@@ -169,7 +169,7 @@ def run_claude_code_to_completion(
 
 
 def format_claude_failure_diag(stdout: str, stderr: str) -> str:
-    return (stderr or stdout).strip()[:SYNTHETIC_DIAG_CHARS]
+    return (stderr or stdout).strip()[:TASK_DIAG_CHARS]
 
 
 def run_claude_code_implementation(request: str, presenter: SubprocessPresenter) -> None:

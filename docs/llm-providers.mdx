@@ -123,7 +123,7 @@ CLI providers (`codex`, `claude-code`, `copilot`, `pi`, `cursor`, `opencode`,
 ### Providers supported via LiteLLM
 
 When `OPENSRE_LLM_TRANSPORT=litellm` (or `LLM_PROVIDER=azure-openai`), OpenSRE
-builds the same investigation tool schemas as the SDK path and passes them to
+builds the same tool schemas as the SDK path and passes them to
 `litellm.completion(..., tools=..., tool_choice="auto")`. LiteLLM routes the
 request; OpenSRE still handles schema cleanup, retries, and message replay.
 
@@ -295,7 +295,7 @@ export CUSTOM_ANTHROPIC_MODEL=claude-opus-4-7
 ```
 
 Both require the base URL and a model — onboarding and startup fail if either is
-missing, rather than reaching a wrong endpoint mid-investigation.
+missing, rather than reaching a wrong endpoint mid-run.
 
 - **The base URL is used verbatim.** Include the API path yourself (for example
   `/v1` for OpenAI-compatible gateways). OpenSRE never appends a path.
@@ -536,7 +536,7 @@ binary on `PATH` (or via an explicit env var) and reuses the existing session.
 CLI providers authenticate with the vendor’s own login command. OpenSRE does
 not start that login.
 
-**Investigation timeouts:** Each ReAct turn runs one full CLI subprocess with
+**Turn timeouts:** Each ReAct turn runs one full CLI subprocess with
 the system prompt, tool schemas, and conversation history. The default budget is
 **300 seconds** (Python adds a small buffer). Override per provider when needed,
 for example `GEMINI_CLI_TIMEOUT_SECONDS`, `CLAUDE_CODE_TIMEOUT_SECONDS`, or
@@ -863,8 +863,6 @@ updating env vars. A new process picks up the new `LLM_PROVIDER` automatically.
   [`core/llm/client_builders.py`](https://github.com/Tracer-Cloud/opensre/blob/main/core/llm/client_builders.py)
 - LiteLLM routing (when enabled):
   [`core/llm/transports/litellm/routing.py`](https://github.com/Tracer-Cloud/opensre/blob/main/core/llm/transports/litellm/routing.py)
-- Investigation tool-calling adapters:
-  [Investigation tool calling](/investigation-tool-calling)
 - API provider guide:
   [`core/llm/AGENTS.md`](https://github.com/Tracer-Cloud/opensre/blob/main/core/llm/AGENTS.md)
 - CLI provider guide:

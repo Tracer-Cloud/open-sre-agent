@@ -38,7 +38,7 @@ def _map_get_mongodb_current_ops(
     name="get_mongodb_current_ops",
     description="Retrieve currently executing MongoDB operations above a specific duration threshold.",
     source="mongodb",
-    surfaces=(ToolSurface.INVESTIGATION, ToolSurface.CHAT),
+    surfaces=(ToolSurface.CHAT,),
     is_available=mongodb_is_available,
     injected_params=("connection_string",),
     extract_params=mongodb_extract_params,

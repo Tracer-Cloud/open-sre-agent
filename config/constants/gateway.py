@@ -22,16 +22,8 @@ USER_STOP_MESSAGE = "Stopped."
 #: Postgres DSN for the gateway's shared repositories; unset means process-local storage.
 DATABASE_URL_ENV = "DATABASE_URL"
 
-#: Opt-in switch: run the background investigation worker in this process.
-INVESTIGATION_WORKER_ENABLED_ENV = "OPENSRE_INVESTIGATION_WORKER"
-
-#: Number of concurrent investigation worker threads; unset or invalid means one.
-INVESTIGATION_WORKERS_ENV = "OPENSRE_INVESTIGATION_WORKERS"
-
 __all__ = [
     "DATABASE_URL_ENV",
-    "INVESTIGATION_WORKER_ENABLED_ENV",
-    "INVESTIGATION_WORKERS_ENV",
     "ATTACHMENT_MAX_FILE_CHARS",
     "ATTACHMENT_MAX_TOTAL_CHARS",
     "CREDITS_DENIED_MESSAGE",

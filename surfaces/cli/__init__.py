@@ -1,5 +1,5 @@
-"""CLI helpers for the incident resolution agent."""
+"""CLI helpers."""
 
-from surfaces.cli.args import parse_args, write_json
+from surfaces.cli.args import write_json
 
-__all__ = ["parse_args", "write_json"]
+__all__ = ["write_json"]

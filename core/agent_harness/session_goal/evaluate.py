@@ -13,10 +13,8 @@ claim, not proof. This module is the independent host check:
   non-empty reply → achieve even when the model only tagged part of the
   checklist (e.g. ``done=0`` for query, forgot report) or omitted tags
   entirely — avoids a redundant session-goal turn that repeats the answer.
-* ``achieved`` while ``investigation_dispatched`` this turn → stay active
-  (starting RCA is not finishing the goal).
 * ``achieved`` on a **host-owned** (``/goal set``) goal → achieved without tools
-  when no investigation was dispatched (explicit slash-path product rule).
+  (explicit slash-path product rule).
 * Host-owned goal, **no** ``achieved`` tag, but tools succeeded (action **or**
   gather) and the reply is non-empty → achieve (same-turn answer). Waiting for
   a scrubbed/forgotten tag forced a redundant outer turn that repeated the
@@ -97,26 +95,13 @@ def reply_claims_session_goal_achieved(text: str) -> bool:
     return _ACHIEVED_CLAIM.search(scrubbed) is not None
 
 
-def turn_dispatched_investigation(result: Any) -> bool:
-    """True when this turn started an RCA pipeline (not yet a finished answer)."""
-    action = getattr(result, "action_result", None)
-    if action is None:
-        return False
-    return bool(getattr(action, "investigation_dispatched", False))
-
-
 def turn_has_session_goal_evidence(result: Any) -> bool:
     """True when the turn ran a tool **successfully** — not prose, not a claim.
 
     A tool that ran and errored is not evidence the goal was met, so a failed
     call must not let an ``achieved`` claim through. ``executed_count`` alone
     would say yes to a turn whose only action failed.
-
-    Dispatching ``investigation_start`` is not finishing evidence for a session
-    goal — that work lands in later turns / the investigation report.
     """
-    if turn_dispatched_investigation(result):
-        return False
     action = getattr(result, "action_result", None)
     action_succeeded = 0
     if action is not None:
@@ -157,19 +142,15 @@ def _short_checklist_has_achieved_claim_and_tool_evidence(
     *,
     claimed: bool,
     has_evidence: bool,
-    investigation_dispatched: bool,
 ) -> bool:
     """True when a short checklist turn claimed achieved and tools succeeded."""
-    return (
-        _same_turn_completable(goal) and claimed and has_evidence and not investigation_dispatched
-    )
+    return _same_turn_completable(goal) and claimed and has_evidence
 
 
 def _short_checklist_has_no_prior_progress_and_tool_answer(
     goal: SessionGoal,
     *,
     has_evidence: bool,
-    investigation_dispatched: bool,
     text: str,
     completed_before: frozenset[int],
 ) -> bool:
@@ -177,7 +158,6 @@ def _short_checklist_has_no_prior_progress_and_tool_answer(
     return (
         _same_turn_completable(goal)
         and has_evidence
-        and not investigation_dispatched
         and bool(text.strip())
         and not completed_before
     )
@@ -243,7 +223,6 @@ def evaluate_session_goal(
     current = apply_session_goal_progress(current, text)
 
     claimed = reply_claims_session_goal_achieved(text)
-    dispatched = turn_dispatched_investigation(result)
     evidence = turn_has_session_goal_evidence(result)
 
     if current.checklist:
@@ -256,7 +235,6 @@ def evaluate_session_goal(
             current,
             claimed=claimed,
             has_evidence=evidence,
-            investigation_dispatched=dispatched,
         ):
             current = _complete_checklist(current)
             verdict = SessionGoalVerdict(
@@ -275,7 +253,6 @@ def evaluate_session_goal(
         elif _short_checklist_has_no_prior_progress_and_tool_answer(
             current,
             has_evidence=evidence,
-            investigation_dispatched=dispatched,
             text=text,
             completed_before=completed_before,
         ):
@@ -293,11 +270,6 @@ def evaluate_session_goal(
             else:
                 reason = SessionGoalReason.checklist_progress(done, total, nxt[1])
             verdict = SessionGoalVerdict(status=SessionGoalStatus.ACTIVE, reason=reason)
-    elif claimed and dispatched:
-        verdict = SessionGoalVerdict(
-            status=SessionGoalStatus.ACTIVE,
-            reason=SessionGoalReason.ACHIEVED_IGNORED_INVESTIGATION,
-        )
     elif claimed:
         if current.host_owned or evidence:
             soft_host = _host_owned_achieved_claim_lacks_tool_evidence(
@@ -318,12 +290,7 @@ def evaluate_session_goal(
                 reason=SessionGoalReason.NO_TOOL_EVIDENCE,
             )
     else:
-        if dispatched:
-            verdict = SessionGoalVerdict(
-                status=SessionGoalStatus.ACTIVE,
-                reason=SessionGoalReason.INVESTIGATION_RUNNING,
-            )
-        elif _host_owned_goal_has_unverified_cohort_reply(current, text):
+        if _host_owned_goal_has_unverified_cohort_reply(current, text):
             verdict = SessionGoalVerdict(
                 status=SessionGoalStatus.ACHIEVED,
                 reason=SessionGoalReason.ACHIEVED_HOST_SET,
@@ -370,6 +337,5 @@ __all__ = [
     "evaluate_session_goal",
     "reply_claims_session_goal_achieved",
     "session_goal_reply_text",
-    "turn_dispatched_investigation",
     "turn_has_session_goal_evidence",
 ]

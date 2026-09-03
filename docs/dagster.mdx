@@ -1,11 +1,11 @@
 ---
 title: "Dagster"
-description: "Connect Dagster so OpenSRE can investigate pipeline run failures, asset materialization errors, and sensor or schedule misfires during incidents"
+description: "Connect Dagster so OpenSRE can investigate pipeline run failures, asset materialization errors, and sensor or schedule misfires"
 ---
 
 ## Overview
 
-OpenSRE uses the Dagster GraphQL API to investigate data-pipeline incidents — fetching recent runs and their status, the full event log and root-cause exception for a failed run, asset materialization history, and sensor or schedule tick history. Works against both Dagster OSS (`dagster dev` and self-hosted dagster-webserver) and Dagster+ (the SaaS).
+OpenSRE uses the Dagster GraphQL API to investigate data-pipeline failures — fetching recent runs and their status, the full event log and root-cause exception for a failed run, asset materialization history, and sensor or schedule tick history. Works against both Dagster OSS (`dagster dev` and self-hosted dagster-webserver) and Dagster+ (the SaaS).
 
 ## Prerequisites
 
@@ -71,7 +71,7 @@ DAGSTER_API_TOKEN=...
 2. **Tokens** tab → **+ Create user token**
 3. Copy the token immediately (shown once)
 
-User Tokens inherit the user's per-deployment role. Viewer is enough for read-only investigation queries.
+User Tokens inherit the user's per-deployment role. Viewer is enough for the read-only queries OpenSRE issues.
 
 > **Token type matters.** Use a **User Token**, not an **Agent Token**. Agent Tokens authenticate Hybrid agents and return HTTP 401 on GraphQL.
 
@@ -122,36 +122,20 @@ SERVICE │ SOURCE    │ STATUS   │ DETAIL
 dagster │ local env │ ✓ passed │ Connected to Dagster version 1.13.18.
 ```
 
-The exported endpoint also makes Dagster available to investigations; no separate setup step is required.
+The exported endpoint also makes Dagster available in chat; no separate setup step is required.
 
-Trigger a real investigation against the failed run — this is the actual supported entrypoint, not an internal function:
+Now ask the agent about the failed run:
 
 ```bash
-opensre investigate --input-json '{
-  "alert_name": "DagsterJobFailed",
-  "severity": "critical",
-  "commonAnnotations": {
-    "summary": "Dagster job payment_service_deploy failed",
-    "job_name": "payment_service_deploy"
-  }
-}'
+opensre
 ```
 
-Real output from a run against this exact local job (edited for length):
+Ask: *Why did the payment_service_deploy Dagster job fail?*
 
-```
-Loading integrations: telegram, dagster
-↳ Dagster · list dagster runs (status=FAILURE)
-↳ Dagster · get dagster run logs
-
-root_cause: "The deploy_payment_service op in job payment_service_deploy
-raised RuntimeError('payment-service deploy failed: connection refused
-to billing-api') at jobs.py:6. The Dagster orchestration itself executed
-correctly; the failure originated in a downstream HTTP call to the
-billing-api dependency being refused at the TCP layer."
-
-Cited Evidence: list dagster runs, get dagster run logs
-```
+The agent lists failed runs and pulls the run's event log, finding the real cause
+against this exact local job: the `deploy_payment_service` op raised
+`RuntimeError('payment-service deploy failed: connection refused to billing-api')`
+at `jobs.py:6`.
 
 Teardown by pressing `Ctrl-C` in the terminal running `dagster dev`, then remove the temporary store and unset the demo variables in the second terminal:
 
@@ -162,7 +146,7 @@ unset DAGSTER_ENDPOINT OPENSRE_INTEGRATIONS_STORE_PATH
 
 The temporary `DAGSTER_HOME` is removed when `dagster dev` exits.
 
-## Investigation tools
+## Tools
 
 | Tool | What it does |
 | --- | --- |

@@ -1,4 +1,4 @@
-"""Buzz credential resolution for alarm dispatch (watchdog, Hermes).
+"""Buzz credential resolution for alarm dispatch.
 
 ``private_key``/``relay_url``/``default_channel``/``auth_tag`` reuse the
 scheduler's resolver (:func:`infrastructure.scheduling.scheduler.credentials.resolve_buzz_credentials`)

@@ -1,11 +1,10 @@
 """Internal chat seam — one entry over the shared ``run_turn`` engine.
 
 The **public** host API is :class:`~core.agent_harness.harness.AgentSession`
-(``chat`` / ``investigate``). Adapters (shell TTY dispatcher, ``HeadlessAgent``)
+(``chat``). Adapters (shell TTY dispatcher, ``HeadlessAgent``)
 build :class:`ChatTurnBindings` from their surface ports, then call
 :func:`dispatch_chat_turn` from inside ``.dispatch``. This module must not
-import ``surfaces`` or ``gateway``. Investigation is
-:meth:`AgentSession.investigate` (installed payload runner).
+import ``surfaces`` or ``gateway``.
 """
 
 from __future__ import annotations

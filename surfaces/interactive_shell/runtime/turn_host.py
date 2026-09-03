@@ -60,7 +60,7 @@ from surfaces.interactive_shell.session import Session
 from surfaces.interactive_shell.telemetry import PromptRecorder
 from surfaces.interactive_shell.ui.streaming.console import StreamingConsole
 from surfaces.shared.error_handling.exception_reporting import report_exception
-from surfaces.shared.terminal.output.console_state import set_investigation_spinner
+from surfaces.shared.terminal.output.console_state import set_turn_spinner
 from surfaces.shared.terminal.output.repl_progress import repl_safe_progress_scope
 
 _logger = logging.getLogger(__name__)
@@ -199,8 +199,8 @@ async def run_agent_turn(runtime: AgentTurnResources, text: str) -> None:
     runtime.session.terminal.exclusive_stdin_active = exclusive_stdin
     # Blocks nested validate_and_handle from set_auto_command (e.g. /goal set).
     runtime.session.terminal.dispatch_active = True
-    # Expose this turn's spinner so investigation stages can animate phase labels.
-    set_investigation_spinner(runtime.spinner)
+    # Expose this turn's spinner so rendering helpers can animate phase labels.
+    set_turn_spinner(runtime.spinner)
     emit_thread_boundary(
         runtime.session.session_id,
         name="turn_boundary",
@@ -221,7 +221,7 @@ async def run_agent_turn(runtime: AgentTurnResources, text: str) -> None:
                 dispatch_cancel=dispatch_cancel,
             )
     finally:
-        set_investigation_spinner(None)
+        set_turn_spinner(None)
         runtime.session.terminal.exclusive_stdin_active = False
         runtime.session.terminal.dispatch_active = False
         # ``set_auto_command`` deliberately avoids submitting while a turn is

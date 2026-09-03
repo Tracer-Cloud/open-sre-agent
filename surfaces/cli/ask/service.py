@@ -27,8 +27,8 @@ from infrastructure.errors import OpenSREError
 from surfaces.cli.ask.approval import ApprovalTracker, build_approval_hooks
 
 #: Capabilities the one-shot ``ask`` agent must not reach — it answers or runs a
-#: bounded action, not investigations, slash commands, or task cancellation.
-_ASK_DISABLED_CAPABILITIES = ("investigation", "llm_provider", "slash_commands", "task_cancel")
+#: bounded action, not slash commands or task cancellation.
+_ASK_DISABLED_CAPABILITIES = ("llm_provider", "slash_commands", "task_cancel")
 
 
 class AskStatus(StrEnum):
@@ -270,6 +270,22 @@ def run_ask(
         denied = _approval_denied_outcome(tracker)
         if denied is not None:
             return denied
+        from surfaces.cli.error_mapping import reraise_cli_runtime_error
+
+        try:
+            reraise_cli_runtime_error(exc)
+        except OpenSREError as mapped:
+            return AskOutcome(
+                status=AskStatus.ERROR,
+                response="",
+                error=AskError(
+                    message=mapped.message,
+                    suggestion=mapped.suggestion,
+                ),
+                exit_code=AskExitCode.ERROR,
+            )
+        except Exception as unmapped:
+            exc = unmapped
         from surfaces.cli.telemetry import report_exception
 
         report_exception(exc, context="surfaces.cli.ask")

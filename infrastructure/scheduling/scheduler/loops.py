@@ -61,6 +61,7 @@ class StarterLoop:
     cron: str
     timezone: str
     window_hours: int
+    prompt: str = ""
 
 
 @dataclass(frozen=True, slots=True)
@@ -120,19 +121,27 @@ STARTER_LOOPS: tuple[StarterLoop, ...] = (
         slug="morning-report",
         name="Morning report",
         description="Weekday reliability digest for the last 24 hours.",
-        kind=TaskKind.DAILY_SUMMARY,
+        kind=TaskKind.MANUAL_LOOP,
         cron="0 8 * * 1-5",
         timezone="UTC",
         window_hours=24,
+        prompt=(
+            "Summarize the reliability picture for the last 24 hours: notable "
+            "alerts, error spikes, and anything on-call should know this morning."
+        ),
     ),
     StarterLoop(
         slug="weekly-alert-audit",
         name="Weekly alert audit",
         description="Monday review of noisy and actionable alert patterns.",
-        kind=TaskKind.WEEKLY_AUDIT,
+        kind=TaskKind.MANUAL_LOOP,
         cron="0 9 * * 1",
         timezone="UTC",
         window_hours=168,
+        prompt=(
+            "Review alert activity over the last week: which alerts were noisy, "
+            "which were actionable, and what tuning would reduce noise."
+        ),
     ),
     StarterLoop(
         slug="pr-sweep",
@@ -146,11 +155,7 @@ STARTER_LOOPS: tuple[StarterLoop, ...] = (
 )
 
 _KIND_LABELS: dict[TaskKind, str] = {
-    TaskKind.DAILY_SUMMARY: "Daily summary",
-    TaskKind.WEEKLY_AUDIT: "Weekly audit",
-    TaskKind.INCIDENT_WINDOW_REPLAY: "Incident replay",
-    TaskKind.SYNTHETIC_RUN: "Synthetic run",
-    TaskKind.CUSTOM_INVESTIGATION: "Custom investigation",
+    TaskKind.MANUAL_LOOP: "Manual loop",
     TaskKind.SENTRY_MORNING_DIGEST: "Sentry morning digest",
     TaskKind.SENTRY_UPTIME_WATCH: "Sentry uptime watch",
     TaskKind.GITHUB_PR_SWEEP: "GitHub PR sweep",
@@ -332,7 +337,7 @@ def create_manual_loop(
     task = ScheduledTask(
         id=loop_id,
         name=name.strip() or _name_from_prompt(loop_prompt),
-        kind=TaskKind.CUSTOM_INVESTIGATION,
+        kind=TaskKind.MANUAL_LOOP,
         cron=cron_expr,
         timezone=timezone.strip() or "UTC",
         provider=Provider.INTERACTIVE_SHELL,
@@ -502,6 +507,14 @@ def seed_starter_loops(store_path: Path | None = None) -> list[ScheduledTask]:
     for starter in STARTER_LOOPS:
         if starter.slug in existing_slugs:
             continue
+        params = {
+            LOOP_SLUG_PARAM: starter.slug,
+            LOOP_SOURCE_PARAM: _ONBOARDING_LOOP_SOURCE,
+            LOOP_DESCRIPTION_PARAM: starter.description,
+            LOOP_CHANNELS_PARAM: Provider.INTERACTIVE_SHELL.value,
+        }
+        if starter.prompt:
+            params[LOOP_PROMPT_PARAM] = starter.prompt
         task = ScheduledTask(
             name=starter.name,
             kind=starter.kind,
@@ -510,12 +523,7 @@ def seed_starter_loops(store_path: Path | None = None) -> list[ScheduledTask]:
             provider=Provider.INTERACTIVE_SHELL,
             window_hours=starter.window_hours,
             enabled=False,
-            params={
-                LOOP_SLUG_PARAM: starter.slug,
-                LOOP_SOURCE_PARAM: _ONBOARDING_LOOP_SOURCE,
-                LOOP_DESCRIPTION_PARAM: starter.description,
-                LOOP_CHANNELS_PARAM: Provider.INTERACTIVE_SHELL.value,
-            },
+            params=params,
         )
         stored_task = add_task(task, store_path)
         record_scheduler_task_operation("scheduled_loop_seeded", stored_task)

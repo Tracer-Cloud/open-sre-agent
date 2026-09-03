@@ -111,7 +111,7 @@ def _map_query_snowflake_history(
     name="query_snowflake_history",
     description="Query Snowflake query history using a read-only bounded statement.",
     source="snowflake",
-    surfaces=(ToolSurface.INVESTIGATION, ToolSurface.CHAT),
+    surfaces=(ToolSurface.CHAT,),
     evidence_mapper=_map_query_snowflake_history,
     requires=["account_identifier"],
     input_schema={

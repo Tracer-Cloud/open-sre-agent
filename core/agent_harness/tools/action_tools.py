@@ -12,7 +12,6 @@ from infrastructure.harness_providers import resolve_surface_tool_map, resolve_s
 from infrastructure.observability.trace.redaction import redact_sensitive
 
 _ACTION_SESSION_SOURCE = "_action_session"
-_EXCLUDED_CHAT_TOOL_NAMES = frozenset({"run_investigation"})
 
 
 class _IntegrationsSessionView(Protocol):
@@ -62,7 +61,6 @@ def get_action_tools_from_integrations_view(
         candidate.name: candidate
         for surface in (ToolSurface.ACTION, ToolSurface.CHAT)
         for candidate in resolve_surface_tools(surface)
-        if candidate.name not in _EXCLUDED_CHAT_TOOL_NAMES
     }
     for candidate in candidates.values():
         try:

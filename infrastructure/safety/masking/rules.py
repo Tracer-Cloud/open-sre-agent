@@ -1,7 +1,7 @@
-"""Per-investigation masking rules.
+"""Per-run masking rules.
 
 ``MaskingRules`` holds a ``MaskingPolicy`` and a stable placeholder map
-for the lifetime of a single investigation. Mask and unmask operations run
+for the lifetime of a single run. Mask and unmask operations run
 over strings, lists, and dicts. The placeholder map is serialized to
 ``AgentState["masking_map"]`` so it survives node-to-node transitions.
 """
@@ -20,7 +20,7 @@ _PLACEHOLDER_TOKEN_RE = re.compile(r"<[^<>]+>")
 
 
 class MaskingRules:
-    """Stable masking state for one investigation."""
+    """Stable masking state for one run."""
 
     def __init__(
         self,
@@ -41,11 +41,11 @@ class MaskingRules:
 
     @classmethod
     def from_state(cls, state: dict[str, Any]) -> MaskingRules:
-        """Reconstruct a context from an investigation state dict.
+        """Reconstruct a context from a persisted state dict.
 
         Policy is re-read from the environment so env changes are honoured.
         ``placeholder_map`` carries the mappings accumulated by earlier nodes
-        in the same investigation.
+        in the same run.
         """
         policy = MaskingPolicy.from_env()
         existing = state.get("masking_map") or {}

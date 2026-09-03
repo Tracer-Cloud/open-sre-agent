@@ -47,7 +47,7 @@ def _read(monkeypatch: pytest.MonkeyPatch, captured: dict[str, Any] | None = Non
 
 class TestItIsRegistered:
     def test_the_tool_exists(self) -> None:
-        assert "read_yc_db_logs" in get_registered_tool_map("investigation")
+        assert "read_yc_db_logs" in get_registered_tool_map("action")
 
     def test_it_says_it_is_a_separate_store_from_cloud_logging(self) -> None:
         """Otherwise there is no reason for the agent to try it after an empty read."""

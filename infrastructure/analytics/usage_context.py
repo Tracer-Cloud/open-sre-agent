@@ -45,7 +45,7 @@ _SESSION_ID: ContextVar[str | None] = ContextVar("analytics_session_id", default
 _USER_ID: ContextVar[str | None] = ContextVar("analytics_user_id", default=None)
 _ORGANIZATION_ID: ContextVar[str | None] = ContextVar("analytics_organization_id", default=None)
 
-# Process-scoped fallback for one-shot CLI workloads (e.g. ``opensre investigate``)
+# Process-scoped fallback for one-shot CLI workloads
 # that never enter a REPL session. Bound ContextVar / REPL session_id always win.
 _PROCESS_SESSION_ID: str | None = None
 _PROCESS_SESSION_ID_LOCK = threading.Lock()

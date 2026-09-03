@@ -240,7 +240,7 @@ def test_unwatch_marks_watchdog_cancelled(monkeypatch: pytest.MonkeyPatch) -> No
 def test_unwatch_rejects_non_watchdog_task() -> None:
     session = Session()
     session.terminal.trust_mode = True
-    inv = session.task_registry.create(TaskKind.INVESTIGATION, command="x")
+    inv = session.task_registry.create(TaskKind.CLI_COMMAND, command="x")
     inv.mark_running()
     console, buf = _capture()
     dispatch_slash(f"/unwatch {inv.task_id}", session, console, is_tty=True)

@@ -6,7 +6,7 @@ from typing import Any, Protocol
 
 from core.domain.alerts.alert_source import secondary_tool_sources
 from integrations.registry import family_key
-from tools.investigation.stages.gather_evidence.tools import get_available_tools
+from tools.registry import get_registered_tools
 
 
 class _IntegrationSession(Protocol):
@@ -54,7 +54,7 @@ def _connected_slugs(configured: list[str], resolved: dict[str, Any]) -> list[st
     if not configured or not resolved:
         return []
     try:
-        tools = get_available_tools(resolved)
+        tools = [tool for tool in get_registered_tools() if tool.is_available(resolved)]
         secondary = secondary_tool_sources()
         active_families = {
             family_key(str(tool.source)) for tool in tools if str(tool.source) not in secondary

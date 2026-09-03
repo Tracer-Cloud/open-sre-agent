@@ -1,11 +1,11 @@
 ---
 title: "OpsGenie"
-description: "Connect OpsGenie so OpenSRE can read active alerts and incident context during investigations"
+description: "Connect OpsGenie so OpenSRE can read active alerts and incident context"
 ---
 
 ## Overview
 
-OpenSRE queries OpsGenie for active alerts and alert details so investigations can
+OpenSRE queries OpsGenie for active alerts and alert details so the agent can
 correlate on-call incidents with infrastructure events.
 
 There is **no** `opensre integrations setup opsgenie` handler today. Configure OpsGenie
@@ -62,7 +62,7 @@ EU accounts use a different endpoint. Set `OPSGENIE_REGION=eu` if your OpsGenie 
 is `app.eu.opsgenie.com`.
 </Info>
 
-## Investigation tools
+## Tools
 
 | Tool | What it does |
 | --- | --- |

@@ -41,7 +41,7 @@ class TestRegistration:
     def test_the_tool_is_discoverable(self, name: str) -> None:
         from tools.registry import get_registered_tool_map
 
-        assert name in get_registered_tool_map("investigation")
+        assert name in get_registered_tool_map("action")
 
 
 class TestLogFilters:
@@ -217,7 +217,7 @@ class TestGuidanceNamesRealParameters:
         from tools.registry import get_registered_tool_map
 
         properties = set(
-            get_registered_tool_map("investigation")["read_yc_logs"].input_schema["properties"]
+            get_registered_tool_map("action")["read_yc_logs"].input_schema["properties"]
         )
         named = {
             word.strip(".,'\"")

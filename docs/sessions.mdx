@@ -7,7 +7,7 @@ description: "Browse recent sessions, resume a conversation, compact long contex
 
 | Command | What it does |
 | --- | --- |
-| `/sessions` | List recent REPL sessions (name, duration, turns, investigations) |
+| `/sessions` | List recent REPL sessions (name, duration, turns) |
 | `/resume <id>` | Restore a past session so you can continue asking questions |
 | `/resume <id>:<entry>` | Restore a specific branch point by entry ID prefix |
 | `/compact` | Summarize older context into a replayable compaction entry |
@@ -24,14 +24,14 @@ description: "Browse recent sessions, resume a conversation, compact long contex
 ```
   Recent sessions
 
-   #  Session ID  Name                           Started            Duration  Turns  Investigations
-   ─────────────────────────────────────────────────────────────────────────────────────────────────
-   1  3f8a1c2d    (current)                      2024-01-15 10:00   42m       8      2
-   2  9b2e4f7a    why is CPU spiking on prod-api  2024-01-14 14:30   1h 5m    15     4
-   3  c1d3e8f2    investigate OOM killer          2024-01-13 09:10   12m       3      1
+   #  Session ID  Name                           Started            Duration  Turns
+   ───────────────────────────────────────────────────────────────────────────────────
+   1  3f8a1c2d    (current)                      2024-01-15 10:00   42m       8
+   2  9b2e4f7a    why is CPU spiking on prod-api  2024-01-14 14:30   1h 5m    15
+   3  c1d3e8f2    who restarted checkout-api      2024-01-13 09:10   12m       3
 ```
 
-Up to 20 sessions are shown, newest first. The current session updates its elapsed time live. **Turns** is the total turn count; **Investigations** is how many of those were investigation turns.
+Up to 20 sessions are shown, newest first. The current session updates its elapsed time live. **Turns** is the total turn count.
 
 ---
 
@@ -155,8 +155,8 @@ Each session records:
 - When it started and ended, and how long it ran
 - Every message you sent and every response from the assistant
 - Tool calls, tool updates, tool results, model/tool changes, labels, custom messages, and compaction summaries
-- Infra context discovered during investigations (service names, cluster names, regions)
-- Turn counts for investigations and chats
+- Infra context discovered while working (service names, cluster names, regions)
+- Turn counts
 
 Sessions are stored as files under `~/.opensre/sessions/`. Each file is plain text and human-readable.
 
@@ -165,7 +165,6 @@ Sessions are stored as files under `~/.opensre/sessions/`. Each file is plain te
 ## Privacy and what is not saved
 
 - **Secrets or credentials** — known token shapes are redacted from the prompt log by default (set `OPENSRE_PROMPT_LOG_REDACT=0` to store raw text instead)
-- **Full investigation results** — stored separately under `~/.opensre/investigations/`
 - **Token usage** — tracked in `~/.opensre/prompt_log.jsonl` when prompt logging is enabled
 
 See [Interactive Shell Privacy](/interactive-shell-privacy) for redaction controls.

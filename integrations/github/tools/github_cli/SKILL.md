@@ -40,7 +40,6 @@ Use `summary` when present. Reply short and chat-like.
 ## Prefer dedicated tools when they clearly fit
 
 Slack propose/execute; workflow digests; investigation code/commit search.
-Multi-source RCA (sentry + github issues + posthog) → investigation_start.
 PR CI fix-and-push → fix_github_pr_ci. Security/quality alerts →
 fix_github_security_alert.
 

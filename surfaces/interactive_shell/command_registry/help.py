@@ -20,7 +20,6 @@ from surfaces.interactive_shell.ui.help.help_menu import (
 from surfaces.shared.terminal.components.choice_menu import repl_tty_interactive
 
 QUICK_ACCESS_COMMANDS: list[str] = [
-    "/investigate",
     "/integrations",
     "/model",
     "/health",
@@ -40,9 +39,6 @@ def _quick_access_section() -> HelpSection:
 def _raw_help_sections() -> list[HelpSection]:
     from surfaces.interactive_shell.command_registry.agents import COMMANDS as AGENTS_CMDS
     from surfaces.interactive_shell.command_registry.alerts import COMMANDS as ALERTS_CMDS
-    from surfaces.interactive_shell.command_registry.background_cmds import (
-        COMMANDS as BACKGROUND_CMDS,
-    )
     from surfaces.interactive_shell.command_registry.choice_prompt import (
         COMMANDS as CHOICE_CMDS,
     )
@@ -56,7 +52,6 @@ def _raw_help_sections() -> list[HelpSection]:
         COMMANDS as GATEWAY_CMDS,
     )
     from surfaces.interactive_shell.command_registry.integrations import COMMANDS as INT_CMDS
-    from surfaces.interactive_shell.command_registry.investigation import COMMANDS as INV_CMDS
     from surfaces.interactive_shell.command_registry.loops_cmds import COMMANDS as LOOPS_CMDS
     from surfaces.interactive_shell.command_registry.memory_cmds import (
         COMMANDS as MEMORY_CMDS,
@@ -65,7 +60,6 @@ def _raw_help_sections() -> list[HelpSection]:
     from surfaces.interactive_shell.command_registry.privacy_cmds import (
         COMMANDS as PRIVACY_CMDS,
     )
-    from surfaces.interactive_shell.command_registry.rca import COMMANDS as RCA_CMDS
     from surfaces.interactive_shell.command_registry.remote_sync_cmds import (
         COMMANDS as REMOTE_SYNC_CMDS,
     )
@@ -87,14 +81,9 @@ def _raw_help_sections() -> list[HelpSection]:
         ("Help", list(COMMANDS)),
         (
             "Session",
-            list(SESSION_CMDS)
-            + list(CHOICE_CMDS)
-            + list(BACKGROUND_CMDS)
-            + list(SETTINGS_CMDS)
-            + list(DIAGNOSTICS_CMDS),
+            list(SESSION_CMDS) + list(CHOICE_CMDS) + list(SETTINGS_CMDS) + list(DIAGNOSTICS_CMDS),
         ),
         ("Integrations, Models & Tools", list(INT_CMDS) + list(MODEL_CMDS) + list(TOOLS_CMDS)),
-        ("Investigation", list(INV_CMDS) + list(RCA_CMDS)),
         ("Privacy", list(PRIVACY_CMDS) + list(MEMORY_CMDS)),
         ("Remote sync", list(REMOTE_SYNC_CMDS)),
         (
@@ -121,7 +110,7 @@ def _help_sections() -> list[HelpSection]:
 
     The "Quick Access" section is intentionally exempted from the dedup set so
     its curated commands remain visible in their canonical sections too (e.g.
-    ``/help investigation`` still contains ``/investigate``).
+    ``/help session`` still contains ``/status``).
     """
     seen: set[str] = set()
     sections: list[HelpSection] = []

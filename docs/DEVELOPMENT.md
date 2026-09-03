@@ -1,6 +1,6 @@
 # Development guide
 
-Contributor-focused workflows: local setup details stay in [SETUP.md](https://github.com/Tracer-Cloud/opensre/blob/main/SETUP.md) at the repo root (Windows, troubleshooting, MCP/OpenClaw).
+Contributor-focused workflows: local setup details stay in [SETUP.md](https://github.com/Tracer-Cloud/opensre/blob/main/SETUP.md) at the repo root (Windows, troubleshooting, MCP).
 
 ## Clone and install
 
@@ -14,7 +14,7 @@ make install
 
 ```bash
 opensre onboard
-opensre investigate -i tests/e2e/kubernetes/fixtures/datadog_k8s_alert.json
+uv run opensre   # open the interactive shell
 ```
 
 ## Quality gates (same as CI)
@@ -53,14 +53,6 @@ Loading every vendor tool at startup was slow. A static index
 
 Adding a vendor tool is a `@tool`/`BaseTool` module; the index finds it and no other vendor is imported. `tests/tools/test_registry_index.py` checks the index matches the imported registry exactly, so they cannot drift.
 
-## Investigation pipeline architecture
-
-The six-stage investigation pipeline (resolve integrations → extract alert → plan → ReAct evidence loop → diagnose → deliver), the loop's guardrails (tool cap, stagnation breaker, context budget, duplicate detection), and diagrams are documented in [`docs/investigation-pipeline-architecture.md`](investigation-pipeline-architecture.md).
-
-## Investigation tool calling
-
-Tool schemas, provider adapters (`transports/sdk/agent_clients.py`), and investigation message shapes are documented in [`docs/investigation-tool-calling.md`](investigation-tool-calling.md) (all LLM providers, not vendor-specific).
-
 ## Interactive shell: REPL watchdog demo
 
 PR reviewers expect a **visible demo** (terminal log or screenshot) in the PR under **Demo/Screenshot**, not only tests. Copy the exact steps from this section into your PR description, then attach your terminal output or recording.
@@ -80,14 +72,6 @@ Longer transcript (optional): [tests/interactive_shell/repl_watchdog_demo.md](ht
 ## VS Code dev container
 
 The dev container is defined under [`.devcontainer/`](https://github.com/Tracer-Cloud/opensre/tree/main/.devcontainer). It builds from [`.devcontainer/Dockerfile`](https://github.com/Tracer-Cloud/opensre/blob/main/.devcontainer/Dockerfile) (Python **3.13**), then **`postCreateCommand`** creates `.venv-devcontainer` and runs **`pip install -e '.[dev]'`** (not `uv`). Docker Desktop, OrbStack, Colima, or another compatible runtime must be available on the host.
-
-## Benchmark
-
-```bash
-make benchmark
-```
-
-To refresh README benchmark copy from cached results (no LLM calls): `make benchmark-update-readme`.
 
 ## Deployment
 

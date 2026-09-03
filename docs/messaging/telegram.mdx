@@ -1,11 +1,11 @@
 ---
 title: "Telegram"
-description: "Deliver investigation findings to a Telegram chat or channel."
+description: "Chat with the agent and deliver alerts and reports to a Telegram chat or channel."
 ---
 
 ## Overview
 
-OpenSRE's Telegram integration delivers investigation findings to any chat your bot has been added to — useful for mobile-first on-call rotations and personal alerting. With the gateway running, you can also DM the agent for two-way chat.
+OpenSRE's Telegram integration delivers agent messages, scheduled reports, and alarms to any chat your bot has been added to — useful for mobile-first on-call rotations and personal alerting. With the gateway running, you can also DM the agent for two-way chat.
 
 Start the interactive shell with `opensre` (no subcommand). Slash commands below are run from that REPL.
 
@@ -13,7 +13,7 @@ Start the interactive shell with `opensre` (no subcommand). Slash commands below
 
 - A Telegram account.
 - The Telegram mobile or desktop app, signed in.
-- The chat (group, channel, or direct message) where you want to receive findings.
+- The chat (group, channel, or direct message) where you want messages delivered.
 
 ## Setup
 
@@ -53,7 +53,7 @@ TELEGRAM_ALLOWED_USERS=123456789   # for two-way gateway chat
 | `TELEGRAM_ALLOWED_USERS` | Comma-separated **numeric** user ids allowed for gateway chat. |
 
 <Note>
-**Credential resolution.** Every Telegram delivery surface — investigations, **background RCA completion notifications**, the scheduler, `/watchdog`, `/hermes watch`, and `/watch` — resolves the bot token the same way: integration store first, then `resolve_env_credential("TELEGRAM_BOT_TOKEN")` (process env, then the credentials file). Chat id is non-secret: `--chat-id` → store `default_chat_id` → `TELEGRAM_DEFAULT_CHAT_ID` env (plain `os.getenv`).
+**Credential resolution.** Every Telegram delivery surface — the scheduler, `/watchdog`, and `/watch` — resolves the bot token the same way: integration store first, then `resolve_env_credential("TELEGRAM_BOT_TOKEN")` (process env, then the credentials file). Chat id is non-secret: `--chat-id` → store `default_chat_id` → `TELEGRAM_DEFAULT_CHAT_ID` env (plain `os.getenv`).
 </Note>
 
 ## Credentials
@@ -76,7 +76,7 @@ You can change the bot name, picture, and description later by sending `/mybots`
 
 <Tabs>
   <Tab title="Group chat">
-    1. Open the group where you want findings to land.
+    1. Open the group where you want messages to land.
     2. Tap the group name → **Add members** → search for your bot username → **Add**.
     3. By default, bots in groups only see messages addressed to them, which is fine for delivery-only.
   </Tab>
@@ -119,7 +119,7 @@ The **chat ID** identifies where the bot should post. It is required — without
 If `getUpdates` returns an empty array, post a fresh message in the chat and reload — Telegram only buffers recent updates.
 </Note>
 
-## Investigation tools
+## Telegram tools
 
 | Tool | What it does |
 | --- | --- |
@@ -141,7 +141,7 @@ Delivery is an external side effect. Its result includes a stable `status`, `sen
 
 ### Two-way chat gateway (DM text)
 
-> **Skip this if you only need outbound delivery** (alerts, cron reports, investigation findings). Setup + verify are sufficient for that.
+> **Skip this if you only need outbound delivery** (alerts, cron reports). Setup + verify are sufficient for that.
 
 v1 supports **text-only direct messages** (no groups, voice, or attachments).
 
@@ -193,13 +193,9 @@ Logs: `~/.opensre/gateway/gateway.log`. If Telegram is not configured the daemon
 
 The gateway uses long polling — no public HTTPS URL or port forwarding is required for local use. Built-in commands: `/new`, `/help`, `/pair <code>`.
 
-The gateway uses the same headless agent harness as the interactive shell, with Telegram-specific wiring:
+The gateway uses the same headless agent harness as the interactive shell: the agent grounds its prompt in your configured integrations and calls their tools to answer.
 
-- **Prompt grounding** — CLI reference, AGENTS.md, integration list, and investigation flow context
-- **Read-only evidence tools** — live integration queries via the gather pass when integrations are configured
-- **Action tools** — `shell_run` and `investigation_start`
-
-Investigation delivery, background RCA completion notifications, watchdog alerts, and cron still use the outbound-only paths — they do not require the gateway process.
+Watchdog alerts and cron deliveries still use the outbound-only paths — they do not require the gateway process.
 
 #### Deploying the gateway to a remote host
 
@@ -215,24 +211,14 @@ ANTHROPIC_API_KEY=...                    # or your provider's key env
 
 If deploy reports `MISSING: TELEGRAM_BOT_TOKEN` even though local setup succeeded, copy the values into `.env` (or `.env.deploy.example`) for the deploy.
 
-### Scheduled, background, and watchdog delivery
+### Scheduled and watchdog delivery
 
-#### Background investigation completion (RCA)
-
-Configure Telegram first (setup + verify — the gateway is **not** required), then:
-
-```text
-/background on
-/background notify set telegram          # or: email,telegram
-/investigate datadog
-```
-
-On completion the summary is posted as plain text to your default chat, truncated to Telegram's 4,096-character limit. Confirm with `/background show <task_id>`. A notification problem never fails the investigation itself. See [Background investigations](/background-investigations).
+Configure Telegram first (setup + verify — the gateway is **not** required).
 
 #### Cron (recurring reports)
 
 ```bash
-opensre cron add --kind daily_summary --cron "0 9 * * 1-5" \
+opensre cron add --kind github_pr_sweep --cron "0 9 * * 1-5" \
   --tz Asia/Kolkata --provider telegram --chat-id <chat_id>
 ```
 
@@ -246,14 +232,6 @@ opensre watchdog --pid <pid> [--max-cpu N] [--max-runtime D] [--max-rss S]
 
 Interactive shell: `/watch`, `/watches`, `/unwatch`, `/watchdog`.
 
-#### Hermes incident escalation
-
-```bash
-opensre hermes watch
-```
-
-See [Hermes](/hermes).
-
 ## Verify
 
 ```bash
@@ -264,13 +242,14 @@ Interactive shell: `/integrations verify telegram` or `/verify telegram`.
 
 This calls Telegram's [`getMe`](https://core.telegram.org/bots/api#getme) endpoint. On success it reports the bot `@username`. It does **not** start a listening process and does not test two-way communication or delivery chat routing.
 
-Delivery test:
+Delivery test — trip a one-shot watchdog alarm:
 
 ```bash
-opensre investigate --input tests/e2e/kubernetes/fixtures/datadog_k8s_alert.json
+sleep 30 &
+opensre watchdog --pid $! --max-runtime 2s --once --provider telegram
 ```
 
-Findings should appear in the configured chat. Long reports are truncated to Telegram's 4,096-character message limit.
+An alarm message should appear in the configured chat within a few seconds. Long messages are truncated to Telegram's 4,096-character limit.
 
 ## Troubleshooting
 
@@ -282,7 +261,7 @@ Verify only calls `getMe`, so it surfaces token-validity errors but cannot detec
 | **`401 Unauthorized`** | Token invalid/revoked — regenerate in BotFather and update credentials. |
 | **`chat not found` (delivery)** | Re-add the bot and re-fetch `chat_id` from `getUpdates`. |
 | **`bot was kicked…`** | Re-add the bot; channels need **Post Messages** admin permission. |
-| **Findings never arrive, but verify passes** | Re-fetch `chat_id` — groups upgraded to `-100…` prefixes may have changed. |
+| **Messages never arrive, but verify passes** | Re-fetch `chat_id` — groups upgraded to `-100…` prefixes may have changed. |
 | **Gateway: `User <id> is not in the allowed users list`** | Allow the numeric user id or complete `/messaging pair -p telegram`. |
 
 ## Security

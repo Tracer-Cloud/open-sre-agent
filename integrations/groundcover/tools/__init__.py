@@ -136,7 +136,7 @@ def _query_ref_extract_params(sources: dict[str, dict]) -> dict[str, Any]:
     display_name="groundcover query reference",
     source="groundcover",
     tags=("observability", "reference"),
-    surfaces=(ToolSurface.INVESTIGATION, ToolSurface.CHAT),
+    surfaces=(ToolSurface.CHAT,),
     description=(
         "Get the groundcover Query Language (gcQL) reference: operators, functions, pipes, and "
         "query patterns. Call this ONCE before writing gcQL for any query_groundcover_* tool. "

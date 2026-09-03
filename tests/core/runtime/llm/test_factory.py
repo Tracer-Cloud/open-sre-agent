@@ -15,11 +15,13 @@ from core.llm.factory import (
     reset_llm_clients,
     resolve_llm_route,
 )
+from core.llm.internal.client_cache_key import current_llm_client_cache_key
 from core.llm.types import ModelType
 
 
 @pytest.fixture(autouse=True)
-def _clear_cache() -> None:
+def _clear_cache(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr("config.account.account_llm_route", lambda: None)
     reset_llm_clients()
     yield
     reset_llm_clients()
@@ -48,6 +50,40 @@ def test_resolve_llm_route_azure_forces_litellm(monkeypatch: pytest.MonkeyPatch)
 
     # Azure always routes through LiteLLM even without the transport flag.
     assert route.use_litellm is True
+
+
+def test_account_login_forces_hosted_openai_sdk_route(monkeypatch: pytest.MonkeyPatch):
+    monkeypatch.setattr(
+        "config.account.account_llm_route",
+        lambda: SimpleNamespace(
+            base_url="https://app.opensre.com/api/llm/v1",
+            model="gpt-5.4-mini",
+        ),
+    )
+    monkeypatch.setenv("LLM_PROVIDER", "custom-openai")
+    monkeypatch.delenv("CUSTOM_OPENAI_BASE_URL", raising=False)
+    monkeypatch.setenv("OPENSRE_LLM_TRANSPORT", "litellm")
+
+    route = resolve_llm_route()
+
+    assert route.provider == "openai"
+    assert route.use_litellm is False
+    assert route.cli_provider_registration is None
+
+
+def test_account_login_uses_a_distinct_client_cache_key(monkeypatch: pytest.MonkeyPatch):
+    monkeypatch.setenv("LLM_PROVIDER", "openai")
+    local_key = current_llm_client_cache_key()
+    monkeypatch.setattr(
+        "config.account.account_llm_route",
+        lambda: SimpleNamespace(
+            base_url="https://app.opensre.com/api/llm/v1",
+            model="gpt-5.4-mini",
+        ),
+    )
+
+    assert current_llm_client_cache_key() != local_key
+    assert current_llm_client_cache_key() == ("sdk", "account:openai")
 
 
 def test_get_llm_routes_agent_and_non_agent_roles(monkeypatch: pytest.MonkeyPatch):

@@ -29,7 +29,7 @@ def _add(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> object:
     _patch_scheduler_store(tmp_path, monkeypatch)
     return CliRunner().invoke(
         cron_add,
-        ["--kind", "daily_summary", "--cron", "0 8 * * 1-5", "--provider", "slack"],
+        ["--kind", "manual_loop", "--cron", "0 8 * * 1-5", "--provider", "slack"],
     )
 
 

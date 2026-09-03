@@ -182,13 +182,11 @@ def test_close_persists_and_releases_resources() -> None:
 
     session = Session(session_id="s-close")
     session.store = storage
-    session.terminal.background_notices.append("pending notice")
     session.terminal.prompt_refresh_fn = lambda: None
 
     manager.close(session)
 
     assert flushed == ["s-close"]
-    assert session.terminal.background_notices == []
     assert session.terminal.prompt_refresh_fn is None
 
 
@@ -344,7 +342,6 @@ def test_closed_session_is_garbage_collectable() -> None:
     session = Session(session_id="s-gc")
     session.store = InMemorySessionStore()
     session.terminal.prompt_refresh_fn = lambda: None
-    session.terminal.background_notices.append("x")
     ref = weakref.ref(session)
 
     manager.close(session)

@@ -1,22 +1,22 @@
 ---
 title: "Features"
-description: "What OpenSRE can do today — investigations, tools, shell, privacy, and more."
+description: "What OpenSRE can do today — tools, shell, privacy, and more."
 ---
 
 ## Highlights
 
 <CardGroup cols={2}>
-  <Card title="Investigations" icon="magnifying-glass" href="/investigation-overview">
-    Alert in, root-cause write-up out — with evidence from your connected tools.
+  <Card title="Interactive shell" icon="terminal" href="/interactive-shell-commands">
+    Describe incidents in plain English, or drive everything with slash commands.
   </Card>
   <Card title="Integrations" icon="plug" href="/integrations-overview">
     60+ tools across monitoring, incidents, cloud, code, chat, and data.
   </Card>
-  <Card title="Interactive shell" icon="terminal" href="/interactive-shell-commands">
-    Describe incidents in plain English, or drive everything with slash commands.
+  <Card title="Goals" icon="flag" href="/goals">
+    Give the agent a finish line and let it work across several turns.
   </Card>
   <Card title="Masking" icon="shield" href="/masking">
-    Hide pods, hosts, and account IDs from external models — restore them in your report.
+    Hide pods, hosts, and account IDs from external models — restore them in the answer.
   </Card>
   <Card title="Messaging" icon="comments" href="/messaging">
     Deliver results to Slack, Discord, Telegram, and more.
@@ -28,15 +28,6 @@ description: "What OpenSRE can do today — investigations, tools, shell, privac
 
 ## Full list
 
-**Investigations:**
-
-- Structured RCA pipeline — read the alert, gather evidence, test ideas, write a report
-- Local artifact files: `problem.md`, `theory/hypothesis_*.md`, and `report.md`
-- JSON export with `--output` for scripts and automation
-- Background investigations with notify when done (email, Telegram, Rocket.Chat) — [Background investigations](/background-investigations)
-- Investigate deployed services (Railway deploy status, logs, health, RCA) — [Remote runtime](/remote-runtime-investigation)
-- Closed-loop learning from misses — [Closed-loop learning](/closed-loop-learning)
-
 **Integrations:**
 
 - 60+ tools across observability, incidents, cloud, code, messaging, databases, and workflows — [Integrations overview](/integrations-overview)
@@ -47,8 +38,9 @@ description: "What OpenSRE can do today — investigations, tools, shell, privac
 
 **Interactive shell:**
 
-- Plain-language prompts that map to investigations and slash commands — [Assistant](/interactive-shell-assistant)
+- Plain-language prompts that map to tools and slash commands — [Assistant](/interactive-shell-assistant)
 - Full slash-command surface via `/help` — [Shell commands](/interactive-shell-commands)
+- Goals that persist across turns until the finish line is met — [Goals](/goals)
 - Sessions you can list, resume, compact, and branch — [Sessions](/sessions)
 - Long-term memory across chats — [Memory](/memory)
 - Process watchdogs (`/watch`) to Telegram or Rocket.Chat
@@ -64,11 +56,11 @@ description: "What OpenSRE can do today — investigations, tools, shell, privac
 **Messaging and automation:**
 
 - Chat delivery and triggers: Slack, Discord, Telegram, and more — [Messaging](/messaging)
-- Scheduled digests and recurring jobs — [Cron](/cron)
+- Scheduled digests, recurring prompt loops, and delivery jobs — [Cron](/cron)
 
 **APIs and deployment:**
 
-- HTTP API for health, alert intake, and sync/async investigate — [HTTP API](/api)
+- HTTP API for health checks and alert intake — [HTTP API](/api)
 - Python API for in-process agents — [Python API](/python-api)
 - Local CLI, gateway daemon (`opensre gateway start`), or host on Railway / ECS / Vercel — [Deployment](/deployment)
 - Local and enterprise install paths — [Install](/install)
@@ -77,13 +69,13 @@ description: "What OpenSRE can do today — investigations, tools, shell, privac
 
 <CardGroup cols={2}>
   <Card title="Showcase" icon="photo-film" href="/showcase">
-    See a first run and sample investigation output.
+    See a first run and sample output.
   </Card>
   <Card title="Quickstart" icon="rocket" href="/quickstart">
-    Install, onboard, and investigate in a few minutes.
+    Install, onboard, and ask your first question in a few minutes.
   </Card>
-  <Card title="How an investigation works" icon="diagram-project" href="/how-investigations-work">
-    Stage-by-stage walkthrough of the RCA pipeline.
+  <Card title="Hosting the agent" icon="server" href="/hosting-the-agent">
+    Embed the agent with your own sink, tools, and prompts.
   </Card>
   <Card title="Integrations overview" icon="plug" href="/integrations-overview">
     Browse the full tool catalog by category.

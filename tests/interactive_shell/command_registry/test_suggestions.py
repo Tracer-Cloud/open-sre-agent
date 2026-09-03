@@ -41,10 +41,10 @@ def test_format_unknown_slash_message_with_suggestion() -> None:
 
 
 def test_resolve_literal_slash_typo_unknown_root() -> None:
-    typo = resolve_literal_slash_typo("/invest", SLASH_COMMANDS)
+    typo = resolve_literal_slash_typo("/modl", SLASH_COMMANDS)
     assert typo is not None
     assert typo.outcome == "unknown_command"
-    assert "Did you mean /investigate?" in typo.message
+    assert "Did you mean /model?" in typo.message
 
 
 @pytest.mark.parametrize(

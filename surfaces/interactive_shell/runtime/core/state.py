@@ -36,7 +36,7 @@ def ready_hint_ansi() -> str:
     reserved = prompt_text_width(lead)
     if reserved >= width:
         visible = clip_prompt_text(f"{lead}{hint}", width)
-        # Soft grey lead — warm accent is reserved for ∴ / ⏺ / spinner glyph.
+        # Soft grey lead — warm accent is reserved for Ω / ⏺ / spinner glyph.
         if visible.startswith("Ready"):
             rest = visible[len("Ready") :]
             return (
@@ -308,10 +308,10 @@ class SpinnerState:
     def set_phase(self, label: str) -> None:
         """Animate a caller-supplied phase label on the status row.
 
-        Investigation stages (``/investigate``) dispatch deterministically, so
-        the turn-level spinner may not have been started. The progress display
-        calls this to keep the prompt spinner cycling with the active pipeline
-        stage; it can be called repeatedly to advance the phase.
+        Some dispatch paths run deterministically, so the turn-level spinner
+        may not have been started. The progress display calls this to keep the
+        prompt spinner cycling with the active stage; it can be called
+        repeatedly to advance the phase.
         """
         if not self.streaming:
             self.started_at = time.monotonic()
@@ -346,7 +346,7 @@ class SpinnerState:
         return ui_theme.reply_marker_hex()
 
     def _phase_accent_ansi(self) -> str:
-        """Spinner glyph: Factory-warm orange (same family as ``∴`` / ``⏺``)."""
+        """Spinner glyph: Factory-warm orange (same family as ``Ω`` / ``⏺``)."""
         return ui_theme.BOLD_REPLY_MARKER_ANSI
 
     def inline_spinner_ansi(self) -> str:

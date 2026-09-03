@@ -17,7 +17,6 @@ from surfaces.shared.terminal.banner import build_launch_banner
 _LANDING_EXAMPLES: tuple[tuple[str, str], ...] = (
     ("opensre setup", "Sign in with GitHub, add an LLM key, then open the shell"),
     ('opensre ask "why is checkout-api slow?"', "Ask the agent a question directly"),
-    ("opensre investigate -i alert.json", "Run a root-cause investigation on an alert"),
     ("opensre doctor", "Check this machine is set up correctly"),
     ("opensre --help", "See every command"),
 )
@@ -31,7 +30,6 @@ _GETTING_STARTED: tuple[str, ...] = (
     "ask",
     "doctor",
     "health",
-    "investigate",
 )
 
 #: Day-to-day operation once configured.
@@ -148,7 +146,7 @@ def render_landing(group: click.Group) -> None:
     console.print(
         Text.assemble(
             ("  ", ""),
-            "open-source SRE agent for automated incident investigation and root cause analysis",
+            "open-source SRE agent",
         )
     )
     console.print()

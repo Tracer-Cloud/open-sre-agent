@@ -6,9 +6,9 @@ description: "Cron-driven recurring reports to Telegram, Slack, Discord, Rocket.
 # Scheduled Deliveries
 
 OpenSRE can deliver recurring reports to messaging providers on a cron
-schedule. Use it for daily reliability digests, weekly alert audits, synthetic
-test summaries, and custom investigations — delivered automatically without
-manual CLI runs.
+schedule. Use it for recurring prompt loops, GitHub PR standups, PostHog metric
+reports, and work-item reminders — delivered automatically without manual CLI
+runs.
 
 For human task reminders and proactive work check-ins, use `opensre work add
 --remind-at ...` or `opensre work schedule-checkin ...`. Those commands create
@@ -22,16 +22,16 @@ When you open the interactive shell (`opensre`) and no scheduled tasks exist yet
 ## Quick Start
 
 ```bash
-# Add a daily summary to Telegram at 09:00 IST on weekdays
-opensre cron add --kind daily_summary --cron "0 9 * * 1-5" \
+# Add a recurring prompt loop to Telegram at 09:00 IST on weekdays
+opensre cron add --kind manual_loop --cron "0 9 * * 1-5" \
   --name "Morning report" --tz Asia/Kolkata --provider telegram --chat-id <chat_id>
 
 # Same kind to Slack via incoming webhook (omit --chat-id; webhook is channel-bound)
-opensre cron add --kind daily_summary --cron "0 9 * * 1-5" \
+opensre cron add --kind manual_loop --cron "0 9 * * 1-5" \
   --tz Europe/London --provider slack
 
 # Slack bot token: omit --chat-id when SLACK_DEFAULT_CHAT_ID is set
-opensre cron add --kind daily_summary --cron "0 9 * * 1-5" \
+opensre cron add --kind manual_loop --cron "0 9 * * 1-5" \
   --tz Europe/London --provider slack
 
 # GitHub PR sweep standup digest → Slack
@@ -39,7 +39,7 @@ opensre cron add --kind github_pr_sweep --cron "0 9 * * 1-5" \
   --tz Europe/London --provider slack --chat-id C0123ABCD
 
 # Local interactive-shell inbox delivery, useful for debugging
-opensre cron add --kind daily_summary --cron "0 9 * * 1-5" \
+opensre cron add --kind manual_loop --cron "0 9 * * 1-5" \
   --name "Local morning report" --provider interactive_shell
 
 # List configured tasks
@@ -61,7 +61,7 @@ Create a new scheduled delivery task.
 | Option | Required | Description |
 |--------|----------|-------------|
 | `--name` | No | Human-readable loop name shown by `opensre cron list` and `/loops` |
-| `--kind` | Yes | Task kind: `daily_summary`, `weekly_audit`, `incident_window_replay`, `synthetic_run`, `custom_investigation`, `github_pr_sweep` |
+| `--kind` | Yes | Task kind: `manual_loop`, `github_pr_sweep`, `posthog_metric_report`, `work_item_reminder`, `work_item_checkin` |
 | `--cron` | Yes | Cron expression (5 fields: minute hour day month day_of_week) |
 | `--tz` | No | IANA timezone (default: `UTC`). Examples: `Europe/London`, `US/Eastern`, `Asia/Kolkata` |
 | `--provider` | Yes | Messaging provider: `telegram`, `slack`, `discord`, `rocketchat`, `interactive_shell` |
@@ -81,10 +81,29 @@ Delete a scheduled task by its ID.
 Execute a task immediately (ad-hoc one-shot). Useful for debugging delivery
 without waiting for the next cron tick.
 
+By default this delivers to every configured destination again, even ones that
+already received the message — that is what you want to trigger a task on
+demand. To recover a partial failure instead, use `--failed-only`: it retries
+only the destinations the most recent run failed at.
+
+`--failed-only` never widens. If it cannot read per-target history for the task
+— no prior run, or one recorded before that history was tracked — it stops and
+tells you, rather than quietly delivering everywhere. Re-run without the flag
+when a full send is what you want.
+
+When the last run was a partial failure, a plain `cron run` warns which
+destinations it is about to re-deliver to before it sends.
+
 ### `opensre cron logs <task_id>`
 
 Show execution history for a task (newest first). Displays start time, status,
-message ID, and any errors.
+delivered targets, message ID, and any errors.
+
+A task with more than one destination delivers to all of them at once, so one
+slow channel does not delay the rest. The **Targets** column counts how many
+destinations were delivered to (`1/2`); when some fail, the run still counts as
+`success` — the message did go out — and the Error column names the destinations
+that missed it. A run is `failed` only when every destination failed.
 
 ### `opensre cron start`
 
@@ -161,12 +180,11 @@ from your existing integration configuration.
 
 | Kind | Behavior |
 |------|----------|
-| `daily_summary` | Runs the investigation pipeline with a daily summary source. Falls back to "no incidents" on empty result, or "pipeline unavailable" on failure. |
-| `weekly_audit` | Runs the pipeline with a weekly audit source. Same fallback behavior. |
-| `incident_window_replay` | Replays the investigation pipeline over the configured window. Raises on failure (operator should know). |
-| `synthetic_run` | Runs the pipeline with a synthetic source. Raises on failure. |
-| `custom_investigation` | Runs a custom investigation with user-provided params. Credential keys are stripped before forwarding to the pipeline. |
+| `manual_loop` | Runs a stored prompt as one headless agent turn and delivers the answer. This is what `/loops` creates. |
 | `github_pr_sweep` | Headless GitHub PR standup (mergeable / stale / conflicted). Requires GitHub configured; posts via the chosen provider. |
+| `posthog_metric_report` | Headless PostHog metric report over the configured window. Requires PostHog configured. |
+| `work_item_reminder` | Reminder for a single work item at its `--remind-at` time. Created by `opensre work add --remind-at …`. |
+| `work_item_checkin` | Recurring check-in on open work items. Created by `opensre work schedule-checkin …`. |
 
 Sentry morning digests use a separate CLI (`opensre sentry digest schedule …`),
 not `opensre cron add`. See [Sentry](/sentry#morning-digest-scheduled).
@@ -210,7 +228,7 @@ The lower-level `/cron` slash command forwards to the CLI:
 
 ```
 /cron list
-/cron add --kind daily_summary --cron "0 9 * * *" --provider telegram --chat-id <id>
+/cron add --kind manual_loop --cron "0 9 * * *" --provider telegram --chat-id <id>
 /cron run <task_id>
 ```
 

@@ -42,7 +42,7 @@ def _map_get_mysql_current_processes(
         " excluding sleeping connections."
     ),
     source="mysql",
-    surfaces=(ToolSurface.INVESTIGATION, ToolSurface.CHAT),
+    surfaces=(ToolSurface.CHAT,),
     use_cases=[
         "Identifying long-running queries blocking other operations",
         "Investigating lock contention or deadlock situations",

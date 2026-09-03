@@ -53,8 +53,6 @@ def test_capture_react_turn_completed_emits_required_properties(
         cli_turn_kind="agent",
         llm_provider="anthropic",
         llm_model="claude-sonnet-4-6",
-        investigation_id="inv-1",
-        investigation_loop_count=2,
         prompt_turn_id="turn-1",
     )
 
@@ -73,8 +71,6 @@ def test_capture_react_turn_completed_emits_required_properties(
                 "cli_turn_kind": "agent",
                 "llm_provider": "anthropic",
                 "llm_model": "claude-sonnet-4-6",
-                "investigation_id": "inv-1",
-                "investigation_loop_count": 2,
                 "prompt_turn_id": "turn-1",
             },
         )
@@ -117,8 +113,6 @@ def test_emit_react_turn_completed_sets_hit_iteration_cap_from_stop_reason(
             "cli_turn_kind": "agent",
             "llm_provider": "anthropic",
             "llm_model": "claude-sonnet-4-6",
-            "investigation_id": None,
-            "investigation_loop_count": None,
             "prompt_turn_id": None,
         }
     ]

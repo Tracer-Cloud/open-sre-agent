@@ -56,7 +56,7 @@ def _map_generate_work_status_report(
         "Summarizing GitHub work status for Slack without changing GitHub",
     ],
     anti_examples=["Creating or updating tasks", "Posting to Slack directly"],
-    surfaces=(ToolSurface.INVESTIGATION, ToolSurface.CHAT),
+    surfaces=(ToolSurface.CHAT,),
     side_effect_level=SideEffectLevel.READ_ONLY,
     input_schema={
         "type": "object",

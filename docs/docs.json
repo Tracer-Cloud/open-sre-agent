@@ -42,8 +42,6 @@
             "group": "First steps",
             "pages": [
               "quickstart",
-              "investigation-overview",
-              "how-investigations-work",
               "interactive-shell-commands",
               "interactive-shell-assistant",
               "goals"
@@ -109,7 +107,6 @@
             "group": "Community",
             "pages": [
               "faq",
-              "cloudopsbench",
               "bi-weekly-giveaway",
               "pr-review-flow"
             ]
@@ -130,8 +127,6 @@
                 "group": "Platform",
                 "expanded": false,
                 "pages": [
-                  "remote-runtime-investigation",
-                  "background-investigations",
                   "masking",
                   "interactive-shell-privacy",
                   "sessions",
@@ -153,9 +148,7 @@
                   "datadog",
                   "grafana",
                   "grafana_annotations",
-                  "grafana-log-sink",
                   "groundcover",
-                  "hermes",
                   "honeycomb",
                   "new_relic",
                   "openobserve",
@@ -267,7 +260,6 @@
                   "airflow",
                   "dagster",
                   "kafka",
-                  "openclaw",
                   "prefect",
                   "rabbitmq",
                   "temporal"

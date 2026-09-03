@@ -74,7 +74,7 @@ def _map_list_github_commits(
         "Correlating a deployment or incident window with code changes",
     ],
     requires=["owner", "repo"],
-    surfaces=(ToolSurface.INVESTIGATION, ToolSurface.CHAT),
+    surfaces=(ToolSurface.CHAT,),
     input_schema={
         "type": "object",
         "properties": {

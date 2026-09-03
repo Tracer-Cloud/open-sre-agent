@@ -16,7 +16,7 @@ from integrations.azure_sql import (
     name="get_azure_sql_resource_stats",
     description="Retrieve Azure SQL Database resource utilization history (CPU, IO, log throughput, memory) with throttling risk assessment.",
     source="azure_sql",
-    surfaces=(ToolSurface.INVESTIGATION, ToolSurface.CHAT),
+    surfaces=(ToolSurface.CHAT,),
     use_cases=[
         "Diagnosing DTU/vCore throttling on Azure SQL Database",
         "Identifying resource saturation causing query timeouts",

@@ -27,14 +27,12 @@ _INTERACTIVE_WIZARD_SLASH_PATHS: frozenset[str] = frozenset(
     }
 )
 
-# Slash commands where console capture is noisy or redundant. Substantive output for
-# investigations is stored on the companion ``alert`` history row instead.
+# Slash commands where console capture is noisy or redundant.
 _SUMMARY_ONLY_SLASH_ROOTS: frozenset[str] = frozenset(
     {
         "/",
         "/help",
         "/?",
-        "/investigate",
         # The user has already read the resume hint and the goodbye on screen,
         # and neither tells the model anything. Replaying the capture printed
         # the whole farewell a second time, with the spinner's frames
@@ -89,77 +87,6 @@ def format_wizard_cli_outcome(args: list[str], *, exit_code: int | None) -> str:
     if exit_code == 0:
         return f"{command}: interactive wizard completed successfully"
     return f"{command}: interactive wizard failed (exit {exit_code})"
-
-
-def _investigation_report_excerpt(final_state: dict[str, object]) -> str:
-    sections: list[str] = []
-    root = final_state.get("root_cause")
-    if isinstance(root, str) and root.strip():
-        sections.append(f"Root cause: {root.strip()}")
-    for key in ("problem_md", "slack_message"):
-        body = final_state.get(key)
-        if isinstance(body, str) and body.strip():
-            sections.append(body.strip())
-            break
-    return "\n\n".join(sections)
-
-
-def format_investigation_outcome(
-    target: str,
-    *,
-    final_state: dict[str, object] | None = None,
-    background: bool = False,
-    error_message: str = "",
-    status: str | None = None,
-) -> str:
-    """Human-readable investigation outcome body for analytics."""
-    label = target.strip() or "investigation"
-    if background:
-        return f"investigation started in background: {label}"
-    if status == "cancelled":
-        return f"investigation_cancelled ({label}): aborted by user"
-    if status == "failed" or (final_state is None and error_message):
-        reason = error_message.strip() or "investigation failed"
-        return truncate_analytics_text(f"investigation_failed ({label}):\n{reason}")
-    if final_state is None:
-        return f"investigation_failed ({label}): investigation did not complete"
-    excerpt = _investigation_report_excerpt(final_state)
-    if excerpt:
-        return truncate_analytics_text(f"investigation completed ({label}):\n{excerpt}")
-    return f"investigation completed: {label}"
-
-
-def format_investigation_terminal_outcome(
-    command_line: str,
-    *,
-    target: str,
-    ok: bool,
-    final_state: dict[str, object] | None = None,
-    background: bool = False,
-    error_message: str = "",
-    status: str | None = None,
-) -> str:
-    """Two-line terminal analytics payload for ``/investigate`` turns."""
-    if background:
-        return format_investigation_outcome(target, background=True)
-    resolved_status = status or ("succeeded" if ok and final_state is not None else "failed")
-    if resolved_status == "completed":
-        resolved_status = "succeeded"
-    slash_status = {
-        "succeeded": "succeeded",
-        "failed": "failed",
-        "cancelled": "cancelled",
-    }.get(resolved_status, "failed")
-    prefix = f"slash {command_line.strip()} ({slash_status})"
-    body = format_investigation_outcome(
-        target,
-        final_state=final_state,
-        error_message=error_message,
-        status="cancelled"
-        if resolved_status == "cancelled"
-        else ("failed" if resolved_status == "failed" else None),
-    )
-    return truncate_analytics_text(f"{prefix}\n{body}")
 
 
 def format_terminal_turn_outcome(

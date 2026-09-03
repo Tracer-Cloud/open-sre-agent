@@ -134,42 +134,23 @@ jenkins │ local env │ ✓ passed │ Jenkins connectivity successful at
         │           │          │ http://localhost:8090 (node: built-in)
 ```
 
-The exported variables also make Jenkins available to investigations; no separate setup step is required.
+The exported variables also make Jenkins available in chat; no separate setup step is required.
 
-Trigger a real investigation against the failing build — this exercises `list_jenkins_jobs`, `list_jenkins_running_builds`, `get_jenkins_pipeline_stages`, and `get_jenkins_build_log` in a single supported turn (not a raw internal import):
+Now ask the agent about the failing build:
 
 ```bash
-opensre investigate --input-json '{
-  "alert_name": "JenkinsBuildFailed",
-  "severity": "critical",
-  "commonAnnotations": {
-    "summary": "Jenkins job payment-service-deploy failed on latest build",
-    "job_name": "payment-service-deploy"
-  }
-}'
+opensre
 ```
 
-Real output from a run against this exact local build (edited for length):
+Ask: *Why did the latest build of the payment-service-deploy Jenkins job fail?*
 
-```
-Loading integrations: jenkins
-↳ Jenkins · list jenkins jobs
-↳ Jenkins · list jenkins running builds
-↳ Jenkins · get jenkins pipeline stages
-↳ Jenkins · get jenkins build log
+Against this exact local build the agent calls `list_jenkins_jobs`,
+`list_jenkins_running_builds`, `get_jenkins_pipeline_stages`, and
+`get_jenkins_build_log`, and finds the real cause: the job's only 'Execute shell'
+step is a placeholder that runs `echo deploying payment-service` followed by
+`exit 1`, so every build fails deterministically.
 
-root_cause: "The Jenkins freestyle job `payment-service-deploy` is
-misconfigured: its only 'Execute shell' build step is a placeholder
-that runs `echo deploying payment-service` followed by `exit 1`.
-The job has no actual deployment logic, so every build fails
-deterministically."
-
-validity_score: 0.95
-Cited Evidence: list jenkins jobs, list jenkins running builds,
-                get jenkins pipeline stages, get jenkins build log
-```
-
-`list_jenkins_builds` is the one registered tool not called here -- `list_jenkins_jobs` already returned this job's last-build number and status, so the agent went straight to `get_jenkins_pipeline_stages`/`get_jenkins_build_log` for that specific build instead of a redundant builds listing.
+`list_jenkins_builds` is the one registered tool not needed here -- `list_jenkins_jobs` already returned this job's last-build number and status, so the agent went straight to `get_jenkins_pipeline_stages`/`get_jenkins_build_log` for that specific build instead of a redundant builds listing.
 
 Teardown:
 
@@ -180,7 +161,7 @@ rm -f "$OPENSRE_INTEGRATIONS_STORE_PATH"
 unset JENKINS_URL JENKINS_USER JENKINS_API_TOKEN OPENSRE_INTEGRATIONS_STORE_PATH
 ```
 
-## Investigation tools
+## Tools
 
 | Tool | What it does |
 | --- | --- |
@@ -190,23 +171,15 @@ unset JENKINS_URL JENKINS_USER JENKINS_API_TOKEN OPENSRE_INTEGRATIONS_STORE_PATH
 | `list_jenkins_jobs` | All jobs with their last-build status |
 | `list_jenkins_running_builds` | Builds currently in progress across all jobs |
 
-### Example investigation
+### Example question
 
-Provide the affected job name so the agent can pull its recent builds and logs:
+Name the affected job so the agent can pull its recent builds and logs:
 
-```bash
-opensre investigate --input-json '{
-  "alert_name": "PaymentServiceErrors",
-  "pipeline_name": "payment-service",
-  "severity": "critical",
-  "commonAnnotations": {
-    "summary": "Error rate spiked shortly after a deploy",
-    "job_name": "payment-service-deploy"
-  }
-}'
+```text
+Error rate spiked shortly after a deploy — did the payment-service-deploy Jenkins job fail recently?
 ```
 
-The agent lists recent builds for the job, spots the failed one near the alert time, fetches its console log, and surfaces the failing step in the RCA.
+The agent lists recent builds for the job, spots the failed one near the time you mention, fetches its console log, and surfaces the failing step in its answer.
 
 ### API reference
 

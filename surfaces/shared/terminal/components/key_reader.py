@@ -1,7 +1,7 @@
 """Low-level terminal key reader for TTY-first interactive menus.
 
 Shared between :mod:`choice_menu` (REPL inline picker) and
-:mod:`feedback` (post-investigation rating prompt) so the raw-mode
+:mod:`feedback` (post-run rating prompt) so the raw-mode
 terminal I/O lives in one place.
 
 Return values from :func:`read_key_unix` / :func:`read_key_windows`:
@@ -42,12 +42,12 @@ def flush_pending_input() -> None:
 
 
 def restore_stdin_terminal() -> None:
-    """Return stdin to canonical echo mode after Live/raw investigation UI.
+    """Return stdin to canonical echo mode after Live/raw progress UI.
 
-    Investigation progress uses a background Tab watcher that puts stdin in
+    Progress rendering uses a background Tab watcher that puts stdin in
     non-canonical mode without echo. If nested watchers restore the wrong
     snapshot, the shell prompt appears to accept input but characters are not
-    echoed. Call this after investigation UI teardown and before line prompts.
+    echoed. Call this after progress UI teardown and before line prompts.
     """
     if os.name == "nt" or not sys.stdin.isatty():
         return

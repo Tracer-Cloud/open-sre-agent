@@ -181,8 +181,8 @@ def is_gather_discovery_call(tool_name: str, arguments: dict[str, Any]) -> bool:
         return False
     # Structured selection (``tool_name=…``). Discovery is the closed set; a
     # target outside it fetches evidence. Defaulting the other way made every
-    # non-PostHog fetch — Sentry ``issue_get``, X ``search_tweets``, OpenClaw
-    # ``conversations_get`` — spend the discovery budget, so a gather that had
+    # non-PostHog fetch — Sentry ``issue_get`` or X ``search_tweets`` — spend
+    # the discovery budget, so a gather that had
     # already answered the question could be rejected for overspending.
     target = bridge_tool_target(arguments)
     if target:

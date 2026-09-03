@@ -112,11 +112,11 @@ def test_confirmation_region_height_is_stable_across_selection_changes() -> None
 
 
 def test_streaming_prompt_height_matches_idle_with_live_tool_on_status_row() -> None:
-    """Prompt stack is status → Auto (Droid); no reserved empty action gap.
+    """Prompt stack is status → Auto; no reserved empty action gap.
 
     Idle omits the empty status placeholder (that was the big gap under the
-    banner). Thinking/Invoking add one status line — height may grow by one,
-    but never by a second reserved blank row.
+    banner). Thinking/Invoking add one status line, but never a second reserved
+    action row.
     """
     session = Session()
     idle = SpinnerState()

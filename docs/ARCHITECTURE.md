@@ -95,7 +95,7 @@ layers below it.
   `integrations/slack`.
 - **`gateway/`** — the standalone messaging gateway for inbound chat platforms
   (`gateway/transports/{telegram,slack,discord,buzz}`), plus the FastAPI
-  `gateway/web/` surface (health, alert intake, async investigations) and the
+  `gateway/web/` surface (health, alert intake) and the
   shared per-turn machinery in `gateway/core/{session,storage,middleware}`
   (`middleware/` holds the inbound-decision, identity, and approval steps every
   transport composes). A peer of `surfaces`, not a child.
@@ -128,10 +128,10 @@ responsibility:
   (`client.py`), the store/catalog that resolves credentials, and
   integration-local helpers. One folder per vendor (`integrations/datadog`,
   `integrations/grafana`, `integrations/github`, …) plus cross-cutting pieces
-  like `integrations/hermes` and `integrations/llm_cli`.
+  like `integrations/llm_cli`.
 - **`tools/`** — the **agent-callable** boundary: every `@tool(...)` function
   and `BaseTool` subclass, the tool registry, framework subsystems
-  (`tools/investigation`, `tools/interactive_shell`), `tools/system/` for
+  (`tools/interactive_shell`), `tools/system/` for
   tools with no vendor in their domain purpose (`fleet_monitoring`,
   `python_execution_tool`, `sre_guidance_tool`, `watch_dog`), and
   `tools/cross_vendor/` for tools whose logic spans 2+ vendor integrations
@@ -153,13 +153,13 @@ belongs in `integrations/`, agent-callable code in `tools/`.
 The shared runtime and cross-cutting services the capability layer is built on.
 
 - **`core/`** — the provider-agnostic agent runtime: the think → call tools →
-  observe loop (`core.agent.Agent`), agent/investigation state (`core/state`) and
+  observe loop (`core.agent.Agent`), agent state (`core/state`) and
   context-budget enforcement (`core/context_budget.py`), tool contracts, schema,
   registry ports, execution, and error reporting (`core/tool`), tool authoring
   helpers (`core/tool_framework`),
   shared LLM clients (`core/llm`), agent-harness
   session handling (`core/agent_harness`), and pure domain rules (`core/domain`).
-- **`infrastructure/`** — cross-cutting services with no investigation logic of their
+- **`infrastructure/`** — cross-cutting services with no agent logic of their
   own: guardrails, masking, sandbox, analytics, auth, notifications,
   observability, scheduler, deployment, and the shared **turn host**
   (`turn_host`) — the single `TurnRunner` the interactive shell and every
@@ -186,28 +186,26 @@ imported anywhere without dragging runtime along.
 Two worked examples showing how control descends the stack and results flow back
 up. Arrows only ever cross a boundary downward.
 
-### An investigation from the CLI
+### A chat turn from the interactive shell
 
 ```mermaid
 flowchart LR
-    A["surfaces/cli\n opensre investigate"] --> B["tools/investigation\n capability + lifecycle"]
-    B --> C["core\n Agent runtime, context budget, LLM"]
-    B --> D["integrations\n vendor clients + credentials"]
-    C --> E["infrastructure\n guardrails, masking, sandbox, observability"]
-    B --> F["config\n prompts + constants"]
+    A["surfaces/interactive_shell\n user question"] --> B["core/agent_harness\n session + turn orchestration"]
+    B --> C["core/agent\n ReAct loop, context budget, LLM"]
+    C --> D["tools\n registry + agent-callable tools"]
+    D --> E["integrations\n vendor clients + credentials"]
+    C --> F["infrastructure\n guardrails, masking, observability"]
 ```
 
-1. `surfaces/cli` parses the command and hands off to the investigation
-   capability in `tools/investigation` — the surface never runs pipeline logic
-   itself.
-2. `tools/investigation` drives the six-stage pipeline (see
-   [`investigation-pipeline-architecture.md`](investigation-pipeline-architecture.md)),
-   asking `core` to run the ReAct loop and select/execute tools.
-3. Evidence-gathering tools reach `integrations` for vendor clients and resolved
-   credentials; `core` and `infrastructure` supply the runtime, guardrails, and
-   masking around every call.
-4. The structured diagnosis flows back up to the surface, which owns how it is
-   presented or delivered.
+1. The shell (or a gateway transport) hands the message to the shared agent
+   harness in `core/agent_harness` — the surface never runs agent logic itself.
+2. The harness runs the ReAct agent (`core/agent`): think → call tools →
+   observe, under the context budget.
+3. Tools selected by the agent reach `integrations` for vendor clients and
+   resolved credentials; `infrastructure` supplies guardrails and masking
+   around every call.
+4. The answer flows back up to the surface, which owns how it is presented or
+   delivered.
 
 ### An inbound gateway message
 
@@ -227,6 +225,3 @@ are independent tier-1 peers.
 
 - [`AGENTS.md`](https://github.com/Tracer-Cloud/opensre/blob/main/AGENTS.md) —
   repo map and per-area "files to touch" guides.
-- [`investigation-pipeline-architecture.md`](investigation-pipeline-architecture.md)
-  — how a single investigation runs end-to-end within the `tools` + `core`
-  layers.

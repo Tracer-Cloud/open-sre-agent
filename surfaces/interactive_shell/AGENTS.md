@@ -130,10 +130,8 @@ owning area rather than adding more logic to the caller.
        `docs/interactive-shell-action-policy.md` ("Deterministic literal-`/slash`
        dispatch").
     2. Structured Want-me-to *accept* after a pending offer armed this session —
-       schedule yes expands to `/cron …`; investigation yes expands to
-       `/investigate alert:…`. Both are literal slash text and use path 1 only
-       (no separate static `investigation_start` bypass). Surfaces that disable
-       the investigation capability (gateway) must not arm the pending offer.
+       schedule yes expands to `/cron …`. That is literal slash text and uses
+       path 1 only.
 - **No planning-stage fail-closed safeguard (v0.1 decision).** The second-phase
   action agent never denies a turn. Because every terminal action is read-only,
   an unmatched/ambiguous/chatty clause is not a safety risk — the agent executes

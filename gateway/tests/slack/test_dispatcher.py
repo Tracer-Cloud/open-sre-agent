@@ -11,6 +11,7 @@ from unittest.mock import patch
 import pytest
 
 from config.constants.billing import ORGANIZATION_ID_ENV, USAGE_SECRET_ENV, WEBAPP_URL_ENV
+from config.constants.gateway import TURN_ERROR_MESSAGE
 from config.principal import Principal, StorageScope
 from gateway.core.billing import turn_metering
 from gateway.core.billing.credits_client import CreditsOutcome
@@ -19,6 +20,7 @@ from gateway.transports.slack.processing.dispatcher import SlackTurnDispatcher
 from gateway.transports.slack.processing.events import SlackInboundMessage
 from gateway.transports.slack.processing.principal import slack_scope
 from gateway.transports.slack.settings import SlackGatewaySettings
+from infrastructure.turn_host.status_messages import user_facing_error_message
 
 
 @pytest.fixture(autouse=True)
@@ -41,12 +43,11 @@ def _test_scope() -> StorageScope:
 
 @pytest.fixture(autouse=True)
 def _metering_unconfigured(monkeypatch: pytest.MonkeyPatch) -> None:
-    """Resolve an owning org, but leave metering unable to make real HTTP calls.
+    """Resolve an owning org, but deliberately disable remote metering.
 
-    ``consume_credits`` needs a URL and a token as well as an org, so setting
-    only the org keeps every outcome UNCONFIGURED while giving principal
-    resolution a silo organization to land on. Install lookup is stubbed so
-    tests do not touch the developer's gateway SQLite catalog.
+    With no webapp URL, setting only the org keeps every outcome ``DISABLED``
+    while giving principal resolution a silo organization to land on. Install
+    lookup is stubbed so tests do not touch the gateway SQLite catalog.
     """
     for name in (WEBAPP_URL_ENV, USAGE_SECRET_ENV):
         monkeypatch.delenv(name, raising=False)
@@ -258,13 +259,10 @@ def test_out_of_credits_blocks_turn_with_short_reply(monkeypatch: pytest.MonkeyP
     assert ("add", "white_check_mark") not in emoji_ops
 
 
-@pytest.mark.parametrize(
-    "outcome", [CreditsOutcome.ALLOWED, CreditsOutcome.UNCONFIGURED, CreditsOutcome.UNAVAILABLE]
-)
-def test_non_denied_credit_outcomes_run_the_turn(
+@pytest.mark.parametrize("outcome", [CreditsOutcome.ALLOWED, CreditsOutcome.DISABLED])
+def test_allowed_or_deliberately_disabled_metering_runs_the_turn(
     monkeypatch: pytest.MonkeyPatch, outcome: CreditsOutcome
 ) -> None:
-    """Fail-open: metering off or a webapp outage must never block a turn."""
     messaging = _FakeMessagingClient()
     resolver = _FakeSessionResolver()
     turns: list[str] = []
@@ -286,6 +284,29 @@ def test_non_denied_credit_outcomes_run_the_turn(
     ).dispatch(_inbound())
 
     assert len(turns) == 1
+
+
+@pytest.mark.parametrize("outcome", [CreditsOutcome.UNCONFIGURED, CreditsOutcome.UNAVAILABLE])
+def test_untrustworthy_credit_outcomes_fail_closed(
+    monkeypatch: pytest.MonkeyPatch, outcome: CreditsOutcome
+) -> None:
+    messaging = _FakeMessagingClient()
+    turns: list[str] = []
+    monkeypatch.setattr(
+        turn_metering,
+        "consume_credits",
+        lambda *_args, **_kw: outcome,
+    )
+
+    _dispatcher(
+        settings=_settings(["U1"]),
+        messaging=messaging,
+        resolver=_FakeSessionResolver(),
+        handler=metered_callback(lambda text, *_args: turns.append(text)),
+    ).dispatch(_inbound())
+
+    assert turns == []
+    assert messaging.updates[-1]["text"] == user_facing_error_message(TURN_ERROR_MESSAGE)
 
 
 def test_handler_exception_is_contained() -> None:

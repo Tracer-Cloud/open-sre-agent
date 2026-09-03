@@ -13,15 +13,9 @@ from surfaces.interactive_shell.runtime.context import (
     create_repl_runtime,
     prepare_repl_session,
 )
-from surfaces.interactive_shell.session.background_investigations import (
-    BackgroundInvestigationRecord,
-    BackgroundNotificationPreferences,
-)
 from surfaces.interactive_shell.session.session import Session
 
 __all__ = [
-    "BackgroundInvestigationRecord",
-    "BackgroundNotificationPreferences",
     "ReplRuntime",
     "Session",
     "SessionBootstrapSpec",

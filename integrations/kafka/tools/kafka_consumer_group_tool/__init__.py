@@ -41,7 +41,7 @@ def _map_get_kafka_consumer_group_lag(
     name="get_kafka_consumer_group_lag",
     description="Retrieve consumer group lag per partition from a Kafka cluster, showing committed offsets versus high watermarks.",
     source="kafka",
-    surfaces=(ToolSurface.INVESTIGATION, ToolSurface.CHAT),
+    surfaces=(ToolSurface.CHAT,),
     use_cases=[
         "Diagnosing consumer lag causing processing delays",
         "Identifying stuck or slow consumers during an incident",

@@ -182,7 +182,7 @@ def test_classify_x_mcp_credentials() -> None:
             },
         }
     ]
-    from tools.investigation.stages.gather_evidence.tools import availability_view
+    from core.tool import availability_view
 
     resolved = _classify_integrations(records)
     assert "x_mcp" in resolved

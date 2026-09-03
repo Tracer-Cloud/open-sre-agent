@@ -1,4 +1,4 @@
-"""SMTP delivery helper for background RCA email notifications."""
+"""SMTP delivery helper for email notifications."""
 
 from __future__ import annotations
 
@@ -9,49 +9,6 @@ from email.message import EmailMessage
 from typing import Any
 
 logger = logging.getLogger(__name__)
-
-
-def format_background_rca_email(
-    *,
-    task_id: str,
-    command: str,
-    root_cause: str,
-    top_analysis: tuple[str, ...],
-    next_steps: tuple[str, ...],
-    stats: dict[str, Any],
-) -> tuple[str, str]:
-    """Build a basic subject/body pair for RCA completion emails."""
-    subject = f"OpenSRE RCA complete: {task_id}"
-    lines = [
-        "OpenSRE background investigation completed.",
-        "",
-        f"Task ID: {task_id}",
-        f"Command: {command}",
-        "",
-        "Root cause",
-        root_cause or "Unavailable",
-        "",
-        "Top analysis",
-    ]
-    if top_analysis:
-        lines.extend(f"- {line}" for line in top_analysis)
-    else:
-        lines.append("- Unavailable")
-    lines.extend(["", "What to do next"])
-    if next_steps:
-        lines.extend(f"- {line}" for line in next_steps)
-    else:
-        lines.append("- Unavailable")
-    lines.extend(
-        [
-            "",
-            "Internal stats",
-            f"- tool calls: {int(stats.get('tool_call_count', 0) or 0)}",
-            f"- investigation loops: {int(stats.get('investigation_loop_count', 0) or 0)}",
-            f"- validity score: {float(stats.get('validity_score', 0.0) or 0.0):.2f}",
-        ]
-    )
-    return subject, "\n".join(lines)
 
 
 def _connect_client(config: dict[str, Any]) -> smtplib.SMTP:

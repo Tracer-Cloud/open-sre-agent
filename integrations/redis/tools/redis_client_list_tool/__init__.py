@@ -21,7 +21,7 @@ from integrations.redis import (
         "exhaustion and stuck or blocked clients."
     ),
     source="redis",
-    surfaces=(ToolSurface.INVESTIGATION, ToolSurface.CHAT),
+    surfaces=(ToolSurface.CHAT,),
     use_cases=[
         "Diagnose connection-pool exhaustion when connected_clients is high or rising.",
         "Find clients blocked on BLPOP/BRPOP/XREAD during a stall or deadlock.",

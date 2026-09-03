@@ -49,7 +49,7 @@ def test_allow_tool_is_allow() -> None:
 
 
 def test_allow_tool_carries_arbitrary_tool_type() -> None:
-    for tool_type in ("investigation", "sample_alert", "synthetic_test", "code_agent"):
+    for tool_type in ("cli_command", "sentry_issue_fix", "switch_llm_provider", "code_agent"):
         r = allow_tool(tool_type)
         assert r.verdict == "allow"
         assert r.tool_type == tool_type
@@ -68,9 +68,9 @@ def test_plan_foreground_tool_defaults_classification_to_tool_type() -> None:
 
 
 def test_plan_foreground_tool_accepts_explicit_classification() -> None:
-    plan = plan_foreground_tool("investigation", "investigation_launch")
-    assert plan.tool_type == "investigation"
-    assert plan.classification == "investigation_launch"
+    plan = plan_foreground_tool("cli_command", "cli_launch")
+    assert plan.tool_type == "cli_command"
+    assert plan.classification == "cli_launch"
     assert plan.execution_mode is ToolExecutionMode.FOREGROUND
     assert plan.policy.verdict == "allow"
 
@@ -145,8 +145,8 @@ def test_auto_med_asks_mutating_tools_and_allows_read_only() -> None:
     assert read_only.verdict == "allow"
 
 
-def test_auto_low_asks_slash_investigation_and_sample_alert() -> None:
-    for tool_type in ("slash", "investigation", "sample_alert", "synthetic_test"):
+def test_auto_low_asks_mutating_tool_types() -> None:
+    for tool_type in ("slash", "shell", "code_agent", "cli_command"):
         result = apply_auto_level(allow_tool(tool_type), AutoLevel.LOW)
         assert result.verdict == "ask", tool_type
 

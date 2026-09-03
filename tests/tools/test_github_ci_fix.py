@@ -138,7 +138,9 @@ def test_parse_pr_url_supports_github_pull_request_urls() -> None:
 
 
 def test_available_when_github_token_present(monkeypatch) -> None:
+    monkeypatch.delenv("GITHUB_MCP_AUTH_TOKEN", raising=False)
     monkeypatch.delenv("GITHUB_TOKEN", raising=False)
+    monkeypatch.delenv("GH_TOKEN", raising=False)
     assert _github_ci_fix_available({}) is False
 
     monkeypatch.setenv("GITHUB_TOKEN", "tok")
@@ -700,14 +702,12 @@ def test_tool_passes_shell_confirmation_function() -> None:
 def test_registry_discovers_ci_fix_on_action_surface() -> None:
     clear_tool_registry_cache()
     action = get_registered_tool_map("action")
-    investigation = get_registered_tool_map("investigation")
     chat = get_registered_tool_map("chat")
 
     tool = action["fix_github_pr_ci"]
     assert tool.surfaces == ("action",)
     assert tool.requires_approval is True
     assert tool.side_effect_level == "mutating"
-    assert "fix_github_pr_ci" not in investigation
     assert "fix_github_pr_ci" not in chat
 
 

@@ -1,6 +1,6 @@
 ---
 title: "AWS S3"
-description: "Inspect S3 objects, metadata, and pipeline markers during investigations"
+description: "Inspect S3 objects, metadata, and pipeline markers during incidents"
 ---
 
 ## Overview
@@ -61,7 +61,7 @@ The integration only needs two read-only S3 actions:
 
 Attach this to the same IAM role or user the S3 tools actually use — the ambient credential chain (env keys or instance/task role), not only a role that the verifier assumes. If you already use the AWS managed `ReadOnlyAccess` policy, both actions are covered.
 
-## Investigation tools
+## Tools
 
 | Tool | IAM action | What it returns |
 | --- | --- | --- |

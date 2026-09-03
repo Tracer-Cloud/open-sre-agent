@@ -57,7 +57,8 @@ def render_prompt_region(session: Session, state: ReplState, spinner: SpinnerSta
 
     The top line is the pending confirmation prompt when one is active,
     otherwise the spinner, completion preview, or idle hint, followed by the
-    autonomy status line showing the active ``/auto`` level.
+    autonomy status line showing the active ``/auto`` level. A rendered task
+    plan has one blank row beneath it before this status chrome.
 
     When confirmation or exclusive-stdin structured input owns the keyboard,
     the free-text typing box (rule + ``[N] ❯``) is omitted so it does not
@@ -91,8 +92,8 @@ def render_prompt_region(session: Session, state: ReplState, spinner: SpinnerSta
         plan_overlay = strip_cpr_sequences(
             task_plan_overlay_ansi(plan, expanded=state.plan_expanded)
         )
-    # One trailing blank after the plan, not two — keeps the stack dense.
-    plan_prefix = f"{plan_overlay}\n" if plan_overlay else ""
+    # Keep one empty row between the pinned plan and the live status chrome.
+    plan_prefix = f"{plan_overlay}\n\n" if plan_overlay else ""
 
     # A pending confirmation renders a stacked, arrow-navigable Yes/No choice
     # (box hidden). Density matches the streaming stack: status → Auto → composer.
@@ -103,9 +104,10 @@ def render_prompt_region(session: Session, state: ReplState, spinner: SpinnerSta
     if state.is_ctrl_c_exit_hint_visible():
         prefix = prompt_rendering.ctrl_c_exit_hint_ansi()
     else:
+        inline_spinner = spinner.inline_spinner_ansi()
         prefix = strip_cpr_sequences(
             prompt_rendering.resolve_prompt_prefix_ansi(
-                inline_spinner=spinner.inline_spinner_ansi(),
+                inline_spinner=inline_spinner,
                 idle_hint=prompt_rendering.resolve_idle_hint_ansi(session),
             )
         )

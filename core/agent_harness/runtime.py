@@ -5,8 +5,8 @@ The headless agent, the two HeadlessAgent builds it is built on (``DefaultHeadle
 the default tool provider a host configures with its tool factories, the
 per-turn binding, the turn plan the runtime hands to stages, the action-turn
 runner, and the ReAct engine itself
-(``AgentConfig``/``build_agent`` and the default LLM factories) that the
-investigation pipeline shares. Importing this loads ``core.agent``;
+(``AgentConfig``/``build_agent`` and the default LLM factories).
+Importing this loads ``core.agent``;
 hosts import it when a turn is dispatched, not at boot.
 """
 

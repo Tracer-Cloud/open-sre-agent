@@ -12,7 +12,7 @@ The image supports three values of `MODE`:
 
 | `MODE` | Runtime |
 | --- | --- |
-| `web` (default) | HTTP API — health checks, alert intake, and investigations |
+| `web` (default) | HTTP API — health checks and alert intake |
 | `gateway` | Messaging gateway (Slack / Telegram) and related services |
 | `scheduler` | Dedicated cron/loop scheduler service (no gateway or web) |
 
@@ -45,12 +45,12 @@ Provider keys and optional model overrides are listed in `.env.example` and
 [Environment variables](/configuration/environment-variables).
 
 For hosted deployments that need persistent storage, set `DATABASE_URI` and
-`REDIS_URI`. The async investigations API uses `DATABASE_URL` for its Postgres
-store; see [HTTP API](/api).
+`REDIS_URI`. See [HTTP API](/api) for the route reference.
 
 ## Local gateway
 
-Start a local HTTP server for investigations (and optional chat transports):
+Start a local HTTP server for health checks and alert intake (and optional chat
+transports):
 
 ```bash
 uv run opensre gateway start                 # background daemon
@@ -66,29 +66,27 @@ The web app listens on `0.0.0.0` using the `PORT` environment variable
 curl http://127.0.0.1:8000/ok
 ```
 
-Example investigation request:
+Example alert push:
 
 ```bash
-curl -X POST http://127.0.0.1:8000/investigate \
+curl -X POST http://127.0.0.1:8000/alerts \
   -H "Content-Type: application/json" \
   -d '{
-    "raw_alert": {
-      "alert_name": "etl-daily-orders-failure",
-      "pipeline_name": "etl_daily_orders",
-      "severity": "critical",
-      "message": "Orders pipeline failed with timeout."
-    }
+    "text": "Orders pipeline failed with timeout.",
+    "alert_name": "etl-daily-orders-failure",
+    "severity": "critical",
+    "source": "dagster"
   }'
 ```
 
-By default, `/investigate` and `/alerts` accept only loopback callers. To allow
-remote access, set `OPENSRE_ALERT_LISTENER_TOKEN` and send it as a bearer token:
+By default, `/alerts` accepts only loopback callers. To allow remote access, set
+`OPENSRE_ALERT_LISTENER_TOKEN` and send it as a bearer token:
 
 ```bash
-curl -X POST http://127.0.0.1:8000/investigate \
+curl -X POST http://127.0.0.1:8000/alerts \
   -H "Content-Type: application/json" \
   -H "Authorization: Bearer $OPENSRE_ALERT_LISTENER_TOKEN" \
-  -d '{"raw_alert":{"alert_name":"test"}}'
+  -d '{"text":"test"}'
 ```
 
 Complete route reference: [HTTP API](/api).
@@ -152,14 +150,6 @@ together.
 
 Read the `gateway_turn_memory` debug lines (`delta_mb`, `peak_mb`) from a real run
 to size this against the task's memory limit before raising it.
-
-Queued investigations (from `POST /investigate`) run in a separate background pool
-that defaults to one at a time. Raise it to process more concurrently, still
-bounded by the turn limit above:
-
-```bash
-OPENSRE_INVESTIGATION_WORKERS=2
-```
 
 ### Dedicated scheduler service
 

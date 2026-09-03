@@ -1,11 +1,11 @@
 ---
 title: "Twilio SMS"
-description: "Deliver investigation findings via Twilio SMS as a standalone, independently configurable channel."
+description: "Send OpenSRE notifications via Twilio SMS as a standalone, independently configurable channel."
 ---
 
 ## Overview
 
-OpenSRE's Twilio integration delivers investigation findings via **SMS** using the Twilio Messaging API. It is configured independently of the existing `whatsapp` integration, though both can share the same Twilio account credentials. Delivery-only — no gateway or pairing.
+OpenSRE's Twilio integration sends notifications via **SMS** using the Twilio Messaging API. It is configured independently of the existing `whatsapp` integration, though both can share the same Twilio account credentials. Delivery-only — no gateway or pairing.
 
 <Note>
 WhatsApp delivery is owned entirely by the separate `whatsapp` integration (`opensre integrations setup whatsapp`) — see the [WhatsApp](/messaging/whatsapp) page. The `twilio` integration documented here is SMS-only. For voice paging on critical incidents, route through PagerDuty or Opsgenie, which provide voice escalation with proper acknowledgement.
@@ -61,9 +61,9 @@ The `twilio` env-bootstrap activates when the account + token are set and an SMS
 2. Provision a phone number **or** Messaging Service for SMS.
 3. Copy Account SID and Auth Token.
 4. Set exactly one SMS sender: `TWILIO_SMS_FROM` **or** `TWILIO_SMS_MESSAGING_SERVICE_SID` (enforced by the verifier).
-5. Set `TWILIO_SMS_DEFAULT_TO` for automatic delivery after investigations (reporting adapter).
+5. Set `TWILIO_SMS_DEFAULT_TO` as the default recipient.
 
-## Investigation tools
+## Twilio tools
 
 | Tool | What it does |
 | --- | --- |
@@ -79,13 +79,7 @@ The `twilio` env-bootstrap activates when the account + token are set and an SMS
 }
 ```
 
-### Test with an investigation
-
-```bash
-opensre investigate --input tests/e2e/kubernetes/fixtures/datadog_k8s_alert.json
-```
-
-When the investigation finishes, the RCA summary is truncated to the SMS body limit (1600 chars) and posted via the Twilio Messaging API to the configured recipient.
+Message bodies are truncated to the SMS body limit (1600 chars) and posted via the Twilio Messaging API to the configured recipient.
 
 ## Verify
 

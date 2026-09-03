@@ -93,7 +93,7 @@ def format_azure_deployment_not_found_message(deployment: str) -> str:
 
 
 def azure_deployment_not_found_remediation_steps() -> list[str]:
-    """Return investigation remediation steps for Azure deployment 404s."""
+    """Return remediation steps for Azure deployment 404s."""
     return [
         (
             "Set AZURE_OPENAI_*_MODEL to your deployment name from the Azure portal, "

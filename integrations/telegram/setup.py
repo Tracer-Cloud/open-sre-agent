@@ -1,8 +1,8 @@
 """What Telegram needs before it is considered configured.
 
 Both credentials are required. A bot token alone verifies happily against
-``getMe``, but every delivery path — the watchdog, Hermes incident sinks, the
-send-message tool — resolves a chat id through
+``getMe``, but every delivery path — the watchdog and the send-message tool —
+resolves a chat id through
 :func:`integrations.telegram.credentials.load_credentials_from_env` and raises
 without one. Accepting a token-only setup produces an integration that looks
 healthy in ``opensre integrations list`` and fails at the first alert.

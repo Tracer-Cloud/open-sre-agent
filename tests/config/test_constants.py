@@ -91,7 +91,6 @@ def test_split_config_constants_are_re_exported() -> None:
         "CLERK_ISSUER_ENV": "CLERK_ISSUER",
         "CLERK_JWKS_URL_ENV": "CLERK_JWKS_URL",
         "DEPLOYMENT_ENV_ENV": "ENV",
-        "SLACK_CHANNEL": "tracer-rca-report-alerts",
         "TRACER_BASE_URL_DEV": "https://staging.tracer.cloud",
         "TRACER_BASE_URL_PROD": "https://app.tracer.cloud",
     }

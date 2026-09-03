@@ -15,7 +15,7 @@ from pydantic import Field, field_validator
 from config.strict_config import StrictConfigModel
 from core.domain.types.tools import ToolSurface
 
-_DEFAULT_SURFACES: tuple[ToolSurface, ...] = (ToolSurface.INVESTIGATION,)
+_DEFAULT_SURFACES: tuple[ToolSurface, ...] = (ToolSurface.CHAT,)
 _VALID_SURFACES = frozenset(ToolSurface)
 
 

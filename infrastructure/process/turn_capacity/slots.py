@@ -5,9 +5,9 @@ at once. Every caller then faces the same question — what to do when the cap i
 reached — and there are exactly two answers:
 
 * **Drop.** A request that can be told "try again": a chat message, an HTTP
-  investigation. It gets an immediate answer instead of an open connection.
+  turn. It gets an immediate answer instead of an open connection.
 * **Wait.** Work already claimed from a queue: a scheduled run, the HTTP
-  investigation worker. Dropping it would lose it, so it queues for a slot.
+  worker. Dropping it would lose it, so it queues for a slot.
 
 Both are stated here so a caller picks a policy rather than reimplementing one,
 and so ``acquire``/``release`` are never paired by hand — a missing ``finally``

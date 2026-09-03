@@ -121,20 +121,18 @@ def test_host_owned_achieved_claim_lacks_tool_evidence() -> None:
 
 
 @pytest.mark.parametrize(
-    ("checklist_len", "claimed", "has_evidence", "dispatched", "expected"),
+    ("checklist_len", "claimed", "has_evidence", "expected"),
     [
-        (2, True, True, False, True),
-        (2, True, True, True, False),
-        (2, True, False, False, False),
-        (2, False, True, False, False),
-        (3, True, True, False, False),
+        (2, True, True, True),
+        (2, True, False, False),
+        (2, False, True, False),
+        (3, True, True, False),
     ],
 )
 def test_short_checklist_has_achieved_claim_and_tool_evidence(
     checklist_len: int,
     claimed: bool,
     has_evidence: bool,
-    dispatched: bool,
     expected: bool,
 ) -> None:
     goal = _goal(checklist=tuple(f"step {i}" for i in range(checklist_len)))
@@ -143,27 +141,24 @@ def test_short_checklist_has_achieved_claim_and_tool_evidence(
             goal,
             claimed=claimed,
             has_evidence=has_evidence,
-            investigation_dispatched=dispatched,
         )
         is expected
     )
 
 
 @pytest.mark.parametrize(
-    ("checklist_len", "has_evidence", "dispatched", "text", "completed", "expected"),
+    ("checklist_len", "has_evidence", "text", "completed", "expected"),
     [
-        (2, True, False, "done", frozenset(), True),
-        (2, True, False, "done", frozenset({0}), False),
-        (2, True, True, "done", frozenset(), False),
-        (2, False, False, "done", frozenset(), False),
-        (2, True, False, "   ", frozenset(), False),
-        (3, True, False, "done", frozenset(), False),
+        (2, True, "done", frozenset(), True),
+        (2, True, "done", frozenset({0}), False),
+        (2, False, "done", frozenset(), False),
+        (2, True, "   ", frozenset(), False),
+        (3, True, "done", frozenset(), False),
     ],
 )
 def test_short_checklist_has_no_prior_progress_and_tool_answer(
     checklist_len: int,
     has_evidence: bool,
-    dispatched: bool,
     text: str,
     completed: frozenset[int],
     expected: bool,
@@ -176,7 +171,6 @@ def test_short_checklist_has_no_prior_progress_and_tool_answer(
         _short_checklist_has_no_prior_progress_and_tool_answer(
             goal,
             has_evidence=has_evidence,
-            investigation_dispatched=dispatched,
             text=text,
             completed_before=completed,
         )

@@ -134,7 +134,7 @@ def stream_to_console_state(
     defer_want_me_to_closer: bool = False,
 ) -> StreamRenderResult:
     """Like :func:`stream_to_console` but returns render/defer metadata."""
-    del label  # the inline ∴ marker replaced the ``∴ OpenSRE`` header
+    del label  # the inline Ω marker replaced the ``Ω OpenSRE`` header
     if not console.is_terminal:
         text = "".join(chunks)
         if suppress_if_starts_with is not None and text.lstrip().startswith(
@@ -230,7 +230,7 @@ def stream_to_console_state(
         )
         if not rendered_paragraphs:
             # One blank row between the user turn and its reply (Droid rhythm):
-            # the echo row and the ∴ reply must not sit flush against each other.
+            # the echo row and the Ω reply must not sit flush against each other.
             console.print()
         if rendered_paragraphs and source_break and not starts_with_self_spacing_block:
             # ``_flush_paragraphs`` consumes the source ``\n\n`` boundary.
@@ -238,7 +238,7 @@ def stream_to_console_state(
             # for the next standalone block. This matters most after lists,
             # whose renderer adds no trailing blank line.
             console.print()
-        # The first paragraph carries the ``∴`` marker in the gutter; every
+        # The first paragraph carries the ``Ω`` marker in the gutter; every
         # paragraph hangs in the same indented body column.
         with console.use_theme(ui_theme.MARKDOWN_THEME):
             console.print(reply_gutter(markdown, lead=rendered_paragraphs == 0))
@@ -423,7 +423,7 @@ def stream_to_console_state(
 
 def publish_full_response(console: Console, text: str, *, label: str = "assistant") -> None:
     """Render a complete assistant answer (non-TTY deferred gather path)."""
-    del label  # the inline ∴ marker replaced the ``∴ OpenSRE`` header
+    del label  # the inline Ω marker replaced the ``Ω OpenSRE`` header
     body = (text or "").strip()
     if not body:
         return

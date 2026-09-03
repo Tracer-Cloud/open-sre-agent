@@ -139,10 +139,13 @@ def render_markdown_block(console: Console, text: str) -> None:
         console.print(_build_markdown_block(visible))
 
 
+_REPLY_MARKER = "Ω"
+
+
 def render_note_block(console: Console, text: str) -> None:
     """Render intermediate agent narration as a dim, indented note.
 
-    Distinct from the bright ``∴`` reply and the recessed grey ``[n] ❯`` user
+    Distinct from the bright ``Ω`` reply and the recessed grey ``[n] ❯`` user
     row: a note carries no glyph, only a dim left indent, so the three turn
     roles — your ask, opensre's working notes, and its final reply — read apart.
     Bold spans (the action words) stay bold within the dim base.
@@ -158,27 +161,27 @@ def render_note_block(console: Console, text: str) -> None:
 
 
 def _reply_marker_style() -> str:
-    """Warm Factory/Droid-parity accent for the ``∴`` reply marker."""
-    return ui_theme.reply_marker_style()
+    """Unbolded warm accent for the ``Ω`` reply marker."""
+    return ui_theme.reply_marker_hex()
 
 
 def reply_gutter(body: RenderableType, *, lead: bool) -> Table:
     """Lay a reply renderable in a two-column gutter.
 
-    The first paragraph carries the ``∴`` marker in the gutter; every other row
+    The first paragraph carries the ``Ω`` marker in the gutter; every other row
     (wrapped lines and following paragraphs) sits in the same indented body
     column, so the whole reply reads as one block hanging under the marker.
     """
     grid = Table.grid(padding=0)
-    grid.add_column(width=2, no_wrap=True)
+    grid.add_column(width=3, no_wrap=True)
     grid.add_column(overflow="fold")
-    marker = Text("∴ ", style=_reply_marker_style()) if lead else Text("  ")
+    marker = Text(f"{_REPLY_MARKER}  ", style=_reply_marker_style()) if lead else Text("   ")
     grid.add_row(marker, body)
     return grid
 
 
 def render_reply_block(console: Console, text: str, *, lead: bool = True) -> None:
-    """Render a whole assistant reply inside the ``∴`` hanging-indent gutter."""
+    """Render a whole assistant reply inside the ``Ω`` hanging-indent gutter."""
     visible = strip_session_goal_progress_tags(text)
     if not visible.strip():
         return
@@ -192,9 +195,9 @@ def render_reply_block(console: Console, text: str, *, lead: bool = True) -> Non
 
 
 def render_response_header(console: Console, label: str) -> None:
-    """Print the ``∴`` triangle row marker that opens every assistant response.
+    """Print the ``Ω`` row marker that opens every assistant response.
 
-    A single triangle is opensre's uniquely identifiable agent marker. Shared
+    A single omega is opensre's uniquely identifiable agent marker. Shared
     with ``action_turn.run_action_tool_turn`` so the planned-actions path and the
     streaming response path use the exact same prefix.
 
@@ -203,4 +206,4 @@ def render_response_header(console: Console, label: str) -> None:
     marker read as school-project chrome next to Droid's silent replies.
     """
     del label
-    console.print(f"[{_reply_marker_style()}]∴[/]")
+    console.print(f"[{_reply_marker_style()}]{_REPLY_MARKER}[/]")

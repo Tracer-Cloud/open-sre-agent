@@ -48,7 +48,7 @@ def record_evidence_entry(
 
 
 def unique_evidence_source(evidence: dict[str, Any], base: str) -> str:
-    """Disambiguate repeat calls to a tool that can run many times per investigation.
+    """Disambiguate repeat calls to a tool that can run many times per run.
 
     ``record_evidence_entry`` lets the first entry for a given ``source``
     win, which silently drops every later call's evidence for a tool the

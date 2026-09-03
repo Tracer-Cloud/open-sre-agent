@@ -49,7 +49,13 @@ def test_welcome_title_renders_in_the_accent_colour() -> None:
     from infrastructure.terminal.theme import HIGHLIGHT
 
     buf = io.StringIO()
-    console = Console(file=buf, force_terminal=True, color_system="truecolor", highlight=False)
+    console = Console(
+        file=buf,
+        force_terminal=True,
+        color_system="truecolor",
+        highlight=False,
+        no_color=False,
+    )
     console.print(sign_in.build_welcome_box())
     raw = buf.getvalue()
     hex_color = str(HIGHLIGHT).lstrip("#")

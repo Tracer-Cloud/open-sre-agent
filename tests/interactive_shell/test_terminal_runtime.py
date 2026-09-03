@@ -41,9 +41,6 @@ from surfaces.interactive_shell.command_registry import SLASH_COMMANDS, dispatch
 from surfaces.interactive_shell.runtime.core import confirmation as controller_runtime
 from surfaces.interactive_shell.runtime.core import state as loop_state
 from surfaces.interactive_shell.runtime.core import turn_detection as loop_turn_detection
-from surfaces.interactive_shell.runtime.investigation_adapter import (
-    repl_investigation_launch_ports,
-)
 from surfaces.interactive_shell.runtime.startup import initial_input as startup_initial_input
 from surfaces.interactive_shell.session import Session
 from surfaces.interactive_shell.ui import input_prompt
@@ -180,6 +177,7 @@ def test_build_prompt_session_installs_growing_bordered_composer() -> None:
     from prompt_toolkit.layout.containers import (
         FloatContainer,
         HSplit,
+        VSplit,
         Window,
     )
 
@@ -198,7 +196,8 @@ def test_build_prompt_session_installs_growing_bordered_composer() -> None:
     assert isinstance(composer, HSplit)
     assert composer.height is None
     editable_row = composer.children[1]
-    surface_body = editable_row.children[1].get_container()
+    assert isinstance(editable_row, VSplit)
+    surface_body = editable_row.children[1]
     assert isinstance(surface_body, HSplit)
     editable_body = surface_body.children[0]
     default_buffer_slot = editable_body.children[0]
@@ -536,87 +535,6 @@ def test_lazy_rich_style_parses_as_real_rich_style() -> None:
     set_active_theme("blue")
     assert Style.parse(str(ui_theme.DIM)) != Style.null()
     assert Style.parse(str(ui_theme.BOLD_BRAND)) != Style.null()
-
-
-def test_shell_completer_path_completion_honors_mixed_case_prefix(tmp_path: Path) -> None:
-    """Regression: path fragments must not be lowercased before PathCompleter.
-
-    On case-sensitive filesystems, a lowered prefix can stop matching real directory
-    names (e.g. ``RePoRtS`` no longer matches prefix ``re``).
-    """
-    mixed_dir = tmp_path / "RePoRtS"
-    mixed_dir.mkdir()
-    (mixed_dir / "x.txt").write_text("x", encoding="utf-8")
-    partial = str(tmp_path / "Re")
-    line = f"/investigate {partial}"
-    completions = list(
-        ShellCompleter().get_completions(
-            Document(line, len(line)),
-            CompleteEvent(text_inserted=True),
-        )
-    )
-    assert completions
-    joined = " ".join(str(c.display) for c in completions)
-    assert "RePoRtS" in joined
-
-
-def test_shell_completer_investigate_includes_template_hints() -> None:
-    completions = list(
-        ShellCompleter().get_completions(
-            Document("/investigate ", len("/investigate ")),
-            CompleteEvent(text_inserted=True),
-        )
-    )
-    assert any(c.text == "generic" for c in completions)
-    assert any(c.text == "splunk" for c in completions)
-
-
-def test_run_text_investigation_uses_background_launcher_when_mode_enabled() -> None:
-    from rich.console import Console
-
-    from tools.interactive_shell.actions.investigation import (
-        run_text_investigation,
-    )
-
-    launches: list[tuple[str, str]] = []
-
-    def _fake_start_background_text_investigation(
-        *,
-        alert_text: str,
-        session: Session,
-        console: Console,
-        display_command: str,
-    ) -> str:
-        _ = (session, console)
-        launches.append((alert_text, display_command))
-        return "bg123"
-
-    def _unexpected_sample_launcher(
-        *,
-        template_name: str,
-        session: Session,
-        console: Console,
-        display_command: str,
-    ) -> str:
-        _ = (template_name, session, console, display_command)
-        raise AssertionError("sample launcher should not run")
-
-    session = Session()
-    session.terminal.background_mode_enabled = True
-    console = Console(file=io.StringIO(), force_terminal=False, highlight=False)
-
-    run_text_investigation(
-        "High CPU alert",
-        session,
-        console,
-        ports=repl_investigation_launch_ports(
-            start_background_text=_fake_start_background_text_investigation,
-            start_background_sample=_unexpected_sample_launcher,
-        ),
-    )
-
-    assert launches == [("High CPU alert", "background free-text investigation")]
-    assert session.task_registry.list_recent(10) == []
 
 
 def test_run_initial_input_dispatches_as_non_tty(monkeypatch: pytest.MonkeyPatch) -> None:

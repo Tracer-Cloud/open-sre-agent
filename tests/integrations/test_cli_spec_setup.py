@@ -38,7 +38,6 @@ import integrations.google_docs as google_docs_setup
 import integrations.grafana.setup as grafana_setup
 import integrations.groundcover.setup as groundcover_setup
 import integrations.helm.setup as helm_setup
-import integrations.hermes.setup as hermes_setup
 import integrations.honeycomb.setup as honeycomb_setup
 import integrations.incident_io.setup as incident_io_setup
 import integrations.jenkins.setup as jenkins_setup
@@ -47,7 +46,6 @@ import integrations.mongodb.setup as mongodb_setup
 import integrations.mongodb_atlas.setup as mongodb_atlas_setup
 import integrations.mysql.setup as mysql_setup
 import integrations.new_relic.setup as new_relic_setup
-import integrations.openclaw.setup as openclaw_setup
 import integrations.opensearch.setup as opensearch_setup
 import integrations.pagerduty.setup as pagerduty_setup
 import integrations.postgresql.setup as postgresql_setup
@@ -142,7 +140,6 @@ _ANSWERS: dict[str, dict[str, str]] = {
         "kubeconfig": "/home/ci/.kube/config",
         "default_namespace": "checkout",
     },
-    "hermes": {"log_path": "/var/log/hermes/errors.log"},
     "smtp": {
         "host": "smtp.eu.example.com",
         "from_address": "reports@example.com",
@@ -185,7 +182,6 @@ _ANSWERS: dict[str, dict[str, str]] = {
         "password": "bs-password",
         "sources": "t1_checkout,t2_api",
     },
-    "openclaw": {"command": "openclaw", "args": "mcp serve"},
     "servicenow": {
         "instance_url": "https://dev12345.service-now.com",
         "username": "opensre",
@@ -299,7 +295,6 @@ _CASES = [
     pytest.param(dagster_setup, "DAGSTER_SETUP", cli._setup_dagster, id="dagster"),
     pytest.param(temporal_setup, "TEMPORAL_SETUP", cli._setup_temporal, id="temporal"),
     pytest.param(helm_setup, "HELM_SETUP", cli._setup_helm, id="helm"),
-    pytest.param(hermes_setup, "HERMES_SETUP", cli._setup_hermes, id="hermes"),
     pytest.param(smtp_setup, "SMTP_SETUP", cli._setup_smtp, id="smtp"),
     pytest.param(whatsapp_setup, "WHATSAPP_SETUP", cli._setup_whatsapp, id="whatsapp"),
     pytest.param(tempo_setup, "TEMPO_SETUP", cli._setup_tempo, id="tempo"),
@@ -307,7 +302,6 @@ _CASES = [
     pytest.param(sentry_mcp_setup, "SENTRY_MCP_SETUP", cli._setup_sentry_mcp, id="sentry_mcp"),
     pytest.param(x_mcp_setup, "X_MCP_SETUP", cli._setup_x_mcp, id="x_mcp"),
     pytest.param(betterstack_setup, "BETTERSTACK_SETUP", cli._setup_betterstack, id="betterstack"),
-    pytest.param(openclaw_setup, "OPENCLAW_SETUP", cli._setup_openclaw, id="openclaw"),
     pytest.param(servicenow_setup, "SERVICENOW_SETUP", cli._setup_servicenow, id="servicenow"),
     pytest.param(postgresql_setup, "POSTGRESQL_SETUP", cli._setup_postgresql, id="postgresql"),
     pytest.param(mysql_setup, "MYSQL_SETUP", cli._setup_mysql, id="mysql"),

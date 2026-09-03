@@ -1,4 +1,4 @@
-"""Canonical tool registry shared by investigation and chat surfaces.
+"""Canonical tool registry shared by chat and action surfaces.
 
 Facade over tool discovery (:mod:`tools.registry_discovery`), the static
 descriptor index (:mod:`tools.registry_index`), and skill-guidance attachment

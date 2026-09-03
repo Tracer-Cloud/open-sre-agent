@@ -2,7 +2,7 @@
 
 An action tool asks its host whether an action may run before running it. The
 four host capabilities — named commands, LLM-provider switching, task
-cancellation and investigation launch — all need that one step, and each had
+cancellation — all need that one step, and each had
 declared the same seven-parameter signature itself. It is declared here once,
 beside the :class:`ExecutionPolicyResult` it takes.
 

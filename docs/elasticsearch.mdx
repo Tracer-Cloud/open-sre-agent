@@ -1,11 +1,11 @@
 ---
 title: "AWS Elasticsearch (AWS ES)"
-description: "Connect Amazon OpenSearch Service (AWS ES) so OpenSRE can search application logs during investigations"
+description: "Connect Amazon OpenSearch Service (AWS ES) so OpenSRE can search application logs"
 ---
 
 ## Overview
 
-OpenSRE queries Amazon OpenSearch Service (formerly Amazon Elasticsearch Service, AWS ES) over its REST API to pull error logs and application events into an investigation. This page covers AWS ES specifically; for self-hosted OpenSearch or Elastic Cloud, see the [OpenSearch / Elasticsearch integration](/opensearch).
+OpenSRE queries Amazon OpenSearch Service (formerly Amazon Elasticsearch Service, AWS ES) over its REST API to pull error logs and application events into its answers. This page covers AWS ES specifically; for self-hosted OpenSearch or Elastic Cloud, see the [OpenSearch / Elasticsearch integration](/opensearch).
 
 AWS ES runs the same integration as self-hosted OpenSearch: there's no separate "AWS ES" config, just an `OPENSEARCH_URL` pointed at your domain endpoint. Verify and setup use the **`opensearch`** service name.
 
@@ -43,7 +43,7 @@ OPENSEARCH_PASSWORD=opensre-reader-password
 
 Create an internal user in fine-grained access control and map it to a read-only role (for example `readall`). Do **not** use the master user for OpenSRE.
 
-## Investigation tools
+## Tools
 
 | Tool | What it returns |
 | --- | --- |

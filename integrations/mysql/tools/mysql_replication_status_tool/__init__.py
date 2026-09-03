@@ -65,7 +65,7 @@ def _map_get_mysql_replication_status(
     name="get_mysql_replication_status",
     description="Retrieve MySQL replication status including IO/SQL thread health and replica lag.",
     source="mysql",
-    surfaces=(ToolSurface.INVESTIGATION, ToolSurface.CHAT),
+    surfaces=(ToolSurface.CHAT,),
     use_cases=[
         "Checking replica lag during high-write incidents",
         "Verifying replication IO and SQL threads are running",

@@ -66,3 +66,15 @@ def test_optional_choice_protections_follow_turn_interaction_facts() -> None:
     assert "Always leave the user a selectable next step" not in text
     assert "TURN INTERACTION says the ask_user_choice menu is available" in collapsed
     assert "headless, scheduled, or gateway" not in collapsed
+
+
+def test_proactive_messages_are_new_actionable_and_time_sensitive() -> None:
+    collapsed = " ".join(_SYSTEM_PROMPT_BASE.split())
+    assert "standing policy for unsolicited messages" in collapsed
+    assert "verified information not previously shared" in collapsed
+    assert "names a clear owner and next action" in collapsed
+    assert "timing that can materially affect the outcome" in collapsed
+    assert "Use a direct message for a blocker owned by a specific person or team" in collapsed
+    assert "Broadcast only decisions, anomalies, or milestones" in collapsed
+    assert "when the underlying state has not changed" in collapsed
+    assert "Do not ask whether to adopt this policy" in collapsed

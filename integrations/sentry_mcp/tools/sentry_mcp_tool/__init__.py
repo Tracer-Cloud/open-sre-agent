@@ -1,8 +1,8 @@
 """Sentry MCP-backed tools.
 
 Exposes the hosted Sentry MCP server (issues, events, traces, replays,
-releases, monitors, Seer root-cause analysis, and more) to the investigation
-and chat surfaces. The tool surface is intentionally generic — a discovery tool
+releases, monitors, Seer root-cause analysis, and more) to the chat
+surface. The tool surface is intentionally generic — a discovery tool
 plus a named-call tool — so it keeps working when Sentry adds or renames
 individual MCP-side tools.
 """
@@ -125,7 +125,7 @@ def _normalize_tool_result(result: SentryMCPToolCallResult) -> SentryMCPResponse
         "Finding the right tool for a task by passing a name_filter (e.g. 'issue event trace')",
         "Fetching the input schema of a specific tool with include_schema before calling it",
     ],
-    surfaces=(ToolSurface.INVESTIGATION, ToolSurface.CHAT),
+    surfaces=(ToolSurface.CHAT,),
     input_schema={
         "type": "object",
         "properties": {
@@ -230,7 +230,7 @@ def list_sentry_tools(
         "Running Seer root-cause analysis on an issue to pinpoint the fix",
     ],
     requires=["tool_name"],
-    surfaces=(ToolSurface.INVESTIGATION, ToolSurface.CHAT),
+    surfaces=(ToolSurface.CHAT,),
     input_schema={
         "type": "object",
         "properties": {

@@ -57,7 +57,7 @@ def record_task_plan_work(session: Any, line: str, *, step_index: int | None = N
     """Append a work line under a plan step.
 
     Defaults to the current ``in_progress`` step. Pass ``step_index`` to attribute
-    work to a specific checklist row (investigation pipeline phase mapping).
+    work to a specific checklist row.
     No-op when there is no plan, no target step, or the line is empty.
     Caps lines per step so a chatty turn stays readable.
     """

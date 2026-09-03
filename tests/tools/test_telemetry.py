@@ -475,107 +475,6 @@ def _eks_pod_logs_case() -> ToolFailureCase:
     return ToolFailureCase("eks_pod_logs", patch, invoke, "get_eks_pod_logs", "eks")
 
 
-def _patch_openclaw_runtime(mp: pytest.MonkeyPatch) -> None:
-    """Shared patches for all OpenClaw cases — bypass the config/runtime guards.
-
-    Each test still patches the specific failure point afterwards.
-    """
-    from integrations.openclaw.tools import openclaw_mcp_tool as mod
-
-    mp.setattr(
-        mod,
-        "_resolve_config",
-        MagicMock(return_value=SimpleNamespace(mode="stdio", command="x", url="")),
-    )
-    mp.setattr(mod, "openclaw_runtime_unavailable_reason", MagicMock(return_value=None))
-    mp.setattr(mod, "describe_openclaw_error", MagicMock(return_value="mocked error"))
-
-
-def _openclaw_list_case() -> ToolFailureCase:
-    def patch(mp: pytest.MonkeyPatch) -> None:
-        from integrations.openclaw.tools import openclaw_mcp_tool as mod
-
-        _patch_openclaw_runtime(mp)
-        mp.setattr(mod, "list_openclaw_mcp_tools", MagicMock(side_effect=RuntimeError("mcp")))
-
-    def invoke() -> dict[str, Any]:
-        from integrations.openclaw.tools.openclaw_mcp_tool import list_openclaw_bridge_tools
-
-        return list_openclaw_bridge_tools()
-
-    return ToolFailureCase("openclaw_list_tools", patch, invoke, "list_openclaw_tools", "openclaw")
-
-
-def _openclaw_search_case() -> ToolFailureCase:
-    def patch(mp: pytest.MonkeyPatch) -> None:
-        from integrations.openclaw.tools import openclaw_mcp_tool as mod
-
-        _patch_openclaw_runtime(mp)
-        mp.setattr(mod, "invoke_openclaw_mcp_tool", MagicMock(side_effect=RuntimeError("mcp")))
-
-    def invoke() -> dict[str, Any]:
-        from integrations.openclaw.tools.openclaw_mcp_tool import search_openclaw_conversations
-
-        return search_openclaw_conversations(search="db error")
-
-    return ToolFailureCase(
-        "openclaw_search_conversations",
-        patch,
-        invoke,
-        "search_openclaw_conversations",
-        "openclaw",
-    )
-
-
-def _openclaw_get_conversation_case() -> ToolFailureCase:
-    """Exercises ``_normalize_named_bridge_call`` via ``get_openclaw_conversation``.
-
-    Verifies the helper's ``surface_tool_name`` plumbing — the Sentry
-    ``tool_name`` tag must be ``get_openclaw_conversation`` (the registered
-    surface name), not ``conversations_get`` (the MCP-side tool id).
-    """
-
-    def patch(mp: pytest.MonkeyPatch) -> None:
-        from integrations.openclaw.tools import openclaw_mcp_tool as mod
-
-        _patch_openclaw_runtime(mp)
-        mp.setattr(mod, "invoke_openclaw_mcp_tool", MagicMock(side_effect=RuntimeError("mcp")))
-
-    def invoke() -> dict[str, Any]:
-        from integrations.openclaw.tools.openclaw_mcp_tool import get_openclaw_conversation
-
-        return get_openclaw_conversation(conversation_id="conv-1")
-
-    return ToolFailureCase(
-        "openclaw_get_conversation",
-        patch,
-        invoke,
-        "get_openclaw_conversation",
-        "openclaw",
-    )
-
-
-def _openclaw_call_tool_case() -> ToolFailureCase:
-    def patch(mp: pytest.MonkeyPatch) -> None:
-        from integrations.openclaw.tools import openclaw_mcp_tool as mod
-
-        _patch_openclaw_runtime(mp)
-        mp.setattr(mod, "invoke_openclaw_mcp_tool", MagicMock(side_effect=RuntimeError("mcp")))
-
-    def invoke() -> dict[str, Any]:
-        from integrations.openclaw.tools.openclaw_mcp_tool import call_openclaw_bridge_tool
-
-        return call_openclaw_bridge_tool(tool_name="permissions_grant", arguments={})
-
-    return ToolFailureCase(
-        "openclaw_call_tool",
-        patch,
-        invoke,
-        "call_openclaw_tool",
-        "openclaw",
-    )
-
-
 def _patch_posthog_mcp_runtime(mp: pytest.MonkeyPatch) -> None:
     """Shared patches for PostHog MCP cases — bypass the config/runtime guards."""
     from integrations.posthog_mcp.tools import posthog_mcp_tool as mod
@@ -796,10 +695,6 @@ _TOOL_FAILURE_CASES: list[ToolFailureCase] = [
     _eks_list_deployments_case(),
     _eks_list_pods_case(),
     _eks_pod_logs_case(),
-    _openclaw_list_case(),
-    _openclaw_search_case(),
-    _openclaw_get_conversation_case(),
-    _openclaw_call_tool_case(),
     _posthog_mcp_list_case(),
     _posthog_mcp_call_tool_case(),
     _sentry_mcp_list_case(),
@@ -991,14 +886,6 @@ _MIGRATED_TOOL_NAMES: frozenset[str] = frozenset(
         "get_eks_node_health",
         "list_eks_namespaces",
         "list_eks_deployments",
-        # OpenClaw — all four swallow sites in OpenClawMCPTool/__init__.py.
-        # ``send_openclaw_message`` and ``get_openclaw_conversation`` share
-        # ``_normalize_named_bridge_call`` via the ``surface_tool_name`` arg.
-        "list_openclaw_tools",
-        "search_openclaw_conversations",
-        "get_openclaw_conversation",
-        "send_openclaw_message",
-        "call_openclaw_tool",
         # PostHog MCP — both swallow sites in PostHogMCPTool/__init__.py.
         "list_posthog_tools",
         "call_posthog_tool",
@@ -1023,7 +910,6 @@ _TOOLS_WITHOUT_DELIBERATE_CATCH: frozenset[str] = frozenset(
         # there as an external registry package and are only loaded when the
         # bench is actively imported, so they don't appear in the production
         # registry that this test enumerates.
-        "alert_sample",
         "alertmanager_alerts",
         "alertmanager_silences",
         # architecture_* catch only WorkspaceError / ReportPersistenceError for
@@ -1083,25 +969,6 @@ _TOOLS_WITHOUT_DELIBERATE_CATCH: frozenset[str] = frozenset(
         "get_github_repository_tree",
         "get_gitlab_file",
         "get_groundcover_query_reference",
-        "get_hermes_adapter_catalog",
-        "get_hermes_approval_events",
-        "get_hermes_audit_trail",
-        "get_hermes_config",
-        "get_hermes_credential_state",
-        "get_hermes_cron_state",
-        "get_hermes_filesystem_state",
-        "get_hermes_kv_cache_state",
-        "get_hermes_logs",
-        "get_hermes_memory_state",
-        "get_hermes_message_history",
-        "get_hermes_orchestration_state",
-        "get_hermes_provider_traffic",
-        "get_hermes_rbac_state",
-        "get_hermes_routing_decisions",
-        "get_hermes_runtime_state",
-        "get_hermes_session_log",
-        "get_hermes_session_topology",
-        "get_hermes_workflow_run",
         "get_host_metrics",
         "get_jenkins_build_log",
         "get_jenkins_pipeline_stages",
@@ -1170,7 +1037,6 @@ _TOOLS_WITHOUT_DELIBERATE_CATCH: frozenset[str] = frozenset(
         "inspect_lambda_function",
         "inspect_s3_object",
         "inspect_railway_deployment",
-        "investigation_start",
         "jira_add_comment",
         "jira_create_issue",
         "jira_issue_detail",
@@ -1249,7 +1115,6 @@ _TOOLS_WITHOUT_DELIBERATE_CATCH: frozenset[str] = frozenset(
         "query_yc_metrics",
         "redeploy_railway_service",
         "replay_slack_thread_locally",
-        "run_investigation",
         "scan_redis_keys",
         "search_bitbucket_code",
         "search_github_code",
@@ -1270,7 +1135,6 @@ _TOOLS_WITHOUT_DELIBERATE_CATCH: frozenset[str] = frozenset(
         "slash_invoke",
         "summarize_community_followups",
         "summarize_github_pr_status",
-        "synthetic_run",
         "task_cancel",
         # update_plan returns structured invalid-plan dicts; unexpected
         # exceptions escape to the global wrapper.
@@ -1362,16 +1226,9 @@ def test_every_registered_tool_is_migrated_or_allowlisted() -> None:
 
 
 def test_every_migrated_tool_has_a_parameterised_failure_case() -> None:
-    """Each migrated tool must have a regression test in ``_TOOL_FAILURE_CASES``.
-
-    ``send_openclaw_message`` is the documented exception: it shares
-    ``_normalize_named_bridge_call`` with ``get_openclaw_conversation``,
-    and the latter's case already exercises that helper's
-    ``report_run_error`` path.
-    """
+    """Each migrated tool must have a regression test in ``_TOOL_FAILURE_CASES``."""
     covered_by_parametrised = {case.expected_tool_name for case in _TOOL_FAILURE_CASES}
-    shared_code_path = {"send_openclaw_message"}
-    missing = _MIGRATED_TOOL_NAMES - covered_by_parametrised - shared_code_path
+    missing = _MIGRATED_TOOL_NAMES - covered_by_parametrised
     assert missing == set(), (
         "Every name in _MIGRATED_TOOL_NAMES must have a parameterised "
         "failure case in _TOOL_FAILURE_CASES (unless it shares a code path "

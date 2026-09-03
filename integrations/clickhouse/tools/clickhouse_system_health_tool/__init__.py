@@ -46,7 +46,7 @@ def _map_get_clickhouse_system_health(
     name="get_clickhouse_system_health",
     description="Retrieve system health metrics and table statistics from a ClickHouse instance, including active queries, connections, and table sizes.",
     source="clickhouse",
-    surfaces=(ToolSurface.INVESTIGATION, ToolSurface.CHAT),
+    surfaces=(ToolSurface.CHAT,),
     use_cases=[
         "Checking ClickHouse server health during an incident",
         "Identifying large or rapidly growing tables",

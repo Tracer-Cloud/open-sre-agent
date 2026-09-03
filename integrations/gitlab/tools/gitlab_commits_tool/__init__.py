@@ -113,7 +113,7 @@ def _map_list_gitlab_commits(
         "Correlating a deployment or incident window with code changes",
     ],
     requires=["project_id"],
-    surfaces=(ToolSurface.INVESTIGATION, ToolSurface.CHAT),
+    surfaces=(ToolSurface.CHAT,),
     input_schema={
         "type": "object",
         "properties": {

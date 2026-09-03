@@ -49,20 +49,17 @@ RULES: tuple[PathRule, ...] = (
     PathRule("core/domain/", (), always_escalate=True),
     PathRule("core/agent_harness/session/", ("tests/core/agent_harness/session/",)),
     PathRule("core/", ("tests/core/",)),
-    PathRule("tools/investigation/reporting/", ("tests/delivery/",)),
-    PathRule("tools/investigation/", (), always_escalate=True),
     PathRule("utils/", (), always_escalate=True),
     # Specific sub-packages before their parent
     PathRule("integrations/llm_cli/", ("tests/integrations/llm_cli/",)),
     PathRule("integrations/opensre/", ("tests/integrations/opensre/",)),
-    PathRule("integrations/hermes/", ("tests/hermes/",)),
     PathRule(
         "integrations/alertmanager/",
         ("tests/integrations/alertmanager/", "tests/e2e/alertmanager/"),
     ),
     PathRule(
         "integrations/dagster/",
-        ("tests/integrations/dagster/", "tests/synthetic/test_dagster_scenario.py"),
+        ("tests/integrations/dagster/",),
     ),
     PathRule(
         "integrations/eks/",
@@ -80,7 +77,6 @@ RULES: tuple[PathRule, ...] = (
             "tests/tools/test_eks_nodegroup_health_tool.py",
             "tests/tools/test_eks_pod_logs_tool.py",
             "tests/tools/test_telemetry.py",
-            "tests/benchmarks/cloudopsbench/tests/test_bench_agent.py",
         ),
     ),
     PathRule(
@@ -236,25 +232,11 @@ RULES: tuple[PathRule, ...] = (
         ),
     ),
     PathRule(
-        "integrations/hermes/tools/",
-        (
-            "tests/tools/test_hermes_logs_tool.py",
-            "tests/tools/test_hermes_session_evidence_tool.py",
-        ),
-    ),
-    PathRule(
         "integrations/kafka/",
         (
             "tests/integrations/test_kafka.py",
             "tests/tools/test_kafka_consumer_group_tool.py",
             "tests/tools/test_kafka_topic_health_tool.py",
-        ),
-    ),
-    PathRule(
-        "integrations/openclaw/",
-        (
-            "tests/tools/test_openclaw_mcp_tool.py",
-            "tests/tools/test_telemetry.py",
         ),
     ),
     PathRule(
@@ -456,7 +438,6 @@ RULES: tuple[PathRule, ...] = (
         (
             "tests/integrations/signoz/",
             "tests/tools/test_signoz_tools.py",
-            "tests/synthetic/test_signoz_scenario.py",
         ),
     ),
     PathRule(
@@ -468,7 +449,6 @@ RULES: tuple[PathRule, ...] = (
         (
             "tests/integrations/tempo/",
             "tests/tools/test_tempo_tools.py",
-            "tests/synthetic/test_tempo_scenario.py",
         ),
     ),
     PathRule(
@@ -476,7 +456,6 @@ RULES: tuple[PathRule, ...] = (
         (
             "tests/integrations/temporal/",
             "tests/integrations/test_temporal_catalog.py",
-            "tests/synthetic/test_temporal_scenario.py",
             "tests/tools/test_temporal_namespace_info_tool.py",
             "tests/tools/test_temporal_task_queue_tool.py",
             "tests/tools/test_temporal_workflow_history_tool.py",
@@ -529,7 +508,7 @@ RULES: tuple[PathRule, ...] = (
     ),
     PathRule(
         "integrations/jenkins/",
-        ("tests/integrations/test_jenkins.py", "tests/synthetic/test_jenkins_scenario.py"),
+        ("tests/integrations/test_jenkins.py",),
     ),
     PathRule(
         "integrations/datadog/",

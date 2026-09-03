@@ -78,7 +78,7 @@ def test_surface_scoped_load_equals_full_filtered() -> None:
     (package-declaration order) fails here rather than silently diverging.
     """
     full = registry_module.get_registered_tools()
-    for surface in (ToolSurface.ACTION, ToolSurface.CHAT, ToolSurface.INVESTIGATION):
+    for surface in (ToolSurface.ACTION, ToolSurface.CHAT):
         scoped = {
             (tool.name, tool.origin_module)
             for tool in registry_module.get_registered_tools(surface)
@@ -93,7 +93,7 @@ def test_surface_scoped_load_equals_full_filtered() -> None:
 
 def test_get_tool_descriptors_match_surface_load() -> None:
     assert {d.name for d in registry_module.get_tool_descriptors()} == set(build_descriptor_index())
-    for surface in (ToolSurface.ACTION, ToolSurface.CHAT, ToolSurface.INVESTIGATION):
+    for surface in (ToolSurface.ACTION, ToolSurface.CHAT):
         descriptor_names = {d.name for d in registry_module.get_tool_descriptors(surface)}
         tool_names = {tool.name for tool in registry_module.get_registered_tools(surface)}
         assert descriptor_names == tool_names, surface

@@ -164,5 +164,5 @@ class SlackReadMessagesTool(BaseTool):
 
 slack_read_messages = tool(
     SlackReadMessagesTool(),
-    surfaces=(ToolSurface.INVESTIGATION, ToolSurface.CHAT, ToolSurface.ACTION),
+    surfaces=(ToolSurface.CHAT, ToolSurface.ACTION),
 )

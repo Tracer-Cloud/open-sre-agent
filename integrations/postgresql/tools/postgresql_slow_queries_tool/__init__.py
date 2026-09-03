@@ -55,7 +55,7 @@ class PostgreSQLSlowQueriesOutput(BaseModel):
         " by mean execution time."
     ),
     source="postgresql",
-    surfaces=(ToolSurface.INVESTIGATION, ToolSurface.CHAT),
+    surfaces=(ToolSurface.CHAT,),
     use_cases=[
         "Identifying slow queries that may be causing performance degradation",
         "Analyzing query execution patterns during incident timeframes",

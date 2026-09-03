@@ -102,7 +102,6 @@ def test_metadata() -> None:
     rt = get_kafka_topic_health.__opensre_registered_tool__
     assert rt.name == "get_kafka_topic_health"
     assert rt.source == "kafka"
-    assert "investigation" in rt.surfaces
     assert "chat" in rt.surfaces
 
 

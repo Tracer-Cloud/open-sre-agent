@@ -11,13 +11,6 @@ from core.domain.types.retrieval import (
     RetrievalIntent,
     TimeBounds,
 )
-from core.domain.types.root_cause_categories import (
-    GENERIC_FALLBACK_CATEGORIES,
-    VALID_ROOT_CAUSE_CATEGORIES,
-    RootCauseCategory,
-    categories_by_group,
-    render_prompt_taxonomy,
-)
 from core.domain.types.tools import ToolSurface
 
 __all__ = [
@@ -26,16 +19,11 @@ __all__ = [
     "EvidenceSource",
     "FieldSelection",
     "FilterCondition",
-    "GENERIC_FALLBACK_CATEGORIES",
     "NodeConfig",
     "RetrievalControls",
     "RetrievalControlsMap",
     "RetrievalIntent",
-    "RootCauseCategory",
     "TimeBounds",
     "ToolSurface",
-    "VALID_ROOT_CAUSE_CATEGORIES",
-    "categories_by_group",
     "get_configurable",
-    "render_prompt_taxonomy",
 ]

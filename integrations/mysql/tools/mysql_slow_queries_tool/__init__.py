@@ -48,7 +48,7 @@ def _map_get_mysql_slow_queries(
     name="get_mysql_slow_queries",
     description="Retrieve slow MySQL queries from performance_schema, ranked by average execution time.",
     source="mysql",
-    surfaces=(ToolSurface.INVESTIGATION, ToolSurface.CHAT),
+    surfaces=(ToolSurface.CHAT,),
     use_cases=[
         "Identifying slow queries that may be causing performance degradation",
         "Analyzing query execution patterns during incident timeframes",

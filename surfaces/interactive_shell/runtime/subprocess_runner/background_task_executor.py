@@ -20,8 +20,8 @@ from surfaces.shared.error_handling.exception_reporting import report_exception
 
 from .task_streaming import (
     _MAX_COMMAND_OUTPUT_CHARS,
-    _SYNTHETIC_DIAG_CHARS,
-    _SYNTHETIC_POLL_SECONDS,
+    _TASK_DIAG_CHARS,
+    _TASK_POLL_SECONDS,
     SHELL_COMMAND_TIMEOUT_SECONDS,
     _join_task_output_streams,
     _pump_task_pty,
@@ -78,7 +78,7 @@ def start_background_cli_task(
         session=session, command=display_command, task_id=task.task_id
     )
     stderr_buf: tempfile.SpooledTemporaryFile[bytes] = tempfile.SpooledTemporaryFile(  # type: ignore[type-arg]
-        max_size=_SYNTHETIC_DIAG_CHARS * 2
+        max_size=_TASK_DIAG_CHARS * 2
     )
     pty_fds: tuple[int, int] | None = None
     if _should_use_pty(console, use_pty):
@@ -163,12 +163,9 @@ def start_background_cli_task(
         output_thread.start()
         output_threads = [output_thread]
 
-    history_gen_when_watch_started = session.terminal.history_generation
-
     def _watch() -> None:
         terminated_by_watcher = False
         timed_out = False
-        suggest_follow_up = False
         outcome_headline = "command completed (exit 0)"
         outcome_error_kind = ""
         while proc.poll() is None:
@@ -182,14 +179,13 @@ def start_background_cli_task(
                 terminate_child_process(proc)
                 terminated_by_watcher = True
                 break
-            time.sleep(_SYNTHETIC_POLL_SECONDS)
+            time.sleep(_TASK_POLL_SECONDS)
 
         try:
             if timed_out:
                 outcome_headline = f"command timed out after {timeout_seconds} seconds"
                 outcome_error_kind = "timeout"
                 task.mark_failed(f"timed out after {timeout_seconds}s")
-                suggest_follow_up = kind is TaskKind.SYNTHETIC_TEST
                 return
             if terminated_by_watcher and task.cancel_requested.is_set():
                 outcome_headline = "command cancelled"
@@ -207,14 +203,12 @@ def start_background_cli_task(
                 outcome_error_kind = "cli_exit_nonzero"
                 task.mark_failed(error_msg)
                 console.print(f"[{ERROR}]command failed (exit {code}):[/]")
-                suggest_follow_up = kind is TaskKind.SYNTHETIC_TEST
         except Exception as exc:  # noqa: BLE001
             outcome_headline = f"command error: {exc}"
             outcome_error_kind = "watcher_error"
             task.mark_failed(str(exc))
             report_exception(exc, context="surfaces.interactive_shell.background_cli_task.watch")
             console.print(f"[{ERROR}]error:[/] {escape(str(exc))}")
-            suggest_follow_up = kind is TaskKind.SYNTHETIC_TEST
         finally:
             _join_task_output_streams(output_threads)
             # Flush the prompt-log/PostHog event with the real outcome (stdout,
@@ -234,13 +228,7 @@ def start_background_cli_task(
             if stdout_buf is not None:
                 stdout_buf.close()
             stderr_buf.close()
-            if (
-                suggest_follow_up
-                and session.terminal.history_generation == history_gen_when_watch_started
-            ):
-                session.suggest_synthetic_failure_follow_up(label=display_command)
-            else:
-                session.terminal.notify_prompt_changed()
+            session.terminal.notify_prompt_changed()
 
     thread = threading.Thread(target=_watch, daemon=True)
     thread.start()

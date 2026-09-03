@@ -6,8 +6,8 @@ description: "Build the OpenSRE agent on your own ports and drive it per turn �
 
 [Python API](/python-api) covers **embedding**: `AgentSession.start()` and
 `chat()`, with the standard ports. This page is for a **host** — a program that
-supplies its own output sink, tools, prompts, error reporting or gather
-progress, and drives one agent across many turns. The gateway (Slack, Discord,
+supplies its own output sink, tools, prompts, or error reporting, and drives
+one agent across many turns. The gateway (Slack, Discord,
 Telegram) and the interactive shell are both hosts, and they are the same
 program with different ports.
 
@@ -19,7 +19,7 @@ harness API. Nothing else under `core.agent_harness` is part of it.
 | Role | You want to… | Import |
 | --- | --- | --- |
 | **Embed** | run turns with the standard ports | `core.agent_harness` — `AgentSession`, `SessionConfig`, `SessionCore`, `SessionManager`, `TurnResult`, `ToolCallingTurnResult`, `OutputSink` |
-| **Host** | build one agent from your ports, handle it per message | `core.agent_harness.runtime` — `DefaultHeadlessBuild`, `InMemoryHeadlessBuild`, `HeadlessAgent`, `TurnBinding`, `GatherPhase`, `DefaultToolProvider`, `ActionTurnRunner`; also the ReAct engine the investigation pipeline shares (`AgentConfig`, `build_agent`, the default LLM factories) |
+| **Host** | build one agent from your ports, handle it per message | `core.agent_harness.runtime` — `DefaultHeadlessBuild`, `InMemoryHeadlessBuild`, `HeadlessAgent`, `TurnBinding`, `DefaultToolProvider`, `ActionTurnRunner`; also the ReAct engine itself (`AgentConfig`, `build_agent`, the default LLM factories) |
 | **Host** | call helpers around a turn | `core.agent_harness.spi.<role>` — `session_goal`, `session_state`, `cancel`, `accounting`, `prompt_chrome`, `integrations`, `grounding`, `defaults` |
 | **Write a tool** | implement an action tool | `core.agent_harness.tools` — `ActionToolScope`, `execute_with_action_context`, `capability_available_from_sources`, `HandoffField`, `EVIDENCE_KIND_VALUES` |
 | **Implement** | satisfy a protocol the harness calls | `core.agent_harness.ports` — `OutputSink`, `ToolProvider`, `PromptContextProvider`, `ReasoningClientProvider`, `RunRecordFactory`, `ErrorReporter`, `TurnAccounting`, `SessionState`, and the rebind mix-ins `ConsoleBindable` / `OutputBindable` / `SessionBindable` |
@@ -29,7 +29,7 @@ harness API. Nothing else under `core.agent_harness` is part of it.
 Build once, then one call per inbound message:
 
 ```python
-from core.agent_harness.runtime import DefaultHeadlessBuild, GatherPhase, TurnBinding
+from core.agent_harness.runtime import DefaultHeadlessBuild, TurnBinding
 
 # 1. Build — the default port family for this session, plus your ports.
 agent = DefaultHeadlessBuild(
@@ -39,7 +39,6 @@ agent = DefaultHeadlessBuild(
 ).agent(
     tools=my_tool_provider,     # optional; a configured DefaultToolProvider or your own
     prompts=my_prompts,         # optional; default grounding provider
-    gather=GatherPhase(),       # opt in to the evidence pass; default is disabled
 )
 
 # 2. Handle — state the whole turn; the agent binds it, dispatches, and keeps
@@ -83,7 +82,6 @@ message:
 agent = DefaultHeadlessBuild(session=session, output=live_sink, console=console, logger=log, surface="gateway").agent(
     tools=DefaultToolProvider(session, console, tool_action_logger=log,
                               observer_factory=…, subprocess_presenter_factory=…, slash_ports_factory=…),
-    gather=GatherPhase(),
 )
 result = agent.handle(
     text,
@@ -102,7 +100,6 @@ agent = DefaultHeadlessBuild(session=session, output=ShellOutputSink(console), c
                      error_reporter=ShellErrorReporter()).agent(
     tools=shell_tool_provider(session, console, request_exit=…),
     prompts=shell_prompt_context_provider(session),
-    gather=shell_gather_ports(session, console),   # console progress lines + session persistence
 )
 result = agent.handle(
     text,
@@ -113,8 +110,8 @@ result = agent.handle(
 )
 ```
 
-Neither host replaces a stage of the agent (action selection, evidence
-gathering, answering) and neither writes its own turn loop. They differ only in
+Neither host replaces a stage of the agent (action selection, answering) and
+neither writes its own turn loop. They differ only in
 ports and in what they do with the result. Production gateway/shell submissions
 go through the pool; expand `AgentBuildConfig` with `resolve_agent_ports`.
 
@@ -125,7 +122,6 @@ go through the pool; expand `AgentBuildConfig` with `resolve_agent_ports`.
 | Send output somewhere new (a websocket, a chat thread) | `OutputSink` — `print`, `stream`, `render_error`, `render_response_header` | `DefaultHeadlessBuild(output=…)` |
 | Add tools or change how they are rendered/confirmed | a `ToolProvider` — usually `DefaultToolProvider(...)` with your port factories | `.agent(tools=…)` |
 | Change what the model is told about the environment | subclass `spi.defaults.DefaultPromptContextProvider`, override the block you need | `.agent(prompts=…)` |
-| Stream progress / persist tool calls of the evidence pass | two callables | `.agent(gather=GatherPhase(on_progress=…, persist=…))` |
 | Route swallowed exceptions (Sentry, logs) | `ErrorReporter` — `report(exc, context=…, expected=…)` | `DefaultHeadlessBuild(error_reporter=…)` |
 | Account a turn (telemetry, token totals) | `TurnAccounting` — `record_action_result`, `finalize` | `TurnBinding(accounting=…)` |
 | Approve or deny tool calls per conversation | — | `TurnBinding(tool_hooks=…)` |

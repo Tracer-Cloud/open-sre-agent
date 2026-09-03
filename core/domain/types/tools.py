@@ -8,6 +8,5 @@ from enum import StrEnum
 class ToolSurface(StrEnum):
     """Closed set of surfaces a registered tool can be exposed on."""
 
-    INVESTIGATION = "investigation"
     CHAT = "chat"
     ACTION = "action"

@@ -93,7 +93,7 @@ def _render_splash_header(*, heading: str, steps: tuple[str, ...]) -> None:
 
     desc = Text()
     desc.append(
-        "  open-source SRE agent for automated incident investigation and root cause analysis",
+        "  open-source SRE agent for production operations and incident response",
         style=SECONDARY,
     )
     console.print(desc)

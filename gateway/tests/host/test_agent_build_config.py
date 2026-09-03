@@ -49,7 +49,6 @@ def test_a_host_that_supplies_nothing_gets_the_chat_defaults() -> None:
 
     # Assert — chat defaults include gateway withholds
     assert agent is not None
-    assert session.available_capabilities["investigation"] == ()
     assert session.available_capabilities["llm_provider"] == ()
     assert session.available_capabilities["task_cancel"] == ()
 
@@ -115,7 +114,6 @@ def test_default_path_applies_gateway_capability_policy() -> None:
     SessionAgentPool(console=Console(force_terminal=False)).agent_for(
         session=session, output=BindableOutput(), logger=_LOGGER
     )
-    assert session.available_capabilities["investigation"] == ()
     assert session.available_capabilities["llm_provider"] == ()
     assert session.available_capabilities["task_cancel"] == ()
 
@@ -126,7 +124,7 @@ def test_empty_config_does_not_inject_gateway_withholds() -> None:
         console=Console(force_terminal=False),
         agent_build=AgentBuildConfig(),
     ).agent_for(session=session, output=BindableOutput(), logger=_LOGGER)
-    assert "investigation" not in session.available_capabilities
+    assert "llm_provider" not in session.available_capabilities
 
 
 def test_host_can_replace_capability_policy() -> None:
@@ -137,7 +135,7 @@ def test_host_can_replace_capability_policy() -> None:
         agent_build=AgentBuildConfig(apply_capability_policy=seen.append),
     ).agent_for(session=session, output=BindableOutput(), logger=_LOGGER)
     assert seen == [session]
-    assert "investigation" not in session.available_capabilities
+    assert "llm_provider" not in session.available_capabilities
 
 
 def test_error_reporter_and_surface_reach_default_headless_build(

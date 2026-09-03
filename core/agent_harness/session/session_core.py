@@ -28,7 +28,6 @@ from core.agent_harness.session.integration_resolution import IntegrationState
 from core.agent_harness.session.pending_choice import PendingUserChoice
 from core.agent_harness.session.pending_offer import (
     PendingIntegrationSetupOffer,
-    PendingInvestigationOffer,
     PendingScheduleOffer,
 )
 from core.agent_harness.session.persistence.contracts import SessionStore
@@ -59,9 +58,8 @@ def _default_grounding() -> GroundingContext:
 class SessionCore:
     """Surface-agnostic session state accumulated across REPL turns.
 
-    Carries everything we want to persist across individual investigations
-    within the same session: previous investigation state (for follow-up
-    questions), accumulated infra context (service names, clusters observed),
+    Carries everything we want to persist across individual turns within the
+    same session: accumulated infra context (service names, clusters observed)
     and a short interaction history for /status.
     """
 
@@ -85,16 +83,10 @@ class SessionCore:
     history: list[dict[str, Any]] = field(default_factory=list)
     """Each entry has type, text, and ok fields for shell, slash, alert, and chat turns."""
 
-    last_state: dict[str, Any] | None = None
-    """The final AgentState from the most recent investigation, used by follow-ups."""
-
-    last_investigation_id: str = ""
-    """Most recent investigation lifecycle id for joining terminal turns to PostHog."""
-
     last_assistant_intent: str | None = None
     """Intent label set by the runtime after each handled turn.
 
-    Values: "slash", "investigation", "follow_up", and the three
+    Values: "slash", "follow_up", and the three
     shell action-agent turn paths: "cli_agent_summarized" (a successful action's
     discovery output was summarized into an answer), "cli_agent_handled" (the
     action fully handled the turn; no LLM answer), and "cli_agent_fallback"
@@ -112,7 +104,7 @@ class SessionCore:
 
     accumulated_context: dict[str, Any] = field(default_factory=dict)
     """Reusable infra context — service names, clusters, regions — learned from
-    earlier investigations that should seed future ones."""
+    earlier turns that should seed future ones."""
 
     runtime_metadata: dict[str, Any] = field(default_factory=dict)
     """Read-only process facts (version, build, env) exposed to prompts and sandboxed tools."""
@@ -144,14 +136,8 @@ class SessionCore:
     Injected so the grounding caches have a process-scoped lifetime with no
     module-level mutable globals; tests can supply a fresh ``GroundingContext``."""
 
-    last_synthetic_observation_path: str | None = None
-    """Absolute path to ``latest.json`` for the last finished synthetic run (set on failure)."""
-
     pending_schedule_offer: PendingScheduleOffer | None = None
     """Structured schedule awaiting bare yes — set by propose_scheduled_delivery."""
-
-    pending_investigation_offer: PendingInvestigationOffer | None = None
-    """Structured investigation awaiting bare yes — armed after Want-me-to closer."""
 
     session_goal: SessionGoal | None = None
     """Outer cross-turn goal (multi-step / keep-going). Distinct from ReAct Goal."""
@@ -199,16 +185,6 @@ class SessionCore:
 
     gather_unreachable_sources: dict[str, str] = field(default_factory=dict)
     """Source id → connectivity failure summary carried across SessionGoal gathers."""
-
-    # Infra keys pulled from a completed investigation state and carried into the
-    # next investigation. A class-level tuple so callers have a single source for
-    # "what counts as accumulated context".
-    _ACCUMULATED_KEYS: tuple[str, ...] = (
-        "service",
-        "cluster_name",
-        "region",
-        "environment",
-    )
 
     @property
     def cli_agent_messages(self) -> list[tuple[str, str]]:
@@ -301,21 +277,6 @@ class SessionCore:
                 latest["response_text"] = response_text.strip()
             return
 
-    def accumulate_from_state(self, state: dict[str, Any] | None) -> None:
-        """Extract reusable infra hints from a completed investigation state.
-
-        Called after every successful investigation (whether triggered by
-        free-text input or by the ``/investigate`` slash command) so that
-        subsequent investigations within the same REPL session inherit the
-        service / cluster / region context discovered earlier.
-        """
-        if not state:
-            return
-        for key in self._ACCUMULATED_KEYS:
-            value = state.get(key)
-            if value:
-                self.accumulated_context[key] = value
-
     # ── integration state: public fields re-exposed from the composed IntegrationState ──
 
     @property
@@ -405,22 +366,6 @@ class SessionCore:
         """Re-resolve integration state after the local store changes."""
         self.integrations.refresh()
 
-    def apply_investigation_result(
-        self,
-        state: dict[str, Any],
-        *,
-        trigger: str = "",
-    ) -> None:
-        """Record a completed investigation result.
-
-        Replaces the inline ``session.last_state = …`` +
-        ``session.accumulate_from_state(…)`` pattern at every call site so the
-        last-state update and accumulated-context update stay in one place.
-        """
-        self.last_state = state
-        self.accumulate_from_state(state)
-        self.store.append_investigation_result(self.session_id, state, trigger=trigger)
-
     def clear(self, *, rotate_identity: bool = True) -> None:
         """Reset core session state to fresh (used by /new and /resume).
 
@@ -429,7 +374,6 @@ class SessionCore:
         """
         self.history.clear()
         self.resumed_from_name = ""
-        self.last_state = None
         self.last_assistant_intent = None
         self.integrations.reset()
         self.available_capabilities.clear()
@@ -446,9 +390,7 @@ class SessionCore:
             if persist_path is not None
             else TaskRegistry()
         )
-        self.last_synthetic_observation_path = None
         self.pending_schedule_offer = None
-        self.pending_investigation_offer = None
         self.pending_integration_setup_offer = None
         self.session_goal = None
         self.offered_upgrade_ctas.clear()

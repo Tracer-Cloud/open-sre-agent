@@ -8,13 +8,18 @@ from dataclasses import asdict
 import click
 
 from config.constants.account import OPENSRE_APP_URL_DEV
-from config.constants.github import GITHUB_CLI_RECOMMENDED_SCOPES
+from config.constants.github import GITHUB_CLI_REQUIRED_SCOPES
 from surfaces.cli.account_auth import (
     AccountAuthError,
     AccountStatus,
     account_status,
     login_account,
     logout_account,
+)
+from surfaces.cli.account_ui import (
+    AccountLoginPresenter,
+    render_account_logout,
+    render_account_status,
 )
 
 
@@ -47,16 +52,25 @@ def _render_status(status: AccountStatus, *, json_output: bool) -> None:
             )
         )
         return
-    click.echo(f"Status       : {'authenticated' if status.authenticated else 'not authenticated'}")
-    if status.record:
-        click.echo(f"GitHub user  : @{status.record.github_username}")
-        click.echo(f"Organization : {status.record.organization_id}")
-        if status.record.email:
-            click.echo(f"Email        : {status.record.email}")
-        click.echo(f"LLM provider : {status.record.llm_provider}")
-        click.echo(f"LLM model    : {status.record.llm_model}")
-        click.echo(f"Expires      : {status.record.token_expires_at}")
-    click.echo(f"Detail       : {status.detail}")
+    render_account_status(status)
+
+
+def _already_active_json(status: AccountStatus) -> str:
+    record = status.record
+    missing_scopes = (
+        sorted(GITHUB_CLI_REQUIRED_SCOPES.difference(record.github_scopes)) if record else []
+    )
+    return json.dumps(
+        {
+            "authenticated": True,
+            "already_active": True,
+            "account": asdict(record) if record else None,
+            "missing_required_github_scopes": missing_scopes,
+            "warning": None,
+            "detail": "A valid OpenSRE session is already active.",
+        },
+        indent=2,
+    )
 
 
 @click.group(name="account", invoke_without_command=True)
@@ -68,6 +82,7 @@ def _render_status(status: AccountStatus, *, json_output: bool) -> None:
 @click.pass_context
 def account_command(ctx: click.Context, dev: bool) -> None:
     """Sign in to OpenSRE with GitHub and inspect the local account."""
+    ctx.ensure_object(dict)
     ctx.find_root().obj["account_dev"] = dev
     if ctx.invoked_subcommand is None:
         _render_status(
@@ -102,6 +117,11 @@ def account_command(ctx: click.Context, dev: bool) -> None:
     type=click.FloatRange(min=1.0, max=1800.0),
     help="Seconds to wait for the browser callback.",
 )
+@click.option(
+    "--force",
+    is_flag=True,
+    help="Replace a valid existing session without prompting.",
+)
 @click.pass_context
 def account_login(
     ctx: click.Context,
@@ -109,27 +129,43 @@ def account_login(
     dev: bool,
     browser: bool,
     timeout_seconds: float,
+    force: bool,
 ) -> None:
     """Sign in or create a personal account using GitHub only."""
+    json_output = _json_enabled(ctx)
+    presenter = AccountLoginPresenter()
+    resolved_app_url = _optional_app_url(app_url=app_url, dev=_dev_enabled(ctx, dev))
+    status = account_status(app_url=resolved_app_url)
+    if status.authenticated and not force:
+        if json_output:
+            click.echo(_already_active_json(status))
+            return
+        presenter.warn_active_session(status)
+        if not presenter.confirm_replace():
+            presenter.session_kept()
+            return
+    elif status.authenticated and force and not json_output:
+        presenter.replacing_session(status)
+
     try:
         result = login_account(
-            app_url=_optional_app_url(app_url=app_url, dev=_dev_enabled(ctx, dev)),
+            app_url=resolved_app_url,
             open_browser=browser,
             timeout_seconds=timeout_seconds,
-            announce=click.echo,
+            progress=None if json_output else presenter,
         )
     except AccountAuthError as exc:
         raise click.ClickException(str(exc)) from exc
 
     record = result.record
-    missing_scopes = sorted(GITHUB_CLI_RECOMMENDED_SCOPES.difference(record.github_scopes))
-    if _json_enabled(ctx):
+    missing_scopes = sorted(GITHUB_CLI_REQUIRED_SCOPES.difference(record.github_scopes))
+    if json_output:
         click.echo(
             json.dumps(
                 {
                     "authenticated": True,
                     "account": asdict(record),
-                    "missing_recommended_github_scopes": missing_scopes,
+                    "missing_required_github_scopes": missing_scopes,
                     "warning": result.warning or None,
                 },
                 indent=2,
@@ -137,17 +173,7 @@ def account_login(
         )
         return
 
-    click.echo(f"Signed in as @{record.github_username}.")
-    click.echo(f"LLM provider: {record.llm_provider} ({record.llm_model}, hosted by OpenSRE).")
-    click.echo("OpenSRE account and GitHub credentials are stored under ~/.opensre.")
-    if result.warning:
-        click.echo(result.warning)
-    if missing_scopes:
-        click.echo(
-            "GitHub scope warning: add "
-            + ", ".join(missing_scopes)
-            + " to the Clerk GitHub connection for private repo, organization, and workflow commands."
-        )
+    presenter.success(result, missing_scopes=missing_scopes)
 
 
 @account_command.command(name="status")
@@ -185,7 +211,7 @@ def account_logout(ctx: click.Context) -> None:
             )
         )
         return
-    click.echo(result.detail)
+    render_account_logout(result)
 
 
 __all__ = ["account_command"]

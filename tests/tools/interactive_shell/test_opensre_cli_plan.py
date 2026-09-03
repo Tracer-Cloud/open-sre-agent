@@ -44,11 +44,6 @@ from tools.interactive_shell.cli import (
             OpensreCommandClass.MUTATING,
             OpensreExecutionMode.BACKGROUND,
         ),
-        (
-            ["investigate", "alert.json"],
-            OpensreCommandClass.INVESTIGATION,
-            OpensreExecutionMode.BACKGROUND,
-        ),
     ],
 )
 def test_build_opensre_execution_plan_modes(

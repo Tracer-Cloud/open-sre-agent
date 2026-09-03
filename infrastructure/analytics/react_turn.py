@@ -21,7 +21,6 @@ from core.agent_harness.ports import SessionState
 from core.agent_harness.spi.accounting import resolve_model_name, resolve_provider_name
 from core.messages import RuntimeMessageLike
 from infrastructure.analytics.capture import capture_react_turn_completed
-from infrastructure.analytics.investigation_loop import bound_loop_metrics
 from infrastructure.analytics.repl_context import (
     get_cli_session_id,
     get_cli_turn_kind,
@@ -49,29 +48,6 @@ def resolve_react_stop_reason(
     if tool_calls_executed == 0:
         return "no_tools_needed"
     return "completed"
-
-
-def _session_investigation_id(session: SessionState | None) -> str | None:
-    if session is None:
-        return None
-    investigation_id = getattr(session, "last_investigation_id", None)
-    if isinstance(investigation_id, str) and investigation_id.strip():
-        return investigation_id.strip()
-    return None
-
-
-def _session_investigation_loop_count(session: SessionState | None) -> int | None:
-    bound = bound_loop_metrics()
-    if bound is not None:
-        return bound[0]
-    if session is None:
-        return None
-    loop_count = getattr(session, "investigation_loop_count", None)
-    if isinstance(loop_count, bool):
-        return None
-    if isinstance(loop_count, int | float):
-        return int(loop_count)
-    return None
 
 
 def _resolve_cli_session_id(session: SessionState | None) -> str:
@@ -123,8 +99,6 @@ def emit_react_turn_completed(
     hit_iteration_cap = stop_reason == "iteration_cap"
 
     cli_turn_kind = get_cli_turn_kind() or "agent"
-    investigation_id = _session_investigation_id(session)
-    investigation_loop_count = _session_investigation_loop_count(session)
 
     capture_react_turn_completed(
         phase=phase,
@@ -138,8 +112,6 @@ def emit_react_turn_completed(
         cli_turn_kind=cli_turn_kind,
         llm_provider=resolve_provider_name(llm) or "unknown",
         llm_model=resolve_model_name(llm) or "unknown",
-        investigation_id=investigation_id,
-        investigation_loop_count=investigation_loop_count,
         prompt_turn_id=get_prompt_turn_id(),
     )
 

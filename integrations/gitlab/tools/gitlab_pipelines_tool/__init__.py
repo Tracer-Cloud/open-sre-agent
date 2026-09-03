@@ -65,7 +65,7 @@ def _list_gitlab_pipelines_available(sources: dict[str, dict]) -> bool:
         "Identifying which CI job failed and on which branch",
     ],
     requires=["project_id"],
-    surfaces=(ToolSurface.INVESTIGATION, ToolSurface.CHAT),
+    surfaces=(ToolSurface.CHAT,),
     input_schema={
         "type": "object",
         "properties": {

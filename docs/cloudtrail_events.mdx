@@ -49,7 +49,7 @@ Attach this policy to the same IAM role or user already configured for the [AWS 
 **Execution identity:** the AWS integration's `role_arn` / credentials gate *availability* and supply the region, but the lookup itself runs through boto3's standard credential chain (environment variables, shared config, or the host's instance role) — the configured role is **not** assumed for the call. Ensure the identity the OpenSRE process runs as can perform `cloudtrail:LookupEvents`. This matches the other AWS tools (RDS/EKS).
 </Note>
 
-## Investigation tools
+## Tools
 
 | Tool | AWS API call | What it returns |
 | --- | --- | --- |
@@ -93,7 +93,7 @@ A single event can touch more resources than the transport layer returns inline 
 opensre integrations verify aws
 ```
 
-There is no separate `cloudtrail` verify target. CloudTrail availability is gated on the AWS integration; the lookup itself uses the ambient credential chain at investigation time.
+There is no separate `cloudtrail` verify target. CloudTrail availability is gated on the AWS integration; the lookup itself uses the ambient credential chain when called.
 
 ## Troubleshooting
 

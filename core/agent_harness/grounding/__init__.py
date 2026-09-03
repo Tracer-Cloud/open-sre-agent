@@ -8,9 +8,6 @@ from core.agent_harness.grounding.agents_md_reference import (
 )
 from core.agent_harness.grounding.context import GroundingContext
 from core.agent_harness.grounding.docs_reference import DocPage, DocsReference
-from core.agent_harness.grounding.investigation_flow_reference import (
-    build_investigation_flow_reference_text,
-)
 
 __all__ = [
     "AgentsMdFile",
@@ -18,5 +15,4 @@ __all__ = [
     "DocPage",
     "DocsReference",
     "GroundingContext",
-    "build_investigation_flow_reference_text",
 ]

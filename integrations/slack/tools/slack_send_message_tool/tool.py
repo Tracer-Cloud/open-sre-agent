@@ -45,8 +45,6 @@ class SlackSendMessageTool(BaseTool):
     ]
     requires = ["slack"]
     side_effect_level = SideEffectLevel.EXTERNAL
-    requires_approval = True
-    approval_reason = "Sends a message to Slack on your behalf."
     input_schema = {
         "type": "object",
         "properties": {
@@ -166,5 +164,5 @@ class SlackSendMessageTool(BaseTool):
 
 slack_send_message = tool(
     SlackSendMessageTool(),
-    surfaces=(ToolSurface.INVESTIGATION, ToolSurface.ACTION),
+    surfaces=(ToolSurface.ACTION,),
 )

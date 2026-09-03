@@ -322,7 +322,7 @@ def _application_balancers(client: YandexCloudClient) -> tuple[list[dict[str, An
 
 @tool(
     name="get_yc_lb_health",
-    surfaces=(ToolSurface.INVESTIGATION, ToolSurface.ACTION),
+    surfaces=(ToolSurface.ACTION,),
     display_name="Load Balancers",
     source=SOURCE,
     description=(

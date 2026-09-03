@@ -1,9 +1,9 @@
 ---
 title: "macOS"
-description: "Install OpenSRE on a Mac and run your first investigation."
+description: "Install OpenSRE on a Mac and ask your first question."
 ---
 
-Install OpenSRE on macOS, set up your LLM, then try a sample investigation.
+Install OpenSRE on macOS, set up your LLM, then ask the agent your first question.
 
 ## 1. Install
 
@@ -44,17 +44,15 @@ Then check connected tools:
 opensre integrations verify
 ```
 
-## 3. Try an investigation
+## 3. Ask the agent
 
-```bash
-opensre investigate -i tests/e2e/kubernetes/fixtures/datadog_k8s_alert.json
-```
-
-Or open the shell and describe what's going on:
+Open the shell and describe what's going on in plain English:
 
 ```bash
 opensre
 ```
+
+Ask: *why is checkout latency spiking?*
 
 ## Next
 

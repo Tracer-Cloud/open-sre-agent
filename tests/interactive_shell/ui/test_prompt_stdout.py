@@ -45,7 +45,7 @@ async def _wait_for_output(buffer: io.StringIO, marker: str, *, count: int = 1) 
         if _visible_prompt_text(rendered).count(marker) >= count:
             return rendered
         await asyncio.sleep(0.01)
-    pytest.fail(f"prompt output never rendered {marker!r} {count} time(s)")
+    raise AssertionError(f"prompt output never rendered {marker!r} {count} time(s)")
 
 
 @pytest.mark.asyncio

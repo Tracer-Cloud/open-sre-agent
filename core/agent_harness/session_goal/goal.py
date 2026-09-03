@@ -67,8 +67,6 @@ class SessionGoalReason:
     LLM_CONFIRM_NOT_REACHED = "LLM confirm: not reached"
     LLM_CONFIRM_UNAVAILABLE = "LLM confirm unavailable; staying active"
     NO_TOOL_EVIDENCE = "achieved tag ignored; no tool evidence yet"
-    INVESTIGATION_RUNNING = "investigation running — continue after results"
-    ACHIEVED_IGNORED_INVESTIGATION = "achieved tag ignored; investigation still running"
 
     @staticmethod
     def is_working(reason: str) -> bool:

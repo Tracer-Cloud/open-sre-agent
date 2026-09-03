@@ -63,10 +63,7 @@ def test_render_landing_shows_header_and_examples(capsys) -> None:
 
     assert "opensre" in output
     assert "Skills" in output
-    assert (
-        "open-source SRE agent for automated incident investigation and root cause analysis"
-        in output
-    )
+    assert "open-source SRE agent" in output
     assert "Usage: opensre [OPTIONS] [COMMAND] [ARGS]..." in output
     assert "Quick start:" in output
     assert "Options:" in output

@@ -64,13 +64,6 @@ def _fallback_terminal_response(*, prompt: str) -> str:
     return "terminal turn handled"
 
 
-def _prompt_relates_to_investigation(*, prompt: str, turn_kind: str) -> bool:
-    stripped = prompt.strip().lower()
-    if turn_kind == "background_task":
-        return "investigate" in stripped
-    return stripped.startswith("/investigate")
-
-
 class PromptRecorder:
     """Captures one `(prompt, response)` pair and flushes to configured sinks."""
 
@@ -91,7 +84,6 @@ class PromptRecorder:
         self._prompt = prompt
         self._session = session
         self._response: str = ""
-        self._scoped_investigation_id: str | None = None
         self._error_kind: str = ""
         self._error_message: str = ""
         self._model: str | None = None
@@ -142,7 +134,7 @@ class PromptRecorder:
     ) -> PromptRecorder | None:
         """Create a recorder for an async background task.
 
-        Background CLI tasks (e.g. ``opensre investigate``) finish long after
+        Background CLI tasks finish long after
         the originating turn has flushed, so their stdout/stderr/exit outcome is
         not available to the turn-level recorder. This recorder is created at
         task launch — so its latency clock spans the full task duration — and is
@@ -153,7 +145,7 @@ class PromptRecorder:
         config = PromptLogConfig.load()
         if not config.enabled:
             return None
-        recorder = cls(
+        return cls(
             config=config,
             turn_kind="background_task",
             session_id=_session_id(session),
@@ -161,16 +153,6 @@ class PromptRecorder:
             prompt=_sanitize_text(command, config=config),
             session=session,
         )
-        if _prompt_relates_to_investigation(prompt=command, turn_kind="background_task"):
-            investigation_id = str(uuid.uuid4())
-            recorder.bind_investigation_id(investigation_id)
-            session.last_investigation_id = investigation_id
-        return recorder
-
-    def bind_investigation_id(self, investigation_id: str) -> None:
-        cleaned = investigation_id.strip()
-        if cleaned:
-            self._scoped_investigation_id = cleaned
 
     def set_error(self, kind: str, message: str) -> None:
         """Attach a structured turn error emitted as ``$ai_error`` properties.
@@ -185,19 +167,6 @@ class PromptRecorder:
             return
         self._error_kind = kind or "error"
         self._error_message = _sanitize_text(message, config=self._config)
-
-    def _resolve_investigation_id(self) -> str:
-        if self._scoped_investigation_id:
-            return self._scoped_investigation_id
-        if self._session is None or not _prompt_relates_to_investigation(
-            prompt=self._prompt,
-            turn_kind=self._turn_kind,
-        ):
-            return ""
-        investigation_id = getattr(self._session, "last_investigation_id", "")
-        if isinstance(investigation_id, str):
-            return investigation_id
-        return ""
 
     def set_response(self, text: str, run: LlmRunInfo | None = None) -> None:
         cleaned = _sanitize_text(text, config=self._config)
@@ -298,9 +267,6 @@ class PromptRecorder:
                 slash_outcome = _latest_slash_outcome(self._session)
                 if slash_outcome:
                     posthog_properties["slash_outcome"] = slash_outcome
-                investigation_id = self._resolve_investigation_id()
-                if investigation_id:
-                    posthog_properties["investigation_id"] = investigation_id
                 if self._error_kind:
                     posthog_properties["$ai_is_error"] = True
                     posthog_properties["$ai_error"] = self._error_message or self._error_kind

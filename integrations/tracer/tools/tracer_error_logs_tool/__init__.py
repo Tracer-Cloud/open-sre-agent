@@ -44,7 +44,7 @@ def _error_logs_extract_params(sources: dict[str, dict]) -> dict[str, Any]:
     },
     is_available=_error_logs_available,
     extract_params=_error_logs_extract_params,
-    surfaces=(ToolSurface.INVESTIGATION, ToolSurface.CHAT),
+    surfaces=(ToolSurface.CHAT,),
 )
 def get_error_logs(trace_id: str, size: int = 500, error_only: bool = True) -> dict[str, Any]:
     """Get logs from OpenSearch, optionally filtered for errors.

@@ -33,7 +33,7 @@ For GitHub, you can put the repo URL in the question, mention it earlier in the 
 1. **You ask** a free-form question (not a `/slash` command).
 2. **OpenSRE decides** whether live data would help and calls the matching chat tools.
 3. **The ReAct loop is bounded** so the shell stays responsive. Tool results are returned to the same model before it answers.
-4. **Tools are read-only data fetches** — they run without a per-call confirmation (same idea as an investigation lookup, not a mutating setup wizard).
+4. **Tools are read-only data fetches** — they run without a per-call confirmation (write actions ask for approval).
 5. **Progress** shows on the dim `· gathering via &lt;source&gt; · &lt;tool&gt; — &lt;hint&gt;…` line while tools run.
 6. **The agent answers** using that evidence and recent chat context.
 
@@ -44,9 +44,6 @@ What happens when something goes wrong:
 | Ctrl+C during tool use | The turn stops |
 | Tool or integration unavailable | The agent reports what is unavailable |
 | No usable tools for the question | The agent answers without a tool call |
-| Full RCA needed | Use `/investigate` — this path is for Q&amp;A with live lookups, not a full multi-stage investigation |
-
-This is **not** the same as the investigation pipeline. Investigations run a separate multi-stage RCA and deliver a report.
 
 ## Setup
 
@@ -104,5 +101,4 @@ With **no** integrations connected, behavior is unchanged: answers come from tex
 
 - [Shell commands](/interactive-shell-commands)
 - [Integrations overview](/integrations-overview)
-- [Investigations overview](/investigation-overview)
 - [GitHub](/github)

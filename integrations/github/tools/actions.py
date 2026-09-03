@@ -384,7 +384,7 @@ def _map_list_github_actions_workflow_runs(
         "Finding a run that matches an outage window or rollback event",
     ],
     requires=["owner", "repo"],
-    surfaces=(ToolSurface.INVESTIGATION, ToolSurface.CHAT, ToolSurface.ACTION),
+    surfaces=(ToolSurface.CHAT, ToolSurface.ACTION),
     input_schema={
         "type": "object",
         "properties": {
@@ -518,7 +518,7 @@ def _map_list_github_actions_active_runs(
         "Spotting queued deploys that may be waiting on a shared runner or lock",
     ],
     requires=["owner", "repo"],
-    surfaces=(ToolSurface.INVESTIGATION, ToolSurface.CHAT),
+    surfaces=(ToolSurface.CHAT,),
     input_schema={
         "type": "object",
         "properties": {
@@ -647,7 +647,7 @@ def _map_list_github_actions_run_jobs(
         "Checking step-by-step status for test, build, and deploy jobs",
     ],
     requires=["owner", "repo", "run_id"],
-    surfaces=(ToolSurface.INVESTIGATION, ToolSurface.CHAT),
+    surfaces=(ToolSurface.CHAT,),
     input_schema={
         "type": "object",
         "properties": {
@@ -781,7 +781,7 @@ def _map_get_github_actions_step_log(
         "Checking the exact log snippet for a flaky test or secret-related failure",
     ],
     requires=["owner", "repo", "run_id", "job_id"],
-    surfaces=(ToolSurface.INVESTIGATION, ToolSurface.CHAT),
+    surfaces=(ToolSurface.CHAT,),
     input_schema={
         "type": "object",
         "properties": {

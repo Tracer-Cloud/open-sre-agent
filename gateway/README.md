@@ -70,8 +70,7 @@ channel), `slack_read_messages` (history / thread),
 `slack_list_team_members` (roster), plus search / join / react helpers
 under `integrations/slack/tools/`. See `docs/messaging/slack.mdx` for
 OAuth scopes. Telegram has `telegram_send_message`; Discord is gateway
-chat plus delivery today (no investigation tool pack yet — see
-`docs/messaging/discord.mdx`).
+chat plus delivery today (see `docs/messaging/discord.mdx`).
 
 Inbound and outbound are independent per platform:
 
@@ -79,7 +78,7 @@ Inbound and outbound are independent per platform:
 |---|---|---|
 | **Telegram** | Yes — `gateway/transports/telegram/` | Yes — integration + `telegram_send_message` |
 | **Slack** | Yes — `gateway/transports/slack/` (Socket Mode by default; Events API HTTP optional; each thread is a conversation) | Yes — webhook + bot-token tools |
-| **Discord** | Yes — `gateway/transports/discord/` (DMs, mentions, threads; `/investigate`) | Delivery + slash registration (no investigation tool pack yet) |
+| **Discord** | Yes — `gateway/transports/discord/` (DMs, mentions, threads) | Delivery + slash registration |
 
 **One core for every surface.** Shell, CLI, and the gateway transports all hand the
 message to the same place: a session-scoped `HeadlessAgent`

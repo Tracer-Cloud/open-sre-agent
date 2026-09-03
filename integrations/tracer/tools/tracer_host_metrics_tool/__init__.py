@@ -30,7 +30,7 @@ from integrations.tracer.tools.tracer_failed_jobs_tool import _tracer_available,
     },
     is_available=_tracer_available,
     extract_params=lambda sources: {"trace_id": _tracer_trace_id(sources)},
-    surfaces=(ToolSurface.INVESTIGATION, ToolSurface.CHAT),
+    surfaces=(ToolSurface.CHAT,),
 )
 def get_host_metrics(trace_id: str) -> dict[str, Any]:
     """Get host-level metrics (CPU, memory, disk) for the run."""

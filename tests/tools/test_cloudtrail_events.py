@@ -59,14 +59,14 @@ class TestCloudTrailEventsToolContract(BaseToolContract):
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# Discovery — the tool is auto-registered on the investigation surface
+# Discovery — the tool is auto-registered on the chat surface
 # ─────────────────────────────────────────────────────────────────────────────
 
 
-def test_tool_discovered_on_investigation_surface() -> None:
+def test_tool_discovered_on_chat_surface() -> None:
     from tools.registry import get_registered_tools
 
-    names = {t.name for t in get_registered_tools("investigation")}
+    names = {t.name for t in get_registered_tools("chat")}
     assert "lookup_cloudtrail_events" in names
 
 

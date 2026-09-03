@@ -1,12 +1,12 @@
 ---
 title: "Alertmanager"
-description: "Connect Alertmanager so OpenSRE can surface firing alerts and active silences during investigations"
+description: "Connect Alertmanager so OpenSRE can surface firing alerts and active silences"
 ---
 
 ## Overview
 
-OpenSRE queries Alertmanager for firing, silenced, and inhibited alerts so investigations
-can correlate the triggering alert with other concurrent signals.
+OpenSRE queries Alertmanager for firing, silenced, and inhibited alerts so the agent
+can correlate the alert you ask about with other concurrent signals.
 
 ## Prerequisites
 
@@ -78,9 +78,9 @@ is rejected.
 
 Alertmanager itself often has no built-in API key UI. Credentials usually come from the
 reverse proxy or basic auth in front of the instance. Prefer a **read-only** token or
-user — OpenSRE only reads alerts and silences during investigations.
+user — OpenSRE only reads alerts and silences.
 
-## Investigation tools
+## Tools
 
 | Tool | What it does |
 | --- | --- |
@@ -96,8 +96,8 @@ Typical uses:
 - Understand blast radius from active alert labels
 - Correlate Prometheus alerts (OOM, latency, error-rate) into one timeline
 
-The `alertname` label from the incoming alert is used as a filter by default so results
-stay scoped to the incident.
+Name the alert in your question — the agent filters on the `alertname` label so
+results stay scoped to the incident.
 
 ### `alertmanager_silences`
 
@@ -139,7 +139,7 @@ for attempt in $(seq 1 30); do
 done
 ```
 
-Seed one firing alert and one active silence so both investigation tools return
+Seed one firing alert and one active silence so both tools return
 real data:
 
 ```bash
@@ -197,6 +197,6 @@ verification only.
 
 ## Security
 
-- Prefer a **read-only** reverse-proxy token — OpenSRE never writes to Alertmanager during investigations.
+- Prefer a **read-only** reverse-proxy token — OpenSRE never writes to Alertmanager.
 - Store credentials in `.env` or your secret manager — not in source control.
 - For internal Kubernetes deployments, prefer network isolation over exposing credentials.

@@ -46,7 +46,7 @@ def _map_get_mongodb_replica_status(
     name="get_mongodb_replica_status",
     description="Retrieve replica set status, member health, and oplog lag for a MongoDB instance.",
     source="mongodb",
-    surfaces=(ToolSurface.INVESTIGATION, ToolSurface.CHAT),
+    surfaces=(ToolSurface.CHAT,),
     is_available=mongodb_is_available,
     injected_params=("connection_string",),
     extract_params=mongodb_extract_params,
