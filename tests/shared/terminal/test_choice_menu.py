@@ -223,6 +223,7 @@ def test_draw_menu_redraw_clears_in_place_without_deleting(monkeypatch) -> None:
     out = io.StringIO()
     monkeypatch.setattr(sys, "stdout", out)
     monkeypatch.setattr(choice_menu, "_cols", lambda: 80)
+    monkeypatch.setattr(choice_menu, "_viewport_rows", lambda: 24)
 
     choice_menu._draw_menu(
         title="Pick",
@@ -241,15 +242,53 @@ def test_draw_menu_redraw_clears_in_place_without_deleting(monkeypatch) -> None:
 def test_erase_menu_block_resets_to_column_zero(monkeypatch) -> None:
     out = io.StringIO()
     monkeypatch.setattr(sys, "stdout", out)
+    monkeypatch.setattr(choice_menu, "_viewport_rows", lambda: 24)
 
     choice_menu._erase_menu("crumb", ["one", "two"])
 
     rendered = out.getvalue()
     assert rendered.startswith("\r\x1b[")
     # Leave must delete the rows (CSI n M), not only blank them (ESC[J).
-    assert "A\r\x1b[" in rendered and "M" in rendered
+    assert "\x1b[7A" in rendered
+    assert "\x1b[7M" in rendered
     assert "\x1b[J" not in rendered
     assert rendered.endswith("\r")
+
+
+def test_erase_menu_does_not_delete_lines_beyond_the_viewport(monkeypatch) -> None:
+    """A climb that stops at the top of the screen must not CSI-M the transcript."""
+    out = io.StringIO()
+    monkeypatch.setattr(sys, "stdout", out)
+    monkeypatch.setattr(choice_menu, "_viewport_rows", lambda: 5)
+
+    choice_menu._erase_menu("crumb", ["one", "two"])
+
+    rendered = out.getvalue()
+    assert "\x1b[4A" in rendered
+    assert "\x1b[7A" not in rendered
+    assert "\x1b[7M" not in rendered
+    assert not re.search(r"\x1b\[\d+M", rendered)
+    assert "\x1b[J" in rendered
+
+
+def test_draw_menu_keeps_each_row_on_one_physical_line(monkeypatch) -> None:
+    """Wrapped rows would make CSI n A miss the menu origin on leave."""
+    out = io.StringIO()
+    monkeypatch.setattr(sys, "stdout", out)
+    monkeypatch.setattr(choice_menu, "_cols", lambda: 24)
+
+    choice_menu._draw_menu(
+        title="x" * 80,
+        crumb="y" * 80,
+        labels=["z" * 80],
+        index=0,
+        erase_lines=0,
+    )
+
+    paint_width = 23
+    for raw_line in out.getvalue().split("\r\n"):
+        visible = _ANSI_RE.sub("", raw_line).lstrip("\r")
+        assert len(visible) <= paint_width
 
 
 def test_reset_tty_column_writes_carriage_return(monkeypatch) -> None:
@@ -283,6 +322,7 @@ def test_pick_ignores_unmapped_keys(monkeypatch) -> None:
     actions = iter(["ignore", "enter"])
     monkeypatch.setattr(sys, "stdout", out)
     monkeypatch.setattr(choice_menu, "_cols", lambda: 80)
+    monkeypatch.setattr(choice_menu, "_viewport_rows", lambda: 24)
     monkeypatch.setattr(choice_menu, "_read_action", lambda: next(actions))
 
     assert choice_menu._pick(title="test", crumb="", labels=["one"]) == 0

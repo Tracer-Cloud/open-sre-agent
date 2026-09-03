@@ -131,17 +131,37 @@ def read_menu_action() -> MenuAction:
 
 
 def _cols() -> int:
-    return max(40, shutil.get_terminal_size(fallback=(80, 24)).columns)
+    return max(1, shutil.get_terminal_size(fallback=(80, 24)).columns)
+
+
+def _viewport_rows() -> int:
+    return max(2, shutil.get_terminal_size(fallback=(80, 24)).lines)
+
+
+def _menu_paint_width() -> int:
+    """Columns for one physical menu row (last cell empty so DEC autowrap stays off)."""
+    return max(1, _cols() - 1)
 
 
 def menu_columns() -> int:
-    """Return the current terminal width floor used by inline menus."""
-    return _cols()
+    """Return the inline-menu paint width (one column short of the TTY)."""
+    return _menu_paint_width()
+
+
+def _clip_to_row(text: str, width: int) -> str:
+    """Keep ``text`` on one physical row so erase height matches the cursor."""
+    if width <= 0:
+        return ""
+    if len(text) <= width:
+        return text
+    if width == 1:
+        return text[:1]
+    return text[: width - 1] + "…"
 
 
 def _write_option_row(*, prefix: str, label: str, width: int, selected: bool) -> None:
     """Accent only the content; pad with plain spaces (avoids a full-width bar)."""
-    content = f"{_BLOCK_INDENT}{prefix} {label}"
+    content = _clip_to_row(f"{_BLOCK_INDENT}{prefix} {label}", width)
     pad = max(0, width - len(content))
     style = ui_theme.PROMPT_ACCENT_ANSI if selected else ui_theme.DIM_COUNTER_ANSI
     write_menu_line(f"{style}{content}{ui_theme.ANSI_RESET}{' ' * pad}")
@@ -184,12 +204,19 @@ def _erase_menu_block(height: int, *, delete: bool = False) -> None:
     8–10 line Ask User picker that hole sits between the reply and the ✓ recap
     (and again above Thinking). ``CSI n M`` removes the rows so the transcript
     closes up.
+
+    Delete-line is only safe when the whole block is still on screen. ``CSI n A``
+    stops at the top of the viewport, so a taller block would delete transcript
+    rows above the menu or leave fragments. Overflow climbs as far as the
+    viewport allows and clears in place.
     """
     if height:
-        if delete:
-            sys.stdout.write(f"\r\x1b[{height}A\r\x1b[{height}M")
+        rows = _viewport_rows()
+        climb = min(height, rows - 1)
+        if delete and height <= rows - 1:
+            sys.stdout.write(f"\r\x1b[{climb}A\r\x1b[{climb}M")
         else:
-            sys.stdout.write(f"\r\x1b[{height}A\r\x1b[J")
+            sys.stdout.write(f"\r\x1b[{climb}A\r\x1b[J")
     reset_tty_column()
 
 
@@ -293,7 +320,7 @@ def _draw_menu(
     numbered: bool = True,
 ) -> None:
     out = sys.stdout
-    w = _cols()
+    w = _menu_paint_width()
     title, crumb, labels = _sanitize_menu(title, crumb, labels)
     checked = checked or set()
     if erase_lines:
@@ -305,13 +332,22 @@ def _draw_menu(
     # accent header (slash-command pickers).
     if header:
         write_menu_line(
-            f"{_BLOCK_INDENT}{ui_theme.PROMPT_ACCENT_ANSI}{header}{ui_theme.ANSI_RESET}"
+            f"{ui_theme.PROMPT_ACCENT_ANSI}{_clip_to_row(f'{_BLOCK_INDENT}{header}', w)}"
+            f"{ui_theme.ANSI_RESET}"
         )
-        write_menu_line(f"{_BLOCK_INDENT}{ui_theme.TEXT_ANSI}{title}{ui_theme.ANSI_RESET}")
+        write_menu_line(
+            f"{ui_theme.TEXT_ANSI}{_clip_to_row(f'{_BLOCK_INDENT}{title}', w)}{ui_theme.ANSI_RESET}"
+        )
     else:
-        write_menu_line(f"{_BLOCK_INDENT}{ui_theme.PROMPT_ACCENT_ANSI}{title}{ui_theme.ANSI_RESET}")
+        write_menu_line(
+            f"{ui_theme.PROMPT_ACCENT_ANSI}{_clip_to_row(f'{_BLOCK_INDENT}{title}', w)}"
+            f"{ui_theme.ANSI_RESET}"
+        )
     if crumb:
-        write_menu_line(f"{_BLOCK_INDENT}{ui_theme.DIM_COUNTER_ANSI}{crumb}{ui_theme.ANSI_RESET}")
+        write_menu_line(
+            f"{ui_theme.DIM_COUNTER_ANSI}{_clip_to_row(f'{_BLOCK_INDENT}{crumb}', w)}"
+            f"{ui_theme.ANSI_RESET}"
+        )
     # Airy: a blank line instead of a full-width rule between question and options.
     write_menu_line()
     for i, label in enumerate(labels):
@@ -336,7 +372,9 @@ def _draw_menu(
         len(labels), letter_keys=letter_keys, numbered=numbered, multi_select=multi_select
     )
     write_menu_line()
-    write_menu_line(f"{_BLOCK_INDENT}{ui_theme.DIM_COUNTER_ANSI}{hint}{ui_theme.ANSI_RESET}")
+    write_menu_line(
+        f"{ui_theme.DIM_COUNTER_ANSI}{_clip_to_row(f'{_BLOCK_INDENT}{hint}', w)}{ui_theme.ANSI_RESET}"
+    )
     out.flush()
 
 
