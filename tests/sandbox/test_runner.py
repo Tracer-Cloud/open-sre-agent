@@ -13,6 +13,7 @@ from typing import Any
 import pytest
 
 from config.constants import OPENSRE_TMP_DIR, ensure_opensre_tmp_dir
+from infrastructure.safety.sandbox import runner as sandbox_runner
 from infrastructure.safety.sandbox.runner import (
     MAX_TIMEOUT,
     SandboxResult,
@@ -248,6 +249,31 @@ class TestSandboxRunnerInputInjection:
         result = run_python_sandbox("x = 1", inputs=None)
         assert result.success
         assert result.inputs == {}
+
+
+class TestSandboxRunnerEnvironment:
+    def test_systemroot_is_forwarded_to_subprocess_environment(
+        self,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        monkeypatch.setenv("SYSTEMROOT", r"C:\Windows")
+        captured_env: dict[str, str] = {}
+
+        def fake_run(*_args: Any, **kwargs: Any) -> subprocess.CompletedProcess[str]:
+            captured_env.update(kwargs["env"])
+            return subprocess.CompletedProcess(
+                args=[],
+                returncode=0,
+                stdout="",
+                stderr="",
+            )
+
+        monkeypatch.setattr(sandbox_runner.subprocess, "run", fake_run)
+
+        result = run_python_sandbox("pass")
+
+        assert result.success
+        assert captured_env["SYSTEMROOT"] == r"C:\Windows"
 
 
 class TestSandboxNetworkRestrictions:
