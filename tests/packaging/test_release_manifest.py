@@ -111,7 +111,9 @@ def test_release_workflow_publishes_python_distributions_to_pypi() -> None:
     assert publish_job["permissions"] == {"id-token": "write"}
 
     download_step, publish_step = publish_job["steps"]
-    assert download_step["uses"] == "actions/download-artifact@v4"
+    assert download_step["uses"] == (
+        "actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093"
+    )
     assert download_step["with"] == {
         "name": "release-python-dist",
         "path": "dist",
@@ -119,6 +121,7 @@ def test_release_workflow_publishes_python_distributions_to_pypi() -> None:
     assert publish_step["uses"] == (
         "pypa/gh-action-pypi-publish@dc37677b2e1c63e2034f94d8a5b11f265b73ba33"
     )
+    assert publish_step["with"]["skip-existing"] == "true"
     assert "password" not in publish_step.get("with", {})
 
 
