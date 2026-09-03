@@ -29,6 +29,15 @@ AUTO_LEVEL_CAPTIONS: Final[dict[AutoLevel, str]] = {
     AutoLevel.HIGH: "all actions allowed",
 }
 
+# Idle status bar — short permission words. High is the default; hiding the
+# caption made it look like "best / full power" instead of allow-all.
+AUTO_LEVEL_BAR_CAPTIONS: Final[dict[AutoLevel, str]] = {
+    AutoLevel.OFF: "Ask everything",
+    AutoLevel.LOW: "Ask to edit",
+    AutoLevel.MED: "Reversible only",
+    AutoLevel.HIGH: "Allow all",
+}
+
 # Display title inside ``Auto (Med)`` — Factory uses Med, not medium.
 AUTO_LEVEL_TITLES: Final[dict[AutoLevel, str]] = {
     AutoLevel.OFF: "Off",
@@ -78,16 +87,23 @@ def parse_auto_level(raw: str) -> AutoLevel | None:
 
 
 def format_auto_status_plain(level: AutoLevel) -> str:
-    """``Auto (Med) · allow reversible commands`` without ANSI."""
+    """``Auto (Med) · allow reversible commands`` without ANSI (``/auto``)."""
     return f"Auto ({AUTO_LEVEL_TITLES[level]}) · {AUTO_LEVEL_CAPTIONS[level]}"
+
+
+def format_auto_status_bar(level: AutoLevel) -> str:
+    """``Auto (High) · Allow all`` — live prompt chrome, no model slug."""
+    return f"Auto ({AUTO_LEVEL_TITLES[level]}) · {AUTO_LEVEL_BAR_CAPTIONS[level]}"
 
 
 __all__ = [
     "AUTO_LEVEL_ASK_TOOL_TYPES",
+    "AUTO_LEVEL_BAR_CAPTIONS",
     "AUTO_LEVEL_CAPTIONS",
     "AUTO_LEVEL_TITLES",
     "AutoLevel",
     "DEFAULT_AUTO_LEVEL",
+    "format_auto_status_bar",
     "format_auto_status_plain",
     "parse_auto_level",
 ]

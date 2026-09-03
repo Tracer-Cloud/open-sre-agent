@@ -83,8 +83,7 @@ def _install_prompt_frame(
     # (otherwise the frame looks hollow against the terminal bg).
     surface_body: AnyContainer = HSplit([editable_body], style="class:composer-body")
     composer: AnyContainer = rounded_composer_frame(surface_body)
-    # No footer row — send hints live in the empty-box placeholder (Droid /
-    # Cursor: one stack, not a textbook under the box).
+    # No footer row — the empty box is the job prompt, not a shortcut dump.
     box_rows: list[AnyContainer] = [composer]
     if hide_composer is not None:
         shown = Condition(lambda: not hide_composer())

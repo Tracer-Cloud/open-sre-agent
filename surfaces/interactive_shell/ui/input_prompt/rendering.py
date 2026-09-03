@@ -19,9 +19,7 @@ from surfaces.interactive_shell.ui.input_prompt.layout import (
 )
 from surfaces.shared.terminal.prompt_layout import prompt_text_width, terminal_columns
 
-DEFAULT_PLACEHOLDER_TEXT = "see what you can do"
-#: One send hint, inside the empty box — not a fourth chrome line under it.
-_COMPOSER_SEND_HINT = "Enter send · ? help"
+DEFAULT_PLACEHOLDER_TEXT = "Ask about an alert"
 _PLAN_CONTINUE_PLACEHOLDER = "continue the plan, or type a message"
 #: Warm vertical bar — same role as Droid's orange user-turn lead-in.
 _USER_TURN_ACCENT = "▌"
@@ -183,7 +181,7 @@ def ctrl_c_exit_hint_ansi() -> str:
 
 
 def composer_footer_ansi() -> str:
-    """No footer row. Shortcuts live in the empty-box placeholder."""
+    """No footer row. The empty box is the job prompt; shortcuts live on ``?``."""
     return ""
 
 
@@ -218,4 +216,4 @@ def resolve_prompt_placeholder(session: Session) -> FormattedText:
         and not session.plan_only_until_authorized
     ):
         return _placeholder_formatted(_PLAN_CONTINUE_PLACEHOLDER)
-    return _placeholder_formatted(f"{DEFAULT_PLACEHOLDER_TEXT} · {_COMPOSER_SEND_HINT}")
+    return _placeholder_formatted(DEFAULT_PLACEHOLDER_TEXT)

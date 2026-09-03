@@ -194,8 +194,8 @@ class TestPromptTurnCounter:
 
 class TestResolveIdleHint:
     def test_idle_hint_is_empty_no_recurring_ready_line(self) -> None:
-        # Hints live once in the banner + footer; the prompt shows no per-turn
-        # "Ready · …" line (it also stacked into copies on terminal resize).
+        # The prompt shows no per-turn "Ready · …" line (it also stacked into
+        # copies on terminal resize).
         session = Session()
         session.configured_integrations_known = True
         session.configured_integrations = ("datadog", "github", "grafana")
@@ -203,11 +203,13 @@ class TestResolveIdleHint:
 
 
 class TestComposerFooter:
-    def test_footer_row_is_empty_hints_live_in_the_placeholder(self) -> None:
+    def test_footer_row_is_empty_box_is_the_job_prompt(self) -> None:
         assert composer_footer_ansi() == ""
         session = Session()
-        assert "Enter send" in _placeholder_text(session)
-        assert "? help" in _placeholder_text(session)
+        text = _placeholder_text(session)
+        assert text == DEFAULT_PLACEHOLDER_TEXT
+        assert "Enter send" not in text
+        assert "? help" not in text
 
 
 class TestPromptMessage:
@@ -219,8 +221,8 @@ class TestResolvePromptPlaceholder:
     def test_default_when_no_session_context(self) -> None:
         session = Session()
         text = _placeholder_text(session)
-        assert text.startswith("see what you can do")
-        assert "Enter send" in text
+        assert text == "Ask about an alert"
+        assert "Enter send" not in text
 
     def test_placeholder_prompts_to_continue_an_unfinished_plan(self) -> None:
         from core.agent_harness.task_plan.plan import parse_task_plan

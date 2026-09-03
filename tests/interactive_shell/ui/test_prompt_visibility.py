@@ -138,8 +138,8 @@ def test_streaming_prompt_height_matches_idle_with_live_tool_on_status_row() -> 
 
 
 def test_idle_prompt_has_no_recurring_ready_hint() -> None:
-    # Command hints live once in the launch banner and the composer footer, not
-    # a per-turn "Ready · …" line (which also stacked into copies on resize).
+    # Command hints live on ``?``, not a per-turn "Ready · …" line (which also
+    # stacked into copies on resize).
     session = Session()
     rendered = _plain(render_prompt_region(session, ReplState(), SpinnerState()).value)
     assert "Ready" not in rendered

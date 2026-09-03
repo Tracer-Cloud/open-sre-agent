@@ -60,7 +60,9 @@ def test_launch_banner_is_borderless_centered_hero(monkeypatch: object) -> None:
     # in place of the old TIP line.
     assert "Welcome to OpenSRE CLI" in output
     assert "AI-powered DevOps agent" in output
-    assert "/ commands" in output
+    # Banner is install health, not a shortcut dump (those live on ``?``).
+    assert "/ commands" not in output
+    assert "Enter send" not in output
     # Only the two capability items — no MCPs or AGENTS.md line.
     assert "MCPs" not in output
     assert "AGENTS.md" not in output

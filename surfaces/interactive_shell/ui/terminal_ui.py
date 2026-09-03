@@ -2,9 +2,10 @@
 
 The terminal UI has three pieces, all composed from this module:
 
-1. compact launch banner (overlapping-ring mark + capability status)
-2. hint/spinner and autonomy status above the composer
-3. bordered ``>`` composer + help footer
+1. compact launch banner (wordmark + install health)
+2. one status row above the composer — Auto while idle, Thinking / Invoking
+   while busy
+3. bordered ``>`` composer (job-shaped placeholder; no help footer)
 
 Piece 1 is static chrome printed once by :func:`render_terminal_ui`.
 Pieces 2–3 form the live prompt region: prompt-toolkit re-evaluates them on
@@ -56,18 +57,18 @@ def render_prompt_region(session: Session, state: ReplState, spinner: SpinnerSta
     """Compose the live prompt region: context line plus rule and input prefix.
 
     The top line is the pending confirmation prompt when one is active,
-    otherwise the spinner, completion preview, or idle hint, followed by the
-    autonomy status line showing the active ``/auto`` level. A rendered task
-    plan has one blank row beneath it before this status chrome.
+    otherwise one status row: Thinking / Invoking while a turn is running, or
+    the ``/auto`` permission line while idle. A rendered task plan has one
+    blank row beneath it before this status chrome.
 
     When confirmation or exclusive-stdin structured input owns the keyboard,
     the free-text typing box (rule + ``[N] ❯``) is omitted so it does not
     compete with Ask User / option menus — free text is itself an option
     (``Or type your own answer...``), not a parallel composer.
 
-    One leading blank row separates scrollback from status → Auto → composer,
-    matching Droid's row margin between transcript and chrome. Idle still has
-    no empty "Ready" placeholder under the banner.
+    One leading blank row separates scrollback from the status slot →
+    composer, matching Droid's row margin between transcript and chrome. Idle
+    still has no empty "Ready" placeholder under the banner.
     """
     if typing_box_hidden(session, state):
         # Same newline count as ``_prompt_message`` so confirmation does not
@@ -97,7 +98,7 @@ def render_prompt_region(session: Session, state: ReplState, spinner: SpinnerSta
     # A pending confirmation renders a stacked, arrow-navigable Yes/No choice
     # (box hidden). Density matches the streaming stack: status → Auto → composer.
     if state.is_awaiting_confirmation():
-        auto_line = strip_cpr_sequences(auto_status_ansi(session, quiet=False))
+        auto_line = strip_cpr_sequences(auto_status_ansi(session))
         choice = _confirmation_block(state)
         return ANSI(f"\n{plan_prefix}{choice}\n{auto_line}\n{base}")
 
@@ -112,14 +113,14 @@ def render_prompt_region(session: Session, state: ReplState, spinner: SpinnerSta
                 idle_hint=prompt_rendering.resolve_idle_hint_ansi(session),
             )
         )
-    # Thinking / Invoking owns the gold accent; Auto recedes so the bar is
-    # one status row, not two headlines.
-    auto_line = strip_cpr_sequences(auto_status_ansi(session, quiet=bool(inline_spinner)))
     # Tools already paint a ``⏺`` line into scrollback; the live tool name is
     # folded into the spinner status row (same line as ``Invoking tools…``).
     # Leading blank = Droid row margin under the last transcript line.
+    # Busy occupies the same slot as Auto so patch_stdout height stays stable
+    # and the bar is one headline, not Thinking plus a leftover Auto row.
     if prefix:
-        return ANSI(f"\n{plan_prefix}{prefix}\n{auto_line}\n{base}")
+        return ANSI(f"\n{plan_prefix}{prefix}\n{base}")
+    auto_line = strip_cpr_sequences(auto_status_ansi(session))
     return ANSI(f"\n{plan_prefix}{auto_line}\n{base}")
 
 

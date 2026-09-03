@@ -323,10 +323,12 @@ from config.constants.redis import (
 )
 from config.constants.repl_autonomy import (
     AUTO_LEVEL_ASK_TOOL_TYPES,
+    AUTO_LEVEL_BAR_CAPTIONS,
     AUTO_LEVEL_CAPTIONS,
     AUTO_LEVEL_TITLES,
     DEFAULT_AUTO_LEVEL,
     AutoLevel,
+    format_auto_status_bar,
     format_auto_status_plain,
     parse_auto_level,
 )
@@ -541,10 +543,12 @@ __all__ = [
     "DEFAULT_REMOTE_SYNC_PROVIDER",
     "DEFAULT_THEME_NAME",
     "AUTO_LEVEL_ASK_TOOL_TYPES",
+    "AUTO_LEVEL_BAR_CAPTIONS",
     "AUTO_LEVEL_CAPTIONS",
     "AUTO_LEVEL_TITLES",
     "AutoLevel",
     "DEFAULT_AUTO_LEVEL",
+    "format_auto_status_bar",
     "format_auto_status_plain",
     "parse_auto_level",
     "SOUND_MIN_TURN_SECONDS",

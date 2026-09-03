@@ -93,8 +93,7 @@ def test_prompt_region_keeps_the_checklist_above_invoking_tools() -> None:
     assert "● Trace 502s to the last deploy" in rendered
     assert SpinnerState.INVOKING_TOOLS_PHASE in rendered
     assert rendered.index("Plan · 2/3") < rendered.index(SpinnerState.INVOKING_TOOLS_PHASE)
-    assert "Auto (High)" in rendered
-    assert rendered.index(SpinnerState.INVOKING_TOOLS_PHASE) < rendered.index("Auto (High)")
+    assert "Auto (High)" not in rendered
     assert re.search(
         rf"  ○ Confirm checkout returns 2xx\n\n[^\n]*"
         rf"{re.escape(SpinnerState.INVOKING_TOOLS_PHASE)}",
@@ -111,7 +110,7 @@ def test_idle_prompt_region_shows_plan_without_thinking_or_ready_hint() -> None:
     assert "Plan · 2/3" in rendered
     assert "Ready" not in rendered  # no recurring idle hint line
     assert rendered.index("Plan · 2/3") < rendered.index("Auto (High)")
-    assert "  ○ Confirm checkout returns 2xx\n\nAuto (High)" in rendered
+    assert "  ○ Confirm checkout returns 2xx\n\nAuto (High) · Allow all" in rendered
 
 
 def test_clearing_the_plan_resets_expanded_state() -> None:
