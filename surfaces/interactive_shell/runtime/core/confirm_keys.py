@@ -69,26 +69,54 @@ def _stdin_has_pending(fd: int, timeout: float) -> bool:
         return False
 
 
+def _is_csi_parameter_or_intermediate(char: str) -> bool:
+    """True for CSI parameter (``0–9:;<=>?``) or intermediate (space–``/``) bytes."""
+    return len(char) == 1 and 0x20 <= ord(char) <= 0x3F
+
+
+def _is_keyboard_csi_final(char: str) -> bool:
+    """True for CSI finals used by arrows, Home/End, Delete, and CPR.
+
+    The full ECMA-48 final range is 0x40–0x7E, which includes ``a``/``b``/``y``/``n``.
+    Those are confirmation choices here, not navigation, so they must not be
+    swallowed as a CSI terminator.
+    """
+    if len(char) != 1:
+        return False
+    code = ord(char)
+    return 0x40 <= code <= 0x5F or code == 0x7E
+
+
 def _drain_escape_tail(
     read_char: Callable[[], str],
     *,
     has_input: Callable[[float], bool],
     first_wait: float = _ESCAPE_INTRODUCER_WAIT_S,
-) -> None:
-    """Swallow a CSI tail after ESC without blocking on a standalone Escape.
+) -> str:
+    """Swallow a CSI tail after ESC. Return any leftover byte that is not CSI.
 
     Arrow keys arrive as ``ESC [ A`` (and similar). A lone Escape has no tail
     — *has_input* must return False so this returns immediately and does not
     consume the next intended choice.
+
+    An incomplete ``ESC [`` followed by a choice letter (``a``/``b``/``y``/``n``)
+    returns that letter so the confirmation reader can still resolve it.
     """
     if not has_input(first_wait):
-        return
-    if read_char() != "[":
-        return
+        return ""
+    introducer = read_char()
+    if introducer != "[":
+        return introducer
     while has_input(0):
         nxt = read_char()
-        if not nxt or (len(nxt) == 1 and 0x40 <= ord(nxt) <= 0x7E):
+        if not nxt:
             break
+        if _is_csi_parameter_or_intermediate(nxt):
+            continue
+        if _is_keyboard_csi_final(nxt):
+            break
+        return nxt
+    return ""
 
 
 def _read_key_answer(prompt: str, rows: ConfirmRows, tags: str, cancel: str) -> str:
@@ -113,10 +141,15 @@ def _read_key_answer(prompt: str, rows: ConfirmRows, tags: str, cancel: str) -> 
             if char == "\x1b":
                 # Arrow/nav escape (ESC [ A/B/C/D): drain a pending CSI tail,
                 # ignore. A standalone Escape has no tail — do not block.
-                _drain_escape_tail(
+                leftover = _drain_escape_tail(
                     lambda: sys.stdin.read(1),
                     has_input=lambda timeout: _stdin_has_pending(fd, timeout),
                 )
+                if leftover:
+                    resolved = resolve_confirm_answer(leftover, rows)
+                    if resolved is not None:
+                        answer = resolved
+                        break
                 continue
             if char in ("\r", "\n"):
                 break

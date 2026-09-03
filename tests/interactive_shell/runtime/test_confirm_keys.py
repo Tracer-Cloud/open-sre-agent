@@ -46,7 +46,7 @@ def test_drain_escape_tail_does_not_read_when_no_bytes_are_pending() -> None:
         reads.append("blocked")
         return "["
 
-    _drain_escape_tail(_read, has_input=lambda _timeout: False)
+    assert _drain_escape_tail(_read, has_input=lambda _timeout: False) == ""
     assert reads == []
 
 
@@ -61,7 +61,7 @@ def test_drain_escape_tail_consumes_a_complete_arrow_sequence() -> None:
         waits.append(timeout)
         return bool(stream)
 
-    _drain_escape_tail(_read, has_input=_pending)
+    assert _drain_escape_tail(_read, has_input=_pending) == ""
     assert stream == []
     assert waits[0] > 0  # first wait may pause for the CSI introducer
     assert all(wait == 0 for wait in waits[1:])
@@ -81,5 +81,42 @@ def test_drain_escape_tail_stops_on_an_incomplete_csi_without_eating_the_next_ch
     def _pending(timeout: float) -> bool:
         return bool(stream)
 
-    _drain_escape_tail(_read, has_input=_pending)
+    assert _drain_escape_tail(_read, has_input=_pending) == ""
     assert leftover == ["a"]
+
+
+@pytest.mark.parametrize("choice", ["a", "b", "y", "n"])
+def test_drain_escape_tail_returns_a_pending_choice_after_incomplete_csi(choice: str) -> None:
+    """ESC [ and a choice letter are already buffered; the letter is not a CSI final."""
+    stream = list(f"[{choice}")
+
+    def _read() -> str:
+        return stream.pop(0) if stream else ""
+
+    def _pending(_timeout: float) -> bool:
+        return bool(stream)
+
+    leftover = _drain_escape_tail(_read, has_input=_pending)
+    assert leftover == choice
+    assert stream == []
+
+
+@pytest.mark.parametrize(
+    ("tail", "leftover"),
+    [
+        ("Oa", "O"),  # SS3 prefix, then a choice — do not invent a CSI
+        ("a", "a"),  # lone ESC then a choice typed within the introducer wait
+        ("[1;5A", ""),  # Ctrl+Up: parameters + keyboard final
+        ("[3~", ""),  # Delete
+    ],
+)
+def test_drain_escape_tail_returns_only_non_csi_leftovers(tail: str, leftover: str) -> None:
+    stream = list(tail)
+
+    def _read() -> str:
+        return stream.pop(0) if stream else ""
+
+    def _pending(_timeout: float) -> bool:
+        return bool(stream)
+
+    assert _drain_escape_tail(_read, has_input=_pending) == leftover

@@ -410,8 +410,10 @@ class ActionRenderObserver:
             if not self._has_active_action():
                 self._set_spinner_phase(SpinnerState.EXECUTING_PHASE)
             # The ReAct loop emits every tool_start before any tool_end, so an
-            # empty pending set means this batch is done: flush its buffered
-            # calls as grouped sections before the next iteration or the reply.
+            # empty pending set means this batch is done. Flush now — not at
+            # agent_end — so the group paints before the next iteration's phase
+            # note or the closing reply. Same-kind calls in a later iteration
+            # are a new batch and render as their own section.
             if not self._pending_result_tools:
                 flush_action_log(self.console, self.session)
             return
