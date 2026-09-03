@@ -441,10 +441,12 @@ def test_generic_tool_end_nests_the_result_under_the_call() -> None:
         },
     )
 
-    out = buffer.getvalue()
-    assert "GitHub CLI" in out
-    assert "\n  ↳ GitHub API call succeeded" in out  # tight child, 2-space gutter
-    assert "\n\n  ↳" not in out  # no blank inside the block
+    # The call is buffered for the grouped log; its result folds into the
+    # entry's Ctrl+O detail under a ``↳`` child, not printed live.
+    entries = observer.session.terminal.action_log_entries
+    assert len(entries) == 1
+    assert entries[0].kind == "GitHub CLI"
+    assert "↳ GitHub API call succeeded" in entries[0].detail
     assert observer.session.terminal.inline_tool_results is True
 
 
@@ -465,11 +467,12 @@ def test_generic_tool_end_hides_a_json_blob() -> None:
         },
     )
 
-    # The batch drains and flushes (non-TTY inlines it): the concise call shows,
-    # but the JSON blob result is not folded under it — the reply summarizes it.
-    out = buffer.getvalue()
-    assert "gh api user" in out
-    assert "login" not in out
+    # The call is buffered; the JSON blob result is not folded under it — the
+    # reply summarizes model-only data.
+    entries = observer.session.terminal.action_log_entries
+    assert len(entries) == 1
+    assert "gh api user" in entries[0].detail
+    assert "login" not in entries[0].detail
     assert observer.session.terminal.inline_tool_results is False
 
 

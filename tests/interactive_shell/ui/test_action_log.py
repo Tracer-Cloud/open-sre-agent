@@ -97,3 +97,33 @@ def test_non_tty_inlines_the_detail() -> None:
     assert "gh pr list" in out
     assert "4 open PRs" in out
     assert "Ctrl+O" not in out
+
+
+def test_same_kind_calls_across_iterations_flush_once_as_one_group() -> None:
+    # Greptile P1 regression: the observer must not flush per ReAct iteration,
+    # or same-kind calls in separate iterations render as separate groups. The
+    # sink flushes once, just before the reply, so they stay in one section.
+    from surfaces.interactive_shell.runtime.agent_harness_adapters import ShellOutputSink
+    from surfaces.interactive_shell.ui.action_rendering import ActionRenderObserver
+
+    buffer = io.StringIO()
+    console = _tty(buffer)
+    session = Session()
+    observer = ActionRenderObserver(session=session, console=console, message="check CI")
+
+    # Iteration 1: one GitHub CLI call.
+    observer("tool_start", {"id": "t1", "name": "github_cli", "input": {"args": ["pr", "list"]}})
+    observer("tool_end", {"id": "t1", "name": "github_cli", "output": {"ok": True}})
+    # Iteration 2: another GitHub CLI call.
+    observer("tool_start", {"id": "t2", "name": "github_cli", "input": {"args": ["repo", "view"]}})
+    observer("tool_end", {"id": "t2", "name": "github_cli", "output": {"ok": True}})
+
+    # Nothing is flushed on the per-iteration drains.
+    assert buffer.getvalue() == ""
+    assert len(session.terminal.action_log_entries) == 2
+
+    # The reply stream flushes them once, grouped.
+    ShellOutputSink(console, session).stream(label="assistant", chunks=iter(["done"]))
+    out = buffer.getvalue()
+    assert "GitHub CLI · 2 actions" in out
+    assert out.count("╭") == 1  # one box, not two
