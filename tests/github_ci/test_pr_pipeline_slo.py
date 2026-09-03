@@ -101,6 +101,18 @@ def test_heavy_test_suites_are_duration_balanced_with_measured_headroom() -> Non
     assert "github.event_name == 'push'" in run_step["env"]["PYTEST_COVERAGE_ARGS"]
 
 
+def test_fork_pull_requests_skip_only_the_live_agent_shard() -> None:
+    test_job = _workflow("ci.yml")["jobs"]["test"]
+    run_step = next(step for step in test_job["steps"] if step.get("name") == "Run tests")
+    condition = " ".join(run_step["if"].split())
+
+    assert condition == (
+        "(steps.changes.outputs.source == 'true' || github.event_name == 'push') && "
+        "(matrix.shard != 'cli-live-agent' || github.event_name != 'pull_request' || "
+        "github.event.pull_request.head.repo.fork == false)"
+    )
+
+
 def test_quality_jobs_start_in_parallel_and_gate_aggregates_them() -> None:
     workflow = _workflow("ci.yml")
     jobs = workflow["jobs"]

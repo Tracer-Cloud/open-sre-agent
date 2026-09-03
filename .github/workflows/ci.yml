@@ -565,7 +565,14 @@ jobs:
           esac
 
       - name: Run tests
-        if: steps.changes.outputs.source == 'true' || github.event_name == 'push'
+        # Fork PRs cannot access live LLM credentials. Their marker excludes
+        # every test in cli-live-agent, so skip that live-only matrix entry
+        # instead of invoking pytest with an empty collection (exit code 5).
+        if: >-
+          (steps.changes.outputs.source == 'true' || github.event_name == 'push') &&
+          (matrix.shard != 'cli-live-agent' ||
+          github.event_name != 'pull_request' ||
+          github.event.pull_request.head.repo.fork == false)
         env:
           COVERAGE_FILE: .coverage.${{ matrix.shard }}
           # PRs do not consume coverage artifacts. Avoid instrumenting every
