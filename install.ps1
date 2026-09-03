@@ -1153,7 +1153,7 @@ function Install-OpenSre {
 
     Ensure-OpenSreGithubCli
 
-    $exe = $binaryName.TrimEnd(".exe")
+    $exe = [System.IO.Path]::GetFileNameWithoutExtension($binaryName)
     $sep = "────────────────────────────────────────────"
 
     Write-Host ""

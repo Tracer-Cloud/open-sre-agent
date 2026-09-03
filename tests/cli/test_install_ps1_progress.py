@@ -86,6 +86,13 @@ def test_install_ps1_contains_auto_onboarding_launch_hook() -> None:
     assert "[System.Console]::IsInputRedirected" in source
 
 
+def test_install_ps1_preserves_full_binary_name_in_next_steps() -> None:
+    source = INSTALL_PS1.read_text()
+
+    assert "$exe = [System.IO.Path]::GetFileNameWithoutExtension($binaryName)" in source
+    assert '$binaryName.TrimEnd(".exe")' not in source
+
+
 def test_install_ps1_soft_installs_github_cli_via_winget() -> None:
     source = INSTALL_PS1.read_text()
 
