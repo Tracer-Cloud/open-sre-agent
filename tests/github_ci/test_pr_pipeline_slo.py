@@ -67,7 +67,7 @@ def test_heavy_test_suites_are_duration_balanced_with_measured_headroom() -> Non
         assert [entry["shard"] for entry in groups] == [
             f"{base}-{group}" for group in range(1, splits + 1)
         ]
-        assert all(f"--ci-splits={splits}" in entry["split_args"] for entry in groups)
+        assert all(f"--splits={splits}" in entry["shard_args"] for entry in groups)
 
     live_agent = next(entry for entry in entries if entry["shard"] == "cli-live-agent")
     assert live_agent["llm_provider"] == "openai"
@@ -97,8 +97,39 @@ def test_heavy_test_suites_are_duration_balanced_with_measured_headroom() -> Non
 
     run_step = next(step for step in test_job["steps"] if step.get("name") == "Run tests")
     assert "-p tests.ci_sharding" in run_step["run"]
+    assert "steps.shard.outputs.pytest_paths || matrix.pytest_paths" in run_step["run"]
+    assert "--ci-durations-output=" in run_step["run"]
     assert "--cov=config" not in run_step["run"]
     assert "github.event_name == 'push'" in run_step["env"]["PYTEST_COVERAGE_ARGS"]
+
+    prepartition = next(
+        step for step in test_job["steps"] if step.get("name") == "Pre-partition pytest files"
+    )
+    assert "tests.ci_sharding select" in prepartition["run"]
+    assert "matrix.shard_args" in prepartition["if"]
+    assert "matrix.pytest_paths" in prepartition["run"]
+
+
+def test_main_builds_a_reviewable_timing_snapshot_artifact() -> None:
+    jobs = _workflow("ci.yml")["jobs"]
+    test_steps = jobs["test"]["steps"]
+    timing_upload = next(
+        step for step in test_steps if step.get("name") == "Upload shard timing data"
+    )
+    assert "github.event_name == 'push'" in timing_upload["if"]
+    assert timing_upload["with"]["name"] == "pytest-timings-${{ matrix.shard }}"
+
+    coverage_steps = jobs["coverage-report"]["steps"]
+    merge = next(
+        step for step in coverage_steps if step.get("name") == "Merge pytest timing snapshot"
+    )
+    assert "tests.ci_sharding merge" in merge["run"]
+    snapshot = next(
+        step
+        for step in coverage_steps
+        if step.get("name") == "Upload reviewable pytest timing snapshot"
+    )
+    assert snapshot["with"]["path"] == ".pytest-timings/pytest-file-durations.json"
 
 
 def test_quality_jobs_start_in_parallel_and_gate_aggregates_them() -> None:

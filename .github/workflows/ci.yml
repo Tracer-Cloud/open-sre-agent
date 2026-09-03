@@ -56,6 +56,13 @@ jobs:
         if: steps.changes.outputs.source == 'true' || github.event_name == 'push'
         run: uv sync --frozen --extra dev
 
+      - name: Report pytest timing snapshot health
+        if: steps.changes.outputs.source == 'true' || github.event_name == 'push'
+        run: |
+          uv run python -m tests.ci_sharding report --label=tools-runtime tests/tools tests/core tests/infrastructure tests/filestorage tests/utils tests/masking tests/watch_dog --ignore=tests/core/agent --ignore=tests/core/tool/test_contracts.py --ignore=tests/tools/test_registry_index.py --ignore=tests/tools/selection
+          uv run python -m tests.ci_sharding report --label=cli-runtime tests/cli tests/interactive_shell tests/surfaces tests/core/agent tests/fleet_monitoring tests/analytics tests/sandbox --ignore=tests/cli/test_smoke.py
+          uv run python -m tests.ci_sharding report --label=integrations-and-misc tests/integrations tests/bootstrap tests/benchmarks tests/shared tests/config tests/github_ci tests/quality tests/packaging tests/scheduler gateway/tests
+
       - name: Lint
         if: steps.changes.outputs.source == 'true' || github.event_name == 'push'
         run: uv run python -m ruff check $PYTHON_SOURCE_PATHS tests/
@@ -149,9 +156,8 @@ jobs:
               --ignore=tests/core/tool/test_contracts.py
               --ignore=tests/tools/test_registry_index.py
               --ignore=tests/tools/selection
-            split_args: >-
-              --ci-splits=6 --ci-group=1
-              --ci-durations-path=.github/ci/pytest-file-durations.json
+            shard_args: >-
+              --splits=6 --group=1
             pytest_paths: >-
               tests/tools
               tests/core
@@ -167,9 +173,8 @@ jobs:
               --ignore=tests/core/tool/test_contracts.py
               --ignore=tests/tools/test_registry_index.py
               --ignore=tests/tools/selection
-            split_args: >-
-              --ci-splits=6 --ci-group=2
-              --ci-durations-path=.github/ci/pytest-file-durations.json
+            shard_args: >-
+              --splits=6 --group=2
             pytest_paths: >-
               tests/tools
               tests/core
@@ -185,9 +190,8 @@ jobs:
               --ignore=tests/core/tool/test_contracts.py
               --ignore=tests/tools/test_registry_index.py
               --ignore=tests/tools/selection
-            split_args: >-
-              --ci-splits=6 --ci-group=3
-              --ci-durations-path=.github/ci/pytest-file-durations.json
+            shard_args: >-
+              --splits=6 --group=3
             pytest_paths: >-
               tests/tools
               tests/core
@@ -203,9 +207,8 @@ jobs:
               --ignore=tests/core/tool/test_contracts.py
               --ignore=tests/tools/test_registry_index.py
               --ignore=tests/tools/selection
-            split_args: >-
-              --ci-splits=6 --ci-group=4
-              --ci-durations-path=.github/ci/pytest-file-durations.json
+            shard_args: >-
+              --splits=6 --group=4
             pytest_paths: >-
               tests/tools
               tests/core
@@ -221,9 +224,8 @@ jobs:
               --ignore=tests/core/tool/test_contracts.py
               --ignore=tests/tools/test_registry_index.py
               --ignore=tests/tools/selection
-            split_args: >-
-              --ci-splits=6 --ci-group=5
-              --ci-durations-path=.github/ci/pytest-file-durations.json
+            shard_args: >-
+              --splits=6 --group=5
             pytest_paths: >-
               tests/tools
               tests/core
@@ -239,9 +241,8 @@ jobs:
               --ignore=tests/core/tool/test_contracts.py
               --ignore=tests/tools/test_registry_index.py
               --ignore=tests/tools/selection
-            split_args: >-
-              --ci-splits=6 --ci-group=6
-              --ci-durations-path=.github/ci/pytest-file-durations.json
+            shard_args: >-
+              --splits=6 --group=6
             pytest_paths: >-
               tests/tools
               tests/core
@@ -264,9 +265,8 @@ jobs:
             llm_provider: openai
             extra_pytest_args: >-
               --ignore=tests/cli/test_smoke.py
-            split_args: >-
-              --ci-splits=6 --ci-group=1
-              --ci-durations-path=.github/ci/pytest-file-durations.json
+            shard_args: >-
+              --splits=6 --group=1
             pytest_paths: >-
               tests/cli
               tests/interactive_shell
@@ -280,9 +280,8 @@ jobs:
             llm_provider: openai
             extra_pytest_args: >-
               --ignore=tests/cli/test_smoke.py
-            split_args: >-
-              --ci-splits=6 --ci-group=2
-              --ci-durations-path=.github/ci/pytest-file-durations.json
+            shard_args: >-
+              --splits=6 --group=2
             pytest_paths: >-
               tests/cli
               tests/interactive_shell
@@ -296,9 +295,8 @@ jobs:
             llm_provider: openai
             extra_pytest_args: >-
               --ignore=tests/cli/test_smoke.py
-            split_args: >-
-              --ci-splits=6 --ci-group=3
-              --ci-durations-path=.github/ci/pytest-file-durations.json
+            shard_args: >-
+              --splits=6 --group=3
             pytest_paths: >-
               tests/cli
               tests/interactive_shell
@@ -312,9 +310,8 @@ jobs:
             llm_provider: openai
             extra_pytest_args: >-
               --ignore=tests/cli/test_smoke.py
-            split_args: >-
-              --ci-splits=6 --ci-group=4
-              --ci-durations-path=.github/ci/pytest-file-durations.json
+            shard_args: >-
+              --splits=6 --group=4
             pytest_paths: >-
               tests/cli
               tests/interactive_shell
@@ -328,9 +325,8 @@ jobs:
             llm_provider: openai
             extra_pytest_args: >-
               --ignore=tests/cli/test_smoke.py
-            split_args: >-
-              --ci-splits=6 --ci-group=5
-              --ci-durations-path=.github/ci/pytest-file-durations.json
+            shard_args: >-
+              --splits=6 --group=5
             pytest_paths: >-
               tests/cli
               tests/interactive_shell
@@ -344,9 +340,8 @@ jobs:
             llm_provider: openai
             extra_pytest_args: >-
               --ignore=tests/cli/test_smoke.py
-            split_args: >-
-              --ci-splits=6 --ci-group=6
-              --ci-durations-path=.github/ci/pytest-file-durations.json
+            shard_args: >-
+              --splits=6 --group=6
             pytest_paths: >-
               tests/cli
               tests/interactive_shell
@@ -389,9 +384,8 @@ jobs:
               test_onboard_interactive_smoke_cli_provider))'
           - os: ubuntu-latest
             shard: integrations-and-misc-1
-            split_args: >-
-              --ci-splits=6 --ci-group=1
-              --ci-durations-path=.github/ci/pytest-file-durations.json
+            shard_args: >-
+              --splits=6 --group=1
             pytest_paths: >-
               tests/integrations
               tests/bootstrap
@@ -405,9 +399,8 @@ jobs:
               gateway/tests
           - os: ubuntu-latest
             shard: integrations-and-misc-2
-            split_args: >-
-              --ci-splits=6 --ci-group=2
-              --ci-durations-path=.github/ci/pytest-file-durations.json
+            shard_args: >-
+              --splits=6 --group=2
             pytest_paths: >-
               tests/integrations
               tests/bootstrap
@@ -421,9 +414,8 @@ jobs:
               gateway/tests
           - os: ubuntu-latest
             shard: integrations-and-misc-3
-            split_args: >-
-              --ci-splits=6 --ci-group=3
-              --ci-durations-path=.github/ci/pytest-file-durations.json
+            shard_args: >-
+              --splits=6 --group=3
             pytest_paths: >-
               tests/integrations
               tests/bootstrap
@@ -437,9 +429,8 @@ jobs:
               gateway/tests
           - os: ubuntu-latest
             shard: integrations-and-misc-4
-            split_args: >-
-              --ci-splits=6 --ci-group=4
-              --ci-durations-path=.github/ci/pytest-file-durations.json
+            shard_args: >-
+              --splits=6 --group=4
             pytest_paths: >-
               tests/integrations
               tests/bootstrap
@@ -453,9 +444,8 @@ jobs:
               gateway/tests
           - os: ubuntu-latest
             shard: integrations-and-misc-5
-            split_args: >-
-              --ci-splits=6 --ci-group=5
-              --ci-durations-path=.github/ci/pytest-file-durations.json
+            shard_args: >-
+              --splits=6 --group=5
             pytest_paths: >-
               tests/integrations
               tests/bootstrap
@@ -469,9 +459,8 @@ jobs:
               gateway/tests
           - os: ubuntu-latest
             shard: integrations-and-misc-6
-            split_args: >-
-              --ci-splits=6 --ci-group=6
-              --ci-durations-path=.github/ci/pytest-file-durations.json
+            shard_args: >-
+              --splits=6 --group=6
             pytest_paths: >-
               tests/integrations
               tests/bootstrap
@@ -558,6 +547,19 @@ jobs:
               ;;
           esac
 
+      - name: Pre-partition pytest files
+        id: shard
+        if: >-
+          (steps.changes.outputs.source == 'true' || github.event_name == 'push') &&
+          matrix.shard_args
+        run: >
+          uv run python -m tests.ci_sharding select
+          --output=.pytest-shard-files
+          ${{ matrix.shard_args }}
+          ${{ matrix.pytest_paths }}
+          ${{ matrix.extra_pytest_args }}
+          && echo "pytest_paths=$(tr '\n' ' ' < .pytest-shard-files)" >> "$GITHUB_OUTPUT"
+
       - name: Run tests
         if: >-
           (steps.changes.outputs.source == 'true' || github.event_name == 'push') &&
@@ -579,10 +581,10 @@ jobs:
         # ``N workers [0 items]`` even when the marker is correct.
         run: >
           uv run python -m pytest -p tests.ci_sharding -n auto -v
-          ${{ matrix.pytest_paths }}
+          ${{ steps.shard.outputs.pytest_paths || matrix.pytest_paths }}
           ${PYTEST_COVERAGE_ARGS}
           ${{ matrix.extra_pytest_args }}
-          ${{ matrix.split_args }}
+          --ci-durations-output=.pytest-file-durations-${{ matrix.shard }}.json
           -m "${PYTEST_MARKER_EXPR}"
 
       - name: Upload shard coverage data
@@ -595,6 +597,19 @@ jobs:
           name: coverage-data-${{ matrix.shard }}
           path: .coverage.${{ matrix.shard }}*
           if-no-files-found: error
+          include-hidden-files: true
+          retention-days: 7
+
+      - name: Upload shard timing data
+        if: >-
+          always() &&
+          github.event_name == 'push' &&
+          github.ref == 'refs/heads/main'
+        uses: actions/upload-artifact@v4
+        with:
+          name: pytest-timings-${{ matrix.shard }}
+          path: .pytest-file-durations-${{ matrix.shard }}.json
+          if-no-files-found: warn
           include-hidden-files: true
           retention-days: 7
 
@@ -638,10 +653,23 @@ jobs:
           path: ./
           merge-multiple: true
 
+      - name: Download shard timing artifacts
+        uses: actions/download-artifact@v4
+        with:
+          pattern: pytest-timings-*
+          path: .pytest-timings
+          merge-multiple: true
+
       - name: Combine coverage and build report
         run: |
           uv run python -m coverage combine .
           uv run python -m coverage html
+
+      - name: Merge pytest timing snapshot
+        run: >-
+          uv run python -m tests.ci_sharding merge
+          --output=.pytest-timings/pytest-file-durations.json
+          .pytest-timings/.pytest-file-durations-*.json
 
       - name: Upload combined coverage
         uses: actions/upload-artifact@v4
@@ -650,6 +678,13 @@ jobs:
           path: |
             htmlcov/
             .coverage
+          retention-days: 7
+
+      - name: Upload reviewable pytest timing snapshot
+        uses: actions/upload-artifact@v4
+        with:
+          name: pytest-file-durations-snapshot
+          path: .pytest-timings/pytest-file-durations.json
           retention-days: 7
 
   session-store-locked:
