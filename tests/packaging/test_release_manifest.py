@@ -112,7 +112,7 @@ def test_release_workflow_publishes_python_distributions_to_pypi() -> None:
 
     download_step, publish_step = publish_job["steps"]
     assert download_step["uses"] == (
-        "actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093"
+        "actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c"
     )
     assert download_step["with"] == {
         "name": "release-python-dist",
