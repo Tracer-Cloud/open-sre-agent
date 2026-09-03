@@ -93,8 +93,9 @@ def _render_section(console: Console, session: Session, group: list[ActionLogEnt
         session.terminal.stash_collapsed_tool_output(detail)
         body.append("Ctrl+O to expand details")
 
-    max_inner = max(_MIN_INNER, terminal_columns() - _BOX_MARGIN - 4)
-    inner = min(max(_MIN_INNER, len(header) + 1, *(len(line) for line in body)), max_inner)
+    # Span the full window, matching the input composer plate (total box width
+    # == terminal columns; the border/padding claim 4 cells).
+    inner = max(_MIN_INNER, terminal_columns() - 4)
 
     def _clip(text: str) -> str:
         return text if len(text) <= inner else text[: inner - 1] + "…"
