@@ -916,9 +916,8 @@ detect_glibc_version() {
   # getconf reports "glibc X.Y" on glibc systems and is part of the C library
   # itself, so prefer it; fall back to parsing `ldd --version` when getconf
   # is missing, or present but unable to report a version (e.g. a non-glibc
-  # getconf that doesn't know GNU_LIBC_VERSION). Empty output (not an error)
-  # means neither could determine a version, e.g. on musl/other libc systems
-  # where this check does not apply.
+  # getconf that doesn't know GNU_LIBC_VERSION). Empty output means no glibc
+  # version was found; the caller distinguishes known musl from an unknown libc.
   local version=""
 
   if command -v getconf >/dev/null 2>&1; then
@@ -935,6 +934,17 @@ detect_glibc_version() {
   fi
 }
 
+is_musl_linux() {
+  local ldd_output
+
+  command -v ldd >/dev/null 2>&1 || return 1
+  ldd_output="$(ldd --version 2>&1 || true)"
+  case "$ldd_output" in
+    *musl*|*MUSL*) return 0 ;;
+    *) return 1 ;;
+  esac
+}
+
 version_ge() {
   [ "$(printf '%s\n%s\n' "$1" "$2" | sort -V | tail -n 1)" = "$1" ]
 }
@@ -945,14 +955,23 @@ check_linux_glibc_compatibility() {
   [ "$platform" = "linux" ] || return 0
 
   glibc_version="$(detect_glibc_version)"
-  # Can't determine the version (non-glibc libc, or missing getconf/ldd) —
-  # don't block install on a check we can't perform.
-  [ -n "$glibc_version" ] || return 0
+  if [ -z "$glibc_version" ]; then
+    if is_musl_linux; then
+      die "$(cat <<EOF
+The OpenSRE Linux binary requires glibc ${LINUX_MIN_GLIBC}+, but this system uses musl libc, so the prebuilt binary will not start here.
+Use a glibc-based distribution or container, or run OpenSRE from source: clone https://github.com/${REPO}, install uv (https://docs.astral.sh/uv/getting-started/installation/), then run 'make install' followed by 'uv run opensre'.
+EOF
+)"
+    fi
+
+    warn "Could not determine this Linux system's libc version. The prebuilt binary requires glibc ${LINUX_MIN_GLIBC}+; continuing without a compatibility guarantee."
+    return 0
+  fi
 
   if ! version_ge "$glibc_version" "$LINUX_MIN_GLIBC"; then
     die "$(cat <<EOF
 The OpenSRE Linux binary requires glibc ${LINUX_MIN_GLIBC}+ (Ubuntu 22.04+, Debian 12+, Fedora 36+, or similarly current distributions). This system reports glibc ${glibc_version}, so the prebuilt binary will not start here.
-Run OpenSRE from source instead: clone https://github.com/${REPO}, install uv (https://docs.astral.sh/uv/getting-started/installation/), then run 'make install' followed by 'uv run opensre'.
+Upgrade to a supported distribution rather than replacing the system glibc manually, or run OpenSRE from source: clone https://github.com/${REPO}, install uv (https://docs.astral.sh/uv/getting-started/installation/), then run 'make install' followed by 'uv run opensre'.
 EOF
 )"
   fi

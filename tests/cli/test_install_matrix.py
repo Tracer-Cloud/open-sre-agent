@@ -535,6 +535,62 @@ def test_install_sh_falls_back_to_ldd_when_getconf_cannot_report_version(tmp_pat
     assert "glibc 2.31" in combined
 
 
+@pytest.mark.skipif(
+    sys.platform != "linux",
+    reason="libc preflight only runs when install.sh detects platform=linux",
+)
+def test_install_sh_rejects_musl_before_download(tmp_path: Path) -> None:
+    """A known non-glibc host must fail before fetching an incompatible binary."""
+    home = tmp_path / "home"
+    home.mkdir()
+    fake_bin = tmp_path / "fake-bin"
+    fake_bin.mkdir()
+    network_marker = tmp_path / "network-reached"
+
+    (fake_bin / "getconf").write_text(
+        "#!/usr/bin/env bash\nexit 1\n",
+        encoding="utf-8",
+    )
+    (fake_bin / "getconf").chmod(
+        (fake_bin / "getconf").stat().st_mode | stat.S_IXUSR | stat.S_IXGRP | stat.S_IXOTH
+    )
+    (fake_bin / "ldd").write_text(
+        "#!/usr/bin/env bash\nprintf 'musl libc (x86_64)\\nVersion 1.2.5\\n' >&2\nexit 1\n",
+        encoding="utf-8",
+    )
+    (fake_bin / "ldd").chmod(
+        (fake_bin / "ldd").stat().st_mode | stat.S_IXUSR | stat.S_IXGRP | stat.S_IXOTH
+    )
+    (fake_bin / "curl").write_text(
+        '#!/usr/bin/env bash\nprintf reached > "$NETWORK_MARKER"\nexit 1\n',
+        encoding="utf-8",
+    )
+    (fake_bin / "curl").chmod(
+        (fake_bin / "curl").stat().st_mode | stat.S_IXUSR | stat.S_IXGRP | stat.S_IXOTH
+    )
+
+    env = os.environ.copy()
+    env["HOME"] = str(home)
+    env["NETWORK_MARKER"] = str(network_marker)
+    env["PATH"] = f"{fake_bin}{os.pathsep}{env.get('PATH', '')}"
+
+    result = subprocess.run(
+        ["bash", str(INSTALL_SH), "--main"],
+        cwd=str(tmp_path),
+        env=env,
+        capture_output=True,
+        text=True,
+        timeout=30,
+        check=False,
+    )
+    combined = result.stdout + result.stderr
+    assert result.returncode != 0, combined
+    assert "musl libc" in combined
+    assert "glibc 2.35" in combined
+    assert "uv run opensre" in combined
+    assert not network_marker.exists()
+
+
 def test_install_sh_skip_gh_and_no_auto_launch_env(tmp_path: Path) -> None:
     """Documented CI/provisioning knobs must keep install non-interactive."""
     result = _run_install_sh(
