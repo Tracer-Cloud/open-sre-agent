@@ -43,10 +43,10 @@ def test_slash_invoke_tool_start_does_not_record_cli_agent() -> None:
     )
 
     # slash_invoke is self-recording, so no cli_agent history row is written,
-    # but the live tool-call preview still shows what is running.
+    # but the call is buffered for the grouped action log.
     assert session.history == []
     assert observer.planned_count == 1
-    assert "/model show" in buffer.getvalue()
+    assert any("/model show" in entry.detail for entry in session.terminal.action_log_entries)
 
 
 def test_internal_choose_slash_has_no_tool_preview() -> None:
@@ -456,7 +456,6 @@ def test_generic_tool_end_hides_a_json_blob() -> None:
         "tool_start",
         {"id": "t1", "name": "github_cli", "input": {"args": ["api", "user"]}},
     )
-    after_start = buffer.getvalue()
     observer(
         "tool_end",
         {
@@ -466,12 +465,16 @@ def test_generic_tool_end_hides_a_json_blob() -> None:
         },
     )
 
-    assert buffer.getvalue() == after_start
+    # The batch drains and flushes (non-TTY inlines it): the concise call shows,
+    # but the JSON blob result is not folded under it — the reply summarizes it.
+    out = buffer.getvalue()
+    assert "gh api user" in out
+    assert "login" not in out
     assert observer.session.terminal.inline_tool_results is False
 
 
-def test_one_blank_line_between_a_skill_block_and_the_next_call() -> None:
-    """Droid / Claude / Cursor: one gap BETWEEN blocks, never two stacked blanks."""
+def test_skill_block_renders_live_not_buffered() -> None:
+    """Skill blocks print live with one gap; tool calls are buffered, not shown yet."""
     observer, buffer = _observer_with_buffer()
 
     observer(
@@ -492,8 +495,10 @@ def test_one_blank_line_between_a_skill_block_and_the_next_call() -> None:
     )
 
     out = buffer.getvalue()
-    assert "\nSkill install-code-review\n  ↳ Skill activated\n\n⏺" in out
+    assert "\nSkill install-code-review\n  ↳ Skill activated\n" in out
     assert "\n\n\n" not in out
+    # The github call is buffered for the grouped log, not printed inline yet.
+    assert any(e.kind == "GitHub CLI" for e in observer.session.terminal.action_log_entries)
 
 
 def test_literal_slash_command_records_single_history_entry(

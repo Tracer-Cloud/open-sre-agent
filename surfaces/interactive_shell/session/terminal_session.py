@@ -39,6 +39,21 @@ INLINE_EXPAND_MAX_LINES = 120
 
 
 @dataclass
+class ActionLogEntry:
+    """One buffered tool call for the grouped, collapsible action log.
+
+    ``kind`` is the section header (e.g. ``GitHub CLI``); ``concise`` is the
+    one-line status shown in the section (no inline arguments); ``detail`` is
+    the full call + result text revealed on Ctrl+O.
+    """
+
+    call_id: str
+    kind: str
+    concise: str
+    detail: str = ""
+
+
+@dataclass
 class TerminalSession:
     """Shell-surface session state, composed onto ``Session`` for the interactive shell."""
 
@@ -133,6 +148,13 @@ class TerminalSession:
 
     The closing reply must not repeat those results. The response composer
     reads and clears the flag."""
+
+    action_log_entries: list[ActionLogEntry] = field(default_factory=list)
+    """Tool calls buffered for the current turn's grouped action log (call order).
+
+    The observer appends each call here instead of printing it live; the batch
+    flushes as bordered, collapsible sections above the reply (Ctrl+O expands
+    the detail)."""
 
     pending_confirm_options: tuple[tuple[str, str], ...] | None = None
     """Rows the next execution confirmation should offer, or None for Yes/No.
@@ -262,6 +284,27 @@ class TerminalSession:
         body = ring[idx]
         self._collapsed_expand_next = idx - 1 if idx > 0 else len(ring) - 1
         return body
+
+    def push_action_log(self, entry: ActionLogEntry) -> None:
+        """Buffer one tool call for the current turn's grouped action log."""
+        self.action_log_entries.append(entry)
+
+    def append_action_result(self, call_id: str, result: str) -> None:
+        """Attach a result line to the buffered call ``call_id`` (if present)."""
+        for entry in reversed(self.action_log_entries):
+            if entry.call_id == call_id:
+                entry.detail = f"{entry.detail}\n{result}" if entry.detail else result
+                return
+
+    def has_action_log(self) -> bool:
+        """True when at least one action is buffered for the current turn."""
+        return bool(self.action_log_entries)
+
+    def take_action_log(self) -> list[ActionLogEntry]:
+        """Return the buffered action entries and clear the buffer."""
+        entries = self.action_log_entries
+        self.action_log_entries = []
+        return entries
 
     def pop_pending_prompt_default(self) -> str:
         """Return pre-filled text for the next prompt line, if any, and clear it."""

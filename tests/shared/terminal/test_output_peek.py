@@ -34,8 +34,10 @@ def test_expand_marker_matches_droid_copy() -> None:
 
 
 def test_cap_output_uses_one_marker_when_both_caps_apply() -> None:
+    # Exceed both the line cap (12) and the char cap (800): the hidden-line
+    # expand marker wins, and the peek itself still ends with the inline ``…``.
     line = "y" * 130
-    text = "\n".join([line] * 7)
+    text = "\n".join([line] * 20)
     preview, folded = cap_output_for_display(text)
     assert folded == text
     assert preview.count("Ctrl+O to view") == 1
@@ -43,3 +45,21 @@ def test_cap_output_uses_one_marker_when_both_caps_apply() -> None:
     assert preview.rstrip().endswith("Ctrl+O to view")
     body, _, _ = preview.rpartition("\n")
     assert body.endswith("…")
+
+
+def test_boxed_table_is_not_folded_mid_box_or_capped_mid_line() -> None:
+    # A rendered table (box-drawing chars) must show whole rows, never a partial
+    # box or a mid-line character cut. Well under the 40-row table budget.
+    rows = [
+        "┌────────┬────────┐",
+        "│ ID     │ Name   │",
+        "├────────┼────────┤",
+        *(f"│ id{i:<5}│ name{i:<3}│" for i in range(8)),
+        "└────────┴────────┘",
+    ]
+    text = "\n".join(rows)
+    preview, folded = cap_output_for_display(text)
+    assert folded is None  # shown whole, nothing stashed
+    assert preview == text
+    assert "Ctrl+O" not in preview
+    assert "…" not in preview

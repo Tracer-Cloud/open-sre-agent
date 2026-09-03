@@ -28,16 +28,15 @@ from infrastructure.safety.terminal_output import strip_terminal_controls
 from infrastructure.terminal.theme import (
     BOLD_SKILL,
     DIM,
-    SECONDARY,
     TEXT,
-    reply_marker_style,
 )
 from infrastructure.text import is_data_blob
 from surfaces.interactive_shell.runtime import Session
 from surfaces.interactive_shell.runtime.core.state import SpinnerState
+from surfaces.interactive_shell.session.terminal_session import ActionLogEntry
+from surfaces.interactive_shell.ui.action_log import flush_action_log
 from surfaces.interactive_shell.ui.streaming import render_note_block
 from surfaces.shared.terminal.output.console_state import get_investigation_spinner
-from surfaces.shared.terminal.tables import print_command_output
 from tools.interactive_shell.action_names import ActionToolName
 from tools.interactive_shell.shell.display import format_shell_command_for_display
 
@@ -388,6 +387,11 @@ class ActionRenderObserver:
         if kind == "llm_start":
             self._set_spinner_phase(SpinnerState.THINKING_PHASE)
             return
+        if kind == "agent_end":
+            # Safety flush: the batch drain below normally empties the buffer,
+            # but a turn that ends without a clean drain still gets its log.
+            flush_action_log(self.console, self.session)
+            return
         if kind == "message_update":
             self._render_intermediate_message(data)
             return
@@ -413,6 +417,11 @@ class ActionRenderObserver:
             self._clear_active_action(data)
             if not self._has_active_action():
                 self._set_spinner_phase(SpinnerState.EXECUTING_PHASE)
+            # The ReAct loop emits every tool_start before any tool_end, so an
+            # empty pending set means this batch is done: flush its buffered
+            # calls as grouped sections before the next iteration or the reply.
+            if not self._pending_result_tools:
+                flush_action_log(self.console, self.session)
             return
         if kind != "tool_start":
             return
@@ -521,38 +530,38 @@ class ActionRenderObserver:
         self.console.print(line)
 
     def _render_tool_invocation(self, name: str, data: dict[str, Any]) -> None:
-        """Show the running tool as one marked line: ``⏺ Label · payload``."""
+        """Buffer the running tool for the grouped action log — no inline args.
+
+        The visible section shows a concise status only (a trimmed command for
+        runnable tools, the label alone for the rest); the ``key: value``
+        arguments go into the Ctrl+O detail, never the dotted inline strip.
+        """
         args = data.get("input")
         label, content = tool_call_display(name, args if isinstance(args, dict) else {})
-        self.console.print()
-        # One warm accent (same as ``∴``) on the glyph; recessed label + dim
-        # payload — Droid-style quiet tool chrome, not a second blue brand strip.
-        line = Text()
-        line.append(f"{_TOOL_CALL_MARKER} ", style=reply_marker_style())
-        line.append(label, style=f"bold {TEXT}")
-        if content:
-            separator = " · " if label in _COMMAND_TOOL_LABELS else " "
-            line.append(separator, style=str(DIM))
-            # Quiet payload that tracks the active palette (SECONDARY), so it
-            # never reads as an off-theme amber under a non-warm theme.
-            line.append(content, style=str(SECONDARY))
-        self.console.print(line)
+        if label in _COMMAND_TOOL_LABELS:
+            concise = _bounded_preview(content, limit=72) if content else ""
+            detail = f"{_TOOL_CALL_MARKER} {label} · {content}" if content else f"{label}"
+        else:
+            concise = ""
+            detail = f"{_TOOL_CALL_MARKER} {label}"
+            if content:
+                # Unfold the dotted argument strip into one indented line each.
+                detail += "\n" + "\n".join(f"    {part}" for part in content.split(" · "))
+        self.session.terminal.push_action_log(
+            ActionLogEntry(call_id=_tool_event_id(data), kind=label, concise=concise, detail=detail)
+        )
 
     def _render_tool_result(self, data: dict[str, Any]) -> None:
-        """Nest the user-facing result under the ``⏺`` call as a ``↳`` child.
+        """Fold the user-facing result under its buffered call (Ctrl+O detail).
 
-        Droid / Claude Code / Cursor keep the result attached to the call.
         JSON blobs stay hidden — the closing reply summarizes those.
         """
         preview = _tool_result_preview(data.get("output"))
         if not preview:
             return
-        print_command_output(
-            self.console,
-            preview,
-            style=str(SECONDARY),
-            on_collapse=lambda body: self.session.terminal.stash_collapsed_tool_output(body),
-        )
+        rows = preview.splitlines() or [preview]
+        result = "\n".join([f"  ↳ {rows[0]}", *(f"    {row}" for row in rows[1:])])
+        self.session.terminal.append_action_result(_tool_event_id(data), result)
         self.session.terminal.inline_tool_results = True
 
     def _render_skill_end(self, data: dict[str, Any]) -> None:

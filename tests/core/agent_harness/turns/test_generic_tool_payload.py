@@ -132,9 +132,9 @@ def test_verbose_output_is_capped_for_display_only() -> None:
     big = "\n".join(f"run {i} failure 2026-08-01T09:11:00Z" for i in range(50))
     capped = cap_for_display(big)
 
-    # Display is a short head + one Droid-style peek marker; the full text is untouched.
-    assert capped.count("\n") + 1 <= 6
-    assert "… 46 more, Ctrl+O to view" in capped
+    # Display is a bounded head + one Droid-style peek marker; the full text is untouched.
+    assert capped.count("\n") + 1 <= 13
+    assert "… 38 more, Ctrl+O to view" in capped
     assert "output truncated" not in capped
     assert big.count("\n") + 1 == 50  # source unchanged
 
