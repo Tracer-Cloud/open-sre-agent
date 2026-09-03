@@ -20,6 +20,10 @@ ConfirmRows = tuple[tuple[str, str], ...]
 #: a standalone Escape (no tail bytes will arrive).
 _ESCAPE_INTRODUCER_WAIT_S = 0.05
 
+#: SS3 finals for application-mode arrows, Home/End, and F1–F4 (``ESC O …``).
+#: Uppercase only — a following ``a``/``b`` is a confirmation choice, not an arrow.
+_SS3_KEYBOARD_FINALS = frozenset("ABCDHFPRS")
+
 
 def resolve_confirm_answer(key: str, rows: ConfirmRows) -> str | None:
     """Map one confirmation keypress to a row answer, or ``None`` to keep waiting.
@@ -93,18 +97,28 @@ def _drain_escape_tail(
     has_input: Callable[[float], bool],
     first_wait: float = _ESCAPE_INTRODUCER_WAIT_S,
 ) -> str:
-    """Swallow a CSI tail after ESC. Return any leftover byte that is not CSI.
+    """Swallow a CSI or SS3 tail after ESC. Return any leftover non-nav byte.
 
-    Arrow keys arrive as ``ESC [ A`` (and similar). A lone Escape has no tail
-    — *has_input* must return False so this returns immediately and does not
-    consume the next intended choice.
+    Arrow keys arrive as ``ESC [ A`` (CSI) or ``ESC O A`` (SS3, application
+    cursor mode). A lone Escape has no tail — *has_input* must return False so
+    this returns immediately and does not consume the next intended choice.
 
-    An incomplete ``ESC [`` followed by a choice letter (``a``/``b``/``y``/``n``)
-    returns that letter so the confirmation reader can still resolve it.
+    An incomplete ``ESC [`` / ``ESC O`` followed by a choice letter
+    (``a``/``b``/``y``/``n``) returns that letter so the confirmation reader
+    can still resolve it. A complete SS3 arrow is consumed in full: returning
+    only ``O`` would leave ``A``/``B`` for the next read, and the resolver
+    case-folds those onto rows ``a``/``b`` (Yes / always allow).
     """
     if not has_input(first_wait):
         return ""
     introducer = read_char()
+    if introducer == "O":
+        if not has_input(0):
+            return ""
+        nxt = read_char()
+        if nxt in _SS3_KEYBOARD_FINALS:
+            return ""
+        return nxt
     if introducer != "[":
         return introducer
     while has_input(0):
@@ -139,8 +153,8 @@ def _read_key_answer(prompt: str, rows: ConfirmRows, tags: str, cancel: str) -> 
             if not char:
                 break
             if char == "\x1b":
-                # Arrow/nav escape (ESC [ A/B/C/D): drain a pending CSI tail,
-                # ignore. A standalone Escape has no tail — do not block.
+                # Arrow/nav escape (ESC [ A or ESC O A): drain the CSI/SS3
+                # tail, ignore. A standalone Escape has no tail — do not block.
                 leftover = _drain_escape_tail(
                     lambda: sys.stdin.read(1),
                     has_input=lambda timeout: _stdin_has_pending(fd, timeout),

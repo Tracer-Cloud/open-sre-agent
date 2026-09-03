@@ -409,13 +409,10 @@ class ActionRenderObserver:
             self._clear_active_action(data)
             if not self._has_active_action():
                 self._set_spinner_phase(SpinnerState.EXECUTING_PHASE)
-            # The ReAct loop emits every tool_start before any tool_end, so an
-            # empty pending set means this batch is done. Flush now — not at
-            # agent_end — so the group paints before the next iteration's phase
-            # note or the closing reply. Same-kind calls in a later iteration
-            # are a new batch and render as their own section.
-            if not self._pending_result_tools:
-                flush_action_log(self.console, self.session)
+            # No per-iteration flush: the whole turn's calls are flushed once,
+            # just before the reply (``ShellOutputSink.stream``), so same-kind
+            # calls spanning iterations stay in one group. ``agent_end`` below is
+            # the fallback for turns that end without streaming a reply.
             return
         if kind != "tool_start":
             return

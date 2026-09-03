@@ -104,7 +104,8 @@ def test_drain_escape_tail_returns_a_pending_choice_after_incomplete_csi(choice:
 @pytest.mark.parametrize(
     ("tail", "leftover"),
     [
-        ("Oa", "O"),  # SS3 prefix, then a choice — do not invent a CSI
+        ("Oa", "a"),  # incomplete SS3, then a choice — keep the choice
+        ("O", ""),  # SS3 prefix only — do not treat O as a leftover choice
         ("a", "a"),  # lone ESC then a choice typed within the introducer wait
         ("[1;5A", ""),  # Ctrl+Up: parameters + keyboard final
         ("[3~", ""),  # Delete
@@ -120,3 +121,24 @@ def test_drain_escape_tail_returns_only_non_csi_leftovers(tail: str, leftover: s
         return bool(stream)
 
     assert _drain_escape_tail(_read, has_input=_pending) == leftover
+
+
+@pytest.mark.parametrize("tail", ["OA", "OB", "OC", "OD", "OH", "OF"])
+def test_drain_escape_tail_consumes_ss3_arrows(tail: str) -> None:
+    """Application-mode arrows are ESC O A/B; A/B lowercased would select a/b."""
+    stream = list(tail)
+
+    def _read() -> str:
+        return stream.pop(0) if stream else ""
+
+    def _pending(_timeout: float) -> bool:
+        return bool(stream)
+
+    assert _drain_escape_tail(_read, has_input=_pending) == ""
+    assert stream == []  # the SS3 final must not reach the next key read
+
+
+def test_ss3_arrow_finals_resolve_as_row_tags() -> None:
+    """Why SS3 must be fully drained: case-fold maps A/B onto Yes / always."""
+    assert resolve_confirm_answer("A", _ROWS) == "y"
+    assert resolve_confirm_answer("B", _ROWS) == "always"
