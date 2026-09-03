@@ -190,9 +190,10 @@ def test_build_prompt_session_installs_growing_bordered_composer() -> None:
     assert isinstance(framed_input, FloatContainer)
     chrome = framed_input.content
     assert isinstance(chrome, HSplit)
-    assert len(chrome.children) == 3
+    # Status rows, then the bordered composer — send hints live in the
+    # empty-box placeholder, not a third footer child.
+    assert len(chrome.children) == 2
     composer = chrome.children[1]
-    footer = chrome.children[2]
     assert isinstance(composer, HSplit)
     assert composer.height is None
     editable_row = composer.children[1]
@@ -203,7 +204,6 @@ def test_build_prompt_session_installs_growing_bordered_composer() -> None:
     default_buffer_slot = editable_body.children[0]
     assert default_buffer_slot.content.height.min == 1
     assert default_buffer_slot.content.height.max == 8
-    assert isinstance(footer, Window)
     assert chrome.preferred_width(80).preferred == 79
 
 
