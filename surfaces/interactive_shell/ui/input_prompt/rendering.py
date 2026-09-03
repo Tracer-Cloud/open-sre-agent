@@ -87,7 +87,6 @@ def render_submitted_prompt(console: Console, session: Session, text: str) -> No
         # Keep the Ask User block in the transcript (Q white, A brand). Claim the
         # turn number so the next prompt still advances; do not paint a fake
         # ``[N] ❯`` — leave this as the Ask User card.
-        console.print()
         session.terminal.claim_turn_number()
         render_ask_user_qa(console, ask_user_pairs)
         return

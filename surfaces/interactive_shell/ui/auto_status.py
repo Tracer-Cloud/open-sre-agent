@@ -12,12 +12,11 @@ if TYPE_CHECKING:
     from surfaces.interactive_shell.session import Session
 
 
-def auto_status_ansi(session: Session) -> str:
-    """One idle row: ``Auto (High) · Allow all``.
+def auto_status_ansi(session: Session, *, quiet: bool = False) -> str:
+    """``Auto (High) · Allow all`` — idle gold, DIM while Thinking owns the accent.
 
     Permission copy stays visible at every level, including High (the default).
-    The model id lives on ``/model`` and ``?``, not this chrome. Busy turns
-    replace this row with Thinking / Invoking instead of stacking both.
+    The model id lives on ``/model`` and ``?``, not this chrome.
     """
     level = getattr(session.terminal, "auto_level", DEFAULT_AUTO_LEVEL)
     left = format_auto_status_bar(level)
@@ -27,8 +26,9 @@ def auto_status_ansi(session: Session) -> str:
     title = clipped if title_end < 0 else clipped[:title_end]
     rest = "" if title_end < 0 else clipped[title_end:]
     pad = max(0, width - len(clipped))
+    title_ansi = ui_theme.DIM_ANSI if quiet else ui_theme.BOLD_REPLY_MARKER_ANSI
     return (
-        f"{ui_theme.BOLD_REPLY_MARKER_ANSI}{title}{ui_theme.ANSI_RESET}"
+        f"{title_ansi}{title}{ui_theme.ANSI_RESET}"
         f"{ui_theme.DIM_ANSI}{rest}{ui_theme.ANSI_RESET}"
         f"{' ' * pad}"
     )

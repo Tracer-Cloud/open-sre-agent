@@ -465,10 +465,10 @@ def choose_help_command(sections: Sequence[HelpSection]) -> str | None:
             continue
         if action == "enter":
             command = rows[selected].command
-            erase_menu_lines(erase_lines)
+            erase_menu_lines(erase_lines, delete=True)
             return command.name if command is not None else None
         if action in ("cancel", "eof"):
-            erase_menu_lines(erase_lines)
+            erase_menu_lines(erase_lines, delete=True)
             return None
         if action == "ignore":
             continue

@@ -198,7 +198,7 @@ def _draw_ask_user(
 
 
 def _erase_ask_user(question: AskUserQuestion) -> None:
-    erase_menu_lines(_menu_height(question))
+    erase_menu_lines(_menu_height(question), delete=True)
     sys.stdout.flush()
 
 

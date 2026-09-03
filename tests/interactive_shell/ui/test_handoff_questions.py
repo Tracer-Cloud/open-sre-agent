@@ -151,6 +151,8 @@ def test_choice_selection_strips_terminal_controls() -> None:
     assert "\x07" not in output
     assert "✓ Deploy?" in output
     assert "Canary" in output
+    assert not output.startswith("\n")
+    assert "\n\n" not in output
 
 
 def test_multi_select_choice_indents_every_selected_line() -> None:

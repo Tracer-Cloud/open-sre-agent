@@ -177,9 +177,19 @@ def write_menu_line(text: str = "") -> None:
     sys.stdout.write(_TERMINAL_NEWLINE)
 
 
-def _erase_menu_block(height: int) -> None:
+def _erase_menu_block(height: int, *, delete: bool = False) -> None:
+    """Rewind the inline menu. Clear in place for redraw; delete rows on leave.
+
+    ``ESC[J`` blanks the menu but leaves the rows in the scrollback — after a
+    8–10 line Ask User picker that hole sits between the reply and the ✓ recap
+    (and again above Thinking). ``CSI n M`` removes the rows so the transcript
+    closes up.
+    """
     if height:
-        sys.stdout.write(f"\r\x1b[{height}A\r\x1b[J")
+        if delete:
+            sys.stdout.write(f"\r\x1b[{height}A\r\x1b[{height}M")
+        else:
+            sys.stdout.write(f"\r\x1b[{height}A\r\x1b[J")
     reset_tty_column()
 
 
@@ -213,7 +223,7 @@ def show_terminal_cursor() -> None:
 
 
 def leave_inline_menu() -> None:
-    """Restore cooked stdin and start the next Rich line at column zero.
+    """Restore cooked stdin and park the cursor at column zero.
 
     Pair with :func:`hide_terminal_cursor` in a ``finally`` so select, Esc,
     and exceptions all recook stdin. Without this, padded menu rows leave the
@@ -233,12 +243,18 @@ def leave_inline_menu() -> None:
     restore_stdin_terminal()
     flush_pending_input()
     drain_stale_cpr_bytes()
-    prepare_repl_output_line()
+    # Column zero only — a newline here is a second blank after the reply
+    # (the stream already printed one) and after a deleted menu.
+    reset_tty_column()
 
 
-def erase_menu_lines(height: int) -> None:
-    """Erase a previously-rendered inline menu block."""
-    _erase_menu_block(height)
+def erase_menu_lines(height: int, *, delete: bool = False) -> None:
+    """Erase a previously-rendered inline menu block.
+
+    ``delete=False`` (redraw) clears in place. ``delete=True`` (leave) removes
+    the rows so they do not remain as a hole in the transcript.
+    """
+    _erase_menu_block(height, delete=delete)
 
 
 def _clear_prompt_toolkit_paint() -> None:
@@ -330,7 +346,7 @@ def _erase_menu(
     """Move cursor up to the start of this menu block and wipe it."""
     _, crumb, labels = _sanitize_menu("", crumb, labels)
     height = _menu_height(crumb, labels, multi_select=multi_select, header=header)
-    _erase_menu_block(height)
+    _erase_menu_block(height, delete=True)
     sys.stdout.flush()
 
 

@@ -218,6 +218,26 @@ def test_print_valid_choice_list_strips_controls_and_escapes_markup() -> None:
     assert "[bold]" in output
 
 
+def test_draw_menu_redraw_clears_in_place_without_deleting(monkeypatch) -> None:
+    """Arrow-key redraw must overwrite the same rows, not pull the transcript up."""
+    out = io.StringIO()
+    monkeypatch.setattr(sys, "stdout", out)
+    monkeypatch.setattr(choice_menu, "_cols", lambda: 80)
+
+    choice_menu._draw_menu(
+        title="Pick",
+        crumb="",
+        labels=["one"],
+        index=0,
+        erase_lines=6,
+    )
+
+    rendered = out.getvalue()
+    assert "\x1b[6A" in rendered
+    assert "\x1b[J" in rendered
+    assert "\x1b[6M" not in rendered
+
+
 def test_erase_menu_block_resets_to_column_zero(monkeypatch) -> None:
     out = io.StringIO()
     monkeypatch.setattr(sys, "stdout", out)
@@ -226,7 +246,9 @@ def test_erase_menu_block_resets_to_column_zero(monkeypatch) -> None:
 
     rendered = out.getvalue()
     assert rendered.startswith("\r\x1b[")
-    assert "A\r\x1b[J" in rendered
+    # Leave must delete the rows (CSI n M), not only blank them (ESC[J).
+    assert "A\r\x1b[" in rendered and "M" in rendered
+    assert "\x1b[J" not in rendered
     assert rendered.endswith("\r")
 
 
@@ -251,8 +273,8 @@ def test_leave_inline_menu_starts_next_line_at_column_zero(monkeypatch) -> None:
 
     choice_menu.leave_inline_menu()
 
-    # prepare_repl_output_line writes \\r\\n then reset_tty_column writes \\r
-    assert "\r\n" in out.getvalue()
+    # Column zero only — a leftover \\r\\n is a blank row after every picker.
+    assert "\r\n" not in out.getvalue()
     assert out.getvalue().endswith("\r")
 
 
@@ -267,7 +289,9 @@ def test_pick_ignores_unmapped_keys(monkeypatch) -> None:
 
     rendered = out.getvalue()
     assert rendered.count("test") == 2
-    assert "A\r\x1b[J" in rendered
+    # Ignore redraws in place (ESC[J); leave deletes the block (CSI n M).
+    assert "\x1b[J" in rendered
+    assert "M" in rendered
 
 
 def test_read_action_treats_space_as_enter(monkeypatch) -> None:
@@ -336,7 +360,7 @@ def test_repl_choose_one_restores_terminal_when_menu_raises(monkeypatch) -> None
         choice_menu.repl_choose_one(title="theme", choices=[("green", "green")])
 
     assert restored == [True]
-    assert "\r\n" in out.getvalue()
+    assert "\r\n" not in out.getvalue()
     assert out.getvalue().endswith("\r")
 
 

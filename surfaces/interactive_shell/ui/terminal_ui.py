@@ -3,8 +3,7 @@
 The terminal UI has three pieces, all composed from this module:
 
 1. compact launch banner (wordmark + install health)
-2. one status row above the composer — Auto while idle, Thinking / Invoking
-   while busy
+2. Thinking / Invoking (when busy) plus the Auto permission line
 3. bordered ``>`` composer (job-shaped placeholder; no help footer)
 
 Piece 1 is static chrome printed once by :func:`render_terminal_ui`.
@@ -57,18 +56,18 @@ def render_prompt_region(session: Session, state: ReplState, spinner: SpinnerSta
     """Compose the live prompt region: context line plus rule and input prefix.
 
     The top line is the pending confirmation prompt when one is active,
-    otherwise one status row: Thinking / Invoking while a turn is running, or
-    the ``/auto`` permission line while idle. A rendered task plan has one
-    blank row beneath it before this status chrome.
+    otherwise Thinking / Invoking while a turn is running, then the ``/auto``
+    permission line. A rendered task plan has one blank row beneath it before
+    this status chrome.
 
     When confirmation or exclusive-stdin structured input owns the keyboard,
     the free-text typing box (rule + ``[N] ❯``) is omitted so it does not
     compete with Ask User / option menus — free text is itself an option
     (``Or type your own answer...``), not a parallel composer.
 
-    One leading blank row separates scrollback from the status slot →
-    composer, matching Droid's row margin between transcript and chrome. Idle
-    still has no empty "Ready" placeholder under the banner.
+    The stream already prints one blank after the last reply. This region
+    starts on the next row — a second leading ``\\n`` stacked a hole under
+    Ask User recaps. Idle still has no empty "Ready" placeholder.
     """
     if typing_box_hidden(session, state):
         # Same newline count as ``_prompt_message`` so confirmation does not
@@ -98,9 +97,9 @@ def render_prompt_region(session: Session, state: ReplState, spinner: SpinnerSta
     # A pending confirmation renders a stacked, arrow-navigable Yes/No choice
     # (box hidden). Density matches the streaming stack: status → Auto → composer.
     if state.is_awaiting_confirmation():
-        auto_line = strip_cpr_sequences(auto_status_ansi(session))
+        auto_line = strip_cpr_sequences(auto_status_ansi(session, quiet=False))
         choice = _confirmation_block(state)
-        return ANSI(f"\n{plan_prefix}{choice}\n{auto_line}\n{base}")
+        return ANSI(f"{plan_prefix}{choice}\n{auto_line}\n{base}")
 
     if state.is_ctrl_c_exit_hint_visible():
         prefix = prompt_rendering.ctrl_c_exit_hint_ansi()
@@ -115,13 +114,12 @@ def render_prompt_region(session: Session, state: ReplState, spinner: SpinnerSta
         )
     # Tools already paint a ``⏺`` line into scrollback; the live tool name is
     # folded into the spinner status row (same line as ``Invoking tools…``).
-    # Leading blank = Droid row margin under the last transcript line.
-    # Busy occupies the same slot as Auto so patch_stdout height stays stable
-    # and the bar is one headline, not Thinking plus a leftover Auto row.
+    # Auto stays on the page while busy (DIM) so permission chrome does not
+    # vanish for the length of the turn.
+    auto_line = strip_cpr_sequences(auto_status_ansi(session, quiet=bool(inline_spinner)))
     if prefix:
-        return ANSI(f"\n{plan_prefix}{prefix}\n{base}")
-    auto_line = strip_cpr_sequences(auto_status_ansi(session))
-    return ANSI(f"\n{plan_prefix}{auto_line}\n{base}")
+        return ANSI(f"{plan_prefix}{prefix}\n{auto_line}\n{base}")
+    return ANSI(f"{plan_prefix}{auto_line}\n{base}")
 
 
 _CONFIRM_HINT = "↑↓ Navigate • Enter confirm • Esc cancel"
