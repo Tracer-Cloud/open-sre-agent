@@ -914,12 +914,19 @@ detect_platform() {
 
 detect_glibc_version() {
   # getconf reports "glibc X.Y" on glibc systems and is part of the C library
-  # itself, so prefer it; fall back to parsing `ldd --version`. Both are
-  # empty (not an error) on musl/other libc systems, where this check does
-  # not apply.
+  # itself, so prefer it; fall back to parsing `ldd --version` when getconf
+  # is missing, or present but unable to report a version (e.g. a non-glibc
+  # getconf that doesn't know GNU_LIBC_VERSION). Empty output (not an error)
+  # means neither could determine a version, e.g. on musl/other libc systems
+  # where this check does not apply.
+  local version=""
+
   if command -v getconf >/dev/null 2>&1; then
-    getconf GNU_LIBC_VERSION 2>/dev/null | sed -n 's/^glibc \([0-9][0-9.]*\)/\1/p'
-    return 0
+    version="$(getconf GNU_LIBC_VERSION 2>/dev/null | sed -n 's/^glibc \([0-9][0-9.]*\)/\1/p')"
+    if [ -n "$version" ]; then
+      printf '%s\n' "$version"
+      return 0
+    fi
   fi
 
   if command -v ldd >/dev/null 2>&1; then
