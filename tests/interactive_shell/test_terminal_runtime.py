@@ -178,7 +178,6 @@ def test_build_prompt_session_installs_growing_bordered_composer() -> None:
         FloatContainer,
         HSplit,
         VSplit,
-        Window,
     )
 
     with create_app_session(input=DummyInput(), output=DummyOutput()):
