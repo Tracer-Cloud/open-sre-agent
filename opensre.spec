@@ -30,6 +30,22 @@ datas += collect_data_files("litellm")
 datas += copy_metadata("opensre")
 datas += list(skill_data_entries(ROOT))
 
+# Bake the tool descriptor index. The bundle carries bytecode only, so the
+# registry's AST scan finds no source there; without this the frozen binary
+# falls back to importing every vendor tool module (~1,900 extra modules) on
+# the first turn. Built from the checkout here and shipped as data.
+import sys as _sys  # noqa: E402
+
+_sys.path.insert(0, str(ROOT))
+from tools.registry_index import (  # noqa: E402
+    BAKED_INDEX_RELATIVE_PATH,
+    dump_descriptor_index,
+)
+
+_baked_index = ROOT / "build" / "baked" / BAKED_INDEX_RELATIVE_PATH
+dump_descriptor_index(_baked_index)
+datas.append((str(_baked_index), str(BAKED_INDEX_RELATIVE_PATH.parent)))
+
 hiddenimports = [
     "tiktoken_ext",
     "tiktoken_ext.openai_public",

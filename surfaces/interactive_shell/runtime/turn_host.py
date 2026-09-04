@@ -37,6 +37,7 @@ from surfaces.interactive_shell.runtime.agent_presentation import (
 from surfaces.interactive_shell.runtime.background.workers import (
     BackgroundTaskPool,
 )
+from surfaces.interactive_shell.runtime.core.confirm_keys import read_confirm_answer
 from surfaces.interactive_shell.runtime.core.confirmation import (
     DispatchCancelled,
     request_confirmation_via_prompt,
@@ -115,27 +116,14 @@ def _confirm_via_prompt(runtime: AgentTurnResources, prompt: str) -> str:
 
 
 def _confirm_via_readline(prompt: str, options: tuple[tuple[str, str], ...] | None) -> str:
-    """Cooked-stdin confirmation for when the arrow-nav prompt app is unavailable.
+    """Confirmation for when the arrow-nav prompt app is unavailable.
 
-    Prints the rows and reads one line; a row tag, digit, or answer key resolves
-    to that row's answer, which the execution gate interprets. An empty line
-    matches the arrow-nav default: the last row (cancel).
+    On a TTY this reads one keypress in cbreak mode — echo off, so arrow keys no
+    longer leak as raw ``^[[A`` — resolving a row tag, digit, answer key, or
+    Enter (cancel); off a TTY it falls back to a cooked one-line read.
     """
     rows = options or DEFAULT_CONFIRM_OPTIONS
-    for index, (_answer, label) in enumerate(rows):
-        print(f"  [{chr(ord('a') + index)}] {label}")
-    tags = "/".join(chr(ord("a") + index) for index in range(len(rows)))
-    cancel = rows[-1][0]
-    try:
-        raw = input(f"{prompt} [{tags}] ").strip().lower()
-    except (EOFError, KeyboardInterrupt):
-        return cancel
-    if not raw:
-        return cancel
-    for index, (answer, _label) in enumerate(rows):
-        if raw in {chr(ord("a") + index), str(index + 1), answer}:
-            return answer
-    return raw
+    return read_confirm_answer(prompt, rows)
 
 
 def _reset_prompt_buffer(session: Session) -> None:

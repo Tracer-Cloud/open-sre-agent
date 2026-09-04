@@ -65,8 +65,11 @@ _SUBMIT = "Submit"
 _CHECKED = "[x]"
 _UNCHECKED = "[ ]"
 CRUMB_SEP = "  ›  "
-# Tight Droid-style panel: no blank line above the title.
+# Tight Droid-style panel: no blank line above slash-command titles.
 _MENU_LEADING_LINES = 0
+# Headered menus (Ask User) need one blank above so the accent header reads as
+# a new section after Plan complete / reply text, not a continuation line.
+_HEADER_SECTION_GAP = 1
 _TERMINAL_NEWLINE = "\r\n"
 MenuAction = Literal["up", "down", "enter", "cancel", "eof", "ignore"]
 
@@ -131,17 +134,37 @@ def read_menu_action() -> MenuAction:
 
 
 def _cols() -> int:
-    return max(40, shutil.get_terminal_size(fallback=(80, 24)).columns)
+    return max(1, shutil.get_terminal_size(fallback=(80, 24)).columns)
+
+
+def _viewport_rows() -> int:
+    return max(2, shutil.get_terminal_size(fallback=(80, 24)).lines)
+
+
+def _menu_paint_width() -> int:
+    """Columns for one physical menu row (last cell empty so DEC autowrap stays off)."""
+    return max(1, _cols() - 1)
 
 
 def menu_columns() -> int:
-    """Return the current terminal width floor used by inline menus."""
-    return _cols()
+    """Return the inline-menu paint width (one column short of the TTY)."""
+    return _menu_paint_width()
+
+
+def _clip_to_row(text: str, width: int) -> str:
+    """Keep ``text`` on one physical row so erase height matches the cursor."""
+    if width <= 0:
+        return ""
+    if len(text) <= width:
+        return text
+    if width == 1:
+        return text[:1]
+    return text[: width - 1] + "…"
 
 
 def _write_option_row(*, prefix: str, label: str, width: int, selected: bool) -> None:
     """Accent only the content; pad with plain spaces (avoids a full-width bar)."""
-    content = f"{_BLOCK_INDENT}{prefix} {label}"
+    content = _clip_to_row(f"{_BLOCK_INDENT}{prefix} {label}", width)
     pad = max(0, width - len(content))
     style = ui_theme.PROMPT_ACCENT_ANSI if selected else ui_theme.DIM_COUNTER_ANSI
     write_menu_line(f"{style}{content}{ui_theme.ANSI_RESET}{' ' * pad}")
@@ -163,9 +186,10 @@ def _sanitize_menu(
 def _menu_height(
     crumb: str, labels: list[str], *, multi_select: bool = False, header: str = ""
 ) -> int:
-    # [header], title, [crumb], blank, choices, [Submit], blank, hint (airy)
+    # [gap], [header], title, [crumb], blank, choices, [Submit], blank, hint
     submit = 1 if multi_select else 0
-    lead = _MENU_LEADING_LINES + (1 if header else 0)
+    gap = _HEADER_SECTION_GAP if header else 0
+    lead = _MENU_LEADING_LINES + gap + (1 if header else 0)
     return lead + 1 + (1 if crumb else 0) + 1 + len(labels) + submit + 1 + 1
 
 
@@ -177,9 +201,26 @@ def write_menu_line(text: str = "") -> None:
     sys.stdout.write(_TERMINAL_NEWLINE)
 
 
-def _erase_menu_block(height: int) -> None:
+def _erase_menu_block(height: int, *, delete: bool = False) -> None:
+    """Rewind the inline menu. Clear in place for redraw; delete rows on leave.
+
+    ``ESC[J`` blanks the menu but leaves the rows in the scrollback — after a
+    8–10 line Ask User picker that hole sits between the reply and the ✓ recap
+    (and again above Thinking). ``CSI n M`` removes the rows so the transcript
+    closes up.
+
+    Delete-line is only safe when the whole block is still on screen. ``CSI n A``
+    stops at the top of the viewport, so a taller block would delete transcript
+    rows above the menu or leave fragments. Overflow climbs as far as the
+    viewport allows and clears in place.
+    """
     if height:
-        sys.stdout.write(f"\r\x1b[{height}A\r\x1b[J")
+        rows = _viewport_rows()
+        climb = min(height, rows - 1)
+        if delete and height <= rows - 1:
+            sys.stdout.write(f"\r\x1b[{climb}A\r\x1b[{climb}M")
+        else:
+            sys.stdout.write(f"\r\x1b[{climb}A\r\x1b[J")
     reset_tty_column()
 
 
@@ -213,7 +254,7 @@ def show_terminal_cursor() -> None:
 
 
 def leave_inline_menu() -> None:
-    """Restore cooked stdin and start the next Rich line at column zero.
+    """Restore cooked stdin and park the cursor at column zero.
 
     Pair with :func:`hide_terminal_cursor` in a ``finally`` so select, Esc,
     and exceptions all recook stdin. Without this, padded menu rows leave the
@@ -233,12 +274,18 @@ def leave_inline_menu() -> None:
     restore_stdin_terminal()
     flush_pending_input()
     drain_stale_cpr_bytes()
-    prepare_repl_output_line()
+    # Column zero only — a newline here is a second blank after the reply
+    # (the stream already printed one) and after a deleted menu.
+    reset_tty_column()
 
 
-def erase_menu_lines(height: int) -> None:
-    """Erase a previously-rendered inline menu block."""
-    _erase_menu_block(height)
+def erase_menu_lines(height: int, *, delete: bool = False) -> None:
+    """Erase a previously-rendered inline menu block.
+
+    ``delete=False`` (redraw) clears in place. ``delete=True`` (leave) removes
+    the rows so they do not remain as a hole in the transcript.
+    """
+    _erase_menu_block(height, delete=delete)
 
 
 def _clear_prompt_toolkit_paint() -> None:
@@ -277,7 +324,7 @@ def _draw_menu(
     numbered: bool = True,
 ) -> None:
     out = sys.stdout
-    w = _cols()
+    w = _menu_paint_width()
     title, crumb, labels = _sanitize_menu(title, crumb, labels)
     checked = checked or set()
     if erase_lines:
@@ -288,14 +335,22 @@ def _draw_menu(
     # title reads as the plain question below it; otherwise the title is the
     # accent header (slash-command pickers).
     if header:
+        for _ in range(_HEADER_SECTION_GAP):
+            write_menu_line()
         write_menu_line(
-            f"{_BLOCK_INDENT}{ui_theme.PROMPT_ACCENT_ANSI}{header}{ui_theme.ANSI_RESET}"
+            f"{ui_theme.PROMPT_ACCENT_ANSI}{_clip_to_row(f'{_BLOCK_INDENT}{header}', w)}{ui_theme.ANSI_RESET}"
         )
-        write_menu_line(f"{_BLOCK_INDENT}{ui_theme.TEXT_ANSI}{title}{ui_theme.ANSI_RESET}")
+        write_menu_line(
+            f"{ui_theme.TEXT_ANSI}{_clip_to_row(f'{_BLOCK_INDENT}{title}', w)}{ui_theme.ANSI_RESET}"
+        )
     else:
-        write_menu_line(f"{_BLOCK_INDENT}{ui_theme.PROMPT_ACCENT_ANSI}{title}{ui_theme.ANSI_RESET}")
+        write_menu_line(
+            f"{ui_theme.PROMPT_ACCENT_ANSI}{_clip_to_row(f'{_BLOCK_INDENT}{title}', w)}{ui_theme.ANSI_RESET}"
+        )
     if crumb:
-        write_menu_line(f"{_BLOCK_INDENT}{ui_theme.DIM_COUNTER_ANSI}{crumb}{ui_theme.ANSI_RESET}")
+        write_menu_line(
+            f"{ui_theme.DIM_COUNTER_ANSI}{_clip_to_row(f'{_BLOCK_INDENT}{crumb}', w)}{ui_theme.ANSI_RESET}"
+        )
     # Airy: a blank line instead of a full-width rule between question and options.
     write_menu_line()
     for i, label in enumerate(labels):
@@ -320,7 +375,9 @@ def _draw_menu(
         len(labels), letter_keys=letter_keys, numbered=numbered, multi_select=multi_select
     )
     write_menu_line()
-    write_menu_line(f"{_BLOCK_INDENT}{ui_theme.DIM_COUNTER_ANSI}{hint}{ui_theme.ANSI_RESET}")
+    write_menu_line(
+        f"{ui_theme.DIM_COUNTER_ANSI}{_clip_to_row(f'{_BLOCK_INDENT}{hint}', w)}{ui_theme.ANSI_RESET}"
+    )
     out.flush()
 
 
@@ -330,7 +387,7 @@ def _erase_menu(
     """Move cursor up to the start of this menu block and wipe it."""
     _, crumb, labels = _sanitize_menu("", crumb, labels)
     height = _menu_height(crumb, labels, multi_select=multi_select, header=header)
-    _erase_menu_block(height)
+    _erase_menu_block(height, delete=True)
     sys.stdout.flush()
 
 

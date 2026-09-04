@@ -14,14 +14,21 @@ from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
     from config.repl_config import ReplConfig
-    from surfaces.cli.host import CliHost
+    from surfaces.cli.host import AfterBanner, CliHost
 
 
-def _launch_shell(config: ReplConfig, resume_session_id: str | None) -> int:
+def _launch_shell(
+    config: ReplConfig, resume_session_id: str | None, after_banner: AfterBanner
+) -> int:
     from surfaces.cli.app import cli
     from surfaces.interactive_shell import run_repl
 
-    return run_repl(config=config, resume_session_id=resume_session_id, cli_command_group=cli)
+    return run_repl(
+        config=config,
+        resume_session_id=resume_session_id,
+        cli_command_group=cli,
+        after_banner=after_banner,
+    )
 
 
 def _start_gateway_foreground() -> None:

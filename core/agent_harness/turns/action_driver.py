@@ -800,24 +800,21 @@ def _show_response(
     """Show the turn's answer, or leave a blank line after silent tool work.
 
     ``final_text`` arrives empty unless the closing message reads like a real
-    reply; only then is it streamed as the assistant speaking. Progress tags
-    are scrubbed for display only — ``response_text`` keeps them for evaluate.
+    reply; only then is it preferred over joined ``display_chunks``. Either way
+    visible prose streams through the sink (``Ω`` gutter on the shell). Progress
+    tags are scrubbed for display only — ``response_text`` keeps them for evaluate.
     """
-    if final_text:
-        visible = strip_session_goal_progress_tags(final_text)
+    # Both branches stream through the sink so the shell paints the ``Ω`` gutter
+    # (Droid / Claude Code rhythm). Bare ``print`` after a lone header left
+    # agent prose unmarked and flush against Thinking chrome.
+    body = final_text or ("\n".join(display_chunks) if display_chunks else "")
+    if body:
+        visible = strip_session_goal_progress_tags(body)
         if visible.strip():
             output.stream(label="OpenSRE", chunks=iter([visible]))
-        return
-    if display_chunks:
-        visible = strip_session_goal_progress_tags("\n".join(display_chunks))
-        if not visible.strip():
-            if handled:
-                _end_silent_tool_turn(output)
             return
-        output.render_response_header("assistant")
-        # Literal text: the sink decides how to render it safely. The harness
-        # must not reach for terminal-markup helpers.
-        output.print(visible)
+        if handled:
+            _end_silent_tool_turn(output)
         return
     if handled:
         _end_silent_tool_turn(output)
@@ -836,7 +833,13 @@ def _show_completed_plan_breakdown(output: OutputSink, session: SessionState) ->
     if not breakdown:
         return
     output.print()
-    output.print(breakdown)
+    # Shell paints ✓ steps vs ↳ work notes in different theme colors; other
+    # sinks (headless / chat) keep the plain-text checklist.
+    render = getattr(output, "render_plan_breakdown", None)
+    if callable(render):
+        render(breakdown)
+    else:
+        output.print(breakdown)
 
 
 def _count_turn(result: Any, session: SessionState, history_start: int) -> _TurnCounts:

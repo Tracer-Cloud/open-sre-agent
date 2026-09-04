@@ -252,6 +252,58 @@ def test_run_repl_async_failed_resume_flushes_starter_session(
     assert not (sessions_dir / f"{session.session_id}.jsonl").exists()
 
 
+def test_run_repl_async_runs_held_back_launch_work_once_the_banner_is_painted(
+    monkeypatch: Any, tmp_path: Path
+) -> None:
+    """``after_banner`` runs after ``finish_banner`` and before the session body."""
+    import asyncio
+
+    # Arrange: a booted runtime whose resume fails, so the run ends right after
+    # the banner step without starting the prompt loop.
+    monkeypatch.setattr("config.constants.OPENSRE_HOME_DIR", tmp_path)
+    monkeypatch.setattr("config.constants.paths.OPENSRE_HOME_DIR", tmp_path)
+    monkeypatch.setattr(
+        "infrastructure.analytics.github_identity.identify_saved_github_username",
+        lambda: None,
+    )
+    order: list[str] = []
+    monkeypatch.setattr(
+        "surfaces.interactive_shell.command_registry.session_cmds.resume.resume_session_by_prefix",
+        lambda *_args, **_kwargs: order.append("resume") or False,
+    )
+    monkeypatch.setattr(
+        main_entrypoint,
+        "create_repl_runtime",
+        lambda **_kwargs: SimpleNamespace(session=Session(), inbox=None),
+    )
+
+    # Act
+    asyncio.run(
+        main_entrypoint.run_repl_async(
+            resume_session_id="missing-session",
+            finish_banner=lambda: order.append("banner"),
+            after_banner=lambda: order.append("after_banner"),
+        )
+    )
+
+    # Assert
+    assert order == ["banner", "after_banner", "resume"]
+
+
+def _finish_banner_then_stop(**kwargs: Any) -> int:
+    """Invoke the launch-banner finisher the real ``run_repl_async`` would.
+
+    ``run_repl`` spins the wordmark on a thread and paints the static banner
+    only when the async half calls ``finish_banner``. Stubs that skip the
+    shell must still run that finisher or startup chrome never reaches the
+    injected console.
+    """
+    finish = kwargs.get("finish_banner")
+    if finish is not None:
+        finish()
+    return 0
+
+
 def test_run_repl_writes_startup_output_to_the_supplied_console(monkeypatch: Any) -> None:
     """An embedding caller can capture the shell's output.
 
@@ -267,16 +319,16 @@ def test_run_repl_writes_startup_output_to_the_supplied_console(monkeypatch: Any
 
     captured = Console(file=StringIO(), force_terminal=False, width=80)
     monkeypatch.setattr(main_entrypoint.sys.stdin, "isatty", lambda: True)
+    monkeypatch.setattr(main_entrypoint, "animate_launch_wordmark", lambda *_a, **_k: None)
 
     def _fake_terminal_ui(console: Any, **_kwargs: Any) -> None:
         console.print("SPLASH")
         console.print("READY")
 
-    async def _skip_async(**_kwargs: Any) -> int:
-        return 0
+    async def _skip_async(**kwargs: Any) -> int:
+        return _finish_banner_then_stop(**kwargs)
 
     monkeypatch.setattr(main_entrypoint, "render_terminal_ui", _fake_terminal_ui)
-    # Stop before the event loop; the startup renders are what this pins.
     monkeypatch.setattr(main_entrypoint, "run_repl_async", _skip_async)
 
     # Act
@@ -297,12 +349,13 @@ def test_run_repl_defaults_to_the_module_console(monkeypatch: Any) -> None:
     # Arrange
     seen: list[object] = []
     monkeypatch.setattr(main_entrypoint.sys.stdin, "isatty", lambda: True)
+    monkeypatch.setattr(main_entrypoint, "animate_launch_wordmark", lambda *_a, **_k: None)
 
     def _record_console(console: Any, **_kwargs: Any) -> None:
         seen.append(console)
 
-    async def _skip_async(**_kwargs: Any) -> int:
-        return 0
+    async def _skip_async(**kwargs: Any) -> int:
+        return _finish_banner_then_stop(**kwargs)
 
     monkeypatch.setattr(main_entrypoint, "render_terminal_ui", _record_console)
     monkeypatch.setattr(main_entrypoint, "run_repl_async", _skip_async)
@@ -436,12 +489,13 @@ def test_console_injection_works_through_the_package_facade(monkeypatch: Any) ->
     from surfaces.interactive_shell import run_repl as facade
 
     monkeypatch.setattr(main_entrypoint.sys.stdin, "isatty", lambda: True)
+    monkeypatch.setattr(main_entrypoint, "animate_launch_wordmark", lambda *_a, **_k: None)
 
     def _fake_terminal_ui(console: Any, **_kwargs: Any) -> None:
         console.print("SPLASH")
 
-    async def _skip_async(**_kwargs: Any) -> int:
-        return 0
+    async def _skip_async(**kwargs: Any) -> int:
+        return _finish_banner_then_stop(**kwargs)
 
     monkeypatch.setattr(main_entrypoint, "render_terminal_ui", _fake_terminal_ui)
     monkeypatch.setattr(main_entrypoint, "run_repl_async", _skip_async)

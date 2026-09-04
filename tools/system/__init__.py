@@ -16,7 +16,6 @@ TOOL_MODULES = (
     "fleet_monitoring",
     "python_execution_tool",
     "sre_guidance_tool",
-    "watch_dog",
     "work_items.tool",
 )
 

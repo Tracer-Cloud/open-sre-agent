@@ -11,17 +11,15 @@ from infrastructure.terminal import theme as ui_theme
 from surfaces.interactive_shell.runtime import Session
 from surfaces.interactive_shell.ui.handoff_questions import (
     render_ask_user_qa,
-    render_handoff_answer_marker,
 )
 from surfaces.interactive_shell.ui.input_prompt.completion import completion_preview_hint_ansi
 from surfaces.interactive_shell.ui.input_prompt.layout import (
     _short_meta,
     clip_prompt_text,
-    prompt_line_width,
 )
 from surfaces.shared.terminal.prompt_layout import prompt_text_width, terminal_columns
 
-DEFAULT_PLACEHOLDER_TEXT = "see what you can do"
+DEFAULT_PLACEHOLDER_TEXT = "Ask about an alert"
 _PLAN_CONTINUE_PLACEHOLDER = "continue the plan, or type a message"
 #: Warm vertical bar — same role as Droid's orange user-turn lead-in.
 _USER_TURN_ACCENT = "▌"
@@ -89,7 +87,6 @@ def render_submitted_prompt(console: Console, session: Session, text: str) -> No
         # Keep the Ask User block in the transcript (Q white, A brand). Claim the
         # turn number so the next prompt still advances; do not paint a fake
         # ``[N] ❯`` — leave this as the Ask User card.
-        console.print()
         session.terminal.claim_turn_number()
         render_ask_user_qa(console, ask_user_pairs)
         return
@@ -101,12 +98,7 @@ def render_submitted_prompt(console: Console, session: Session, text: str) -> No
         # answer so a no-op model acknowledgement can be omitted as well.
         session.terminal.pending_choice_response = stripped
         return
-    if is_handoff_answer:
-        # The marker hugs the assistant answer it responds to (no gap above);
-        # the between-turns gap falls below it, before the user's input row.
-        console.print(render_handoff_answer_marker())
-        console.print()
-    elif autosubmitted:
+    if autosubmitted:
         # Keep this shorter than the condition — the ``[N] ❯`` line carries the
         # full text; this only answers "is this still /goal set or real work?".
         console.print()
@@ -188,11 +180,8 @@ def ctrl_c_exit_hint_ansi() -> str:
 
 
 def composer_footer_ansi() -> str:
-    """Return the help hint below the composer (no competing mode chrome)."""
-    left = "Enter send · Shift+Enter newline · ? help"
-    width = prompt_line_width()
-    clipped = clip_prompt_text(left, width)
-    return f"{ui_theme.DIM_ANSI}{clipped}{ui_theme.ANSI_RESET}"
+    """No footer row. The empty box is the job prompt; shortcuts live on ``?``."""
+    return ""
 
 
 def resolve_prompt_placeholder(session: Session) -> FormattedText:

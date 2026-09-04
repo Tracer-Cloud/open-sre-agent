@@ -201,10 +201,6 @@ MCP_BY_COMMAND: dict[str, _SlashMcpFields] = {
         "User asks for available commands or help using /help",
         anti_examples=("User asks a procedural docs question (answer directly)",),
     ),
-    "/hermes": _mcp(
-        "Live-tail Hermes logs and send detected incidents to Telegram. Subcommand: watch.",
-        "User asks to watch Hermes logs or Hermes incident escalation",
-    ),
     "/history": _mcp(
         "Manage persisted command history: clear, off, on, retention <N>.",
         "User asks to clear, disable, or configure command history persistence",
@@ -374,10 +370,6 @@ MCP_BY_COMMAND: dict[str, _SlashMcpFields] = {
         "Remove OpenSRE and all local data from this machine. Destructive — requires confirmation.",
         "User explicitly asks to uninstall OpenSRE locally",
     ),
-    "/unwatch": _mcp(
-        "Cancel a running watchdog task by task id. Requires confirmation.",
-        "User asks to stop a /watch background task by id",
-    ),
     "/update": _mcp(
         "Check for a newer OpenSRE version and update if available.",
         "User asks to update or upgrade OpenSRE",
@@ -399,18 +391,6 @@ MCP_BY_COMMAND: dict[str, _SlashMcpFields] = {
     "/version": _mcp(
         "Print OpenSRE version, Python version, and OS information.",
         "User asks for version information",
-    ),
-    "/watch": _mcp(
-        "Watch a process by PID and send Telegram threshold alarms. Requires confirmation.",
-        "User asks to watch a process or set resource threshold alarms",
-    ),
-    "/watchdog": _mcp(
-        "Monitor one process and send threshold alarms (CLI parity wrapper).",
-        "User asks to run the watchdog monitor CLI from the REPL",
-    ),
-    "/watches": _mcp(
-        "List active watchdog background tasks with latest resource samples.",
-        "User asks to list running watchdog watches",
     ),
     "/work": _mcp(
         "Manage durable human work items and reminders. Subcommands: list, add, done, next, path.",

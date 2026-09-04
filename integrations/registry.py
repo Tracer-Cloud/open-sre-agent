@@ -247,13 +247,6 @@ _BUILTIN_SPECS: tuple[IntegrationSpec, ...] = (
         verify_order=28,
     ),
     IntegrationSpec(
-        service="openclaw",
-        has_verifier=True,
-        direct_effective=True,
-        setup_order=12,
-        verify_order=39,
-    ),
-    IntegrationSpec(
         service="posthog_mcp",
         aliases=("posthog mcp", "posthog-mcp"),
         has_verifier=True,
@@ -352,13 +345,6 @@ _BUILTIN_SPECS: tuple[IntegrationSpec, ...] = (
         direct_effective=True,
         setup_order=38,
         verify_order=34,
-    ),
-    IntegrationSpec(
-        service="hermes",
-        has_verifier=True,
-        direct_effective=True,
-        setup_order=56,
-        verify_order=101,
     ),
     IntegrationSpec(
         service="victoria_logs",

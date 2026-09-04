@@ -24,9 +24,10 @@ def test_entrypoint_hands_the_cli_a_host_that_opens_the_shell_with_the_click_gro
         exit_code = main(["--no-interactive"])
         host = captured[0]
         assert host.launch_shell is not None
-        shell_exit = host.launch_shell(_config(), "abc123")
+        shell_exit = host.launch_shell(_config(), "abc123", _after_banner)
 
-    # Assert: the shell was launched with the CLI's click group for grounding.
+    # Assert: the shell was launched with the CLI's click group for grounding
+    # and the held-back launch work handed through untouched.
     from surfaces.cli.app import cli
 
     assert exit_code == 0
@@ -35,6 +36,11 @@ def test_entrypoint_hands_the_cli_a_host_that_opens_the_shell_with_the_click_gro
     kwargs = fake_run_repl.call_args.kwargs
     assert kwargs["resume_session_id"] == "abc123"
     assert kwargs["cli_command_group"] is cli
+    assert kwargs["after_banner"] is _after_banner
+
+
+def _after_banner() -> None:
+    """Stand-in for the launch work the CLI defers until the banner is painted."""
 
 
 def test_entrypoint_hands_the_cli_a_foreground_gateway_runner() -> None:

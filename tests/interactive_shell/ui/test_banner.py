@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import io
+from pathlib import Path
 
 from rich.console import Console
 
@@ -60,7 +61,9 @@ def test_launch_banner_is_borderless_centered_hero(monkeypatch: object) -> None:
     # in place of the old TIP line.
     assert "Welcome to OpenSRE CLI" in output
     assert "AI-powered DevOps agent" in output
-    assert "/ commands" in output
+    # Banner is install health, not a shortcut dump (those live on ``?``).
+    assert "/ commands" not in output
+    assert "Enter send" not in output
     # Only the two capability items — no MCPs or AGENTS.md line.
     assert "MCPs" not in output
     assert "AGENTS.md" not in output
@@ -216,13 +219,13 @@ def test_status_marks_empty_or_unavailable_capabilities(monkeypatch: object) -> 
 
 
 def test_integration_count_includes_all_configured(monkeypatch: object) -> None:
-    # Every configured integration counts (not just MCP ones), any health state.
+    # Every configured integration counts (not just MCP ones).
     monkeypatch.setattr(
-        "integrations.catalog.configured_integration_health",
-        lambda: [("datadog", "ok"), ("github", "ok"), ("openclaw", "incomplete")],
+        "integrations.catalog.configured_integration_services",
+        lambda: ["datadog", "github"],
     )
 
-    assert banner_state_module._count_configured_integrations() == 3
+    assert banner_state_module._count_configured_integrations() == 2
 
 
 def test_status_probes_survive_loader_failures(monkeypatch: object) -> None:
@@ -232,13 +235,22 @@ def test_status_probes_survive_loader_failures(monkeypatch: object) -> None:
 
     def _fail_startup_probes(name: str, *args: object, **kwargs: object) -> object:
         if name in {
-            "core.agent_harness.spi.grounding",
             "integrations.catalog",
         }:
             raise ImportError("simulated startup probe failure")
         return real_import(name, *args, **kwargs)
 
     monkeypatch.setattr(builtins, "__import__", _fail_startup_probes)
+    monkeypatch.setattr(
+        banner_state_module,
+        "_BUNDLED_SKILLS_DIR",
+        Path("/nonexistent/skills-dir"),
+    )
+    monkeypatch.setattr(
+        banner_state_module,
+        "_integrations_store_file",
+        lambda: Path("/nonexistent/integrations.json"),
+    )
 
     assert banner_state_module._count_loaded_skills() == 0
     assert banner_state_module._count_configured_integrations() == 0

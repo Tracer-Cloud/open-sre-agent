@@ -107,7 +107,7 @@ class TestTaskRegistry:
         monkeypatch.setattr(const_module, "OPENSRE_HOME_DIR", tmp_path)
         monkeypatch.setattr("config.constants.paths.OPENSRE_HOME_DIR", tmp_path)
         reg = TaskRegistry.persistent()
-        task = reg.create(TaskKind.CLI_COMMAND, command="opensre fleet scan")
+        task = reg.create(TaskKind.CLI_COMMAND, command="opensre health")
         task.mark_running()
         task.attach_pid(os.getpid())
 
@@ -116,7 +116,7 @@ class TestTaskRegistry:
         assert loaded.task_id == task.task_id
         assert loaded.status == TaskStatus.RUNNING
         assert loaded.pid == os.getpid()
-        assert loaded.command == "opensre fleet scan"
+        assert loaded.command == "opensre health"
 
     def test_persistent_registry_marks_missing_pid_finished(
         self,
@@ -141,7 +141,7 @@ class TestTaskRegistry:
                         "result": None,
                         "error": None,
                         "pid": 999_999,
-                        "command": "opensre fleet scan",
+                        "command": "opensre health",
                     }
                 ]
             ),
@@ -156,6 +156,33 @@ class TestTaskRegistry:
         [loaded] = reloaded.list_recent()
         assert loaded.status == TaskStatus.COMPLETED
         assert loaded.result == "process exited while shell was closed"
+
+    def test_persistent_registry_ignores_retired_task_kinds(
+        self,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        import config.constants as const_module
+
+        monkeypatch.setattr(const_module, "OPENSRE_HOME_DIR", tmp_path)
+        monkeypatch.setattr("config.constants.paths.OPENSRE_HOME_DIR", tmp_path)
+        store_path = tmp_path / "interactive_tasks.json"
+        store_path.parent.mkdir(parents=True, exist_ok=True)
+        store_path.write_text(
+            json.dumps(
+                [
+                    {
+                        "task_id": "abc12345",
+                        "kind": "retired_kind",
+                        "status": "completed",
+                        "started_at": 1.0,
+                    }
+                ]
+            ),
+            encoding="utf-8",
+        )
+
+        assert TaskRegistry.persistent().list_recent() == []
 
     def test_cancel_rehydrated_task_does_not_signal_pid(
         self,
@@ -173,7 +200,7 @@ class TestTaskRegistry:
 
         monkeypatch.setattr("infrastructure.scheduling.task_types.os.kill", _fake_kill)
         reg = TaskRegistry.persistent()
-        task = reg.create(TaskKind.CLI_COMMAND, command="opensre fleet scan")
+        task = reg.create(TaskKind.CLI_COMMAND, command="opensre health")
         task.mark_running()
         task.attach_pid(12345)
 

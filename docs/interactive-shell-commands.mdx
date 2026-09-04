@@ -101,15 +101,6 @@ When you first launch the shell with no scheduled loops, a picker offers three s
 | `/cancel <id>` | Cancel a running task by id **elevated** |
 | `/stop` | Guidance for stopping background work |
 
-### Watchdog
-
-| Command | What it does |
-| --- | --- |
-| `/watch` | Watch a process and send threshold alarms via Telegram or Rocket.Chat **elevated** |
-| `/watches` | List active watchdog tasks with latest samples |
-| `/unwatch <id>` | Stop a watchdog task by id **elevated** |
-| `/watchdog` | CLI-parity wrapper for the watchdog monitor |
-
 ### Agents and alerts
 
 | Command | What it does |
@@ -133,7 +124,6 @@ These commands delegate to the same Click CLI you would run outside the REPL.
 | `/cron` | Manage scheduled delivery jobs |
 | `/sentry` | Schedule automated Sentry morning digests or uptime watches (Telegram or Slack required) |
 | `/messaging` | Telegram pairing and allowlist |
-| `/hermes` | Hermes log tailing and incident escalation |
 | `/guardrails` | Sensitive-information guardrail rules |
 | `/update` | Check for updates and upgrade OpenSRE |
 | `/debug` | Targeted runtime diagnostics |
@@ -177,13 +167,13 @@ Bare invocation opens a picker or submenu:
 | Form | Result |
 | --- | --- |
 | `/help` | Interactive picker in a TTY; category index otherwise |
-| `/help &lt;command&gt;` | Detailed usage for one command (e.g. `/help /watch`) |
+| `/help &lt;command&gt;` | Detailed usage for one command (e.g. `/help /model`) |
 | `/help &lt;category&gt;` | All commands in a section (`session`, `tasks`, …) |
 | `/help all` | Full command index |
 
 Help categories mirror the REPL grouping: Quick Access, Session, Integrations/Models/Tools, Privacy, Tasks, Agents, Alerts, CLI parity, and System.
 
-**Quick Access** duplicates frequently used commands (`/integrations`, `/model`, `/health`, `/watch`, `/status`, `/help`) for faster discovery in the picker.
+**Quick Access** duplicates frequently used commands (`/integrations`, `/model`, `/health`, `/status`, `/help`) for faster discovery in the picker.
 
 </Accordion>
 
@@ -322,7 +312,7 @@ Session preference only — not restored by `/resume`. Bare `/auto` prints the c
 
 <Accordion title="/trust">
 
-Trust mode skips execution confirmation prompts for **elevated** commands (`/watch`, `/cancel`, `/uninstall`, integration remove, etc.).
+Trust mode skips execution confirmation prompts for **elevated** commands (`/cancel`, `/uninstall`, integration remove, etc.).
 
 ```text
 /trust on
@@ -331,10 +321,6 @@ Trust mode skips execution confirmation prompts for **elevated** commands (`/wat
 ```
 
 In a TTY, bare `/trust` opens an interactive on/off menu. Trust mode is a **session preference** — it is not restored by `/resume`.
-
-<Tip>
-  During watchdog demos, `/trust on` avoids confirmation fatigue. Turn it off before running destructive commands you might mistype.
-</Tip>
 
 </Accordion>
 
@@ -677,7 +663,6 @@ Human todos and reminders are tracked separately by `/work`.
 
 | Kind | Source |
 | --- | --- |
-| `watchdog` | `/watch` |
 | `cli_command` | Delegated CLI subprocesses |
 | `code_agent` | Code-agent integrations (when used) |
 
@@ -707,10 +692,10 @@ Example:
   Tasks
 
   id      kind           status     started (UTC)     duration  detail
-  def34   watchdog       completed  2026-06-17 09:55  120.0s    pid=12345 max_cpu=80%
+  def34   cli_command    completed  2026-06-17 09:55  120.0s    opensre health
 ```
 
-Shows up to **50** recent tasks, newest first. Use the **id** column (short prefix) with `/cancel` or `/unwatch`.
+Shows up to **50** recent tasks, newest first. Use the **id** column (short prefix) with `/cancel`.
 
 </Accordion>
 
@@ -743,7 +728,6 @@ What should I focus on next?
 
 - Matches task id by **prefix** (must be unique among active/recent tasks)
 - Only **running** tasks accept cancellation
-- Watchdogs: prefer `/unwatch` for watchdog-specific messaging
 
 </Accordion>
 
@@ -759,86 +743,6 @@ Prints guidance only — does not kill processes:
 | --- | --- |
 | Streaming turn | **Ctrl+C** |
 | Background CLI task | `/tasks` → `/cancel &lt;id&gt;` |
-| Watchdog | `/unwatch &lt;id&gt;` or `/cancel &lt;id&gt;` |
-
-</Accordion>
-
-</AccordionGroup>
-
-### Watchdog
-Monitor a local process and send **Telegram** alarms when CPU, memory, or runtime thresholds breach. Configure Telegram credentials before use (via `/integrations setup telegram` or env — see messaging docs).
-
-<AccordionGroup>
-<Accordion title="/watch">
-
-```text
-/watch 12345 --max-cpu 80 --max-rss 512M --max-runtime 30m --cooldown 5m --interval 2s --once
-```
-
-| Flag | Meaning | Default |
-| --- | --- | --- |
-| `&lt;pid&gt;` | Process to watch (required first arg) | — |
-| `--max-cpu` | CPU percent threshold (max ≈ `100 × cpu_count`) | none |
-| `--max-rss` | Resident memory cap (`512M`, `1G`, `1.5Gib`) | none |
-| `--max-runtime` | Wall-clock limit (`30s`, `5m`, `1h`) | none |
-| `--cooldown` | Min seconds between repeat alarms | `300` (5m) |
-| `--interval` | Sample period | `2s` |
-| `--once` | At most one alarm per threshold type | off |
-
-On start:
-
-```text
-task abc12 started.
-```
-
-When a threshold fires (Telegram configured):
-
-```text
-[task abc12] alarm fired: max_cpu … (telegram delivered)
-```
-
-**Typical demo workflow:**
-
-1. `/trust on` (optional — skips `/watch` confirmation)
-2. `/watch &lt;pid&gt; --max-cpu 80` — use a real PID (e.g. the REPL's Python process)
-3. `/watches` — confirm `running` status and threshold string
-4. `/unwatch abc12` — request stop; `/watches` should show `cancelled`
-
-Quoted values are supported: `/watch 12345 --max-cpu "80"`.
-
-</Accordion>
-
-<Accordion title="/watches">
-
-```text
-/watches
-```
-
-Watchdog-only view with columns: id, pid, status, started, thresholds (from command summary), **last sample** (live CPU/RSS from progress line).
-
-</Accordion>
-
-<Accordion title="/unwatch">
-
-```text
-/unwatch abc12
-```
-
-Cancels a **watchdog** task by task id. Using `/cancel` also works; `/unwatch` validates the task kind.
-
-</Accordion>
-
-<Accordion title="/watchdog">
-
-CLI-parity syntax (subprocess to `opensre watchdog`):
-
-```text
-/watchdog --pid 12345 --max-rss 1G --max-cpu 80
-```
-
-Prefer `/watch` inside the REPL — it registers tasks for `/watches` and `/tasks` automatically.
-
----
 
 </Accordion>
 
@@ -1069,17 +973,7 @@ Requires Sentry plus Telegram or Slack configured for the chosen provider. See [
 /messaging status
 ```
 
-Telegram bot pairing and sender allowlist — required for `/watch` alarms and some delivery features.
-
-</Accordion>
-
-<Accordion title="/hermes">
-
-```text
-/hermes watch
-```
-
-Tail Hermes logs and escalate classified incidents. See [Hermes](/hermes).
+Telegram bot pairing and sender allowlist for two-way chat and delivery features.
 
 </Accordion>
 
@@ -1202,7 +1096,7 @@ Two controls decide whether the REPL prompts before an action:
 | --- | --- | --- |
 | Exempt | `/help`, `/exit`, `/trust`, `/auto` | Never prompts |
 | Safe | `/status`, `/health`, `/integrations list` | Read-only or standard risk |
-| Elevated | `/watch`, `/cancel`, `/integrations remove`, `/fleet kill`, `/uninstall` | Prompt unless trust on |
+| Elevated | `/cancel`, `/integrations remove`, `/fleet kill`, `/uninstall` | Prompt unless trust on |
 
 Non-TTY: actions that would ask **fail closed** (error message, no side effect).
 
@@ -1240,7 +1134,6 @@ You do not need to memorize every slash command. Examples:
 | MCP servers | `/mcp list` |
 | Cron jobs | `/loops` or `/cron list` |
 | Past REPL sessions | `/sessions` |
-| Watchdog tasks | `/watches` |
 
 When the planner is uncertain, it asks for clarification or falls back to help — it does not silently run elevated commands.
 
@@ -1292,14 +1185,6 @@ Continue chatting, then optionally:
 /cost
 ```
 
-### Monitor a runaway process
-
-```text
-/watch &lt;pid&gt; --max-cpu 90 --max-rss 2G --cooldown 10m
-/watches
-/unwatch &lt;task_id&gt;
-```
-
 ### Debug integration failures
 
 ```text
@@ -1320,7 +1205,6 @@ Continue chatting, then optionally:
 | `/resume` not found | Run `/sessions`; use longer ID prefix |
 | `/resume` ambiguous prefix | Add more characters from Session ID column |
 | `/model set` missing credential | `/auth login &lt;provider&gt;` or export `ANTHROPIC_API_KEY` / etc.; use `/auth verify &lt;provider&gt;` for stale metadata |
-| `/watch` Telegram error | Configure messaging via `/messaging status` |
 | `/integrations show` not found | Run `/integrations list` for exact service slug |
 | History pause not working | Requires redacting backend — see `/privacy` |
 | Garbage in next prompt after table | Known TTY issue — upgrade OpenSRE; report if persistent |
@@ -1335,5 +1219,4 @@ Continue chatting, then optionally:
 - [LLM providers](/llm-providers) — `/model` and `/effort`
 - [Agents](/fleet) — fleet dashboard, bus, trace, budgets
 - [Cron](/cron) — `/cron` scheduled deliveries
-- [Hermes](/hermes) — `/hermes watch`
 - [Sync to your own object store](/configuration/remote-sync) — `/remote-sync`

@@ -18,7 +18,6 @@ from surfaces.cli.wizard.integration_validators.http_probe_validators import (
 )
 from surfaces.cli.wizard.integration_validators.mcp_validators import (
     validate_github_mcp_integration,
-    validate_openclaw_integration,
     validate_posthog_mcp_integration,
     validate_sentry_mcp_integration,
 )
@@ -42,7 +41,6 @@ __all__ = [
     "validate_google_docs_integration",
     "validate_grafana_integration",
     "validate_jira_integration",
-    "validate_openclaw_integration",
     "validate_opensearch_integration",
     "validate_opsgenie_integration",
     "validate_posthog_mcp_integration",

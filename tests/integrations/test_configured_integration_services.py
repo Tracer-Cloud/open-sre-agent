@@ -41,6 +41,38 @@ def test_includes_active_store_integrations_and_dedupes_with_env(monkeypatch: An
     assert catalog.configured_integration_services() == ["sentry", "gitlab", "github"]
 
 
+def test_unsupported_active_store_integration_is_not_advertised(monkeypatch: Any) -> None:
+    """A record left by an uninstalled integration must not reach startup surfaces."""
+    monkeypatch.setattr(catalog, "load_env_integration_services", list)
+    monkeypatch.setattr(
+        catalog,
+        "load_integrations",
+        lambda: [
+            {
+                "service": "retired_integration",
+                "status": "active",
+                "credentials": {"token": "stale"},
+            }
+        ],
+    )
+
+    assert catalog.configured_integration_services() == []
+    assert catalog.configured_integration_health() == []
+
+
+def test_active_store_family_member_is_advertised(monkeypatch: Any) -> None:
+    """Persisted family members remain visible after registry-based filtering."""
+    monkeypatch.setattr(catalog, "load_env_integration_services", list)
+    monkeypatch.setattr(
+        catalog,
+        "load_integrations",
+        lambda: [{"service": "grafana_local", "status": "active"}],
+    )
+
+    assert catalog.configured_integration_services() == ["grafana_local"]
+    assert catalog.configured_integration_health() == [("grafana_local", "ok")]
+
+
 def test_returns_empty_list_when_env_loader_raises(monkeypatch: Any) -> None:
     def _boom() -> list[str]:
         raise RuntimeError("env unreadable")

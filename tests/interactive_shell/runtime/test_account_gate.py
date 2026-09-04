@@ -147,9 +147,10 @@ def test_run_repl_invokes_the_sign_in_gate_before_the_controller(monkeypatch: An
 
 
 def test_run_repl_clears_screen_before_painting_banner(monkeypatch: Any) -> None:
-    """Launch wipes the calling shell so the REPL owns the viewport like Droid."""
+    """Launch wipes the calling shell, then paints once the runtime finisher runs."""
     cleared: list[bool] = []
     painted: list[bool] = []
+    finishers: list[object] = []
     monkeypatch.setattr(main_entrypoint.sys.stdin, "isatty", lambda: True)
     monkeypatch.setattr(main_entrypoint, "should_paint_launch_banner", lambda: True)
     monkeypatch.setattr(main_entrypoint, "pass_sign_in_gate", lambda _c: True)
@@ -163,14 +164,21 @@ def test_run_repl_clears_screen_before_painting_banner(monkeypatch: Any) -> None
         "render_terminal_ui",
         lambda *_a, **_k: painted.append(True),
     )
+    # Unit path: no real wordmark thread; finisher still paints the static banner.
+    monkeypatch.setattr(main_entrypoint, "animate_launch_wordmark", lambda *_a, **_k: None)
 
     async def _skip_async(**_kwargs: Any) -> int:
+        finish = _kwargs.get("finish_banner")
+        finishers.append(finish)
+        if finish is not None:
+            finish()
         return 0
 
     monkeypatch.setattr(main_entrypoint, "run_repl_async", _skip_async)
     main_entrypoint.run_repl(config=ReplConfig(enabled=True, layout="classic"))
 
     assert cleared == [True]
+    assert finishers and finishers[0] is not None
     assert painted == [True]
 
 

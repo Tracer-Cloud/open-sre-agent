@@ -324,6 +324,9 @@ def test_install_sh_source_exposes_env_knobs() -> None:
         "OPENSRE_INSTALL_REPO",
         'INSTALL_CHANNEL="${OPENSRE_INSTALL_CHANNEL:-main}"',
         "ensure_github_cli",
+        "warm_first_launch",
+        "package_smoke_quiet",
+        "_package-smoke",
     ):
         assert needle in source, f"install.sh missing {needle!r}"
 
@@ -345,6 +348,8 @@ def test_install_ps1_source_exposes_all_windows_install_knobs() -> None:
         'else { "main" }',
         "main-build",
         "$exe setup",
+        "Invoke-OpenSreFirstLaunchWarmup",
+        "_package-smoke",
     ):
         assert needle in source, f"install.ps1 missing {needle!r}"
 

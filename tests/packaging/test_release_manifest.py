@@ -12,6 +12,7 @@ from infrastructure.deployment.packaging.release_manifest import (
     runtime_hidden_imports,
 )
 from tools.registry_discovery import INTEGRATION_TOOL_PACKAGES
+from tools.registry_index import BAKED_INDEX_RELATIVE_PATH
 
 _REPO_ROOT = Path(__file__).resolve().parents[2]
 _RELEASE_WORKFLOW = _REPO_ROOT / ".github" / "workflows" / "release.yml"
@@ -25,6 +26,21 @@ def test_hidden_imports_cover_runtime_discovered_tool_packages() -> None:
     assert "integrations.x_mcp.tools.x_mcp_tool" in hidden_imports
     assert "tools.system.work_items" in hidden_imports
     assert "tools.system.work_items.tool" in hidden_imports
+
+
+def test_hidden_imports_cover_lazy_cli_command_modules() -> None:
+    """CLI commands load via importlib from COMMAND_SPECS; freeze must list them.
+
+    Without this, ``opensre _package-smoke`` (and every other top-level command)
+    fails in the PyInstaller binary with ModuleNotFoundError before Click runs.
+    """
+    from surfaces.cli.commands.command_specs import COMMAND_SPECS
+
+    hidden_imports = set(runtime_hidden_imports(_REPO_ROOT))
+    command_modules = {spec.import_path.split(":", 1)[0] for spec in COMMAND_SPECS}
+
+    assert command_modules <= hidden_imports
+    assert "surfaces.cli.commands.package_smoke" in hidden_imports
 
 
 def test_hidden_imports_exclude_non_runtime_discovery_modules() -> None:
@@ -88,6 +104,47 @@ def test_release_build_uses_checked_in_spec() -> None:
     assert "skill_data_entries(ROOT)" in spec
 
 
+def test_spec_bakes_the_descriptor_index_into_the_bundle() -> None:
+    """The frozen fallback imports every vendor module when this file is missing.
+
+    A unit test that writes the JSON into a fake ``_MEIPASS`` cannot catch a
+    spec that omits or misplaces it. Pin the PyInstaller data entry: dump at
+    build time, ship under ``BAKED_INDEX_RELATIVE_PATH.parent`` so the runtime
+    path ``sys._MEIPASS / tools / descriptor_index.json`` is what the bundle
+    actually contains.
+    """
+    spec = _SPEC_FILE.read_text(encoding="utf-8")
+
+    assert '_baked_index = ROOT / "build" / "baked" / BAKED_INDEX_RELATIVE_PATH' in spec
+    assert "dump_descriptor_index(_baked_index)" in spec
+    assert "datas.append((str(_baked_index), str(BAKED_INDEX_RELATIVE_PATH.parent)))" in spec
+    assert BAKED_INDEX_RELATIVE_PATH.as_posix() == "tools/descriptor_index.json"
+
+
+def test_release_smoke_asserts_onedir_contains_the_baked_index() -> None:
+    """Unix onedir smoke must see the file on disk, not only via ``_package-smoke``.
+
+    A unit test that writes JSON into a fake ``_MEIPASS`` cannot catch a spec
+    that omits or misplaces the bake. ``_package-smoke`` fail-closed covers
+    onefile (Windows), where datas live inside the archive. Onedir can assert
+    the path PyInstaller materializes under ``_internal/``, same as LiteLLM.
+    """
+    workflow = _RELEASE_WORKFLOW.read_text(encoding="utf-8")
+    baked_onedir = f"./dist/opensre/_internal/{BAKED_INDEX_RELATIVE_PATH.as_posix()}"
+
+    assert baked_onedir in workflow
+    assert "_package-smoke" in workflow
+
+
+def test_release_workflow_parallelizes_macos_onedir_resign() -> None:
+    """Nested lib signs are independent; main binary stays serial and last."""
+    workflow = _RELEASE_WORKFLOW.read_text(encoding="utf-8")
+
+    assert 'xargs -0 -P "$JOBS" -n 1 codesign --force --sign -' in workflow
+    assert 'codesign --force --sign - "$APP_BIN"' in workflow
+    assert 'if [ "$JOBS" -gt 4 ]; then' in workflow
+
+
 def test_release_workflow_does_not_run_on_pull_requests() -> None:
     workflow = _RELEASE_WORKFLOW.read_text(encoding="utf-8")
     triggers = yaml.load(workflow, Loader=yaml.BaseLoader)["on"]
@@ -98,6 +155,32 @@ def test_release_workflow_does_not_run_on_pull_requests() -> None:
     assert 'if [ "$EVENT_NAME" = "pull_request" ]; then' not in workflow
     assert 'echo "channel=pr" >> "$GITHUB_OUTPUT"' not in workflow
     assert "opensre_pr_" not in workflow
+
+
+def test_release_workflow_publishes_python_distributions_to_pypi() -> None:
+    workflow = yaml.load(_RELEASE_WORKFLOW.read_text(encoding="utf-8"), Loader=yaml.BaseLoader)
+    publish_job = workflow["jobs"]["publish-python-dist"]
+
+    assert publish_job["needs"] == ["build-python-dist", "publish-release"]
+    assert publish_job["environment"] == {
+        "name": "pypi",
+        "url": "https://pypi.org/p/opensre",
+    }
+    assert publish_job["permissions"] == {"id-token": "write"}
+
+    download_step, publish_step = publish_job["steps"]
+    assert download_step["uses"] == (
+        "actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c"
+    )
+    assert download_step["with"] == {
+        "name": "release-python-dist",
+        "path": "dist",
+    }
+    assert publish_step["uses"] == (
+        "pypa/gh-action-pypi-publish@dc37677b2e1c63e2034f94d8a5b11f265b73ba33"
+    )
+    assert publish_step["with"]["skip-existing"] == "true"
+    assert "password" not in publish_step.get("with", {})
 
 
 def test_infrastructure_data_excludes_the_cloudflare_worker() -> None:

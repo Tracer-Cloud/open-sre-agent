@@ -107,7 +107,10 @@ def run_remote_sync_on_exit() -> None:
 @click.option(
     "--provider",
     default=None,
-    help=f"Backend name (default {DEFAULT_REMOTE_SYNC_PROVIDER}; built-in: {', '.join(builtin_providers())}).",
+    help=(
+        f"Backend name (default {DEFAULT_REMOTE_SYNC_PROVIDER}; "
+        f"built-in: {', '.join(builtin_providers())})."
+    ),
 )
 @click.option(
     "--bucket",

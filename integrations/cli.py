@@ -680,14 +680,6 @@ def _setup_twilio() -> None:
     _run_spec_setup(TWILIO_SETUP)
 
 
-def _setup_openclaw() -> None:
-    from integrations.openclaw.setup import OPENCLAW_SETUP
-
-    _run_spec_setup(OPENCLAW_SETUP)
-    print('    - uv run opensre ask "check the OpenClaw gateway status"')
-    print("    - for richer answers, also configure Grafana/Datadog and GitHub")
-
-
 def _setup_posthog_mcp() -> None:
     from integrations.posthog_mcp.setup import POSTHOG_MCP_SETUP
 
@@ -754,12 +746,6 @@ def _setup_helm() -> None:
     _run_spec_setup(HELM_SETUP)
 
 
-def _setup_hermes() -> None:
-    from integrations.hermes.setup import HERMES_SETUP
-
-    _run_spec_setup(HERMES_SETUP)
-
-
 def _setup_tempo() -> None:
     from integrations.tempo.setup import TEMPO_SETUP
 
@@ -803,7 +789,6 @@ _HANDLERS: dict[str, Any] = {
     "grafana": _setup_grafana,
     "honeycomb": _setup_honeycomb,
     "helm": _setup_helm,
-    "hermes": _setup_hermes,
     "incident_io": _setup_incident_io,
     "mariadb": _setup_mariadb,
     "mongodb_atlas": _setup_mongodb_atlas,
@@ -825,7 +810,6 @@ _HANDLERS: dict[str, Any] = {
     "smtp": _setup_smtp,
     "whatsapp": _setup_whatsapp,
     "twilio": _setup_twilio,
-    "openclaw": _setup_openclaw,
     "posthog_mcp": _setup_posthog_mcp,
     "sentry_mcp": _setup_sentry_mcp,
     "x_mcp": _setup_x_mcp,

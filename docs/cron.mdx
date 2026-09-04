@@ -92,10 +92,29 @@ Delete a scheduled task by its ID.
 Execute a task immediately (ad-hoc one-shot). Useful for debugging delivery
 without waiting for the next cron tick.
 
+By default this delivers to every configured destination again, even ones that
+already received the message — that is what you want to trigger a task on
+demand. To recover a partial failure instead, use `--failed-only`: it retries
+only the destinations the most recent run failed at.
+
+`--failed-only` never widens. If it cannot read per-target history for the task
+— no prior run, or one recorded before that history was tracked — it stops and
+tells you, rather than quietly delivering everywhere. Re-run without the flag
+when a full send is what you want.
+
+When the last run was a partial failure, a plain `cron run` warns which
+destinations it is about to re-deliver to before it sends.
+
 ### `opensre cron logs <task_id>`
 
 Show execution history for a task (newest first). Displays start time, status,
-message ID, and any errors.
+delivered targets, message ID, and any errors.
+
+A task with more than one destination delivers to all of them at once, so one
+slow channel does not delay the rest. The **Targets** column counts how many
+destinations were delivered to (`1/2`); when some fail, the run still counts as
+`success` — the message did go out — and the Error column names the destinations
+that missed it. A run is `failed` only when every destination failed.
 
 ### `opensre cron start`
 

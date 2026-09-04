@@ -34,6 +34,7 @@ def test_turn_needs_exclusive_stdin_for_bare_integration_menu(
     assert loop_input_policy.turn_needs_exclusive_stdin("/memory", session) is True
     assert loop_input_policy.turn_needs_exclusive_stdin("/model", session) is True
     assert loop_input_policy.turn_needs_exclusive_stdin("/loops", session) is True
+    assert loop_input_policy.turn_needs_exclusive_stdin("/fleet", session) is True
     assert loop_input_policy.turn_needs_exclusive_stdin("/theme", session) is True
 
     assert loop_input_policy.turn_needs_exclusive_stdin("/integrations list", session) is False

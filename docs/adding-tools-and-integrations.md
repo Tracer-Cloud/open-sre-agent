@@ -116,7 +116,6 @@ disable-model-invocation: false   # optional — set true to suppress attachment
 
 - Datadog: `integrations/datadog/` (with `integrations/datadog/tools/`), `integrations/catalog.py`, tests under `tests/integrations/datadog/` and `tests/tools/test_datadog_*.py`.
 - Grafana: `integrations/grafana/` (with `integrations/grafana/tools/`), `integrations/catalog.py`, `surfaces/cli/wizard/local_grafana_stack/`, tests under `tests/integrations/grafana/` and `tests/tools/test_grafana_*.py`.
-- Hermes: `integrations/hermes/` (with `integrations/hermes/tools/hermes_logs_tool/`), `surfaces/cli/commands/hermes.py`, `tests/hermes/`.
 - Bitbucket: `integrations/bitbucket/` shows the facade layout — a one-line `__init__.py` beside `config.py`, `client.py`, `verifier.py`, and `tools/`.
 
 ### Core completeness

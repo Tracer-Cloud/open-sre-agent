@@ -45,7 +45,6 @@ _EXCLUSIVE_STDIN_MENU_COMMANDS: frozenset[str] = frozenset(
         "/cost",
         "/tasks",
         "/loops",
-        "/watches",
         "/work",
         "/alerts",
         "/privacy",

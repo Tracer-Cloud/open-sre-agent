@@ -42,11 +42,11 @@ def test_slash_invoke_tool_start_does_not_record_cli_agent() -> None:
         {"name": "slash_invoke", "input": {"command": "/model", "args": ["show"]}},
     )
 
-    # slash_invoke is self-recording, so no cli_agent history row is written,
-    # but the live tool-call preview still shows what is running.
+    # A user slash command is echoed as the ``[N]`` row, so it is not added to
+    # the tool action log (that would duplicate it, and strand a line at exit).
     assert session.history == []
     assert observer.planned_count == 1
-    assert "/model show" in buffer.getvalue()
+    assert session.terminal.action_log_entries == []
 
 
 def test_internal_choose_slash_has_no_tool_preview() -> None:
@@ -441,11 +441,18 @@ def test_generic_tool_end_nests_the_result_under_the_call() -> None:
         },
     )
 
+    # The call is buffered — nothing prints live until the log flushes.
+    assert buffer.getvalue() == ""
+    entries = observer.session.terminal.action_log_entries
+    assert len(entries) == 1
+    assert entries[0].kind == "GitHub CLI"
+    assert "↳ GitHub API call succeeded" in entries[0].detail
+    assert observer.session.terminal.inline_tool_results is True
+
+    observer("agent_end", {})
     out = buffer.getvalue()
     assert "GitHub CLI" in out
-    assert "\n  ↳ GitHub API call succeeded" in out  # tight child, 2-space gutter
-    assert "\n\n  ↳" not in out  # no blank inside the block
-    assert observer.session.terminal.inline_tool_results is True
+    assert "↳ GitHub API call succeeded" in out
 
 
 def test_generic_tool_end_hides_a_json_blob() -> None:
@@ -456,7 +463,6 @@ def test_generic_tool_end_hides_a_json_blob() -> None:
         "tool_start",
         {"id": "t1", "name": "github_cli", "input": {"args": ["api", "user"]}},
     )
-    after_start = buffer.getvalue()
     observer(
         "tool_end",
         {
@@ -466,12 +472,23 @@ def test_generic_tool_end_hides_a_json_blob() -> None:
         },
     )
 
-    assert buffer.getvalue() == after_start
+    # The call is buffered; the JSON blob result is not folded under it — the
+    # reply summarizes model-only data.
+    assert buffer.getvalue() == ""
+    entries = observer.session.terminal.action_log_entries
+    assert len(entries) == 1
+    assert "gh api user" in entries[0].detail
+    assert "login" not in entries[0].detail
     assert observer.session.terminal.inline_tool_results is False
 
+    observer("agent_end", {})
+    out = buffer.getvalue()
+    assert "gh api user" in out
+    assert "login" not in out
 
-def test_one_blank_line_between_a_skill_block_and_the_next_call() -> None:
-    """Droid / Claude / Cursor: one gap BETWEEN blocks, never two stacked blanks."""
+
+def test_skill_block_renders_live_not_buffered() -> None:
+    """Skill blocks print live with one gap; tool calls are buffered, not shown yet."""
     observer, buffer = _observer_with_buffer()
 
     observer(
@@ -492,8 +509,10 @@ def test_one_blank_line_between_a_skill_block_and_the_next_call() -> None:
     )
 
     out = buffer.getvalue()
-    assert "\nSkill install-code-review\n  ↳ Skill activated\n\n⏺" in out
+    assert "\nSkill install-code-review\n  ↳ Skill activated\n" in out
     assert "\n\n\n" not in out
+    # The github call is buffered for the grouped log, not printed inline yet.
+    assert any(e.kind == "GitHub CLI" for e in observer.session.terminal.action_log_entries)
 
 
 def test_literal_slash_command_records_single_history_entry(

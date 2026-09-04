@@ -53,7 +53,7 @@ TELEGRAM_ALLOWED_USERS=123456789   # for two-way gateway chat
 | `TELEGRAM_ALLOWED_USERS` | Comma-separated **numeric** user ids allowed for gateway chat. |
 
 <Note>
-**Credential resolution.** Every Telegram delivery surface — the scheduler, `/watchdog`, `/hermes watch`, and `/watch` — resolves the bot token the same way: integration store first, then `resolve_env_credential("TELEGRAM_BOT_TOKEN")` (process env, then the credentials file). Chat id is non-secret: `--chat-id` → store `default_chat_id` → `TELEGRAM_DEFAULT_CHAT_ID` env (plain `os.getenv`).
+**Credential resolution.** Telegram delivery surfaces resolve the bot token from the integration store first, then `resolve_env_credential("TELEGRAM_BOT_TOKEN")` (process env, then the credentials file). Chat id is non-secret: `--chat-id` → store `default_chat_id` → `TELEGRAM_DEFAULT_CHAT_ID` env (plain `os.getenv`).
 </Note>
 
 ## Credentials
@@ -135,7 +135,7 @@ If `getUpdates` returns an empty array, post a fresh message in the chat and rel
 }
 ```
 
-The tool resolves the bot token from the same credential chain as the watchdog: integration store, then `resolve_env_credential("TELEGRAM_BOT_TOKEN")` (env then keyring). If `chat_id` is omitted, it sends through the configured `default_chat_id`.
+The tool resolves the bot token from the integration store, then `resolve_env_credential("TELEGRAM_BOT_TOKEN")` (env then keyring). If `chat_id` is omitted, it sends through the configured `default_chat_id`.
 
 Delivery is an external side effect. Its result includes a stable `status`, `sent`, `error_type`, `chat_id`, `reply_to_message_id`, and `message_length` shape so follow-up tool calls can tell configuration failures from Telegram delivery failures.
 
@@ -195,7 +195,7 @@ The gateway uses long polling — no public HTTPS URL or port forwarding is requ
 
 The gateway uses the same headless agent harness as the interactive shell: the agent grounds its prompt in your configured integrations and calls their tools to answer.
 
-Watchdog alerts and cron deliveries still use the outbound-only paths — they do not require the gateway process.
+Cron deliveries use the outbound-only path — they do not require the gateway process.
 
 #### Deploying the gateway to a remote host
 
@@ -211,7 +211,7 @@ ANTHROPIC_API_KEY=...                    # or your provider's key env
 
 If deploy reports `MISSING: TELEGRAM_BOT_TOKEN` even though local setup succeeded, copy the values into `.env` (or `.env.deploy.example`) for the deploy.
 
-### Scheduled and watchdog delivery
+### Scheduled delivery
 
 Configure Telegram first (setup + verify — the gateway is **not** required).
 
@@ -224,22 +224,6 @@ opensre cron add --kind github_pr_sweep --cron "0 9 * * 1-5" \
 
 See [Cron](/cron).
 
-#### Watchdog (process threshold alarms)
-
-```bash
-opensre watchdog --pid <pid> [--max-cpu N] [--max-runtime D] [--max-rss S]
-```
-
-Interactive shell: `/watch`, `/watches`, `/unwatch`, `/watchdog`.
-
-#### Hermes incident escalation
-
-```bash
-opensre hermes watch
-```
-
-See [Hermes](/hermes).
-
 ## Verify
 
 ```bash
@@ -249,15 +233,6 @@ opensre integrations verify telegram
 Interactive shell: `/integrations verify telegram` or `/verify telegram`.
 
 This calls Telegram's [`getMe`](https://core.telegram.org/bots/api#getme) endpoint. On success it reports the bot `@username`. It does **not** start a listening process and does not test two-way communication or delivery chat routing.
-
-Delivery test — trip a one-shot watchdog alarm:
-
-```bash
-sleep 30 &
-opensre watchdog --pid $! --max-runtime 2s --once --provider telegram
-```
-
-An alarm message should appear in the configured chat within a few seconds. Long messages are truncated to Telegram's 4,096-character limit.
 
 ## Troubleshooting
 

@@ -79,8 +79,8 @@ def run_cli_command(
     action agent reads it back as its tool observation. Capture is the default
     because most delegated commands are non-interactive printers; only commands
     that prompt on the real TTY (``onboard``, ``login``, ``uninstall``), stream
-    their own progress UI (``update``), or block indefinitely (``cron start``,
-    ``hermes watch``, ``watchdog``) must pass ``capture_output=False``.
+    their own progress UI (``update``), or block indefinitely (``cron start``)
+    must pass ``capture_output=False``.
 
     **Return value:** Reports subprocess success for headless/gateway sessions
     (``session`` with no terminal facet) so slash analytics can show failure.
@@ -297,15 +297,6 @@ def _cmd_messaging(session: Session, console: Console, args: list[str]) -> bool:
     return run_cli_command(console, ["messaging", *args], session=session)
 
 
-def _cmd_hermes(session: Session, console: Console, args: list[str]) -> bool:
-    # ``hermes watch`` live-tails logs until interrupted; capturing would buffer
-    # its stream forever. Everything else (including bare ``/hermes`` help) prints.
-    capture_output = not args or args[0].lower() != "watch"
-    return run_cli_command(
-        console, ["hermes", *args], capture_output=capture_output, session=session
-    )
-
-
 def _cmd_cron(session: Session, console: Console, args: list[str]) -> bool:
     # ``cron start`` blocks as the scheduler daemon and must stream to the real
     # TTY. Every other subcommand is a printer; the captured output reaches the
@@ -321,11 +312,6 @@ def _cmd_sentry(session: Session, console: Console, args: list[str]) -> bool:
 
 def _cmd_posthog(session: Session, console: Console, args: list[str]) -> bool:
     return run_cli_command(console, ["posthog", *args], capture_output=True, session=session)
-
-
-def _cmd_watchdog(session: Session, console: Console, args: list[str]) -> bool:
-    # Blocking monitor loop; streams sampled state until interrupted.
-    return run_cli_command(console, ["watchdog", *args], capture_output=False, session=session)
 
 
 def _cmd_debug(session: Session, console: Console, args: list[str]) -> bool:
@@ -413,12 +399,6 @@ COMMANDS: list[SlashCommand] = [
         ),
     ),
     SlashCommand(
-        "/hermes",
-        "Live-tail Hermes logs and send incidents to Telegram.",
-        _cmd_hermes,
-        usage=("/hermes watch",),
-    ),
-    SlashCommand(
         "/cron",
         "Manage cron-driven scheduled deliveries.",
         _cmd_cron,
@@ -458,13 +438,6 @@ COMMANDS: list[SlashCommand] = [
             "/posthog report schedule run <id>",
             "/posthog report schedule remove <id>",
         ),
-    ),
-    SlashCommand(
-        "/watchdog",
-        "Monitor one process and send threshold alarms.",
-        _cmd_watchdog,
-        usage=("/watchdog --pid <pid> [--max-rss <size>] [--max-cpu <percent>]",),
-        examples=("/watchdog --pid 123 --max-rss 1G",),
     ),
     SlashCommand(
         "/debug",

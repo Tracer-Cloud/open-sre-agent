@@ -8,8 +8,8 @@ Resolution rule:
 
 The store, env, and keyring fallbacks match the resolution order the scheduler
 and onboarding wizard use, so credentials saved via ``opensre onboard`` or
-``opensre integrations setup telegram`` work uniformly across the watchdog,
-Hermes incident sinks, the Telegram send-message tool, and any other caller.
+``opensre integrations setup telegram`` work uniformly across the Telegram
+send-message tool and any other caller.
 """
 
 from __future__ import annotations

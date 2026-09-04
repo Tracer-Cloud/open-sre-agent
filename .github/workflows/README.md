@@ -13,6 +13,7 @@ Internal notes for repository automation under `.github/workflows/`. Not publish
 | [`celebrate-merged-pr.yml`](celebrate-merged-pr.yml) | Post-merge celebration comment |
 | [`good-first-issue-assign.yml`](good-first-issue-assign.yml) | Auto-assign good first issues |
 | [`release.yml`](release.yml) | Release builds and artifacts |
+| [`installer-canary.yml`](installer-canary.yml) | Post-publish canaries for the public install paths (CDN, GitHub release resolution, PowerShell, Homebrew) on Linux/macOS/Windows |
 
 See [CI.md](../../CI.md) for local parity commands before push.
 

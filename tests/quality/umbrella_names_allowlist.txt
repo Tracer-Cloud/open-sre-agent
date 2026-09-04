@@ -28,7 +28,6 @@ core/tool_framework/utils/sql_wrapper.py|module|sql_wrapper
 
 # port (hexagonal sense — not network ports)
 core/agent_harness/ports.py|module|ports
-integrations/hermes/sinks.py|class|AlarmDispatcherPort
 surfaces/interactive_shell/runtime/llm_provider_adapter.py|class|LlmProviderPorts
 surfaces/interactive_shell/runtime/llm_provider_adapter.py|class|ReplLlmProviderPorts
 surfaces/interactive_shell/runtime/slash_adapter.py|class|HeadlessSlashPorts
@@ -36,7 +35,6 @@ surfaces/interactive_shell/runtime/slash_adapter.py|class|ReplSlashPorts
 surfaces/interactive_shell/runtime/slash_adapter.py|class|SlashPorts
 surfaces/interactive_shell/runtime/task_cancel_adapter.py|class|ReplTaskCancelPorts
 surfaces/interactive_shell/runtime/task_cancel_adapter.py|class|TaskCancelPorts
-tools/system/watch_dog/monitor.py|class|AlarmDispatcherPort
 
 # context
 config/constants/paths.py|class|ContextRootOwnerMismatchError

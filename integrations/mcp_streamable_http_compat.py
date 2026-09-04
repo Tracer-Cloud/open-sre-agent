@@ -21,6 +21,26 @@ def _load_streamable_http_clients() -> tuple[Any, Any]:
     return modern_client, legacy_client
 
 
+def _as_transport_triple(streams: Any) -> tuple[Any, Any, Any]:
+    """Normalize SDK stream tuples to ``(read, write, session_id_callback)``.
+
+    Modern ``mcp`` yields three values. Older clients yield only the two
+    streams; callers that unpack exactly three values then fail while opening
+    a session.
+    """
+    try:
+        count = len(streams)
+    except TypeError:
+        count = -1
+    if count not in {2, 3}:
+        raise ValueError(
+            "Streamable HTTP transport returned an unexpected stream count: "
+            f"{count if count >= 0 else type(streams).__name__} (expected 2 or 3)."
+        )
+    read_stream, write_stream, *rest = streams
+    return read_stream, write_stream, rest[0] if rest else None
+
+
 @asynccontextmanager
 async def streamable_http_client(
     url: str,
@@ -38,8 +58,8 @@ async def streamable_http_client(
             url,
             http_client=http_client,
             terminate_on_close=terminate_on_close,
-        ) as triple:
-            yield triple
+        ) as streams:
+            yield _as_transport_triple(streams)
         return
 
     del http_client
@@ -49,5 +69,5 @@ async def streamable_http_client(
         timeout=timeout,
         sse_read_timeout=sse_read_timeout,
         terminate_on_close=terminate_on_close,
-    ) as triple:
-        yield triple
+    ) as streams:
+        yield _as_transport_triple(streams)

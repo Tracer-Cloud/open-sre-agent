@@ -45,7 +45,11 @@ def test_get_rejects_oversized_response(monkeypatch: pytest.MonkeyPatch) -> None
             assert limit == morning_fetch._MAX_RESPONSE_BYTES + 1
             return b"x" * limit
 
-    monkeypatch.setattr(morning_fetch.urllib.request, "urlopen", lambda *_args, **_kwargs: Response())
+    monkeypatch.setattr(
+        morning_fetch.urllib.request,
+        "urlopen",
+        lambda *_args, **_kwargs: Response(),
+    )
     with pytest.raises(RuntimeError, match="exceeded"):
         morning_fetch._get("https://example.invalid/feed")
 

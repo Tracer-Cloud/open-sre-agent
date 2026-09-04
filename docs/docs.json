@@ -149,7 +149,6 @@
                   "grafana",
                   "grafana_annotations",
                   "groundcover",
-                  "hermes",
                   "honeycomb",
                   "new_relic",
                   "openobserve",
@@ -261,7 +260,6 @@
                   "airflow",
                   "dagster",
                   "kafka",
-                  "openclaw",
                   "prefect",
                   "rabbitmq",
                   "temporal"

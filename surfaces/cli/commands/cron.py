@@ -13,7 +13,7 @@ from rich.table import Table
 
 from core.agent_harness import pin_recurring_skill
 from infrastructure.scheduling.scheduler.credentials import requires_explicit_chat_id
-from infrastructure.scheduling.scheduler.types import Provider, TaskKind
+from infrastructure.scheduling.scheduler.types import Provider, TaskKind, TaskRun
 from infrastructure.terminal.theme import GLYPH_ERROR, GLYPH_SUCCESS
 from surfaces.cli.commands.scheduling import validate_cron_and_timezone
 
@@ -267,14 +267,46 @@ def cron_remove(task_id: str) -> None:
         raise SystemExit(1)
 
 
+def _warn_if_rerun_duplicates(task_id: str) -> None:
+    """Warn before a full rerun re-posts where the last run already delivered.
+
+    A partial failure is the case an operator is most likely to reach for
+    ``cron run`` to fix, and a full rerun is the one thing that quietly
+    double-posts. Warn rather than narrow the delivery silently: a plain
+    ``cron run`` is also the way to trigger a task on demand, and that has to
+    keep reaching every destination.
+    """
+    from infrastructure.scheduling.scheduler.claim_store import get_latest_targeted_run
+
+    run = get_latest_targeted_run(task_id)
+    if run is None:
+        return
+    delivered = [outcome for outcome in run.targets if outcome.ok]
+    if not delivered or len(delivered) == len(run.targets):
+        return
+    names = ", ".join(outcome.label() for outcome in delivered)
+    _console.print(
+        f"[yellow]Note: the most recent run already delivered to {names}. "
+        "This re-sends there too — use --failed-only to retry just the "
+        "destinations that failed.[/yellow]"
+    )
+
+
 @cron_command.command(name="run")
 @click.argument("task_id")
-def cron_run(task_id: str) -> None:
+@click.option(
+    "--failed-only",
+    is_flag=True,
+    default=False,
+    help="Retry only the destinations the most recent run failed at, instead of "
+    "delivering to every configured destination again.",
+)
+def cron_run(task_id: str, failed_only: bool) -> None:
     """Run a scheduled task immediately (ad-hoc one-shot for debugging)."""
     from bootstrap.adapters import scheduler_runners
     from bootstrap.process import SCHEDULED_COMMAND_PROFILE, configure_process
     from infrastructure.scheduling.scheduler.operation_log import record_scheduler_task_operation
-    from infrastructure.scheduling.scheduler.runner import run_task_now
+    from infrastructure.scheduling.scheduler.runner import failed_retry_scope, run_task_now
     from infrastructure.scheduling.scheduler.store import get_task
 
     configure_process(SCHEDULED_COMMAND_PROFILE)
@@ -284,18 +316,40 @@ def cron_run(task_id: str) -> None:
         _console.print(f"[red]Error: task {task_id} not found.[/red]")
         raise SystemExit(1)
 
+    if failed_only:
+        scope = failed_retry_scope(task_id)
+        if scope is None:
+            _console.print(
+                "[red]No readable per-target history for this task, so which "
+                "destinations failed is unknown.[/red]"
+            )
+            _console.print("Run without --failed-only to deliver to every configured destination.")
+            raise SystemExit(1)
+        if not scope:
+            _console.print("[dim]Nothing to retry — the most recent run had no failures.[/dim]")
+            return
+    else:
+        _warn_if_rerun_duplicates(task_id)
+
     _console.print(f"Running task {task_id} ({task.kind.value})...")
     record_scheduler_task_operation(
         "scheduled_task_run_requested",
         task,
-        extra={"command": "cron_run"},
+        extra={"command": "cron_run", "failed_only": failed_only},
     )
-    success = run_task_now(task_id, scheduler_runners())
+    success = run_task_now(task_id, scheduler_runners(), only_failed=failed_only)
     if success:
         _console.print("[green]Done.[/green]")
     else:
         _console.print("[red]Task execution failed. Check logs for details.[/red]")
         raise SystemExit(1)
+
+
+def _delivered_targets(run: TaskRun) -> str:
+    """How many of a run's destinations were delivered to (``2/3``)."""
+    if not run.targets:
+        return "—"
+    return f"{sum(1 for outcome in run.targets if outcome.ok)}/{len(run.targets)}"
 
 
 @cron_command.command(name="logs")
@@ -325,6 +379,7 @@ def cron_logs(task_id: str, limit: int) -> None:
     table = Table(show_header=True, header_style="bold")
     table.add_column("Started")
     table.add_column("Status")
+    table.add_column("Targets")
     table.add_column("Message ID")
     table.add_column("Error")
 
@@ -341,6 +396,7 @@ def cron_logs(task_id: str, limit: int) -> None:
             f"[{status_style}]{run.status.value}[/{status_style}]"
             if status_style
             else run.status.value,
+            _delivered_targets(run),
             run.posted_message_id or "—",
             run.error[:50] if run.error else "—",
         )

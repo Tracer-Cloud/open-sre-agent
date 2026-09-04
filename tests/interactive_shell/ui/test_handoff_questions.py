@@ -25,7 +25,7 @@ def test_render_markdown_block_highlights_a_question() -> None:
     assert "Which environment should I investigate first?" in output
 
 
-def test_submitted_answer_to_a_handoff_is_marked() -> None:
+def test_submitted_handoff_answer_is_the_user_row() -> None:
     session = Session()
     # Only a structured picker / Ask-User handoff sets this flag; a plain
     # assistant question in prose must not trigger the answer treatment.
@@ -34,16 +34,9 @@ def test_submitted_answer_to_a_handoff_is_marked() -> None:
     console = Console(file=buffer, force_terminal=False, highlight=False, width=80)
     render_submitted_prompt(console, session, "staging")
     output = buffer.getvalue()
-    assert "↗ answer" in output
+    # No hanging ``↗ answer`` — the user row is the answer (Droid / Cursor).
+    assert "↗ answer" not in output
     assert "staging" in output
-    # The marker hugs the assistant answer it responds to (no blank row above it),
-    # and the between-turns gap falls after the marker, before the input row.
-    assert not output.startswith("\n")
-    lines = output.splitlines()
-    marker_index = next(i for i, line in enumerate(lines) if "↗ answer" in line)
-    input_index = next(i for i, line in enumerate(lines) if "staging" in line)
-    assert lines[marker_index + 1].strip() == ""
-    assert marker_index < input_index
 
 
 def test_ask_user_answers_render_as_numbered_qa() -> None:
@@ -156,8 +149,12 @@ def test_choice_selection_strips_terminal_controls() -> None:
     output = buffer.getvalue()
     assert "\x1b" not in output
     assert "\x07" not in output
-    assert "✓ Deploy?" in output
+    assert "Ask User" in output
+    assert "Deploy?" in output
     assert "Canary" in output
+    assert "✓" not in output
+    # Section gap above the card so it does not join Plan complete.
+    assert output.startswith("\n")
 
 
 def test_multi_select_choice_indents_every_selected_line() -> None:
@@ -169,12 +166,33 @@ def test_multi_select_choice_indents_every_selected_line() -> None:
     # Act
     render_choice_selection(console, "Select Complex Demos", answer)
 
-    # Assert: heading, then every option indented under it — never flush-left.
+    # Assert: Ask User card — question, then every option indented under it.
     lines = [line.rstrip() for line in buffer.getvalue().splitlines() if line.strip()]
-    assert "✓ Select Complex Demos" in lines
+    assert lines[0] == "Ask User"
+    assert "1.  Select Complex Demos" in lines[1] or lines[1].endswith("Select Complex Demos")
     for label in ("Audit the architecture", "Find failing PRs", "Remediate alerts"):
-        assert f"  {label}" in lines
+        assert any(label in line and line.startswith(" ") for line in lines)
         assert label not in lines
+    assert "✓" not in buffer.getvalue()
+
+
+def test_choice_selection_is_not_a_plan_step() -> None:
+    """Single-pick recap must not look like another Plan complete checklist row."""
+    buffer = io.StringIO()
+    console = Console(file=buffer, force_terminal=False, highlight=False, width=80)
+
+    render_choice_selection(
+        console,
+        "Choose a Demo",
+        "Explore a repo and analyze its CI/CD performance (recommended)",
+    )
+
+    output = buffer.getvalue()
+    assert "Ask User" in output
+    assert "Choose a Demo" in output
+    assert "Explore a repo" in output
+    assert "✓ Choose a Demo" not in output
+    assert "✓" not in output
 
 
 def test_try_render_rejects_a_single_choice_label() -> None:

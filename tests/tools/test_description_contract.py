@@ -52,7 +52,7 @@ _SECRET_RE = re.compile(
 # Today's production tool count. Discovery swallows import errors, so a silently
 # short registry would make every per-tool check pass by testing nothing. This
 # floor fails loud when the registry shrinks; raise it when the registry grows.
-_MIN_REGISTRY_SIZE = 270
+_MIN_REGISTRY_SIZE = 265
 
 #: Tools that currently violate at least one description-contract rule.
 #: Compared exactly against the live violator set — a fixed tool MUST be removed

@@ -53,7 +53,6 @@ RULES: tuple[PathRule, ...] = (
     # Specific sub-packages before their parent
     PathRule("integrations/llm_cli/", ("tests/integrations/llm_cli/",)),
     PathRule("integrations/opensre/", ("tests/integrations/opensre/",)),
-    PathRule("integrations/hermes/", ("tests/hermes/",)),
     PathRule(
         "integrations/alertmanager/",
         ("tests/integrations/alertmanager/", "tests/e2e/alertmanager/"),
@@ -233,25 +232,11 @@ RULES: tuple[PathRule, ...] = (
         ),
     ),
     PathRule(
-        "integrations/hermes/tools/",
-        (
-            "tests/tools/test_hermes_logs_tool.py",
-            "tests/tools/test_hermes_session_evidence_tool.py",
-        ),
-    ),
-    PathRule(
         "integrations/kafka/",
         (
             "tests/integrations/test_kafka.py",
             "tests/tools/test_kafka_consumer_group_tool.py",
             "tests/tools/test_kafka_topic_health_tool.py",
-        ),
-    ),
-    PathRule(
-        "integrations/openclaw/",
-        (
-            "tests/tools/test_openclaw_mcp_tool.py",
-            "tests/tools/test_telemetry.py",
         ),
     ),
     PathRule(
@@ -555,7 +540,6 @@ RULES: tuple[PathRule, ...] = (
     PathRule("surfaces/cli/", ("tests/cli/",)),
     PathRule("surfaces/interactive_shell/", ("tests/interactive_shell/",)),
     PathRule("gateway/", ("gateway/tests/",)),
-    PathRule("tools/system/watch_dog/", ("tests/watch_dog/",)),
     PathRule("tools/", ("tests/tools/",)),
     PathRule("infrastructure/analytics/", ("tests/analytics/",)),
     # Without this rule a change under infrastructure/filestorage/ matches nothing,
@@ -567,6 +551,7 @@ RULES: tuple[PathRule, ...] = (
     ),
     PathRule("infrastructure/safety/guardrails/", ("tests/infrastructure/safety/guardrails/",)),
     PathRule("infrastructure/safety/masking/", ("tests/masking/",)),
+    PathRule("opensre.spec", ("tests/packaging/",)),
     PathRule("infrastructure/deployment/packaging/", ("tests/packaging/",)),
     PathRule("infrastructure/safety/sandbox/", ("tests/sandbox/",)),
     PathRule(

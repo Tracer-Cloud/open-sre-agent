@@ -86,7 +86,7 @@ def list_integrations() -> None:
 
 
 @integrations.command(name="show")
-@click.argument("service", type=IntegrationServiceChoice("MANAGED_INTEGRATION_SERVICES"))
+@click.argument("service")
 def show_integration(service: str) -> None:
     """Show details for a configured integration."""
     from integrations.cli import cmd_show
@@ -95,7 +95,7 @@ def show_integration(service: str) -> None:
 
 
 @integrations.command(name="remove")
-@click.argument("service", type=IntegrationServiceChoice("MANAGED_INTEGRATION_SERVICES"))
+@click.argument("service")
 def remove_integration(service: str) -> None:
     """Remove a configured integration."""
     from integrations.cli import cmd_remove

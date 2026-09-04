@@ -278,8 +278,8 @@ def test_data_fetching_targets_are_not_discovery() -> None:
     """A bridge target that fetches evidence must not spend the discovery budget.
 
     Only ``execute-sql`` and ``query-*`` were treated as real queries, so every
-    other vendor's fetch — Sentry ``issue_get``, X ``search_tweets``, OpenClaw
-    ``conversations_get`` — counted as discovery. That exhausts the allowance
+    other vendor's fetch — Sentry ``issue_get`` or X ``search_tweets`` — counted
+    as discovery. That exhausts the allowance
     and lets the goal reviewer reject a gather that already fetched what was
     asked for.
     """

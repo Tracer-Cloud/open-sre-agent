@@ -44,31 +44,22 @@ _ALLOWED: dict[str, frozenset[str]] = {
     ),
     "tools": frozenset(
         {
-            "integrations.buzz.alarms",
-            "integrations.rocketchat.alarms",
             "integrations.sentry.issue_url",
-            "integrations.telegram.alarms",
-            "integrations.telegram.credentials",
         }
     ),
     "surfaces": frozenset(
         {
             "integrations.betterstack.setup",
-            "integrations.buzz.alarms",
             "integrations.dagster.setup",
             "integrations.github.setup",
             "integrations.jenkins.setup",
-            "integrations.openclaw.setup",
             "integrations.posthog.report_prerequisites",
             "integrations.posthog.setup",
             "integrations.posthog_mcp.setup",
-            "integrations.rocketchat.alarms",
             "integrations.sentry.digest_prerequisites",
             "integrations.sentry.setup",
             "integrations.sentry.uptime",
             "integrations.sentry_mcp.setup",
-            "integrations.telegram.alarms",
-            "integrations.telegram.credentials",
             "integrations.telegram.setup",
             "integrations.tempo.setup",
             "integrations.tracer.integrations_adapter",

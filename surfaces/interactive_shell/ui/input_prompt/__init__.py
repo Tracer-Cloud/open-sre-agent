@@ -6,7 +6,7 @@ from collections.abc import Callable
 
 from prompt_toolkit import PromptSession
 from prompt_toolkit.filters import Condition, to_filter
-from prompt_toolkit.formatted_text import ANSI, FormattedText
+from prompt_toolkit.formatted_text import FormattedText
 from prompt_toolkit.layout.containers import (
     AnyContainer,
     ConditionalContainer,
@@ -16,7 +16,6 @@ from prompt_toolkit.layout.containers import (
     Window,
     to_container,
 )
-from prompt_toolkit.layout.controls import FormattedTextControl
 from prompt_toolkit.layout.dimension import Dimension
 
 from surfaces.interactive_shell.prompt_history import load_prompt_history
@@ -28,7 +27,6 @@ from surfaces.interactive_shell.ui.input_prompt.layout import prompt_line_width
 from surfaces.interactive_shell.ui.input_prompt.lexer import ReplInputLexer
 from surfaces.interactive_shell.ui.input_prompt.rendering import (
     DEFAULT_PLACEHOLDER_TEXT,
-    composer_footer_ansi,
     resolve_prompt_placeholder,
 )
 from surfaces.interactive_shell.ui.input_prompt.style import _build_prompt_style
@@ -85,13 +83,8 @@ def _install_prompt_frame(
     # (otherwise the frame looks hollow against the terminal bg).
     surface_body: AnyContainer = HSplit([editable_body], style="class:composer-body")
     composer: AnyContainer = rounded_composer_frame(surface_body)
-    footer: AnyContainer = Window(
-        FormattedTextControl(lambda: ANSI(composer_footer_ansi())),
-        height=1,
-        dont_extend_height=True,
-        style="class:composer-footer",
-    )
-    box_rows: list[AnyContainer] = [composer, footer]
+    # No footer row — the empty box is the job prompt, not a shortcut dump.
+    box_rows: list[AnyContainer] = [composer]
     if hide_composer is not None:
         shown = Condition(lambda: not hide_composer())
         composer_container = to_container(composer)
@@ -112,9 +105,8 @@ def _install_prompt_frame(
         # same-height stand-in overwrites the growing box cleanly instead.
         box_rows = [
             ConditionalContainer(composer, filter=shown),
-            ConditionalContainer(footer, filter=shown),
             ConditionalContainer(
-                Window(height=lambda: _current_composer_rows() + 1, char=" "),
+                Window(height=_current_composer_rows, char=" "),
                 filter=~shown,
             ),
         ]
@@ -136,7 +128,15 @@ def _install_prompt_frame(
     # Replace the root instead of mutating ``root.children``: HSplit caches its
     # converted child containers, so an in-place list update would leave the
     # original unframed input active even though the object graph looks changed.
-    session.layout.container = HSplit([framed_input, *root.children[1:]])
+    #
+    # TOP — not the PromptSession default JUSTIFY. JUSTIFY + a tall Screen
+    # (CPR ``_min_available_height`` = rows-below-cursor) stretches the live
+    # region to the floor, scrolls the launch banner out of the viewport, and
+    # parks Auto/composer at the bottom of a hollow terminal.
+    session.layout.container = HSplit(
+        [framed_input, *root.children[1:]],
+        align=VerticalAlign.TOP,
+    )
     return session
 
 

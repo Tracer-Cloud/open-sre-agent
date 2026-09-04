@@ -126,17 +126,16 @@ def _load_surface_snapshot(surface: ToolSurface) -> tuple[RegisteredTool, ...]:
     imported, so they are collected directly. Equivalent to the full snapshot
     filtered by ``surface`` (pinned by the registry-index contract test).
 
-    In a PyInstaller frozen binary the AST scanner cannot locate ``.py`` source
-    files (they are compiled to bytecode and not extracted), so
-    ``build_descriptor_index`` returns only the hand-written fallback entries and
-    Grafana / other integration tools are never discovered.  Fall back to the
-    full dynamic snapshot — which imports via ``importlib`` and works correctly
-    with the bundled bytecode — and filter by surface there.
+    A PyInstaller frozen binary carries bytecode only, so the AST scanner finds
+    no source; the build bakes the descriptor index into the bundle instead
+    (``dump_descriptor_index``) and this loads it. Only a frozen build that
+    shipped without that index falls back to the full dynamic snapshot, which
+    imports every vendor tool module.
     """
-    if getattr(sys, "frozen", False):
-        return tuple(t for t in _load_registry_snapshot() if surface in t.surfaces)
+    from tools.registry_index import baked_index_available, build_descriptor_index
 
-    from tools.registry_index import build_descriptor_index
+    if getattr(sys, "frozen", False) and not baked_index_available():
+        return tuple(t for t in _load_registry_snapshot() if surface in t.surfaces)
 
     index = build_descriptor_index()
     modules = sorted({d.module for d in index.values() if surface in d.surfaces})

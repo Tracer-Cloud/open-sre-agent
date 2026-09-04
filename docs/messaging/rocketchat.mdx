@@ -5,7 +5,7 @@ description: "Deliver agent messages, alarms, and scheduled reports to a Rocket.
 
 ## Overview
 
-OpenSRE's Rocket.Chat integration delivers messages — agent-requested posts, watchdog alarms, scheduled reports — to any channel your user or bot account can post to. Useful for teams running self-hosted or cloud Rocket.Chat workspaces.
+OpenSRE's Rocket.Chat integration delivers agent-requested posts and scheduled reports to any channel your user or bot account can post to. Useful for teams running self-hosted or cloud Rocket.Chat workspaces.
 
 Start the interactive shell with `opensre` (no subcommand). Slash commands below are run from that REPL.
 
@@ -170,25 +170,6 @@ SERVICE    │ SOURCE    │ STATUS   │ DETAIL
 rocketchat │ local env │ ✓ passed │ Connected to Rocket.Chat as @verifyadmin.
 ```
 
-Send a real message through the supported watchdog delivery path (see [Watchdog alarms](#watchdog-alarms) below) rather than calling the tool class directly — this exercises the same threshold-detection, cooldown, and provider-routing code a production alarm uses.
-
-```bash
-sleep 30 &
-opensre watchdog --pid $! --max-runtime 2s --once --provider rocketchat --chat-id "#general"
-```
-
-Check the channel — a real alarm message lands within a few seconds:
-
-```
-🚨 OpenSRE Watchdog Alarm
-host       dev-machine.local
-pid        44352  (sleep)
-cmd        sleep 30
-threshold  max_runtime  limit=2s  observed=2s
-runtime    2s
-started    2026-08-21T09:54:35.439729Z
-```
-
 Teardown:
 
 ```bash
@@ -217,26 +198,6 @@ The tool resolves credentials internally from the integration store, then the sa
 
 Delivery is an external side effect but does not require a separate approval. The result includes a stable `status`, `sent`, `error_type`, `channel`, and `message_length` shape so follow-up tool calls can tell configuration failures from Rocket.Chat delivery failures.
 
-### Watchdog alarms
-
-```text
-/watch <pid> --max-cpu 80 --provider rocketchat --chat-id "#alerts"
-```
-
-```bash
-opensre watchdog --pid <pid> --max-cpu 80 --provider rocketchat --chat-id "#alerts"
-```
-
-`--chat-id` overrides the configured `default_channel` (token mode) or is optional in webhook-only mode. Unlike scheduled deliveries (cron, Sentry digest), watchdog alarms accept **either** token credentials with a resolvable channel **or** a configured incoming webhook. Cooldown suppresses repeat alarms for the same threshold (`--cooldown`, default 5 minutes).
-
-### Hermes incident escalation
-
-```bash
-opensre hermes watch --provider rocketchat --chat-id "#incidents"
-```
-
-Same credential rule as watchdog alarms, and the same per-incident-fingerprint cooldown (`--cooldown-seconds`). See [Hermes](/hermes).
-
 ### Scheduled deliveries (cron)
 
 ```bash
@@ -256,7 +217,7 @@ Interactive shell: `/integrations verify rocketchat` or `/verify rocketchat`.
 
 With token credentials configured, this calls Rocket.Chat's [`/api/v1/me`](https://developer.rocket.chat/apidocs/get-user-information) endpoint and reports the authenticated `@username`. With webhook-only configuration, it runs a **non-posting reachability probe** against the webhook URL (a 404 means the URL or its embedded token is wrong; no message is delivered by the probe).
 
-For a real delivery test, trip a one-shot watchdog alarm (see [Watchdog alarms](#watchdog-alarms) above). Long messages are truncated to 4,096 characters.
+Long messages are truncated to 4,096 characters.
 
 ## Troubleshooting
 

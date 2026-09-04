@@ -49,7 +49,9 @@ def execute_shell_turn(
     prompts. Pass a long-lived ``handler`` (the REPL builds one
     at startup) so the tool stack is not rebuilt every turn.
     """
-    resolved_output: TurnOutput = output if output is not None else ShellOutputSink(console)
+    resolved_output: TurnOutput = (
+        output if output is not None else ShellOutputSink(console, session)
+    )
     # The host reads per-turn tool hooks off the output, the same way a chat
     # transport supplies them.
     resolved_output.tool_hooks = tool_hooks  # type: ignore[attr-defined]

@@ -10,8 +10,8 @@ or ``logger.debug(..., exc_info=True)`` with no Sentry trace:
      centrally wraps ``pydantic.ValidationError`` so no vendor classifier has
      to duplicate that guard itself).
   B. ``load_env_integrations`` argocd + helm ``except Exception: pass``.
-  C. ``load_env_integrations`` debug-only env loaders (incident_io,
-     openclaw, mariadb, rabbitmq, rds, betterstack, alertmanager,
+  C. ``load_env_integrations`` debug-only env loaders (incident_io, mariadb,
+     rabbitmq, rds, betterstack, alertmanager,
      victoria_logs, supabase).
 
 After the fix every site routes through ``report_classify_failure`` (in
@@ -112,7 +112,6 @@ _CLASSIFY_PATCH_TARGETS: list[tuple[str, str, str]] = [
     ("jira", "integrations.jira", "JiraIntegrationConfig"),
     ("discord", "integrations.discord", "DiscordBotConfig"),
     ("telegram", "integrations.telegram", "TelegramBotConfig"),
-    ("openclaw", "integrations.openclaw", "build_openclaw_config"),
     ("mysql", "integrations.mysql", "build_mysql_config"),
     ("rabbitmq", "integrations.rabbitmq", "build_rabbitmq_config"),
     ("rds", "integrations.rds", "build_rds_config"),
@@ -256,11 +255,6 @@ _ENV_LOADER_CASES: list[tuple[str, dict[str, str], str]] = [
         "supabase",
         {"SUPABASE_URL": "https://s.example", "SUPABASE_SERVICE_KEY": "k"},
         "build_supabase_config",
-    ),
-    (
-        "openclaw",
-        {"OPENCLAW_MCP_URL": "https://oc.example"},
-        "build_openclaw_config",
     ),
     (
         "rds",

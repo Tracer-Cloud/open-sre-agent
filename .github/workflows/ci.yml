@@ -159,7 +159,6 @@ jobs:
               tests/filestorage
               tests/utils
               tests/masking
-              tests/watch_dog
           - os: ubuntu-latest
             shard: tools-runtime-2
             extra_pytest_args: >-
@@ -177,7 +176,6 @@ jobs:
               tests/filestorage
               tests/utils
               tests/masking
-              tests/watch_dog
           - os: ubuntu-latest
             shard: tools-runtime-3
             extra_pytest_args: >-
@@ -195,7 +193,6 @@ jobs:
               tests/filestorage
               tests/utils
               tests/masking
-              tests/watch_dog
           - os: ubuntu-latest
             shard: tools-runtime-4
             extra_pytest_args: >-
@@ -213,7 +210,6 @@ jobs:
               tests/filestorage
               tests/utils
               tests/masking
-              tests/watch_dog
           - os: ubuntu-latest
             shard: tools-runtime-5
             extra_pytest_args: >-
@@ -231,7 +227,6 @@ jobs:
               tests/filestorage
               tests/utils
               tests/masking
-              tests/watch_dog
           - os: ubuntu-latest
             shard: tools-runtime-6
             extra_pytest_args: >-
@@ -249,7 +244,6 @@ jobs:
               tests/filestorage
               tests/utils
               tests/masking
-              tests/watch_dog
           - os: ubuntu-latest
             shard: cli-runtime-1
             # Live shell action-agent contracts are validated on openai,
@@ -275,7 +269,6 @@ jobs:
               tests/fleet_monitoring
               tests/analytics
               tests/sandbox
-              tests/hermes
           - os: ubuntu-latest
             shard: cli-runtime-2
             llm_provider: openai
@@ -292,7 +285,6 @@ jobs:
               tests/fleet_monitoring
               tests/analytics
               tests/sandbox
-              tests/hermes
           - os: ubuntu-latest
             shard: cli-runtime-3
             llm_provider: openai
@@ -309,7 +301,6 @@ jobs:
               tests/fleet_monitoring
               tests/analytics
               tests/sandbox
-              tests/hermes
           - os: ubuntu-latest
             shard: cli-runtime-4
             llm_provider: openai
@@ -326,7 +317,6 @@ jobs:
               tests/fleet_monitoring
               tests/analytics
               tests/sandbox
-              tests/hermes
           - os: ubuntu-latest
             shard: cli-runtime-5
             llm_provider: openai
@@ -343,7 +333,6 @@ jobs:
               tests/fleet_monitoring
               tests/analytics
               tests/sandbox
-              tests/hermes
           - os: ubuntu-latest
             shard: cli-runtime-6
             llm_provider: openai
@@ -360,7 +349,6 @@ jobs:
               tests/fleet_monitoring
               tests/analytics
               tests/sandbox
-              tests/hermes
           - os: ubuntu-latest
             shard: cli-live-agent
             # Keep all required live agent/tool-choice contracts on the
@@ -565,7 +553,11 @@ jobs:
           esac
 
       - name: Run tests
-        if: steps.changes.outputs.source == 'true' || github.event_name == 'push'
+        if: >-
+          (steps.changes.outputs.source == 'true' || github.event_name == 'push') &&
+          !(github.event_name == 'pull_request' &&
+          github.event.pull_request.head.repo.fork == true &&
+          matrix.shard == 'cli-live-agent')
         env:
           COVERAGE_FILE: .coverage.${{ matrix.shard }}
           # PRs do not consume coverage artifacts. Avoid instrumenting every

@@ -42,7 +42,6 @@ from integrations.google_docs import GOOGLE_DOCS_SETUP
 from integrations.grafana.setup import GRAFANA_SETUP
 from integrations.groundcover.setup import GROUNDCOVER_SETUP
 from integrations.helm.setup import HELM_SETUP
-from integrations.hermes.setup import HERMES_SETUP
 from integrations.honeycomb.setup import HONEYCOMB_SETUP
 from integrations.incident_io.setup import INCIDENT_IO_SETUP
 from integrations.jenkins.setup import JENKINS_SETUP
@@ -52,7 +51,6 @@ from integrations.mongodb.setup import MONGODB_SETUP
 from integrations.mongodb_atlas.setup import MONGODB_ATLAS_SETUP
 from integrations.mysql.setup import MYSQL_SETUP
 from integrations.new_relic.setup import NEW_RELIC_SETUP
-from integrations.openclaw.setup import OPENCLAW_SETUP
 from integrations.opensearch.setup import OPENSEARCH_SETUP
 from integrations.pagerduty.setup import PAGERDUTY_SETUP
 from integrations.postgresql.setup import POSTGRESQL_SETUP
@@ -152,7 +150,6 @@ _SUBMITTED: dict[str, dict[str, str]] = {
         "kubeconfig": "/home/ci/.kube/config",
         "default_namespace": "checkout",
     },
-    "hermes": {"log_path": "/var/log/hermes/errors.log"},
     "smtp": {
         "host": "smtp.eu.example.com",
         "port": "2525",
@@ -194,13 +191,6 @@ _SUBMITTED: dict[str, dict[str, str]] = {
         "username": "bs-user",
         "password": "bs-password",
         "sources": "t1_checkout,t2_api",
-    },
-    "openclaw": {
-        "mode": "stdio",
-        "command": "openclaw",
-        "args": "mcp serve",
-        "url": "",
-        "auth_token": "",
     },
     "servicenow": {
         "instance_url": "https://dev12345.service-now.com",
@@ -332,7 +322,6 @@ _SPECS = [
     GOOGLE_DOCS_SETUP,
     GROUNDCOVER_SETUP,
     HELM_SETUP,
-    HERMES_SETUP,
     HONEYCOMB_SETUP,
     INCIDENT_IO_SETUP,
     JENKINS_SETUP,
@@ -353,7 +342,6 @@ _SPECS = [
     SENTRY_MCP_SETUP,
     X_MCP_SETUP,
     BETTERSTACK_SETUP,
-    OPENCLAW_SETUP,
     SERVICENOW_SETUP,
     POSTGRESQL_SETUP,
     MYSQL_SETUP,

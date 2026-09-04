@@ -20,30 +20,30 @@ def _display_safe(text: str) -> str:
     return "\n".join(strip_terminal_controls(line) for line in text.splitlines())
 
 
-def render_handoff_answer_marker() -> Text:
-    """Dim marker painted above a submitted answer to a hand-off question."""
-    return Text("↗ answer", style=str(ui_theme.DIM))
-
-
 def render_choice_selection(console: Console, title: str, answer: str) -> None:
-    """Persist a compact selected-choice result after the transient picker closes.
+    """Persist selected choice(s) as an Ask User card after the picker closes.
 
-    A multi-select answer arrives as one option per line; each line is indented
-    under the heading so the selected set reads as one aligned block rather than
-    a first row that hangs indented while the rest sit flush-left.
+    Must not use the plan-step ``✓`` glyph — that makes a single pick look like
+    another ``Plan complete`` row. Same hierarchy as :func:`render_ask_user_qa`:
+    accent header, bold question, brand answer(s). Leading blank separates the
+    card from Plan complete / reply text above.
     """
-    heading = Text()
-    heading.append("✓ ", style=f"bold {ui_theme.HIGHLIGHT}")
-    heading.append(_display_safe(title.strip()), style=str(ui_theme.TEXT))
     console.print()
-    console.print(heading)
+    console.print(Text("Ask User", style=f"bold {ui_theme.HIGHLIGHT}"))
+    console.print()
+    qline = Text()
+    qline.append("  1.  ", style=str(ui_theme.DIM))
+    qline.append(_display_safe(title.strip()), style=f"bold {ui_theme.TEXT}")
+    console.print(qline)
+    # Multi-select arrives as one option per line; keep every line indented
+    # under the question so the set reads as one block.
     for line in _display_safe(answer.strip()).splitlines():
         if not line.strip():
             continue
-        row = Text("  ", style=str(ui_theme.DIM))
-        row.append(line, style=str(ui_theme.BRAND))
-        console.print(row)
-    console.print()
+        aline = Text()
+        aline.append("      ", style=str(ui_theme.DIM))
+        aline.append(line, style=str(ui_theme.BRAND))
+        console.print(aline)
 
 
 def render_ask_user_qa(console: Console, pairs: list[tuple[str, str]]) -> None:
@@ -52,9 +52,9 @@ def render_ask_user_qa(console: Console, pairs: list[tuple[str, str]]) -> None:
     Each pair is a two-line block — a bold question, then its answer in the brand
     colour indented beneath it — with a blank row after the header and between
     items so the filled-in recap is scannable and the answer reads apart from the
-    question.
+    question. No extra blank above or below the card (the stream / prompt
+    already own that margin).
     """
-    console.print()
     console.print(Text("Ask User", style=f"bold {ui_theme.HIGHLIGHT}"))
     console.print()
     for index, (question, answer) in enumerate(pairs):
@@ -68,7 +68,6 @@ def render_ask_user_qa(console: Console, pairs: list[tuple[str, str]]) -> None:
         aline.append("      ", style=str(ui_theme.DIM))
         aline.append(_display_safe(answer), style=str(ui_theme.BRAND))
         console.print(aline)
-    console.print()
 
 
 def try_render_ask_user_submission(console: Console, text: str) -> bool:
@@ -83,6 +82,5 @@ def try_render_ask_user_submission(console: Console, text: str) -> bool:
 __all__ = [
     "render_ask_user_qa",
     "render_choice_selection",
-    "render_handoff_answer_marker",
     "try_render_ask_user_submission",
 ]

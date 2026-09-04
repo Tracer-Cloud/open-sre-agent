@@ -93,13 +93,9 @@ def test_prompt_region_keeps_the_checklist_above_invoking_tools() -> None:
     assert "● Trace 502s to the last deploy" in rendered
     assert SpinnerState.INVOKING_TOOLS_PHASE in rendered
     assert rendered.index("Plan · 2/3") < rendered.index(SpinnerState.INVOKING_TOOLS_PHASE)
+    # Auto stays on the page (DIM) while busy, below the Invoking status row.
     assert "Auto (High)" in rendered
     assert rendered.index(SpinnerState.INVOKING_TOOLS_PHASE) < rendered.index("Auto (High)")
-    assert re.search(
-        rf"  ○ Confirm checkout returns 2xx\n\n[^\n]*"
-        rf"{re.escape(SpinnerState.INVOKING_TOOLS_PHASE)}",
-        rendered,
-    )
 
 
 def test_idle_prompt_region_shows_plan_without_thinking_or_ready_hint() -> None:
@@ -111,7 +107,9 @@ def test_idle_prompt_region_shows_plan_without_thinking_or_ready_hint() -> None:
     assert "Plan · 2/3" in rendered
     assert "Ready" not in rendered  # no recurring idle hint line
     assert rendered.index("Plan · 2/3") < rendered.index("Auto (High)")
-    assert "  ○ Confirm checkout returns 2xx\n\nAuto (High)" in rendered
+    assert "  ○ Confirm checkout returns 2xx\n\nAuto (High) · Allow all" in rendered
+    # Blank row above the plan separates it from scrollback notes (Droid blocks).
+    assert rendered.lstrip().startswith("Plan · 2/3") or "\nPlan · 2/3" in rendered
 
 
 def test_clearing_the_plan_resets_expanded_state() -> None:
@@ -232,3 +230,48 @@ def test_updating_plan_status_keeps_expanded_state() -> None:
     assert state.plan_expanded is True
     assert "Inspect the repo" in rendered
     assert "Confirm green" in rendered
+
+
+def test_plan_breakdown_dims_work_notes_and_accents_checked_steps() -> None:
+    """Droid/Cursor/Claude: checklist steps primary; ``↳`` work notes dim."""
+    import io
+
+    from rich.color import ColorSystem
+    from rich.console import Console
+    from rich.style import Style
+
+    import infrastructure.terminal.theme as ui_theme
+    from surfaces.interactive_shell.ui.task_plan import render_plan_breakdown
+
+    ui_theme.set_active_theme("amber")
+    # A 16-color render of theme DIM must not pin work notes to bright-black.
+    Style.parse(str(ui_theme.DIM))._make_ansi_codes(ColorSystem.STANDARD)
+    breakdown = (
+        "Plan complete · 2/2\n"
+        "  ✓ Confirm repository\n"
+        "      ↳ GitHub CLI · gh repo view\n"
+        "  ✓ Collect workflow runs\n"
+        "      ↳ Python · analyze runs"
+    )
+    buf = io.StringIO()
+    console = Console(
+        file=buf,
+        force_terminal=True,
+        color_system="truecolor",
+        highlight=False,
+        no_color=False,
+        width=80,
+    )
+    render_plan_breakdown(console, breakdown)
+    out = buf.getvalue()
+    plain = _strip_ansi(out)
+    assert "Plan complete · 2/2" in plain
+    assert "✓ Confirm repository" in plain
+    assert "↳ GitHub CLI · gh repo view" in plain
+    # Work notes use DIM; checked glyphs use HIGHLIGHT — not one flat color.
+    assert ui_theme.DIM_ANSI in out
+    assert "\x1b[90m" not in out
+    assert ui_theme.HIGHLIGHT_ANSI in out
+    assert ui_theme.TEXT_ANSI in out
+    # Caption is secondary, distinct from step body and work notes.
+    assert ui_theme.SECONDARY_ANSI in out

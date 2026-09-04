@@ -294,26 +294,6 @@ class TestDispatchSlash:
         assert "/local-llm" not in SLASH_COMMANDS
         assert "/local_llm" not in SLASH_COMMANDS
 
-    def test_hermes_slash_command_delegates_to_bare_cli(
-        self, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
-        from surfaces.interactive_shell.command_registry import cli_parity
-
-        calls: list[list[str]] = []
-
-        def _fake_run_cli_command(_console: Console, args: list[str], **kwargs: object) -> bool:
-            del kwargs
-            calls.append(args)
-            return True
-
-        monkeypatch.setattr(cli_parity, "run_cli_command", _fake_run_cli_command)
-
-        session = Session()
-        console, _ = _capture()
-
-        assert dispatch_slash("/hermes", session, console) is True
-        assert calls == [["hermes"]]
-
     def test_empty_input_is_noop(self) -> None:
         session = Session()
         console, _ = _capture()
@@ -351,7 +331,6 @@ class TestSpecificListCommands:
         {"service": "datadog", "source": "store", "status": "ok", "detail": "API ok"},
         {"service": "slack", "source": "env", "status": "failed", "detail": "No bot token"},
         {"service": "github", "source": "store", "status": "ok", "detail": "MCP ok"},
-        {"service": "openclaw", "source": "store", "status": "failed", "detail": "401 from server"},
     ]
 
     def _patch_verify(self, monkeypatch: object) -> None:
@@ -368,7 +347,6 @@ class TestSpecificListCommands:
         output = buf.getvalue()
         assert "datadog" in output
         assert "slack" in output
-        assert "openclaw" in output
         assert "github" in output
 
     def test_mcp_list_shows_only_mcp_services(self, monkeypatch: object) -> None:
@@ -376,7 +354,6 @@ class TestSpecificListCommands:
         console, buf = _capture()
         dispatch_slash("/mcp list", Session(), console)
         output = buf.getvalue()
-        assert "openclaw" in output
         assert "github" in output
         assert "datadog" not in output
 
@@ -686,7 +663,6 @@ class TestIntegrationsCommand:
 class TestMcpCommand:
     _FAKE = [
         {"service": "github", "source": "store", "status": "ok", "detail": "MCP ok"},
-        {"service": "openclaw", "source": "store", "status": "ok", "detail": "ok"},
     ]
 
     def _patch(self, monkeypatch: object) -> None:

@@ -3,7 +3,7 @@
 ``hourly_budget_usd`` is reserved for the future budget-alarm
 feature (the dashboard's ``$/hr`` column shows observed cost, not the
 budget). ``progress_minutes`` and ``error_rate_pct`` are stored for
-the SLO watchdog landing in a later phase. ``model`` and the
+the SLO monitoring landing in a later phase. ``model`` and the
 ``*_usd_per_million_tokens`` fields override the meter / pricing
 defaults when the user wants a per-agent rate.
 """

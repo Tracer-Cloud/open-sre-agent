@@ -1,6 +1,6 @@
 ---
 title: "Buzz"
-description: "Chat with the agent and deliver alarms to a Buzz (block/buzz) channel."
+description: "Chat with the agent and send messages to a Buzz (block/buzz) channel."
 ---
 
 ## Overview
@@ -10,7 +10,7 @@ OpenSRE's Buzz integration posts messages to a channel in [Buzz](https://github.
 Start the interactive shell with `opensre` (no subcommand). Slash commands below are run from that REPL.
 
 <Note>
-Steps 1–3 give you **outbound delivery** (watchdog alarms and agent-requested messages posted to a channel). To `@mention` the agent from a Buzz channel and get replies, also do [Step 4](#step-4-enable-two-way-chat).
+Steps 1–3 give you **outbound delivery** for agent-requested messages. To `@mention` the agent from a Buzz channel and get replies, also do [Step 4](#step-4-enable-two-way-chat).
 </Note>
 
 ## Prerequisites
@@ -99,31 +99,6 @@ BUZZ_PATH=buzz
 | Tool | What it does |
 | --- | --- |
 | `buzz_send_message` | Post a message to the configured (or explicit) Buzz channel |
-
-### Watchdog alarms
-
-Buzz is a supported watchdog delivery provider alongside Telegram and Rocket.Chat:
-
-```text
-/watch <pid> --provider buzz --max-cpu 90
-```
-
-```bash
-opensre watchdog --pid <pid> --provider buzz --max-cpu 90
-```
-
-Alarms use the same per-threshold cooldown as the other providers (default 300s) and deliver to `BUZZ_DEFAULT_CHANNEL` unless `--chat-id <channel-uuid>` overrides it.
-
-### Delivery test
-
-Trip a one-shot watchdog alarm:
-
-```bash
-sleep 30 &
-opensre watchdog --pid $! --max-runtime 2s --once --provider buzz
-```
-
-An alarm message should appear in the configured channel within a few seconds. Long messages are truncated to 4,096 characters.
 
 ## Verify
 <Note>

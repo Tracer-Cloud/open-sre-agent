@@ -126,7 +126,8 @@ def test_streaming_prompt_height_matches_idle_with_live_tool_on_status_row() -> 
     spinner.start()
     spinner.set_phase(SpinnerState.THINKING_PHASE)
     thinking_rows = render_prompt_region(session, ReplState(), spinner).value.count("\n")
-    assert thinking_rows in {idle_rows, idle_rows + 1}
+    # Busy adds the Thinking row and one lead blank under mid-turn text.
+    assert thinking_rows == idle_rows + 2
 
     spinner.set_phase(SpinnerState.INVOKING_TOOLS_PHASE)
     spinner.set_active_action("GitHub CLI · gh api repos/x", action_id="t1")
@@ -137,9 +138,33 @@ def test_streaming_prompt_height_matches_idle_with_live_tool_on_status_row() -> 
     assert "Invoking tools" in plain
 
 
+def test_prompt_region_idle_does_not_lead_with_a_blank_row() -> None:
+    """Idle chrome stays flush; a leading blank under the banner is a hole."""
+    session = Session()
+    idle = render_prompt_region(session, ReplState(), SpinnerState()).value
+    assert not idle.startswith("\n")
+    assert "\n\n" not in idle
+
+
+def test_prompt_region_thinking_leads_with_a_blank_row() -> None:
+    """Thinking sits under mid-turn assistant text — one blank so it breathes."""
+    session = Session()
+    spinner = SpinnerState()
+    spinner.start()
+    spinner.set_phase(SpinnerState.THINKING_PHASE)
+    busy = render_prompt_region(session, ReplState(), spinner).value
+    assert busy.startswith("\n")
+    plain = _plain(busy)
+    assert "Thinking" in plain
+    # Lead blank, then the status row (spinner glyph + Thinking…) — not flush.
+    first_content_line = plain.split("\n", 1)[1]
+    assert "Thinking" in first_content_line
+    assert not plain.startswith("\n\n")
+
+
 def test_idle_prompt_has_no_recurring_ready_hint() -> None:
-    # Command hints live once in the launch banner and the composer footer, not
-    # a per-turn "Ready · …" line (which also stacked into copies on resize).
+    # Command hints live on ``?``, not a per-turn "Ready · …" line (which also
+    # stacked into copies on resize).
     session = Session()
     rendered = _plain(render_prompt_region(session, ReplState(), SpinnerState()).value)
     assert "Ready" not in rendered

@@ -68,9 +68,7 @@ def _get(url: str) -> str:
         with urllib.request.urlopen(request, timeout=_TIMEOUT_SECONDS) as response:
             payload = response.read(_MAX_RESPONSE_BYTES + 1)
             if len(payload) > _MAX_RESPONSE_BYTES:
-                raise RuntimeError(
-                    f"Morning-report fetch exceeded {_MAX_RESPONSE_BYTES} bytes."
-                )
+                raise RuntimeError(f"Morning-report fetch exceeded {_MAX_RESPONSE_BYTES} bytes.")
             return bytes(payload).decode("utf-8", errors="replace")
     except (urllib.error.URLError, TimeoutError, OSError) as exc:
         raise RuntimeError(f"Morning-report fetch failed for {url}: {type(exc).__name__}") from exc

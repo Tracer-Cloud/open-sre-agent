@@ -45,9 +45,3 @@ ignore_imports =
     tools.cross_vendor.fix_sentry_issue.ship -> integrations.github
     tools.interactive_shell.implementation.claude_code_executor -> integrations.llm_cli
     tools.system.python_execution_tool.credentials -> integrations.github
-    tools.system.watch_dog.runner -> integrations.buzz
-    tools.system.watch_dog.runner -> integrations.buzz.alarms
-    tools.system.watch_dog.runner -> integrations.rocketchat
-    tools.system.watch_dog.runner -> integrations.rocketchat.alarms
-    tools.system.watch_dog.runner -> integrations.telegram.alarms
-    tools.system.watch_dog.runner -> integrations.telegram.credentials

@@ -326,7 +326,9 @@ def test_choose_help_command_space_toggles_inline_details_and_exits(monkeypatch)
     assert selected is None
     rendered = out.getvalue()
     assert "\x1b[" in rendered
+    # Redraw clears in place; cancel deletes the leftover rows.
     assert "A\r\x1b[J" in rendered
+    assert "M" in rendered
     plain = _ANSI_RE.sub("", rendered)
     assert "/trust on" in plain
 

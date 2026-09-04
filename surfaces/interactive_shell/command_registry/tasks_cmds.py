@@ -10,7 +10,7 @@ from rich.markup import escape
 from surfaces.interactive_shell.command_registry.types import (
     SlashCommand,
 )
-from surfaces.interactive_shell.runtime import Session, TaskKind, TaskRecord, TaskStatus
+from surfaces.interactive_shell.runtime import Session, TaskRecord, TaskStatus
 from surfaces.interactive_shell.ui import (
     BOLD_BRAND,
     DIM,
@@ -24,7 +24,6 @@ from surfaces.shared.terminal.components.time_format import format_repl_timestam
 
 _ANSI_ESCAPE = re.compile(r"\x1b\[[0-9;]*[mA-Za-z]")
 _MAX_DETAIL_CHARS = 120
-_WATCHDOG_PID = re.compile(r"pid=(\d+)")
 
 
 def _task_started_label(task: TaskRecord) -> str:
@@ -45,11 +44,7 @@ def _clean_first_line(text: str) -> str:
 
 
 def _kind_label(task: TaskRecord) -> str:
-    """Return a concise kind label — for watchdogs include the pid."""
-    if task.kind == TaskKind.WATCHDOG and task.command:
-        match = _WATCHDOG_PID.search(task.command)
-        if match:
-            return f"watchdog {match.group(1)}"
+    """Return a concise task-kind label."""
     return task.kind.value
 
 
@@ -60,21 +55,7 @@ def _task_detail_label(task: TaskRecord) -> str:
             return line[:_MAX_DETAIL_CHARS] + "…"
         return line or "—"
 
-    if task.kind == TaskKind.WATCHDOG:
-        if task.error:
-            raw = task.error
-        elif task.result:
-            raw = task.result
-        elif task.command:
-            raw = task.command
-        else:
-            return "—"
-        first_line = _clean_first_line(raw)
-        if len(first_line) > _MAX_DETAIL_CHARS:
-            return first_line[:_MAX_DETAIL_CHARS] + "…"
-        return first_line or "—"
-
-    # All other task kinds: show error > result > command, first line, truncated.
+    # Show error > result > command, first line, truncated.
     if task.error:
         raw = task.error
     elif task.result:

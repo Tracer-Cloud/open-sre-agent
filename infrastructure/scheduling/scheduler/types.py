@@ -32,14 +32,22 @@ class TaskStatus(StrEnum):
     SKIPPED = "skipped"
 
 
+class DeliveryStatus(StrEnum):
+    """Outcome of fanning one built message out to a task's destinations."""
+
+    SUCCESS = "success"
+    PARTIAL = "partial"
+    FAILED = "failed"
+
+
 class Provider(StrEnum):
     """The canonical delivery-provider vocabulary: where a scheduled outbound
-    message (cron digest, watchdog alarm, ...) can be sent.
+    message (cron digest, ...) can be sent.
 
     Distinct from ``integrations.messaging_security.MessagingPlatform``,
     which tracks gateway *inbound* identity, not delivery. Not every consumer
     supports every member here (e.g. Sentry digest delivery has no Discord
-    path, watchdog alarms only support Telegram/Rocket.Chat/Buzz) -- those
+    path) -- those
     consumers define their own documented subset rather than exposing a
     choice that would silently fail.
     """
@@ -81,6 +89,25 @@ class ScheduledTask(BaseModel):
         return self.id[:12]
 
 
+class DeliveryOutcome(BaseModel):
+    """What happened when one built message was delivered to one destination.
+
+    Persisted per run in plan order, so a fan-out that completes out of order
+    still reads back deterministically.
+    """
+
+    provider: Provider
+    chat_id: str = ""
+    ok: bool = False
+    message_id: str = ""
+    error: str = ""
+    attempts: int = 0
+
+    def label(self) -> str:
+        """Human-readable destination name used in run message-id/error text."""
+        return f"{self.provider.value}:{self.chat_id}" if self.chat_id else self.provider.value
+
+
 class TaskRun(BaseModel):
     """A single execution record for a scheduled task."""
 
@@ -92,9 +119,12 @@ class TaskRun(BaseModel):
     posted_message_id: str = ""
     error: str = ""
     provider: str = ""
+    targets: tuple[DeliveryOutcome, ...] = ()
 
 
 __all__ = [
+    "DeliveryOutcome",
+    "DeliveryStatus",
     "Provider",
     "ScheduledTask",
     "TaskKind",

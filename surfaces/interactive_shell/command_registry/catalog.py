@@ -44,7 +44,6 @@ from surfaces.interactive_shell.command_registry.tasks_cmds import COMMANDS as T
 from surfaces.interactive_shell.command_registry.theme import COMMANDS as THEME_COMMANDS
 from surfaces.interactive_shell.command_registry.tools_cmds import COMMANDS as TOOLS_COMMANDS
 from surfaces.interactive_shell.command_registry.types import SlashCommand
-from surfaces.interactive_shell.command_registry.watch_cmds import COMMANDS as WATCH_COMMANDS
 from surfaces.interactive_shell.command_registry.work_cmds import COMMANDS as WORK_COMMANDS
 
 _MERGED_SEQUENCE = tuple(
@@ -60,7 +59,6 @@ _MERGED_SEQUENCE = tuple(
         TOOLS_COMMANDS,
         LOOPS_COMMANDS,
         TASK_COMMANDS,
-        WATCH_COMMANDS,
         GATEWAY_COMMANDS,
         PRIVACY_COMMANDS,
         MEMORY_COMMANDS,

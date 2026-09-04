@@ -169,7 +169,7 @@ def verify_integrations(
 def format_verification_results(results: list[dict[str, str]]) -> str:
     """Render verification results as a theme-consistent Rich table.
 
-    Long ``detail`` text (e.g. the multi-clause OpenClaw bridge hint) is
+    Long ``detail`` text (e.g. a multi-clause bridge hint) is
     folded within its own column instead of overflowing the terminal, which
     is what broke row alignment in the old fixed-width string formatting.
     Each ``"; "``/``" | "`` clause is put on its own line first (see

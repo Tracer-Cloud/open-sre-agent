@@ -128,12 +128,12 @@ responsibility:
   (`client.py`), the store/catalog that resolves credentials, and
   integration-local helpers. One folder per vendor (`integrations/datadog`,
   `integrations/grafana`, `integrations/github`, …) plus cross-cutting pieces
-  like `integrations/hermes` and `integrations/llm_cli`.
+  like `integrations/llm_cli`.
 - **`tools/`** — the **agent-callable** boundary: every `@tool(...)` function
   and `BaseTool` subclass, the tool registry, framework subsystems
   (`tools/interactive_shell`), `tools/system/` for
   tools with no vendor in their domain purpose (`fleet_monitoring`,
-  `python_execution_tool`, `sre_guidance_tool`, `watch_dog`), and
+  `python_execution_tool`, `sre_guidance_tool`), and
   `tools/cross_vendor/` for tools whose logic spans 2+ vendor integrations
   (`fix_sentry_issue`). See
   [tool-placement-policy.md](tool-placement-policy.md) for the full decision

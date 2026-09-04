@@ -173,7 +173,8 @@ def test_install_sh_defines_progress_helpers() -> None:
         "finish_dots()",
         "run_with_dots()",
         "binary_app_root()",
-        "install_binary_app()",
+        "stage_binary_app()",
+        "activate_staged_binary()",
         "print_binary_diagnostics()",
     ):
         assert helper in source
@@ -257,7 +258,12 @@ def test_install_sh_installs_pyinstaller_onedir_app(tmp_path: Path) -> None:
         platform="linux"
         BIN_NAME="opensre"
         INSTALL_DIR={shlex.quote(str(install_dir))}
-        install_verified_binary {shlex.quote(str(app_binary))} {shlex.quote(str(destination))}
+        staged="$(stage_binary {shlex.quote(str(app_binary))})"
+        test -f "$staged"
+        test ! -e {shlex.quote(str(app_root))}
+        test ! -e {shlex.quote(str(destination))}
+        activate_staged_binary "$staged" {shlex.quote(str(destination))}
+        test ! -e "$staged"
         test -L {shlex.quote(str(destination))}
         test -x {shlex.quote(str(destination))}
         test -f {shlex.quote(str(install_dir / ".opensre-app" / "_internal" / "payload.txt"))}
@@ -570,3 +576,96 @@ def test_ensure_github_cli_respects_skip_env(tmp_path: Path) -> None:
     assert result.returncode == 0, result.stderr
     assert "OPENSRE_SKIP_GH_INSTALL" in result.stderr
     assert "OpenSRE GitHub chat tools" in result.stderr
+
+
+def test_warm_first_launch_skips_package_smoke_off_darwin() -> None:
+    """Linux/Windows have no codesign cache; the installer must not pay for smoke."""
+    result = _run_logging_snippet(
+        """
+        uname() { printf 'Linux\\n'; }
+        package_smoke_quiet() { printf 'SMOKE_RAN\\n'; return 0; }
+        BIN_NAME=opensre
+        warm_first_launch /tmp/opensre
+        printf 'done\\n'
+        """
+    )
+
+    assert result.returncode == 0, result.stderr
+    combined = result.stdout + result.stderr
+    assert "SMOKE_RAN" not in combined
+    assert "Preparing OpenSRE for first launch" not in combined
+    assert "done" in result.stdout
+
+
+def test_warm_first_launch_runs_package_smoke_on_darwin() -> None:
+    result = _run_logging_snippet(
+        """
+        uname() { printf 'Darwin\\n'; }
+        package_smoke_quiet() { printf 'SMOKE_RAN\\n'; return 0; }
+        BIN_NAME=opensre
+        warm_first_launch /tmp/opensre
+        """
+    )
+
+    assert result.returncode == 0, result.stderr
+    assert "SMOKE_RAN" in result.stdout
+    assert "Preparing OpenSRE for first launch" in result.stderr
+
+
+def test_install_release_binary_verifies_and_warms_the_staged_tree_before_activation() -> None:
+    """Signature validation is cached per file: check and warm the tree that gets renamed
+    into place, and never copy it afterwards (a copy is validated all over again)."""
+    source = INSTALL_SH.read_text(encoding="utf-8")
+    pipeline = source.split("install_release_binary()")[1].split("\nprint_install_confirmation()")[
+        0
+    ]
+    assert pipeline.index('verify_staged_binary "$staged_path"') < pipeline.index(
+        'warm_first_launch "$staged_path"'
+    )
+    assert pipeline.index('warm_first_launch "$staged_path"') < pipeline.index(
+        'activate_staged_binary "$staged_path"'
+    )
+    assert "cp -R" not in source
+    # prepare_and_verify must not invoke warm (comment may still name it).
+    prepare = source.split("prepare_and_verify_binary()")[1].split("\nwarm_first_launch()")[0]
+    assert "warm_first_launch " not in prepare
+    assert "warm_first_launch\n" not in prepare
+
+
+def test_discarding_a_staged_app_leaves_the_existing_install_alone(tmp_path: Path) -> None:
+    app_root = tmp_path / "opensre-app"
+    (app_root / "_internal").mkdir(parents=True)
+    app_binary = app_root / "opensre"
+    app_binary.write_text("#!/usr/bin/env sh\nexit 0\n", encoding="utf-8")
+    app_binary.chmod(0o755)
+    install_dir = tmp_path / "bin"
+    existing_app = install_dir / ".opensre-app"
+    (existing_app / "_internal").mkdir(parents=True)
+    (existing_app / "opensre").write_text("#!/usr/bin/env sh\nprintf 'old\\n'\n", encoding="utf-8")
+    (existing_app / "opensre").chmod(0o755)
+    destination = install_dir / "opensre"
+    destination.symlink_to(existing_app / "opensre")
+
+    result = _run_logging_snippet(
+        f"""
+        platform="linux"
+        BIN_NAME="opensre"
+        INSTALL_DIR={shlex.quote(str(install_dir))}
+        staged="$(stage_binary {shlex.quote(str(app_binary))})"
+        discard_staged_binary "$staged"
+        test ! -e "$staged"
+        {shlex.quote(str(destination))}
+        """
+    )
+
+    assert result.returncode == 0, result.stderr
+    assert "old" in result.stdout
+
+
+def test_resign_macos_onedir_parallelizes_nested_libs() -> None:
+    """Nested dylib/so signs are independent; main binary stays serial and last."""
+    source = INSTALL_SH.read_text(encoding="utf-8")
+    assert 'xargs -0 -P "$jobs" -n 1 codesign --force --sign -' in source
+    assert 'codesign --force --sign - "$binary_path"' in source
+    # Cap avoids disk stampede on large hosts.
+    assert 'if [ "$jobs" -gt 4 ]; then' in source

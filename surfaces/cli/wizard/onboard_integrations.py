@@ -194,12 +194,6 @@ ONBOARD_INTEGRATION_CHOICES: tuple[Choice, ...] = (
         hint="Let the agent inspect repos, PRs, and issues",
     ),
     Choice(
-        value="openclaw",
-        label="OpenClaw (recommended)",
-        group="MCP & Protocols",
-        hint="Connect OpenSRE to OpenClaw for editor-driven RCA, setup checks, and write-back",
-    ),
-    Choice(
         value="posthog_mcp",
         label="PostHog (MCP)",
         group="MCP & Protocols",

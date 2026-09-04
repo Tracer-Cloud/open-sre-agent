@@ -1,9 +1,10 @@
 from __future__ import annotations
 
 import importlib
+import importlib.machinery
 import sys
+import types
 from pathlib import Path
-from types import SimpleNamespace
 from unittest.mock import patch
 
 import click
@@ -16,6 +17,14 @@ from infrastructure.analytics.events import Event
 from surfaces.cli.app import cli
 from surfaces.cli.startup import sentry_entrypoint_for
 from surfaces.entrypoint import main
+
+
+def _fake_sentry_sdk(*, flush: object) -> types.ModuleType:
+    """A ``sys.modules`` double that ``find_spec`` can tolerate."""
+    mod = types.ModuleType("sentry_sdk")
+    mod.__spec__ = importlib.machinery.ModuleSpec("sentry_sdk", loader=None)
+    mod.flush = flush  # type: ignore[attr-defined]
+    return mod
 
 
 def _stub_analytics_httpx(monkeypatch: pytest.MonkeyPatch) -> list[dict[str, object]]:
@@ -267,7 +276,7 @@ def test_main_debug_sentry_sends_synthetic_event(monkeypatch, capsys) -> None:
     monkeypatch.setitem(
         sys.modules,
         "sentry_sdk",
-        SimpleNamespace(flush=lambda timeout: flush_calls.append(timeout)),
+        _fake_sentry_sdk(flush=lambda timeout: flush_calls.append(timeout)),
     )
 
     exit_code = main(["debug", "sentry"])
@@ -320,11 +329,7 @@ def test_main_debug_sentry_exits_nonzero_when_flush_fails(monkeypatch, capsys) -
         assert timeout == 5
         return False
 
-    monkeypatch.setitem(
-        sys.modules,
-        "sentry_sdk",
-        SimpleNamespace(flush=flush_stub),
-    )
+    monkeypatch.setitem(sys.modules, "sentry_sdk", _fake_sentry_sdk(flush=flush_stub))
 
     exit_code = main(["debug", "sentry"])
 
@@ -468,6 +473,38 @@ def test_no_interactive_falls_through_to_landing_page(monkeypatch) -> None:
 
     assert exit_code == 0
     assert landing_calls == [1], "render_landing should be called exactly once"
+
+
+def test_landing_page_runs_the_launch_work_the_shell_would_have_run(monkeypatch) -> None:
+    """With no shell to paint a banner, the deferred error-reporting start still runs."""
+    # Arrange: a bare launch whose startup hands back deferred work, on a TTY
+    # with the shell disabled so the landing page is served instead.
+    monkeypatch.setattr("surfaces.cli.app.capture_first_run_if_needed", lambda: None)
+    monkeypatch.setattr("surfaces.cli.app.shutdown_analytics", lambda **_kw: None)
+    monkeypatch.setattr("surfaces.cli.app.capture_cli_invoked", lambda *_args: None)
+    monkeypatch.setattr("surfaces.cli.app.sys.stdin.isatty", lambda: True)
+    monkeypatch.setattr("surfaces.cli.app.sys.stdout.isatty", lambda: True)
+    monkeypatch.setattr(
+        "config.repl_config.ReplConfig.load",
+        classmethod(lambda _cls, **_kw: ReplConfig(enabled=False, layout="classic")),
+    )
+    order: list[str] = []
+
+    def _start_error_reporting() -> None:
+        order.append("start")
+
+    def _hand_back_error_reporting_start(_group: object, _argv: object) -> object:
+        return _start_error_reporting
+
+    monkeypatch.setattr("surfaces.cli.app.startup.run", _hand_back_error_reporting_start)
+    monkeypatch.setattr("surfaces.cli.app.render_landing", lambda _group: order.append("landing"))
+
+    # Act
+    exit_code = main(["--no-interactive"])
+
+    # Assert: the deferred start ran once, before the page printed.
+    assert exit_code == 0
+    assert order == ["start", "landing"]
 
 
 def test_default_no_args_enters_repl(monkeypatch) -> None:

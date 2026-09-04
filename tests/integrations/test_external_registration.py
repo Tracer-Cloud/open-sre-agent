@@ -332,7 +332,7 @@ def test_the_cli_command_offers_a_registered_integration(
     registered, so a captured list rejected the plugin with "is not one of"
     before ``cmd_setup`` was reached.
     """
-    import surfaces.cli.commands.integrations as integrations_group
+    from surfaces.cli.commands.integrations import integrations as integrations_group
 
     setup_command = integrations_group.get_command(None, "setup")
     assert setup_command is not None
@@ -342,7 +342,7 @@ def test_the_cli_command_offers_a_registered_integration(
 def test_the_cli_command_still_rejects_an_unknown_service() -> None:
     from click.testing import CliRunner
 
-    import surfaces.cli.commands.integrations as integrations_group
+    from surfaces.cli.commands.integrations import integrations as integrations_group
 
     result = CliRunner().invoke(integrations_group, ["setup", "definitely_not_a_service"])
 

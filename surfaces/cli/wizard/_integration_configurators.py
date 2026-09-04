@@ -38,7 +38,6 @@ from surfaces.cli.wizard.configurators.observability import (
     _configure_splunk,
     _configure_tempo,
 )
-from surfaces.cli.wizard.configurators.openclaw import _configure_openclaw
 from surfaces.cli.wizard.configurators.posthog import _configure_posthog, _configure_posthog_mcp
 from surfaces.cli.wizard.configurators.productivity import (
     _configure_google_docs,
@@ -107,7 +106,6 @@ def _configure_selected_integrations() -> tuple[list[str], str | None]:
         "opsgenie": _configure_opsgenie,
         "pagerduty": _configure_pagerduty,
         "incident_io": _configure_incident_io,
-        "openclaw": _configure_openclaw,
         "posthog": _configure_posthog,
         "posthog_mcp": _configure_posthog_mcp,
         "sentry_mcp": _configure_sentry_mcp,
@@ -141,7 +139,6 @@ def _configure_selected_integrations() -> tuple[list[str], str | None]:
         "opsgenie": "opsgenie",
         "pagerduty": "pagerduty",
         "incident_io": "incident.io",
-        "openclaw": "openclaw",
         "posthog": "posthog",
         "posthog_mcp": "posthog mcp",
         "sentry_mcp": "sentry mcp",

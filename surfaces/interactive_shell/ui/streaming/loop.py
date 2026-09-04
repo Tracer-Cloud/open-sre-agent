@@ -239,9 +239,13 @@ def stream_to_console_state(
             # whose renderer adds no trailing blank line.
             console.print()
         # The first paragraph carries the ``Ω`` marker in the gutter; every
-        # paragraph hangs in the same indented body column.
+        # paragraph hangs in the same indented body column. Explicit TEXT so
+        # body never falls through to terminal white and washes the marker out.
         with console.use_theme(ui_theme.MARKDOWN_THEME):
-            console.print(reply_gutter(markdown, lead=rendered_paragraphs == 0))
+            console.print(
+                reply_gutter(markdown, lead=rendered_paragraphs == 0),
+                style=str(ui_theme.TEXT),
+            )
         rendered_paragraphs += 1
 
     def _render_paragraph(text: str, *, source_break: bool = True) -> None:

@@ -124,7 +124,7 @@ def build_shell_agent(
     )
     return DefaultHeadlessBuild(
         session=session,
-        output=resolve_output_sink(console, output),
+        output=resolve_output_sink(console, output, session),
         console=console,
         surface="interactive_shell",
         error_reporter=config.error_reporter,

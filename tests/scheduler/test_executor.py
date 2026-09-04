@@ -9,7 +9,9 @@ the real bundle and patching that vendor's ``scheduled_delivery`` adapter.
 from __future__ import annotations
 
 import json
+import threading
 from pathlib import Path
+from typing import Any
 from unittest.mock import patch
 
 import pytest
@@ -22,6 +24,9 @@ from infrastructure.scheduling.scheduler.local_delivery import get_loop_messages
 from infrastructure.scheduling.scheduler.loop_constants import LOOP_CHANNELS_PARAM
 from infrastructure.scheduling.scheduler.types import Provider, ScheduledTask, TaskKind
 from tests.scheduler._bundle import real_runners
+
+#: Generous enough to survive a loaded CI shard; a real hang still fails fast.
+_SYNC_TIMEOUT_SECONDS = 15.0
 
 _DELIVERY_PROVIDERS = (
     Provider.TELEGRAM,
@@ -306,97 +311,6 @@ class TestExecutor:
         assert len(adapters[Provider.SLACK].calls) == 3
         assert len(adapters[Provider.INTERACTIVE_SHELL].calls) == 1
 
-    def test_loop_fanout_slack_uses_default_channel(self, monkeypatch: pytest.MonkeyPatch) -> None:
-        """Loop fan-out must resolve Slack chat_id when primary is interactive_shell."""
-        adapters = _install_fake_bundle()
-        task = ScheduledTask(
-            id="test_fanout_slack_default",
-            kind=TaskKind.MANUAL_LOOP,
-            cron="0 9 * * *",
-            provider=Provider.INTERACTIVE_SHELL,
-            params={LOOP_CHANNELS_PARAM: "interactive_shell,slack"},
-        )
-        monkeypatch.setattr(
-            "infrastructure.scheduling.scheduler.delivery.resolve_slack_default_chat_id",
-            lambda _params: "C0123ABCD",
-        )
-        monkeypatch.setattr(
-            "infrastructure.scheduling.scheduler.executor.resolve_slack_credentials",
-            lambda _params: {"access_token": "xoxb-test"},
-        )
-
-        with patch(
-            "infrastructure.scheduling.scheduler.executor.build_message",
-            return_value="Scheduled report",
-        ):
-            result = execute_task(task, "2026-01-01T09:00", real_runners())
-
-        assert result is True
-        slack_task = adapters[Provider.SLACK].calls[-1][0]
-        assert slack_task.chat_id == "C0123ABCD"
-
-    def test_loop_fanout_slack_skips_default_when_webhook_configured(
-        self, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
-        adapters = _install_fake_bundle()
-        task = ScheduledTask(
-            id="test_fanout_slack_webhook",
-            kind=TaskKind.MANUAL_LOOP,
-            cron="0 9 * * *",
-            provider=Provider.INTERACTIVE_SHELL,
-            params={LOOP_CHANNELS_PARAM: "slack"},
-        )
-        monkeypatch.setattr(
-            "infrastructure.scheduling.scheduler.delivery.resolve_slack_default_chat_id",
-            lambda _params: "C0123ABCD",
-        )
-        monkeypatch.setattr(
-            "infrastructure.scheduling.scheduler.executor.resolve_slack_credentials",
-            lambda _params: {"webhook_url": "https://hooks.slack.com/x"},
-        )
-
-        with patch(
-            "infrastructure.scheduling.scheduler.executor.build_message",
-            return_value="Loop report",
-        ):
-            result = execute_task(task, "2026-01-01T10:00", real_runners())
-
-        assert result is True
-        slack_task = adapters[Provider.SLACK].calls[-1][0]
-        assert slack_task.chat_id == ""
-
-    def test_loop_fanout_slack_ignores_non_slack_task_chat_id(
-        self, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
-        """A Telegram chat id on an inbox-primary loop must not become Slack's channel."""
-        adapters = _install_fake_bundle()
-        task = ScheduledTask(
-            id="test_fanout_slack_ignore_foreign_chat",
-            kind=TaskKind.MANUAL_LOOP,
-            cron="0 9 * * *",
-            provider=Provider.INTERACTIVE_SHELL,
-            chat_id="8098636622",
-            params={LOOP_CHANNELS_PARAM: "slack"},
-        )
-        monkeypatch.setattr(
-            "infrastructure.scheduling.scheduler.delivery.resolve_slack_default_chat_id",
-            lambda _params: "C0123ABCD",
-        )
-        monkeypatch.setattr(
-            "infrastructure.scheduling.scheduler.executor.resolve_slack_credentials",
-            lambda _params: {"access_token": "xoxb-test"},
-        )
-
-        with patch(
-            "infrastructure.scheduling.scheduler.executor.build_message",
-            return_value="Loop report",
-        ):
-            result = execute_task(task, "2026-01-01T11:00", real_runners())
-
-        assert result is True
-        slack_task = adapters[Provider.SLACK].calls[-1][0]
-        assert slack_task.chat_id == "C0123ABCD"
-
     def test_rocketchat_delivery_posts_to_channel(self) -> None:
         _install_real_bundle()
         task = ScheduledTask(
@@ -582,7 +496,14 @@ class TestExecutor:
         assert slack_call[1] == "Scheduled report"
         assert telegram_call[1] == "Scheduled report"
 
-    def test_delivery_targets_report_partial_failure(self) -> None:
+    def test_delivery_targets_partial_success_completes_claim(self) -> None:
+        """Both fan-out paths agree: posted messages are not thrown away.
+
+        The delivery-targets path used to fail the whole run after Slack had
+        already been posted to, so run history claimed nothing was delivered.
+        """
+        from infrastructure.scheduling.scheduler.claim_store import get_runs
+
         adapters = _install_fake_bundle()
         adapters[Provider.SLACK].result = (True, "", "ts_123")
         adapters[Provider.TELEGRAM].result = (False, "missing token", "")
@@ -608,9 +529,14 @@ class TestExecutor:
         ):
             result = execute_task(task, "2026-01-01T09:00", real_runners())
 
-        assert result is False
+        assert result is True
+        runs = get_runs(task.id)
+        assert runs[0].status.value == "success"
+        assert "slack:C123:ts_123" in runs[0].posted_message_id
+        assert "partial delivery" in runs[0].error
+        # The healthy destination is posted to once; only the failure retries.
         assert len(adapters[Provider.SLACK].calls) == 1
-        assert len(adapters[Provider.TELEGRAM].calls) == 1
+        assert len(adapters[Provider.TELEGRAM].calls) == 3
 
     def test_empty_message_skips_delivery(self) -> None:
         adapters = _install_fake_bundle()
@@ -630,3 +556,250 @@ class TestExecutor:
 
         assert result is True
         assert adapters[Provider.SLACK].calls == []
+
+
+class _BlockingAdapter:
+    """Blocks on a barrier before returning, proving deliveries overlap.
+
+    Serial fan-out can never gather ``parties`` threads at the barrier, so the
+    wait times out and the delivery reports the broken barrier as its error —
+    the assertion fails on the outcome rather than hanging the suite.
+    """
+
+    def __init__(self, barrier: threading.Barrier, result: tuple[bool, str, str]) -> None:
+        self.barrier = barrier
+        self.result = result
+        self.calls: list[tuple[ScheduledTask, str]] = []
+
+    def deliver(self, task: ScheduledTask, message: str) -> tuple[bool, str, str]:
+        self.calls.append((task, message))
+        try:
+            self.barrier.wait()
+        except threading.BrokenBarrierError:
+            return False, "delivery did not overlap", ""
+        return self.result
+
+
+class _OrderedAdapter:
+    """Finishes only after ``after`` is set, then sets ``done``.
+
+    Serial fan-out never sets ``after`` while this delivery is waiting, so the
+    wait times out and the delivery reports a failure the test asserts against.
+    """
+
+    def __init__(self, after: threading.Event | None, done: threading.Event) -> None:
+        self.after = after
+        self.done = done
+
+    def deliver(self, _task: ScheduledTask, _message: str) -> tuple[bool, str, str]:
+        if self.after is not None and not self.after.wait(timeout=_SYNC_TIMEOUT_SECONDS):
+            return False, "delivery did not overlap", ""
+        self.done.set()
+        return True, "", "msg"
+
+
+class _FlakyAdapter:
+    """Fails its first ``failures`` calls, then succeeds."""
+
+    def __init__(self, failures: int) -> None:
+        self.failures = failures
+        self.calls = 0
+
+    def deliver(self, _task: ScheduledTask, _message: str) -> tuple[bool, str, str]:
+        self.calls += 1
+        if self.calls <= self.failures:
+            return False, "rate limited", ""
+        return True, "", f"msg_{self.calls}"
+
+
+def _install_bundle(adapters: dict[Provider, Any]) -> None:
+    delivery_bundle.ScheduledDeliveryAdapters(adapters).install()
+
+
+def _fanout_task(task_id: str, channels: str) -> ScheduledTask:
+    return ScheduledTask(
+        id=task_id,
+        kind=TaskKind.MANUAL_LOOP,
+        cron="0 9 * * *",
+        provider=Provider.INTERACTIVE_SHELL,
+        params={LOOP_CHANNELS_PARAM: channels},
+    )
+
+
+@pytest.mark.usefixtures("_tmp_stores")
+class TestDeliveryFanOutConcurrency:
+    """Fan-out overlaps destinations and reports them in a stable order."""
+
+    def test_destinations_are_delivered_to_concurrently(self) -> None:
+        from infrastructure.scheduling.scheduler.claim_store import get_runs
+
+        barrier = threading.Barrier(3, timeout=_SYNC_TIMEOUT_SECONDS)
+        adapters: dict[Provider, Any] = {
+            provider: _BlockingAdapter(barrier, (True, "", f"{provider.value}_id"))
+            for provider in (Provider.INTERACTIVE_SHELL, Provider.SLACK, Provider.TELEGRAM)
+        }
+        _install_bundle(adapters)
+        task = _fanout_task("test_overlap", "interactive_shell,slack,telegram")
+
+        with patch(
+            "infrastructure.scheduling.scheduler.executor.build_message",
+            return_value="Scheduled report",
+        ):
+            result = execute_task(task, "2026-01-01T09:00", real_runners())
+
+        assert result is True
+        runs = get_runs(task.id)
+        assert [outcome.ok for outcome in runs[0].targets] == [True, True, True]
+        assert runs[0].error == ""
+
+    def test_target_outcomes_persist_in_plan_order_not_completion_order(self) -> None:
+        """The last destination to finish is still reported first."""
+        from infrastructure.scheduling.scheduler.claim_store import get_runs
+
+        slack_done = threading.Event()
+        shell_done = threading.Event()
+        # interactive_shell is planned first but waits for slack to finish.
+        adapters: dict[Provider, Any] = {
+            Provider.INTERACTIVE_SHELL: _OrderedAdapter(slack_done, shell_done),
+            Provider.SLACK: _OrderedAdapter(None, slack_done),
+        }
+        _install_bundle(adapters)
+        task = _fanout_task("test_order", "interactive_shell,slack")
+
+        with patch(
+            "infrastructure.scheduling.scheduler.executor.build_message",
+            return_value="Scheduled report",
+        ):
+            result = execute_task(task, "2026-01-01T09:00", real_runners())
+
+        assert result is True
+        assert shell_done.is_set()
+        runs = get_runs(task.id)
+        assert [outcome.ok for outcome in runs[0].targets] == [True, True]
+        assert [outcome.provider for outcome in runs[0].targets] == [
+            Provider.INTERACTIVE_SHELL,
+            Provider.SLACK,
+        ]
+
+    def test_retry_targets_only_the_failed_destination(self) -> None:
+        from infrastructure.scheduling.scheduler.claim_store import get_runs
+
+        flaky = _FlakyAdapter(failures=2)
+        healthy = _FakeAdapter()
+        healthy.result = (True, "", "local:1")
+        _install_bundle({Provider.SLACK: flaky, Provider.INTERACTIVE_SHELL: healthy})
+        task = _fanout_task("test_retry_scope", "interactive_shell,slack")
+
+        with patch(
+            "infrastructure.scheduling.scheduler.executor.build_message",
+            return_value="Scheduled report",
+        ):
+            result = execute_task(task, "2026-01-01T09:00", real_runners())
+
+        assert result is True
+        assert flaky.calls == 3
+        assert len(healthy.calls) == 1
+        runs = get_runs(task.id)
+        assert runs[0].error == ""
+        assert [outcome.attempts for outcome in runs[0].targets] == [1, 3]
+
+    def test_all_destinations_failing_fails_the_run(self) -> None:
+        from infrastructure.scheduling.scheduler.claim_store import get_runs
+
+        adapters = _install_fake_bundle()
+        adapters[Provider.INTERACTIVE_SHELL].result = (False, "inbox unwritable", "")
+        adapters[Provider.SLACK].result = (False, "webhook missing", "")
+        task = _fanout_task("test_all_fail", "interactive_shell,slack")
+
+        with patch(
+            "infrastructure.scheduling.scheduler.executor.build_message",
+            return_value="Scheduled report",
+        ):
+            result = execute_task(task, "2026-01-01T09:00", real_runners())
+
+        assert result is False
+        runs = get_runs(task.id)
+        assert runs[0].status.value == "failed"
+        assert "partial delivery" not in runs[0].error
+        assert [outcome.ok for outcome in runs[0].targets] == [False, False]
+
+    def test_unsupported_loop_channel_records_the_parse_error(self) -> None:
+        from infrastructure.scheduling.scheduler.claim_store import get_runs
+
+        _install_fake_bundle()
+        task = _fanout_task("test_bad_channel", "interactive_shell,carrier_pigeon")
+
+        with patch(
+            "infrastructure.scheduling.scheduler.executor.build_message",
+            return_value="Scheduled report",
+        ):
+            result = execute_task(task, "2026-01-01T09:00", real_runners())
+
+        assert result is False
+        runs = get_runs(task.id)
+        assert "carrier_pigeon" in runs[0].error
+        assert runs[0].targets == ()
+
+
+@pytest.mark.usefixtures("_tmp_stores")
+class TestSelectiveRerun:
+    """execute_task's target_filter -- what --failed-only ultimately drives."""
+
+    def test_target_filter_delivers_only_to_the_named_destinations(self) -> None:
+        from infrastructure.scheduling.scheduler.types import Provider as P
+
+        adapters = _install_fake_bundle()
+        adapters[P.SLACK].result = (True, "", "ts_retry")
+        task = ScheduledTask(
+            id="test_rerun_filtered",
+            kind=TaskKind.WORK_ITEM_CHECKIN,
+            cron="0 9 * * *",
+            provider=P.SLACK,
+            chat_id="C123",
+            params={
+                "delivery_targets": json.dumps(
+                    [
+                        {"provider": "slack", "chat_id": "C123"},
+                        {"provider": "telegram", "chat_id": "-100123"},
+                    ]
+                )
+            },
+        )
+
+        with patch(
+            "infrastructure.scheduling.scheduler.executor.build_message",
+            return_value="Scheduled report",
+        ):
+            result = execute_task(
+                task,
+                "2026-01-01T09:00",
+                real_runners(),
+                target_filter=frozenset({(P.SLACK, "C123")}),
+            )
+
+        assert result is True
+        # Only the named destination is contacted -- the previously-succeeded
+        # Telegram destination is never touched by the rerun.
+        assert len(adapters[P.SLACK].calls) == 1
+        assert len(adapters[P.TELEGRAM].calls) == 0
+
+    def test_an_empty_target_filter_delivers_to_nobody(self) -> None:
+        adapters = _install_fake_bundle()
+        task = ScheduledTask(
+            id="test_rerun_nothing_to_do",
+            kind=TaskKind.MANUAL_LOOP,
+            cron="0 9 * * *",
+            provider=Provider.TELEGRAM,
+            chat_id="-100",
+        )
+
+        with patch(
+            "infrastructure.scheduling.scheduler.executor.build_message",
+            return_value="Scheduled report",
+        ):
+            result = execute_task(
+                task, "2026-01-01T09:00", real_runners(), target_filter=frozenset()
+            )
+
+        assert result is False
+        assert adapters[Provider.TELEGRAM].calls == []

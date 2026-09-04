@@ -210,8 +210,8 @@ def test_repl_display_buffers_subtext_until_step_complete(
     assert "Planning" in out_after_start
     assert "↳" not in out_after_start
 
-    display.step_subtext("plan_actions", "Hermes: log poll")
-    display.step_subtext("plan_actions", "Hermes: log poll x2")
+    display.step_subtext("plan_actions", "Planner: log poll")
+    display.step_subtext("plan_actions", "Planner: log poll x2")
     assert "↳" not in _strip_ansi(capsys.readouterr().out)
 
     display.step_complete(
@@ -220,8 +220,8 @@ def test_repl_display_buffers_subtext_until_step_complete(
     )
     out = _strip_ansi(capsys.readouterr().out)
     assert out.count("↳") == 1
-    assert "Hermes: log poll x2" in out
-    assert "Hermes: log poll\n" not in out
+    assert "Planner: log poll x2" in out
+    assert "Planner: log poll\n" not in out
 
 
 @pytest.mark.asyncio

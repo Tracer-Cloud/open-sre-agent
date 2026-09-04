@@ -389,11 +389,11 @@ def test_every_tier_lands_in_exactly_one_half() -> None:
 def test_layers_are_emitted_in_tier_order_however_blocks_were_added() -> None:
     """The three layers must hold by construction, not by authoring discipline.
 
-    Hermes joins the prompt ``stable → context → volatile``. Today that order
-    survives only because the builder happens to append in that sequence — a
-    volatile block added after an ephemeral one would silently break the layer
-    contract and land inside the churn. Rendering sorts by tier so the layout is
-    a property of the envelope, not of the order someone typed.
+    Prompt blocks join the prompt ``stable → context → volatile``. Today that
+    order survives only because the builder happens to append in that sequence —
+    a volatile block added after an ephemeral one would silently break the layer
+    contract and land inside the churn. Rendering sorts by tier so the layout is a
+    property of the envelope, not of the order someone typed.
     """
     # Arrange — deliberately scrambled
     from core.agent_harness.prompts import PromptTier

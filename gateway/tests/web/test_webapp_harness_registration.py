@@ -75,4 +75,4 @@ def test_webapp_import_registers_vendor_registries() -> None:
         assert field in probe["detail_fields"]
 
     # Assert: generic fallback sources are known, so they are not ranked primary.
-    assert probe["secondary_sources"] == ["google_docs", "knowledge", "openclaw"]
+    assert probe["secondary_sources"] == ["google_docs", "knowledge"]
