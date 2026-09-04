@@ -4,7 +4,7 @@ Pure helpers used by ``surfaces.cli.app`` before the full CLI is
 bootstrapped. They take the Click command / argv explicitly so they carry no
 dependency on the root group and stay trivially testable.
 
-Fast paths (``--version``) must stay cheap: they answer before
+Fast paths (``--version``, ``--help``) must stay cheap: they answer before
 :func:`surfaces.cli.startup.run` installs adapters.
 """
 
@@ -70,24 +70,42 @@ def resolve_command_parts(command: click.Command, argv: list[str]) -> list[str]:
     return parts
 
 
+_HELP_FLAGS = frozenset({"-h", "--help"})
+
+#: CLI tokens for the version fast path, shared by the classifier and printer.
+_VERSION_FLAG = "--version"
+_VERSION_COMMAND = "version"
+_VERSION_JSON_FLAGS = frozenset({"--json", "-j"})
+
+
 def is_fast_version_invocation(argv: list[str]) -> bool:
     """Return whether argv can be answered before bootstrapping the full CLI."""
     return (
-        argv == ["--version"]
-        or argv == ["version"]
-        or argv in (["--json", "version"], ["-j", "version"])
+        argv == [_VERSION_FLAG]
+        or argv == [_VERSION_COMMAND]
+        or (len(argv) == 2 and argv[0] in _VERSION_JSON_FLAGS and argv[1] == _VERSION_COMMAND)
     )
 
 
+def is_fast_help_invocation(argv: list[str]) -> bool:
+    """Return whether argv only needs Click help, not product adapters.
+
+    Help must not import kubernetes/boto3 via :func:`surfaces.cli.startup.run`.
+    Subcommand help (``opensre doctor --help``) is the same: Click prints
+    usage without running the command body.
+    """
+    return any(token in _HELP_FLAGS for token in argv)
+
+
 def print_fast_version(argv: list[str]) -> None:
-    if argv == ["--version"]:
+    if argv == [_VERSION_FLAG]:
         click.echo(f"opensre, version {get_opensre_version()}")
         return
 
     import json
     import platform
 
-    json_output = argv[0] in {"--json", "-j"}
+    json_output = argv[0] in _VERSION_JSON_FLAGS
     payload = {
         "opensre": get_opensre_version(),
         "python": platform.python_version(),

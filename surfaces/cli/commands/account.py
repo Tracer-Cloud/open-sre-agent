@@ -9,13 +9,8 @@ import click
 
 from config.constants.account import OPENSRE_APP_URL_DEV
 from config.constants.github import GITHUB_CLI_REQUIRED_SCOPES
-from surfaces.cli.account_auth import (
-    AccountAuthError,
-    AccountStatus,
-    account_status,
-    login_account,
-    logout_account,
-)
+from surfaces.cli import account_auth
+from surfaces.cli.account_auth import AccountAuthError, AccountStatus
 from surfaces.cli.account_ui import (
     AccountLoginPresenter,
     render_account_logout,
@@ -86,7 +81,7 @@ def account_command(ctx: click.Context, dev: bool) -> None:
     ctx.find_root().obj["account_dev"] = dev
     if ctx.invoked_subcommand is None:
         _render_status(
-            account_status(app_url=_optional_app_url(app_url=None, dev=dev)),
+            account_auth.account_status(app_url=_optional_app_url(app_url=None, dev=dev)),
             json_output=_json_enabled(ctx),
         )
 
@@ -135,7 +130,7 @@ def account_login(
     json_output = _json_enabled(ctx)
     presenter = AccountLoginPresenter()
     resolved_app_url = _optional_app_url(app_url=app_url, dev=_dev_enabled(ctx, dev))
-    status = account_status(app_url=resolved_app_url)
+    status = account_auth.account_status(app_url=resolved_app_url)
     if status.authenticated and not force:
         if json_output:
             click.echo(_already_active_json(status))
@@ -148,7 +143,7 @@ def account_login(
         presenter.replacing_session(status)
 
     try:
-        result = login_account(
+        result = account_auth.login_account(
             app_url=resolved_app_url,
             open_browser=browser,
             timeout_seconds=timeout_seconds,
@@ -186,7 +181,9 @@ def account_login(
 def account_status_command(ctx: click.Context, dev: bool) -> None:
     """Validate and display the current personal account."""
     _render_status(
-        account_status(app_url=_optional_app_url(app_url=None, dev=_dev_enabled(ctx, dev))),
+        account_auth.account_status(
+            app_url=_optional_app_url(app_url=None, dev=_dev_enabled(ctx, dev))
+        ),
         json_output=_json_enabled(ctx),
     )
 
@@ -196,7 +193,7 @@ def account_status_command(ctx: click.Context, dev: bool) -> None:
 def account_logout(ctx: click.Context) -> None:
     """Revoke the OpenSRE token and clear account-managed GitHub credentials."""
     try:
-        result = logout_account()
+        result = account_auth.logout_account()
     except AccountAuthError as exc:
         raise click.ClickException(str(exc)) from exc
     if _json_enabled(ctx):

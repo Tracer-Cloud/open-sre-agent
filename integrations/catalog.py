@@ -3,7 +3,8 @@
 from __future__ import annotations
 
 import os
-from typing import Any
+import sys
+from typing import Any, cast
 
 from config.constants.google_docs import (
     GOOGLE_CREDENTIALS_FILE_ENV,
@@ -23,24 +24,30 @@ from config.constants.yandex_cloud import (
     YC_TOKEN_ENV,
     YC_USE_METADATA_ENV,
 )
-from integrations import _catalog_impl
 from integrations.registry import INTEGRATION_SPECS_BY_SERVICE, family_key, service_key
 from integrations.store import load_integrations
 
 
+def _load_catalog_impl() -> Any:
+    """Load classifiers only when a caller actually classifies or merges."""
+    from integrations import _catalog_impl as impl
+
+    return impl
+
+
 def _sync_overrides() -> None:
     """Keep monkeypatch-friendly facade attributes wired into the implementation module."""
-    _catalog_impl.load_integrations = load_integrations
+    _load_catalog_impl().load_integrations = load_integrations
 
 
 def classify_integrations(integrations: list[dict[str, Any]]) -> dict[str, Any]:
     _sync_overrides()
-    return _catalog_impl.classify_integrations(integrations)
+    return cast("dict[str, Any]", _load_catalog_impl().classify_integrations(integrations))
 
 
 def load_env_integrations() -> list[dict[str, Any]]:
     _sync_overrides()
-    return _catalog_impl.load_env_integrations()
+    return cast("list[dict[str, Any]]", _load_catalog_impl().load_env_integrations())
 
 
 def merge_local_integrations(
@@ -48,14 +55,20 @@ def merge_local_integrations(
     env_integrations: list[dict[str, Any]],
 ) -> list[dict[str, Any]]:
     _sync_overrides()
-    return _catalog_impl.merge_local_integrations(store_integrations, env_integrations)
+    return cast(
+        "list[dict[str, Any]]",
+        _load_catalog_impl().merge_local_integrations(store_integrations, env_integrations),
+    )
 
 
 def merge_integrations_by_service(
     *integration_groups: list[dict[str, Any]],
 ) -> list[dict[str, Any]]:
     _sync_overrides()
-    return _catalog_impl.merge_integrations_by_service(*integration_groups)
+    return cast(
+        "list[dict[str, Any]]",
+        _load_catalog_impl().merge_integrations_by_service(*integration_groups),
+    )
 
 
 def resolve_effective_integrations(
@@ -63,9 +76,12 @@ def resolve_effective_integrations(
     env_integrations: list[dict[str, Any]] | None = None,
 ) -> dict[str, dict[str, Any]]:
     _sync_overrides()
-    return _catalog_impl.resolve_effective_integrations(
-        store_integrations=store_integrations,
-        env_integrations=env_integrations,
+    return cast(
+        "dict[str, dict[str, Any]]",
+        _load_catalog_impl().resolve_effective_integrations(
+            store_integrations=store_integrations,
+            env_integrations=env_integrations,
+        ),
     )
 
 
@@ -193,7 +209,9 @@ def load_env_integration_services() -> list[str]:
         or os.getenv(YC_USE_METADATA_ENV, "").strip().lower() in {"1", "true", "yes", "on"},
     )
 
-    services.extend(_catalog_impl.external_env_presence_services())
+    impl = sys.modules.get("integrations._catalog_impl")
+    if impl is not None:
+        services.extend(impl.external_env_presence_services())
 
     return list(dict.fromkeys(services))
 
@@ -325,11 +343,16 @@ def configured_integration_health() -> list[tuple[str, str]]:
     return health
 
 
-# Re-exported so an out-of-tree integration registers through this facade
-# instead of reaching into the private implementation module.
-register_classifier = _catalog_impl.register_classifier
-register_env_loader = _catalog_impl.register_env_loader
-register_env_presence = _catalog_impl.register_env_presence
+def register_classifier(service: str, classify: Any) -> None:
+    _load_catalog_impl().register_classifier(service, classify)
+
+
+def register_env_loader(service: str, loader: Any) -> None:
+    _load_catalog_impl().register_env_loader(service, loader)
+
+
+def register_env_presence(service: str, is_configured: Any) -> None:
+    _load_catalog_impl().register_env_presence(service, is_configured)
 
 
 __all__ = [

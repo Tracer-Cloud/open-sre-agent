@@ -341,14 +341,14 @@ def test_login_keeps_valid_session_without_starting_oauth(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     monkeypatch.setattr(
-        "surfaces.cli.commands.account.account_status",
+        "surfaces.cli.account_auth.account_status",
         lambda **_: AccountStatus(True, _record(), "ok"),
     )
 
     def _should_not_login(**_kwargs: object) -> AccountLoginResult:
         raise AssertionError("login must not start while a session is active")
 
-    monkeypatch.setattr("surfaces.cli.commands.account.login_account", _should_not_login)
+    monkeypatch.setattr("surfaces.cli.account_auth.login_account", _should_not_login)
 
     result = _invoke_account_login("--no-browser")
 
@@ -360,14 +360,14 @@ def test_login_keeps_valid_session_without_starting_oauth(
 
 def test_login_json_reports_already_active_session(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(
-        "surfaces.cli.commands.account.account_status",
+        "surfaces.cli.account_auth.account_status",
         lambda **_: AccountStatus(True, _record(), "ok"),
     )
 
     def _should_not_login(**_kwargs: object) -> AccountLoginResult:
         raise AssertionError("login must not start while a session is active")
 
-    monkeypatch.setattr("surfaces.cli.commands.account.login_account", _should_not_login)
+    monkeypatch.setattr("surfaces.cli.account_auth.login_account", _should_not_login)
 
     result = _invoke_account_login("--no-browser", json_output=True)
 
@@ -381,7 +381,7 @@ def test_login_json_reports_already_active_session(monkeypatch: pytest.MonkeyPat
 def test_login_force_replaces_valid_session(monkeypatch: pytest.MonkeyPatch) -> None:
     login_calls: list[object] = []
     monkeypatch.setattr(
-        "surfaces.cli.commands.account.account_status",
+        "surfaces.cli.account_auth.account_status",
         lambda **_: AccountStatus(True, _record(), "ok"),
     )
 
@@ -389,7 +389,7 @@ def test_login_force_replaces_valid_session(monkeypatch: pytest.MonkeyPatch) -> 
         login_calls.append(True)
         return AccountLoginResult(record=_record())
 
-    monkeypatch.setattr("surfaces.cli.commands.account.login_account", fake_login)
+    monkeypatch.setattr("surfaces.cli.account_auth.login_account", fake_login)
 
     result = _invoke_account_login("--no-browser", "--force")
 

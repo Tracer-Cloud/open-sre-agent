@@ -23,6 +23,7 @@ from surfaces.cli.group import LazyRichGroup, ThemeParamType
 from surfaces.cli.host import CLI_HOST_CONTEXT_KEY, CliHost, ShellLauncher, cli_host
 from surfaces.cli.invocation import (
     ensure_utf8_stdio,
+    is_fast_help_invocation,
     is_fast_version_invocation,
     print_fast_version,
     resolve_command_parts,
@@ -255,8 +256,8 @@ def main(argv: list[str] | None = None, *, host: CliHost | None = None) -> int:
     if is_fast_version_invocation(cli_argv):
         print_fast_version(cli_argv)
         return 0
-
-    startup.run(cli, cli_argv)
+    if not is_fast_help_invocation(cli_argv):
+        startup.run(cli, cli_argv)
     StructuredError = load_structured_error_type()
 
     try:

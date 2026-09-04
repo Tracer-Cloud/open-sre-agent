@@ -4,6 +4,9 @@
 exit code. Shared env boot lives in :func:`bootstrap.process.configure_process`;
 this module adds CLI-only terminal hooks after that.
 
+``--help`` / ``-h`` skip this module: they only need Click usage text, not
+Sentry or kubernetes via product adapters.
+
 Order is load-bearing:
 
 1. **shared process boot** (env via :data:`CLI_PROFILE`);

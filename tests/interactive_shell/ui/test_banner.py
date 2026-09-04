@@ -105,21 +105,11 @@ def test_launch_banner_draws_ring_logo_on_wide_terminals(monkeypatch: object) ->
     assert "⣿⣿⠀⠀⣿⣿⡇⠀⠀⠀⠀⠀⠀⠀⠀⢸⣿⣿⠀⢸⣿⣿" in output
 
 
-def test_wordmark_spin_frames_complete_a_full_revolution() -> None:
-    frames = banner_module.build_wordmark_spin_frames()
-    blank = "\u2800"
+def test_launch_banner_does_not_delay_the_prompt_with_animation(
+    monkeypatch: object,
+) -> None:
+    """The wordmark is static so the composer can accept input immediately."""
 
-    assert len(frames) > 10
-    assert frames[0].rows == frames[-1].rows
-    assert any(frame.back_facing for frame in frames)
-    assert all(tuple(map(len, frame.rows)) == tuple(map(len, frames[0].rows)) for frame in frames)
-    edge = min(frames, key=lambda frame: frame.scale)
-    assert max(len(row.strip(blank)) for row in edge.rows) < max(
-        len(row.strip(blank)) for row in frames[0].rows
-    )
-
-
-def test_launch_banner_spins_once_in_place_on_tty(monkeypatch: object) -> None:
     class _FakeStdout:
         def __init__(self) -> None:
             self.writes: list[str] = []
@@ -136,7 +126,6 @@ def test_launch_banner_spins_once_in_place_on_tty(monkeypatch: object) -> None:
 
     fake_stdout = _FakeStdout()
     monkeypatch.setattr("sys.stdout", fake_stdout)
-    monkeypatch.setattr(banner_module.time, "sleep", lambda _delay: None)
     monkeypatch.setattr(banner_module, "load_launch_status", _fixed_status)
     console = Console(
         file=fake_stdout,
@@ -149,14 +138,9 @@ def test_launch_banner_spins_once_in_place_on_tty(monkeypatch: object) -> None:
     banner_module.render_launch_banner(console)
 
     written = "".join(fake_stdout.writes)
-    animation_end = written.index("\x1b[?25h") + len("\x1b[?25h")
-    animation = written[:animation_end]
-    assert written.count("\x1b[10A") > 10
-    assert "\x1b[2;1H" not in animation
-    assert "\x1b[H" not in animation
-    assert "\n" not in animation.replace("\r\n", "")
-    assert written.index("\x1b[?25l") < written.index("\x1b[1G")
-    assert written.index("\x1b[?25h") < written.index("Welcome to OpenSRE CLI")
+    assert "\x1b[?25l" not in written
+    assert "\x1b[10A" not in written
+    assert "Welcome to OpenSRE CLI" in written
 
 
 def test_launch_banner_falls_back_to_title_on_narrow_terminals(monkeypatch: object) -> None:

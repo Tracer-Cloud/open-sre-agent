@@ -183,3 +183,64 @@ def test_fast_version_answers_without_the_terminal_stack() -> None:
 
     # Assert
     assert "TERMINAL_MODULES 0" in result.stdout, result.stdout
+
+
+def test_fast_help_invocation_detects_help_flags() -> None:
+    from surfaces.cli.invocation import is_fast_help_invocation
+
+    assert is_fast_help_invocation(["--help"])
+    assert is_fast_help_invocation(["-h"])
+    assert is_fast_help_invocation(["doctor", "--help"])
+    assert not is_fast_help_invocation([])
+    assert not is_fast_help_invocation(["doctor"])
+    assert not is_fast_help_invocation(["--version"])
+
+
+def test_help_flag_skips_full_startup(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Root ``--help`` must not install adapters or Sentry (kubernetes/boto3)."""
+
+    def fail_bootstrap(*_args: object, **_kwargs: object) -> None:
+        raise AssertionError("--help should not bootstrap the full CLI")
+
+    monkeypatch.setattr("infrastructure.observability.errors.sentry.init_sentry", fail_bootstrap)
+    monkeypatch.setattr(
+        "surfaces.shared.terminal.output.boundary.install_product_adapters",
+        fail_bootstrap,
+    )
+    monkeypatch.setattr("surfaces.cli.app.shutdown_analytics", lambda **_kw: None)
+
+    from surfaces.cli.app import main
+
+    assert main(["--help"]) == 0
+
+
+def test_fast_help_does_not_import_vendor_sdks() -> None:
+    """``opensre --help`` must not pay kubernetes/boto3/Sentry import tax."""
+    probe = (
+        "import sys; from surfaces.cli.__main__ import main; main(['--help']); "
+        "heavy = [n for n in sys.modules if n.split('.')[0] in "
+        "{'kubernetes', 'boto3', 'botocore', 'sentry_sdk', 'litellm'}]; "
+        "cmds = [n for n in sys.modules if n.startswith('surfaces.cli.commands.') "
+        "and n not in {'surfaces.cli.commands', 'surfaces.cli.commands.command_specs'}]; "
+        "print('HEAVY', ','.join(sorted(heavy)[:12]) or 'none'); "
+        "print('CMDS', ','.join(sorted(cmds)) or 'none')"
+    )
+    result = subprocess.run(
+        [sys.executable, "-c", probe],
+        capture_output=True,
+        text=True,
+        check=True,
+    )
+    assert "HEAVY none" in result.stdout, result.stdout + result.stderr
+    assert "CMDS none" in result.stdout, result.stdout + result.stderr
+
+
+def test_subcommand_help_still_loads_that_command(capsys: pytest.CaptureFixture[str]) -> None:
+    """``opensre ask --help`` must print real options from the ask command module."""
+    from surfaces.cli.app import main
+
+    rc = main(["ask", "--help"])
+    out = capsys.readouterr().out
+    assert rc == 0
+    assert "--allowed-tool" in out
+    assert "dangerously-bypass-approvals" in out
