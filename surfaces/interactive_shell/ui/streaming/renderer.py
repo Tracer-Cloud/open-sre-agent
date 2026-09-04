@@ -139,18 +139,18 @@ def render_markdown_block(console: Console, text: str) -> None:
 
 
 _REPLY_MARKER = "Ω"
-# Quiet lead for mid-turn narration — same gutter width as ``Ω``, so notes align
-# with replies the way Droid keeps one marker column on every agent line.
+# Quiet lead for mid-turn narration — same 2-cell gutter as ``Ω `` / ``⏺ ``
+# (Droid: one marker column, body text shares a left edge).
 _NOTE_MARKER = "·"
+_GUTTER_WIDTH = 2
 
 
 def render_note_block(console: Console, text: str) -> None:
-    """Render intermediate agent narration in the recessed note gutter.
+    """Render intermediate agent narration in the agent marker gutter.
 
-    Distinct from the bright ``Ω`` reply and the recessed grey ``[n] ❯`` user
-    row: a note keeps a dim ``·`` lead (same column as ``Ω``) so it does not
-    float as unmarked white prose against Thinking chrome. Bold spans (the
-    action words) stay bold within the recessed base.
+    Droid puts a warm accent on every agent line. Notes use a dimmer ``·`` in
+    that same column as ``Ω`` / Thinking so the left edge stays straight; bold
+    spans (action words) stay bold within the recessed body.
     """
     visible = strip_session_goal_progress_tags(text)
     if not visible.strip():
@@ -161,7 +161,9 @@ def render_note_block(console: Console, text: str) -> None:
                 _build_markdown_block(visible),
                 lead=True,
                 marker=_NOTE_MARKER,
-                marker_style=str(ui_theme.DIM),
+                # Warm accent like Droid's agent marker — not ghost DIM, or notes
+                # vanish next to Thinking / plan chrome.
+                marker_style=ui_theme.reply_marker_style(),
             ),
             style=str(ui_theme.SECONDARY),
         )
@@ -186,10 +188,11 @@ def reply_gutter(
     column, so the whole reply reads as one block hanging under the marker.
     """
     grid = Table.grid(padding=0)
-    grid.add_column(width=3, no_wrap=True)
+    grid.add_column(width=_GUTTER_WIDTH, no_wrap=True)
     grid.add_column(overflow="fold")
     style = marker_style if marker_style is not None else _reply_marker_style()
-    lead_cell = Text(f"{marker}  ", style=style) if lead else Text("   ")
+    pad = " " * (_GUTTER_WIDTH - 1)
+    lead_cell = Text(f"{marker}{pad}", style=style) if lead else Text(" " * _GUTTER_WIDTH)
     grid.add_row(lead_cell, body)
     return grid
 

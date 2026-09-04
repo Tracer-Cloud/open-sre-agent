@@ -131,9 +131,38 @@ def test_missing_sentry_module_still_raises_for_other_commands(
     _silence_all(monkeypatch)
     monkeypatch.setattr(_SENTRY, _raise_missing_sentry)
 
-    # Act / Assert
+    # Act / Assert — subcommands init Sentry synchronously so the raise
+    # reaches the caller (background init would swallow it on a daemon thread).
     with pytest.raises(ModuleNotFoundError):
         startup.run(cli, ["doctor"])
+
+
+def test_sentry_sdk_installed_tolerates_modules_without_spec(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Test doubles in ``sys.modules`` must not make presence checks raise."""
+    from types import SimpleNamespace
+
+    from surfaces.cli import startup
+
+    monkeypatch.setitem(sys.modules, "sentry_sdk", SimpleNamespace())
+
+    assert startup._sentry_sdk_installed() is True
+
+
+def test_bare_shell_raises_when_sentry_sdk_absent(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Bare ``opensre`` checks presence inline before background init."""
+    from bootstrap.process import reset_process_runtime_for_tests
+    from surfaces.cli import startup
+
+    reset_process_runtime_for_tests()
+    _silence_all(monkeypatch)
+    monkeypatch.setattr(startup, "_sentry_sdk_installed", lambda: False)
+
+    with pytest.raises(ModuleNotFoundError, match="sentry_sdk"):
+        startup.run(cli, [])
 
 
 def test_importing_the_entry_point_does_not_load_the_terminal_stack() -> None:

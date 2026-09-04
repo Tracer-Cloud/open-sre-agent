@@ -28,8 +28,8 @@ def _strip_ansi(text: str) -> str:
 
 
 def test_render_note_block_is_recessed_and_indented_but_keeps_bold() -> None:
-    # A working note reads as soft recessed grey under a dim ``·`` gutter lead,
-    # distinct from the bright ``Ω`` reply, while the bold action word stays bold.
+    # Droid rhythm: warm ``·`` in the shared agent column, recessed body, bold
+    # action words still bold.
     from infrastructure.terminal import theme as ui_theme
 
     ui_theme.set_active_theme("amber")
@@ -51,7 +51,7 @@ def test_render_note_block_is_recessed_and_indented_but_keeps_bold() -> None:
     assert "38;2;" in raw or "38;5;" in raw
     assert re.search(r"\x1b\[[0-9;]*1[;m]", raw)  # bold action word survives
     first_line = _strip_ansi(raw).splitlines()[0]
-    assert first_line.startswith("·  ")  # dim note marker in the Ω gutter column
+    assert first_line.startswith("· ")  # warm · in the shared agent marker column
     assert "load the workflow" in first_line
 
 
@@ -80,7 +80,7 @@ def test_prose_reply_keeps_the_inline_marker() -> None:
 
     publish_full_response(console, "Root disk is 44% full.")
 
-    assert "Ω  Root disk is 44% full." in buf.getvalue()
+    assert "Ω Root disk is 44% full." in buf.getvalue()
 
 
 def _tty_console() -> tuple[Console, io.StringIO]:
@@ -231,7 +231,7 @@ class TestTtyParagraphRender:
         stream_to_console(console, label="OpenSRE", chunks=_yield_chunks([text]))
 
         visible = "\n".join(line.rstrip() for line in _strip_ansi(buf.getvalue()).splitlines())
-        assert "Ω  Ready:\n\n    • first\n    • second\n\n   Blocked pending a choice." in visible
+        assert "Ω Ready:\n\n   • first\n   • second\n\n  Blocked pending a choice." in visible
 
     def test_reply_hangs_indented_under_the_marker(self) -> None:
         """A wrapped reply hangs in the Ω gutter: line one carries the marker,
@@ -242,7 +242,7 @@ class TestTtyParagraphRender:
         stream_to_console(console, label="assistant", chunks=_yield_chunks([text]))
 
         lines = [line for line in _strip_ansi(buf.getvalue()).splitlines() if line.strip()]
-        assert lines[0].startswith("Ω  ")  # marker leads the first line
+        assert lines[0].startswith("Ω ")  # marker leads the first line
         assert len(lines) > 1  # the reply actually wrapped
         assert all(line.startswith("  ") for line in lines[1:])  # hang-indent at col 2
 

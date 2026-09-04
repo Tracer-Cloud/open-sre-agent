@@ -1,9 +1,10 @@
 from __future__ import annotations
 
 import importlib
+import importlib.machinery
 import sys
+import types
 from pathlib import Path
-from types import SimpleNamespace
 from unittest.mock import patch
 
 import click
@@ -16,6 +17,14 @@ from infrastructure.analytics.events import Event
 from surfaces.cli.app import cli
 from surfaces.cli.startup import sentry_entrypoint_for
 from surfaces.entrypoint import main
+
+
+def _fake_sentry_sdk(*, flush: object) -> types.ModuleType:
+    """A ``sys.modules`` double that ``find_spec`` can tolerate."""
+    mod = types.ModuleType("sentry_sdk")
+    mod.__spec__ = importlib.machinery.ModuleSpec("sentry_sdk", loader=None)
+    mod.flush = flush  # type: ignore[attr-defined]
+    return mod
 
 
 def _stub_analytics_httpx(monkeypatch: pytest.MonkeyPatch) -> list[dict[str, object]]:
@@ -267,7 +276,7 @@ def test_main_debug_sentry_sends_synthetic_event(monkeypatch, capsys) -> None:
     monkeypatch.setitem(
         sys.modules,
         "sentry_sdk",
-        SimpleNamespace(flush=lambda timeout: flush_calls.append(timeout)),
+        _fake_sentry_sdk(flush=lambda timeout: flush_calls.append(timeout)),
     )
 
     exit_code = main(["debug", "sentry"])
@@ -320,11 +329,7 @@ def test_main_debug_sentry_exits_nonzero_when_flush_fails(monkeypatch, capsys) -
         assert timeout == 5
         return False
 
-    monkeypatch.setitem(
-        sys.modules,
-        "sentry_sdk",
-        SimpleNamespace(flush=flush_stub),
-    )
+    monkeypatch.setitem(sys.modules, "sentry_sdk", _fake_sentry_sdk(flush=flush_stub))
 
     exit_code = main(["debug", "sentry"])
 

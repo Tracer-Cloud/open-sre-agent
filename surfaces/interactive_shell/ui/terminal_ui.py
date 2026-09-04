@@ -96,8 +96,9 @@ def render_prompt_region(session: Session, state: ReplState, spinner: SpinnerSta
         plan_overlay = strip_cpr_sequences(
             task_plan_overlay_ansi(plan, expanded=state.plan_expanded)
         )
-    # Keep one empty row between the pinned plan and the live status chrome.
-    plan_prefix = f"{plan_overlay}\n\n" if plan_overlay else ""
+    # Droid block rhythm: blank row above the checklist (separates scrollback
+    # notes from the pinned plan) and one blank beneath before status chrome.
+    plan_prefix = f"\n{plan_overlay}\n\n" if plan_overlay else ""
 
     # A pending confirmation renders a stacked, arrow-navigable Yes/No choice
     # (box hidden). Density matches the streaming stack: status → Auto → composer.

@@ -108,6 +108,8 @@ def test_idle_prompt_region_shows_plan_without_thinking_or_ready_hint() -> None:
     assert "Ready" not in rendered  # no recurring idle hint line
     assert rendered.index("Plan · 2/3") < rendered.index("Auto (High)")
     assert "  ○ Confirm checkout returns 2xx\n\nAuto (High) · Allow all" in rendered
+    # Blank row above the plan separates it from scrollback notes (Droid blocks).
+    assert rendered.lstrip().startswith("Plan · 2/3") or "\nPlan · 2/3" in rendered
 
 
 def test_clearing_the_plan_resets_expanded_state() -> None:
