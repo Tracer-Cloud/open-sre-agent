@@ -19,7 +19,13 @@ import click
 from config.constants.product import RELEASE_STAGE_BANNER
 from surfaces.cli import startup
 from surfaces.cli.group import LazyRichGroup, ThemeParamType
-from surfaces.cli.host import CLI_HOST_CONTEXT_KEY, CliHost, ShellLauncher, cli_host
+from surfaces.cli.host import (
+    CLI_HOST_CONTEXT_KEY,
+    AfterBanner,
+    CliHost,
+    ShellLauncher,
+    cli_host,
+)
 from surfaces.cli.invocation import (
     ensure_utf8_stdio,
     is_fast_help_invocation,
@@ -52,6 +58,8 @@ _ANALYTICS_FLUSH_TIMEOUT_SECONDS = 2.0
 _CAPTURE_CLI_ANALYTICS = "capture_cli_analytics"
 _CLI_ANALYTICS_CAPTURED = "cli_analytics_captured"
 _CLI_ARGV = "cli_argv"
+# Launch work startup held back for the shell to run once its banner is painted.
+_AFTER_BANNER = "after_banner"
 
 
 def _cli_invoked_properties(ctx: click.Context) -> Properties:
@@ -111,6 +119,7 @@ def _run_without_subcommand(
     passed_on_command_line: bool,
     layout: str | None,
     theme: str | None,
+    after_banner: AfterBanner,
 ) -> int:
     """Serve a bare ``opensre``: open the shell, or print the landing page.
 
@@ -133,13 +142,16 @@ def _run_without_subcommand(
             cli_theme=theme,
         )
         if config.enabled or resume_session_id:
-            exit_code = launch_shell(config, resume_session_id)
+            exit_code = launch_shell(config, resume_session_id, after_banner)
             if sync_on_exit:
                 from surfaces.cli.commands.remote_sync import run_remote_sync_on_exit
 
                 run_remote_sync_on_exit()
             return exit_code
 
+    # No shell to paint a banner: the held-back launch work runs here instead.
+    if after_banner is not None:
+        after_banner()
     click.echo(RELEASE_STAGE_BANNER, err=True)
     render_landing(group)
     return 0
@@ -234,6 +246,7 @@ def cli(
                 ),
                 layout=layout,
                 theme=theme,
+                after_banner=ctx.obj.get(_AFTER_BANNER),
             )
         )
 
@@ -256,8 +269,7 @@ def main(argv: list[str] | None = None, *, host: CliHost | None = None) -> int:
         print_fast_version(cli_argv)
         return 0
     fast_help = is_fast_help_invocation(cli, cli_argv)
-    if not fast_help:
-        startup.run(cli, cli_argv)
+    after_banner = None if fast_help else startup.run(cli, cli_argv)
     StructuredError = load_structured_error_type()
 
     try:
@@ -267,6 +279,7 @@ def main(argv: list[str] | None = None, *, host: CliHost | None = None) -> int:
             obj={
                 _CAPTURE_CLI_ANALYTICS: True,
                 _CLI_ARGV: cli_argv,
+                _AFTER_BANNER: after_banner,
                 CLI_HOST_CONTEXT_KEY: host or CliHost(),
             },
         )

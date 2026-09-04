@@ -475,6 +475,33 @@ def test_no_interactive_falls_through_to_landing_page(monkeypatch) -> None:
     assert landing_calls == [1], "render_landing should be called exactly once"
 
 
+def test_landing_page_runs_the_launch_work_the_shell_would_have_run(monkeypatch) -> None:
+    """With no shell to paint a banner, the deferred error-reporting start still runs."""
+    # Arrange: a bare launch whose startup hands back deferred work, on a TTY
+    # with the shell disabled so the landing page is served instead.
+    monkeypatch.setattr("surfaces.cli.app.capture_first_run_if_needed", lambda: None)
+    monkeypatch.setattr("surfaces.cli.app.shutdown_analytics", lambda **_kw: None)
+    monkeypatch.setattr("surfaces.cli.app.capture_cli_invoked", lambda *_args: None)
+    monkeypatch.setattr("surfaces.cli.app.sys.stdin.isatty", lambda: True)
+    monkeypatch.setattr("surfaces.cli.app.sys.stdout.isatty", lambda: True)
+    monkeypatch.setattr(
+        "config.repl_config.ReplConfig.load",
+        classmethod(lambda _cls, **_kw: ReplConfig(enabled=False, layout="classic")),
+    )
+    order: list[str] = []
+    monkeypatch.setattr(
+        "surfaces.cli.app.startup.run", lambda _group, _argv: lambda: order.append("start")
+    )
+    monkeypatch.setattr("surfaces.cli.app.render_landing", lambda _group: order.append("landing"))
+
+    # Act
+    exit_code = main(["--no-interactive"])
+
+    # Assert: the deferred start ran once, before the page printed.
+    assert exit_code == 0
+    assert order == ["start", "landing"]
+
+
 def test_default_no_args_enters_repl(monkeypatch) -> None:
     """Regression: the default invocation `opensre` (no args, TTY) must enter
     the REPL.  A previous Click misconfiguration (is_flag + flag_value=False)

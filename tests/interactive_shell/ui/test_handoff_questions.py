@@ -149,10 +149,12 @@ def test_choice_selection_strips_terminal_controls() -> None:
     output = buffer.getvalue()
     assert "\x1b" not in output
     assert "\x07" not in output
-    assert "✓ Deploy?" in output
+    assert "Ask User" in output
+    assert "Deploy?" in output
     assert "Canary" in output
-    assert not output.startswith("\n")
-    assert "\n\n" not in output
+    assert "✓" not in output
+    # Section gap above the card so it does not join Plan complete.
+    assert output.startswith("\n")
 
 
 def test_multi_select_choice_indents_every_selected_line() -> None:
@@ -164,12 +166,33 @@ def test_multi_select_choice_indents_every_selected_line() -> None:
     # Act
     render_choice_selection(console, "Select Complex Demos", answer)
 
-    # Assert: heading, then every option indented under it — never flush-left.
+    # Assert: Ask User card — question, then every option indented under it.
     lines = [line.rstrip() for line in buffer.getvalue().splitlines() if line.strip()]
-    assert "✓ Select Complex Demos" in lines
+    assert lines[0] == "Ask User"
+    assert "1.  Select Complex Demos" in lines[1] or lines[1].endswith("Select Complex Demos")
     for label in ("Audit the architecture", "Find failing PRs", "Remediate alerts"):
-        assert f"  {label}" in lines
+        assert any(label in line and line.startswith(" ") for line in lines)
         assert label not in lines
+    assert "✓" not in buffer.getvalue()
+
+
+def test_choice_selection_is_not_a_plan_step() -> None:
+    """Single-pick recap must not look like another Plan complete checklist row."""
+    buffer = io.StringIO()
+    console = Console(file=buffer, force_terminal=False, highlight=False, width=80)
+
+    render_choice_selection(
+        console,
+        "Choose a Demo",
+        "Explore a repo and analyze its CI/CD performance (recommended)",
+    )
+
+    output = buffer.getvalue()
+    assert "Ask User" in output
+    assert "Choose a Demo" in output
+    assert "Explore a repo" in output
+    assert "✓ Choose a Demo" not in output
+    assert "✓" not in output
 
 
 def test_try_render_rejects_a_single_choice_label() -> None:

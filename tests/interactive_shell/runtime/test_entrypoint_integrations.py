@@ -252,6 +252,44 @@ def test_run_repl_async_failed_resume_flushes_starter_session(
     assert not (sessions_dir / f"{session.session_id}.jsonl").exists()
 
 
+def test_run_repl_async_runs_held_back_launch_work_once_the_banner_is_painted(
+    monkeypatch: Any, tmp_path: Path
+) -> None:
+    """``after_banner`` runs after ``finish_banner`` and before the session body."""
+    import asyncio
+
+    # Arrange: a booted runtime whose resume fails, so the run ends right after
+    # the banner step without starting the prompt loop.
+    monkeypatch.setattr("config.constants.OPENSRE_HOME_DIR", tmp_path)
+    monkeypatch.setattr("config.constants.paths.OPENSRE_HOME_DIR", tmp_path)
+    monkeypatch.setattr(
+        "infrastructure.analytics.github_identity.identify_saved_github_username",
+        lambda: None,
+    )
+    order: list[str] = []
+    monkeypatch.setattr(
+        "surfaces.interactive_shell.command_registry.session_cmds.resume.resume_session_by_prefix",
+        lambda *_args, **_kwargs: order.append("resume") or False,
+    )
+    monkeypatch.setattr(
+        main_entrypoint,
+        "create_repl_runtime",
+        lambda **_kwargs: SimpleNamespace(session=Session(), inbox=None),
+    )
+
+    # Act
+    asyncio.run(
+        main_entrypoint.run_repl_async(
+            resume_session_id="missing-session",
+            finish_banner=lambda: order.append("banner"),
+            after_banner=lambda: order.append("after_banner"),
+        )
+    )
+
+    # Assert
+    assert order == ["banner", "after_banner", "resume"]
+
+
 def _finish_banner_then_stop(**kwargs: Any) -> int:
     """Invoke the launch-banner finisher the real ``run_repl_async`` would.
 

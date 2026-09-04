@@ -626,8 +626,9 @@ prepare_and_verify_binary() {
   else
     verify_binary_version "$binary_path"
   fi
-
-  warm_first_launch "$binary_path"
+  # Do not warm here: install copies the onedir to a new path, and macOS
+  # re-validates that tree on first exec. Warm the *installed* binary instead
+  # (see install_release_binary → warm_first_launch).
 }
 
 warm_first_launch() {
@@ -637,14 +638,11 @@ warm_first_launch() {
   # and would otherwise pay for a full registry/verifier/skills import.
   [ "$(uname -s 2>/dev/null || true)" = "Darwin" ] || return 0
 
-  # macOS validates the code signature of every Mach-O image on its first
-  # dlopen and caches the result. The re-sign above resets that cache for all
-  # ~300 bundled libs, and ``--version`` (the fast path) loads only a few of
-  # them, so the user's first real ``opensre`` would pay ~10s of validation.
-  # ``_package-smoke`` imports the full tool registry, verifiers and skills,
-  # which loads essentially the whole set — so pay that cost here, under the
-  # installer spinner, instead of on the first launch. Best-effort: the binary
-  # already passed ``--version``, so a smoke failure warns rather than aborts.
+  # macOS validates each Mach-O image on first load and caches by path/inode.
+  # The extract-dir ``--version`` / smoke above does **not** help the copy under
+  # ``~/.local/bin/.opensre-app`` — measured ~6–8s again after ``cp -R``.
+  # Run smoke against the *final* install path so the user's first ``opensre``
+  # is warm (~0.2s), not another Gatekeeper tax.
   run_with_dots "Preparing OpenSRE for first launch" package_smoke_quiet "$binary_path" \
     || printf 'warning: first-launch warm-up did not complete; the first "%s" may start slowly.\n' "$BIN_NAME" >&2
 }
@@ -1104,6 +1102,8 @@ install_release_binary() {
   run_with_dots "Installing OpenSRE" \
     install_verified_binary "$binary_path" "${INSTALL_DIR}/${BIN_NAME}" \
     || die "Failed to install ${BIN_NAME} to '${INSTALL_DIR}'."
+  # Warm the installed tree (final path), not the extract dir — see warm_first_launch.
+  warm_first_launch "${INSTALL_DIR}/${BIN_NAME}"
 }
 
 print_install_confirmation() {

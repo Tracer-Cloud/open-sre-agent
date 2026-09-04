@@ -17,8 +17,10 @@ import click
 if TYPE_CHECKING:
     from config.repl_config import ReplConfig
 
-#: ``(config, resume_session_id) -> exit code``.
-ShellLauncher = Callable[["ReplConfig", str | None], int]
+#: Work the shell runs once its banner is on screen (``None``: nothing deferred).
+AfterBanner = Callable[[], None] | None
+#: ``(config, resume_session_id, after_banner) -> exit code``.
+ShellLauncher = Callable[["ReplConfig", str | None, AfterBanner], int]
 #: Runs the gateway attached to this terminal until it stops.
 GatewayForegroundRunner = Callable[[], None]
 
@@ -42,6 +44,7 @@ def cli_host(ctx: click.Context) -> CliHost:
 
 __all__ = [
     "CLI_HOST_CONTEXT_KEY",
+    "AfterBanner",
     "CliHost",
     "GatewayForegroundRunner",
     "ShellLauncher",

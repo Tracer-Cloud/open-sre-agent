@@ -90,7 +90,8 @@ def _launch_interactive_shell(ctx: click.Context | None) -> int:
     launch_shell = cli_host(ctx).launch_shell if ctx is not None else None
     if launch_shell is None:
         return 0
-    return launch_shell(ReplConfig.load(cli_enabled=True), None)
+    # A subcommand initialised error reporting in line: nothing is held back.
+    return launch_shell(ReplConfig.load(cli_enabled=True), None, None)
 
 
 @click.group(name="onboard", invoke_without_command=True)

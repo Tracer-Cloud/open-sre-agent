@@ -41,11 +41,14 @@ async def run_repl_async(
     console: Console | None = None,
     cli_command_group: click.Command | None = None,
     finish_banner: Callable[[], None] | None = None,
+    after_banner: Callable[[], None] | None = None,
 ) -> int:
     """Run the shell on an existing event loop and return its exit code.
 
     ``cli_command_group`` is the ``opensre`` Click group the shell documents to
     the model; the process entrypoint passes it, embedders may leave it out.
+    ``after_banner`` is launch work the CLI held back until the banner is on
+    screen (error-reporting start); it runs once the runtime is booted.
     """
     # Keep MCP schema-cache warnings / httpx chatter off the transcript —
     # progress is soft status lines, not library WARNINGs.
@@ -66,6 +69,8 @@ async def run_repl_async(
     session.terminal.cli_command_group = cli_command_group
 
     if initial_input:
+        if after_banner is not None:
+            after_banner()
         session.warm_resolved_integrations()
         return run_initial_input(initial_input, session, out)
 
@@ -79,6 +84,10 @@ async def run_repl_async(
     # paint the static banner before anything below can write to the screen.
     if finish_banner is not None:
         finish_banner()
+    # The launch has nothing left to load: held-back work no longer competes
+    # with it for the interpreter.
+    if after_banner is not None:
+        after_banner()
 
     try:
         if resume_session_id:
@@ -142,6 +151,7 @@ def run_repl(
     resume_session_id: str | None = None,
     console: Console | None = None,
     cli_command_group: click.Command | None = None,
+    after_banner: Callable[[], None] | None = None,
 ) -> int:
     """Run the shell on a new event loop and return its exit code."""
     cfg = config or ReplConfig.load()
@@ -176,6 +186,7 @@ def run_repl(
                 console=out,
                 cli_command_group=cli_command_group,
                 finish_banner=finish_banner,
+                after_banner=after_banner,
             )
         )
     except (EOFError, KeyboardInterrupt):

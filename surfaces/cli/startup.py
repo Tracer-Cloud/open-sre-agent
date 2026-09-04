@@ -22,6 +22,7 @@ from __future__ import annotations
 import importlib.util
 import logging
 import threading
+from collections.abc import Callable
 from typing import Any
 
 from surfaces.cli.invocation import resolve_command_parts
@@ -49,31 +50,31 @@ def sentry_entrypoint_for(group: Any, argv: list[str]) -> str:
     return "debug" if _first_command(group, argv) == "debug" else "cli"
 
 
-def _init_error_reporting(group: Any, argv: list[str], command: str) -> None:
+def _init_error_reporting(group: Any, argv: list[str], command: str) -> Callable[[], None] | None:
     """Start error reporting, tolerating a missing SDK only during ``update``.
 
     ``opensre update`` replaces the installed tree, so ``sentry_sdk`` can be
     briefly absent mid-upgrade. Anywhere else its absence is a broken install and
     must surface.
+
+    Subcommands initialise in line. A bare ``opensre`` gets the init back as a
+    callable to run once its banner is on screen: the init imports the SDK and
+    the llm_cli exception classes it registers, and under the GIL that work
+    only interleaves with the launch imports when started alongside them, so
+    it waits until the launch has nothing left to load.
     """
     from infrastructure.observability.errors.sentry import init_sentry
 
     entrypoint = sentry_entrypoint_for(group, argv)
     if command:
-        # Subcommands keep the init synchronous: ``debug sentry`` sends an
-        # event right after boot and must find the SDK ready.
         try:
             init_sentry(entrypoint=entrypoint)
         except ModuleNotFoundError as exc:
             if exc.name != "sentry_sdk" or command != "update":
                 raise
-        return
+        return None
 
-    # Bare ``opensre`` opens the shell. The init (~0.3s: SDK setup plus the
-    # llm_cli exception classes it registers) runs on a thread so it never sits
-    # between the user and the prompt; only the presence check stays in line so
-    # a broken install still surfaces here. An error raised in that window is
-    # the accepted trade for a launch that does not wait on telemetry.
+    # Only the presence check stays in line so a broken install surfaces here.
     if not _sentry_sdk_installed():
         raise ModuleNotFoundError("No module named 'sentry_sdk'", name="sentry_sdk")
 
@@ -83,7 +84,10 @@ def _init_error_reporting(group: Any, argv: list[str], command: str) -> None:
         except Exception:  # noqa: BLE001 - telemetry must never take the CLI down
             _LOG.debug("Sentry init failed; continuing without error reporting", exc_info=True)
 
-    threading.Thread(target=_init, name="sentry-init", daemon=True).start()
+    def start_in_background() -> None:
+        threading.Thread(target=_init, name="sentry-init", daemon=True).start()
+
+    return start_in_background
 
 
 def _sentry_sdk_installed() -> bool:
@@ -95,8 +99,12 @@ def _sentry_sdk_installed() -> bool:
         return True
 
 
-def run(group: Any, argv: list[str]) -> None:
-    """Prepare this process for ``argv``. Safe to call once, before the group."""
+def run(group: Any, argv: list[str]) -> Callable[[], None] | None:
+    """Prepare this process for ``argv``. Safe to call once, before the group.
+
+    Returns the error-reporting start a bare ``opensre`` must run once its
+    banner is painted; ``None`` for subcommands, which initialise in line.
+    """
     from bootstrap.adapters import install_cli_auth_checker
     from bootstrap.process import CLI_PROFILE, configure_process
     from infrastructure.terminal.prompt_support import (
@@ -113,13 +121,14 @@ def run(group: Any, argv: list[str]) -> None:
     # can report installed CLI providers (the integrations import stays deferred).
     install_cli_auth_checker()
 
-    _init_error_reporting(group, argv, command)
+    start_error_reporting = _init_error_reporting(group, argv, command)
 
     install_product_adapters()
 
     install_questionary_escape_cancel()
     install_questionary_ctrl_c_double_exit()
     install_sigint_handler()
+    return start_error_reporting
 
 
 __all__ = ["run", "sentry_entrypoint_for"]

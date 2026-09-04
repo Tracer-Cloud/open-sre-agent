@@ -165,6 +165,36 @@ def test_bare_shell_raises_when_sentry_sdk_absent(
         startup.run(cli, [])
 
 
+def test_bare_shell_hands_back_error_reporting_start_and_does_not_run_it(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Bare ``opensre`` defers Sentry to the returned callable; subcommands do not."""
+    # Arrange
+    import threading
+
+    from bootstrap.process import reset_process_runtime_for_tests
+    from surfaces.cli import startup
+
+    reset_process_runtime_for_tests()
+    _silence_all(monkeypatch)
+    started = threading.Event()
+    monkeypatch.setattr(_SENTRY, lambda **_kw: started.set())
+
+    # Act
+    start_error_reporting = startup.run(cli, [])
+
+    # Assert: nothing started until the shell says the banner is painted.
+    assert start_error_reporting is not None
+    assert not started.is_set()
+    start_error_reporting()
+    assert started.wait(timeout=5)
+
+    # Subcommands initialise in line and hand nothing back.
+    started.clear()
+    assert startup.run(cli, ["doctor"]) is None
+    assert started.is_set()
+
+
 def test_importing_the_entry_point_does_not_load_the_terminal_stack() -> None:
     """``opensre --version`` must answer before questionary/prompt_toolkit load.
 
