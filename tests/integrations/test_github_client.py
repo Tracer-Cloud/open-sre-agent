@@ -130,9 +130,9 @@ def test_paginate_supports_wrapped_collections(monkeypatch: pytest.MonkeyPatch) 
     monkeypatch.setattr("integrations.github.client.request.urlopen", fake_urlopen)
     client = GitHubRestClient(github_token="tok")
 
-    assert client.paginate(
-        "/repos/o/r/commits/s/check-runs", collection_key="check_runs"
-    ) == [{"id": 1}, {"id": 2}]
+    items = client.paginate("/repos/o/r/commits/s/check-runs", collection_key="check_runs")
+
+    assert items == [{"id": 1}, {"id": 2}]
     assert len(calls) == 2
 
 
