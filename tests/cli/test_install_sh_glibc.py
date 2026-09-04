@@ -74,7 +74,7 @@ def test_install_sh_glibc_guard_rejects_unknown_libc(tmp_path: Path) -> None:
 
     assert result.returncode != 0
     assert "Could not determine the host glibc version" in result.stderr
-    assert "install from source with uv" in result.stderr
+    assert "Install from source with uv" in result.stderr
 
 
 def test_install_sh_glibc_guard_accepts_gnu_ldd_fallback(tmp_path: Path) -> None:
