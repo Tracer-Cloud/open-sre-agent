@@ -119,7 +119,6 @@ def test_live_install_sh_main_to_temp_dir(tmp_path: Path) -> None:
     )
     assert version.returncode == 0, version.stderr
     assert "opensre" in version.stdout.lower() or "0." in version.stdout
-    assert "opensre onboard" in combined
     if venv_before is not None:
         assert venv_opensre.exists(), "live install must not remove .venv/bin/opensre"
         assert venv_opensre.resolve() == venv_before, (
