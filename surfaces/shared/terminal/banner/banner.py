@@ -341,8 +341,13 @@ def render_launch_banner(
     console: Console | None = None,
     *,
     session: object = None,
+    animate: bool = True,
 ) -> None:
-    """Print the OpenSRE launch banner."""
+    """Print the OpenSRE launch banner.
+
+    ``animate=False`` skips the startup spin — used on terminal resize where the
+    banner must be reprinted instantly at the new width.
+    """
     console = console or Console(
         highlight=False,
         force_terminal=True,
@@ -350,7 +355,8 @@ def render_launch_banner(
         legacy_windows=False,
     )
     banner = build_launch_banner(console, session=session)
-    animate_launch_wordmark(console)
+    if animate:
+        animate_launch_wordmark(console)
     console.print(banner)
 
 

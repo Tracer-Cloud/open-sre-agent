@@ -1,114 +1,118 @@
-"""Shrink-resize guard for the live prompt region.
+"""Keep the live prompt region compact; reset chrome cleanly on resize.
 
-Failure modes this module prevents:
+Root cause
+----------
+prompt-toolkit sizes a non-fullscreen Screen as::
 
-1. **Tall live region (banner scrolls away).** After CPR, prompt-toolkit sets
-   ``_min_available_height`` to "rows below the cursor". ``Renderer.render``
-   then takes ``max(min_available, preferred)``, paints dozens of blank rows,
-   and scrolls the launch banner out of the viewport.
+    height = max(_min_available_height, last_height, preferred_height)
 
-2. **Overshot erase (banner wiped).** ``Renderer.erase`` does ``cursor_up(y)``
-   then ``erase_down()``. Inflating ``y`` toward the terminal floor starts the
-   wipe inside scrollback chrome.
+After CPR, ``_min_available_height`` is "rows below the cursor" (the rest of the
+terminal under the launch banner). That tall Screen scrolls the banner away,
+and ``last_height`` sticks so later paints stay hollow.
 
-3. **Undershot erase (ghost Auto lines).** When columns shrink, the previous
-   paint soft-wraps. Erasing only the logical height leaves wrapped ``Auto``
-   rows behind; the next paint stacks another copy.
-
-Clamp the live Screen to preferred chrome size, and on resize inflate erase
-``y`` only within that live budget (never into the banner).
+Partial ``erase`` on SIGWINCH cannot keep scrollback chrome and the live
+region aligned — soft-wrap and reflow leave Auto/composer ghosts. On resize the
+host therefore clears the viewport, reprints the static banner, and redraws the
+prompt from a clean cursor position.
 """
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from typing import Any
 
 from prompt_toolkit.application import Application
 from prompt_toolkit.layout.layout import Layout
+from prompt_toolkit.output.base import Size
 
-# Headroom above preferred Auto + composer height for soft-wrap / completion.
-# Keep small: a large budget reintroduces scrolling the banner away.
-_LIVE_REGION_HEIGHT_PAD = 4
-# Extra erase rows on resize for soft-wrapped ghosts inside the live region.
-_RESIZE_ERASE_MAX_EXTRA = 4
-
-
-def inflate_resize_erase_y(
-    logical_y: int,
-    *,
-    rows: int,
-    live_cap: int | None = None,
-) -> int:
-    """Return erase origin Y: a little above logical height, inside the live cap."""
-    if logical_y <= 0:
-        return logical_y
-    inflated = logical_y + _RESIZE_ERASE_MAX_EXTRA
-    if live_cap is not None and live_cap > 0:
-        inflated = min(inflated, live_cap)
-    ceiling = max(1, rows) - 1
-    return min(ceiling, inflated)
+# Soft-wrap headroom above preferred Auto + composer. Keep tiny — blank Screen
+# rows below the composer become a hollow band and invite ghost stacking.
+_LIVE_REGION_HEIGHT_PAD = 1
+# Absolute ceiling; never paint a live Screen taller than this.
+_LIVE_REGION_HARD_MAX = 12
 
 
-def clamp_live_region_min_height(renderer: Any, layout: Layout, *, columns: int, rows: int) -> int:
-    """Cap ``_min_available_height`` so the Screen does not fill the terminal.
+def live_region_height_cap(preferred: int) -> int:
+    """Return the max Screen height allowed for the live prompt region."""
+    return min(max(preferred, 1) + _LIVE_REGION_HEIGHT_PAD, _LIVE_REGION_HARD_MAX)
 
-    Returns the cap applied (preferred + pad), for tests.
+
+def prepare_live_region_height(renderer: Any, layout: Layout, *, columns: int, rows: int) -> int:
+    """Force CPR / last-screen budgets down so height tracks preferred chrome.
+
+    Returns the live-region cap applied (for tests).
     """
     preferred = layout.container.preferred_height(columns, rows).preferred
-    cap = max(preferred, 1) + _LIVE_REGION_HEIGHT_PAD
-    current = int(getattr(renderer, "_min_available_height", 0) or 0)
-    if current > cap:
-        renderer._min_available_height = cap
+    cap = live_region_height_cap(preferred)
+    renderer._min_available_height = 0
+    last = getattr(renderer, "_last_screen", None)
+    if last is not None and int(getattr(last, "height", 0) or 0) > cap:
+        renderer._last_screen = None
     return cap
 
 
-def _live_erase_cap(renderer: Any) -> int | None:
-    """Max rows erase may climb — last live Screen height plus soft-wrap pad."""
-    last = getattr(renderer, "_last_screen", None)
-    if last is None:
-        return None
-    height = int(getattr(last, "height", 0) or 0)
-    if height <= 0:
-        return None
-    return height + _RESIZE_ERASE_MAX_EXTRA
+# Back-compat name used by older tests / imports.
+clamp_live_region_min_height = prepare_live_region_height
 
 
-def install_shrink_resize_guard(app: Application[Any]) -> None:
-    """Install height + erase + autowrap guards for banner-safe resize."""
+def _size_changed(previous: Size | None, current: Size) -> bool:
+    if previous is None:
+        return False
+    return previous.rows != current.rows or previous.columns != current.columns
+
+
+def install_shrink_resize_guard(
+    app: Application[Any],
+    *,
+    rerender_banner: Callable[[], None] | None = None,
+) -> None:
+    """Install height + resize chrome guards for banner-safe layout.
+
+    ``rerender_banner`` clears the viewport and reprints the static launch
+    banner at the new size. When provided, resize skips prompt-toolkit's
+    partial erase (which stacks Auto/composer ghosts) and redraws the live
+    region from the cursor below the fresh banner.
+    """
     output = app.output
     renderer = app.renderer
     original_on_resize = app._on_resize
     original_render = renderer.render
+    original_report = renderer.report_absolute_cursor_row
+
+    def report_absolute_cursor_row(row: int) -> None:
+        original_report(row)
+        renderer._min_available_height = 0
 
     def _render(pt_app: Any, layout: Layout, is_done: bool = False) -> None:
         size = output.get_size()
-        clamp_live_region_min_height(
+        if _size_changed(getattr(renderer, "_last_size", None), size):
+            renderer._last_screen = None
+            renderer._min_available_height = 0
+        prepare_live_region_height(
             renderer,
             layout,
             columns=size.columns,
             rows=size.rows,
         )
         original_render(pt_app, layout, is_done)
-        # prompt_toolkit re-enables autowrap after non-fullscreen paints so
-        # background threads can wrap. That leaves the idle composer wrap-on,
-        # so a column shrink soft-wraps Ready/Auto into ghost rows. Disable
-        # again; ``patch_prompt_stdout`` still calls ``enable_autowrap`` for
-        # each background write.
         output.disable_autowrap()
 
     def _on_resize() -> None:
         output.disable_autowrap()
-        pos = renderer._cursor_pos
-        if pos is not None and pos.y > 0:
-            size = output.get_size()
-            inflated_y = inflate_resize_erase_y(
-                pos.y,
-                rows=size.rows,
-                live_cap=_live_erase_cap(renderer),
-            )
-            renderer._cursor_pos = type(pos)(x=pos.x, y=inflated_y)
+        renderer._min_available_height = 0
+        renderer._last_screen = None
+        if rerender_banner is not None:
+            # Full chrome reset: clear + static banner, then redraw the live
+            # region only. Do not call original erase — it leaves ghosts.
+            rerender_banner()
+            renderer.reset(leave_alternate_screen=False)
+            app._request_absolute_cursor_position()
+            app._redraw()
+            output.disable_autowrap()
+            return
         original_on_resize()
 
+    renderer.report_absolute_cursor_row = report_absolute_cursor_row  # type: ignore[method-assign]
     renderer.render = _render  # type: ignore[method-assign, assignment]
     app._on_resize = _on_resize  # type: ignore[method-assign]
     output.disable_autowrap()
@@ -116,6 +120,7 @@ def install_shrink_resize_guard(app: Application[Any]) -> None:
 
 __all__ = [
     "clamp_live_region_min_height",
-    "inflate_resize_erase_y",
     "install_shrink_resize_guard",
+    "live_region_height_cap",
+    "prepare_live_region_height",
 ]

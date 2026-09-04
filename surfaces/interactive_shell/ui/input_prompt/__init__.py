@@ -128,7 +128,15 @@ def _install_prompt_frame(
     # Replace the root instead of mutating ``root.children``: HSplit caches its
     # converted child containers, so an in-place list update would leave the
     # original unframed input active even though the object graph looks changed.
-    session.layout.container = HSplit([framed_input, *root.children[1:]])
+    #
+    # TOP — not the PromptSession default JUSTIFY. JUSTIFY + a tall Screen
+    # (CPR ``_min_available_height`` = rows-below-cursor) stretches the live
+    # region to the floor, scrolls the launch banner out of the viewport, and
+    # parks Auto/composer at the bottom of a hollow terminal.
+    session.layout.container = HSplit(
+        [framed_input, *root.children[1:]],
+        align=VerticalAlign.TOP,
+    )
     return session
 
 
