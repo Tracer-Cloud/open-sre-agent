@@ -12,7 +12,8 @@ from integrations.github import GitHubApiError, GitHubRestClient
 
 CI_HEALTH_SKILL_NAME = "github-ci-health"
 MAX_OPEN_PRS = 100
-_CHECK_PAGES_PER_SHA = 10
+MAX_CHECK_RUNS_PER_SHA = 1_000
+_CHECK_PAGES_FOR_TRUNCATION_DETECTION = 11
 _FAILED_CHECK_CONCLUSIONS = frozenset(
     {"action_required", "cancelled", "failure", "startup_failure", "timed_out"}
 )
@@ -106,15 +107,27 @@ def _failed_commit_statuses(payload: object) -> list[_Failure]:
 
 
 def _failures_for_sha(
-    client: GitHubRestClient, *, owner: str, repo: str, sha: str
+    client: GitHubRestClient,
+    *,
+    owner: str,
+    repo: str,
+    sha: str,
+    responsible: str,
+    coverage_notices: list[str],
 ) -> list[_Failure]:
     root = f"/repos/{_segment(owner)}/{_segment(repo)}/commits/{_segment(sha)}"
     check_runs = client.paginate(
         f"{root}/check-runs",
         params={"filter": "latest", "per_page": 100},
         collection_key="check_runs",
-        max_pages=_CHECK_PAGES_PER_SHA,
+        max_pages=_CHECK_PAGES_FOR_TRUNCATION_DETECTION,
     )
+    if len(check_runs) > MAX_CHECK_RUNS_PER_SHA:
+        coverage_notices.append(
+            "Coverage notice: check-run report limited to the first "
+            f"{MAX_CHECK_RUNS_PER_SHA} latest checks for {responsible}."
+        )
+        check_runs = check_runs[:MAX_CHECK_RUNS_PER_SHA]
     combined_status = client.request("GET", f"{root}/status")
     return [*_failed_check_runs(check_runs), *_failed_commit_statuses(combined_status)]
 
@@ -133,6 +146,7 @@ def _pull_request_report(
     repo: str,
     pr: dict[str, Any],
     now: datetime,
+    coverage_notices: list[str],
 ) -> list[str]:
     number = pr.get("number")
     if not isinstance(number, int):
@@ -143,8 +157,16 @@ def _pull_request_report(
     branch = _single_line(head.get("ref"), fallback="unknown branch")
     if not sha:
         raise RuntimeError(f"GitHub PR #{number} has no readable head SHA.")
-    failures = _failures_for_sha(client, owner=owner, repo=repo, sha=sha)
-    return _format_failures(failures, responsible=f"PR #{number} ({branch})", now=now)
+    responsible = f"PR #{number} ({branch})"
+    failures = _failures_for_sha(
+        client,
+        owner=owner,
+        repo=repo,
+        sha=sha,
+        responsible=responsible,
+        coverage_notices=coverage_notices,
+    )
+    return _format_failures(failures, responsible=responsible, now=now)
 
 
 def _single_pull_request_report(
@@ -154,12 +176,20 @@ def _single_pull_request_report(
     repo: str,
     pr_number: int,
     now: datetime,
+    coverage_notices: list[str],
 ) -> list[str]:
     path = f"/repos/{_segment(owner)}/{_segment(repo)}/pulls/{pr_number}"
     pr = client.request("GET", path)
     if not isinstance(pr, dict):
         raise RuntimeError(f"GitHub returned an invalid response for PR #{pr_number}.")
-    return _pull_request_report(client, owner=owner, repo=repo, pr=pr, now=now)
+    return _pull_request_report(
+        client,
+        owner=owner,
+        repo=repo,
+        pr=pr,
+        now=now,
+        coverage_notices=coverage_notices,
+    )
 
 
 def _branch_report(
@@ -169,6 +199,7 @@ def _branch_report(
     repo: str,
     branch: str,
     now: datetime,
+    coverage_notices: list[str],
 ) -> list[str]:
     path = f"/repos/{_segment(owner)}/{_segment(repo)}/branches/{_segment(branch)}"
     branch_payload = client.request("GET", path)
@@ -179,14 +210,26 @@ def _branch_report(
     sha = str(commit.get("sha") or "").strip()
     if not sha:
         raise RuntimeError(f"GitHub branch {branch!r} has no readable head SHA.")
-    failures = _failures_for_sha(client, owner=owner, repo=repo, sha=sha)
     responsible = f"branch {_single_line(branch, fallback='unknown')}"
+    failures = _failures_for_sha(
+        client,
+        owner=owner,
+        repo=repo,
+        sha=sha,
+        responsible=responsible,
+        coverage_notices=coverage_notices,
+    )
     return _format_failures(failures, responsible=responsible, now=now)
 
 
 def _repository_report(
-    client: GitHubRestClient, *, owner: str, repo: str, now: datetime
-) -> tuple[list[str], bool]:
+    client: GitHubRestClient,
+    *,
+    owner: str,
+    repo: str,
+    now: datetime,
+    coverage_notices: list[str],
+) -> list[str]:
     root = f"/repos/{_segment(owner)}/{_segment(repo)}"
     repository = client.request("GET", root)
     if not isinstance(repository, dict):
@@ -195,16 +238,35 @@ def _repository_report(
     if not default_branch:
         raise RuntimeError(f"GitHub repository {owner}/{repo} has no readable default branch.")
 
-    lines = _branch_report(client, owner=owner, repo=repo, branch=default_branch, now=now)
+    lines = _branch_report(
+        client,
+        owner=owner,
+        repo=repo,
+        branch=default_branch,
+        now=now,
+        coverage_notices=coverage_notices,
+    )
     pull_requests = client.paginate(
         f"{root}/pulls",
         params={"state": "open", "per_page": 100},
         max_pages=2,
     )
-    truncated = len(pull_requests) > MAX_OPEN_PRS
+    if len(pull_requests) > MAX_OPEN_PRS:
+        coverage_notices.append(
+            f"Coverage notice: report limited to the first {MAX_OPEN_PRS} open PRs."
+        )
     for pr in pull_requests[:MAX_OPEN_PRS]:
-        lines.extend(_pull_request_report(client, owner=owner, repo=repo, pr=pr, now=now))
-    return lines, truncated
+        lines.extend(
+            _pull_request_report(
+                client,
+                owner=owner,
+                repo=repo,
+                pr=pr,
+                now=now,
+                coverage_notices=coverage_notices,
+            )
+        )
+    return lines
 
 
 def run_github_ci_health(
@@ -229,31 +291,49 @@ def run_github_ci_health(
 
     github = client or GitHubRestClient()
     checked_at = now or datetime.now(UTC)
-    truncated = False
+    coverage_notices: list[str] = []
     try:
         if pr_number is not None:
             failures = _single_pull_request_report(
-                github, owner=owner, repo=repo, pr_number=pr_number, now=checked_at
+                github,
+                owner=owner,
+                repo=repo,
+                pr_number=pr_number,
+                now=checked_at,
+                coverage_notices=coverage_notices,
             )
             scope = f"PR #{pr_number}"
         elif branch:
-            failures = _branch_report(github, owner=owner, repo=repo, branch=branch, now=checked_at)
+            failures = _branch_report(
+                github,
+                owner=owner,
+                repo=repo,
+                branch=branch,
+                now=checked_at,
+                coverage_notices=coverage_notices,
+            )
             scope = f"branch {_single_line(branch, fallback='unknown')}"
         else:
-            failures, truncated = _repository_report(github, owner=owner, repo=repo, now=checked_at)
+            failures = _repository_report(
+                github,
+                owner=owner,
+                repo=repo,
+                now=checked_at,
+                coverage_notices=coverage_notices,
+            )
             scope = "default branch and open PRs"
     except GitHubApiError as exc:
         raise RuntimeError(f"GitHub CI health read failed for {owner}/{repo}: {exc}") from exc
 
     heading = f"GitHub CI health — {owner}/{repo} — {scope}"
-    notices = (
-        [f"Coverage notice: report limited to the first {MAX_OPEN_PRS} open PRs."]
-        if truncated
-        else []
-    )
     if not failures:
-        return "\n".join((heading, *notices, "No failing checks found."))
-    return "\n".join((heading, *notices, *failures, "", _REPAIR_HANDOFF))
+        return "\n".join((heading, *coverage_notices, "No failing checks found."))
+    return "\n".join((heading, *coverage_notices, *failures, "", _REPAIR_HANDOFF))
 
 
-__all__ = ["CI_HEALTH_SKILL_NAME", "MAX_OPEN_PRS", "run_github_ci_health"]
+__all__ = [
+    "CI_HEALTH_SKILL_NAME",
+    "MAX_CHECK_RUNS_PER_SHA",
+    "MAX_OPEN_PRS",
+    "run_github_ci_health",
+]

@@ -11,7 +11,11 @@ import pytest
 from core.agent_harness import pin_recurring_skill
 from infrastructure.scheduling.scheduler.store import add_task, list_tasks
 from infrastructure.scheduling.scheduler.types import Provider, ScheduledTask, TaskKind
-from integrations.github.ci_health_runner import MAX_OPEN_PRS, run_github_ci_health
+from integrations.github.ci_health_runner import (
+    MAX_CHECK_RUNS_PER_SHA,
+    MAX_OPEN_PRS,
+    run_github_ci_health,
+)
 
 
 class _FakeGitHubClient:
@@ -260,6 +264,20 @@ def test_repository_report_caps_open_pr_scan_and_discloses_coverage() -> None:
     assert f"limited to the first {MAX_OPEN_PRS} open PRs" in report
     checked_pr_shas = [path for _, path, _ in client.calls if "/check-runs" in path]
     assert len(checked_pr_shas) == MAX_OPEN_PRS + 1  # default branch plus bounded PRs
+
+
+def test_check_run_scan_detects_and_discloses_truncation() -> None:
+    checks = [
+        _check(f"check-{number}", f"https://github.test/{number}", conclusion="success")
+        for number in range(MAX_CHECK_RUNS_PER_SHA + 1)
+    ]
+    client = _FakeGitHubClient({"api": _repository(branch="main", sha="main-sha", checks=checks)})
+
+    report = run_github_ci_health({"owner": "acme", "repo": "api", "branch": "main"}, client=client)
+
+    assert f"limited to the first {MAX_CHECK_RUNS_PER_SHA} latest checks" in report
+    assert "branch main" in report
+    assert "No failing checks found" in report
 
 
 def test_scope_path_segments_are_encoded() -> None:

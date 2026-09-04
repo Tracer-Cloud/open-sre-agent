@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-from types import SimpleNamespace
-
 import pytest
 
 from core.agent_harness import AgentSession, pin_recurring_skill
@@ -60,23 +58,22 @@ def test_unattended_run_allows_read_only_tools_only() -> None:
     )
 
 
-def test_github_ci_health_skill_is_resolved_prefetched_and_run_unattended(
+def test_github_ci_health_skill_returns_complete_prefetched_report_without_agent_truncation(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     skill_name, revision = pin_recurring_skill("github-ci-health")
     prefetched: list[tuple[str, dict[str, str]]] = []
-    headless_calls: list[tuple[str, dict[str, object]]] = []
+    complete_report = "GitHub CI health — acme/api\n" + ("failure detail\n" * 100)
 
     def fake_prefetch(name: str, inputs: dict[str, str]) -> str:
         prefetched.append((name, inputs))
-        return "GitHub CI health — acme/api — branch main\nNo failing checks found."
+        return complete_report
 
-    def fake_headless(message: str, **kwargs: object) -> SimpleNamespace:
-        headless_calls.append((message, kwargs))
-        return SimpleNamespace(answered=True, primary_response_text="final CI report")
+    def fail_headless(*_args: object, **_kwargs: object) -> None:
+        raise AssertionError("deterministic CI reports must not pass through the action agent")
 
     monkeypatch.setattr(scheduled_skill_runner, "_prefetched_context", fake_prefetch)
-    monkeypatch.setattr(AgentSession, "run_headless_turn", fake_headless)
+    monkeypatch.setattr(AgentSession, "run_headless_turn", fail_headless)
 
     report = scheduled_skill_runner.run_scheduled_recurring_skill(
         {
@@ -86,10 +83,6 @@ def test_github_ci_health_skill_is_resolved_prefetched_and_run_unattended(
         }
     )
 
-    assert report == "final CI report"
+    assert len(report) > 512
+    assert report == complete_report
     assert prefetched == [("github-ci-health", {"owner": "acme", "repo": "api", "branch": "main"})]
-    message, kwargs = headless_calls[0]
-    assert "Skill: github-ci-health" in message
-    assert "GitHub CI health — acme/api" in message
-    assert "Never call `fix_github_pr_ci`" in message
-    assert kwargs["unattended"] is True

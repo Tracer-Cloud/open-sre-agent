@@ -50,6 +50,11 @@ def run_scheduled_recurring_skill(payload: AgentPayload) -> str:
         input_block = f"\nValidated inputs:\n{rendered}\n"
     typed_inputs = {str(key): str(value) for key, value in inputs.items()}
     fetch_block = _prefetched_context(resolved.name, typed_inputs)
+    if resolved.name == "github-ci-health":
+        # The prefetcher renders the complete final report. Returning it
+        # directly preserves every scoped failure instead of sending it
+        # through the action agent's intentionally short message preview.
+        return fetch_block
     fetch_section = f"\n{fetch_block}\n" if fetch_block else ""
     message = (
         f"{_SCHEDULED_SKILL_INSTRUCTIONS}\n"
