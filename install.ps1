@@ -111,6 +111,11 @@ function Get-OpenSreFriendlyProgressLabel {
         return "fetching metadata"
     }
 
+    # More specific than ``*Preparing opensre*`` below (install warm-up step).
+    if ($Label -like "*first launch*") {
+        return "preparing first launch"
+    }
+
     if ($Label -like "*Preparing opensre*") {
         return "resolving build"
     }
@@ -938,6 +943,33 @@ function Get-OpenSreBinaryVersionInfo {
     }
 }
 
+function Invoke-OpenSreFirstLaunchWarmup {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$BinaryPath
+    )
+
+    # Windows Defender / Smart App Control often scan a freshly installed
+    # onedir tree on first execution. ``--version`` is a fast path and loads
+    # little of the bundle; ``_package-smoke`` imports the tool registry,
+    # verifiers and skills so that cost lands under the installer instead of
+    # the user's first real ``opensre``. (POSIX ``install.sh`` only warms on
+    # Darwin for codesign-cache reasons.) Best-effort: binary already passed
+    # ``--version``, so a smoke failure warns rather than aborts the install.
+    Write-OpenSreLine -Message "Preparing OpenSRE for first launch" -Color "Cyan"
+    try {
+        $null = & $BinaryPath _package-smoke 2>&1 | Out-Null
+        if ($LASTEXITCODE -eq 0) {
+            Write-OpenSreLine -Message "  OK Preparing OpenSRE for first launch" -Color "Green"
+            return
+        }
+    }
+    catch {
+        # Fall through to the warning below.
+    }
+    Write-Warning "First-launch warm-up did not complete; the first opensre may start slowly."
+}
+
 function Ensure-OpenSreGithubCli {
     # Soft dependency for github_cli chat tools. Never fails the OpenSRE install.
     if (Get-Command gh -ErrorAction SilentlyContinue) {
@@ -1124,6 +1156,8 @@ function Install-OpenSre {
         $binaryVersionText = [string]$verifiedBinary.VersionText
         $binaryVersion = [string]$verifiedBinary.Version
         $version = [string]$verifiedBinary.InstallVersion
+
+        Invoke-OpenSreFirstLaunchWarmup -BinaryPath $binaryPath
 
         Invoke-OpenSreStep -Name "[6/6] Installing binary" -Detail (Join-Path $installDir $binaryName) -Operation {
             New-Item -ItemType Directory -Force -Path $installDir | Out-Null

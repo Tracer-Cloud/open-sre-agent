@@ -28,6 +28,7 @@ def test_install_ps1_defines_branded_progress_helpers() -> None:
         "function Get-OpenSreProgressFrame",
         "function New-OpenSreProgressBar",
         "function Invoke-OpenSreStep",
+        "function Invoke-OpenSreFirstLaunchWarmup",
         "function Invoke-OpenSreDownloadFileWithProgress",
     ):
         assert helper in source

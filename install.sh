@@ -633,6 +633,10 @@ prepare_and_verify_binary() {
 warm_first_launch() {
   local binary_path="$1"
 
+  # Codesign-cache warm-up is Darwin-only; Linux/Windows have no equivalent
+  # and would otherwise pay for a full registry/verifier/skills import.
+  [ "$(uname -s 2>/dev/null || true)" = "Darwin" ] || return 0
+
   # macOS validates the code signature of every Mach-O image on its first
   # dlopen and caches the result. The re-sign above resets that cache for all
   # ~300 bundled libs, and ``--version`` (the fast path) loads only a few of

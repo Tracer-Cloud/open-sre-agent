@@ -551,6 +551,7 @@ RULES: tuple[PathRule, ...] = (
     ),
     PathRule("infrastructure/safety/guardrails/", ("tests/infrastructure/safety/guardrails/",)),
     PathRule("infrastructure/safety/masking/", ("tests/masking/",)),
+    PathRule("opensre.spec", ("tests/packaging/",)),
     PathRule("infrastructure/deployment/packaging/", ("tests/packaging/",)),
     PathRule("infrastructure/safety/sandbox/", ("tests/sandbox/",)),
     PathRule(

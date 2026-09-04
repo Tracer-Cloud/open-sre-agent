@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import sys
 
 import click
 
@@ -38,6 +39,17 @@ def package_smoke_command() -> None:
     from integrations._verifiers_loader import register_all_verifiers
     from integrations.verification import list_verifiers
     from tools.registry import get_registered_tool_map
+    from tools.registry_index import BAKED_INDEX_RELATIVE_PATH, baked_index_available
+
+    # Frozen builds silently fall back to importing every vendor module when
+    # the bake is missing. Fail before the slow path so release smoke cannot
+    # pass on an artifact that restored the first-turn delay.
+    frozen = bool(getattr(sys, "frozen", False))
+    if frozen and not baked_index_available():
+        baked_failures = {"missing_baked_descriptor_index": [BAKED_INDEX_RELATIVE_PATH.as_posix()]}
+        raise click.ClickException(
+            f"PyInstaller package smoke failed: {json.dumps(baked_failures)}"
+        )
 
     register_all_verifiers()
     tool_map = get_registered_tool_map()
@@ -70,17 +82,15 @@ def package_smoke_command() -> None:
     if any(failures.values()):
         raise click.ClickException(f"PyInstaller package smoke failed: {json.dumps(failures)}")
 
-    click.echo(
-        json.dumps(
-            {
-                "action_skills": len(action_skill_names),
-                "integration_verifiers": len(integration_verifier_names),
-                "registered_tools": len(tool_names),
-                "status": "ok",
-            },
-            sort_keys=True,
-        )
-    )
+    payload: dict[str, object] = {
+        "action_skills": len(action_skill_names),
+        "integration_verifiers": len(integration_verifier_names),
+        "registered_tools": len(tool_names),
+        "status": "ok",
+    }
+    if frozen:
+        payload["baked_descriptor_index"] = True
+    click.echo(json.dumps(payload, sort_keys=True))
 
 
 __all__ = ["package_smoke_command"]

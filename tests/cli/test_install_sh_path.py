@@ -570,3 +570,37 @@ def test_ensure_github_cli_respects_skip_env(tmp_path: Path) -> None:
     assert result.returncode == 0, result.stderr
     assert "OPENSRE_SKIP_GH_INSTALL" in result.stderr
     assert "OpenSRE GitHub chat tools" in result.stderr
+
+
+def test_warm_first_launch_skips_package_smoke_off_darwin() -> None:
+    """Linux/Windows have no codesign cache; the installer must not pay for smoke."""
+    result = _run_logging_snippet(
+        """
+        uname() { printf 'Linux\\n'; }
+        package_smoke_quiet() { printf 'SMOKE_RAN\\n'; return 0; }
+        BIN_NAME=opensre
+        warm_first_launch /tmp/opensre
+        printf 'done\\n'
+        """
+    )
+
+    assert result.returncode == 0, result.stderr
+    combined = result.stdout + result.stderr
+    assert "SMOKE_RAN" not in combined
+    assert "Preparing OpenSRE for first launch" not in combined
+    assert "done" in result.stdout
+
+
+def test_warm_first_launch_runs_package_smoke_on_darwin() -> None:
+    result = _run_logging_snippet(
+        """
+        uname() { printf 'Darwin\\n'; }
+        package_smoke_quiet() { printf 'SMOKE_RAN\\n'; return 0; }
+        BIN_NAME=opensre
+        warm_first_launch /tmp/opensre
+        """
+    )
+
+    assert result.returncode == 0, result.stderr
+    assert "SMOKE_RAN" in result.stdout
+    assert "Preparing OpenSRE for first launch" in result.stderr

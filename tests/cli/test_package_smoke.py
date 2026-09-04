@@ -3,10 +3,14 @@
 from __future__ import annotations
 
 import json
+import sys
+from pathlib import Path
 
+import pytest
 from click.testing import CliRunner
 
 from surfaces.cli.app import cli
+from tools.registry_index import BAKED_INDEX_RELATIVE_PATH
 
 
 def test_package_smoke_finds_essential_tools_and_skills() -> None:
@@ -26,3 +30,17 @@ def test_package_smoke_command_is_hidden_from_help() -> None:
 
     assert result.exit_code == 0, result.output
     assert "_package-smoke" not in result.output
+
+
+def test_package_smoke_fails_when_frozen_bundle_lacks_baked_index(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Release smoke must not pass on a frozen artifact that fell back to the slow path."""
+    monkeypatch.setattr(sys, "frozen", True, raising=False)
+    monkeypatch.setattr(sys, "_MEIPASS", str(tmp_path), raising=False)
+
+    result = CliRunner().invoke(cli, ["_package-smoke"])
+
+    assert result.exit_code != 0, result.output
+    assert BAKED_INDEX_RELATIVE_PATH.as_posix() in result.output
+    assert "missing_baked_descriptor_index" in result.output

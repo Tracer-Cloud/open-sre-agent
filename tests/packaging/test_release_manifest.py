@@ -12,6 +12,7 @@ from infrastructure.deployment.packaging.release_manifest import (
     runtime_hidden_imports,
 )
 from tools.registry_discovery import INTEGRATION_TOOL_PACKAGES
+from tools.registry_index import BAKED_INDEX_RELATIVE_PATH
 
 _REPO_ROOT = Path(__file__).resolve().parents[2]
 _RELEASE_WORKFLOW = _REPO_ROOT / ".github" / "workflows" / "release.yml"
@@ -100,6 +101,22 @@ def test_release_build_uses_checked_in_spec() -> None:
     assert "OPENSRE_PYINSTALLER_MODE: ${{ matrix.pyinstaller_mode }}" in workflow
     assert "release_manifest.py" in spec
     assert "skill_data_entries(ROOT)" in spec
+
+
+def test_spec_bakes_the_descriptor_index_into_the_bundle() -> None:
+    """The frozen fallback imports every vendor module when this file is missing.
+
+    A unit test that writes the JSON into a fake ``_MEIPASS`` cannot catch a
+    spec that omits or misplaces it. Pin the PyInstaller data entry: dump at
+    build time, ship under ``BAKED_INDEX_RELATIVE_PATH.parent`` so the runtime
+    path ``sys._MEIPASS / tools / descriptor_index.json`` is what the bundle
+    actually contains.
+    """
+    spec = _SPEC_FILE.read_text(encoding="utf-8")
+
+    assert "dump_descriptor_index(_baked_index)" in spec
+    assert "datas.append((str(_baked_index), str(BAKED_INDEX_RELATIVE_PATH.parent)))" in spec
+    assert BAKED_INDEX_RELATIVE_PATH.as_posix() == "tools/descriptor_index.json"
 
 
 def test_release_workflow_does_not_run_on_pull_requests() -> None:

@@ -562,7 +562,7 @@ async def _open_github_mcp_session(config: GitHubMCPConfig) -> AsyncIterator[Cli
                     timeout=httpx.Timeout(config.timeout_seconds, read=read_timeout),
                 )
             )
-            transport_streams = await stack.enter_async_context(
+            read_stream, write_stream, _ = await stack.enter_async_context(
                 streamable_http_client(
                     session_url,
                     http_client=http_client,
@@ -571,12 +571,6 @@ async def _open_github_mcp_session(config: GitHubMCPConfig) -> AsyncIterator[Cli
                     sse_read_timeout=read_timeout,
                 )
             )
-            if len(transport_streams) not in {2, 3}:
-                raise ValueError(
-                    "GitHub MCP streamable HTTP transport returned an unexpected "
-                    f"stream count: {len(transport_streams)} (expected 2 or 3)."
-                )
-            read_stream, write_stream = transport_streams[:2]
         else:
             raise ValueError(
                 f"Unsupported GitHub MCP mode '{config.mode}'. "
