@@ -37,6 +37,8 @@ On Windows (PowerShell):
 irm https://install.opensre.com | iex
 ```
 
+Prebuilt Linux releases require glibc **2.35 or newer** (for example, Ubuntu 22.04+). The installer checks this before downloading. On older or non-glibc systems, install from source with `uv` or use Docker.
+
 You usually don't need `sudo`. The installer puts `opensre` somewhere already on your PATH when it can. If it can't, it uses `~/.local/bin` and prints how to add that to PATH.
 
 **Auto setup:** In a normal interactive terminal, install often starts `opensre setup` when it finishes. In CI or scripts it skips that. To turn auto-setup off:
