@@ -180,8 +180,6 @@ def test_run_repl_clears_screen_before_painting_banner(monkeypatch: Any) -> None
     assert cleared == [True]
     assert finishers and finishers[0] is not None
     assert painted == [True]
-    # Clear happens on the sync entrypoint before the async finisher paints.
-    assert cleared[0] is True
 
 
 def test_run_repl_skips_the_launch_banner_when_the_gate_paints_it(monkeypatch: Any) -> None:

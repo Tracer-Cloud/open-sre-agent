@@ -503,8 +503,9 @@ class ActionRenderObserver:
         if is_plan_diagnosis_prose(content):
             return
         self.console.print()
-        # Intermediate narration is a working note: dim + indented, no glyph, so
-        # it reads apart from the recessed ``[n] ❯`` user row and bright ``Ω`` reply.
+        # Intermediate narration is a working note: recessed body + dim ``·`` in
+        # the same gutter column as ``Ω``, so it reads apart from the user row
+        # and the bright final reply without floating as unmarked prose.
         # ``render_note_block`` sanitizes model text at ``_build_markdown_block``.
         render_note_block(self.console, content)
 

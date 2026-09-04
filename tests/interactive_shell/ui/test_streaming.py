@@ -28,8 +28,8 @@ def _strip_ansi(text: str) -> str:
 
 
 def test_render_note_block_is_recessed_and_indented_but_keeps_bold() -> None:
-    # A working note reads as soft recessed grey + indented (no glyph), distinct
-    # from the bright reply, while the bold action word stays bold.
+    # A working note reads as soft recessed grey under a dim ``·`` gutter lead,
+    # distinct from the bright ``Ω`` reply, while the bold action word stays bold.
     from infrastructure.terminal import theme as ui_theme
 
     ui_theme.set_active_theme("amber")
@@ -51,7 +51,7 @@ def test_render_note_block_is_recessed_and_indented_but_keeps_bold() -> None:
     assert "38;2;" in raw or "38;5;" in raw
     assert re.search(r"\x1b\[[0-9;]*1[;m]", raw)  # bold action word survives
     first_line = _strip_ansi(raw).splitlines()[0]
-    assert first_line.startswith("   ")  # three-space left indent, no glyph
+    assert first_line.startswith("·  ")  # dim note marker in the Ω gutter column
     assert "load the workflow" in first_line
 
 

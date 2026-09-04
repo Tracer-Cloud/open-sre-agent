@@ -7,7 +7,6 @@ import sys
 from typing import TYPE_CHECKING
 
 from rich.console import Console
-from rich.padding import Padding
 from rich.table import Table
 from rich.text import Text
 
@@ -140,43 +139,58 @@ def render_markdown_block(console: Console, text: str) -> None:
 
 
 _REPLY_MARKER = "Ω"
+# Quiet lead for mid-turn narration — same gutter width as ``Ω``, so notes align
+# with replies the way Droid keeps one marker column on every agent line.
+_NOTE_MARKER = "·"
 
 
 def render_note_block(console: Console, text: str) -> None:
-    """Render intermediate agent narration as a dim, indented note.
+    """Render intermediate agent narration in the recessed note gutter.
 
     Distinct from the bright ``Ω`` reply and the recessed grey ``[n] ❯`` user
-    row: a note carries no glyph, only a dim left indent, so the three turn
-    roles — your ask, opensre's working notes, and its final reply — read apart.
-    Bold spans (the action words) stay bold within the dim base.
+    row: a note keeps a dim ``·`` lead (same column as ``Ω``) so it does not
+    float as unmarked white prose against Thinking chrome. Bold spans (the
+    action words) stay bold within the recessed base.
     """
     visible = strip_session_goal_progress_tags(text)
     if not visible.strip():
         return
     with console.use_theme(ui_theme.MARKDOWN_THEME):
         console.print(
-            Padding(_build_markdown_block(visible), (0, 0, 0, 3)),
+            reply_gutter(
+                _build_markdown_block(visible),
+                lead=True,
+                marker=_NOTE_MARKER,
+                marker_style=str(ui_theme.DIM),
+            ),
             style=str(ui_theme.SECONDARY),
         )
 
 
 def _reply_marker_style() -> str:
-    """Unbolded warm accent for the ``Ω`` reply marker."""
-    return ui_theme.reply_marker_hex()
+    """Bold warm accent for the ``Ω`` reply marker — same weight as ``⏺`` / Thinking."""
+    return ui_theme.reply_marker_style()
 
 
-def reply_gutter(body: RenderableType, *, lead: bool) -> Table:
+def reply_gutter(
+    body: RenderableType,
+    *,
+    lead: bool,
+    marker: str = _REPLY_MARKER,
+    marker_style: str | None = None,
+) -> Table:
     """Lay a reply renderable in a two-column gutter.
 
-    The first paragraph carries the ``Ω`` marker in the gutter; every other row
+    The first paragraph carries the lead marker in the gutter; every other row
     (wrapped lines and following paragraphs) sits in the same indented body
     column, so the whole reply reads as one block hanging under the marker.
     """
     grid = Table.grid(padding=0)
     grid.add_column(width=3, no_wrap=True)
     grid.add_column(overflow="fold")
-    marker = Text(f"{_REPLY_MARKER}  ", style=_reply_marker_style()) if lead else Text("   ")
-    grid.add_row(marker, body)
+    style = marker_style if marker_style is not None else _reply_marker_style()
+    lead_cell = Text(f"{marker}  ", style=style) if lead else Text("   ")
+    grid.add_row(lead_cell, body)
     return grid
 
 

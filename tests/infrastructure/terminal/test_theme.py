@@ -161,7 +161,7 @@ def test_reply_block_paints_orange_marker_and_themed_body() -> None:
         render_reply_block(console, "Hey! How can I help?")
     output = capture.get()
     assert "Ω" in output
-    assert _reply_marker_style() == get_theme("blue").HIGHLIGHT
+    assert _reply_marker_style() == f"bold {get_theme('blue').HIGHLIGHT}"
     # Marker follows the active theme's HIGHLIGHT (whatever the palette sets).
     highlight = get_theme("blue").HIGHLIGHT.lstrip("#")
     r, g, b = (int(highlight[i : i + 2], 16) for i in (0, 2, 4))

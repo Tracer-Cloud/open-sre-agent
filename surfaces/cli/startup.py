@@ -56,19 +56,26 @@ def _init_error_reporting(group: Any, argv: list[str], command: str) -> None:
     briefly absent mid-upgrade. Anywhere else its absence is a broken install and
     must surface.
     """
-    # Presence check stays synchronous so a missing SDK surfaces here (the
-    # ``update`` exemption above); the init itself (~0.3s: SDK setup plus the
-    # llm_cli exception classes it registers) runs on a thread so it never
-    # sits between the user and the prompt. An error raised in that window is
-    # the accepted trade for a launch that does not wait on telemetry.
-    if importlib.util.find_spec("sentry_sdk") is None:
-        if command != "update":
-            raise ModuleNotFoundError("No module named 'sentry_sdk'", name="sentry_sdk")
-        return
-
     from infrastructure.observability.errors.sentry import init_sentry
 
     entrypoint = sentry_entrypoint_for(group, argv)
+    if command:
+        # Subcommands keep the init synchronous: ``debug sentry`` sends an
+        # event right after boot and must find the SDK ready.
+        try:
+            init_sentry(entrypoint=entrypoint)
+        except ModuleNotFoundError as exc:
+            if exc.name != "sentry_sdk" or command != "update":
+                raise
+        return
+
+    # Bare ``opensre`` opens the shell. The init (~0.3s: SDK setup plus the
+    # llm_cli exception classes it registers) runs on a thread so it never sits
+    # between the user and the prompt; only the presence check stays in line so
+    # a broken install still surfaces here. An error raised in that window is
+    # the accepted trade for a launch that does not wait on telemetry.
+    if not _sentry_sdk_installed():
+        raise ModuleNotFoundError("No module named 'sentry_sdk'", name="sentry_sdk")
 
     def _init() -> None:
         try:
@@ -77,6 +84,15 @@ def _init_error_reporting(group: Any, argv: list[str], command: str) -> None:
             _LOG.debug("Sentry init failed; continuing without error reporting", exc_info=True)
 
     threading.Thread(target=_init, name="sentry-init", daemon=True).start()
+
+
+def _sentry_sdk_installed() -> bool:
+    """Whether ``sentry_sdk`` can be imported, without paying for the import."""
+    try:
+        return importlib.util.find_spec("sentry_sdk") is not None
+    except ValueError:
+        # Already in ``sys.modules`` without a spec (test doubles): present.
+        return True
 
 
 def run(group: Any, argv: list[str]) -> None:
