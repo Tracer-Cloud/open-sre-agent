@@ -994,7 +994,7 @@ check_linux_glibc_compatibility() {
     reported_version="$(getconf GNU_LIBC_VERSION 2>/dev/null || true)"
   fi
   if [ -z "$reported_version" ] && command -v ldd >/dev/null 2>&1; then
-    reported_version="$(ldd --version 2>&1 | sed -n '1s/.*\([0-9][0-9]*\.[0-9][0-9]*\).*/\1/p')"
+    reported_version="$(ldd --version 2>&1 || true)"
   fi
   detected_version="$(printf '%s\n' "$reported_version" | sed -n 's/.*\([0-9][0-9]*\.[0-9][0-9]*\).*/\1/p')"
 
