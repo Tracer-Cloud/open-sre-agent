@@ -70,9 +70,9 @@ LOOP_SUGGESTIONS: tuple[LoopSuggestion, ...] = (
         option=OPTION_CI_CD,
         label="CI/CD loop — weekdays 8:00 AM · watch pipelines, surface failing checks",
         prompt=(
-            "Check CI on the current repository's pull requests and fix any "
-            "failing checks, then set this up as a recurring weekday check at "
-            "8:00 AM."
+            "Report failing CI checks on the current repository's pull requests, "
+            "with links and an interactive repair handoff, then set this up as a "
+            "read-only recurring weekday check at 8:00 AM."
         ),
     ),
     LoopSuggestion(

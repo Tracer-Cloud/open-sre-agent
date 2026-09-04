@@ -6,9 +6,9 @@ description: "Cron-driven recurring reports to Telegram, Slack, Discord, Rocket.
 # Scheduled Deliveries
 
 OpenSRE can deliver recurring reports to messaging providers on a cron
-schedule. Use it for recurring prompt loops, GitHub PR standups, PostHog metric
-reports, and work-item reminders — delivered automatically without manual CLI
-runs.
+schedule. Use it for recurring prompt loops, repository-scoped GitHub CI health
+reports, GitHub PR standups, PostHog metric reports, and work-item reminders —
+delivered automatically without manual CLI runs.
 
 For human task reminders and proactive work check-ins, use `opensre work add
 --remind-at ...` or `opensre work schedule-checkin ...`. Those commands create
@@ -38,6 +38,12 @@ opensre cron add --kind manual_loop --cron "0 9 * * 1-5" \
 opensre cron add --kind github_pr_sweep --cron "0 9 * * 1-5" \
   --tz Europe/London --provider slack --chat-id C0123ABCD
 
+# Read-only CI health for one repository and branch → Slack
+opensre cron add --kind recurring_skill --skill github-ci-health \
+  --cron "0 8 * * 1-5" \
+  --tz Europe/London --provider slack --owner Tracer-Cloud --repo opensre \
+  --branch main
+
 # Local interactive-shell inbox delivery, useful for debugging
 opensre cron add --kind manual_loop --cron "0 9 * * 1-5" \
   --name "Local morning report" --provider interactive_shell
@@ -61,12 +67,17 @@ Create a new scheduled delivery task.
 | Option | Required | Description |
 |--------|----------|-------------|
 | `--name` | No | Human-readable loop name shown by `opensre cron list` and `/loops` |
-| `--kind` | Yes | Task kind: `manual_loop`, `github_pr_sweep`, `posthog_metric_report`, `work_item_reminder`, `work_item_checkin` |
+| `--kind` | Yes | Task kind: `manual_loop`, `recurring_skill`, `github_pr_sweep`, `posthog_metric_report`, `work_item_reminder`, `work_item_checkin` |
 | `--cron` | Yes | Cron expression (5 fields: minute hour day month day_of_week) |
 | `--tz` | No | IANA timezone (default: `UTC`). Examples: `Europe/London`, `US/Eastern`, `Asia/Kolkata` |
 | `--provider` | Yes | Messaging provider: `telegram`, `slack`, `discord`, `rocketchat`, `interactive_shell` |
 | `--chat-id` | Cond. | Required for telegram/discord/rocketchat. Optional for slack when an incoming webhook or `SLACK_DEFAULT_CHAT_ID` is configured, and not needed for `interactive_shell`. |
 | `--window` | No | Lookback window in hours (default: `24`) |
+| `--skill` | Cond. | Required with `--kind recurring_skill`; names the revision-pinned skill to execute |
+| `--owner` | Cond. | GitHub repository owner; required for the `github-ci-health` recurring skill |
+| `--repo` | Cond. | GitHub repository name; required for the `github-ci-health` recurring skill |
+| `--branch` | No | Branch filter for `github-ci-health`; cannot be combined with `--pr` |
+| `--pr` | No | Pull-request filter for `github-ci-health`; cannot be combined with `--branch` |
 
 ### `opensre cron list`
 
@@ -162,6 +173,7 @@ from your existing integration configuration.
 | Kind | Behavior |
 |------|----------|
 | `manual_loop` | Runs a stored prompt as one headless agent turn and delivers the answer. This is what `/loops` creates. |
+| `recurring_skill` | Runs a named, revision-pinned recurring skill. `github-ci-health` produces a read-only failing-check report for one repository, optionally narrowed to a branch or PR, with links, age, ownership, and an interactive repair handoff. |
 | `github_pr_sweep` | Headless GitHub PR standup (mergeable / stale / conflicted). Requires GitHub configured; posts via the chosen provider. |
 | `posthog_metric_report` | Headless PostHog metric report over the configured window. Requires PostHog configured. |
 | `work_item_reminder` | Reminder for a single work item at its `--remind-at` time. Created by `opensre work add --remind-at …`. |

@@ -109,6 +109,10 @@ def execute_propose_scheduled_delivery_tool(
     chat_id = str(args.get("chat_id", "")).strip()
     briefing_text = str(args.get("briefing_text", "") or "").strip()
     skill_name = normalize_skill_name(str(args.get("skill_name", "") or ""))
+    owner = str(args.get("owner", "") or "").strip()
+    repo = str(args.get("repo", "") or "").strip()
+    branch = str(args.get("branch", "") or "").strip()
+    pr_number = str(args.get("pr_number", "") or "").strip()
 
     if kind not in _KIND_VALUES:
         return {
@@ -170,6 +174,30 @@ def execute_propose_scheduled_delivery_tool(
         if blocked is not None:
             return blocked
 
+    scope_supplied = bool(owner or repo or branch or pr_number)
+    skill_inputs: dict[str, str] = {}
+    if skill_name == "github-ci-health":
+        if not owner or not repo:
+            return {"ok": False, "error": "owner and repo are required for github-ci-health."}
+        if branch and pr_number:
+            return {"ok": False, "error": "Use either branch or pr_number, not both."}
+        if pr_number:
+            try:
+                if int(pr_number) < 1:
+                    raise ValueError
+            except ValueError:
+                return {"ok": False, "error": "pr_number must be a positive integer."}
+        skill_inputs = {"owner": owner, "repo": repo}
+        if branch:
+            skill_inputs["branch"] = branch
+        if pr_number:
+            skill_inputs["pr_number"] = pr_number
+    elif scope_supplied:
+        return {
+            "ok": False,
+            "error": "owner, repo, branch, and pr_number are only valid for github-ci-health.",
+        }
+
     offer = PendingScheduleOffer(
         kind=kind,
         cron=cron,
@@ -177,6 +205,7 @@ def execute_propose_scheduled_delivery_tool(
         provider=provider,
         chat_id=chat_id,
         skill_name=skill_name if kind == TaskKind.RECURRING_SKILL.value else "",
+        skill_inputs=skill_inputs,
     )
     ctx.session.pending_schedule_offer = offer
     clear_competing_pending_offers(ctx.session, keep_attr="pending_schedule_offer")
@@ -209,6 +238,10 @@ def run_propose_scheduled_delivery(
     chat_id: str = "",
     briefing_text: str = "",
     skill_name: str = "",
+    owner: str = "",
+    repo: str = "",
+    branch: str = "",
+    pr_number: str = "",
     context: Any,
 ) -> dict[str, Any]:
     return execute_with_action_context(
@@ -220,6 +253,10 @@ def run_propose_scheduled_delivery(
             "chat_id": chat_id,
             "briefing_text": briefing_text,
             "skill_name": skill_name,
+            "owner": owner,
+            "repo": repo,
+            "branch": branch,
+            "pr_number": pr_number,
         },
         context,
         execute_propose_scheduled_delivery_tool,
@@ -293,6 +330,18 @@ propose_scheduled_delivery_tool = RegisteredTool(
                     "Required for recurring_skill: the kebab-case action skill "
                     "to repeat (e.g. 'morning-report')."
                 ),
+            ),
+            "owner": string_property(
+                description="Repository owner required by the github-ci-health skill."
+            ),
+            "repo": string_property(
+                description="Repository name required by the github-ci-health skill."
+            ),
+            "branch": string_property(
+                description="Optional github-ci-health branch filter; mutually exclusive with pr_number."
+            ),
+            "pr_number": string_property(
+                description="Optional positive github-ci-health PR number; mutually exclusive with branch."
             ),
         },
         required=("kind", "cron", "provider"),

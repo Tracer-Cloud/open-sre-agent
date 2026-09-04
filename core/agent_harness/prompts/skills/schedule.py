@@ -100,13 +100,14 @@ def resolve_scheduled_skill(name: str, pinned_revision: str) -> ScheduledSkillRe
 
 def scheduled_skill_context_block(name: str, inputs: dict[str, str] | None) -> str:
     """Return extra unattended prompt context, or empty when the skill needs none."""
-    if normalize_skill_name(name) != "morning-report":
-        return ""
-    from core.agent_harness.prompts.skills.morning_report.fetch import (
-        format_fetched_briefing_inputs,
-    )
+    normalized = normalize_skill_name(name)
+    if normalized == "morning-report":
+        from core.agent_harness.prompts.skills.morning_report.fetch import (
+            format_fetched_briefing_inputs,
+        )
 
-    return format_fetched_briefing_inputs(inputs)
+        return format_fetched_briefing_inputs(inputs)
+    return ""
 
 
 def validate_skill_inputs(raw: dict[str, object] | None) -> dict[str, str]:

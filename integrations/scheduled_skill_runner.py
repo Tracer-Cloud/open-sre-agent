@@ -27,6 +27,15 @@ or change any external system.
 """
 
 
+def _prefetched_context(skill_name: str, inputs: dict[str, str]) -> str:
+    """Fetch integration-owned context without reversing core dependency direction."""
+    if skill_name == "github-ci-health":
+        from integrations.github.ci_health_runner import run_github_ci_health
+
+        return run_github_ci_health(inputs)
+    return scheduled_skill_context_block(skill_name, inputs)
+
+
 def run_scheduled_recurring_skill(payload: AgentPayload) -> str:
     """Run one headless turn for a pinned recurring skill and return report text."""
     resolved = resolve_scheduled_skill(
@@ -40,7 +49,7 @@ def run_scheduled_recurring_skill(payload: AgentPayload) -> str:
         rendered = "\n".join(f"- {key}: {value}" for key, value in sorted(inputs.items()))
         input_block = f"\nValidated inputs:\n{rendered}\n"
     typed_inputs = {str(key): str(value) for key, value in inputs.items()}
-    fetch_block = scheduled_skill_context_block(resolved.name, typed_inputs)
+    fetch_block = _prefetched_context(resolved.name, typed_inputs)
     fetch_section = f"\n{fetch_block}\n" if fetch_block else ""
     message = (
         f"{_SCHEDULED_SKILL_INSTRUCTIONS}\n"

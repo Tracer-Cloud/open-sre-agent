@@ -113,6 +113,29 @@ def test_paginate_follows_link_header(monkeypatch: pytest.MonkeyPatch) -> None:
     assert len(calls) == 2
 
 
+def test_paginate_supports_wrapped_collections(monkeypatch: pytest.MonkeyPatch) -> None:
+    calls: list[str] = []
+
+    def fake_urlopen(req: request.Request, timeout: int = 0) -> _Response:  # noqa: ARG001
+        calls.append(req.full_url)
+        if "page=2" in req.full_url:
+            return _Response({"check_runs": [{"id": 2}]}, headers={})
+        return _Response(
+            {"total_count": 2, "check_runs": [{"id": 1}]},
+            headers={
+                "Link": '<https://api.github.com/repos/o/r/commits/s/check-runs?page=2>; rel="next"'
+            },
+        )
+
+    monkeypatch.setattr("integrations.github.client.request.urlopen", fake_urlopen)
+    client = GitHubRestClient(github_token="tok")
+
+    assert client.paginate(
+        "/repos/o/r/commits/s/check-runs", collection_key="check_runs"
+    ) == [{"id": 1}, {"id": 2}]
+    assert len(calls) == 2
+
+
 def test_paginate_stops_at_max_pages(monkeypatch: pytest.MonkeyPatch) -> None:
     """Regression: paginate() followed every Link-header page with no cap, so
     an endpoint that returns the whole repository's history (e.g.

@@ -59,6 +59,21 @@ def test_selection_queues_the_canned_prompt(monkeypatch: pytest.MonkeyPatch) -> 
     assert "morning report" in session.terminal.pending_prompt_default
 
 
+def test_ci_suggestion_is_read_only(monkeypatch: pytest.MonkeyPatch) -> None:
+    _offerable(monkeypatch)
+    monkeypatch.setattr(
+        loop_suggestions, "repl_choose_one", lambda **_kw: loop_suggestions.OPTION_CI_CD
+    )
+    session = Session()
+
+    loop_suggestions.offer_loop_suggestions(session, None)
+
+    prompt = session.terminal.pending_prompt_default
+    assert "read-only" in prompt
+    assert "repair handoff" in prompt
+    assert "fix any failing checks" not in prompt
+
+
 def test_skip_queues_nothing(monkeypatch: pytest.MonkeyPatch) -> None:
     # Arrange
     _offerable(monkeypatch)

@@ -148,9 +148,12 @@ class GitHubRestClient:
         accept: str = "application/vnd.github+json",
         api_version: str = "2022-11-28",
         max_pages: int = _DEFAULT_PAGINATE_MAX_PAGES,
+        collection_key: str = "items",
     ) -> list[dict[str, Any]]:
         """Follow Link-header pagination, stopping after ``max_pages`` pages.
 
+        ``collection_key`` supports endpoints such as check-runs whose list is
+        wrapped in an object instead of returned as the top-level payload.
         Silently returns whatever was collected so far once the cap is hit,
         rather than raising -- callers on a bounded listing never reach the
         cap; callers on an unbounded one get a usable partial result instead
@@ -197,8 +200,7 @@ class GitHubRestClient:
             if isinstance(parsed, list):
                 items.extend(item for item in parsed if isinstance(item, dict))
             elif isinstance(parsed, dict):
-                # Search endpoints return objects with an items list.
-                raw_items = parsed.get("items")
+                raw_items = parsed.get(collection_key)
                 if isinstance(raw_items, list):
                     items.extend(item for item in raw_items if isinstance(item, dict))
             url = _next_link(headers)
