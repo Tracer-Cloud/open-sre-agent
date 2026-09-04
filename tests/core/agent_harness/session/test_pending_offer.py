@@ -155,6 +155,7 @@ def test_propose_tool_sets_session_pending_offer() -> None:
             "provider": "slack",
             "chat_id": "C0123ABCD",
             "briefing_text": briefing,
+            "city": "Amsterdam",
         },
         ctx,
     )
@@ -162,6 +163,7 @@ def test_propose_tool_sets_session_pending_offer() -> None:
     assert session.pending_schedule_offer is not None
     assert session.pending_schedule_offer.kind == "recurring_skill"
     assert session.pending_schedule_offer.skill_name == "morning-report"
+    assert session.pending_schedule_offer.skill_inputs == {"city": "Amsterdam"}
     assert result["closer"].startswith("**Want me to:**")
     assert "Weather — Amsterdam" in result["response_text"]
     assert result["closer"] in result["response_text"]

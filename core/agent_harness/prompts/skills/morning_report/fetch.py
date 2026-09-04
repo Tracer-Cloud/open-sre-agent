@@ -12,6 +12,7 @@ _HEADLINES_URL = "https://feeds.bbci.co.uk/news/rss.xml"
 _TIMEOUT_SECONDS = 10
 _USER_AGENT = "OpenSRE-scheduled-morning-report/1.0"
 _MAX_HEADLINES = 8
+_MAX_RESPONSE_BYTES = 256 * 1024
 
 
 def format_fetched_briefing_inputs(inputs: dict[str, str] | None) -> str:
@@ -41,6 +42,9 @@ def fetch_weather(city: str = "") -> str:
 def fetch_headlines() -> list[str]:
     """Return up to eight BBC RSS item titles (channel title excluded)."""
     xml = _get(_HEADLINES_URL)
+    lowered = xml.lower()
+    if "<!doctype" in lowered or "<!entity" in lowered:
+        raise RuntimeError("Morning-report headlines XML contains a forbidden DTD or entity.")
     try:
         root = ElementTree.fromstring(xml)
     except ElementTree.ParseError as exc:
@@ -62,7 +66,11 @@ def _get(url: str) -> str:
     request = urllib.request.Request(url, headers={"User-Agent": _USER_AGENT})
     try:
         with urllib.request.urlopen(request, timeout=_TIMEOUT_SECONDS) as response:
-            payload = response.read()
+            payload = response.read(_MAX_RESPONSE_BYTES + 1)
+            if len(payload) > _MAX_RESPONSE_BYTES:
+                raise RuntimeError(
+                    f"Morning-report fetch exceeded {_MAX_RESPONSE_BYTES} bytes."
+                )
             return bytes(payload).decode("utf-8", errors="replace")
     except (urllib.error.URLError, TimeoutError, OSError) as exc:
         raise RuntimeError(f"Morning-report fetch failed for {url}: {type(exc).__name__}") from exc

@@ -103,6 +103,7 @@ Examples:
    skill_name morning-report.
    Example after Slack webhook delivery:
      → propose_scheduled_delivery(kind="recurring_skill", skill_name="morning-report",
+         city="<city used for the weather fetch>",
          cron="0 8 * * 1-5", timezone="UTC", provider="slack",
          briefing_text="<FULL composed weather + headlines briefing>")
      → show the tool's response_text (briefing + Want me to: …)

@@ -113,6 +113,7 @@ def execute_propose_scheduled_delivery_tool(
     repo = str(args.get("repo", "") or "").strip()
     branch = str(args.get("branch", "") or "").strip()
     pr_number = str(args.get("pr_number", "") or "").strip()
+    city = str(args.get("city", "") or "").strip()
 
     if kind not in _KIND_VALUES:
         return {
@@ -176,7 +177,10 @@ def execute_propose_scheduled_delivery_tool(
 
     scope_supplied = bool(owner or repo or branch or pr_number)
     skill_inputs: dict[str, str] = {}
-    if skill_name == "github-ci-health":
+    if skill_name == "morning-report":
+        if city:
+            skill_inputs["city"] = city
+    elif skill_name == "github-ci-health":
         if not owner or not repo:
             return {"ok": False, "error": "owner and repo are required for github-ci-health."}
         if branch and pr_number:
@@ -196,6 +200,11 @@ def execute_propose_scheduled_delivery_tool(
         return {
             "ok": False,
             "error": "owner, repo, branch, and pr_number are only valid for github-ci-health.",
+        }
+    elif city:
+        return {
+            "ok": False,
+            "error": "city is only valid for morning-report.",
         }
 
     offer = PendingScheduleOffer(
@@ -242,6 +251,7 @@ def run_propose_scheduled_delivery(
     repo: str = "",
     branch: str = "",
     pr_number: str = "",
+    city: str = "",
     context: Any,
 ) -> dict[str, Any]:
     return execute_with_action_context(
@@ -257,6 +267,7 @@ def run_propose_scheduled_delivery(
             "repo": repo,
             "branch": branch,
             "pr_number": pr_number,
+            "city": city,
         },
         context,
         execute_propose_scheduled_delivery_tool,
@@ -342,6 +353,12 @@ propose_scheduled_delivery_tool = RegisteredTool(
             ),
             "pr_number": string_property(
                 description="Optional positive github-ci-health PR number; mutually exclusive with branch."
+            ),
+            "city": string_property(
+                description=(
+                    "Optional city for the morning-report skill. Persisted so each "
+                    "scheduled tick fetches weather for the requested location."
+                ),
             ),
         },
         required=("kind", "cron", "provider"),
