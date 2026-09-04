@@ -14,110 +14,79 @@ Roots follow the active principal scope (``sessions_dir`` / ``get_memory_dir``).
 This is the object-store counterpart to a mounted org context root: same idea,
 different mechanism, because a laptop has no provisioned filesystem and the
 stores here write by atomic rename.
+
+Leaf modules are the source of truth. ``from infrastructure.filestorage import
+NAME`` still works; importing this package does not load the sync engine.
 """
 
 from __future__ import annotations
 
-from infrastructure.filestorage.config import (
-    RemoteSyncConfig,
-    load_remote_sync_config,
-    remote_sync_enabled,
-)
-from infrastructure.filestorage.contracts import ObjectStore, RemoteObject
-from infrastructure.filestorage.engine import (
-    SyncReport,
-    local_files,
-    pull,
-    push,
-    relative_key,
-    resolve_direction,
-    run_sync,
-)
-from infrastructure.filestorage.enums import (
-    BucketExposure,
-    BuiltInProvider,
-    RemoteSyncSubcommand,
-    SyncDirection,
-    SyncRootName,
-)
-from infrastructure.filestorage.errors import (
-    OrgScopeNotSupportedError,
-    RemoteSyncConfigError,
-    RemoteSyncError,
-    RemoteSyncUnavailableError,
-    UnsyncablePathError,
-)
-from infrastructure.filestorage.exclusions import (
-    NO_EXCLUSIONS,
-    ExclusionRules,
-    parse_exclusions,
-)
-from infrastructure.filestorage.exposure import PublicAccessStatus
-from infrastructure.filestorage.messages import (
-    DISABLED_HELP,
-    NO_EXCLUSIONS_HELP,
-    format_exclusion_lines,
-    format_exposure_line,
-    format_report_lines,
-    format_status_lines,
-    root_state,
-)
-from infrastructure.filestorage.operations import (
-    SyncRootStatus,
-    SyncStatus,
-    get_sync_status,
-    run_remote_sync,
-)
-from infrastructure.filestorage.providers import build_object_store, check_bucket_exposure
-from infrastructure.filestorage.syncable import (
-    SyncRoot,
-    is_syncable,
-    resolved_roots,
-    syncable_roots,
-)
+import importlib
+from typing import Any
 
-__all__ = [
-    "NO_EXCLUSIONS",
-    "NO_EXCLUSIONS_HELP",
-    "BucketExposure",
-    "ExclusionRules",
-    "OrgScopeNotSupportedError",
-    "PublicAccessStatus",
-    "format_exclusion_lines",
-    "format_exposure_line",
-    "format_status_lines",
-    "format_report_lines",
-    "DISABLED_HELP",
-    "BuiltInProvider",
-    "ObjectStore",
-    "RemoteObject",
-    "RemoteSyncConfig",
-    "RemoteSyncConfigError",
-    "RemoteSyncError",
-    "RemoteSyncSubcommand",
-    "RemoteSyncUnavailableError",
-    "SyncDirection",
-    "SyncReport",
-    "SyncRoot",
-    "SyncRootName",
-    "SyncRootStatus",
-    "SyncStatus",
-    "UnsyncablePathError",
-    "build_object_store",
-    "check_bucket_exposure",
-    "get_sync_status",
-    "is_syncable",
-    "load_remote_sync_config",
-    "local_files",
-    "parse_exclusions",
-    "pull",
-    "push",
-    "relative_key",
-    "remote_sync_enabled",
-    "resolve_direction",
-    "resolved_roots",
-    "root_state",
-    "run_remote_sync",
-    "run_sync",
-    "syncable_roots",
-]
+_EXPORTS: dict[str, str] = {
+    "NO_EXCLUSIONS": "exclusions",
+    "NO_EXCLUSIONS_HELP": "messages",
+    "BucketExposure": "enums",
+    "ExclusionRules": "exclusions",
+    "OrgScopeNotSupportedError": "errors",
+    "PublicAccessStatus": "exposure",
+    "format_exclusion_lines": "messages",
+    "format_exposure_line": "messages",
+    "format_status_lines": "messages",
+    "format_report_lines": "messages",
+    "DISABLED_HELP": "messages",
+    "BuiltInProvider": "enums",
+    "ObjectStore": "contracts",
+    "RemoteObject": "contracts",
+    "RemoteSyncConfig": "config",
+    "RemoteSyncConfigError": "errors",
+    "RemoteSyncError": "errors",
+    "RemoteSyncSubcommand": "enums",
+    "RemoteSyncUnavailableError": "errors",
+    "SyncDirection": "enums",
+    "SyncReport": "engine",
+    "SyncRoot": "syncable",
+    "SyncRootName": "enums",
+    "SyncRootStatus": "operations",
+    "SyncStatus": "operations",
+    "UnsyncablePathError": "errors",
+    "build_object_store": "providers",
+    "check_bucket_exposure": "providers",
+    "get_sync_status": "operations",
+    "is_syncable": "syncable",
+    "load_remote_sync_config": "config",
+    "local_files": "engine",
+    "parse_exclusions": "exclusions",
+    "pull": "engine",
+    "push": "engine",
+    "relative_key": "engine",
+    "remote_sync_enabled": "config",
+    "resolve_direction": "engine",
+    "resolved_roots": "syncable",
+    "root_state": "messages",
+    "run_remote_sync": "operations",
+    "run_sync": "engine",
+    "syncable_roots": "syncable",
+}
+
+__all__ = tuple(_EXPORTS)
+
+
+def __getattr__(name: str) -> Any:
+    """Load one leaf for a re-exported name, or a submodule by name."""
+    leaf = _EXPORTS.get(name)
+    if leaf is not None:
+        value = getattr(importlib.import_module(f"{__name__}.{leaf}"), name)
+        globals()[name] = value
+        return value
+    try:
+        value = importlib.import_module(f"{__name__}.{name}")
+    except ModuleNotFoundError as exc:
+        raise AttributeError(f"module {__name__!r} has no attribute {name!r}") from exc
+    globals()[name] = value
+    return value
+
+
+def __dir__() -> list[str]:
+    return sorted(set(globals()) | set(__all__) | set(_EXPORTS.values()))

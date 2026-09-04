@@ -244,3 +244,34 @@ def test_subcommand_help_still_loads_that_command(capsys: pytest.CaptureFixture[
     assert rc == 0
     assert "--allowed-tool" in out
     assert "dangerously-bypass-approvals" in out
+
+
+def test_ask_help_does_not_import_the_agent_harness() -> None:
+    """Ask help is the Click adapter; the harness loads when ask actually runs."""
+    probe = (
+        "import sys; from surfaces.cli.__main__ import main; main(['ask', '--help']); "
+        "heavy = [n for n in sys.modules if n.startswith('core.agent_harness')]; "
+        "print('HARNESS', ','.join(sorted(heavy)[:8]) or 'none')"
+    )
+    result = subprocess.run(
+        [sys.executable, "-c", probe],
+        capture_output=True,
+        text=True,
+        check=True,
+    )
+    assert "HARNESS none" in result.stdout, result.stdout + result.stderr
+
+
+def test_help_does_not_resolve_the_git_version() -> None:
+    """Root help must not read git / package metadata just to exist."""
+    probe = (
+        "import sys; from surfaces.cli.__main__ import main; main(['--help']); "
+        "print('BUILD_INFO', 'config.runtime_metadata.build_info' in sys.modules)"
+    )
+    result = subprocess.run(
+        [sys.executable, "-c", probe],
+        capture_output=True,
+        text=True,
+        check=True,
+    )
+    assert "BUILD_INFO False" in result.stdout, result.stdout + result.stderr

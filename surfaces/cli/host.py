@@ -10,14 +10,15 @@ from __future__ import annotations
 
 from collections.abc import Callable
 from dataclasses import dataclass
-from typing import Final
+from typing import TYPE_CHECKING, Final
 
 import click
 
-from config.repl_config import ReplConfig
+if TYPE_CHECKING:
+    from config.repl_config import ReplConfig
 
 #: ``(config, resume_session_id) -> exit code``.
-ShellLauncher = Callable[[ReplConfig, str | None], int]
+ShellLauncher = Callable[["ReplConfig", str | None], int]
 #: Runs the gateway attached to this terminal until it stops.
 GatewayForegroundRunner = Callable[[], None]
 

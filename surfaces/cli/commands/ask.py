@@ -1,22 +1,22 @@
-"""One-shot configured agent command."""
+"""One-shot configured agent command.
+
+This module is the Click adapter: options, prompt, and exit codes.
+The agent harness lives in :mod:`surfaces.cli.ask.service` and loads
+when the command runs, not when ``opensre ask --help`` prints usage.
+"""
 
 from __future__ import annotations
 
 import json
 import sys
+from typing import TYPE_CHECKING
 
 import click
 
 from infrastructure.process.runtime_flags import is_json_output
-from surfaces.cli.ask.approval import unknown_allowed_tools
-from surfaces.cli.ask.service import (
-    AskOutcome,
-    AskSignal,
-    AskStatus,
-    ask_signal_scope,
-    cancelled_outcome,
-    run_ask,
-)
+
+if TYPE_CHECKING:
+    from surfaces.cli.ask.service import AskOutcome
 
 
 def _resolve_prompt(value: str) -> str:
@@ -50,6 +50,8 @@ def _echo_answer(text: str) -> None:
 
 
 def _render_outcome(outcome: AskOutcome) -> None:
+    from surfaces.cli.ask.service import AskStatus
+
     if is_json_output():
         click.echo(json.dumps(outcome.as_dict(), ensure_ascii=False))
         return
@@ -84,11 +86,14 @@ def ask_command(
     dangerously_bypass_approvals: bool,
 ) -> None:
     """Run one configured OpenSRE agent request and exit."""
+    from surfaces.cli.ask import approval as ask_approval
+    from surfaces.cli.ask import service as ask_service
+
     if allowed_tools and dangerously_bypass_approvals:
         raise click.UsageError(
             "--allowed-tool cannot be combined with --dangerously-bypass-approvals."
         )
-    unknown = unknown_allowed_tools(allowed_tools)
+    unknown = ask_approval.unknown_allowed_tools(allowed_tools)
     if unknown:
         names = ", ".join(unknown)
         raise click.BadParameter(
@@ -96,14 +101,14 @@ def ask_command(
             param_hint="--allowed-tool",
         )
     try:
-        with ask_signal_scope():
-            outcome = run_ask(
+        with ask_service.ask_signal_scope():
+            outcome = ask_service.run_ask(
                 _resolve_prompt(prompt),
                 allowed_tools=allowed_tools,
                 bypass_approvals=dangerously_bypass_approvals,
             )
-    except AskSignal as exc:
-        outcome = cancelled_outcome(exc.signum)
+    except ask_service.AskSignal as exc:
+        outcome = ask_service.cancelled_outcome(exc.signum)
     _render_outcome(outcome)
     if outcome.exit_code:
         raise SystemExit(int(outcome.exit_code))

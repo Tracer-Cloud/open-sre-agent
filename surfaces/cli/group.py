@@ -22,31 +22,46 @@ from surfaces.cli.commands.command_specs import (
 _GetDefault = TypeVar("_GetDefault")
 
 
-class ThemeParamType(click.ParamType):
-    """Validate theme names without importing terminal UI dependencies at startup."""
+class LazyRichGroup(click.Group):
+    """Root CLI group: spec-table help, one command module per invocation."""
 
-    name = "theme"
+    _loaded_commands: dict[str, click.Command]
 
-    def _choices(self) -> tuple[str, ...]:
-        from infrastructure.terminal.theme import list_theme_names
+    def __init__(self, *args: Any, **kwargs: Any) -> None:
+        super().__init__(*args, **kwargs)
+        self._loaded_commands = {}
+        self.commands = LazyCommandsDict(self, self.commands)
 
-        return list_theme_names()
+    def list_commands(self, ctx: click.Context) -> list[str]:
+        del ctx
+        return [spec.name for spec in COMMAND_SPECS]
 
-    def convert(
-        self,
-        value: object,
-        param: click.Parameter | None,
-        ctx: click.Context | None,
-    ) -> str:
-        normalized = str(value).strip().lower()
-        choices = self._choices()
-        if normalized in choices:
-            return normalized
-        return self.fail(
-            f"{value!r} is not one of: {', '.join(choices)}.",
-            param,
-            ctx,
-        )
+    def get_command(self, ctx: click.Context, cmd_name: str) -> click.Command | None:
+        del ctx
+        loaded = self._loaded_commands.get(cmd_name)
+        if loaded is not None:
+            return loaded
+        spec = COMMAND_SPECS_BY_NAME.get(cmd_name)
+        if spec is None:
+            return None
+        command = load_command(spec)
+        self._loaded_commands[cmd_name] = command
+        # Set through ``dict`` so the lazy view's iteration/len overrides are
+        # bypassed; ``self.commands`` is a LazyCommandsDict (a dict subclass).
+        dict.__setitem__(cast("dict[str, click.Command]", self.commands), cmd_name, command)
+        return command
+
+    def format_help(self, ctx: click.Context, _formatter: click.HelpFormatter) -> None:
+        assert isinstance(ctx.command, click.Group)
+        from surfaces.cli.layout import render_help
+
+        render_help(ctx.command)
+
+    def help_command_rows(self) -> tuple[tuple[str, str], ...]:
+        """Visible commands for root help, without importing implementations."""
+        from surfaces.cli.commands.command_specs import visible_help_rows
+
+        return visible_help_rows()
 
 
 class LazyCommandsDict(dict[str, click.Command]):
@@ -109,43 +124,28 @@ class LazyCommandsDict(dict[str, click.Command]):
         return ((name, self[name]) for name in self)
 
 
-class LazyRichGroup(click.Group):
-    """Root CLI group: spec-table help, one command module per invocation."""
+class ThemeParamType(click.ParamType):
+    """Validate theme names without importing terminal UI dependencies at startup."""
 
-    _loaded_commands: dict[str, click.Command]
+    name = "theme"
 
-    def __init__(self, *args: Any, **kwargs: Any) -> None:
-        super().__init__(*args, **kwargs)
-        self._loaded_commands = {}
-        self.commands = LazyCommandsDict(self, self.commands)
+    def _choices(self) -> tuple[str, ...]:
+        from infrastructure.terminal.theme import list_theme_names
 
-    def list_commands(self, ctx: click.Context) -> list[str]:
-        del ctx
-        return [spec.name for spec in COMMAND_SPECS]
+        return list_theme_names()
 
-    def get_command(self, ctx: click.Context, cmd_name: str) -> click.Command | None:
-        del ctx
-        loaded = self._loaded_commands.get(cmd_name)
-        if loaded is not None:
-            return loaded
-        spec = COMMAND_SPECS_BY_NAME.get(cmd_name)
-        if spec is None:
-            return None
-        command = load_command(spec)
-        self._loaded_commands[cmd_name] = command
-        # Set through ``dict`` so the lazy view's iteration/len overrides are
-        # bypassed; ``self.commands`` is a LazyCommandsDict (a dict subclass).
-        dict.__setitem__(cast("dict[str, click.Command]", self.commands), cmd_name, command)
-        return command
-
-    def format_help(self, ctx: click.Context, _formatter: click.HelpFormatter) -> None:
-        assert isinstance(ctx.command, click.Group)
-        from surfaces.cli.layout import render_help
-
-        render_help(ctx.command)
-
-    def help_command_rows(self) -> tuple[tuple[str, str], ...]:
-        """Visible commands for root help, without importing implementations."""
-        from surfaces.cli.commands.command_specs import visible_help_rows
-
-        return visible_help_rows()
+    def convert(
+        self,
+        value: object,
+        param: click.Parameter | None,
+        ctx: click.Context | None,
+    ) -> str:
+        normalized = str(value).strip().lower()
+        choices = self._choices()
+        if normalized in choices:
+            return normalized
+        return self.fail(
+            f"{value!r} is not one of: {', '.join(choices)}.",
+            param,
+            ctx,
+        )

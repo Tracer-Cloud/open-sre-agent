@@ -1,10 +1,49 @@
 from __future__ import annotations
 
+import subprocess
+import sys
 from pathlib import Path
 
 import pytest
 
 from config.constants import get_store_path
+
+
+def test_importing_a_leaf_does_not_load_unrelated_vendor_modules() -> None:
+    """``from config.constants.product import …`` must not import every vendor leaf.
+
+    The package used to re-export all names at import time, so any
+    ``config.constants.*`` load paid for kubernetes/aws/datadog constants
+    (and ``paths`` filesystem setup) before the CLI could print ``--help``.
+    """
+    probe = (
+        "from config.constants.product import RELEASE_STAGE_BANNER; "
+        "import sys; "
+        "leaves = sorted("
+        "n.rsplit('.', 1)[-1] for n in sys.modules "
+        "if n.startswith('config.constants.') and n != 'config.constants'"
+        "); "
+        "print('LEAVES', ','.join(leaves)); "
+        "print('BANNER', bool(RELEASE_STAGE_BANNER))"
+    )
+    result = subprocess.run(
+        [sys.executable, "-c", probe],
+        capture_output=True,
+        text=True,
+        check=True,
+    )
+    assert "BANNER True" in result.stdout, result.stdout + result.stderr
+    loaded = result.stdout.split("LEAVES ", 1)[1].splitlines()[0].split(",")
+    assert loaded == ["product"], result.stdout
+
+
+def test_package_root_still_re_exports_and_submodules() -> None:
+    from config import constants
+
+    assert constants.RELEASE_STAGE_BANNER.startswith("🚧 OpenSRE is in ")
+    assert constants.billing.ORGANIZATION_ID_ENV == "ORGANIZATION_ID"
+    with pytest.raises(AttributeError, match="has no attribute"):
+        _ = constants.not_a_real_constant
 
 
 def test_billing_env_var_names_are_the_infra_contract() -> None:

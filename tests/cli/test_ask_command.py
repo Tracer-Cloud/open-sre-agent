@@ -65,8 +65,8 @@ def test_ask_passes_prompt_and_invocation_authority(monkeypatch) -> None:
         captured.update(prompt=prompt, **kwargs)
         return _success()
 
-    monkeypatch.setattr("surfaces.cli.commands.ask.unknown_allowed_tools", lambda _v: ())
-    monkeypatch.setattr("surfaces.cli.commands.ask.run_ask", fake_run)
+    monkeypatch.setattr("surfaces.cli.ask.approval.unknown_allowed_tools", lambda _v: ())
+    monkeypatch.setattr("surfaces.cli.ask.service.run_ask", fake_run)
 
     result = CliRunner().invoke(
         ask_command,
@@ -89,8 +89,8 @@ def test_root_yes_does_not_bypass_ask_approvals(monkeypatch) -> None:
         captured.update(prompt=prompt, **kwargs)
         return _success()
 
-    monkeypatch.setattr("surfaces.cli.commands.ask.unknown_allowed_tools", lambda _v: ())
-    monkeypatch.setattr("surfaces.cli.commands.ask.run_ask", fake_run)
+    monkeypatch.setattr("surfaces.cli.ask.approval.unknown_allowed_tools", lambda _v: ())
+    monkeypatch.setattr("surfaces.cli.ask.service.run_ask", fake_run)
 
     result = CliRunner().invoke(cli, ["-y", "ask", "check latency"])
 
@@ -105,8 +105,8 @@ def test_ask_reads_prompt_from_stdin(monkeypatch) -> None:
         seen.append(prompt)
         return _success()
 
-    monkeypatch.setattr("surfaces.cli.commands.ask.unknown_allowed_tools", lambda _v: ())
-    monkeypatch.setattr("surfaces.cli.commands.ask.run_ask", fake_run)
+    monkeypatch.setattr("surfaces.cli.ask.approval.unknown_allowed_tools", lambda _v: ())
+    monkeypatch.setattr("surfaces.cli.ask.service.run_ask", fake_run)
 
     result = CliRunner().invoke(ask_command, ["-"], input="from stdin\n")
 
@@ -118,7 +118,7 @@ def test_ask_interrupt_while_reading_stdin_returns_signal_exit(monkeypatch) -> N
     def interrupt(_value: str) -> str:
         raise AskSignal(signal.SIGINT)
 
-    monkeypatch.setattr("surfaces.cli.commands.ask.unknown_allowed_tools", lambda _v: ())
+    monkeypatch.setattr("surfaces.cli.ask.approval.unknown_allowed_tools", lambda _v: ())
     monkeypatch.setattr("surfaces.cli.commands.ask._resolve_prompt", interrupt)
     monkeypatch.setattr("surfaces.cli.commands.ask.is_json_output", lambda: True)
 
@@ -129,7 +129,7 @@ def test_ask_interrupt_while_reading_stdin_returns_signal_exit(monkeypatch) -> N
 
 
 def test_ask_rejects_empty_prompt(monkeypatch) -> None:
-    monkeypatch.setattr("surfaces.cli.commands.ask.unknown_allowed_tools", lambda _v: ())
+    monkeypatch.setattr("surfaces.cli.ask.approval.unknown_allowed_tools", lambda _v: ())
 
     result = CliRunner().invoke(ask_command, ["-"], input="  \n")
 
@@ -138,7 +138,7 @@ def test_ask_rejects_empty_prompt(monkeypatch) -> None:
 
 
 def test_ask_rejects_conflicting_approval_options(monkeypatch) -> None:
-    monkeypatch.setattr("surfaces.cli.commands.ask.unknown_allowed_tools", lambda _v: ())
+    monkeypatch.setattr("surfaces.cli.ask.approval.unknown_allowed_tools", lambda _v: ())
 
     result = CliRunner().invoke(
         ask_command,
@@ -158,10 +158,10 @@ def test_ask_rejects_unknown_allowed_tool_before_execution(monkeypatch) -> None:
         return _success()
 
     monkeypatch.setattr(
-        "surfaces.cli.commands.ask.unknown_allowed_tools",
+        "surfaces.cli.ask.approval.unknown_allowed_tools",
         lambda _v: ("typo",),
     )
-    monkeypatch.setattr("surfaces.cli.commands.ask.run_ask", fake_run)
+    monkeypatch.setattr("surfaces.cli.ask.service.run_ask", fake_run)
 
     result = CliRunner().invoke(ask_command, ["prompt", "--allowed-tool", "typo"])
 
@@ -177,8 +177,8 @@ def test_ask_json_output_is_one_stable_document(monkeypatch) -> None:
         error=AskError(message="failed", suggestion="retry"),
         exit_code=AskExitCode.ERROR,
     )
-    monkeypatch.setattr("surfaces.cli.commands.ask.unknown_allowed_tools", lambda _v: ())
-    monkeypatch.setattr("surfaces.cli.commands.ask.run_ask", lambda *_a, **_kw: outcome)
+    monkeypatch.setattr("surfaces.cli.ask.approval.unknown_allowed_tools", lambda _v: ())
+    monkeypatch.setattr("surfaces.cli.ask.service.run_ask", lambda *_a, **_kw: outcome)
     monkeypatch.setattr("surfaces.cli.commands.ask.is_json_output", lambda: True)
 
     result = CliRunner().invoke(ask_command, ["prompt"])
