@@ -27,6 +27,21 @@ def test_hidden_imports_cover_runtime_discovered_tool_packages() -> None:
     assert "tools.system.work_items.tool" in hidden_imports
 
 
+def test_hidden_imports_cover_lazy_cli_command_modules() -> None:
+    """CLI commands load via importlib from COMMAND_SPECS; freeze must list them.
+
+    Without this, ``opensre _package-smoke`` (and every other top-level command)
+    fails in the PyInstaller binary with ModuleNotFoundError before Click runs.
+    """
+    from surfaces.cli.commands.command_specs import COMMAND_SPECS
+
+    hidden_imports = set(runtime_hidden_imports(_REPO_ROOT))
+    command_modules = {spec.import_path.split(":", 1)[0] for spec in COMMAND_SPECS}
+
+    assert command_modules <= hidden_imports
+    assert "surfaces.cli.commands.package_smoke" in hidden_imports
+
+
 def test_hidden_imports_exclude_non_runtime_discovery_modules() -> None:
     hidden_imports = set(runtime_hidden_imports(_REPO_ROOT))
 

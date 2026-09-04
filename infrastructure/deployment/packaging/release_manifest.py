@@ -6,6 +6,10 @@ from pathlib import Path
 
 _RUNTIME_PACKAGE_NAMES = (
     "integrations",
+    # Lazy-loaded via ``COMMAND_SPECS`` / ``importlib`` — Analysis cannot see
+    # these edges, so the frozen binary must list every command module here
+    # (including hidden ``_package-smoke`` for release artifact checks).
+    "surfaces.cli.commands",
     "surfaces.interactive_shell",
     "tools",
 )
