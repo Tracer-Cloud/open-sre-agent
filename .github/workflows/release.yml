@@ -439,6 +439,14 @@ jobs:
             echo "LiteLLM package data missing from Unix onedir bundle: ${LITELLM_DATA}" >&2
             exit 1
           fi
+          # Baked tool index: without this file the frozen binary imports every
+          # vendor module on the first turn. _package-smoke fail-closed covers
+          # onefile (Windows); onedir can also assert the path on disk.
+          BAKED_INDEX="./dist/opensre/_internal/tools/descriptor_index.json"
+          if [ ! -f "$BAKED_INDEX" ]; then
+            echo "Baked descriptor index missing from Unix onedir bundle: ${BAKED_INDEX}" >&2
+            exit 1
+          fi
 
       - name: Check Linux binary glibc compatibility
         if: runner.os == 'Linux'

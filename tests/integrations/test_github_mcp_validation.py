@@ -1055,3 +1055,51 @@ def test_github_integration_is_configured_true_when_store_has_token(
     monkeypatch.setattr(github_mcp_module, "github_mcp_config_from_env", lambda: None)
 
     assert github_mcp_module.github_integration_is_configured() is True
+
+
+@pytest.mark.asyncio
+async def test_open_session_accepts_legacy_two_stream_transport(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Older streamable-HTTP clients yield ``(read, write)`` only."""
+    read, write = object(), object()
+    opened: list[object] = []
+
+    @asynccontextmanager
+    async def _two_stream_client(*_args: Any, **_kwargs: Any):
+        yield (read, write)
+
+    class _HttpClient:
+        def __init__(self, *_args: Any, **_kwargs: Any) -> None:
+            return None
+
+        async def __aenter__(self) -> _HttpClient:
+            return self
+
+        async def __aexit__(self, *_exc: object) -> None:
+            return None
+
+    class _Session:
+        def __init__(self, read_stream: Any, write_stream: Any) -> None:
+            assert read_stream is read
+            assert write_stream is write
+            opened.append(self)
+            self.initialize = AsyncMock()
+
+        async def __aenter__(self) -> _Session:
+            return self
+
+        async def __aexit__(self, *_exc: object) -> None:
+            return None
+
+    monkeypatch.setattr(github_mcp_module, "streamable_http_client", _two_stream_client)
+    monkeypatch.setattr(github_mcp_module.httpx, "AsyncClient", _HttpClient)
+    monkeypatch.setattr("mcp.client.session.ClientSession", _Session)
+
+    config = github_mcp_module.GitHubMCPConfig(
+        url="https://mcp.example.test/mcp",
+        mode="streamable-http",
+    )
+    async with github_mcp_module._open_github_mcp_session(config) as session:
+        assert session is opened[0]
+        session.initialize.assert_awaited_once()

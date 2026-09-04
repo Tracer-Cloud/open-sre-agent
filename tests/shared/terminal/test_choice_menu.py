@@ -65,11 +65,34 @@ def test_draw_menu_letter_keys_labels_options_alphabetically(monkeypatch) -> Non
     )
 
     plain = _ANSI_RE.sub("", out.getvalue())
+    # Section gap before the accent header so Ask User is not flush under
+    # Plan complete / reply text above.
+    assert plain.startswith("\r\n\r  Ask User")
+    assert "\r  Ask User\r\n\r  How should I select repos?" in plain
     assert "❯ (A) Local repos" in plain
     assert "(B) GitHub account" in plain
     assert "(C) Or type your own answer..." in plain
     assert "Enter/A-C Select" in plain
     assert "1." not in plain
+
+
+def test_draw_menu_without_header_stays_tight(monkeypatch) -> None:
+    """Slash pickers keep no blank above the title."""
+    out = io.StringIO()
+    monkeypatch.setattr(sys, "stdout", out)
+    monkeypatch.setattr(choice_menu, "_cols", lambda: 80)
+
+    choice_menu._draw_menu(
+        title="integrations",
+        crumb="/integrations",
+        labels=["list"],
+        index=0,
+        erase_lines=0,
+    )
+
+    plain = _ANSI_RE.sub("", out.getvalue())
+    assert plain.startswith("\r  integrations")
+    assert not plain.startswith("\r\n\r  integrations")
 
 
 def test_pick_letter_key_selects_matching_option(monkeypatch) -> None:

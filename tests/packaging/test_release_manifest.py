@@ -114,9 +114,25 @@ def test_spec_bakes_the_descriptor_index_into_the_bundle() -> None:
     """
     spec = _SPEC_FILE.read_text(encoding="utf-8")
 
+    assert '_baked_index = ROOT / "build" / "baked" / BAKED_INDEX_RELATIVE_PATH' in spec
     assert "dump_descriptor_index(_baked_index)" in spec
     assert "datas.append((str(_baked_index), str(BAKED_INDEX_RELATIVE_PATH.parent)))" in spec
     assert BAKED_INDEX_RELATIVE_PATH.as_posix() == "tools/descriptor_index.json"
+
+
+def test_release_smoke_asserts_onedir_contains_the_baked_index() -> None:
+    """Unix onedir smoke must see the file on disk, not only via ``_package-smoke``.
+
+    A unit test that writes JSON into a fake ``_MEIPASS`` cannot catch a spec
+    that omits or misplaces the bake. ``_package-smoke`` fail-closed covers
+    onefile (Windows), where datas live inside the archive. Onedir can assert
+    the path PyInstaller materializes under ``_internal/``, same as LiteLLM.
+    """
+    workflow = _RELEASE_WORKFLOW.read_text(encoding="utf-8")
+    baked_onedir = f"./dist/opensre/_internal/{BAKED_INDEX_RELATIVE_PATH.as_posix()}"
+
+    assert baked_onedir in workflow
+    assert "_package-smoke" in workflow
 
 
 def test_release_workflow_parallelizes_macos_onedir_resign() -> None:

@@ -130,6 +130,11 @@ def test_baked_index_round_trips_and_serves_frozen_builds(
 
     Without it a frozen binary imports every vendor tool module (~1,900 extra
     modules) on the first turn; with it the surface-scoped load is intact.
+
+    This plants the JSON to exercise the load path only. The spec and release
+    onedir smoke own the "bundle actually ships the file" contract
+    (``test_spec_bakes_the_descriptor_index_into_the_bundle``,
+    ``test_release_smoke_asserts_onedir_contains_the_baked_index``).
     """
     from tools import registry_index as ri
     from tools.registry import _load_surface_snapshot, clear_tool_registry_cache

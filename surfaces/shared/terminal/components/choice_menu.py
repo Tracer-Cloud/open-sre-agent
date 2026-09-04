@@ -65,8 +65,11 @@ _SUBMIT = "Submit"
 _CHECKED = "[x]"
 _UNCHECKED = "[ ]"
 CRUMB_SEP = "  ›  "
-# Tight Droid-style panel: no blank line above the title.
+# Tight Droid-style panel: no blank line above slash-command titles.
 _MENU_LEADING_LINES = 0
+# Headered menus (Ask User) need one blank above so the accent header reads as
+# a new section after Plan complete / reply text, not a continuation line.
+_HEADER_SECTION_GAP = 1
 _TERMINAL_NEWLINE = "\r\n"
 MenuAction = Literal["up", "down", "enter", "cancel", "eof", "ignore"]
 
@@ -183,9 +186,10 @@ def _sanitize_menu(
 def _menu_height(
     crumb: str, labels: list[str], *, multi_select: bool = False, header: str = ""
 ) -> int:
-    # [header], title, [crumb], blank, choices, [Submit], blank, hint (airy)
+    # [gap], [header], title, [crumb], blank, choices, [Submit], blank, hint
     submit = 1 if multi_select else 0
-    lead = _MENU_LEADING_LINES + (1 if header else 0)
+    gap = _HEADER_SECTION_GAP if header else 0
+    lead = _MENU_LEADING_LINES + gap + (1 if header else 0)
     return lead + 1 + (1 if crumb else 0) + 1 + len(labels) + submit + 1 + 1
 
 
@@ -331,6 +335,8 @@ def _draw_menu(
     # title reads as the plain question below it; otherwise the title is the
     # accent header (slash-command pickers).
     if header:
+        for _ in range(_HEADER_SECTION_GAP):
+            write_menu_line()
         write_menu_line(
             f"{ui_theme.PROMPT_ACCENT_ANSI}{_clip_to_row(f'{_BLOCK_INDENT}{header}', w)}{ui_theme.ANSI_RESET}"
         )

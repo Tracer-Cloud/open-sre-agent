@@ -95,8 +95,8 @@ def _option_labels(question: AskUserQuestion) -> list[str]:
 
 
 def _menu_height(question: AskUserQuestion) -> int:
-    # header, breadcrumb, rule, question, choices, Submit, hint (tight, no blank gaps)
-    return 1 + 1 + 1 + 1 + len(_option_labels(question)) + 1 + 1
+    # blank (section gap), header, breadcrumb, rule, question, choices, Submit, hint
+    return 1 + 1 + 1 + 1 + 1 + len(_option_labels(question)) + 1 + 1
 
 
 def _row_count(question: AskUserQuestion) -> int:
@@ -156,6 +156,9 @@ def _draw_ask_user(
     checked = checked or set()
     if erase_lines:
         erase_menu_lines(erase_lines)
+    # Blank above the header so Ask User reads as a new section after Plan
+    # complete / reply text (same rhythm as headered choice_menu).
+    write_menu_line()
     write_menu_line(f"{ui_theme.PROMPT_ACCENT_ANSI}{_HEADER}{ui_theme.ANSI_RESET}")
     write_menu_line(breadcrumb)
     write_menu_line(f"{ui_theme.DIM_COUNTER_ANSI}{'─' * width}{ui_theme.ANSI_RESET}")
