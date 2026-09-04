@@ -626,6 +626,28 @@ prepare_and_verify_binary() {
   else
     verify_binary_version "$binary_path"
   fi
+
+  warm_first_launch "$binary_path"
+}
+
+warm_first_launch() {
+  local binary_path="$1"
+
+  # macOS validates the code signature of every Mach-O image on its first
+  # dlopen and caches the result. The re-sign above resets that cache for all
+  # ~300 bundled libs, and ``--version`` (the fast path) loads only a few of
+  # them, so the user's first real ``opensre`` would pay ~10s of validation.
+  # ``_package-smoke`` imports the full tool registry, verifiers and skills,
+  # which loads essentially the whole set — so pay that cost here, under the
+  # installer spinner, instead of on the first launch. Best-effort: the binary
+  # already passed ``--version``, so a smoke failure warns rather than aborts.
+  run_with_dots "Preparing OpenSRE for first launch" package_smoke_quiet "$binary_path" \
+    || printf 'warning: first-launch warm-up did not complete; the first "%s" may start slowly.\n' "$BIN_NAME" >&2
+}
+
+package_smoke_quiet() {
+  # The smoke prints a JSON summary; only its exit status matters here.
+  "$1" _package-smoke >/dev/null 2>&1
 }
 
 extract_and_verify_binary() {
