@@ -604,3 +604,12 @@ def test_warm_first_launch_runs_package_smoke_on_darwin() -> None:
     assert result.returncode == 0, result.stderr
     assert "SMOKE_RAN" in result.stdout
     assert "Preparing OpenSRE for first launch" in result.stderr
+
+
+def test_resign_macos_onedir_parallelizes_nested_libs() -> None:
+    """Nested dylib/so signs are independent; main binary stays serial and last."""
+    source = INSTALL_SH.read_text(encoding="utf-8")
+    assert 'xargs -0 -P "$jobs" -n 1 codesign --force --sign -' in source
+    assert 'codesign --force --sign - "$binary_path"' in source
+    # Cap avoids disk stampede on large hosts.
+    assert 'if [ "$jobs" -gt 4 ]; then' in source

@@ -19,7 +19,10 @@ def test_package_smoke_finds_essential_tools_and_skills() -> None:
     assert result.exit_code == 0, result.output
     payload = json.loads(result.output)
     assert payload["status"] == "ok"
+    # Catalog size from the descriptor index (no full vendor import).
     assert payload["registered_tools"] >= 250
+    # Deep-checked essentials only (required name set).
+    assert payload["checked_tools"] == 7
     assert payload["action_skills"] >= 5
     assert payload["integration_verifiers"] >= 60
     assert "planning_instructions" not in payload

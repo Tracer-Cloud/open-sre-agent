@@ -783,6 +783,7 @@ clear_macos_quarantine() {
 resign_macos_onedir_adhoc() {
   local binary_path="$1"
   local bundle_dir
+  local jobs
 
   # PyInstaller onedir: post-build dylib rewrites (or a stale CI signature) leave
   # Invalid Page codesign faults. Consumer Macs SIGKILL --version (exit 137).
@@ -792,10 +793,18 @@ resign_macos_onedir_adhoc() {
   [ -f "$binary_path" ] || return 0
   bundle_dir="$(cd "$(dirname "$binary_path")" && pwd)"
   clear_macos_quarantine "$bundle_dir"
+  # Nested libs are independent; parallelize with a small cap so large hosts
+  # do not stampede the disk. The main binary stays serial and last.
+  jobs="$(sysctl -n hw.ncpu 2>/dev/null || printf '4')"
+  if [ "$jobs" -gt 4 ]; then
+    jobs=4
+  fi
+  if [ "$jobs" -lt 1 ]; then
+    jobs=1
+  fi
   find "$bundle_dir" -type f \( -name '*.dylib' -o -name '*.so' -o -name '*.so.*' \) -print0 \
-    | while IFS= read -r -d '' lib; do
-        codesign --force --sign - "$lib" >/dev/null 2>&1 || true
-      done
+    | xargs -0 -P "$jobs" -n 1 codesign --force --sign - >/dev/null 2>&1 \
+    || true
   codesign --force --sign - "$binary_path" >/dev/null 2>&1 || true
 }
 

@@ -41,15 +41,20 @@ def render_terminal_ui(
     console: Console | None = None,
     *,
     session: object = None,
+    animate: bool = True,
 ) -> None:
-    """Render the static terminal chrome: the compact launch banner."""
+    """Render the static terminal chrome: the compact launch banner.
+
+    ``animate=False`` prints the banner without the startup spin — used when
+    the spin already ran on its own thread while the runtime booted.
+    """
     console = console or Console(
         highlight=False,
         force_terminal=True,
         color_system="truecolor",
         legacy_windows=False,
     )
-    render_launch_banner(console, session=session)
+    render_launch_banner(console, session=session, animate=animate)
 
 
 def render_prompt_region(session: Session, state: ReplState, spinner: SpinnerState) -> ANSI:

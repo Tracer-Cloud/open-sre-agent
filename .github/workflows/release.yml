@@ -384,10 +384,17 @@ jobs:
             echo "No onedir binary at ${APP_BIN}; skip re-sign"
             exit 0
           fi
+          # Nested libs are independent — parallelize with a small cap, then
+          # sign the main binary last (same order as install.sh).
+          JOBS="$(sysctl -n hw.ncpu 2>/dev/null || printf '4')"
+          if [ "$JOBS" -gt 4 ]; then
+            JOBS=4
+          fi
+          if [ "$JOBS" -lt 1 ]; then
+            JOBS=1
+          fi
           find "$APP_DIR" -type f \( -name '*.dylib' -o -name '*.so' -o -name '*.so.*' \) -print0 \
-            | while IFS= read -r -d '' lib; do
-                codesign --force --sign - "$lib"
-              done
+            | xargs -0 -P "$JOBS" -n 1 codesign --force --sign -
           codesign --force --sign - "$APP_BIN"
           codesign --verify --strict "$APP_BIN"
           echo "Re-signed onedir libs + ${APP_BIN} (adhoc) after post-build mutations"

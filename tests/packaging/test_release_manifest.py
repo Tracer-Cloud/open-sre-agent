@@ -119,6 +119,15 @@ def test_spec_bakes_the_descriptor_index_into_the_bundle() -> None:
     assert BAKED_INDEX_RELATIVE_PATH.as_posix() == "tools/descriptor_index.json"
 
 
+def test_release_workflow_parallelizes_macos_onedir_resign() -> None:
+    """Nested lib signs are independent; main binary stays serial and last."""
+    workflow = _RELEASE_WORKFLOW.read_text(encoding="utf-8")
+
+    assert 'xargs -0 -P "$JOBS" -n 1 codesign --force --sign -' in workflow
+    assert 'codesign --force --sign - "$APP_BIN"' in workflow
+    assert 'if [ "$JOBS" -gt 4 ]; then' in workflow
+
+
 def test_release_workflow_does_not_run_on_pull_requests() -> None:
     workflow = _RELEASE_WORKFLOW.read_text(encoding="utf-8")
     triggers = yaml.load(workflow, Loader=yaml.BaseLoader)["on"]
