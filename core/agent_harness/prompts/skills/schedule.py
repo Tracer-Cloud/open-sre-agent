@@ -18,7 +18,6 @@ __all__ = (
     "normalize_skill_name",
     "pin_recurring_skill",
     "resolve_scheduled_skill",
-    "scheduled_skill_context_block",
     "skill_revision",
     "validate_skill_inputs",
 )
@@ -96,18 +95,6 @@ def resolve_scheduled_skill(name: str, pinned_revision: str) -> ScheduledSkillRe
             "Remove and re-add the schedule to accept the new recipe."
         )
     return ScheduledSkillResolution(skill=skill, body=body, revision=current)
-
-
-def scheduled_skill_context_block(name: str, inputs: dict[str, str] | None) -> str:
-    """Return extra unattended prompt context, or empty when the skill needs none."""
-    normalized = normalize_skill_name(name)
-    if normalized == "morning-report":
-        from core.agent_harness.prompts.skills.morning_report.fetch import (
-            format_fetched_briefing_inputs,
-        )
-
-        return format_fetched_briefing_inputs(inputs)
-    return ""
 
 
 def validate_skill_inputs(raw: dict[str, object] | None) -> dict[str, str]:

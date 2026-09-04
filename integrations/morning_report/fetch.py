@@ -1,4 +1,4 @@
-"""Deterministic weather/headline fetches for unattended morning-report ticks."""
+"""Integration-owned weather and headline fetches for scheduled morning reports."""
 
 from __future__ import annotations
 

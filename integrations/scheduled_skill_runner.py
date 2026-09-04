@@ -7,7 +7,6 @@ import logging
 from core.agent_harness import (
     AgentSession,
     resolve_scheduled_skill,
-    scheduled_skill_context_block,
 )
 from infrastructure.scheduling.scheduler.agent_runner import AgentPayload
 
@@ -33,7 +32,11 @@ def _prefetched_context(skill_name: str, inputs: dict[str, str]) -> str:
         from integrations.github.ci_health_runner import run_github_ci_health
 
         return run_github_ci_health(inputs)
-    return scheduled_skill_context_block(skill_name, inputs)
+    if skill_name == "morning-report":
+        from integrations.morning_report import format_fetched_briefing_inputs
+
+        return format_fetched_briefing_inputs(inputs)
+    return ""
 
 
 def run_scheduled_recurring_skill(payload: AgentPayload) -> str:

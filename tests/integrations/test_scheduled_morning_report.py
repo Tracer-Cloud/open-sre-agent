@@ -1,11 +1,11 @@
-"""Tests for unattended morning-report data fetches."""
+"""Tests for integration-owned scheduled morning-report data fetches."""
 
 from __future__ import annotations
 
 import pytest
 
-from core.agent_harness.prompts.skills.morning_report import fetch as morning_fetch
-from core.agent_harness.prompts.skills.schedule import scheduled_skill_context_block
+from integrations import scheduled_skill_runner
+from integrations.morning_report import fetch as morning_fetch
 
 _BBC_RSS = """\
 <?xml version="1.0"?>
@@ -62,15 +62,15 @@ def test_format_fetched_briefing_inputs_uses_city(monkeypatch: pytest.MonkeyPatc
     assert "- One" in block
 
 
-def test_scheduled_skill_context_block_empty_for_other_skills() -> None:
-    assert scheduled_skill_context_block("github-ci-fix", {}) == ""
+def test_prefetched_context_empty_for_other_skills() -> None:
+    assert scheduled_skill_runner._prefetched_context("github-ci-fix", {}) == ""
 
 
-def test_scheduled_skill_context_block_morning_report(
+def test_prefetched_context_morning_report(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     monkeypatch.setattr(morning_fetch, "fetch_weather", lambda _city="": "Paris: cloudy")
     monkeypatch.setattr(morning_fetch, "fetch_headlines", lambda: ["News"])
-    block = scheduled_skill_context_block("morning-report", {"city": "Paris"})
+    block = scheduled_skill_runner._prefetched_context("morning-report", {"city": "Paris"})
     assert "Paris: cloudy" in block
     assert "- News" in block
