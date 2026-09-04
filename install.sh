@@ -566,39 +566,78 @@ install_binary() {
   chmod 0755 "$destination_path" 2>/dev/null || true
 }
 
-install_binary_app() {
+# Install is two renames with the checks in between: stage the extracted tree
+# under INSTALL_DIR, verify and warm it there, then swap it into place. A binary
+# that fails its checks never replaces a working install, and nothing is
+# copied: macOS caches signature validation per file, so a renamed tree keeps
+# what the checks paid for while a copied tree is validated again on the
+# user's first launch.
+
+stage_binary() {
+  local source_path="$1"
+  local app_root=""
+
+  mkdir -p "$INSTALL_DIR"
+  if [ "$platform" != "windows" ] && app_root="$(binary_app_root "$source_path")"; then
+    stage_binary_app "$app_root"
+    return
+  fi
+
+  stage_single_binary "$source_path"
+}
+
+stage_binary_app() {
   local app_root="$1"
+  local staged_dir="${INSTALL_DIR}/.${BIN_NAME}-app.new.$$"
+
+  rm -rf "$staged_dir"
+  mv "$app_root" "$staged_dir"
+  chmod -R u+rwX,go+rX "$staged_dir" 2>/dev/null || true
+  printf '%s\n' "${staged_dir}/${BIN_NAME}"
+}
+
+stage_single_binary() {
+  local source_path="$1"
+  local staged_path="${INSTALL_DIR}/${BIN_NAME}.new.$$"
+
+  install_binary "$source_path" "$staged_path"
+  printf '%s\n' "$staged_path"
+}
+
+staged_binary_is_app() {
+  [ "${1%/*}" != "$INSTALL_DIR" ]
+}
+
+activate_staged_binary() {
+  local staged_path="$1"
   local destination_path="$2"
   local app_destination_dir="${INSTALL_DIR}/.${BIN_NAME}-app"
-  local app_tmp_dir="${app_destination_dir}.new.$$"
   local app_old_dir="${app_destination_dir}.old.$$"
 
-  rm -rf "$app_tmp_dir" "$app_old_dir"
-  cp -R "$app_root" "$app_tmp_dir"
-  chmod -R u+rwX,go+rX "$app_tmp_dir" 2>/dev/null || true
+  if ! staged_binary_is_app "$staged_path"; then
+    mv -f "$staged_path" "$destination_path"
+    return
+  fi
 
+  rm -rf "$app_old_dir"
   if [ -e "$app_destination_dir" ]; then
     mv "$app_destination_dir" "$app_old_dir"
   fi
-  mv "$app_tmp_dir" "$app_destination_dir"
+  mv "${staged_path%/*}" "$app_destination_dir"
   rm -rf "$app_old_dir"
 
   rm -f "$destination_path"
   ln -s "$app_destination_dir/${BIN_NAME}" "$destination_path"
 }
 
-install_verified_binary() {
-  local source_path="$1"
-  local destination_path="$2"
-  local app_root=""
+discard_staged_binary() {
+  local staged_path="$1"
 
-  mkdir -p "$INSTALL_DIR"
-  if [ "$platform" != "windows" ] && app_root="$(binary_app_root "$source_path")"; then
-    install_binary_app "$app_root" "$destination_path"
-    return
+  if staged_binary_is_app "$staged_path"; then
+    rm -rf "${staged_path%/*}"
+  else
+    rm -f "$staged_path"
   fi
-
-  install_binary "$source_path" "$destination_path"
 }
 
 download_and_verify_checksum() {
@@ -626,9 +665,9 @@ prepare_and_verify_binary() {
   else
     verify_binary_version "$binary_path"
   fi
-  # Do not warm here: install copies the onedir to a new path, and macOS
-  # re-validates that tree on first exec. Warm the *installed* binary instead
-  # (see install_release_binary → warm_first_launch).
+  # Runs on the staged tree under INSTALL_DIR, which is renamed into place
+  # afterwards, so the validation paid here is the validation the user's
+  # first launch would otherwise pay.
 }
 
 warm_first_launch() {
@@ -638,11 +677,11 @@ warm_first_launch() {
   # and would otherwise pay for a full registry/verifier/skills import.
   [ "$(uname -s 2>/dev/null || true)" = "Darwin" ] || return 0
 
-  # macOS validates each Mach-O image on first load and caches by path/inode.
-  # The extract-dir ``--version`` / smoke above does **not** help the copy under
-  # ``~/.local/bin/.opensre-app`` — measured ~6–8s again after ``cp -R``.
-  # Run smoke against the *final* install path so the user's first ``opensre``
-  # is warm (~0.2s), not another Gatekeeper tax.
+  # macOS validates each Mach-O image on first load and caches the result per
+  # file. ``--version`` loads only a few images; the smoke imports the whole
+  # tool registry and loads nearly all of them, so the user's first ``opensre``
+  # starts warm (~0.2s) instead of paying ~6s of validation. The staged tree
+  # is renamed into place afterwards, which keeps the cache.
   run_with_dots "Preparing OpenSRE for first launch" package_smoke_quiet "$binary_path" \
     || printf 'warning: first-launch warm-up did not complete; the first "%s" may start slowly.\n' "$BIN_NAME" >&2
 }
@@ -652,32 +691,14 @@ package_smoke_quiet() {
   "$1" _package-smoke >/dev/null 2>&1
 }
 
-extract_and_verify_binary() {
-  local archive_path="$1"
-  local extraction_dir="$2"
-  local extracted_binary_path
-  local extracted_version
+verify_staged_binary() {
+  local staged_path="$1"
 
-  run_with_dots "Extracting OpenSRE" extract_archive "$archive_path" "$extraction_dir" \
-    || return "$?"
-
-  extracted_binary_path="$(
-    run_with_dots "Locating ${BIN_NAME} binary" \
-      get_binary_path_from_archive "$extraction_dir" "$BIN_NAME"
-  )" || return "$?"
   if [ "$INSTALL_CHANNEL" = "main" ]; then
-    extracted_version="$(
-      run_with_dots "Found ${BIN_NAME} binary, verifying it runs" \
-        prepare_and_verify_binary "$extracted_binary_path" "$extraction_dir"
-    )" || return "$?"
+    prepare_and_verify_binary "$staged_path" "${staged_path%/*}"
   else
-    extracted_version="$(
-      run_with_dots "Found ${BIN_NAME} binary, verifying it runs" \
-        prepare_and_verify_binary "$extracted_binary_path" "$extraction_dir" "$version"
-    )" || return "$?"
+    prepare_and_verify_binary "$staged_path" "${staged_path%/*}" "$version"
   fi
-
-  printf '%s\n%s\n' "$extracted_binary_path" "$extracted_version"
 }
 
 get_binary_path_from_archive() {
@@ -1090,20 +1111,28 @@ verify_release_checksum() {
 }
 
 extract_release_binary() {
-  local verified_binary
-
-  verified_binary="$(extract_and_verify_binary "$archive_path" "$tmp_dir")" \
-    || die "Failed to extract or verify '${archive}'."
-  binary_path="${verified_binary%%$'\n'*}"
-  installed_version="${verified_binary#*$'\n'}"
+  run_with_dots "Extracting OpenSRE" extract_archive "$archive_path" "$tmp_dir" \
+    || die "Failed to extract '${archive}'."
+  binary_path="$(
+    run_with_dots "Locating ${BIN_NAME} binary" \
+      get_binary_path_from_archive "$tmp_dir" "$BIN_NAME"
+  )" || die "Failed to locate ${BIN_NAME} in '${archive}'."
 }
 
 install_release_binary() {
-  run_with_dots "Installing OpenSRE" \
-    install_verified_binary "$binary_path" "${INSTALL_DIR}/${BIN_NAME}" \
+  local staged_path
+
+  staged_path="$(run_with_dots "Installing OpenSRE" stage_binary "$binary_path")" \
     || die "Failed to install ${BIN_NAME} to '${INSTALL_DIR}'."
-  # Warm the installed tree (final path), not the extract dir — see warm_first_launch.
-  warm_first_launch "${INSTALL_DIR}/${BIN_NAME}"
+  if ! installed_version="$(
+    run_with_dots "Found ${BIN_NAME} binary, verifying it runs" verify_staged_binary "$staged_path"
+  )"; then
+    discard_staged_binary "$staged_path"
+    die "Failed to verify '${archive}'."
+  fi
+  warm_first_launch "$staged_path"
+  activate_staged_binary "$staged_path" "${INSTALL_DIR}/${BIN_NAME}" \
+    || die "Failed to install ${BIN_NAME} to '${INSTALL_DIR}'."
 }
 
 print_install_confirmation() {

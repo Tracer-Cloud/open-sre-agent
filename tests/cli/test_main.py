@@ -489,9 +489,14 @@ def test_landing_page_runs_the_launch_work_the_shell_would_have_run(monkeypatch)
         classmethod(lambda _cls, **_kw: ReplConfig(enabled=False, layout="classic")),
     )
     order: list[str] = []
-    monkeypatch.setattr(
-        "surfaces.cli.app.startup.run", lambda _group, _argv: lambda: order.append("start")
-    )
+
+    def _start_error_reporting() -> None:
+        order.append("start")
+
+    def _hand_back_error_reporting_start(_group: object, _argv: object) -> object:
+        return _start_error_reporting
+
+    monkeypatch.setattr("surfaces.cli.app.startup.run", _hand_back_error_reporting_start)
     monkeypatch.setattr("surfaces.cli.app.render_landing", lambda _group: order.append("landing"))
 
     # Act

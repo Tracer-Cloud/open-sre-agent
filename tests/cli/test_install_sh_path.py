@@ -173,7 +173,8 @@ def test_install_sh_defines_progress_helpers() -> None:
         "finish_dots()",
         "run_with_dots()",
         "binary_app_root()",
-        "install_binary_app()",
+        "stage_binary_app()",
+        "activate_staged_binary()",
         "print_binary_diagnostics()",
     ):
         assert helper in source
@@ -257,7 +258,12 @@ def test_install_sh_installs_pyinstaller_onedir_app(tmp_path: Path) -> None:
         platform="linux"
         BIN_NAME="opensre"
         INSTALL_DIR={shlex.quote(str(install_dir))}
-        install_verified_binary {shlex.quote(str(app_binary))} {shlex.quote(str(destination))}
+        staged="$(stage_binary {shlex.quote(str(app_binary))})"
+        test -f "$staged"
+        test ! -e {shlex.quote(str(app_root))}
+        test ! -e {shlex.quote(str(destination))}
+        activate_staged_binary "$staged" {shlex.quote(str(destination))}
+        test ! -e "$staged"
         test -L {shlex.quote(str(destination))}
         test -x {shlex.quote(str(destination))}
         test -f {shlex.quote(str(install_dir / ".opensre-app" / "_internal" / "payload.txt"))}
@@ -606,15 +612,54 @@ def test_warm_first_launch_runs_package_smoke_on_darwin() -> None:
     assert "Preparing OpenSRE for first launch" in result.stderr
 
 
-def test_install_release_binary_warms_final_path_not_extract() -> None:
-    """Codesign cache is per path: warming the extract dir does not help after cp -R."""
+def test_install_release_binary_verifies_and_warms_the_staged_tree_before_activation() -> None:
+    """Signature validation is cached per file: check and warm the tree that gets renamed
+    into place, and never copy it afterwards (a copy is validated all over again)."""
     source = INSTALL_SH.read_text(encoding="utf-8")
-    # Warm must run on the installed symlink/path after install_verified_binary.
-    assert 'warm_first_launch "${INSTALL_DIR}/${BIN_NAME}"' in source
+    pipeline = source.split("install_release_binary()")[1].split("\nprint_install_confirmation()")[
+        0
+    ]
+    assert pipeline.index('verify_staged_binary "$staged_path"') < pipeline.index(
+        'warm_first_launch "$staged_path"'
+    )
+    assert pipeline.index('warm_first_launch "$staged_path"') < pipeline.index(
+        'activate_staged_binary "$staged_path"'
+    )
+    assert "cp -R" not in source
     # prepare_and_verify must not invoke warm (comment may still name it).
     prepare = source.split("prepare_and_verify_binary()")[1].split("\nwarm_first_launch()")[0]
     assert "warm_first_launch " not in prepare
     assert "warm_first_launch\n" not in prepare
+
+
+def test_discarding_a_staged_app_leaves_the_existing_install_alone(tmp_path: Path) -> None:
+    app_root = tmp_path / "opensre-app"
+    (app_root / "_internal").mkdir(parents=True)
+    app_binary = app_root / "opensre"
+    app_binary.write_text("#!/usr/bin/env sh\nexit 0\n", encoding="utf-8")
+    app_binary.chmod(0o755)
+    install_dir = tmp_path / "bin"
+    existing_app = install_dir / ".opensre-app"
+    (existing_app / "_internal").mkdir(parents=True)
+    (existing_app / "opensre").write_text("#!/usr/bin/env sh\nprintf 'old\\n'\n", encoding="utf-8")
+    (existing_app / "opensre").chmod(0o755)
+    destination = install_dir / "opensre"
+    destination.symlink_to(existing_app / "opensre")
+
+    result = _run_logging_snippet(
+        f"""
+        platform="linux"
+        BIN_NAME="opensre"
+        INSTALL_DIR={shlex.quote(str(install_dir))}
+        staged="$(stage_binary {shlex.quote(str(app_binary))})"
+        discard_staged_binary "$staged"
+        test ! -e "$staged"
+        {shlex.quote(str(destination))}
+        """
+    )
+
+    assert result.returncode == 0, result.stderr
+    assert "old" in result.stdout
 
 
 def test_resign_macos_onedir_parallelizes_nested_libs() -> None:
