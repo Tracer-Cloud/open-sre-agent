@@ -17,15 +17,23 @@ pytestmark = pytest.mark.skipif(
 INSTALL_SH = Path(__file__).parents[2] / "install.sh"
 
 
-def _run_glibc_guard(tmp_path: Path, version: str) -> subprocess.CompletedProcess[str]:
+def _run_glibc_guard(
+    tmp_path: Path, version: str | None, *, hide_detection_tools: bool = False
+) -> subprocess.CompletedProcess[str]:
     fake_bin = tmp_path / "bin"
     fake_bin.mkdir()
-    getconf = fake_bin / "getconf"
-    getconf.write_text(
-        f"#!/usr/bin/env sh\nprintf 'glibc {version}\\n'\n",
-        encoding="utf-8",
-    )
-    getconf.chmod(0o755)
+    if not hide_detection_tools:
+        getconf = fake_bin / "getconf"
+        getconf.write_text(
+            f"#!/usr/bin/env sh\nprintf 'glibc {version}\\n'\n",
+            encoding="utf-8",
+        )
+        getconf.chmod(0o755)
+    else:
+        for command in ("getconf", "ldd"):
+            detector = fake_bin / command
+            detector.write_text("#!/usr/bin/env sh\nexit 1\n", encoding="utf-8")
+            detector.chmod(0o755)
 
     source = INSTALL_SH.read_text(encoding="utf-8").rsplit('main "$@"', 1)[0]
     env = os.environ.copy()
@@ -51,3 +59,11 @@ def test_install_sh_glibc_guard_accepts_supported_host(tmp_path: Path) -> None:
     result = _run_glibc_guard(tmp_path, "2.35")
 
     assert result.returncode == 0, result.stderr
+
+
+def test_install_sh_glibc_guard_rejects_unknown_libc(tmp_path: Path) -> None:
+    result = _run_glibc_guard(tmp_path, None, hide_detection_tools=True)
+
+    assert result.returncode != 0
+    assert "Could not determine the host glibc version" in result.stderr
+    assert "install from source with uv" in result.stderr

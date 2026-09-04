@@ -999,8 +999,7 @@ check_linux_glibc_compatibility() {
   detected_version="$(printf '%s\n' "$reported_version" | sed -n 's/.*\([0-9][0-9]*\.[0-9][0-9]*\).*/\1/p')"
 
   if [ -z "$detected_version" ]; then
-    warn "Could not determine the host glibc version; the Linux release requires glibc >= ${MIN_GLIBC_VERSION}."
-    return 0
+    die "Could not determine the host glibc version; the Linux release requires glibc >= ${MIN_GLIBC_VERSION}. Install from source with uv, or use Docker."
   fi
 
   if ! glibc_version_at_least "$detected_version" "$MIN_GLIBC_VERSION"; then
