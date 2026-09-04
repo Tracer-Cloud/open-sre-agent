@@ -606,6 +606,17 @@ def test_warm_first_launch_runs_package_smoke_on_darwin() -> None:
     assert "Preparing OpenSRE for first launch" in result.stderr
 
 
+def test_install_release_binary_warms_final_path_not_extract() -> None:
+    """Codesign cache is per path: warming the extract dir does not help after cp -R."""
+    source = INSTALL_SH.read_text(encoding="utf-8")
+    # Warm must run on the installed symlink/path after install_verified_binary.
+    assert 'warm_first_launch "${INSTALL_DIR}/${BIN_NAME}"' in source
+    # prepare_and_verify must not invoke warm (comment may still name it).
+    prepare = source.split("prepare_and_verify_binary()")[1].split("\nwarm_first_launch()")[0]
+    assert "warm_first_launch " not in prepare
+    assert "warm_first_launch\n" not in prepare
+
+
 def test_resign_macos_onedir_parallelizes_nested_libs() -> None:
     """Nested dylib/so signs are independent; main binary stays serial and last."""
     source = INSTALL_SH.read_text(encoding="utf-8")
