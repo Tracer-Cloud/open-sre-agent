@@ -35,6 +35,7 @@ INSTALL_CHANNEL_EXPLICIT=0
 MAIN_RELEASE_TAG="${OPENSRE_MAIN_RELEASE_TAG:-main-build}"
 BIN_NAME="opensre"
 requested_version="${OPENSRE_VERSION:-}"
+MIN_GLIBC_VERSION="2.35"
 
 [ -n "$INSTALL_DIR" ] && INSTALL_DIR_OVERRIDE=1
 requested_version="${requested_version#v}"
@@ -963,6 +964,50 @@ detect_platform() {
   esac
 }
 
+glibc_version_at_least() {
+  local actual_version="$1"
+  local required_version="$2"
+  local actual_major actual_minor required_major required_minor
+
+  IFS=. read -r actual_major actual_minor _ <<< "$actual_version"
+  IFS=. read -r required_major required_minor _ <<< "$required_version"
+  case "${actual_major:-}${actual_minor:-}${required_major:-}${required_minor:-}" in
+    *[!0-9]*|"")
+      return 2
+      ;;
+  esac
+
+  if [ "$actual_major" -ne "$required_major" ]; then
+    [ "$actual_major" -gt "$required_major" ]
+    return
+  fi
+  [ "$actual_minor" -ge "$required_minor" ]
+}
+
+check_linux_glibc_compatibility() {
+  local reported_version=""
+  local detected_version=""
+
+  [ "$platform" = "linux" ] || return 0
+
+  if command -v getconf >/dev/null 2>&1; then
+    reported_version="$(getconf GNU_LIBC_VERSION 2>/dev/null || true)"
+  fi
+  if [ -z "$reported_version" ] && command -v ldd >/dev/null 2>&1; then
+    reported_version="$(ldd --version 2>&1 | sed -n '1s/.*\([0-9][0-9]*\.[0-9][0-9]*\).*/\1/p')"
+  fi
+  detected_version="$(printf '%s\n' "$reported_version" | sed -n 's/.*\([0-9][0-9]*\.[0-9][0-9]*\).*/\1/p')"
+
+  if [ -z "$detected_version" ]; then
+    warn "Could not determine the host glibc version; the Linux release requires glibc >= ${MIN_GLIBC_VERSION}."
+    return 0
+  fi
+
+  if ! glibc_version_at_least "$detected_version" "$MIN_GLIBC_VERSION"; then
+    die "This Linux release requires glibc >= ${MIN_GLIBC_VERSION}; detected ${detected_version}. Use a newer distribution (Ubuntu 22.04+), install from source with uv, or use Docker."
+  fi
+}
+
 resolve_release_metadata() {
   version="$requested_version"
   release_tag=""
@@ -1154,6 +1199,7 @@ main() {
   parse_args "$@"
   require_prerequisites
   detect_platform
+  check_linux_glibc_compatibility
   resolve_install_dir
   resolve_release_metadata
   select_archive_asset

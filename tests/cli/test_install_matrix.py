@@ -245,6 +245,7 @@ def _run_install_sh(
                 "brew tap tracer-cloud/tap",
                 "brew install tracer-cloud/tap/opensre",
                 "irm https://install.opensre.com | iex",
+                "glibc **2.35 or newer**",
             ),
         ),
         (
@@ -262,6 +263,7 @@ def _run_install_sh(
                 "curl -fsSL https://install.opensre.com | bash",
                 "irm https://install.opensre.com | iex",
                 "opensre onboard",
+                "glibc **2.35 or newer**",
             ),
         ),
         (
@@ -273,6 +275,7 @@ def _run_install_sh(
                 "OPENSRE_AUTO_LAUNCH=0",
                 "OPENSRE_SKIP_GH_INSTALL=1",
                 "Homebrew installs pull in `gh` automatically.",
+                "glibc",
             ),
         ),
         (
@@ -329,6 +332,17 @@ def test_install_sh_source_exposes_env_knobs() -> None:
         "_package-smoke",
     ):
         assert needle in source, f"install.sh missing {needle!r}"
+
+
+def test_install_sh_checks_linux_glibc_before_download() -> None:
+    source = INSTALL_SH.read_text(encoding="utf-8")
+    for needle in (
+        'MIN_GLIBC_VERSION="2.35"',
+        "check_linux_glibc_compatibility",
+        "glibc >= ${MIN_GLIBC_VERSION}",
+        "install from source with uv, or use Docker",
+    ):
+        assert needle in source, f"install.sh missing glibc guard {needle!r}"
 
 
 def test_install_ps1_source_exposes_all_windows_install_knobs() -> None:

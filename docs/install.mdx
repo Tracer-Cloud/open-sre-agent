@@ -15,6 +15,8 @@ After install, you have:
 
 No sudo required on macOS/Linux in the usual case — the installer puts the binary somewhere writable (often `~/.local/bin`) and tells you if you need a PATH tweak.
 
+Linux release binaries require glibc **2.35 or newer** (for example, Ubuntu 22.04+). The installer checks this before downloading. On Ubuntu 20.04 or another older glibc system, install from source with `uv` or use Docker instead.
+
 ## Install
 
 Pick one method.
