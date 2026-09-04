@@ -328,7 +328,7 @@ class TestStoreSurvivesTornWrites:
     def _digest(hour: int) -> ScheduledTask:
         return ScheduledTask(
             name=f"digest-{hour}",
-            kind=TaskKind.DAILY_SUMMARY,
+            kind=TaskKind.SENTRY_MORNING_DIGEST,
             cron=f"0 {hour} * * *",
             provider=Provider.TELEGRAM,
             chat_id="-100",
