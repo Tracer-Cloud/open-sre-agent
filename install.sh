@@ -995,6 +995,13 @@ check_linux_glibc_compatibility() {
   fi
   if [ -z "$reported_version" ] && command -v ldd >/dev/null 2>&1; then
     reported_version="$(ldd --version 2>&1 || true)"
+    case "$reported_version" in
+      *GLIBC*|*glibc*|*"GNU libc"*|*"GNU C Library"*)
+        ;;
+      *)
+        reported_version=""
+        ;;
+    esac
   fi
   detected_version="$(printf '%s\n' "$reported_version" | sed -n 's/.*\([0-9][0-9]*\.[0-9][0-9]*\).*/\1/p')"
 
