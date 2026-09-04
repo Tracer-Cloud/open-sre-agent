@@ -70,9 +70,9 @@ def render_prompt_region(session: Session, state: ReplState, spinner: SpinnerSta
     compete with Ask User / option menus — free text is itself an option
     (``Or type your own answer...``), not a parallel composer.
 
-    The stream already prints one blank after the last reply. This region
-    starts on the next row — a second leading ``\\n`` stacked a hole under
-    Ask User recaps. Idle still has no empty "Ready" placeholder.
+    The stream already prints one blank after a *finished* reply. Mid-turn
+    Thinking sits under still-streaming text with no that margin, so the busy
+    path leads with one blank row. Idle still has no empty "Ready" placeholder.
     """
     if typing_box_hidden(session, state):
         # Same newline count as ``_prompt_message`` so confirmation does not
@@ -122,8 +122,13 @@ def render_prompt_region(session: Session, state: ReplState, spinner: SpinnerSta
     # Auto stays on the page while busy (DIM) so permission chrome does not
     # vanish for the length of the turn.
     auto_line = strip_cpr_sequences(auto_status_ansi(session, quiet=bool(inline_spinner)))
+    # Mid-turn stream text has no trailing blank (that lands only when the
+    # reply finishes). One lead row under Thinking/Invoking so status chrome
+    # does not sit flush on the last assistant line. Skip when a plan overlay
+    # already supplies the gap, and skip when idle (no status prefix).
+    status_lead = "\n" if prefix and not plan_prefix else ""
     if prefix:
-        return ANSI(f"{plan_prefix}{prefix}\n{auto_line}\n{base}")
+        return ANSI(f"{plan_prefix}{status_lead}{prefix}\n{auto_line}\n{base}")
     return ANSI(f"{plan_prefix}{auto_line}\n{base}")
 
 
