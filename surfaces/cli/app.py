@@ -255,7 +255,7 @@ def main(argv: list[str] | None = None, *, host: CliHost | None = None) -> int:
     if is_fast_version_invocation(cli_argv):
         print_fast_version(cli_argv)
         return 0
-    fast_help = is_fast_help_invocation(cli_argv)
+    fast_help = is_fast_help_invocation(cli, cli_argv)
     if not fast_help:
         startup.run(cli, cli_argv)
     StructuredError = load_structured_error_type()

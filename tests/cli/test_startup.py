@@ -188,12 +188,25 @@ def test_fast_version_answers_without_the_terminal_stack() -> None:
 def test_fast_help_invocation_detects_help_flags() -> None:
     from surfaces.cli.invocation import is_fast_help_invocation
 
-    assert is_fast_help_invocation(["--help"])
-    assert is_fast_help_invocation(["-h"])
-    assert is_fast_help_invocation(["doctor", "--help"])
-    assert not is_fast_help_invocation([])
-    assert not is_fast_help_invocation(["doctor"])
-    assert not is_fast_help_invocation(["--version"])
+    assert is_fast_help_invocation(cli, ["--help"])
+    assert is_fast_help_invocation(cli, ["-h"])
+    assert is_fast_help_invocation(cli, ["doctor", "--help"])
+    assert is_fast_help_invocation(cli, ["ask", "--allowed-tool", "grafana_query", "--help"])
+    assert not is_fast_help_invocation(cli, [])
+    assert not is_fast_help_invocation(cli, ["doctor"])
+    assert not is_fast_help_invocation(cli, ["--version"])
+
+
+def test_fast_help_invocation_ignores_help_tokens_used_as_values() -> None:
+    """``--help`` / ``-h`` bound as option values or ``--`` operands are not help."""
+    from surfaces.cli.invocation import is_fast_help_invocation, resolve_command_parts
+
+    assert not is_fast_help_invocation(cli, ["ask", "--allowed-tool", "--help", "prompt"])
+    assert not is_fast_help_invocation(cli, ["ask", "--allowed-tool", "-h", "prompt"])
+    assert not is_fast_help_invocation(cli, ["ask", "--", "--help"])
+    assert not is_fast_help_invocation(cli, ["--theme", "--help"])
+    assert resolve_command_parts(cli, ["ask", "--allowed-tool", "--help", "prompt"]) == ["ask"]
+    assert resolve_command_parts(cli, ["ask", "--", "--help"]) == ["ask"]
 
 
 def test_help_flag_skips_full_startup(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -212,6 +225,27 @@ def test_help_flag_skips_full_startup(monkeypatch: pytest.MonkeyPatch) -> None:
     from surfaces.cli.app import main
 
     assert main(["--help"]) == 0
+
+
+def test_help_as_option_value_still_runs_startup(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Click binds ``--help`` to ``--allowed-tool``; that is not a help invocation."""
+    started: list[bool] = []
+
+    monkeypatch.setattr(
+        "surfaces.cli.app.startup.run",
+        lambda *_a, **_k: started.append(True),
+    )
+    monkeypatch.setattr("surfaces.cli.app.shutdown_analytics", lambda **_kw: None)
+    monkeypatch.setattr(
+        "surfaces.cli.ask.approval.unknown_allowed_tools",
+        lambda _v: ("--help",),
+    )
+
+    from surfaces.cli.app import main
+
+    rc = main(["ask", "--allowed-tool", "--help", "prompt"])
+    assert started
+    assert rc != 0
 
 
 def test_fast_help_does_not_import_vendor_sdks() -> None:
