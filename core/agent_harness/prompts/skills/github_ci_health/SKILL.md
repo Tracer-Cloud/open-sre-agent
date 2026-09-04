@@ -18,6 +18,17 @@ do not discover a broader organization or repository scope. Preserve every
 failing check, link, age, responsible PR or branch, coverage notice, and repair
 handoff in the block.
 
+## Tool usage
+
+This skill does not issue GitHub tool calls during unattended execution. Before
+the skill runs, the scheduled runner invokes `run_github_ci_health`, which
+collects the configured repository's CI data through read-only GitHub REST GET
+requests and supplies the complete rendered report.
+
+Do not perform additional or fallback GitHub discovery. The only interactive
+tool used by this skill is `propose_scheduled_delivery`, which configures the
+recurring report and is never called during an unattended run.
+
 This workflow is read-only. Never call `fix_github_pr_ci`, `github_cli`,
 `shell_run`, or any other mutating or external-command tool during unattended
 execution. Repairs must be requested interactively and explicitly approved.
