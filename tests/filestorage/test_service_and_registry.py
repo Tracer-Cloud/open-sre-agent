@@ -73,6 +73,11 @@ def _restore_registry() -> Iterator[None]:
     from infrastructure.filestorage.providers import registry as reg
 
     with reg._REGISTRY_LOCK:
+        # Import every built-in before snapshotting. Restoring an empty
+        # registry after a lazy import leaves the module cached but its
+        # import-time registration missing for later tests.
+        for provider in reg._BUILTIN_MODULES:
+            reg._load_builtin(provider)
         snap = dict(reg._REGISTRY)
         # Restored alongside the factories: a declared upload cap outliving its
         # registration would silently re-tune a later test's push.
