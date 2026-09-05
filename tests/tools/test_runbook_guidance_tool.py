@@ -14,6 +14,7 @@ from core.domain.runbooks import (
     RunbookReference,
 )
 from core.tool import AgentToolContext
+from tools import registry as registry_module
 from tools.system.runbook_guidance_tool import load_runbook_guidance
 from tools.system.runbook_guidance_tool._evidence import map_runbook_guidance
 
@@ -91,6 +92,14 @@ def _install_source(
 
 def _context() -> AgentToolContext:
     return AgentToolContext(resolved_integrations={"github": {"connection_verified": True}})
+
+
+def test_tool_is_discoverable_on_the_shared_chat_surface() -> None:
+    registered = registry_module.get_registered_tool_map("chat")["load_runbook_guidance"]
+
+    assert registered.accepts_runtime_context is True
+    assert registered.side_effect_level == "read_only"
+    assert registered.evidence_mapper is map_runbook_guidance
 
 
 def test_explicit_trusted_url_loads_document_with_provenance(
