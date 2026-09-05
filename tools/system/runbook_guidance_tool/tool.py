@@ -17,7 +17,7 @@ from core.domain.runbooks import (
     select_runbook,
 )
 from core.domain.types.tools import ToolSurface
-from core.tool import AgentToolContext, SideEffectLevel, availability_view
+from core.tool import AgentToolContext, SideEffectLevel, availability_view, report_run_error
 from core.tool_framework import tool
 from infrastructure.harness_providers import resolve_runbook_source
 from tools.system.runbook_guidance_tool._evidence import map_runbook_guidance
@@ -28,6 +28,26 @@ _STATUS_LOADED = "loaded"
 _STATUS_NOT_FOUND = "not_found"
 _STATUS_AMBIGUOUS = "ambiguous"
 _STATUS_UNAVAILABLE = "unavailable"
+_TOOL_NAME = "load_runbook_guidance"
+_TOOL_SOURCE = "knowledge"
+
+
+def _report_failure(
+    exc: Exception,
+    *,
+    method: str,
+    source_name: str = "",
+) -> None:
+    extras = {"runbook_source": source_name} if source_name else None
+    report_run_error(
+        exc,
+        tool_name=_TOOL_NAME,
+        source=_TOOL_SOURCE,
+        component="tools.system.runbook_guidance_tool.tool",
+        method=method,
+        logger=logger,
+        extras=extras,
+    )
 
 
 @dataclass(frozen=True, slots=True)
@@ -48,8 +68,8 @@ def _runbook_sources_available(sources: dict[str, dict[str, Any]]) -> bool:
     try:
         configured = load_runbook_sources()
         return any(resolve_runbook_source(source, sources) is not None for source in configured)
-    except Exception:
-        logger.warning("Runbook source availability check failed.", exc_info=True)
+    except Exception as exc:
+        _report_failure(exc, method="is_available")
         return False
 
 
@@ -82,8 +102,8 @@ def _load_bindings(
         return [], ["Runbook source integrations are unavailable in this runtime."]
     try:
         configured = load_runbook_sources()
-    except Exception:
-        logger.warning("Runbook source configuration could not be loaded.", exc_info=True)
+    except Exception as exc:
+        _report_failure(exc, method="load_runbook_sources")
         return [], ["Runbook source configuration could not be loaded."]
 
     selected = tuple(
@@ -98,11 +118,11 @@ def _load_bindings(
     for config in selected:
         try:
             provider = resolve_runbook_source(config, integrations)
-        except Exception:
-            logger.warning(
-                "Runbook source provider resolution failed for %s.",
-                config.name,
-                exc_info=True,
+        except Exception as exc:
+            _report_failure(
+                exc,
+                method="resolve_runbook_source",
+                source_name=config.name,
             )
             provider = None
         if provider is None:
@@ -145,11 +165,11 @@ def _fetch_document(
 ) -> dict[str, Any]:
     try:
         document = binding.source.fetch_document(reference)
-    except Exception:
-        logger.warning(
-            "Runbook document retrieval failed for source %s.",
-            binding.config.name,
-            exc_info=True,
+    except Exception as exc:
+        _report_failure(
+            exc,
+            method="RunbookSource.fetch_document",
+            source_name=binding.config.name,
         )
         return _result(
             _STATUS_UNAVAILABLE,
@@ -173,11 +193,11 @@ def _load_explicit_url(
     for binding in bindings:
         try:
             reference = binding.source.resolve_reference(runbook_url)
-        except Exception:
-            logger.warning(
-                "Runbook URL resolution failed for source %s.",
-                binding.config.name,
-                exc_info=True,
+        except Exception as exc:
+            _report_failure(
+                exc,
+                method="RunbookSource.resolve_reference",
+                source_name=binding.config.name,
             )
             warnings.append(f"Runbook source {binding.config.name!r} could not inspect the URL.")
             continue
@@ -231,11 +251,11 @@ def _load_catalog_match(
         manifest_sources += 1
         try:
             catalog = binding.source.fetch_catalog()
-        except Exception:
-            logger.warning(
-                "Runbook catalog retrieval failed for source %s.",
-                binding.config.name,
-                exc_info=True,
+        except Exception as exc:
+            _report_failure(
+                exc,
+                method="RunbookSource.fetch_catalog",
+                source_name=binding.config.name,
             )
             warnings.append(f"Runbook source {binding.config.name!r} could not load its catalog.")
             continue

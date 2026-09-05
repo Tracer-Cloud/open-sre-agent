@@ -2061,6 +2061,7 @@ class TestCliDelegatedCommands:
         "command,expected_args",
         [
             ("/config show", ["config", "show"]),
+            ("/runbooks source list", ["runbooks", "source", "list"]),
             ("/remote health", ["remote", "health"]),
             ("/guardrails audit", ["guardrails", "audit"]),
             ("/update", ["update"]),
