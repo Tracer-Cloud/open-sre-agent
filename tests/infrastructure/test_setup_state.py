@@ -154,7 +154,7 @@ class TestLatestDeliveryOrdering:
     ) -> None:
         # Arrange: Greptile P1 — more than five newer RUNNING rows (by start)
         # must not hide an earlier-started finished delivery.
-        from infrastructure.scheduling.scheduler import claim_store
+        from infrastructure.scheduling.scheduler import claim_store, migrations
         from infrastructure.scheduling.scheduler.types import TaskStatus
 
         db = tmp_path / "scheduler.db"
@@ -162,7 +162,7 @@ class TestLatestDeliveryOrdering:
 
         conn = claim_store._connect(db)
         try:
-            claim_store._ensure_schema(conn)
+            migrations.apply_migrations(conn)
             conn.execute(
                 "INSERT INTO task_runs "
                 "(task_id, fire_time, started_at, finished_at, status) "
