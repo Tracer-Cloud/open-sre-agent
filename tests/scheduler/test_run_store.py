@@ -9,8 +9,8 @@ from pathlib import Path
 
 import pytest
 
-from infrastructure.scheduling.scheduler import claim_store, migrations
-from infrastructure.scheduling.scheduler.claim_store import (
+from infrastructure.scheduling.scheduler.storage import database, migrations
+from infrastructure.scheduling.scheduler.storage.run_store import (
     ExecutionClaim,
     ExpiredClaim,
     complete_run,
@@ -192,9 +192,7 @@ class TestClaimStore:
     def test_get_latest_finished_run_ignores_newer_in_flight_starts(self, db_path: Path) -> None:
         # Arrange: one finished delivery, then six newer RUNNING claims. A
         # start-ordered lookback of five would drop the finished row.
-        conn = claim_store._connect(db_path)
-        try:
-            migrations.apply_migrations(conn)
+        with database.connection(db_path) as conn:
             conn.execute(
                 "INSERT INTO task_runs "
                 "(task_id, fire_time, started_at, finished_at, status) "
@@ -220,8 +218,6 @@ class TestClaimStore:
                     ),
                 )
             conn.commit()
-        finally:
-            conn.close()
 
         # Act
         run = get_latest_finished_run("task1", db_path=db_path)

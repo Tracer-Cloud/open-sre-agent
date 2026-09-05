@@ -15,7 +15,6 @@ from collections.abc import Callable
 from datetime import UTC, datetime
 from typing import Any, cast
 
-from infrastructure.scheduling.scheduler.claim_store import get_expired_claims
 from infrastructure.scheduling.scheduler.executor import execute_task
 from infrastructure.scheduling.scheduler.operation_log import (
     record_scheduler_execution_operation,
@@ -27,8 +26,9 @@ from infrastructure.scheduling.scheduler.reload_signal import (
     watch_and_reconcile,
 )
 from infrastructure.scheduling.scheduler.runners import SchedulerRunners
-from infrastructure.scheduling.scheduler.store import (
-    _default_store_path,
+from infrastructure.scheduling.scheduler.storage import (
+    default_task_store_path,
+    get_expired_claims,
     get_task,
     list_tasks,
     update_task,
@@ -352,7 +352,7 @@ def _watch_reload_signal(
     watch_and_reconcile(
         stop_event,
         lambda: resync_scheduler_jobs(scheduler, runners),
-        _default_store_path(),
+        default_task_store_path(),
         on_error=lambda exc: logger.warning("Scheduler resync failed; will retry: %s", exc),
     )
 
@@ -465,7 +465,7 @@ def failed_retry_scope(task_id: str) -> frozenset[tuple[Provider, str]] | None:
     message already landed. An empty (non-``None``) set means history was read
     and nothing had failed -- there is simply nothing to retry.
     """
-    from infrastructure.scheduling.scheduler.claim_store import get_latest_targeted_run
+    from infrastructure.scheduling.scheduler.storage import get_latest_targeted_run
 
     run = get_latest_targeted_run(task_id)
     if run is None:

@@ -141,8 +141,8 @@ class TestRegisterJobs:
         tmp_path,
         monkeypatch: pytest.MonkeyPatch,
     ) -> None:
-        from infrastructure.scheduling.scheduler import store as scheduler_store
-        from infrastructure.scheduling.scheduler.store import add_task
+        from infrastructure.scheduling.scheduler.storage import task_store as scheduler_store
+        from infrastructure.scheduling.scheduler.storage.task_store import add_task
 
         class _FakeScheduler:
             def __init__(self) -> None:
@@ -156,7 +156,7 @@ class TestRegisterJobs:
                 self.job_ids.append(str(kwargs["id"]))
 
         store_path = tmp_path / "tasks.json"
-        monkeypatch.setattr(scheduler_store, "_default_store_path", lambda: store_path)
+        monkeypatch.setattr(scheduler_store, "default_task_store_path", lambda: store_path)
         add_task(
             ScheduledTask(
                 id="prompt-loop",
@@ -192,8 +192,8 @@ class TestRegisterJobs:
         tmp_path,
         monkeypatch: pytest.MonkeyPatch,
     ) -> None:
-        from infrastructure.scheduling.scheduler import store as scheduler_store
-        from infrastructure.scheduling.scheduler.store import add_task
+        from infrastructure.scheduling.scheduler.storage import task_store as scheduler_store
+        from infrastructure.scheduling.scheduler.storage.task_store import add_task
 
         class _FakeJob:
             def __init__(self, job_id: str) -> None:
@@ -218,7 +218,7 @@ class TestRegisterJobs:
                 self.jobs.pop(job_id, None)
 
         store_path = tmp_path / "tasks.json"
-        monkeypatch.setattr(scheduler_store, "_default_store_path", lambda: store_path)
+        monkeypatch.setattr(scheduler_store, "default_task_store_path", lambda: store_path)
         add_task(
             ScheduledTask(
                 id="keep",
@@ -303,7 +303,7 @@ class TestRunTaskNow:
             "infrastructure.scheduling.scheduler.runner.get_task", lambda _task_id: task
         )
         monkeypatch.setattr(
-            "infrastructure.scheduling.scheduler.claim_store.get_latest_targeted_run",
+            "infrastructure.scheduling.scheduler.storage.get_latest_targeted_run",
             lambda _task_id: None,
         )
 
@@ -338,7 +338,7 @@ class TestRunTaskNow:
             "infrastructure.scheduling.scheduler.runner.get_task", lambda _task_id: task
         )
         monkeypatch.setattr(
-            "infrastructure.scheduling.scheduler.claim_store.get_latest_targeted_run",
+            "infrastructure.scheduling.scheduler.storage.get_latest_targeted_run",
             lambda _task_id: last_run,
         )
 
@@ -368,7 +368,7 @@ class TestRunTaskNow:
             "infrastructure.scheduling.scheduler.runner.get_task", lambda _task_id: task
         )
         monkeypatch.setattr(
-            "infrastructure.scheduling.scheduler.claim_store.get_latest_targeted_run",
+            "infrastructure.scheduling.scheduler.storage.get_latest_targeted_run",
             lambda _task_id: last_run,
         )
 

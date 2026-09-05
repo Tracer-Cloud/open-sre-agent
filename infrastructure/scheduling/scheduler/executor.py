@@ -4,11 +4,6 @@ from __future__ import annotations
 
 import logging
 
-from infrastructure.scheduling.scheduler.claim_store import (
-    ExecutionClaim,
-    complete_run,
-    try_claim,
-)
 from infrastructure.scheduling.scheduler.delivery_bundle import resolve_delivery_adapter
 from infrastructure.scheduling.scheduler.delivery_plan import (
     DeliveryTarget,
@@ -19,6 +14,11 @@ from infrastructure.scheduling.scheduler.fanout import FanOutResult, deliver_pla
 from infrastructure.scheduling.scheduler.loop_constants import LOOP_CHANNELS_PARAM
 from infrastructure.scheduling.scheduler.operation_log import record_scheduler_execution_operation
 from infrastructure.scheduling.scheduler.runners import SchedulerRunners
+from infrastructure.scheduling.scheduler.storage import (
+    ExecutionClaim,
+    complete_run,
+    try_claim,
+)
 from infrastructure.scheduling.scheduler.tasks import build_message
 from infrastructure.scheduling.scheduler.types import (
     DeliveryStatus,

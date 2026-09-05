@@ -12,13 +12,10 @@ from pathlib import Path
 from typing import Any
 from uuid import uuid4
 
-from config.constants import OPENSRE_HOME_DIR
-from infrastructure.scheduling.scheduler.migrations import apply_migrations
+import infrastructure.scheduling.scheduler.storage.database as database
 from infrastructure.scheduling.scheduler.types import DeliveryOutcome, TaskRun, TaskStatus
 
 logger = logging.getLogger(__name__)
-
-_DB_FILENAME = "scheduler.db"
 
 #: How far back to look for a run with readable per-target history before
 #: reporting none. Only a bound on work, not on correctness: exhausting it
@@ -51,91 +48,67 @@ class ExpiredClaim:
     fire_time: str
 
 
-def _default_db_path() -> Path:
-    return OPENSRE_HOME_DIR / _DB_FILENAME
-
-
-def _connect(db_path: Path) -> sqlite3.Connection:
-    """Open a SQLite connection with WAL mode for concurrent readers."""
-    db_path.parent.mkdir(parents=True, exist_ok=True)
-    conn = sqlite3.connect(str(db_path), timeout=10.0)
-    conn.execute("PRAGMA journal_mode=WAL")
-    conn.execute("PRAGMA busy_timeout=5000")
-    return conn
-
-
 def try_claim(task_id: str, fire_time: str, db_path: Path | None = None) -> ExecutionClaim | None:
     """Claim a task tick or reclaim it when the current lease has expired."""
-    path = db_path or _default_db_path()
-    conn = _connect(path)
     try:
-        apply_migrations(conn)
-        conn.execute("BEGIN IMMEDIATE")
-        now = datetime.now(UTC)
-        now_text = now.isoformat()
-        lease_text = (now + timedelta(seconds=_CLAIM_LEASE_SECONDS)).isoformat()
-        row = conn.execute(
-            "SELECT attempt, status, lease_expires_at FROM task_runs "
-            "WHERE task_id = ? AND fire_time = ? ORDER BY attempt DESC LIMIT 1",
-            (task_id, fire_time),
-        ).fetchone()
+        with database.transaction(db_path, immediate=True) as conn:
+            now = datetime.now(UTC)
+            now_text = now.isoformat()
+            lease_text = (now + timedelta(seconds=_CLAIM_LEASE_SECONDS)).isoformat()
+            row = conn.execute(
+                "SELECT attempt, status, lease_expires_at FROM task_runs "
+                "WHERE task_id = ? AND fire_time = ? ORDER BY attempt DESC LIMIT 1",
+                (task_id, fire_time),
+            ).fetchone()
 
-        if row is not None:
-            attempt = int(row[0])
-            status = TaskStatus(row[1])
-            lease = _parse_datetime(row[2])
-            if status is not TaskStatus.RUNNING or (lease is not None and lease >= now):
-                conn.rollback()
-                return None
+            if row is not None:
+                attempt = int(row[0])
+                status = TaskStatus(row[1])
+                lease = _parse_datetime(row[2])
+                if status is not TaskStatus.RUNNING or (lease is not None and lease >= now):
+                    return None
+                conn.execute(
+                    "UPDATE task_runs SET status = ?, finished_at = ?, error = ? "
+                    "WHERE task_id = ? AND fire_time = ? AND attempt = ? AND status = ?",
+                    (
+                        TaskStatus.ABANDONED.value,
+                        now_text,
+                        "claim lease expired",
+                        task_id,
+                        fire_time,
+                        attempt,
+                        TaskStatus.RUNNING.value,
+                    ),
+                )
+                attempt += 1
+            else:
+                attempt = 1
+
+            owner_token = uuid4().hex
             conn.execute(
-                "UPDATE task_runs SET status = ?, finished_at = ?, error = ? "
-                "WHERE task_id = ? AND fire_time = ? AND attempt = ? AND status = ?",
+                "INSERT INTO task_runs "
+                "(task_id, fire_time, attempt, started_at, status, owner_token, "
+                "lease_expires_at) VALUES (?, ?, ?, ?, ?, ?, ?)",
                 (
-                    TaskStatus.ABANDONED.value,
-                    now_text,
-                    "claim lease expired",
                     task_id,
                     fire_time,
                     attempt,
+                    now_text,
                     TaskStatus.RUNNING.value,
+                    owner_token,
+                    lease_text,
                 ),
             )
-            attempt += 1
-        else:
-            attempt = 1
-
-        owner_token = uuid4().hex
-        conn.execute(
-            "INSERT INTO task_runs "
-            "(task_id, fire_time, attempt, started_at, status, owner_token, "
-            "lease_expires_at) VALUES (?, ?, ?, ?, ?, ?, ?)",
-            (
-                task_id,
-                fire_time,
-                attempt,
-                now_text,
-                TaskStatus.RUNNING.value,
-                owner_token,
-                lease_text,
-            ),
-        )
-        conn.commit()
-        return ExecutionClaim(task_id, fire_time, attempt, owner_token)
+            return ExecutionClaim(task_id, fire_time, attempt, owner_token)
     except sqlite3.IntegrityError:
-        conn.rollback()
         return None
-    finally:
-        conn.close()
 
 
 def get_expired_claims(
     *, limit: int = _EXPIRED_CLAIM_SCAN_LIMIT, db_path: Path | None = None
 ) -> list[ExpiredClaim]:
     """Return the latest expired running attempts that are eligible for retry."""
-    path = db_path or _default_db_path()
-    conn = _connect(path)
-    try:
-        apply_migrations(conn)
+    with database.connection(db_path) as conn:
         now_text = datetime.now(UTC).isoformat()
         rows = conn.execute(
             "SELECT task_id, fire_time FROM task_runs AS current "
@@ -148,8 +121,6 @@ def get_expired_claims(
             (TaskStatus.RUNNING.value, now_text, limit),
         ).fetchall()
         return [ExpiredClaim(task_id=str(row[0]), fire_time=str(row[1])) for row in rows]
-    finally:
-        conn.close()
 
 
 def complete_run(
@@ -167,10 +138,7 @@ def complete_run(
     ``targets`` is stored in the order it is given, which is the order the run
     planned its destinations in — not the order they finished.
     """
-    path = db_path or _default_db_path()
-    conn = _connect(path)
-    try:
-        apply_migrations(conn)
+    with database.transaction(db_path) as conn:
         now = datetime.now(UTC).isoformat()
         cursor = conn.execute(
             "UPDATE task_runs SET finished_at = ?, status = ?, "
@@ -191,7 +159,6 @@ def complete_run(
                 TaskStatus.RUNNING.value,
             ),
         )
-        conn.commit()
         completed = cursor.rowcount == 1
         if not completed:
             logger.warning(
@@ -201,8 +168,6 @@ def complete_run(
                 claim.attempt,
             )
         return completed
-    finally:
-        conn.close()
 
 
 def _encode_targets(targets: Sequence[DeliveryOutcome]) -> str:
@@ -252,18 +217,13 @@ def _parse_datetime(value: Any) -> datetime | None:
 
 def get_runs(task_id: str, limit: int = 20, db_path: Path | None = None) -> list[TaskRun]:
     """Return recent runs for a task, newest first."""
-    path = db_path or _default_db_path()
-    conn = _connect(path)
-    try:
-        apply_migrations(conn)
+    with database.connection(db_path) as conn:
         cursor = conn.execute(
             f"SELECT {_RUN_COLUMNS} "
             "FROM task_runs WHERE task_id = ? ORDER BY started_at DESC LIMIT ?",
             (task_id, limit),
         )
         return [_row_to_task_run(row) for row in cursor.fetchall()]
-    finally:
-        conn.close()
 
 
 def get_latest_finished_run(task_id: str, db_path: Path | None = None) -> TaskRun | None:
@@ -272,10 +232,7 @@ def get_latest_finished_run(task_id: str, db_path: Path | None = None) -> TaskRu
     Orders by completion time, not start time, and ignores in-flight rows so a
     burst of pending claims cannot hide the last delivery outcome.
     """
-    path = db_path or _default_db_path()
-    conn = _connect(path)
-    try:
-        apply_migrations(conn)
+    with database.connection(db_path) as conn:
         cursor = conn.execute(
             f"SELECT {_RUN_COLUMNS} "
             "FROM task_runs WHERE task_id = ? AND status IN (?, ?) "
@@ -284,8 +241,6 @@ def get_latest_finished_run(task_id: str, db_path: Path | None = None) -> TaskRu
         )
         row = cursor.fetchone()
         return _row_to_task_run(row) if row is not None else None
-    finally:
-        conn.close()
 
 
 def get_latest_targeted_run(task_id: str, db_path: Path | None = None) -> TaskRun | None:
@@ -302,10 +257,7 @@ def get_latest_targeted_run(task_id: str, db_path: Path | None = None) -> TaskRu
     unreadable value decodes to no outcomes, so a SQL-level check alone would
     let it shadow a readable older run.
     """
-    path = db_path or _default_db_path()
-    conn = _connect(path)
-    try:
-        apply_migrations(conn)
+    with database.connection(db_path) as conn:
         cursor = conn.execute(
             f"SELECT {_RUN_COLUMNS} "
             "FROM task_runs WHERE task_id = ? AND status IN (?, ?) "
@@ -323,8 +275,6 @@ def get_latest_targeted_run(task_id: str, db_path: Path | None = None) -> TaskRu
             if run.targets:
                 return run
         return None
-    finally:
-        conn.close()
 
 
 def delete_runs(task_id: str, db_path: Path | None = None) -> int:
@@ -333,20 +283,15 @@ def delete_runs(task_id: str, db_path: Path | None = None) -> int:
     Returns the number of deleted rows. Safe to call when no DB or table
     exists (returns 0). Idempotent — subsequent calls return 0.
     """
-    path = db_path or _default_db_path()
+    path = db_path or database.default_run_database_path()
     if not path.exists():
         return 0
-    conn = _connect(path)
-    try:
-        apply_migrations(conn)
+    with database.transaction(path) as conn:
         cursor = conn.execute(
             "DELETE FROM task_runs WHERE task_id = ?",
             (task_id,),
         )
-        conn.commit()
         return cursor.rowcount
-    finally:
-        conn.close()
 
 
 __all__ = [

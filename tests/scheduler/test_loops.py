@@ -15,7 +15,7 @@ from infrastructure.scheduling.scheduler.loop_constants import (
     LOOP_SOURCE_PARAM,
 )
 from infrastructure.scheduling.scheduler.loops import default_loop_channels, normalize_loop_channels
-from infrastructure.scheduling.scheduler.store import add_task, list_tasks
+from infrastructure.scheduling.scheduler.storage.task_store import add_task, list_tasks
 from infrastructure.scheduling.scheduler.types import Provider, ScheduledTask, TaskKind
 
 _LEGACY_MORNING_REPORT_PROMPT = (

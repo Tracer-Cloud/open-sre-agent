@@ -164,7 +164,7 @@ def cron_add(
     )
 
     from infrastructure.scheduling.scheduler.operation_log import record_scheduler_task_operation
-    from infrastructure.scheduling.scheduler.store import add_task
+    from infrastructure.scheduling.scheduler.storage import add_task
 
     added = add_task(task)
     record_scheduler_task_operation(
@@ -271,7 +271,7 @@ def cron_list() -> None:
 def cron_remove(task_id: str) -> None:
     """Remove a scheduled delivery task by ID."""
     from infrastructure.scheduling.scheduler.operation_log import record_scheduler_task_operation
-    from infrastructure.scheduling.scheduler.store import get_task, remove_task
+    from infrastructure.scheduling.scheduler.storage import get_task, remove_task
 
     task = get_task(task_id)
     if remove_task(task_id):
@@ -296,7 +296,7 @@ def _warn_if_rerun_duplicates(task_id: str) -> None:
     ``cron run`` is also the way to trigger a task on demand, and that has to
     keep reaching every destination.
     """
-    from infrastructure.scheduling.scheduler.claim_store import get_latest_targeted_run
+    from infrastructure.scheduling.scheduler.storage import get_latest_targeted_run
 
     run = get_latest_targeted_run(task_id)
     if run is None:
@@ -327,7 +327,7 @@ def cron_run(task_id: str, failed_only: bool) -> None:
     from bootstrap.process import SCHEDULED_COMMAND_PROFILE, configure_process
     from infrastructure.scheduling.scheduler.operation_log import record_scheduler_task_operation
     from infrastructure.scheduling.scheduler.runner import failed_retry_scope, run_task_now
-    from infrastructure.scheduling.scheduler.store import get_task
+    from infrastructure.scheduling.scheduler.storage import get_task
 
     configure_process(SCHEDULED_COMMAND_PROFILE)
 
@@ -392,8 +392,7 @@ def _run_status_label(run: TaskRun) -> str:
 )
 def cron_logs(task_id: str, limit: int) -> None:
     """Show execution history for a scheduled task."""
-    from infrastructure.scheduling.scheduler.claim_store import get_runs
-    from infrastructure.scheduling.scheduler.store import get_task
+    from infrastructure.scheduling.scheduler.storage import get_runs, get_task
 
     task = get_task(task_id)
     if task is None:

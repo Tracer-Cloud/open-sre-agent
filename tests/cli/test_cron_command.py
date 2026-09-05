@@ -85,10 +85,10 @@ def test_cron_add_allows_slack_without_chat_id(
     The webhook is the destination, so it must actually be configured — without
     one a bot-token install would store a task that delivers nowhere.
     """
-    from infrastructure.scheduling.scheduler import store as scheduler_store
+    from infrastructure.scheduling.scheduler.storage import task_store as scheduler_store
 
     store = tmp_path / "scheduler_tasks.json"
-    monkeypatch.setattr(scheduler_store, "_default_store_path", lambda: store)
+    monkeypatch.setattr(scheduler_store, "default_task_store_path", lambda: store)
     monkeypatch.setenv("SLACK_WEBHOOK_URL", "https://hooks.slack.test/services/T/B/x")
 
     runner = CliRunner()
@@ -111,11 +111,11 @@ def test_cron_add_allows_slack_without_chat_id(
 
 
 def test_cron_add_persists_loop_name(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
-    from infrastructure.scheduling.scheduler import store as scheduler_store
-    from infrastructure.scheduling.scheduler.store import list_tasks
+    from infrastructure.scheduling.scheduler.storage import task_store as scheduler_store
+    from infrastructure.scheduling.scheduler.storage.task_store import list_tasks
 
     store = tmp_path / "scheduler_tasks.json"
-    monkeypatch.setattr(scheduler_store, "_default_store_path", lambda: store)
+    monkeypatch.setattr(scheduler_store, "default_task_store_path", lambda: store)
     monkeypatch.setenv("SLACK_WEBHOOK_URL", "https://hooks.slack.test/services/T/B/x")
 
     runner = CliRunner()
@@ -142,11 +142,11 @@ def test_cron_add_persists_loop_name(tmp_path: Path, monkeypatch: pytest.MonkeyP
 def test_cron_add_persists_github_ci_health_scope(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    from infrastructure.scheduling.scheduler import store as scheduler_store
-    from infrastructure.scheduling.scheduler.store import list_tasks
+    from infrastructure.scheduling.scheduler.storage import task_store as scheduler_store
+    from infrastructure.scheduling.scheduler.storage.task_store import list_tasks
 
     store = tmp_path / "scheduler_tasks.json"
-    monkeypatch.setattr(scheduler_store, "_default_store_path", lambda: store)
+    monkeypatch.setattr(scheduler_store, "default_task_store_path", lambda: store)
     monkeypatch.setenv("SLACK_WEBHOOK_URL", "https://hooks.slack.test/services/T/B/x")
 
     result = CliRunner().invoke(
@@ -184,11 +184,11 @@ def test_cron_add_persists_github_ci_health_scope(
 def test_cron_add_persists_morning_report_city(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    from infrastructure.scheduling.scheduler import store as scheduler_store
-    from infrastructure.scheduling.scheduler.store import list_tasks
+    from infrastructure.scheduling.scheduler.storage import task_store as scheduler_store
+    from infrastructure.scheduling.scheduler.storage.task_store import list_tasks
 
     store = tmp_path / "scheduler_tasks.json"
-    monkeypatch.setattr(scheduler_store, "_default_store_path", lambda: store)
+    monkeypatch.setattr(scheduler_store, "default_task_store_path", lambda: store)
 
     result = CliRunner().invoke(
         cron_command,
@@ -313,11 +313,11 @@ def test_cron_add_rejects_github_scope_for_an_unrelated_kind() -> None:
 def test_cron_add_allows_interactive_shell_without_chat_id(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    from infrastructure.scheduling.scheduler import store as scheduler_store
-    from infrastructure.scheduling.scheduler.store import list_tasks
+    from infrastructure.scheduling.scheduler.storage import task_store as scheduler_store
+    from infrastructure.scheduling.scheduler.storage.task_store import list_tasks
 
     store = tmp_path / "scheduler_tasks.json"
-    monkeypatch.setattr(scheduler_store, "_default_store_path", lambda: store)
+    monkeypatch.setattr(scheduler_store, "default_task_store_path", lambda: store)
 
     runner = CliRunner()
     result = runner.invoke(
@@ -407,7 +407,7 @@ def _patch_cron_run_deps(
 
     monkeypatch.setattr("bootstrap.process.configure_process", lambda _profile: None)
     monkeypatch.setattr("bootstrap.adapters.scheduler_runners", lambda: object())
-    monkeypatch.setattr("infrastructure.scheduling.scheduler.store.get_task", lambda _tid: task)
+    monkeypatch.setattr("infrastructure.scheduling.scheduler.storage.get_task", lambda _tid: task)
     monkeypatch.setattr(
         "infrastructure.scheduling.scheduler.runner.run_task_now", _fake_run_task_now
     )
@@ -416,7 +416,7 @@ def _patch_cron_run_deps(
         lambda *_args, **_kwargs: None,
     )
     monkeypatch.setattr(
-        "infrastructure.scheduling.scheduler.claim_store.get_latest_targeted_run",
+        "infrastructure.scheduling.scheduler.storage.get_latest_targeted_run",
         lambda _tid: latest_run,
     )
     return calls

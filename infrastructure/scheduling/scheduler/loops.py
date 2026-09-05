@@ -33,7 +33,12 @@ from infrastructure.scheduling.scheduler.operation_log import (
     record_scheduler_task_operation,
 )
 from infrastructure.scheduling.scheduler.runner import compute_next_run
-from infrastructure.scheduling.scheduler.store import add_task, list_tasks, remove_task, update_task
+from infrastructure.scheduling.scheduler.storage import (
+    add_task,
+    list_tasks,
+    remove_task,
+    update_task,
+)
 from infrastructure.scheduling.scheduler.types import Provider, ScheduledTask, TaskKind
 
 _ONBOARDING_LOOP_SOURCE = "onboarding"

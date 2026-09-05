@@ -7,8 +7,8 @@ from pathlib import Path
 
 import pytest
 
-from infrastructure.scheduling.scheduler.claim_store import get_runs, try_claim
-from infrastructure.scheduling.scheduler.store import (
+from infrastructure.scheduling.scheduler.storage.run_store import get_runs, try_claim
+from infrastructure.scheduling.scheduler.storage.task_store import (
     _quarantine_unreadable,
     add_task,
     get_task,
@@ -348,7 +348,9 @@ class TestStoreSurvivesTornWrites:
             raise OSError("crash during rename")
 
         with pytest.MonkeyPatch.context() as patch:
-            patch.setattr("infrastructure.scheduling.scheduler.store.os.replace", _explode)
+            patch.setattr(
+                "infrastructure.scheduling.scheduler.storage.task_store.os.replace", _explode
+            )
             with pytest.raises(OSError):
                 add_task(self._digest(8), store_path)
 
@@ -406,7 +408,8 @@ class TestStoreSurvivesTornWrites:
         # second os.replace would erase the first casualty.
         with pytest.MonkeyPatch.context() as patch:
             patch.setattr(
-                "infrastructure.scheduling.scheduler.store.time.time", lambda: 1_700_000_000.0
+                "infrastructure.scheduling.scheduler.storage.task_store.time.time",
+                lambda: 1_700_000_000.0,
             )
 
             store_path.write_text("first torn write", encoding="utf-8")
@@ -434,7 +437,9 @@ class TestStoreSurvivesTornWrites:
             real_fsync(fd)
             fsync_calls.append(fd)
 
-        monkeypatch.setattr("infrastructure.scheduling.scheduler.store.os.fsync", _counting_fsync)
+        monkeypatch.setattr(
+            "infrastructure.scheduling.scheduler.storage.task_store.os.fsync", _counting_fsync
+        )
 
         add_task(self._digest(7), store_path)
 
@@ -453,7 +458,9 @@ class TestStoreSurvivesTornWrites:
         def _explode(_src: object, _dst: object) -> None:
             raise OSError("simulated replace failure")
 
-        monkeypatch.setattr("infrastructure.scheduling.scheduler.store.os.replace", _explode)
+        monkeypatch.setattr(
+            "infrastructure.scheduling.scheduler.storage.task_store.os.replace", _explode
+        )
 
         with pytest.raises(OSError):
             _quarantine_unreadable(store_path)

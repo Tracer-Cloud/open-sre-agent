@@ -9,9 +9,9 @@ from click.testing import CliRunner
 
 import infrastructure.scheduling.scheduler.delivery_bundle as delivery_bundle
 from core.agent_harness import AgentSession, ToolCallingTurnResult, TurnResult
-from infrastructure.scheduling.scheduler.claim_store import get_runs
 from infrastructure.scheduling.scheduler.executor import execute_task
-from infrastructure.scheduling.scheduler.store import list_tasks
+from infrastructure.scheduling.scheduler.storage.run_store import get_runs
+from infrastructure.scheduling.scheduler.storage.task_store import list_tasks
 from infrastructure.scheduling.scheduler.types import Provider, ScheduledTask, TaskKind, TaskStatus
 from integrations import scheduled_skill_runner
 from surfaces.cli.commands.cron import cron_command
@@ -38,11 +38,11 @@ def test_scheduled_morning_report_runs_the_skill_and_delivers_once(
     prompts: list[str] = []
 
     monkeypatch.setattr(
-        "infrastructure.scheduling.scheduler.store._default_store_path",
+        "infrastructure.scheduling.scheduler.storage.task_store.default_task_store_path",
         lambda: store_path,
     )
     monkeypatch.setattr(
-        "infrastructure.scheduling.scheduler.claim_store._default_db_path",
+        "infrastructure.scheduling.scheduler.storage.database.default_run_database_path",
         lambda: db_path,
     )
 

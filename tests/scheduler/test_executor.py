@@ -20,12 +20,12 @@ import pytest
 import infrastructure.scheduling.scheduler.delivery_bundle as delivery_bundle
 from config.constants import OPENSRE_OPERATIONS_LOG_PATH_ENV
 from infrastructure.observability.operations_log import read_operations
-from infrastructure.scheduling.scheduler.claim_store import get_runs
 from infrastructure.scheduling.scheduler.executor import execute_task
 from infrastructure.scheduling.scheduler.local_delivery import get_loop_messages
 from infrastructure.scheduling.scheduler.loop_constants import LOOP_CHANNELS_PARAM
 from infrastructure.scheduling.scheduler.runner import _recover_expired_tasks
-from infrastructure.scheduling.scheduler.store import add_task
+from infrastructure.scheduling.scheduler.storage.run_store import get_runs
+from infrastructure.scheduling.scheduler.storage.task_store import add_task
 from infrastructure.scheduling.scheduler.types import (
     Provider,
     ScheduledTask,
@@ -98,11 +98,11 @@ def _reset_delivery_bundle() -> None:
 def _tmp_stores(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     """Point both stores at tmp_path so tests are isolated."""
     monkeypatch.setattr(
-        "infrastructure.scheduling.scheduler.claim_store._default_db_path",
+        "infrastructure.scheduling.scheduler.storage.database.default_run_database_path",
         lambda: tmp_path / "scheduler.db",
     )
     monkeypatch.setattr(
-        "infrastructure.scheduling.scheduler.store._default_store_path",
+        "infrastructure.scheduling.scheduler.storage.task_store.default_task_store_path",
         lambda: tmp_path / "tasks.json",
     )
 
@@ -120,7 +120,7 @@ def _expire_claim(db_path: Path, task_id: str, fire_time: str) -> None:
 @pytest.mark.usefixtures("_tmp_stores")
 class TestExecutor:
     def test_crash_before_build_is_recovered_by_a_new_attempt(self, tmp_path: Path) -> None:
-        from infrastructure.scheduling.scheduler.claim_store import get_runs, try_claim
+        from infrastructure.scheduling.scheduler.storage.run_store import get_runs, try_claim
 
         task = ScheduledTask(
             id="test_build_crash",
@@ -146,7 +146,7 @@ class TestExecutor:
         assert len(adapters[Provider.SLACK].calls) == 1
 
     def test_crash_during_delivery_is_recovered_by_a_new_attempt(self, tmp_path: Path) -> None:
-        from infrastructure.scheduling.scheduler.claim_store import get_runs
+        from infrastructure.scheduling.scheduler.storage.run_store import get_runs
 
         adapter = _CrashOnceAdapter()
         _install_bundle({Provider.SLACK: adapter})
@@ -184,7 +184,7 @@ class TestExecutor:
     def test_scheduler_recovery_sweep_resubmits_the_original_fire_time(
         self, tmp_path: Path
     ) -> None:
-        from infrastructure.scheduling.scheduler.claim_store import get_runs, try_claim
+        from infrastructure.scheduling.scheduler.storage.run_store import get_runs, try_claim
 
         task = ScheduledTask(
             id="test_sweep_recovery",
@@ -406,7 +406,7 @@ class TestExecutor:
 
     def test_loop_fanout_partial_success_completes_claim(self) -> None:
         """One channel failing must not leave an unrecoverable failed claim."""
-        from infrastructure.scheduling.scheduler.claim_store import get_runs
+        from infrastructure.scheduling.scheduler.storage.run_store import get_runs
 
         adapters = _install_fake_bundle()
         adapters[Provider.INTERACTIVE_SHELL].result = (True, "", "local:1")
@@ -657,7 +657,7 @@ class TestExecutor:
         The delivery-targets path used to fail the whole run after Slack had
         already been posted to, so run history claimed nothing was delivered.
         """
-        from infrastructure.scheduling.scheduler.claim_store import get_runs
+        from infrastructure.scheduling.scheduler.storage.run_store import get_runs
 
         adapters = _install_fake_bundle()
         adapters[Provider.SLACK].result = (True, "", "ts_123")
@@ -786,7 +786,7 @@ class TestDeliveryFanOutConcurrency:
     """Fan-out overlaps destinations and reports them in a stable order."""
 
     def test_destinations_are_delivered_to_concurrently(self) -> None:
-        from infrastructure.scheduling.scheduler.claim_store import get_runs
+        from infrastructure.scheduling.scheduler.storage.run_store import get_runs
 
         barrier = threading.Barrier(3, timeout=_SYNC_TIMEOUT_SECONDS)
         adapters: dict[Provider, Any] = {
@@ -809,7 +809,7 @@ class TestDeliveryFanOutConcurrency:
 
     def test_target_outcomes_persist_in_plan_order_not_completion_order(self) -> None:
         """The last destination to finish is still reported first."""
-        from infrastructure.scheduling.scheduler.claim_store import get_runs
+        from infrastructure.scheduling.scheduler.storage.run_store import get_runs
 
         slack_done = threading.Event()
         shell_done = threading.Event()
@@ -837,7 +837,7 @@ class TestDeliveryFanOutConcurrency:
         ]
 
     def test_retry_targets_only_the_failed_destination(self) -> None:
-        from infrastructure.scheduling.scheduler.claim_store import get_runs
+        from infrastructure.scheduling.scheduler.storage.run_store import get_runs
 
         flaky = _FlakyAdapter(failures=2)
         healthy = _FakeAdapter()
@@ -859,7 +859,7 @@ class TestDeliveryFanOutConcurrency:
         assert [outcome.attempts for outcome in runs[0].targets] == [1, 3]
 
     def test_all_destinations_failing_fails_the_run(self) -> None:
-        from infrastructure.scheduling.scheduler.claim_store import get_runs
+        from infrastructure.scheduling.scheduler.storage.run_store import get_runs
 
         adapters = _install_fake_bundle()
         adapters[Provider.INTERACTIVE_SHELL].result = (False, "inbox unwritable", "")
@@ -879,7 +879,7 @@ class TestDeliveryFanOutConcurrency:
         assert [outcome.ok for outcome in runs[0].targets] == [False, False]
 
     def test_unsupported_loop_channel_records_the_parse_error(self) -> None:
-        from infrastructure.scheduling.scheduler.claim_store import get_runs
+        from infrastructure.scheduling.scheduler.storage.run_store import get_runs
 
         _install_fake_bundle()
         task = _fanout_task("test_bad_channel", "interactive_shell,carrier_pigeon")

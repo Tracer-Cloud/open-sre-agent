@@ -16,7 +16,8 @@ from filelock import FileLock
 
 from config.constants import OPENSRE_HOME_DIR
 from infrastructure.scheduling.scheduler import reload_signal
-from infrastructure.scheduling.scheduler.claim_store import _DB_FILENAME, delete_runs
+from infrastructure.scheduling.scheduler.storage.database import run_database_path
+from infrastructure.scheduling.scheduler.storage.run_store import delete_runs
 from infrastructure.scheduling.scheduler.types import ScheduledTask
 
 logger = logging.getLogger(__name__)
@@ -24,7 +25,8 @@ logger = logging.getLogger(__name__)
 _STORE_FILENAME = "scheduler_tasks.json"
 
 
-def _default_store_path() -> Path:
+def default_task_store_path() -> Path:
+    """Return the scheduler task-store path under the OpenSRE home."""
     return OPENSRE_HOME_DIR / _STORE_FILENAME
 
 
@@ -152,7 +154,7 @@ def _save_raw(store_path: Path, data: list[dict[str, object]]) -> None:
 
 def list_tasks(store_path: Path | None = None) -> list[ScheduledTask]:
     """Return all persisted scheduled tasks."""
-    path = store_path or _default_store_path()
+    path = store_path or default_task_store_path()
     lock = FileLock(_lock_path(path))
     with lock:
         raw = _load_raw(path)
@@ -202,7 +204,7 @@ def add_task(task: ScheduledTask, store_path: Path | None = None) -> ScheduledTa
     confirmation appended a row — a real install reached 37 byte-identical
     ``daily_summary`` entries, none of which could deliver.
     """
-    path = store_path or _default_store_path()
+    path = store_path or default_task_store_path()
     lock = FileLock(_lock_path(path))
     with lock:
         raw = _load_for_write(path)
@@ -234,7 +236,7 @@ def remove_task(task_id: str, store_path: Path | None = None) -> bool:
     best-effort — a warning is logged on failure but the return value
     reflects only the JSON-store result.
     """
-    path = store_path or _default_store_path()
+    path = store_path or default_task_store_path()
     lock = FileLock(_lock_path(path))
     with lock:
         raw = _load_raw(path)
@@ -249,7 +251,7 @@ def remove_task(task_id: str, store_path: Path | None = None) -> bool:
 
     # Cascade: remove orphaned TaskRun records from the SQLite claim store.
     # Derive the DB path from the same directory as the JSON store.
-    db_path = path.with_name(_DB_FILENAME)
+    db_path = run_database_path(path.parent)
     try:
         deleted = delete_runs(task_id, db_path)
         if deleted:
@@ -267,7 +269,7 @@ def remove_task(task_id: str, store_path: Path | None = None) -> bool:
 
 def update_task(task: ScheduledTask, store_path: Path | None = None) -> bool:
     """Update an existing task in the store. Returns True if found and updated."""
-    path = store_path or _default_store_path()
+    path = store_path or default_task_store_path()
     lock = FileLock(_lock_path(path))
     with lock:
         raw = _load_raw(path)
@@ -281,6 +283,7 @@ def update_task(task: ScheduledTask, store_path: Path | None = None) -> bool:
 
 __all__ = [
     "add_task",
+    "default_task_store_path",
     "get_task",
     "list_tasks",
     "remove_task",
