@@ -2,6 +2,7 @@
 
 from core.domain.runbooks.contracts import (
     IncidentIdentity,
+    RunbookCatalog,
     RunbookCatalogEntry,
     RunbookDocument,
     RunbookMatch,
@@ -15,6 +16,7 @@ from core.domain.runbooks.selection import select_runbook
 
 __all__ = [
     "IncidentIdentity",
+    "RunbookCatalog",
     "RunbookCatalogEntry",
     "RunbookDocument",
     "RunbookMatch",

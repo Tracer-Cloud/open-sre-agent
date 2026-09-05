@@ -66,6 +66,16 @@ class RunbookCatalogEntry:
 
 
 @dataclass(frozen=True, slots=True)
+class RunbookCatalog:
+    """Manifest entries loaded from one immutable source revision."""
+
+    source_name: str
+    entries: tuple[RunbookCatalogEntry, ...]
+    resolved_revision: str
+    source_uri: str
+
+
+@dataclass(frozen=True, slots=True)
 class RunbookReference:
     """Provider-neutral pointer to one runbook document."""
 
@@ -104,8 +114,14 @@ class RunbookSource(Protocol):
 
     provider: str
 
-    def verify(self, source_name: str) -> tuple[bool, str]:
+    def verify(self) -> tuple[bool, str]:
         """Verify that the configured source can retrieve runbooks."""
+
+    def resolve_reference(self, url: str) -> RunbookReference | None:
+        """Resolve a supported URL when it belongs to this trusted source."""
+
+    def fetch_catalog(self) -> RunbookCatalog:
+        """Retrieve and validate the optional catalog at an immutable revision."""
 
     def fetch_document(self, reference: RunbookReference) -> RunbookDocument:
         """Retrieve one bounded document at an immutable source revision."""
@@ -113,6 +129,7 @@ class RunbookSource(Protocol):
 
 __all__ = [
     "IncidentIdentity",
+    "RunbookCatalog",
     "RunbookCatalogEntry",
     "RunbookDocument",
     "RunbookMatch",

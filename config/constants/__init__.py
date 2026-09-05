@@ -803,6 +803,9 @@ if TYPE_CHECKING:
     from config.constants.repl_theme import (
         Theme as Theme,
     )
+    from config.constants.runbooks import (
+        RUNBOOK_CONTENT_MAX_CHARS as RUNBOOK_CONTENT_MAX_CHARS,
+    )
     from config.constants.runtime_metadata import (
         GITHUB_REPO_ENV as GITHUB_REPO_ENV,
     )

@@ -8,6 +8,7 @@ from config.runbook_sources import (
     RunbookSourceConfig,
     RunbookSourceConfigError,
     add_runbook_source,
+    get_runbook_source,
     load_runbook_sources,
     remove_runbook_source,
 )
@@ -81,6 +82,34 @@ def source_remove(name: str) -> None:
     if not removed:
         raise click.ClickException(f"Runbook source {name!r} was not found")
     click.echo(f"{GLYPH_SUCCESS} Removed runbook source {name}")
+
+
+def _verify_source(source: RunbookSourceConfig) -> tuple[bool, str]:
+    from infrastructure.harness_providers import resolve_integrations, resolve_runbook_source
+
+    provider = resolve_runbook_source(source, resolve_integrations())
+    if provider is None:
+        return False, (
+            f"{source.provider.title()} integration is not configured and verified. "
+            f"Run 'opensre integrations setup {source.provider}' first."
+        )
+    return provider.verify()
+
+
+@source_command.command(name="verify")
+@click.argument("name")
+def source_verify(name: str) -> None:
+    """Verify access to one configured runbook source."""
+    try:
+        source = get_runbook_source(name)
+    except RunbookSourceConfigError as exc:
+        raise click.ClickException(str(exc)) from exc
+    if source is None:
+        raise click.ClickException(f"Runbook source {name!r} was not found")
+    ok, detail = _verify_source(source)
+    if not ok:
+        raise click.ClickException(detail)
+    click.echo(f"{GLYPH_SUCCESS} {detail}")
 
 
 __all__ = ["runbooks_command"]

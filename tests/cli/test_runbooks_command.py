@@ -7,6 +7,7 @@ from click.testing import CliRunner
 
 from config import local_settings
 from surfaces.cli.app import cli
+from surfaces.cli.commands import runbooks
 
 
 @pytest.fixture(autouse=True)
@@ -75,3 +76,67 @@ def test_empty_source_list_has_actionable_output() -> None:
 
     assert result.exit_code == 0, result.output
     assert "No runbook sources configured" in result.output
+
+
+def test_source_verify_reports_provider_result(monkeypatch: pytest.MonkeyPatch) -> None:
+    runner = CliRunner()
+    added = runner.invoke(
+        cli,
+        [
+            "runbooks",
+            "source",
+            "add",
+            "github",
+            "--name",
+            "platform-runbooks",
+            "--repo",
+            "acme/operations",
+        ],
+    )
+    assert added.exit_code == 0, added.output
+    monkeypatch.setattr(
+        runbooks,
+        "_verify_source",
+        lambda _source: (True, "Verified access to acme/operations@main."),
+    )
+
+    result = runner.invoke(
+        cli,
+        ["runbooks", "source", "verify", "platform-runbooks"],
+    )
+
+    assert result.exit_code == 0, result.output
+    assert "Verified access" in result.output
+
+
+def test_source_verify_fails_when_provider_is_unavailable(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    runner = CliRunner()
+    added = runner.invoke(
+        cli,
+        [
+            "runbooks",
+            "source",
+            "add",
+            "github",
+            "--name",
+            "platform-runbooks",
+            "--repo",
+            "acme/operations",
+        ],
+    )
+    assert added.exit_code == 0, added.output
+    monkeypatch.setattr(
+        runbooks,
+        "_verify_source",
+        lambda _source: (False, "GitHub integration is unavailable."),
+    )
+
+    result = runner.invoke(
+        cli,
+        ["runbooks", "source", "verify", "platform-runbooks"],
+    )
+
+    assert result.exit_code != 0
+    assert "GitHub integration is unavailable" in result.output
