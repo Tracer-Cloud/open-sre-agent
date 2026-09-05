@@ -6,8 +6,8 @@ import logging
 
 from infrastructure.scheduling.scheduler.claim_store import (
     complete_run,
-    start_queued_run,
     try_claim,
+    try_start_run,
 )
 from infrastructure.scheduling.scheduler.delivery_bundle import resolve_delivery_adapter
 from infrastructure.scheduling.scheduler.delivery_plan import (
@@ -52,11 +52,7 @@ def execute_task(
         True if the task was executed and delivered successfully.
         False if the claim was lost (another instance handled it) or delivery failed.
     """
-    claimed = (
-        start_queued_run(task.id, fire_time) or try_claim(task.id, fire_time)
-        if queued_claim
-        else try_claim(task.id, fire_time)
-    )
+    claimed = try_start_run(task.id, fire_time) if queued_claim else try_claim(task.id, fire_time)
     if not claimed:
         logger.info(
             "Task %s fire_time=%s already claimed by another instance",

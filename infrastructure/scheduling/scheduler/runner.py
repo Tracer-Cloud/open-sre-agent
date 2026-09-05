@@ -13,11 +13,16 @@ import os
 import signal
 import threading
 from collections.abc import Callable
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from typing import Any, cast
 
 from config.constants.turn_concurrency import OPENSRE_SCHEDULER_MAX_CONCURRENT_RUNS_ENV
-from infrastructure.scheduling.scheduler.claim_store import complete_run, try_queue_run
+from infrastructure.scheduling.scheduler.claim_store import (
+    complete_run,
+    fail_stale_pending_runs,
+    try_queue_run,
+    try_start_run,
+)
 from infrastructure.scheduling.scheduler.executor import execute_task
 from infrastructure.scheduling.scheduler.operation_log import (
     record_scheduler_execution_operation,
@@ -40,6 +45,7 @@ from infrastructure.scheduling.scheduler.types import Provider, ScheduledTask, T
 logger = logging.getLogger(__name__)
 TaskFilter = Callable[[ScheduledTask], bool]
 DEFAULT_SCHEDULED_RUN_CONCURRENCY = 2
+STALE_PENDING_RUN_AGE = timedelta(hours=24)
 
 # Populated by EVENT_JOB_SUBMITTED before each job runs (job_id -> fire_time).
 _pending_fire_times: dict[str, str] = {}
@@ -147,6 +153,8 @@ def _scheduled_job(task_id: str, runners: SchedulerRunners) -> None:
 
     task = get_task(task_id)
     if task is None:
+        if not try_start_run(task_id, fire_time):
+            return
         logger.warning("Task %s not found in store, skipping", task_id)
         record_scheduler_service_operation(
             "scheduler_job_skipped",
@@ -155,6 +163,8 @@ def _scheduled_job(task_id: str, runners: SchedulerRunners) -> None:
         complete_run(task_id, fire_time, status=TaskStatus.SKIPPED, error="missing_task")
         return
     if not task.enabled:
+        if not try_start_run(task_id, fire_time):
+            return
         logger.info("Task %s is disabled, skipping", task_id)
         record_scheduler_execution_operation(
             "scheduled_task_execution_skipped",
@@ -302,6 +312,14 @@ def refresh_background_scheduler(
     return None, 0
 
 
+def _recover_stale_pending_runs() -> None:
+    """Fail queued records that survived a previous scheduler process."""
+    stale_before = datetime.now(UTC) - STALE_PENDING_RUN_AGE
+    recovered = fail_stale_pending_runs(stale_before)
+    if recovered:
+        logger.warning("Marked %d stale pending scheduler run(s) as failed", recovered)
+
+
 def start_background_scheduler(
     runners: SchedulerRunners,
     *,
@@ -315,6 +333,7 @@ def start_background_scheduler(
     """
     from apscheduler.schedulers.background import BackgroundScheduler
 
+    _recover_stale_pending_runs()
     scheduler = _build_scheduler(BackgroundScheduler)
     enabled_count = _register_jobs(scheduler, runners, task_filter=task_filter)
     if enabled_count == 0:
@@ -356,6 +375,7 @@ def start_scheduler(runners: SchedulerRunners, *, idle_when_empty: bool = False)
     """
     from apscheduler.schedulers.blocking import BlockingScheduler
 
+    _recover_stale_pending_runs()
     scheduler = _build_scheduler(BlockingScheduler)
     enabled_count = _register_jobs(scheduler, runners)
     if enabled_count == 0 and not idle_when_empty:

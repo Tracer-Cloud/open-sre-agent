@@ -157,6 +157,8 @@ Scheduled callbacks use a bounded worker pool. At most two distinct tasks run
 at once by default; set `OPENSRE_SCHEDULER_MAX_CONCURRENT_RUNS` to a positive
 integer to change that limit. A task never overlaps its own previous run.
 Runs waiting for a scheduler worker appear as `pending` in run history.
+Pending runs older than 24 hours are marked failed when the scheduler starts,
+so interrupted queued work does not remain pending indefinitely.
 
 Agentic scheduled runs also take a permit from
 `OPENSRE_MAX_CONCURRENT_TURNS`, so the lower of the scheduler and process-wide

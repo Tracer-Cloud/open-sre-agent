@@ -6,6 +6,7 @@ from unittest.mock import patch
 
 import pytest
 
+from config.constants.turn_concurrency import OPENSRE_SCHEDULER_MAX_CONCURRENT_RUNS_ENV
 from infrastructure.scheduling.scheduler.loop_constants import LOOP_PROMPT_PARAM
 from infrastructure.scheduling.scheduler.runner import (
     _build_scheduler,
@@ -14,6 +15,7 @@ from infrastructure.scheduling.scheduler.runner import (
     _on_job_submitted,
     _pending_fire_times,
     _register_jobs,
+    _scheduled_job,
     compute_next_run,
     configured_scheduled_run_limit,
     refresh_background_scheduler,
@@ -105,7 +107,7 @@ class TestOnJobSubmitted:
 
 class TestScheduledConcurrency:
     def test_configured_limit_defaults_to_two(self, monkeypatch: pytest.MonkeyPatch) -> None:
-        monkeypatch.delenv("OPENSRE_SCHEDULER_MAX_CONCURRENT_RUNS", raising=False)
+        monkeypatch.delenv(OPENSRE_SCHEDULER_MAX_CONCURRENT_RUNS_ENV, raising=False)
         assert configured_scheduled_run_limit() == 2
 
     @pytest.mark.parametrize("limit", [1, 2])
@@ -118,7 +120,7 @@ class TestScheduledConcurrency:
         from apscheduler.events import EVENT_JOB_SUBMITTED
         from apscheduler.schedulers.background import BackgroundScheduler
 
-        monkeypatch.setenv("OPENSRE_SCHEDULER_MAX_CONCURRENT_RUNS", str(limit))
+        monkeypatch.setenv(OPENSRE_SCHEDULER_MAX_CONCURRENT_RUNS_ENV, str(limit))
         scheduler = _build_scheduler(BackgroundScheduler)
         entered = threading.Barrier(limit + 1)
         release = threading.Event()
@@ -150,7 +152,7 @@ class TestScheduledConcurrency:
         from apscheduler.events import EVENT_JOB_SUBMITTED
         from apscheduler.schedulers.background import BackgroundScheduler
 
-        monkeypatch.setenv("OPENSRE_SCHEDULER_MAX_CONCURRENT_RUNS", "2")
+        monkeypatch.setenv(OPENSRE_SCHEDULER_MAX_CONCURRENT_RUNS_ENV, "2")
         scheduler = _build_scheduler(BackgroundScheduler)
         first_wave = threading.Barrier(3)
         release = threading.Event()
@@ -211,7 +213,7 @@ class TestScheduledConcurrency:
         from apscheduler.events import EVENT_JOB_MAX_INSTANCES
         from apscheduler.schedulers.background import BackgroundScheduler
 
-        monkeypatch.setenv("OPENSRE_SCHEDULER_MAX_CONCURRENT_RUNS", "2")
+        monkeypatch.setenv(OPENSRE_SCHEDULER_MAX_CONCURRENT_RUNS_ENV, "2")
         scheduler = _build_scheduler(BackgroundScheduler)
         entered = threading.Barrier(2)
         release = threading.Event()
@@ -249,6 +251,45 @@ class TestScheduledConcurrency:
         finally:
             release.set()
             scheduler.shutdown(wait=True)
+
+
+class TestScheduledJobOwnership:
+    @pytest.mark.parametrize(
+        "task",
+        [
+            None,
+            ScheduledTask(
+                id="task-1",
+                kind=TaskKind.MANUAL_LOOP,
+                cron="0 9 * * *",
+                provider=Provider.TELEGRAM,
+                enabled=False,
+            ),
+        ],
+    )
+    def test_duplicate_skipped_callback_cannot_complete_another_hosts_run(
+        self,
+        task: ScheduledTask | None,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        completed: list[tuple[str, str]] = []
+        _pending_fire_times["task-1"] = "2026-01-15T09:00Z"
+        monkeypatch.setattr(
+            "infrastructure.scheduling.scheduler.runner.get_task",
+            lambda _task_id: task,
+        )
+        monkeypatch.setattr(
+            "infrastructure.scheduling.scheduler.runner.try_start_run",
+            lambda _task_id, _fire_time: False,
+        )
+        monkeypatch.setattr(
+            "infrastructure.scheduling.scheduler.runner.complete_run",
+            lambda task_id, fire_time, **_kwargs: completed.append((task_id, fire_time)),
+        )
+
+        _scheduled_job("task-1", real_runners())
+
+        assert completed == []
 
 
 class TestComputeFireTime:
@@ -544,10 +585,13 @@ class TestStartSchedulerIdle:
     def test_empty_exits_by_default(self, monkeypatch: pytest.MonkeyPatch) -> None:
         from infrastructure.scheduling.scheduler import runner
 
+        recovered: list[bool] = []
+        monkeypatch.setattr(runner, "_recover_stale_pending_runs", lambda: recovered.append(True))
         monkeypatch.setattr(runner, "_register_jobs", lambda _scheduler, _runners, **_kw: 0)
         monkeypatch.setattr(runner, "record_scheduler_service_operation", lambda *_a, **_k: None)
         with pytest.raises(SystemExit):
             runner.start_scheduler(real_runners())
+        assert recovered == [True]
 
     def test_empty_idles_when_service(self, monkeypatch: pytest.MonkeyPatch) -> None:
         import apscheduler.schedulers.blocking as blocking
@@ -567,6 +611,7 @@ class TestStartSchedulerIdle:
                 pass
 
         monkeypatch.setattr(blocking, "BlockingScheduler", _FakeScheduler)
+        monkeypatch.setattr(runner, "_recover_stale_pending_runs", lambda: None)
         monkeypatch.setattr(runner, "_register_jobs", lambda _scheduler, _runners, **_kw: 0)
         monkeypatch.setattr(runner, "record_scheduler_service_operation", lambda *_a, **_k: None)
         monkeypatch.setattr(runner.signal, "signal", lambda *_a, **_k: None)

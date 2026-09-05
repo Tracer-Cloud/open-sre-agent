@@ -154,6 +154,15 @@ def try_queue_run(task_id: str, fire_time: str, db_path: Path | None = None) -> 
     )
 
 
+def try_start_run(task_id: str, fire_time: str, db_path: Path | None = None) -> bool:
+    """Start a queued run, or claim it directly if submission was not observed."""
+    return start_queued_run(task_id, fire_time, db_path=db_path) or try_claim(
+        task_id,
+        fire_time,
+        db_path=db_path,
+    )
+
+
 def start_queued_run(task_id: str, fire_time: str, db_path: Path | None = None) -> bool:
     """Move a queued claim to running, returning whether the claim exists."""
     path = db_path or _default_db_path()
@@ -177,6 +186,34 @@ def start_queued_run(task_id: str, fire_time: str, db_path: Path | None = None) 
         conn.close()
 
 
+def fail_stale_pending_runs(
+    stale_before: datetime,
+    *,
+    db_path: Path | None = None,
+) -> int:
+    """Fail pending runs queued before ``stale_before`` and return the count."""
+    path = db_path or _default_db_path()
+    conn = _connect(path)
+    try:
+        _ensure_schema(conn)
+        now = datetime.now(UTC).isoformat()
+        cursor = conn.execute(
+            "UPDATE task_runs SET finished_at = ?, status = ?, error = ? "
+            "WHERE status = ? AND started_at < ?",
+            (
+                now,
+                TaskStatus.FAILED.value,
+                "scheduler stopped before queued run started",
+                TaskStatus.PENDING.value,
+                stale_before.astimezone(UTC).isoformat(),
+            ),
+        )
+        conn.commit()
+        return cursor.rowcount
+    finally:
+        conn.close()
+
+
 def complete_run(
     task_id: str,
     fire_time: str,
@@ -188,10 +225,11 @@ def complete_run(
     targets: Sequence[DeliveryOutcome] = (),
     db_path: Path | None = None,
 ) -> None:
-    """Mark a claimed run as completed, recording each destination's outcome.
+    """Complete a running claim, recording each destination's outcome.
 
     ``targets`` is stored in the order it is given, which is the order the run
     planned its destinations in — not the order they finished.
+    Pending and terminal records are left unchanged.
     """
     path = db_path or _default_db_path()
     conn = _connect(path)
@@ -201,7 +239,7 @@ def complete_run(
         conn.execute(
             "UPDATE task_runs SET finished_at = ?, status = ?, "
             "posted_message_id = ?, error = ?, provider = ?, targets = ? "
-            "WHERE task_id = ? AND fire_time = ?",
+            "WHERE task_id = ? AND fire_time = ? AND status = ?",
             (
                 now,
                 status.value,
@@ -211,6 +249,7 @@ def complete_run(
                 _encode_targets(targets),
                 task_id,
                 fire_time,
+                TaskStatus.RUNNING.value,
             ),
         )
         conn.commit()
@@ -357,10 +396,12 @@ def delete_runs(task_id: str, db_path: Path | None = None) -> int:
 __all__ = [
     "complete_run",
     "delete_runs",
+    "fail_stale_pending_runs",
     "get_latest_finished_run",
     "get_latest_targeted_run",
     "get_runs",
     "start_queued_run",
     "try_claim",
     "try_queue_run",
+    "try_start_run",
 ]
