@@ -14,7 +14,9 @@ from infrastructure.scheduling.scheduler.claim_store import (
     get_latest_finished_run,
     get_latest_targeted_run,
     get_runs,
+    start_queued_run,
     try_claim,
+    try_queue_run,
 )
 from infrastructure.scheduling.scheduler.types import DeliveryOutcome, Provider, TaskStatus
 
@@ -58,6 +60,14 @@ class TestClaimStore:
         assert try_claim("task1", "2026-01-01T09:00", db_path=db_path) is True
         assert try_claim("task2", "2026-01-01T09:00", db_path=db_path) is True
 
+    def test_queued_claim_is_visible_before_it_starts(self, db_path: Path) -> None:
+        assert try_queue_run("task1", "2026-01-01T09:00", db_path=db_path) is True
+        assert get_runs("task1", db_path=db_path)[0].status == TaskStatus.PENDING
+
+        assert start_queued_run("task1", "2026-01-01T09:00", db_path=db_path) is True
+
+        assert get_runs("task1", db_path=db_path)[0].status == TaskStatus.RUNNING
+
     def test_complete_run_success(self, db_path: Path) -> None:
         try_claim("task1", "2026-01-01T09:00", db_path=db_path)
         complete_run(
@@ -88,6 +98,27 @@ class TestClaimStore:
         assert len(runs) == 1
         assert runs[0].status == TaskStatus.FAILED
         assert runs[0].error == "Connection timeout"
+
+    def test_complete_run_does_not_overwrite_a_terminal_run(self, db_path: Path) -> None:
+        assert try_claim("task1", "2026-01-01T09:00", db_path=db_path) is True
+        complete_run(
+            "task1",
+            "2026-01-01T09:00",
+            status=TaskStatus.SUCCESS,
+            db_path=db_path,
+        )
+
+        complete_run(
+            "task1",
+            "2026-01-01T09:00",
+            status=TaskStatus.SKIPPED,
+            error="duplicate callback",
+            db_path=db_path,
+        )
+
+        run = get_runs("task1", db_path=db_path)[0]
+        assert run.status == TaskStatus.SUCCESS
+        assert run.error == ""
 
     def test_get_runs_ordered_newest_first(self, db_path: Path) -> None:
         for i in range(5):

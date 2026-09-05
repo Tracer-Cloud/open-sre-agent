@@ -4,7 +4,11 @@ from __future__ import annotations
 
 import logging
 
-from infrastructure.scheduling.scheduler.claim_store import complete_run, try_claim
+from infrastructure.scheduling.scheduler.claim_store import (
+    complete_run,
+    try_claim,
+    try_start_run,
+)
 from infrastructure.scheduling.scheduler.delivery_bundle import resolve_delivery_adapter
 from infrastructure.scheduling.scheduler.delivery_plan import (
     DeliveryTarget,
@@ -32,6 +36,7 @@ def execute_task(
     runners: SchedulerRunners,
     *,
     target_filter: frozenset[TargetKey] | None = None,
+    queued_claim: bool = False,
 ) -> bool:
     """Execute a scheduled task with claim-based dedup.
 
@@ -47,8 +52,8 @@ def execute_task(
         True if the task was executed and delivered successfully.
         False if the claim was lost (another instance handled it) or delivery failed.
     """
-    # Attempt to claim this execution slot
-    if not try_claim(task.id, fire_time):
+    claimed = try_start_run(task.id, fire_time) if queued_claim else try_claim(task.id, fire_time)
+    if not claimed:
         logger.info(
             "Task %s fire_time=%s already claimed by another instance",
             task.id,

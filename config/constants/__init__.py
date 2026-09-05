@@ -999,6 +999,9 @@ if TYPE_CHECKING:
         OPENSRE_MAX_CONCURRENT_TURNS_ENV as OPENSRE_MAX_CONCURRENT_TURNS_ENV,
     )
     from config.constants.turn_concurrency import (
+        OPENSRE_SCHEDULER_MAX_CONCURRENT_RUNS_ENV as OPENSRE_SCHEDULER_MAX_CONCURRENT_RUNS_ENV,
+    )
+    from config.constants.turn_concurrency import (
         OPENSRE_SIZE_PROFILE_ENV as OPENSRE_SIZE_PROFILE_ENV,
     )
     from config.constants.twilio import (

@@ -15,4 +15,12 @@ OPENSRE_SIZE_PROFILE_ENV = "OPENSRE_SIZE_PROFILE"
 # deployment raise concurrency on the same task size; unset keeps the default.
 OPENSRE_MAX_CONCURRENT_TURNS_ENV = "OPENSRE_MAX_CONCURRENT_TURNS"
 
-__all__ = ["OPENSRE_MAX_CONCURRENT_TURNS_ENV", "OPENSRE_SIZE_PROFILE_ENV"]
+# Maximum scheduled callbacks that may execute concurrently. Scheduled agent
+# turns still take a permit from the process-wide turn gate as a second cap.
+OPENSRE_SCHEDULER_MAX_CONCURRENT_RUNS_ENV = "OPENSRE_SCHEDULER_MAX_CONCURRENT_RUNS"
+
+__all__ = [
+    "OPENSRE_MAX_CONCURRENT_TURNS_ENV",
+    "OPENSRE_SCHEDULER_MAX_CONCURRENT_RUNS_ENV",
+    "OPENSRE_SIZE_PROFILE_ENV",
+]
