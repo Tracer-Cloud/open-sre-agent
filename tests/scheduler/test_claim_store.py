@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import sqlite3
-from datetime import UTC, datetime
 from pathlib import Path
 
 import pytest
@@ -12,7 +11,6 @@ from infrastructure.scheduling.scheduler import claim_store
 from infrastructure.scheduling.scheduler.claim_store import (
     complete_run,
     delete_runs,
-    fail_stale_pending_runs,
     get_latest_finished_run,
     get_latest_targeted_run,
     get_runs,
@@ -69,26 +67,6 @@ class TestClaimStore:
         assert start_queued_run("task1", "2026-01-01T09:00", db_path=db_path) is True
 
         assert get_runs("task1", db_path=db_path)[0].status == TaskStatus.RUNNING
-
-    def test_stale_pending_runs_are_failed_without_touching_newer_runs(self, db_path: Path) -> None:
-        assert try_queue_run("stale", "2026-01-01T09:00", db_path=db_path) is True
-        assert try_queue_run("current", "2026-01-01T09:00", db_path=db_path) is True
-        with sqlite3.connect(db_path) as conn:
-            conn.execute(
-                "UPDATE task_runs SET started_at = ? WHERE task_id = ?",
-                ("2026-01-01T00:00:00+00:00", "stale"),
-            )
-
-        recovered = fail_stale_pending_runs(
-            datetime(2026, 1, 2, tzinfo=UTC),
-            db_path=db_path,
-        )
-
-        assert recovered == 1
-        stale_run = get_runs("stale", db_path=db_path)[0]
-        assert stale_run.status == TaskStatus.FAILED
-        assert stale_run.finished_at is not None
-        assert get_runs("current", db_path=db_path)[0].status == TaskStatus.PENDING
 
     def test_complete_run_success(self, db_path: Path) -> None:
         try_claim("task1", "2026-01-01T09:00", db_path=db_path)

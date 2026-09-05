@@ -585,13 +585,10 @@ class TestStartSchedulerIdle:
     def test_empty_exits_by_default(self, monkeypatch: pytest.MonkeyPatch) -> None:
         from infrastructure.scheduling.scheduler import runner
 
-        recovered: list[bool] = []
-        monkeypatch.setattr(runner, "_recover_stale_pending_runs", lambda: recovered.append(True))
         monkeypatch.setattr(runner, "_register_jobs", lambda _scheduler, _runners, **_kw: 0)
         monkeypatch.setattr(runner, "record_scheduler_service_operation", lambda *_a, **_k: None)
         with pytest.raises(SystemExit):
             runner.start_scheduler(real_runners())
-        assert recovered == [True]
 
     def test_empty_idles_when_service(self, monkeypatch: pytest.MonkeyPatch) -> None:
         import apscheduler.schedulers.blocking as blocking
@@ -611,7 +608,6 @@ class TestStartSchedulerIdle:
                 pass
 
         monkeypatch.setattr(blocking, "BlockingScheduler", _FakeScheduler)
-        monkeypatch.setattr(runner, "_recover_stale_pending_runs", lambda: None)
         monkeypatch.setattr(runner, "_register_jobs", lambda _scheduler, _runners, **_kw: 0)
         monkeypatch.setattr(runner, "record_scheduler_service_operation", lambda *_a, **_k: None)
         monkeypatch.setattr(runner.signal, "signal", lambda *_a, **_k: None)

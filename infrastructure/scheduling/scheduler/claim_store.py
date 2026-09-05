@@ -186,34 +186,6 @@ def start_queued_run(task_id: str, fire_time: str, db_path: Path | None = None) 
         conn.close()
 
 
-def fail_stale_pending_runs(
-    stale_before: datetime,
-    *,
-    db_path: Path | None = None,
-) -> int:
-    """Fail pending runs queued before ``stale_before`` and return the count."""
-    path = db_path or _default_db_path()
-    conn = _connect(path)
-    try:
-        _ensure_schema(conn)
-        now = datetime.now(UTC).isoformat()
-        cursor = conn.execute(
-            "UPDATE task_runs SET finished_at = ?, status = ?, error = ? "
-            "WHERE status = ? AND started_at < ?",
-            (
-                now,
-                TaskStatus.FAILED.value,
-                "scheduler stopped before queued run started",
-                TaskStatus.PENDING.value,
-                stale_before.astimezone(UTC).isoformat(),
-            ),
-        )
-        conn.commit()
-        return cursor.rowcount
-    finally:
-        conn.close()
-
-
 def complete_run(
     task_id: str,
     fire_time: str,
@@ -396,7 +368,6 @@ def delete_runs(task_id: str, db_path: Path | None = None) -> int:
 __all__ = [
     "complete_run",
     "delete_runs",
-    "fail_stale_pending_runs",
     "get_latest_finished_run",
     "get_latest_targeted_run",
     "get_runs",
