@@ -241,7 +241,7 @@ def _load_catalog_match(
     warnings: list[str],
 ) -> dict[str, Any]:
     matches: list[_CatalogMatch] = []
-    ambiguous: list[str] = []
+    ambiguous: list[tuple[tuple[int, int, int], tuple[str, ...]]] = []
     readable_catalogs = 0
     manifest_sources = 0
 
@@ -262,8 +262,14 @@ def _load_catalog_match(
         readable_catalogs += 1
         selection = select_runbook(catalog.entries, incident)
         if selection.status == _STATUS_AMBIGUOUS:
-            ambiguous.extend(
-                f"{binding.config.name}/{candidate}" for candidate in selection.candidate_ids
+            ambiguous.append(
+                (
+                    selection.specificity,
+                    tuple(
+                        f"{binding.config.name}/{candidate}"
+                        for candidate in selection.candidate_ids
+                    ),
+                )
             )
         elif selection.status == "matched" and selection.entry is not None:
             matches.append(
@@ -275,10 +281,23 @@ def _load_catalog_match(
                 )
             )
 
-    if ambiguous or len(matches) > 1:
+    ranked_specificities = [
+        *(match.selection.specificity for match in matches),
+        *(specificity for specificity, _candidates in ambiguous),
+    ]
+    best_specificity = max(ranked_specificities, default=(0, 0, 0))
+    best_matches = [match for match in matches if match.selection.specificity == best_specificity]
+    best_ambiguous = [
+        candidate
+        for specificity, candidates in ambiguous
+        if specificity == best_specificity
+        for candidate in candidates
+    ]
+
+    if best_ambiguous or len(best_matches) > 1:
         candidates = [
-            *ambiguous,
-            *(f"{match.binding.config.name}/{match.entry.document_id}" for match in matches),
+            *best_ambiguous,
+            *(f"{match.binding.config.name}/{match.entry.document_id}" for match in best_matches),
         ]
         return _result(
             _STATUS_AMBIGUOUS,
@@ -286,8 +305,8 @@ def _load_catalog_match(
             candidates=sorted(candidates),
             warnings=warnings,
         )
-    if len(matches) == 1:
-        match = matches[0]
+    if len(best_matches) == 1:
+        match = best_matches[0]
         result = _fetch_document(
             match.binding,
             _catalog_reference(match),

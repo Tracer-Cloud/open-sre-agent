@@ -107,6 +107,7 @@ class RunbookSelection:
     reason: RunbookSelectionReason = "none"
     matched_fields: tuple[str, ...] = ()
     candidate_ids: tuple[str, ...] = ()
+    specificity: tuple[int, int, int] = (0, 0, 0)
 
 
 class RunbookSource(Protocol):

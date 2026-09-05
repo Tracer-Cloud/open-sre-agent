@@ -93,6 +93,28 @@ def test_alertname_match_takes_precedence_over_service_match() -> None:
     assert selection.reason == "alertname"
 
 
+def test_service_match_reports_labels_that_contributed_to_specificity() -> None:
+    incident = IncidentIdentity.from_values(
+        service="checkout",
+        labels={"environment": "production"},
+    )
+
+    selection = select_runbook(
+        (
+            _entry(
+                "production",
+                service="checkout",
+                labels=(("environment", "production"),),
+            ),
+        ),
+        incident,
+    )
+
+    assert selection.status == "matched"
+    assert selection.reason == "service"
+    assert selection.matched_fields == ("service", "label:environment")
+
+
 def test_non_matching_labels_disqualify_entry() -> None:
     incident = IncidentIdentity.from_values(
         alertname="CheckoutHighLatency",

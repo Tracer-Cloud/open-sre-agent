@@ -47,7 +47,8 @@ def _selection_details(
             ("alertname", "service") if match.service else ("alertname",)
         )
         return "alertname", alert_fields
-    return "service", ("service",)
+    matched_fields = ["service", *(f"label:{name}" for name, _value in match.labels)]
+    return "service", tuple(matched_fields)
 
 
 def select_runbook(
@@ -67,6 +68,7 @@ def select_runbook(
         return RunbookSelection(
             status="ambiguous",
             candidate_ids=tuple(sorted(entry.document_id for entry in candidates)),
+            specificity=best_rank,
         )
 
     entry = candidates[0]
@@ -76,6 +78,7 @@ def select_runbook(
         entry=entry,
         reason=reason,
         matched_fields=fields,
+        specificity=best_rank,
     )
 
 

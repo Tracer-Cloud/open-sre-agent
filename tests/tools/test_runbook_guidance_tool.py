@@ -180,6 +180,71 @@ def test_equal_manifest_matches_are_reported_without_fetching(
     assert source.fetched_reference is None
 
 
+def test_highest_precedence_match_wins_across_sources(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    generic_config = _CONFIG.model_copy(update={"name": "service-runbooks"})
+    specific_config = _CONFIG.model_copy(update={"name": "alert-runbooks"})
+    generic_source = _FakeRunbookSource(
+        catalog=RunbookCatalog(
+            source_name=generic_config.name,
+            entries=(
+                RunbookCatalogEntry(
+                    document_id="checkout-service",
+                    path="runbooks/checkout-service.md",
+                    match=RunbookMatch(service="checkout"),
+                ),
+            ),
+            resolved_revision=_SHA,
+            source_uri="service-manifest",
+        )
+    )
+    specific_source = _FakeRunbookSource(
+        catalog=RunbookCatalog(
+            source_name=specific_config.name,
+            entries=(
+                RunbookCatalogEntry(
+                    document_id="checkout-production",
+                    path="runbooks/checkout-production.md",
+                    match=RunbookMatch(
+                        alertname="CheckoutDown",
+                        labels=(("environment", "production"),),
+                    ),
+                ),
+            ),
+            resolved_revision=_SHA,
+            source_uri="alert-manifest",
+        )
+    )
+    sources = {
+        generic_config.name: generic_source,
+        specific_config.name: specific_source,
+    }
+    monkeypatch.setattr(
+        runbook_tool_module,
+        "load_runbook_sources",
+        lambda: (generic_config, specific_config),
+    )
+    monkeypatch.setattr(
+        runbook_tool_module,
+        "resolve_runbook_source",
+        lambda config, _integrations: sources[config.name],
+    )
+
+    result = load_runbook_guidance(
+        alertname="CheckoutDown",
+        service="checkout",
+        labels={"environment": "production"},
+        context=_context(),
+    )
+
+    assert result["status"] == "loaded"
+    assert result["runbook"]["source_name"] == specific_config.name
+    assert result["runbook"]["document_id"] == "checkout-production"
+    assert generic_source.fetched_reference is None
+    assert specific_source.fetched_reference is not None
+
+
 def test_untrusted_url_is_rejected_without_fallback_matching(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
