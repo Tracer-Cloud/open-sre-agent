@@ -344,6 +344,15 @@ MCP_BY_COMMAND: dict[str, _SlashMcpFields] = {
             "User asks what opensre remembers (use /memory)",
         ),
     ),
+    "/runbooks": _mcp(
+        "Manage organization-owned runbook sources for guided investigations. "
+        "Subcommands: source list, source add, source verify, source remove.",
+        "User asks to configure, list, verify, or remove trusted runbook sources",
+        anti_examples=(
+            "User asks to investigate an incident with a runbook (use runbook guidance tooling)",
+            "User asks how runbook-guided investigations work (answer from docs)",
+        ),
+    ),
     "/tasks": _mcp(
         "List recent and in-flight shell background tasks with ids and status.",
         "User asks to list running or recent tasks",
