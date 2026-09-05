@@ -22,7 +22,6 @@ def test_source_add_list_and_remove() -> None:
         cli,
         [
             "runbooks",
-            "source",
             "add",
             "github",
             "--name",
@@ -35,10 +34,10 @@ def test_source_add_list_and_remove() -> None:
             ".opensre/runbooks.yaml",
         ],
     )
-    listed = runner.invoke(cli, ["runbooks", "source", "list"])
+    listed = runner.invoke(cli, ["runbooks", "list"])
     removed = runner.invoke(
         cli,
-        ["runbooks", "source", "remove", "platform-runbooks"],
+        ["runbooks", "remove", "platform-runbooks"],
     )
 
     assert added.exit_code == 0, added.output
@@ -55,7 +54,6 @@ def test_duplicate_source_name_is_a_cli_error() -> None:
     runner = CliRunner()
     args = [
         "runbooks",
-        "source",
         "add",
         "github",
         "--name",
@@ -72,7 +70,7 @@ def test_duplicate_source_name_is_a_cli_error() -> None:
 
 
 def test_empty_source_list_has_actionable_output() -> None:
-    result = CliRunner().invoke(cli, ["runbooks", "source", "list"])
+    result = CliRunner().invoke(cli, ["runbooks", "list"])
 
     assert result.exit_code == 0, result.output
     assert "No runbook sources configured" in result.output
@@ -84,7 +82,6 @@ def test_source_verify_reports_provider_result(monkeypatch: pytest.MonkeyPatch) 
         cli,
         [
             "runbooks",
-            "source",
             "add",
             "github",
             "--name",
@@ -102,7 +99,7 @@ def test_source_verify_reports_provider_result(monkeypatch: pytest.MonkeyPatch) 
 
     result = runner.invoke(
         cli,
-        ["runbooks", "source", "verify", "platform-runbooks"],
+        ["runbooks", "verify", "platform-runbooks"],
     )
 
     assert result.exit_code == 0, result.output
@@ -117,7 +114,6 @@ def test_source_verify_fails_when_provider_is_unavailable(
         cli,
         [
             "runbooks",
-            "source",
             "add",
             "github",
             "--name",
@@ -135,7 +131,7 @@ def test_source_verify_fails_when_provider_is_unavailable(
 
     result = runner.invoke(
         cli,
-        ["runbooks", "source", "verify", "platform-runbooks"],
+        ["runbooks", "verify", "platform-runbooks"],
     )
 
     assert result.exit_code != 0

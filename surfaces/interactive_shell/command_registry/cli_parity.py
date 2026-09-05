@@ -396,10 +396,10 @@ COMMANDS: list[SlashCommand] = [
         "Manage trusted runbook sources for guided investigations.",
         _cmd_runbooks,
         usage=(
-            "/runbooks source list",
-            "/runbooks source add github --name <name> --repo <owner/repo>",
-            "/runbooks source verify <name>",
-            "/runbooks source remove <name>",
+            "/runbooks list",
+            "/runbooks add github --name <name> --repo <owner/repo>",
+            "/runbooks verify <name>",
+            "/runbooks remove <name>",
         ),
     ),
     SlashCommand(

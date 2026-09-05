@@ -346,7 +346,7 @@ MCP_BY_COMMAND: dict[str, _SlashMcpFields] = {
     ),
     "/runbooks": _mcp(
         "Manage organization-owned runbook sources for guided investigations. "
-        "Subcommands: source list, source add, source verify, source remove.",
+        "Subcommands: list, add, verify, remove.",
         "User asks to configure, list, verify, or remove trusted runbook sources",
         anti_examples=(
             "User asks to investigate an incident with a runbook (use runbook guidance tooling)",

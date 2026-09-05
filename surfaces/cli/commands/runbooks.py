@@ -20,18 +20,13 @@ def runbooks_command() -> None:
     """Manage organization-owned runbook sources."""
 
 
-@runbooks_command.group(name="source")
-def source_command() -> None:
-    """Add, inspect, and remove trusted runbook sources."""
-
-
-@source_command.command(name="add")
+@runbooks_command.command(name="add")
 @click.argument("provider", type=click.Choice(("github",), case_sensitive=False))
 @click.option("--name", required=True, help="Stable name for this runbook source.")
 @click.option("--repo", "repository", required=True, help="GitHub owner/repository.")
 @click.option("--ref", default="main", show_default=True, help="Branch, tag, or commit.")
 @click.option("--manifest", default="", help="Optional repository-relative YAML manifest.")
-def source_add(
+def runbooks_add(
     provider: str,
     name: str,
     repository: str,
@@ -53,8 +48,8 @@ def source_add(
     click.echo(f"{GLYPH_SUCCESS} Added runbook source {source.name}")
 
 
-@source_command.command(name="list")
-def source_list() -> None:
+@runbooks_command.command(name="list")
+def runbooks_list() -> None:
     """List configured runbook sources."""
     try:
         sources = load_runbook_sources()
@@ -70,9 +65,9 @@ def source_list() -> None:
         )
 
 
-@source_command.command(name="remove")
+@runbooks_command.command(name="remove")
 @click.argument("name")
-def source_remove(name: str) -> None:
+def runbooks_remove(name: str) -> None:
     """Remove a configured runbook source."""
     try:
         removed = remove_runbook_source(name)
@@ -96,9 +91,9 @@ def _verify_source(source: RunbookSourceConfig) -> tuple[bool, str]:
     return provider.verify()
 
 
-@source_command.command(name="verify")
+@runbooks_command.command(name="verify")
 @click.argument("name")
-def source_verify(name: str) -> None:
+def runbooks_verify(name: str) -> None:
     """Verify access to one configured runbook source."""
     try:
         source = get_runbook_source(name)

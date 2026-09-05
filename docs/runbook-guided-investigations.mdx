@@ -37,17 +37,17 @@ opensre integrations verify github
 Register the repository. A manifest is optional when you only use explicit URLs.
 
 ```bash
-opensre runbooks source add github \
+opensre runbooks add github \
   --name platform-runbooks \
   --repo acme/operations \
   --ref main \
   --manifest .opensre/runbooks.yaml
 
-opensre runbooks source verify platform-runbooks
-opensre runbooks source list
+opensre runbooks verify platform-runbooks
+opensre runbooks list
 ```
 
-Use `opensre runbooks source remove platform-runbooks` to remove it. The source settings
+Use `opensre runbooks remove platform-runbooks` to remove it. The source settings
 are stored with other local OpenSRE settings, while credentials remain owned by the
 GitHub integration.
 
@@ -79,13 +79,13 @@ After this version is available on the repository's default branch, register its
 demo runbook:
 
 ```bash
-opensre runbooks source add github \
+opensre runbooks add github \
   --name opensre-demo \
   --repo Tracer-Cloud/opensre \
   --ref main \
   --manifest docs/snippets/runbooks/demo-manifest.yaml
 
-opensre runbooks source verify opensre-demo
+opensre runbooks verify opensre-demo
 ```
 
 Start `opensre` and ask:
