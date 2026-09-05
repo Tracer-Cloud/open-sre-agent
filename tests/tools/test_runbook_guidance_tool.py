@@ -231,3 +231,53 @@ def test_loaded_runbook_becomes_citeable_evidence() -> None:
             "snippet": None,
         }
     ]
+
+
+def test_registered_github_provider_runs_manifest_demo(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    manifest = """
+version: 1
+runbooks:
+  - id: checkout-high-latency
+    title: Checkout high latency
+    document: docs/snippets/runbooks/checkout-high-latency.md
+    match:
+      alertname: CheckoutHighLatency
+      service: checkout
+      labels:
+        severity: critical
+""".strip()
+
+    def github_file_contents(**kwargs: Any) -> dict[str, Any]:
+        path = str(kwargs["path"])
+        content = manifest if path.endswith("demo-manifest.yaml") else "# Checkout high latency"
+        return {
+            "available": True,
+            "file": {
+                "uri": f"repo://acme/operations/sha/{_SHA}/contents/{path}",
+                "content": content,
+            },
+            "content": [],
+        }
+
+    demo_config = _CONFIG.model_copy(
+        update={"manifest": "docs/snippets/runbooks/demo-manifest.yaml"}
+    )
+    monkeypatch.setattr(runbook_tool_module, "load_runbook_sources", lambda: (demo_config,))
+    monkeypatch.setattr(
+        "integrations.github.runbooks.source.get_github_file_contents",
+        github_file_contents,
+    )
+
+    result = load_runbook_guidance(
+        alertname="CheckoutHighLatency",
+        service="checkout",
+        labels={"severity": "critical"},
+        context=_context(),
+    )
+
+    assert result["status"] == "loaded"
+    assert result["runbook"]["document_id"] == "checkout-high-latency"
+    assert result["runbook"]["revision"] == _SHA
+    assert result["runbook"]["content"] == "# Checkout high latency"
