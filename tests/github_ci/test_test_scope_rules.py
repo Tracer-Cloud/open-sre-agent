@@ -16,7 +16,13 @@ def test_scheduler_source_changes_run_scheduler_suite() -> None:
     escalate, targets, areas = classify(["infrastructure/scheduling/scheduler/runner.py"])
 
     assert escalate is False
-    assert targets == ["tests/scheduler/"]
+    assert targets == [
+        "tests/scheduler/",
+        "tests/cli/",
+        "tests/tools/",
+        "tests/interactive_shell/",
+        "tests/infrastructure/",
+    ]
     assert areas == ["infrastructure/scheduling/"]
 
 
@@ -29,5 +35,12 @@ def test_scheduler_source_with_specific_test_still_runs_scheduler_suite() -> Non
     )
 
     assert escalate is False
-    assert targets == ["tests/scheduler/", "tests/scheduler/test_task_store.py"]
+    assert targets == [
+        "tests/scheduler/",
+        "tests/cli/",
+        "tests/tools/",
+        "tests/interactive_shell/",
+        "tests/infrastructure/",
+        "tests/scheduler/test_task_store.py",
+    ]
     assert areas == ["infrastructure/scheduling/"]

@@ -542,7 +542,16 @@ RULES: tuple[PathRule, ...] = (
     PathRule("gateway/", ("gateway/tests/",)),
     PathRule("tools/", ("tests/tools/",)),
     PathRule("infrastructure/analytics/", ("tests/analytics/",)),
-    PathRule("infrastructure/scheduling/", ("tests/scheduler/",)),
+    PathRule(
+        "infrastructure/scheduling/",
+        (
+            "tests/scheduler/",
+            "tests/cli/",
+            "tests/tools/",
+            "tests/interactive_shell/",
+            "tests/infrastructure/",
+        ),
+    ),
     # Without this rule a change under infrastructure/filestorage/ matches nothing,
     # and the credential deny-list tests only run via the no-targets fallback —
     # which a diff that also touches any test file silently defeats.
