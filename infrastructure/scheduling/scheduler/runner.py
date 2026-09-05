@@ -9,12 +9,15 @@ not wall-clock time inside the callback.
 from __future__ import annotations
 
 import logging
+import os
 import signal
 import threading
 from collections.abc import Callable
 from datetime import UTC, datetime
 from typing import Any, cast
 
+from config.constants.turn_concurrency import OPENSRE_SCHEDULER_MAX_CONCURRENT_RUNS_ENV
+from infrastructure.scheduling.scheduler.claim_store import complete_run, try_queue_run
 from infrastructure.scheduling.scheduler.executor import execute_task
 from infrastructure.scheduling.scheduler.operation_log import (
     record_scheduler_execution_operation,
@@ -36,6 +39,7 @@ from infrastructure.scheduling.scheduler.types import Provider, ScheduledTask, T
 
 logger = logging.getLogger(__name__)
 TaskFilter = Callable[[ScheduledTask], bool]
+DEFAULT_SCHEDULED_RUN_CONCURRENCY = 2
 
 # Populated by EVENT_JOB_SUBMITTED before each job runs (job_id -> fire_time).
 _pending_fire_times: dict[str, str] = {}
@@ -88,7 +92,7 @@ def _compute_fire_time(scheduled_run_time: Any) -> str:
 
 
 def _on_job_submitted(event: Any) -> None:
-    """Capture the intended fire time for this tick before the job callback runs."""
+    """Capture and persist a queued run before its worker starts."""
     run_times = getattr(event, "scheduled_run_times", None)
     if run_times:
         fire_time = _compute_fire_time(run_times[0])
@@ -96,6 +100,38 @@ def _on_job_submitted(event: Any) -> None:
         fire_time = datetime.now(UTC).strftime("%Y-%m-%dT%H:%MZ")
     with _pending_fire_times_lock:
         _pending_fire_times[event.job_id] = fire_time
+    try_queue_run(event.job_id, fire_time)
+
+
+def configured_scheduled_run_limit() -> int:
+    """Return the positive scheduled-worker limit, defaulting to two."""
+    raw = os.getenv(OPENSRE_SCHEDULER_MAX_CONCURRENT_RUNS_ENV)
+    if raw is None:
+        return DEFAULT_SCHEDULED_RUN_CONCURRENCY
+    try:
+        limit = int(raw)
+    except ValueError:
+        limit = 0
+    if limit >= 1:
+        return limit
+    logger.warning(
+        "Ignoring %s=%r: not a positive integer; using %d.",
+        OPENSRE_SCHEDULER_MAX_CONCURRENT_RUNS_ENV,
+        raw,
+        DEFAULT_SCHEDULED_RUN_CONCURRENCY,
+    )
+    return DEFAULT_SCHEDULED_RUN_CONCURRENCY
+
+
+def _build_scheduler(scheduler_type: type[Any]) -> Any:
+    """Build an APScheduler with the bounded scheduled-run contract."""
+    from apscheduler.executors.pool import ThreadPoolExecutor
+
+    limit = configured_scheduled_run_limit()
+    return scheduler_type(
+        executors={"default": ThreadPoolExecutor(max_workers=limit)},
+        job_defaults={"max_instances": 1},
+    )
 
 
 def _scheduled_job(task_id: str, runners: SchedulerRunners) -> None:
@@ -116,6 +152,7 @@ def _scheduled_job(task_id: str, runners: SchedulerRunners) -> None:
             "scheduler_job_skipped",
             extra={"task_id": task_id, "fire_time": fire_time, "reason": "missing_task"},
         )
+        complete_run(task_id, fire_time, status=TaskStatus.SKIPPED, error="missing_task")
         return
     if not task.enabled:
         logger.info("Task %s is disabled, skipping", task_id)
@@ -126,9 +163,10 @@ def _scheduled_job(task_id: str, runners: SchedulerRunners) -> None:
             status=TaskStatus.SKIPPED,
             extra={"reason": "disabled"},
         )
+        complete_run(task_id, fire_time, status=TaskStatus.SKIPPED, error="disabled")
         return
 
-    result = execute_task(task, fire_time, runners)
+    result = execute_task(task, fire_time, runners, queued_claim=True)
 
     if result:
         task.last_run = datetime.now(UTC).isoformat()
@@ -174,6 +212,7 @@ def _register_jobs(
             name=f"{task.kind.value}:{task.id}",
             replace_existing=True,
             misfire_grace_time=60,
+            max_instances=1,
         )
         enabled_count += 1
         record_scheduler_task_operation(
@@ -276,7 +315,7 @@ def start_background_scheduler(
     """
     from apscheduler.schedulers.background import BackgroundScheduler
 
-    scheduler = BackgroundScheduler()
+    scheduler = _build_scheduler(BackgroundScheduler)
     enabled_count = _register_jobs(scheduler, runners, task_filter=task_filter)
     if enabled_count == 0:
         record_scheduler_service_operation("scheduler_idle", task_count=0)
@@ -317,7 +356,7 @@ def start_scheduler(runners: SchedulerRunners, *, idle_when_empty: bool = False)
     """
     from apscheduler.schedulers.blocking import BlockingScheduler
 
-    scheduler = BlockingScheduler()
+    scheduler = _build_scheduler(BlockingScheduler)
     enabled_count = _register_jobs(scheduler, runners)
     if enabled_count == 0 and not idle_when_empty:
         logger.warning("No enabled tasks found. Scheduler has nothing to run.")
@@ -422,6 +461,7 @@ def failed_retry_scope(task_id: str) -> frozenset[tuple[Provider, str]] | None:
 
 
 __all__ = [
+    "configured_scheduled_run_limit",
     "compute_next_run",
     "failed_retry_scope",
     "refresh_background_scheduler",

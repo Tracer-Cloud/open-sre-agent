@@ -153,6 +153,15 @@ to size this against the task's memory limit before raising it.
 
 ### Dedicated scheduler service
 
+Scheduled callbacks use a bounded worker pool. At most two distinct tasks run
+at once by default; set `OPENSRE_SCHEDULER_MAX_CONCURRENT_RUNS` to a positive
+integer to change that limit. A task never overlaps its own previous run.
+Runs waiting for a scheduler worker appear as `pending` in run history.
+
+Agentic scheduled runs also take a permit from
+`OPENSRE_MAX_CONCURRENT_TURNS`, so the lower of the scheduler and process-wide
+limits determines their effective concurrency.
+
 By default the gateway process also runs the cron/loop scheduler. With more than
 one gateway task that would fire every scheduled task once per task. Run the
 scheduler as its own single service instead:

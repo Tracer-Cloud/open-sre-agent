@@ -108,12 +108,13 @@ def _add_missing_columns(conn: sqlite3.Connection) -> None:
             return
 
 
-def try_claim(task_id: str, fire_time: str, db_path: Path | None = None) -> bool:
-    """Attempt to claim a task execution slot.
-
-    Returns True if this instance won the claim (INSERT succeeded).
-    Returns False if another instance already claimed it (UNIQUE violation).
-    """
+def _try_create_run(
+    task_id: str,
+    fire_time: str,
+    *,
+    status: TaskStatus,
+    db_path: Path | None = None,
+) -> bool:
     path = db_path or _default_db_path()
     conn = _connect(path)
     try:
@@ -122,13 +123,56 @@ def try_claim(task_id: str, fire_time: str, db_path: Path | None = None) -> bool
         cursor = conn.execute(
             "INSERT OR IGNORE INTO task_runs (task_id, fire_time, started_at, status) "
             "VALUES (?, ?, ?, ?)",
-            (task_id, fire_time, now, TaskStatus.RUNNING.value),
+            (task_id, fire_time, now, status.value),
         )
         conn.commit()
         # rowcount == 1 means our INSERT went through; 0 means IGNORE fired
         return cursor.rowcount == 1
     except sqlite3.IntegrityError:
         return False
+    finally:
+        conn.close()
+
+
+def try_claim(task_id: str, fire_time: str, db_path: Path | None = None) -> bool:
+    """Claim a run as running unless another process already created it."""
+    return _try_create_run(
+        task_id,
+        fire_time,
+        status=TaskStatus.RUNNING,
+        db_path=db_path,
+    )
+
+
+def try_queue_run(task_id: str, fire_time: str, db_path: Path | None = None) -> bool:
+    """Record a run as pending unless another process already created it."""
+    return _try_create_run(
+        task_id,
+        fire_time,
+        status=TaskStatus.PENDING,
+        db_path=db_path,
+    )
+
+
+def start_queued_run(task_id: str, fire_time: str, db_path: Path | None = None) -> bool:
+    """Move a queued claim to running, returning whether the claim exists."""
+    path = db_path or _default_db_path()
+    conn = _connect(path)
+    try:
+        _ensure_schema(conn)
+        cursor = conn.execute(
+            "UPDATE task_runs SET status = ?, started_at = ? "
+            "WHERE task_id = ? AND fire_time = ? AND status = ?",
+            (
+                TaskStatus.RUNNING.value,
+                datetime.now(UTC).isoformat(),
+                task_id,
+                fire_time,
+                TaskStatus.PENDING.value,
+            ),
+        )
+        conn.commit()
+        return cursor.rowcount == 1
     finally:
         conn.close()
 
@@ -316,5 +360,7 @@ __all__ = [
     "get_latest_finished_run",
     "get_latest_targeted_run",
     "get_runs",
+    "start_queued_run",
     "try_claim",
+    "try_queue_run",
 ]

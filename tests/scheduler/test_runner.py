@@ -8,12 +8,14 @@ import pytest
 
 from infrastructure.scheduling.scheduler.loop_constants import LOOP_PROMPT_PARAM
 from infrastructure.scheduling.scheduler.runner import (
+    _build_scheduler,
     _compute_fire_time,
     _make_trigger,
     _on_job_submitted,
     _pending_fire_times,
     _register_jobs,
     compute_next_run,
+    configured_scheduled_run_limit,
     refresh_background_scheduler,
     resync_scheduler_jobs,
     run_task_now,
@@ -82,7 +84,7 @@ class TestMakeTrigger:
 
 
 class TestOnJobSubmitted:
-    def test_stores_fire_time_from_scheduled_run_times(self) -> None:
+    def test_stores_fire_time_and_queues_history(self, monkeypatch: pytest.MonkeyPatch) -> None:
         from datetime import UTC, datetime
         from types import SimpleNamespace
 
@@ -91,8 +93,162 @@ class TestOnJobSubmitted:
             job_id="task-1",
             scheduled_run_times=[datetime(2026, 1, 15, 9, 0, tzinfo=UTC)],
         )
+        claims: list[tuple[str, str]] = []
+        monkeypatch.setattr(
+            "infrastructure.scheduling.scheduler.runner.try_queue_run",
+            lambda task_id, fire_time: claims.append((task_id, fire_time)),
+        )
         _on_job_submitted(event)
         assert _pending_fire_times["task-1"] == "2026-01-15T09:00Z"
+        assert claims == [("task-1", "2026-01-15T09:00Z")]
+
+
+class TestScheduledConcurrency:
+    def test_configured_limit_defaults_to_two(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        monkeypatch.delenv("OPENSRE_SCHEDULER_MAX_CONCURRENT_RUNS", raising=False)
+        assert configured_scheduled_run_limit() == 2
+
+    @pytest.mark.parametrize("limit", [1, 2])
+    def test_distinct_jobs_overlap_up_to_limit(
+        self, limit: int, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        import threading
+        from datetime import UTC, datetime, timedelta
+
+        from apscheduler.events import EVENT_JOB_SUBMITTED
+        from apscheduler.schedulers.background import BackgroundScheduler
+
+        monkeypatch.setenv("OPENSRE_SCHEDULER_MAX_CONCURRENT_RUNS", str(limit))
+        scheduler = _build_scheduler(BackgroundScheduler)
+        entered = threading.Barrier(limit + 1)
+        release = threading.Event()
+        submitted = threading.Event()
+
+        def on_submitted(_event: object) -> None:
+            submitted.set()
+
+        def blocking_job() -> None:
+            entered.wait(timeout=5)
+            release.wait(timeout=5)
+
+        run_at = datetime.now(UTC) + timedelta(milliseconds=200)
+        scheduler.add_listener(on_submitted, EVENT_JOB_SUBMITTED)
+        for index in range(limit):
+            scheduler.add_job(blocking_job, "date", run_date=run_at, id=f"job-{index}")
+        scheduler.start()
+        try:
+            entered.wait(timeout=5)
+        finally:
+            release.set()
+            assert submitted.wait(timeout=5)
+            scheduler.shutdown(wait=True)
+
+    def test_overflow_waits_for_a_worker(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        import threading
+        from datetime import UTC, datetime, timedelta
+
+        from apscheduler.events import EVENT_JOB_SUBMITTED
+        from apscheduler.schedulers.background import BackgroundScheduler
+
+        monkeypatch.setenv("OPENSRE_SCHEDULER_MAX_CONCURRENT_RUNS", "2")
+        scheduler = _build_scheduler(BackgroundScheduler)
+        first_wave = threading.Barrier(3)
+        release = threading.Event()
+        overflow_started = threading.Event()
+        all_submitted = threading.Event()
+        submitted_count = 0
+        queued_claims: list[tuple[str, str]] = []
+
+        def record_queued_run(task_id: str, fire_time: str) -> bool:
+            queued_claims.append((task_id, fire_time))
+            return True
+
+        monkeypatch.setattr(
+            "infrastructure.scheduling.scheduler.runner.try_queue_run",
+            record_queued_run,
+        )
+
+        def on_submitted(_event: object) -> None:
+            nonlocal submitted_count
+            submitted_count += 1
+            if submitted_count == 3:
+                all_submitted.set()
+
+        def blocking_job() -> None:
+            first_wave.wait(timeout=5)
+            release.wait(timeout=5)
+
+        def overflow_job() -> None:
+            overflow_started.set()
+
+        run_at = datetime.now(UTC) + timedelta(milliseconds=200)
+        scheduler.add_listener(_on_job_submitted, EVENT_JOB_SUBMITTED)
+        scheduler.add_listener(on_submitted, EVENT_JOB_SUBMITTED)
+        scheduler.add_job(blocking_job, "date", run_date=run_at, id="first")
+        scheduler.add_job(blocking_job, "date", run_date=run_at, id="second")
+        scheduler.add_job(overflow_job, "date", run_date=run_at, id="z-overflow")
+        scheduler.start()
+        try:
+            first_wave.wait(timeout=5)
+            assert not overflow_started.is_set()
+            assert all_submitted.wait(timeout=5)
+            assert {task_id for task_id, _ in queued_claims} == {
+                "first",
+                "second",
+                "z-overflow",
+            }
+            release.set()
+            assert overflow_started.wait(timeout=5)
+        finally:
+            release.set()
+            scheduler.shutdown(wait=True)
+            _pending_fire_times.clear()
+
+    def test_same_job_never_overlaps_itself(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        import threading
+        from datetime import UTC, datetime, timedelta
+
+        from apscheduler.events import EVENT_JOB_MAX_INSTANCES
+        from apscheduler.schedulers.background import BackgroundScheduler
+
+        monkeypatch.setenv("OPENSRE_SCHEDULER_MAX_CONCURRENT_RUNS", "2")
+        scheduler = _build_scheduler(BackgroundScheduler)
+        entered = threading.Barrier(2)
+        release = threading.Event()
+        overlap_skipped = threading.Event()
+        active = 0
+        peak_active = 0
+        active_lock = threading.Lock()
+
+        def blocking_job() -> None:
+            nonlocal active, peak_active
+            with active_lock:
+                active += 1
+                peak_active = max(peak_active, active)
+            try:
+                entered.wait(timeout=5)
+                release.wait(timeout=5)
+            finally:
+                with active_lock:
+                    active -= 1
+
+        scheduler.add_listener(lambda _event: overlap_skipped.set(), EVENT_JOB_MAX_INSTANCES)
+        scheduler.add_job(
+            blocking_job,
+            "interval",
+            seconds=0.05,
+            next_run_time=datetime.now(UTC) + timedelta(milliseconds=100),
+            id="repeating-task",
+        )
+        scheduler.start()
+        try:
+            entered.wait(timeout=5)
+            assert overlap_skipped.wait(timeout=5)
+            scheduler.pause()
+            assert peak_active == 1
+        finally:
+            release.set()
+            scheduler.shutdown(wait=True)
 
 
 class TestComputeFireTime:
@@ -147,6 +303,7 @@ class TestRegisterJobs:
         class _FakeScheduler:
             def __init__(self) -> None:
                 self.job_ids: list[str] = []
+                self.job_options: list[dict[str, object]] = []
 
             def add_listener(self, *_args: object) -> None:
                 return None
@@ -154,6 +311,7 @@ class TestRegisterJobs:
             def add_job(self, *args: object, **kwargs: object) -> None:
                 _ = args
                 self.job_ids.append(str(kwargs["id"]))
+                self.job_options.append(kwargs)
 
         store_path = tmp_path / "tasks.json"
         monkeypatch.setattr(scheduler_store, "_default_store_path", lambda: store_path)
@@ -186,6 +344,7 @@ class TestRegisterJobs:
 
         assert count == 1
         assert scheduler.job_ids == ["prompt-loop"]
+        assert scheduler.job_options[0]["max_instances"] == 1
 
     def test_resync_removes_stale_jobs(
         self,
@@ -398,6 +557,9 @@ class TestStartSchedulerIdle:
         started: list[bool] = []
 
         class _FakeScheduler:
+            def __init__(self, **_kwargs: object) -> None:
+                pass
+
             def start(self) -> None:
                 started.append(True)  # no-op instead of blocking forever
 

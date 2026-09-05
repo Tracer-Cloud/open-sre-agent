@@ -14,7 +14,9 @@ from infrastructure.scheduling.scheduler.claim_store import (
     get_latest_finished_run,
     get_latest_targeted_run,
     get_runs,
+    start_queued_run,
     try_claim,
+    try_queue_run,
 )
 from infrastructure.scheduling.scheduler.types import DeliveryOutcome, Provider, TaskStatus
 
@@ -57,6 +59,14 @@ class TestClaimStore:
     def test_different_tasks_same_fire_time(self, db_path: Path) -> None:
         assert try_claim("task1", "2026-01-01T09:00", db_path=db_path) is True
         assert try_claim("task2", "2026-01-01T09:00", db_path=db_path) is True
+
+    def test_queued_claim_is_visible_before_it_starts(self, db_path: Path) -> None:
+        assert try_queue_run("task1", "2026-01-01T09:00", db_path=db_path) is True
+        assert get_runs("task1", db_path=db_path)[0].status == TaskStatus.PENDING
+
+        assert start_queued_run("task1", "2026-01-01T09:00", db_path=db_path) is True
+
+        assert get_runs("task1", db_path=db_path)[0].status == TaskStatus.RUNNING
 
     def test_complete_run_success(self, db_path: Path) -> None:
         try_claim("task1", "2026-01-01T09:00", db_path=db_path)
