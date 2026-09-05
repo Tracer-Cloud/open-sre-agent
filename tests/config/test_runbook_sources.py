@@ -64,6 +64,7 @@ def test_duplicate_source_name_is_rejected() -> None:
         ("repository", "acme/../secrets"),
         ("manifest", "/etc/passwd"),
         ("manifest", "../runbooks.yaml"),
+        ("manifest", "runbooks/\nmanifest.yaml"),
         ("ref", ""),
     ),
 )

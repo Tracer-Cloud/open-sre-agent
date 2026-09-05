@@ -6,7 +6,7 @@ import logging
 import re
 from pathlib import PurePosixPath
 from typing import Any
-from urllib.parse import unquote, urlparse
+from urllib.parse import quote, unquote, urlparse
 
 from config.constants.runbooks import RUNBOOK_CONTENT_MAX_CHARS
 from config.runbook_sources import RunbookSourceConfig
@@ -38,10 +38,18 @@ def _safe_markdown_path(value: str) -> str | None:
         or path.is_absolute()
         or ".." in path.parts
         or "\\" in candidate
+        or any(ord(char) < 32 for char in candidate)
         or path.suffix.lower() != ".md"
     ):
         return None
     return candidate
+
+
+def _blob_url(repository: str, revision: str, path: str) -> str:
+    encoded_repository = quote(repository, safe="/")
+    encoded_revision = quote(revision, safe="")
+    encoded_path = quote(path, safe="/")
+    return f"https://github.com/{encoded_repository}/blob/{encoded_revision}/{encoded_path}"
 
 
 def _resource_file(payload: dict[str, Any]) -> tuple[str, str]:
@@ -58,12 +66,12 @@ def _resource_file(payload: dict[str, Any]) -> tuple[str, str]:
 
 
 def _revision_from_payload(payload: dict[str, Any], uri: str, requested: str) -> str:
-    file_data = payload.get("file")
-    if isinstance(file_data, dict) and file_data.get("sha"):
-        return str(file_data["sha"])
     match = _RESOURCE_SHA_RE.search(uri)
     if match:
         return match.group("sha")
+    file_data = payload.get("file")
+    if isinstance(file_data, dict) and file_data.get("commit_sha"):
+        return str(file_data["commit_sha"])
     if _FULL_SHA_RE.fullmatch(requested):
         return requested
     raise RunbookRetrievalError("GitHub did not return an immutable revision for the runbook.")
@@ -79,16 +87,39 @@ class GitHubRunbookSource:
         self._github = github
         self._owner, self._repo = source.repository.split("/", 1)
 
+    def _resolve_revision(self, revision: str) -> str:
+        if _FULL_SHA_RE.fullmatch(revision):
+            return revision.lower()
+        result = list_github_commits(
+            owner=self._owner,
+            repo=self._repo,
+            sha=revision,
+            per_page=1,
+            **github_creds(self._github),
+        )
+        commits = result.get("commits")
+        if not result.get("available") or not isinstance(commits, list) or not commits:
+            logger.warning(
+                "GitHub runbook revision resolution failed for %s: %s",
+                self._source.name,
+                result.get("error", "no commits returned"),
+            )
+            raise RunbookRetrievalError("GitHub could not resolve the configured revision.")
+        first = commits[0]
+        resolved = first.get("sha") if isinstance(first, dict) else None
+        if not isinstance(resolved, str) or not _FULL_SHA_RE.fullmatch(resolved):
+            raise RunbookRetrievalError("GitHub did not return an immutable commit revision.")
+        return resolved.lower()
+
     def _fetch_file(self, path: str, revision: str) -> tuple[str, str, str]:
         kwargs = github_creds(self._github)
-        ref = "" if _FULL_SHA_RE.fullmatch(revision) else revision
-        sha = revision if _FULL_SHA_RE.fullmatch(revision) else ""
+        resolved_revision = self._resolve_revision(revision)
         payload = get_github_file_contents(
             owner=self._owner,
             repo=self._repo,
             path=path,
-            ref=ref,
-            sha=sha,
+            ref="",
+            sha=resolved_revision,
             **kwargs,
         )
         if not payload.get("available"):
@@ -102,7 +133,9 @@ class GitHubRunbookSource:
         content, uri = _resource_file(payload)
         if not content:
             raise RunbookRetrievalError("GitHub returned an empty or non-text runbook document.")
-        resolved_revision = _revision_from_payload(payload, uri, revision)
+        returned_revision = _revision_from_payload(payload, uri, resolved_revision)
+        if returned_revision.lower() != resolved_revision:
+            raise RunbookRetrievalError("GitHub returned content from an unexpected revision.")
         return content, uri, resolved_revision
 
     def verify(self) -> tuple[bool, str]:
@@ -117,16 +150,11 @@ class GitHubRunbookSource:
                 f"{self._source.repository}@{catalog.resolved_revision}."
             )
 
-        result = list_github_commits(
-            owner=self._owner,
-            repo=self._repo,
-            sha=self._source.ref,
-            per_page=1,
-            **github_creds(self._github),
-        )
-        if not result.get("available"):
+        try:
+            revision = self._resolve_revision(self._source.ref)
+        except RunbookRetrievalError:
             return False, "GitHub could not verify access to the configured repository."
-        return True, f"Verified access to {self._source.repository}@{self._source.ref}."
+        return True, f"Verified access to {self._source.repository}@{revision}."
 
     def resolve_reference(self, url: str) -> RunbookReference | None:
         """Resolve a GitHub blob URL only for this configured repository and ref."""
@@ -172,10 +200,7 @@ class GitHubRunbookSource:
             entries = parse_manifest(content)
         except ManifestError as exc:
             raise RunbookRetrievalError("The configured runbook manifest is invalid.") from exc
-        source_uri = (
-            f"https://github.com/{self._source.repository}/blob/"
-            f"{revision}/{self._source.manifest}"
-        )
+        source_uri = _blob_url(self._source.repository, revision, self._source.manifest)
         return RunbookCatalog(
             source_name=self._source.name,
             entries=entries,
@@ -194,9 +219,7 @@ class GitHubRunbookSource:
         content, _resource_uri, resolved_revision = self._fetch_file(path, revision)
         truncated = len(content) > RUNBOOK_CONTENT_MAX_CHARS
         bounded = content[:RUNBOOK_CONTENT_MAX_CHARS]
-        source_uri = (
-            f"https://github.com/{self._source.repository}/blob/{resolved_revision}/{path}"
-        )
+        source_uri = _blob_url(self._source.repository, resolved_revision, path)
         return RunbookDocument(
             reference=reference,
             content=bounded,

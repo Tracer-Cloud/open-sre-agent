@@ -8,6 +8,7 @@ from typing import Any, Literal
 import yaml
 from pydantic import Field, model_validator
 
+from config.constants.runbooks import RUNBOOK_MANIFEST_MAX_CHARS
 from config.strict_config import StrictConfigModel
 from core.domain.runbooks import RunbookCatalogEntry, RunbookMatch
 
@@ -24,6 +25,7 @@ def _safe_markdown_path(value: str) -> str:
         or path.is_absolute()
         or ".." in path.parts
         or "\\" in candidate
+        or any(ord(char) < 32 for char in candidate)
         or path.suffix.lower() != ".md"
     ):
         raise ValueError("document must be a safe repository-relative Markdown path")
@@ -70,6 +72,8 @@ class _Manifest(StrictConfigModel):
 
 def parse_manifest(content: str) -> tuple[RunbookCatalogEntry, ...]:
     """Parse V1 YAML into provider-neutral catalog entries."""
+    if len(content) > RUNBOOK_MANIFEST_MAX_CHARS:
+        raise ManifestError("Runbook manifest exceeds the supported size.")
     try:
         raw: Any = yaml.safe_load(content)
         manifest = _Manifest.model_validate(raw)

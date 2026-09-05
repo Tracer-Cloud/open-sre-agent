@@ -85,9 +85,10 @@ def source_remove(name: str) -> None:
 
 
 def _verify_source(source: RunbookSourceConfig) -> tuple[bool, str]:
+    from core.tool import availability_view
     from infrastructure.harness_providers import resolve_integrations, resolve_runbook_source
 
-    provider = resolve_runbook_source(source, resolve_integrations())
+    provider = resolve_runbook_source(source, availability_view(resolve_integrations()))
     if provider is None:
         return False, (
             f"{source.provider.title()} integration is not configured and verified. "

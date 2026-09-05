@@ -17,7 +17,7 @@ from core.domain.runbooks import (
     select_runbook,
 )
 from core.domain.types.tools import ToolSurface
-from core.tool import AgentToolContext, SideEffectLevel
+from core.tool import AgentToolContext, SideEffectLevel, availability_view
 from core.tool_framework import tool
 from infrastructure.harness_providers import resolve_runbook_source
 from tools.system.runbook_guidance_tool._evidence import map_runbook_guidance
@@ -92,9 +92,10 @@ def _load_bindings(
 
     bindings: list[_SourceBinding] = []
     unavailable: list[str] = []
+    integrations = availability_view(context.resolved_integrations)
     for config in selected:
         try:
-            provider = resolve_runbook_source(config, context.resolved_integrations)
+            provider = resolve_runbook_source(config, integrations)
         except Exception:
             logger.warning(
                 "Runbook source provider resolution failed for %s.",

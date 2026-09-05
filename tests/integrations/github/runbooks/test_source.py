@@ -4,6 +4,7 @@ from unittest.mock import patch
 
 import pytest
 
+from config.constants.runbooks import RUNBOOK_MANIFEST_MAX_CHARS
 from config.runbook_sources import RunbookSourceConfig
 from core.domain.runbooks import RunbookReference
 from integrations.github.runbooks.source import (
@@ -36,6 +37,10 @@ def _file_payload(path: str, content: str, *, sha: str = "abc123") -> dict[str, 
     }
 
 
+def _commits_payload(sha: str) -> dict[str, object]:
+    return {"available": True, "commits": [{"sha": sha}]}
+
+
 def test_resolve_reference_accepts_only_configured_repository_and_ref() -> None:
     source = GitHubRunbookSource(_SOURCE, _GITHUB)
 
@@ -59,6 +64,12 @@ def test_resolve_reference_accepts_only_configured_repository_and_ref() -> None:
     assert (
         source.resolve_reference(
             "https://github.com/acme/operations/blob/dev/runbooks/checkout.md"
+        )
+        is None
+    )
+    assert (
+        source.resolve_reference(
+            "https://github.com/acme/operations/blob/main/runbooks/%00checkout.md"
         )
         is None
     )
@@ -89,7 +100,10 @@ runbooks:
                 sha=manifest_sha,
             ),
         ),
-    ) as fetch:
+    ) as fetch, patch(
+        "integrations.github.runbooks.source.list_github_commits",
+        return_value=_commits_payload(manifest_sha),
+    ) as commits:
         catalog = source.fetch_catalog()
         entry = catalog.entries[0]
         document = source.fetch_document(
@@ -106,7 +120,8 @@ runbooks:
     assert entry.match.labels == (("service", "checkout"),)
     assert document.resolved_revision == manifest_sha
     assert document.content.startswith("# Checkout latency")
-    assert fetch.call_args_list[0].kwargs["ref"] == "main"
+    assert commits.call_args.kwargs["sha"] == "main"
+    assert fetch.call_args_list[0].kwargs["sha"] == manifest_sha
     assert fetch.call_args_list[1].kwargs["sha"] == manifest_sha
 
 
@@ -119,7 +134,33 @@ def test_invalid_manifest_is_reported() -> None:
             return_value=_file_payload(
                 ".opensre/runbooks.yaml",
                 "version: 1\nrunbooks:\n  - id: unsafe\n    document: ../secret.md",
+                sha="a" * 40,
             ),
+        ),
+        patch(
+            "integrations.github.runbooks.source.list_github_commits",
+            return_value=_commits_payload("a" * 40),
+        ),
+        pytest.raises(RunbookRetrievalError, match="manifest is invalid"),
+    ):
+        source.fetch_catalog()
+
+
+def test_oversized_manifest_is_rejected_before_parsing() -> None:
+    source = GitHubRunbookSource(_SOURCE, _GITHUB)
+
+    with (
+        patch(
+            "integrations.github.runbooks.source.get_github_file_contents",
+            return_value=_file_payload(
+                ".opensre/runbooks.yaml",
+                "x" * (RUNBOOK_MANIFEST_MAX_CHARS + 1),
+                sha="a" * 40,
+            ),
+        ),
+        patch(
+            "integrations.github.runbooks.source.list_github_commits",
+            return_value=_commits_payload("a" * 40),
         ),
         pytest.raises(RunbookRetrievalError, match="manifest is invalid"),
     ):
@@ -135,9 +176,15 @@ def test_fetch_document_truncates_bounded_content() -> None:
         requested_revision="main",
     )
 
-    with patch(
-        "integrations.github.runbooks.source.get_github_file_contents",
-        return_value=_file_payload("runbooks/long.md", "x" * 30_000),
+    with (
+        patch(
+            "integrations.github.runbooks.source.get_github_file_contents",
+            return_value=_file_payload("runbooks/long.md", "x" * 30_000, sha="a" * 40),
+        ),
+        patch(
+            "integrations.github.runbooks.source.list_github_commits",
+            return_value=_commits_payload("a" * 40),
+        ),
     ):
         document = source.fetch_document(reference)
 
@@ -161,6 +208,10 @@ def test_fetch_failure_uses_stable_error_without_provider_detail() -> None:
                 "error": "token ghp_secret cannot access private repository",
                 "file": {},
             },
+        ),
+        patch(
+            "integrations.github.runbooks.source.list_github_commits",
+            return_value=_commits_payload("a" * 40),
         ),
         pytest.raises(RunbookRetrievalError) as raised,
     ):

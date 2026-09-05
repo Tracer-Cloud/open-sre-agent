@@ -269,6 +269,10 @@ runbooks:
         "integrations.github.runbooks.source.get_github_file_contents",
         github_file_contents,
     )
+    monkeypatch.setattr(
+        "integrations.github.runbooks.source.list_github_commits",
+        lambda **_kwargs: {"available": True, "commits": [{"sha": _SHA}]},
+    )
 
     result = load_runbook_guidance(
         alertname="CheckoutHighLatency",

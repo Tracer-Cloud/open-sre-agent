@@ -328,6 +328,7 @@ EXPORTS: dict[str, str] = {
     "WORKSPACE_REPO_ENV_KEYS": "runtime_metadata",
     # runbooks
     "RUNBOOK_CONTENT_MAX_CHARS": "runbooks",
+    "RUNBOOK_MANIFEST_MAX_CHARS": "runbooks",
     # scheduler
     "OPENSRE_GATEWAY_HOST_SCHEDULER_ENV": "scheduler",
     # secrets

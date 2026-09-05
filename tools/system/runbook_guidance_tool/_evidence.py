@@ -5,6 +5,9 @@ from __future__ import annotations
 from typing import Any
 
 from core.domain.types.evidence import record_evidence_entry, unique_evidence_source
+from infrastructure.text.truncation import truncate
+
+_RUNBOOK_SUMMARY_MAX_CHARS = 240
 
 
 def map_runbook_guidance(
@@ -20,7 +23,10 @@ def map_runbook_guidance(
     title = str(runbook.get("title") or runbook.get("document_id") or "Runbook")
     path = str(runbook.get("path") or "")
     revision = str(runbook.get("revision") or "")
-    summary = f"{title}: {path}@{revision}" if path and revision else title
+    summary = truncate(
+        f"{title}: {path}@{revision}" if path and revision else title,
+        _RUNBOOK_SUMMARY_MAX_CHARS,
+    )
     record_evidence_entry(
         evidence,
         source=unique_evidence_source(evidence, "load_runbook_guidance"),

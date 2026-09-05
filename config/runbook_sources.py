@@ -25,7 +25,12 @@ def _safe_relative_path(value: str, *, field_name: str) -> str:
     if not candidate:
         return ""
     path = PurePosixPath(candidate)
-    if path.is_absolute() or ".." in path.parts or "\\" in candidate:
+    if (
+        path.is_absolute()
+        or ".." in path.parts
+        or "\\" in candidate
+        or any(ord(char) < 32 for char in candidate)
+    ):
         raise ValueError(f"{field_name} must be a safe repository-relative path")
     return candidate
 
