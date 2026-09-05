@@ -56,9 +56,7 @@ def select_runbook(
 ) -> RunbookSelection:
     """Select the uniquely most-specific exact match for ``incident``."""
     ranked = [
-        (rank, entry)
-        for entry in entries
-        if (rank := _match_rank(entry, incident)) is not None
+        (rank, entry) for entry in entries if (rank := _match_rank(entry, incident)) is not None
     ]
     if not ranked:
         return RunbookSelection(status="not_found")

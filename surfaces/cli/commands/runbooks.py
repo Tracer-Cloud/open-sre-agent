@@ -66,8 +66,7 @@ def source_list() -> None:
     for source in sources:
         manifest = source.manifest or "(explicit URLs only)"
         click.echo(
-            f"{source.name}: {source.provider} {source.repository}@{source.ref} "
-            f"manifest={manifest}"
+            f"{source.name}: {source.provider} {source.repository}@{source.ref} manifest={manifest}"
         )
 
 

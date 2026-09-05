@@ -62,9 +62,7 @@ def test_resolve_reference_accepts_only_configured_repository_and_ref() -> None:
         is None
     )
     assert (
-        source.resolve_reference(
-            "https://github.com/acme/operations/blob/dev/runbooks/checkout.md"
-        )
+        source.resolve_reference("https://github.com/acme/operations/blob/dev/runbooks/checkout.md")
         is None
     )
     assert (
@@ -90,20 +88,23 @@ runbooks:
 """.strip()
     source = GitHubRunbookSource(_SOURCE, _GITHUB)
 
-    with patch(
-        "integrations.github.runbooks.source.get_github_file_contents",
-        side_effect=(
-            _file_payload(".opensre/runbooks.yaml", manifest, sha=manifest_sha),
-            _file_payload(
-                "runbooks/checkout-high-latency.md",
-                "# Checkout latency\n\nCheck the deployment.",
-                sha=manifest_sha,
+    with (
+        patch(
+            "integrations.github.runbooks.source.get_github_file_contents",
+            side_effect=(
+                _file_payload(".opensre/runbooks.yaml", manifest, sha=manifest_sha),
+                _file_payload(
+                    "runbooks/checkout-high-latency.md",
+                    "# Checkout latency\n\nCheck the deployment.",
+                    sha=manifest_sha,
+                ),
             ),
-        ),
-    ) as fetch, patch(
-        "integrations.github.runbooks.source.list_github_commits",
-        return_value=_commits_payload(manifest_sha),
-    ) as commits:
+        ) as fetch,
+        patch(
+            "integrations.github.runbooks.source.list_github_commits",
+            return_value=_commits_payload(manifest_sha),
+        ) as commits,
+    ):
         catalog = source.fetch_catalog()
         entry = catalog.entries[0]
         document = source.fetch_document(

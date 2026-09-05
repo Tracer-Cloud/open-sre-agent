@@ -86,7 +86,9 @@ def _load_bindings(
         logger.warning("Runbook source configuration could not be loaded.", exc_info=True)
         return [], ["Runbook source configuration could not be loaded."]
 
-    selected = tuple(source for source in configured if not source_name or source.name == source_name)
+    selected = tuple(
+        source for source in configured if not source_name or source.name == source_name
+    )
     if source_name and not selected:
         return [], [f"Runbook source {source_name!r} is not configured."]
 

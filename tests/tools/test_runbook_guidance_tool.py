@@ -70,10 +70,7 @@ class _FakeRunbookSource:
             reference=reference,
             content="# Checkout latency\n\nInspect the latest deployment.",
             resolved_revision=_SHA,
-            source_uri=(
-                "https://github.com/acme/operations/blob/"
-                f"{_SHA}/runbooks/checkout.md"
-            ),
+            source_uri=(f"https://github.com/acme/operations/blob/{_SHA}/runbooks/checkout.md"),
             title="Checkout latency",
         )
 
