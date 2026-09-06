@@ -676,6 +676,34 @@ def _x_mcp_call_tool_case() -> ToolFailureCase:
     )
 
 
+def _runbook_guidance_case() -> ToolFailureCase:
+    def patch(mp: pytest.MonkeyPatch) -> None:
+        from tools.system.runbook_guidance_tool import tool as mod
+
+        mp.setattr(
+            mod,
+            "load_runbook_sources",
+            MagicMock(side_effect=RuntimeError("config")),
+        )
+
+    def invoke() -> dict[str, Any]:
+        from core.tool import AgentToolContext
+        from tools.system.runbook_guidance_tool import load_runbook_guidance
+
+        return load_runbook_guidance(
+            alertname="CheckoutDown",
+            context=AgentToolContext(resolved_integrations={}),
+        )
+
+    return ToolFailureCase(
+        "runbook_guidance",
+        patch,
+        invoke,
+        "load_runbook_guidance",
+        "knowledge",
+    )
+
+
 _TOOL_FAILURE_CASES: list[ToolFailureCase] = [
     _azure_case(),
     _openobserve_case(),
@@ -701,6 +729,7 @@ _TOOL_FAILURE_CASES: list[ToolFailureCase] = [
     _sentry_mcp_call_tool_case(),
     _x_mcp_list_case(),
     _x_mcp_call_tool_case(),
+    _runbook_guidance_case(),
 ]
 
 
@@ -895,6 +924,7 @@ _MIGRATED_TOOL_NAMES: frozenset[str] = frozenset(
         # X MCP — both swallow sites in x_mcp_tool/__init__.py.
         "list_x_tools",
         "call_x_tool",
+        "load_runbook_guidance",
     }
 )
 

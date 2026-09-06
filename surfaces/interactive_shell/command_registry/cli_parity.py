@@ -293,6 +293,10 @@ def _cmd_config(session: Session, console: Console, args: list[str]) -> bool:
     return run_cli_command(console, ["config", *args], session=session)
 
 
+def _cmd_runbooks(session: Session, console: Console, args: list[str]) -> bool:
+    return run_cli_command(console, ["runbooks", *args], session=session)
+
+
 def _cmd_messaging(session: Session, console: Console, args: list[str]) -> bool:
     return run_cli_command(console, ["messaging", *args], session=session)
 
@@ -386,6 +390,17 @@ COMMANDS: list[SlashCommand] = [
         "Show or edit local OpenSRE config.",
         _cmd_config,
         usage=("/config show", "/config set <key> <value>"),
+    ),
+    SlashCommand(
+        "/runbooks",
+        "Manage trusted runbook sources for guided investigations.",
+        _cmd_runbooks,
+        usage=(
+            "/runbooks list",
+            "/runbooks add github --name <name> --repo <owner/repo>",
+            "/runbooks verify <name>",
+            "/runbooks remove <name>",
+        ),
     ),
     SlashCommand(
         "/messaging",
