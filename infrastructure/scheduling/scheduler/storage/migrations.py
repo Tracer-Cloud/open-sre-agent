@@ -25,6 +25,7 @@ _TASK_RUNS_SCHEMA = """
         targets TEXT DEFAULT '',
         owner_token TEXT NOT NULL DEFAULT '',
         lease_expires_at TEXT NOT NULL DEFAULT '',
+        target_filter TEXT NOT NULL DEFAULT '[]',
         UNIQUE(task_id, fire_time, attempt)
     )
 """
@@ -91,7 +92,7 @@ def _add_missing_columns(conn: sqlite3.Connection) -> None:
 def apply_migrations(conn: sqlite3.Connection) -> None:
     """Create or migrate the task-runs schema under one SQLite write lock."""
     columns = _table_columns(conn)
-    if {"attempt", "targets"} <= columns:
+    if {"attempt", "targets", "target_filter"} <= columns:
         return
 
     conn.execute("BEGIN IMMEDIATE")
@@ -102,6 +103,12 @@ def apply_migrations(conn: sqlite3.Connection) -> None:
         elif "attempt" not in columns:
             _migrate_legacy_claim_table(conn, columns)
         _add_missing_columns(conn)
+        if "target_filter" not in _table_columns(conn):
+            # Old attempts did not record whether delivery was restricted.
+            # An empty scope prevents automatic recovery from widening it.
+            conn.execute(
+                "ALTER TABLE task_runs ADD COLUMN target_filter TEXT NOT NULL DEFAULT '[]'"
+            )
         conn.commit()
     except Exception:
         conn.rollback()

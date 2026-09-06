@@ -182,7 +182,14 @@ and attempt key. Each attempt has a 30-minute lease and a random owner token:
 
 The scheduler also runs a recovery sweep every minute, including after a
 restart. It finds expired running attempts and resubmits their original
-fire-time keys through the same claim path.
+fire-time keys through the same claim path. Recovery preserves the destination
+restriction of a `--failed-only` retry, so it does not resend to destinations
+outside that retry's scope.
+
+Attempts created before delivery scopes were persisted cannot safely recover
+automatically. They appear as failed runs with a delivery-scope error; use
+`opensre cron run <task-id> --failed-only` when readable per-target history exists,
+or explicitly rerun the task for all destinations after checking its logs.
 
 This prevents concurrent duplicate claims and recovers ticks after worker
 crashes. A crash after an external provider accepts a message but before the

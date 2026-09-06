@@ -627,3 +627,66 @@ class TestLatestTargetedRun:
         conn.close()
 
         assert get_latest_targeted_run("task1", db_path=db_path) is None
+
+
+@pytest.mark.parametrize("scope", [None, frozenset(), frozenset({(Provider.SLACK, "C123")})])
+def test_reclaim_preserves_original_delivery_scope(
+    db_path: Path, scope: frozenset[tuple[Provider, str]] | None
+) -> None:
+    first = try_claim("task", "tick", db_path=db_path, target_filter=scope)
+    assert first is not None
+    _expire_claim(db_path, "task", "tick")
+    reclaimed = try_claim(
+        "task", "tick", db_path=db_path, target_filter=frozenset({(Provider.TELEGRAM, "other")})
+    )
+    assert reclaimed is not None
+    assert reclaimed.target_filter == scope
+
+
+def test_scope_migration_preserves_claims_and_refuses_unknown_delivery(db_path: Path) -> None:
+    claim = _claimed(db_path, "task", "tick")
+    with sqlite3.connect(db_path) as conn:
+        conn.execute("ALTER TABLE task_runs DROP COLUMN target_filter")
+    _expire_claim(db_path, "task", "tick")
+    with ThreadPoolExecutor(max_workers=4) as pool:
+        results = list(pool.map(lambda _: get_runs("task", db_path=db_path), range(4)))
+    assert all(len(runs) == 1 for runs in results)
+    reclaimed = try_claim("task", "tick", db_path=db_path)
+    assert reclaimed is not None
+    assert reclaimed.target_filter == frozenset()
+    assert not complete_run(claim, status=TaskStatus.SUCCESS, db_path=db_path)
+
+
+@pytest.mark.parametrize("raw", ['{"provider":"slack"}', '[["unknown", "chat"]]', "broken"])
+def test_malformed_scope_cannot_widen_recovery(db_path: Path, raw: str) -> None:
+    _claimed(db_path, "task", "tick")
+    with sqlite3.connect(db_path) as conn:
+        conn.execute("UPDATE task_runs SET target_filter = ?", (raw,))
+    _expire_claim(db_path, "task", "tick")
+    reclaimed = try_claim("task", "tick", db_path=db_path)
+    assert reclaimed is not None
+    assert reclaimed.target_filter == frozenset()
+
+
+def test_delivery_scope_migration_rolls_back_on_failure(db_path: Path) -> None:
+    class FailScopeMigration(sqlite3.Connection):
+        def execute(self, sql: str, parameters: object = (), /) -> sqlite3.Cursor:
+            if sql.startswith("ALTER TABLE task_runs ADD COLUMN target_filter"):
+                raise sqlite3.OperationalError("injected migration failure")
+            return super().execute(sql, parameters)
+
+    _claimed(db_path, "task", "tick")
+    with sqlite3.connect(db_path) as conn:
+        conn.execute("ALTER TABLE task_runs DROP COLUMN target_filter")
+        conn.execute("ALTER TABLE task_runs DROP COLUMN targets")
+    conn = sqlite3.connect(db_path, factory=FailScopeMigration)
+    try:
+        with pytest.raises(sqlite3.OperationalError, match="injected migration failure"):
+            migrations.apply_migrations(conn)
+        columns = {row[1] for row in conn.execute("PRAGMA table_info(task_runs)")}
+        assert "targets" not in columns
+        assert "target_filter" not in columns
+        assert conn.execute("SELECT COUNT(*) FROM task_runs").fetchone()[0] == 1
+    finally:
+        conn.close()
+    assert len(get_runs("task", db_path=db_path)) == 1
