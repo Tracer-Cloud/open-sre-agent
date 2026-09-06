@@ -3,6 +3,8 @@ from __future__ import annotations
 from types import MappingProxyType
 from unittest.mock import MagicMock, patch
 
+import pytest
+
 from gateway.transports.telegram.poller.client import TelegramBotClient
 from infrastructure.delivery.notifications.delivery_transport import DeliveryResponse
 
@@ -37,7 +39,7 @@ def test_send_message_success_with_mapping_proxy_data(mock_post: MagicMock) -> N
 
 @patch("gateway.transports.telegram.poller.client.post_json")
 def test_send_message_redacts_bot_token_from_transport_exception(
-    mock_post: MagicMock, caplog: object
+    mock_post: MagicMock, caplog: pytest.LogCaptureFixture
 ) -> None:
     import logging
 

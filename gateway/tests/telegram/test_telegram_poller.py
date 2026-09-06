@@ -3,6 +3,7 @@ from __future__ import annotations
 from unittest.mock import MagicMock, patch
 
 import httpx
+import pytest
 
 from gateway.transports.telegram.poller.poller import (
     TelegramPoller,
@@ -136,7 +137,7 @@ def test_poll_once_parses_callback_query(mock_get: MagicMock, mock_sleep: MagicM
 def test_poll_once_redacts_bot_token_from_transport_exception(
     mock_get: MagicMock,
     mock_sleep: MagicMock,
-    caplog: object,
+    caplog: pytest.LogCaptureFixture,
 ) -> None:
     import logging
 
