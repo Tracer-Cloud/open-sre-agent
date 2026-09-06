@@ -8,9 +8,13 @@ from pathlib import Path
 
 import pytest
 
-from config.constants import OPENSRE_TMP_DIR, ensure_opensre_tmp_dir
+from config.constants import (
+    OPENSRE_TMP_DIR,
+    SANDBOX_BASE_ENV_KEYS,
+    SANDBOXED_TEMP_ENV_KEYS,
+    ensure_opensre_tmp_dir,
+)
 from infrastructure.safety.sandbox.runner import (
-    _BASE_ENV_KEYS,
     MAX_TIMEOUT,
     SandboxResult,
     _sandbox_env,
@@ -151,14 +155,10 @@ class TestSandboxTimeout:
         assert not result.timed_out
 
 
-_WINDOWS_ENV_KEYS = (
-    "SYSTEMDRIVE",
-    "SYSTEMROOT",
-    "WINDIR",
-    "TMP",
-    "TEMP",
-    "USERPROFILE",
-    "PATHEXT",
+# The Windows keys the child receives verbatim: everything in the shared
+# allowlist except the temp keys, which are sandboxed rather than forwarded.
+_WINDOWS_ENV_KEYS = tuple(
+    key for key in SANDBOX_BASE_ENV_KEYS if key not in SANDBOXED_TEMP_ENV_KEYS
 )
 
 
@@ -166,7 +166,7 @@ class TestSandboxEnvironment:
     # Set the values explicitly rather than reading os.environ: the Windows keys
     # are absent on POSIX and vice versa, so the allowlist is asserted the same
     # way on every platform.
-    def test_windows_keys_are_forwarded_when_set(self, monkeypatch: pytest.MonkeyPatch) -> None:
+    def test_non_temp_keys_are_forwarded_when_set(self, monkeypatch: pytest.MonkeyPatch) -> None:
         for key in _WINDOWS_ENV_KEYS:
             monkeypatch.setenv(key, f"value-for-{key}")
 
@@ -174,6 +174,40 @@ class TestSandboxEnvironment:
 
         for key in _WINDOWS_ENV_KEYS:
             assert env[key] == f"value-for-{key}"
+
+    def test_temp_keys_are_sandboxed_not_forwarded(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        # Forwarding the host TEMP/TMP/USERPROFILE (and TMPDIR on POSIX) lets
+        # ordinary tempfile calls write outside OPENSRE_TMP_DIR: the injected
+        # guard intercepts only builtins.open, while tempfile uses lower-level
+        # file APIs. The values are rewritten to the sandbox root instead.
+        for key in SANDBOXED_TEMP_ENV_KEYS:
+            monkeypatch.setenv(key, r"C:\host-cwd\tmp-should-not-cross")
+
+        env = _sandbox_env(None)
+
+        for key in SANDBOXED_TEMP_ENV_KEYS:
+            assert os.path.realpath(env[key]) == os.path.realpath(str(OPENSRE_TMP_DIR))
+
+    def test_child_tempfile_writes_stay_inside_sandbox_tmp(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        # Regression for the P1 review finding: with the host value forwarded, an
+        # ordinary tempfile.mkstemp() in generated code landed in the host temp
+        # directory, which builtins.open-guarding cannot see.
+        monkeypatch.setenv("TEMP", r"C:\host-cwd\tmp-should-not-cross")
+
+        code = (
+            "import os, tempfile;"
+            "fd, path = tempfile.mkstemp();"
+            "os.close(fd); os.remove(path);"
+            "print(os.path.realpath(path))"
+        )
+        result = run_python_sandbox(code)
+
+        assert result.success, result.stderr
+        assert os.path.realpath(result.stdout.strip()).startswith(
+            os.path.realpath(str(OPENSRE_TMP_DIR))
+        )
 
     @pytest.mark.skipif(os.name != "nt", reason="%SystemDrive% expansion is Windows-only")
     def test_child_can_expand_systemdrive(self) -> None:
@@ -209,14 +243,15 @@ class TestSandboxEnvironment:
     def test_unlisted_variables_are_still_not_forwarded(
         self, monkeypatch: pytest.MonkeyPatch
     ) -> None:
-        # _BASE_ENV_KEYS is a security control. Widening it must not turn it into
+        # SANDBOX_BASE_ENV_KEYS is a security control. Widening it must not
+        # turn it into
         # a passthrough, so the keys held back on purpose are named here.
         for key in ("AWS_SECRET_ACCESS_KEY", "COMSPEC", "APPDATA", "LOCALAPPDATA"):
             monkeypatch.setenv(key, "should-not-cross")
 
         env = _sandbox_env(None)
 
-        assert set(env) <= set(_BASE_ENV_KEYS)
+        assert set(env) <= set(SANDBOX_BASE_ENV_KEYS)
         for key in ("AWS_SECRET_ACCESS_KEY", "COMSPEC", "APPDATA", "LOCALAPPDATA"):
             assert key not in env
 

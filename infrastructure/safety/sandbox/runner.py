@@ -12,15 +12,21 @@ import textwrap
 from dataclasses import dataclass, field
 from typing import Any
 
-from config.constants import OPENSRE_TMP_DIR, ensure_opensre_tmp_dir
+from config.constants import (
+    OPENSRE_TMP_DIR,
+    SANDBOX_BASE_ENV_KEYS,
+    SANDBOXED_TEMP_ENV_KEYS,
+    ensure_opensre_tmp_dir,
+)
 
 DEFAULT_TIMEOUT: int = 30
 MAX_TIMEOUT: int = 60
 _SANDBOX_TMP_ROOT = os.path.realpath(os.fspath(OPENSRE_TMP_DIR))
 # An allowlist, not a passthrough: anything absent here is dropped. The second
-# group is the Windows spelling of entries in the first, plus the keys the OS
-# itself requires — without SYSTEMROOT, Winsock cannot initialise and every
-# socket call fails with WinError 10106. SYSTEMDRIVE travels with it because
+# An allowlist, not a passthrough: anything absent here is dropped. The Windows
+# entries are the keys the OS itself requires — without SYSTEMROOT, Winsock
+# cannot initialise and every socket call fails with WinError 10106.
+# SYSTEMDRIVE travels with it because
 # Windows resolves the shell folders from a REG_EXPAND_SZ holding the literal
 # "%SystemDrive%\\ProgramData", expanded against this environment. Drop the key
 # and the token stays literal, leaving a path with no drive letter and no
@@ -31,25 +37,13 @@ _SANDBOX_TMP_ROOT = os.path.realpath(os.fspath(OPENSRE_TMP_DIR))
 # writes its packaging-layer cache to the relative path, creating an actual
 # "%SystemDrive%" tree under the child's cwd — a write outside the sandbox root,
 # made by the OS at process start rather than through the guarded open() below.
+# TEMP, TMP, TMPDIR and USERPROFILE are listed but *not* forwarded: they are
+# rewritten to the sandbox temp root in _sandbox_env, because the injected guard
+# only intercepts builtins.open and tempfile's OS-level file creation bypasses
+# it. Forwarding the host values would let ordinary mkstemp() calls land in host
+# temp directories, outside the documented write-containment contract.
 # Deliberately excluded: COMSPEC (the preamble blocks subprocess spawning) and
 # APPDATA/LOCALAPPDATA (config homes, matching the omission of XDG_CONFIG_HOME).
-_BASE_ENV_KEYS = (
-    "HOME",
-    "LANG",
-    "LC_ALL",
-    "PATH",
-    "PYTHONPATH",
-    "REQUESTS_CA_BUNDLE",
-    "SSL_CERT_FILE",
-    "TMPDIR",
-    "PATHEXT",
-    "SYSTEMDRIVE",
-    "SYSTEMROOT",
-    "TEMP",
-    "TMP",
-    "USERPROFILE",
-    "WINDIR",
-)
 
 # Preamble injected before user code when network access is disabled.
 _NETWORK_BLOCK_PREAMBLE = textwrap.dedent("""\
@@ -229,9 +223,22 @@ def run_python_sandbox(
 
 
 def _sandbox_env(extra_env: dict[str, str] | None) -> dict[str, str]:
-    """Build a narrow subprocess environment plus explicitly approved values."""
+    """Build a narrow subprocess environment plus explicitly approved values.
+
+    Keys in SANDBOXED_TEMP_ENV_KEYS are not forwarded from the host:
+    they are rewritten to the sandbox temp root so the child's own temp-file
+    APIs (tempfile reads TEMP/TMP on Windows, TMPDIR on POSIX) cannot write
+    outside OPENSRE_TMP_DIR, where the builtins.open guard gives no coverage
+    (tempfile uses lower-level OS file creation).
+    """
     sandbox_env: dict[str, str] = {}
-    for key in _BASE_ENV_KEYS:
+    for key in SANDBOX_BASE_ENV_KEYS:
+        if key in SANDBOXED_TEMP_ENV_KEYS:
+            # Never forward the host value: point the child's temp locations at
+            # the sandbox root instead, so writes stay inside the sandbox even
+            # when they bypass the guarded open().
+            sandbox_env[key] = _SANDBOX_TMP_ROOT
+            continue
         value = os.environ.get(key)
         if value:
             sandbox_env[key] = value

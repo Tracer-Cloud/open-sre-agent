@@ -299,6 +299,10 @@ from config.constants.runtime_metadata import (
     OPENSRE_WORKSPACE_REPO_ENV,
     WORKSPACE_REPO_ENV_KEYS,
 )
+from config.constants.sandbox import (
+    SANDBOX_BASE_ENV_KEYS,
+    SANDBOXED_TEMP_ENV_KEYS,
+)
 from config.constants.secrets import (
     CREDENTIAL_FALLBACK_FILENAME,
     KEYRING_SERVICE,
@@ -632,6 +636,8 @@ __all__ = [
     "OPENSRE_ALLOW_NETWORK_ENV",
     "OPENSRE_WORKSPACE_REPO_ENV",
     "WORKSPACE_REPO_ENV_KEYS",
+    "SANDBOX_BASE_ENV_KEYS",
+    "SANDBOXED_TEMP_ENV_KEYS",
     "SENTRY_AUTH_TOKEN_ENV",
     "SENTRY_BASE_URL_ENV",
     "SENTRY_DSN",
