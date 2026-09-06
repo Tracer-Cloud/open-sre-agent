@@ -262,6 +262,49 @@ def test_get_function_code_corrupt_zip(mock_lambda_client) -> None:
     assert "extract_error" in result["data"]
 
 
+def test_get_recent_invocations_start_line_without_a_value(mock_logs_client) -> None:
+    # The log group also carries the function's own stdout, so a START-shaped
+    # line can arrive with no request id after the label.
+    mock_logs_client.filter_log_events.return_value = {
+        "events": [
+            {"timestamp": 1000, "message": "START RequestId: \n"},
+            {"timestamp": 1050, "message": "log line\n"},
+        ]
+    }
+
+    result = get_recent_invocations("test-func")
+
+    assert result["success"] is True
+    assert result["data"]["invocations"][0]["request_id"] is None
+
+
+def test_get_recent_invocations_start_line_without_a_space(mock_logs_client) -> None:
+    mock_logs_client.filter_log_events.return_value = {
+        "events": [{"timestamp": 1000, "message": "START RequestId:req9 Version: $LATEST\n"}]
+    }
+
+    result = get_recent_invocations("test-func")
+
+    assert result["success"] is True
+    assert result["data"]["invocations"][0]["request_id"] == "req9"
+
+
+def test_get_recent_invocations_report_line_without_values(mock_logs_client) -> None:
+    mock_logs_client.filter_log_events.return_value = {
+        "events": [
+            {"timestamp": 1000, "message": "START RequestId: req1\n"},
+            {"timestamp": 1100, "message": "REPORT RequestId: req1\tDuration:\tMemory Used:\n"},
+        ]
+    }
+
+    result = get_recent_invocations("test-func")
+
+    assert result["success"] is True
+    invocation = result["data"]["invocations"][0]
+    assert "duration_ms" not in invocation
+    assert "memory_used_mb" not in invocation
+
+
 def test_get_recent_invocations_multiple(mock_logs_client) -> None:
     # Test grouping of multiple overlapping/sequential invocations
     mock_logs_client.filter_log_events.return_value = {

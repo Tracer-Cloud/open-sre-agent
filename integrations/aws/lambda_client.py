@@ -156,6 +156,21 @@ def get_function_code(
         return {"success": False, "error": str(e)}
 
 
+def _token_after(message: str, label: str) -> str | None:
+    """First whitespace-delimited token following *label* in *message*, or None.
+
+    ``filter_log_events`` returns every event in the function's log group,
+    including the function's own stdout, so a line can carry a label without
+    the value that normally follows it. Both the label-value separator and the
+    value itself are therefore treated as optional.
+    """
+    _, separator, rest = message.partition(label)
+    if not separator:
+        return None
+    tokens = rest.split()
+    return tokens[0] if tokens else None
+
+
 def get_recent_invocations(
     function_name: str,
     limit: int = 50,
@@ -204,9 +219,7 @@ def get_recent_invocations(
             if "START RequestId:" in message:
                 if current_invocation:
                     invocations.append(current_invocation)
-                request_id = (
-                    message.split("RequestId: ")[1].split()[0] if "RequestId:" in message else None
-                )
+                request_id = _token_after(message, "RequestId:")
                 current_invocation = {
                     "request_id": request_id,
                     "start_time": timestamp,
@@ -219,13 +232,13 @@ def get_recent_invocations(
             elif "REPORT RequestId:" in message:
                 if current_invocation:
                     current_invocation["logs"].append(message)
-                    if "Duration:" in message:
-                        with suppress(IndexError, ValueError):
-                            duration_part = message.split("Duration: ")[1].split()[0]
+                    duration_part = _token_after(message, "Duration:")
+                    if duration_part is not None:
+                        with suppress(ValueError):
                             current_invocation["duration_ms"] = float(duration_part)
-                    if "Memory Used:" in message:
-                        with suppress(IndexError, ValueError):
-                            memory_part = message.split("Memory Used: ")[1].split()[0]
+                    memory_part = _token_after(message, "Memory Used:")
+                    if memory_part is not None:
+                        with suppress(ValueError):
                             current_invocation["memory_used_mb"] = int(memory_part)
                     invocations.append(current_invocation)
                     current_invocation = None
