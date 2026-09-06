@@ -31,6 +31,7 @@ from infrastructure.scheduling.scheduler.storage import (
     get_expired_claims,
     get_task,
     list_tasks,
+    record_task_success,
     update_task,
 )
 from infrastructure.scheduling.scheduler.types import Provider, ScheduledTask, TaskStatus
@@ -134,10 +135,7 @@ def _scheduled_job(task_id: str, runners: SchedulerRunners) -> None:
     result = execute_task(task, fire_time, runners)
 
     if result:
-        task.last_run = datetime.now(UTC).isoformat()
-        if task.params.get("disable_after_success", "").strip().lower() == "true":
-            task.enabled = False
-        update_task(task)
+        record_task_success(task.id)
 
 
 def _recover_expired_tasks(

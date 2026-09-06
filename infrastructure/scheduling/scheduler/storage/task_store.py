@@ -9,6 +9,7 @@ import os
 import tempfile
 import time
 from collections.abc import Mapping
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
@@ -281,11 +282,28 @@ def update_task(task: ScheduledTask, store_path: Path | None = None) -> bool:
     return False
 
 
+def record_task_success(task_id: str, store_path: Path | None = None) -> bool:
+    """Update completion fields on the latest task while preserving user edits."""
+    path = store_path or default_task_store_path()
+    with FileLock(_lock_path(path)):
+        raw = _load_raw(path)
+        for entry in raw:
+            if entry.get("id") == task_id:
+                task = ScheduledTask.model_validate(entry)
+                entry["last_run"] = datetime.now(UTC).isoformat()
+                if task.params.get("disable_after_success", "").strip().lower() == "true":
+                    entry["enabled"] = False
+                _save_raw(path, raw)
+                return True
+    return False
+
+
 __all__ = [
     "add_task",
     "default_task_store_path",
     "get_task",
     "list_tasks",
+    "record_task_success",
     "remove_task",
     "update_task",
 ]

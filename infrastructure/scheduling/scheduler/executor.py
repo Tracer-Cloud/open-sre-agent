@@ -52,7 +52,7 @@ def execute_task(
         False if the claim was lost (another instance handled it) or delivery failed.
     """
     # Attempt to claim this execution slot
-    claim = try_claim(task.id, fire_time)
+    claim = try_claim(task.id, fire_time, target_filter=target_filter)
     if claim is None:
         logger.info(
             "Task %s fire_time=%s already claimed by another instance",
@@ -76,6 +76,16 @@ def execute_task(
         status=TaskStatus.RUNNING,
     )
     _emit_analytics_started(task)
+
+    if claim.target_filter == frozenset():
+        _record_failure(
+            claim,
+            task,
+            fire_time,
+            "No delivery destinations authorized for this attempt; run the task explicitly.",
+            stage="delivery_scope",
+        )
+        return False
 
     # Build the message
     try:
@@ -116,7 +126,7 @@ def execute_task(
         return True
 
     # Fan out to every destination the task resolves to, concurrently.
-    result = _deliver_all(task, message, target_filter=target_filter)
+    result = _deliver_all(task, message, target_filter=claim.target_filter)
     message_id = result.message_id()
     error = result.error()
 
