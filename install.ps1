@@ -1005,6 +1005,15 @@ function Test-OpenSreAutoLaunchEnabled {
     return -not ($value -eq "0" -or $value -eq "false" -or $value -eq "FALSE" -or $value -eq "no" -or $value -eq "NO" -or $value -eq "off" -or $value -eq "OFF")
 }
 
+function Get-OpenSreCommandName {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$BinaryName
+    )
+
+    return [System.IO.Path]::GetFileNameWithoutExtension($BinaryName)
+}
+
 function Start-OpenSreOnboardingAfterInstall {
     param(
         [string]$BinaryPath,
@@ -1187,7 +1196,7 @@ function Install-OpenSre {
 
     Ensure-OpenSreGithubCli
 
-    $exe = $binaryName.TrimEnd(".exe")
+    $exe = Get-OpenSreCommandName -BinaryName $binaryName
     $sep = "────────────────────────────────────────────"
 
     Write-Host ""
