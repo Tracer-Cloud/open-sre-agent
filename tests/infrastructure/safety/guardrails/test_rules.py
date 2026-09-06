@@ -26,6 +26,16 @@ class TestLoadRules:
         path = _write_config(tmp_path, {"version": 1})
         assert load_rules(path) == []
 
+    def test_returns_empty_when_rules_key_is_empty(self, tmp_path: Path) -> None:
+        # "rules:" with every entry commented out parses as None, not a list.
+        path = tmp_path / "guardrails.yml"
+        path.write_text("rules:", encoding="utf-8")
+        assert load_rules(path) == []
+
+    def test_returns_empty_when_rules_key_is_not_a_list(self, tmp_path: Path) -> None:
+        path = _write_config(tmp_path, {"rules": "aws_key"})
+        assert load_rules(path) == []
+
     def test_parses_pattern_rule(self, tmp_path: Path) -> None:
         path = _write_config(
             tmp_path,
