@@ -63,6 +63,7 @@ class PendingScheduleOffer:
     chat_id: str = ""
     skill_name: str = ""
     skill_inputs: dict[str, str] = field(default_factory=dict)
+    prompt: str = ""
 
     def to_slash_command(self) -> str:
         """Literal slash the action driver dispatches without an LLM round-trip."""
@@ -95,6 +96,10 @@ class PendingScheduleOffer:
                     value = self.skill_inputs.get(key, "").strip()
                     if value:
                         args.extend([flag, value])
+        elif self.kind == "manual_loop":
+            prompt_text = self.prompt.strip()
+            if prompt_text:
+                args.extend(["--prompt", prompt_text])
         chat = self.chat_id.strip()
         if chat:
             args.extend(["--chat-id", chat])

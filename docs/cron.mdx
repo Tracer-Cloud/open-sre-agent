@@ -24,15 +24,18 @@ When you open the interactive shell (`opensre`) and no scheduled tasks exist yet
 ```bash
 # Add a free-form recurring ops digest to Telegram at 09:00 IST on weekdays
 opensre cron add --kind manual_loop --cron "0 9 * * 1-5" \
-  --name "Ops digest" --tz Asia/Kolkata --provider telegram --chat-id <chat_id>
+  --name "Ops digest" --tz Asia/Kolkata --provider telegram --chat-id <chat_id> \
+  --prompt "Check open incidents and summarize production risk"
 
 # Same kind to Slack via incoming webhook (omit --chat-id; webhook is channel-bound)
 opensre cron add --kind manual_loop --cron "0 9 * * 1-5" \
-  --tz Europe/London --provider slack
+  --tz Europe/London --provider slack \
+  --prompt "Check open incidents and summarize production risk"
 
 # Slack bot token: omit --chat-id when SLACK_DEFAULT_CHAT_ID is set
 opensre cron add --kind manual_loop --cron "0 9 * * 1-5" \
-  --tz Europe/London --provider slack
+  --tz Europe/London --provider slack \
+  --prompt "Check open incidents and summarize production risk"
 
 # GitHub PR sweep standup digest → Slack
 opensre cron add --kind github_pr_sweep --cron "0 9 * * 1-5" \
@@ -51,7 +54,8 @@ opensre cron add --kind recurring_skill --skill morning-report \
 
 # Local interactive-shell inbox delivery, useful for debugging
 opensre cron add --kind manual_loop --cron "0 9 * * 1-5" \
-  --name "Local ops digest" --provider interactive_shell
+  --name "Local ops digest" --provider interactive_shell \
+  --prompt "Check open incidents and summarize production risk"
 
 # List configured tasks
 opensre cron list
@@ -84,6 +88,7 @@ Create a new scheduled delivery task.
 | `--branch` | No | Branch filter for `github-ci-health`; cannot be combined with `--pr` |
 | `--pr` | No | Pull-request filter for `github-ci-health`; cannot be combined with `--branch` |
 | `--city` | No | City for `morning-report`; omitted to use its default-location behavior |
+| `--prompt` | Cond. | Required with `--kind manual_loop`; the instruction executed on each run |
 
 ### `opensre cron list`
 
@@ -255,7 +260,7 @@ The lower-level `/cron` slash command forwards to the CLI:
 
 ```
 /cron list
-/cron add --kind manual_loop --cron "0 9 * * *" --provider telegram --chat-id <id>
+/cron add --kind manual_loop --cron "0 9 * * *" --provider telegram --chat-id <id> --prompt "Check open incidents and summarize production risk"
 /cron run <task_id>
 ```
 

@@ -107,6 +107,13 @@ def cron_command() -> None:
     "--pr", "pr_number", type=click.IntRange(min=1), default=None, help="Optional GitHub PR filter."
 )
 @click.option("--city", type=str, default="", help="Optional city for the morning-report skill.")
+@click.option(
+    "--prompt",
+    type=str,
+    default="",
+    show_default=False,
+    help="Instruction to execute on each run (required for manual_loop).",
+)
 def cron_add(
     name: str,
     kind: str,
@@ -121,6 +128,7 @@ def cron_add(
     branch: str,
     pr_number: int | None,
     city: str,
+    prompt: str,
 ) -> None:
     """Add a new scheduled delivery task."""
     from infrastructure.scheduling.scheduler.types import ScheduledTask
@@ -150,6 +158,18 @@ def cron_add(
         pr_number=pr_number,
     )
 
+    from infrastructure.scheduling.scheduler.loop_constants import LOOP_PROMPT_PARAM
+
+    prompt_text = prompt.strip()
+    if task_kind == TaskKind.MANUAL_LOOP:
+        if not prompt_text:
+            raise click.ClickException("--prompt is required when --kind is manual_loop.")
+    elif prompt_text:
+        raise click.ClickException("--prompt is only valid with --kind manual_loop.")
+    params: dict[str, str] = {}
+    if task_kind == TaskKind.MANUAL_LOOP:
+        params[LOOP_PROMPT_PARAM] = prompt_text
+
     task = ScheduledTask(
         name=name.strip(),
         kind=task_kind,
@@ -161,6 +181,7 @@ def cron_add(
         skill_name=pinned_name,
         skill_revision=pinned_revision,
         skill_inputs=skill_inputs,
+        params=params,
     )
 
     from infrastructure.scheduling.scheduler.operation_log import record_scheduler_task_operation

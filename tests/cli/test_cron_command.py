@@ -104,6 +104,8 @@ def test_cron_add_allows_slack_without_chat_id(
             "Europe/Amsterdam",
             "--provider",
             "slack",
+            "--prompt",
+            "Check open incidents and summarize risk.",
         ],
     )
     assert result.exit_code == 0, result.output
@@ -131,6 +133,8 @@ def test_cron_add_persists_loop_name(tmp_path: Path, monkeypatch: pytest.MonkeyP
             "0 8 * * 1-5",
             "--provider",
             "slack",
+            "--prompt",
+            "Check open incidents and summarize risk.",
         ],
     )
 
@@ -332,6 +336,8 @@ def test_cron_add_allows_interactive_shell_without_chat_id(
             "0 8 * * 1-5",
             "--provider",
             "interactive_shell",
+            "--prompt",
+            "Check open incidents and summarize risk.",
         ],
     )
 
@@ -516,3 +522,122 @@ def test_cron_run_failed_only_skips_the_warning(monkeypatch: pytest.MonkeyPatch)
     assert result.exit_code == 0, result.output
     assert "already delivered" not in result.output
     assert calls == [{"task_id": "t1", "only_failed": True}]
+
+
+def test_cron_add_manual_loop_persists_prompt(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """CLI-created manual_loop schedules must store the prompt for the scheduler.
+
+    Regression for #6047: cron_add built the ScheduledTask without a prompt,
+    so the scheduler had nothing to execute and returned a missing-prompt
+    warning instead of running the instruction.
+    """
+    from infrastructure.scheduling.scheduler.loop_constants import LOOP_PROMPT_PARAM
+    from infrastructure.scheduling.scheduler.storage import task_store as scheduler_store
+    from infrastructure.scheduling.scheduler.storage.task_store import list_tasks
+
+    store = tmp_path / "scheduler_tasks.json"
+    monkeypatch.setattr(scheduler_store, "default_task_store_path", lambda: store)
+    monkeypatch.setenv("SLACK_WEBHOOK_URL", "https://hooks.slack.test/services/T/B/x")
+
+    result = CliRunner().invoke(
+        cron_command,
+        [
+            "add",
+            "--kind",
+            "manual_loop",
+            "--cron",
+            "0 9 * * 1-5",
+            "--provider",
+            "slack",
+            "--prompt",
+            "Check open incidents and summarize production risk.",
+        ],
+    )
+
+    assert result.exit_code == 0, result.output
+    task = list_tasks(store)[0]
+    assert task.params[LOOP_PROMPT_PARAM] == "Check open incidents and summarize production risk."
+
+
+def test_cron_add_manual_loop_executes_stored_prompt(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The stored prompt must reach the scheduler runner on every run."""
+    from infrastructure.scheduling.scheduler.storage import task_store as scheduler_store
+    from infrastructure.scheduling.scheduler.storage.task_store import list_tasks
+    from infrastructure.scheduling.scheduler.tasks import build_message
+
+    store = tmp_path / "scheduler_tasks.json"
+    monkeypatch.setattr(scheduler_store, "default_task_store_path", lambda: store)
+    monkeypatch.setenv("SLACK_WEBHOOK_URL", "https://hooks.slack.test/services/T/B/x")
+
+    result = CliRunner().invoke(
+        cron_command,
+        [
+            "add",
+            "--kind",
+            "manual_loop",
+            "--cron",
+            "0 9 * * 1-5",
+            "--provider",
+            "slack",
+            "--prompt",
+            "Check open incidents and summarize production risk.",
+        ],
+    )
+    assert result.exit_code == 0, result.output
+    task = list_tasks(store)[0]
+
+    captured: dict[str, object] = {}
+
+    def _fake_agent(payload: dict[str, object]) -> str:
+        captured.update(payload)
+        return "report body"
+
+    from infrastructure.scheduling.scheduler.runners import SchedulerRunners
+
+    runners = SchedulerRunners(agent=_fake_agent)
+    assert build_message(task, runners) == "report body"
+    assert captured["loop_prompt"] == "Check open incidents and summarize production risk."
+
+
+def test_cron_add_manual_loop_requires_prompt() -> None:
+    """A manual_loop without --prompt must not create an unrunnable schedule."""
+    result = CliRunner().invoke(
+        cron_command,
+        [
+            "add",
+            "--kind",
+            "manual_loop",
+            "--cron",
+            "0 9 * * *",
+            "--provider",
+            "interactive_shell",
+        ],
+    )
+
+    assert result.exit_code != 0
+    assert "--prompt is required" in result.output
+
+
+def test_cron_add_rejects_prompt_for_other_kinds() -> None:
+    """--prompt belongs to manual_loop only, like --skill belongs to recurring_skill."""
+    result = CliRunner().invoke(
+        cron_command,
+        [
+            "add",
+            "--kind",
+            "github_pr_sweep",
+            "--cron",
+            "0 9 * * *",
+            "--provider",
+            "interactive_shell",
+            "--prompt",
+            "Check incidents.",
+        ],
+    )
+
+    assert result.exit_code != 0
+    assert "--prompt is only valid" in result.output

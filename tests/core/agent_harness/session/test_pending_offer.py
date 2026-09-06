@@ -264,7 +264,11 @@ def test_a_confirmed_schedule_survives_the_literal_slash_dispatcher(
         name = "slash_invoke"
 
     offer = PendingScheduleOffer(
-        kind="manual_loop", cron="0 8 * * 1-5", timezone="UTC", provider="slack"
+        kind="manual_loop",
+        cron="0 8 * * 1-5",
+        timezone="UTC",
+        provider="slack",
+        prompt="Check open incidents and summarize risk.",
     )
 
     # Act
@@ -546,3 +550,100 @@ def test_the_turn_boundary_reaches_the_tool_context_in_production() -> None:
     # Assert
     assert ctx is not None
     assert ctx.history_start == 2, "boundary must exclude rows already in the session"
+
+
+def test_pending_manual_loop_offer_preserves_prompt() -> None:
+    """Regression for #6047: the prompt must survive offer → slash → task.
+
+    The conversational confirmation previously dropped the prompt when
+    converting a pending schedule offer into a slash command, leaving the
+    scheduler with no instruction to execute.
+    """
+    import shlex
+
+    offer = PendingScheduleOffer(
+        kind="manual_loop",
+        cron="0 9 * * 1-5",
+        timezone="UTC",
+        provider="slack",
+        prompt="Check open incidents and summarize production risk.",
+    )
+
+    slash = offer.to_slash_command()
+    assert "--prompt" in slash
+    tokens = shlex.split(slash, posix=True)
+    assert "Check open incidents and summarize production risk." in tokens
+
+
+def test_propose_manual_loop_offer_preserves_prompt_through_confirmation(
+    tmp_path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """End-to-end: propose → slash_preview → cron_add stores the prompt."""
+    from pathlib import Path
+
+    from click.testing import CliRunner
+
+    from core.agent_harness.turns.action_driver import _literal_slash_tool_call
+    from infrastructure.scheduling.scheduler.loop_constants import LOOP_PROMPT_PARAM
+    from surfaces.cli.commands.cron import cron_add
+
+    session = InMemorySessionState()
+    session.record(
+        "shell",
+        "curl -s 'wttr.in/Amsterdam?format=3'",
+        ok=True,
+        response_text="Amsterdam: ☀️ +20°C",
+    )
+    session.record(
+        "shell",
+        "curl -s 'https://feeds.bbci.co.uk/news/rss.xml' | head",
+        ok=True,
+        response_text="Some headline",
+    )
+    ctx = ActionToolScope(session=session, console=object())
+    briefing = (
+        "Good morning! Here is your briefing.\n"
+        "Weather — Amsterdam: ☀️ +20°C\n"
+        "Top headlines:\n"
+        "- Some headline"
+    )
+    result = execute_propose_scheduled_delivery_tool(
+        {
+            "kind": "manual_loop",
+            "cron": "0 9 * * 1-5",
+            "timezone": "UTC",
+            "provider": "interactive_shell",
+            "briefing_text": briefing,
+            "prompt": "Check open incidents and summarize production risk.",
+        },
+        ctx,
+    )
+
+    assert result["ok"] is True
+    assert session.pending_schedule_offer is not None
+    assert (
+        session.pending_schedule_offer.prompt
+        == "Check open incidents and summarize production risk."
+    )
+    assert "--prompt" in result["slash_preview"]
+
+    class _SlashTool:
+        name = "slash_invoke"
+
+    call = _literal_slash_tool_call(result["slash_preview"], [_SlashTool()])
+    assert call is not None
+    args = call.input["args"]
+    assert "Check open incidents and summarize production risk." in args
+
+    # The slash args must create a runnable task: prompt stored in params.
+    from infrastructure.scheduling.scheduler.storage import task_store as scheduler_store
+    from infrastructure.scheduling.scheduler.storage.task_store import list_tasks
+
+    store: Path = tmp_path / "scheduler_tasks.json"
+    monkeypatch.setattr(scheduler_store, "default_task_store_path", lambda: store)
+    cli_result = CliRunner().invoke(cron_add, args[1:])
+    assert cli_result.exit_code == 0, cli_result.output
+    tasks = list_tasks(store)
+    assert tasks[0].params[LOOP_PROMPT_PARAM] == (
+        "Check open incidents and summarize production risk."
+    )

@@ -108,6 +108,7 @@ def execute_propose_scheduled_delivery_tool(
     provider = str(args.get("provider", "")).strip().lower()
     chat_id = str(args.get("chat_id", "")).strip()
     briefing_text = str(args.get("briefing_text", "") or "").strip()
+    prompt_text = str(args.get("prompt", "") or "").strip()
     skill_name = normalize_skill_name(str(args.get("skill_name", "") or ""))
     owner = str(args.get("owner", "") or "").strip()
     repo = str(args.get("repo", "") or "").strip()
@@ -176,6 +177,19 @@ def execute_propose_scheduled_delivery_tool(
             return blocked
 
     scope_supplied = bool(owner or repo or branch or pr_number)
+    if kind == TaskKind.MANUAL_LOOP.value:
+        if prompt_text and (scope_supplied or city or skill_name):
+            return {
+                "ok": False,
+                "error": (
+                    "owner, repo, branch, pr_number, city, and skill_name are only "
+                    "valid for recurring_skill."
+                ),
+            }
+        if not prompt_text:
+            return {"ok": False, "error": "prompt is required for manual_loop."}
+    elif prompt_text:
+        return {"ok": False, "error": "prompt is only valid for manual_loop."}
     skill_inputs: dict[str, str] = {}
     if skill_name == "morning-report":
         if city:
@@ -220,6 +234,7 @@ def execute_propose_scheduled_delivery_tool(
         chat_id=chat_id,
         skill_name=skill_name if kind == TaskKind.RECURRING_SKILL.value else "",
         skill_inputs=skill_inputs,
+        prompt=prompt_text if kind == TaskKind.MANUAL_LOOP.value else "",
     )
     ctx.session.pending_schedule_offer = offer
     clear_competing_pending_offers(ctx.session, keep_attr="pending_schedule_offer")
@@ -251,6 +266,7 @@ def run_propose_scheduled_delivery(
     timezone: str = "UTC",
     chat_id: str = "",
     briefing_text: str = "",
+    prompt: str = "",
     skill_name: str = "",
     owner: str = "",
     repo: str = "",
@@ -267,6 +283,7 @@ def run_propose_scheduled_delivery(
             "provider": provider,
             "chat_id": chat_id,
             "briefing_text": briefing_text,
+            "prompt": prompt,
             "skill_name": skill_name,
             "owner": owner,
             "repo": repo,
@@ -339,6 +356,13 @@ propose_scheduled_delivery_tool = RegisteredTool(
                     "already produced for the user. Returned in response_text "
                     "ahead of the Want me to: closer so the user never sees an "
                     "offer without the report."
+                ),
+            ),
+            "prompt": string_property(
+                description=(
+                    "Required for manual_loop: the instruction to execute on each "
+                    "scheduled run (e.g. the user request that produced the briefing). "
+                    "Persisted as the scheduled task prompt."
                 ),
             ),
             "skill_name": string_property(
