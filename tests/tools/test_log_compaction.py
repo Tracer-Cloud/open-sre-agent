@@ -289,6 +289,19 @@ class TestClassifyErrorType:
     def test_import_error(self):
         assert _classify_error_type("ImportError: No module named 'pandas'") == "ImportError"
 
+    def test_status_code_digits_inside_a_longer_number_are_not_a_match(self):
+        # Latencies, offsets and counts routinely embed 401/403/404/429.
+        assert _classify_error_type("Request completed in 1429ms") == "Unknown"
+        assert _classify_error_type("Processed 40412 records from the queue") == "Unknown"
+        assert _classify_error_type("worker pod-4013 restarted") == "Unknown"
+        assert _classify_error_type("checkpoint 24290 committed") == "Unknown"
+
+    def test_status_codes_still_match_when_standalone(self):
+        assert _classify_error_type("HTTP 429 Too Many Requests") == "RateLimited"
+        assert _classify_error_type("GET /v1/items returned 404") == "ResourceNotFound"
+        assert _classify_error_type("upstream replied 401") == "AuthenticationError"
+        assert _classify_error_type("status=403 on PutObject") == "AuthenticationError"
+
 
 class TestExtractComponents:
     def test_key_value_pattern(self):
