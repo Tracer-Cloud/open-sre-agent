@@ -61,8 +61,17 @@ def load_rules(path: Path | None = None) -> list[GuardrailRule]:
         logger.warning("Guardrails config missing 'rules' key at %s", rules_path)
         return []
 
+    entries = raw["rules"]
+    if not isinstance(entries, list):
+        logger.warning(
+            "Guardrails config 'rules' must be a list at %s, got %s; ignoring",
+            rules_path,
+            type(entries).__name__,
+        )
+        return []
+
     rules: list[GuardrailRule] = []
-    for entry in raw["rules"]:
+    for entry in entries:
         if not isinstance(entry, dict):
             continue
         parsed = _parse_rule(entry)

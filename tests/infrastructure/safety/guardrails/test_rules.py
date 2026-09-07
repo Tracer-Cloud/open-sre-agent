@@ -1,7 +1,9 @@
 from __future__ import annotations
 
+import logging
 from pathlib import Path
 
+import pytest
 import yaml
 
 from infrastructure.safety.guardrails.rules import GuardrailAction, load_rules
@@ -25,6 +27,29 @@ class TestLoadRules:
     def test_returns_empty_when_rules_key_missing(self, tmp_path: Path) -> None:
         path = _write_config(tmp_path, {"version": 1})
         assert load_rules(path) == []
+
+    def test_returns_empty_when_rules_key_is_empty(
+        self, tmp_path: Path, caplog: pytest.LogCaptureFixture
+    ) -> None:
+        # "rules:" with every entry commented out parses as None, not a list.
+        path = tmp_path / "guardrails.yml"
+        path.write_text("rules:", encoding="utf-8")
+        with caplog.at_level(logging.WARNING):
+            assert load_rules(path) == []
+        assert "must be a list" in caplog.text
+        assert "NoneType" in caplog.text
+
+    def test_rejects_a_non_list_rules_key(
+        self, tmp_path: Path, caplog: pytest.LogCaptureFixture
+    ) -> None:
+        # A scalar already returned [], but only because iterating the string
+        # yielded characters that each failed the per-entry dict check. Assert
+        # the warning so the shape check itself is what is under test.
+        path = _write_config(tmp_path, {"rules": "aws_key"})
+        with caplog.at_level(logging.WARNING):
+            assert load_rules(path) == []
+        assert "must be a list" in caplog.text
+        assert "str" in caplog.text
 
     def test_parses_pattern_rule(self, tmp_path: Path) -> None:
         path = _write_config(
